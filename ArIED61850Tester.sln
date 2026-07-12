@@ -1,0 +1,27 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.7.11903.348 stable
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArIED61850Tester", "ArIED61850Tester.csproj", "{A71ED618-5000-4D21-9000-618500000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850", "..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj", "{AEB61850-6F64-49A6-8448-02E2D0F61850}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A71ED618-5000-4D21-9000-618500000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A71ED618-5000-4D21-9000-618500000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A71ED618-5000-4D21-9000-618500000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A71ED618-5000-4D21-9000-618500000001}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AEB61850-6F64-49A6-8448-02E2D0F61850}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEB61850-6F64-49A6-8448-02E2D0F61850}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEB61850-6F64-49A6-8448-02E2D0F61850}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEB61850-6F64-49A6-8448-02E2D0F61850}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

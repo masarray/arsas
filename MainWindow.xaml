@@ -1,0 +1,815 @@
+<Window x:Class="ArIED61850Tester.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ArIED 61850 — Smart IED Explorer &amp; Monitor"
+        Height="900" Width="1480" MinHeight="760" MinWidth="1180"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}"
+        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        Icon="Assets/app-icon.ico" Closing="Window_Closing">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Premium compact application bar restored from the original ArServer shell. -->
+        <Grid Grid.Row="0" Height="44" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="25" Height="25" CornerRadius="12" Margin="0,0,12,0" ClipToBounds="True">
+                    <Image Source="Assets/app-icon.png" Width="25" Height="25" RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+                <TextBlock Text="ArIED 61850" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                <Border Width="1" Height="21" Background="{StaticResource Line}" Margin="14,0"/>
+                <TextBlock Text="Smart IED Explorer &amp; Monitor" FontSize="13.2" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Text="Fast workflow: add IED → discover live model → choose signals → monitor each IED independently"
+                       FontSize="12.5" Foreground="{StaticResource Muted}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="📂 Open Project" Style="{StaticResource MiniChipButton}" Click="OpenProject_Click" Margin="0,0,8,0"/>
+                <Button Content="💾 Save Project" Style="{StaticResource MiniChipButton}" Click="SaveProject_Click" Margin="0,0,10,0"/>
+                <Border Background="#EAF1FF" CornerRadius="16" Padding="12,7">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Session" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,7,0"/>
+                        <TextBlock Text="{Binding HeaderStatusText}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource Accent}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Restored premium segmented navigation. No global runtime switch: each IED owns its session. -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="WorkflowNavShell" Width="720" Height="42" HorizontalAlignment="Left"
+                    Background="#E7ECF5" CornerRadius="21" Padding="4" Effect="{StaticResource SoftShadow}">
+                <Grid x:Name="WorkflowNavGrid" ClipToBounds="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="4" Width="172" Height="34"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
+                            Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="WorkflowPillScale" ScaleX="1" ScaleY="1"/>
+                                <TranslateTransform x:Name="WorkflowPillTranslate" X="0"/>
+                            </TransformGroup>
+                        </Border.RenderTransform>
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Color="#2563EB"/>
+                        </Border.Effect>
+                    </Border>
+                    <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavEventsButton" Grid.Column="2" Content="Event Log" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavDiagnosticsButton" Grid.Column="3" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
+                            <Border Visibility="{Binding DiagnosticsAlertVisibility}"
+                                    Width="17" Height="17" CornerRadius="8.5" Margin="7,0,0,0"
+                                    Background="#DC2626" BorderBrush="White" BorderThickness="1.5">
+                                <TextBlock Text="!" Foreground="White" FontSize="10.5" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                            </Border>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <WrapPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding ConnectionInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                </Border>
+                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                </Border>
+                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
+                    <TextBlock Text="{Binding EventInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                </Border>
+            </WrapPanel>
+        </Grid>
+
+        <TabControl x:Name="MainTabs" Grid.Row="2" SelectedIndex="0"
+                    Style="{StaticResource HiddenTabControl}"
+                    SelectionChanged="MainTabs_SelectionChanged">
+            <!-- IEC 61850 EXPLORER -->
+            <TabItem Header="IEC 61850 Explorer">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="292"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="12">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="IED Explorer" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Independent MMS session per IED" FontSize="11.8" Foreground="{StaticResource Muted}" Margin="16,3,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Always-visible fast workflow actions. They remain anchored below the
+                                 independently scrolling IED list and never move with its content. -->
+                            <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="5"
+                                    Background="#F7FAFF" BorderBrush="#DCE6F5" BorderThickness="1"
+                                    CornerRadius="15" Effect="{StaticResource SoftShadow}" Panel.ZIndex="30">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Click="ConnectAllIeds_Click" Style="{StaticResource SoftButton}"
+                                            ToolTip="Fast-connect every saved IED and start live monitoring for its saved selections">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Data="M5,3 L19,12 L5,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
+                                                </Canvas>
+                                            </Viewbox>
+                                            <TextBlock Text="Connect All" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="2" Click="AddRelay_Click" Style="{StaticResource PrimaryButton}"
+                                            ToolTip="Add another IEC 61850 IED">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="＋" FontSize="15" FontWeight="SemiBold" Margin="0,-1,5,0"/>
+                                            <TextBlock Text="Add IED" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                     BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0,0,0,8"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Card" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Card" Property="Background" Value="#F3F7FF"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#9ABAFB"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Card" Property="Background" Value="#F8FAFD"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid MinHeight="142">
+                                            <Grid x:Name="CardContent">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Grid Grid.Row="0" Grid.Column="0" Width="22" Height="20" Margin="0,2,8,0" VerticalAlignment="Top">
+                                                    <Ellipse x:Name="ConnectionDot" Width="10" Height="10" Fill="#EF4444" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                                        <Ellipse.Effect><DropShadowEffect BlurRadius="7" ShadowDepth="0" Opacity="0.28" Color="#EF4444"/></Ellipse.Effect>
+                                                    </Ellipse>
+                                                    <Ellipse x:Name="TxDot" Width="7" Height="7" Fill="#86EFAC" Visibility="Collapsed"
+                                                             HorizontalAlignment="Right" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,0.5" Opacity="0.72">
+                                                        <Ellipse.RenderTransform><ScaleTransform x:Name="TxPulseScale" ScaleX="1" ScaleY="1"/></Ellipse.RenderTransform>
+                                                        <Ellipse.Effect><DropShadowEffect BlurRadius="9" ShadowDepth="0" Opacity="0.8" Color="#4ADE80"/></Ellipse.Effect>
+                                                    </Ellipse>
+                                                </Grid>
+
+                                                <StackPanel Grid.Row="0" Grid.Column="1">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        <Border x:Name="UnreadEventBadge" Grid.Column="1" Visibility="Collapsed" Background="#D92D20" BorderBrush="#FEE4E2" BorderThickness="1"
+                                                                CornerRadius="10" Padding="7,2" Margin="7,0,0,0" ToolTip="New process events from this IED">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="5" Height="5" Fill="White" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="{Binding UnreadEventText}" Foreground="White" FontSize="10.5" FontWeight="Bold"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding IdentityText}" FontSize="11.6" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding SummaryText}" FontSize="11.4" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding AcquisitionMode}" FontSize="11.3" Foreground="#3B67B1" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+
+                                                <Border Grid.Row="1" Grid.Column="1" Margin="0,9,0,0" Padding="3"
+                                                        HorizontalAlignment="Left" Background="#F2F6FC" BorderBrush="#E1E8F3"
+                                                        BorderThickness="1" CornerRadius="11">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedPlayAction_Click"
+                                                                IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
+                                                            <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M6,3 L20,12 L6,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                                                        </Button>
+                                                        <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedStopAction_Click"
+                                                                IsEnabled="{Binding CanStopAction}" ToolTip="{Binding StopToolTip}">
+                                                            <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M6,6 L18,6 L18,18 L6,18 Z" Stroke="#DC2626" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                                                        </Button>
+                                                        <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedConfigureSignals_Click"
+                                                                IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
+                                                            <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
+                                                                <Path Data="M12,20 L21,20" Stroke="#2563EB" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                                                <Path Data="M16.5,3.5 A2.12,2.12 0 0 1 19.5,6.5 L7,19 L3,20 L4,16 Z" Stroke="#2563EB" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
+                                                            </Canvas></Viewbox>
+                                                        </Button>
+                                                        <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedRemove_Click"
+                                                                IsEnabled="{Binding IsActionEnabled}" ToolTip="{Binding RemoveToolTip}">
+                                                            <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
+                                                                <Path Data="M18,6 L6,18 M6,6 L18,18" Stroke="#64748B" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                                            </Canvas></Viewbox>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+
+                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F2F7FDFA" CornerRadius="12"
+                                                    BorderBrush="#B8CEF3" BorderThickness="1" Padding="12" Panel.ZIndex="20">
+                                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="238">
+                                                    <!-- Eight identical rounded dashes recreate the original loading circle
+                                                         without the asymmetric final dash produced by Ellipse.StrokeDashArray. -->
+                                                    <Grid Width="32" Height="32" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                        <Grid.RenderTransform><RotateTransform x:Name="CardSpinnerRotate"/></Grid.RenderTransform>
+                                                        <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.88"><Path.RenderTransform><RotateTransform Angle="45" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.76"><Path.RenderTransform><RotateTransform Angle="90" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.64"><Path.RenderTransform><RotateTransform Angle="135" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.52"><Path.RenderTransform><RotateTransform Angle="180" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.40"><Path.RenderTransform><RotateTransform Angle="225" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.28"><Path.RenderTransform><RotateTransform Angle="270" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.18"><Path.RenderTransform><RotateTransform Angle="315" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
+                                                        </Canvas>
+                                                        <Grid.Triggers>
+                                                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                                                <BeginStoryboard>
+                                                                    <Storyboard RepeatBehavior="Forever">
+                                                                        <DoubleAnimation Storyboard.TargetName="CardSpinnerRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.9"/>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </EventTrigger>
+                                                        </Grid.Triggers>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding BusyTitle}" FontSize="12.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                                                               HorizontalAlignment="Center" Margin="0,7,0,0"/>
+                                                    <TextBlock Text="{Binding BusyStage}" FontSize="10.8" Foreground="{StaticResource Muted}" TextAlignment="Center"
+                                                               TextWrapping="Wrap" Margin="0,3,0,0" MinHeight="28" MaxWidth="224"/>
+                                                    <ProgressBar Value="{Binding DiscoveryProgressPercent, Mode=OneWay}" Minimum="0" Maximum="100"
+                                                                 Style="{StaticResource DiscoveryProgressBar}" Width="218" Height="8" Margin="0,8,0,0"/>
+                                                    <Grid Width="218" Margin="0,5,0,0">
+                                                        <TextBlock Text="{Binding DiscoveryProgressStepText}" FontSize="10.2" Foreground="#5D6B82"/>
+                                                        <TextBlock Text="{Binding DiscoveryProgressPercentText}" FontSize="10.4" FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource Accent}" HorizontalAlignment="Right"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                <Setter TargetName="ConnectionDot" Property="Fill" Value="#22C55E"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding HasReportStream}" Value="True">
+                                                <Setter TargetName="TxDot" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ReportPulseActive}" Value="True">
+                                                <Setter TargetName="TxDot" Property="Fill" Value="#BBF7D0"/>
+                                                <Setter TargetName="TxDot" Property="Opacity" Value="1"/>
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="TxPulseScale" Storyboard.TargetProperty="ScaleX" From="1" To="1.6" AutoReverse="True" Duration="0:0:0.22"/>
+                                                            <DoubleAnimation Storyboard.TargetName="TxPulseScale" Storyboard.TargetProperty="ScaleY" From="1" To="1.6" AutoReverse="True" Duration="0:0:0.22"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding HasUnreadEvents}" Value="True">
+                                                <Setter TargetName="UnreadEventBadge" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                                <Setter TargetName="CardContent" Property="Opacity" Value="0.22"/>
+                                                <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
+                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid Grid.Column="2">
+                        <!-- Original premium first-run empty state restored. -->
+                        <Border Style="{StaticResource Card}" Padding="0" Visibility="{Binding EmptyExplorerVisibility}" ClipToBounds="True">
+                            <Grid>
+                                <Image Source="Assets/gateway-hero.png" Stretch="UniformToFill" Opacity="0.88"/>
+                                <Rectangle Fill="#F8FAFC" Opacity="0.18"/>
+                                <Border Background="#F8FAFC" Opacity="0.91" CornerRadius="22" Padding="22"
+                                        HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="34" MaxWidth="535">
+                                    <StackPanel>
+                                        <TextBlock Text="Start by adding your first IED" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                        <TextBlock Text="Connect a relay by IP, let ArIED discover the live IEC 61850 MMS model, choose only the signals you need, then monitor every IED independently."
+                                                   TextWrapping="Wrap" FontSize="13.4" Foreground="{StaticResource Muted}" Margin="0,10,0,18"/>
+                                        <WrapPanel>
+                                            <Button Content="📂 Open Project" Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0"/>
+                                            <TextBlock Text="Use the always-visible Add IED action below the Explorer list."
+                                                       Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <Grid Visibility="{Binding SelectedExplorerVisibility}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Style="{StaticResource Card}" Padding="10">
+                                <Grid>
+                                    <DataGrid ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
+                                              Style="{StaticResource ModernDataGrid}" FrozenColumnCount="2"
+                                              EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                              ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                        <DataGrid.RowStyle>
+                                            <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRecentlyChanged}" Value="True">
+                                                        <Setter Property="Background" Value="#FFF0A8"/>
+                                                        <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                                        <Setter Property="BorderThickness" Value="4,1,1,1"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGrid.RowStyle>
+                                        <DataGrid.CellStyle>
+                                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRecentlyChanged}" Value="True">
+                                                        <Setter Property="Background" Value="#FFF5C2"/>
+                                                        <Setter Property="Foreground" Value="#5C3B00"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGrid.CellStyle>
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="220*" MinWidth="175"/>
+                                            <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320*" MinWidth="250"/>
+                                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="120*" MinWidth="100"/>
+                                            <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="150*" MinWidth="125"/>
+                                            <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185*" MinWidth="150"/>
+                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190*" MinWidth="160"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+
+                                    <Border Visibility="{Binding SelectedDeviceNoLivePointsVisibility}" Background="#FAFCFF" CornerRadius="16"
+                                            BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="24"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SelectedDevice.ReadyWorkspaceTitle}" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding SelectedDevice.ReadyWorkspaceMessage}"
+                                                       TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,8,0,16"/>
+                                            <WrapPanel HorizontalAlignment="Center">
+                                                <Button Content="Edit Signals" Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
+                                                        Style="{StaticResource SoftButton}" Margin="0,0,8,0" IsEnabled="{Binding SelectedDevice.CanEditSignals}"/>
+                                                <Button Content="{Binding SelectedDevice.MonitorActionLabel}" Tag="{Binding SelectedDevice}" Click="IedMonitorAction_Click"
+                                                        Style="{StaticResource PrimaryButton}" IsEnabled="{Binding SelectedDevice.CanStartOrStopMonitor}"/>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Header="IED Command Panel" Margin="0,9,0,0"
+                                      IsExpanded="False" Expanded="CommandPanel_Expanded">
+                                <Border Style="{StaticResource Card}" Padding="12">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Fast IEC 61850 Control" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                                <TextBlock Text="Current process value is shown before command. Arm once, then operate directly from each row; technical details remain optional."
+                                                           FontSize="11.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <WrapPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <CheckBox Content="Live control armed" IsChecked="{Binding LiveControlArmed}" FontWeight="SemiBold"
+                                                          Foreground="#B42318" VerticalAlignment="Center" Margin="0,0,14,0"
+                                                          ToolTip="Safety arm for direct row commands. It resets when another IED is selected."/>
+                                                <CheckBox Content="Interlock" IsChecked="{Binding CommandInterlockCheck}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                <CheckBox Content="Synchrocheck" IsChecked="{Binding CommandSynchroCheck}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                <CheckBox Content="Test" IsChecked="{Binding CommandTestMode}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                <Button Content="Refresh values" Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0"/>
+                                                <Button Content="Edit signals" Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
+                                                        Style="{StaticResource SoftButton}" Padding="11,6" IsEnabled="{Binding SelectedDevice.CanEditSignals}"/>
+                                            </WrapPanel>
+                                        </Grid>
+
+                                        <Grid Grid.Row="1">
+                                            <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False" Style="{StaticResource ModernDataGrid}"
+                                                      AutoGenerateColumns="False" MaxHeight="300" MinHeight="92" FrozenColumnCount="1"
+                                                      EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="280" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Value" Width="115">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <Border Padding="9,5" CornerRadius="10" HorizontalAlignment="Left" MinWidth="76">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Background" Value="#F2F4F7"/>
+                                                                            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+                                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized">
+                                                                                    <Setter Property="Background" Value="#FEF3F2"/>
+                                                                                    <Setter Property="BorderBrush" Value="#FECDCA"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized">
+                                                                                    <Setter Property="Background" Value="#ECFDF3"/>
+                                                                                    <Setter Property="BorderBrush" Value="#ABEFC6"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal">
+                                                                                    <Setter Property="Background" Value="#FFFAEB"/>
+                                                                                    <Setter Property="BorderBrush" Value="#FEDF89"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <TextBlock Text="{Binding ControlCurrentValue}" FontWeight="SemiBold" HorizontalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Foreground" Value="#344054"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized"><Setter Property="Foreground" Value="#B42318"/></DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized"><Setter Property="Foreground" Value="#067647"/></DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal"><Setter Property="Foreground" Value="#B54708"/></DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="105" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="210" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Control" Width="390">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Margin="0,3">
+                                                                    <Grid>
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsPositionControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                            <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsRaiseOnlyControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsLowerOnlyControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsRaiseLowerControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsBooleanControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                            <Button Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsSetPointControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <TextBox Text="{Binding ControlSetPointText, UpdateSourceTrigger=PropertyChanged}" Width="105" Height="31" Padding="8,4" Margin="0,0,7,0" ToolTip="Target value"/>
+                                                                            <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsGenericControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Technical details" Tag="{Binding}" Click="ControlDetails_Click" Style="{StaticResource SoftButton}" Padding="12,6"/>
+                                                                        </StackPanel>
+                                                                    </Grid>
+
+                                                                    <DockPanel Margin="0,4,0,0">
+                                                                        <Button DockPanel.Dock="Right" Content="Details" Tag="{Binding}" Click="ControlDetails_Click" Style="{StaticResource SoftButton}" Padding="9,4" Margin="7,0,0,0"/>
+                                                                        <TextBlock Text="{Binding ControlLastResult}" Foreground="{StaticResource Muted}" FontSize="10.8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                    </DockPanel>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <Border Background="#FAFCFF" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SelectedDevice.CommandSignals.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel>
+                                                    <TextBlock Text="No command signal selected" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="Open Signal Selection, choose valid control Data Objects, then use the direct row controls here."
+                                                               FontSize="11.5" Foreground="{StaticResource Muted}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" MaxWidth="620"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Expander>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- GLOBAL MULTI-IED LIVE MONITOR -->
+            <TabItem Header="Live Monitor">
+                <Border Style="{StaticResource Card}" Padding="12">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Global Multi-IED Live Monitor" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="Every IED keeps its own connection, report subscription, validation reads, and start/stop state."
+                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
+                                <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.4" Foreground="{StaticResource Ink}"/>
+                            </Border>
+                        </Grid>
+                        <DataGrid ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                                  FrozenColumnCount="3" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRecentlyChanged}" Value="True">
+                                            <Setter Property="Background" Value="#FFF0A8"/>
+                                            <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                            <Setter Property="BorderThickness" Value="4,1,1,1"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRecentlyChanged}" Value="True">
+                                            <Setter Property="Background" Value="#FFF5C2"/>
+                                            <Setter Property="Foreground" Value="#5C3B00"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.CellStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
+                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="195"/>
+                                <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320"/>
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="125"/>
+                                <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
+                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+
+            <!-- EVENT LOG -->
+            <TabItem Header="Event Log">
+                <Border Style="{StaticResource Card}" Padding="12">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="IEC 61850 Sequence of Events" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="SCADA/SAS SOE: each row shows the new process value directly. Closed/ON/true is red, Open/OFF/false is green, and intermediate/bad states are amber. Non-events stay out."
+                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <WrapPanel Grid.Column="1">
+                                <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>
+                                <Button Content="Clear" Style="{StaticResource SoftButton}" Click="ClearEvents_Click"/>
+                            </WrapPanel>
+                        </Grid>
+                        <DataGrid ItemsSource="{Binding Events}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                                  FrozenColumnCount="4" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding Sequence}" Width="65"/>
+                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
+                                <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
+                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="190"/>
+                                <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="300"/>
+                                <DataGridTemplateColumn Header="Value" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="ValueBadge" CornerRadius="9" Padding="10,4" HorizontalAlignment="Left"
+                                                    Background="#F1F5F9" BorderBrush="#D8E0EA" BorderThickness="1">
+                                                <TextBlock x:Name="ValueText" Text="{Binding EventValue}" FontWeight="SemiBold" Foreground="#344054"/>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding ValueTone}" Value="Energized">
+                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FEE4E2"/>
+                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#FDA29B"/>
+                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#B42318"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ValueTone}" Value="Deenergized">
+                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#ECFDF3"/>
+                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#86EFAC"/>
+                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#067647"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ValueTone}" Value="Abnormal">
+                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FFFAEB"/>
+                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#FEC84B"/>
+                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#B54708"/>
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="150"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+
+            <!-- DIAGNOSTICS -->
+            <TabItem Header="Diagnostics">
+                <Border Style="{StaticResource Card}" Padding="12">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Diagnostics &amp; Communication Journal" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="Connection, discovery, IED identity, RCB/DataSet setup, report verification, fallback, reconnect, and protocol faults."
+                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="CopyDiagnosticButton"
+                                        Content="Copy Diagnostic"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Copy app, engine, network, IED-session, TCP-probe, and recent journal details for support analysis"
+                                        Click="CopyDiagnostics_Click"/>
+                                <Button Content="Clear Log" Style="{StaticResource SoftButton}" Click="ClearDiagnostics_Click"/>
+                            </StackPanel>
+                        </Grid>
+                        <DataGrid ItemsSource="{Binding Logs}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                                  EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Level}" Value="ERROR">
+                                            <Setter Property="BorderBrush" Value="#EF4444"/>
+                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Level}" Value="WARN">
+                                            <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Level}" Value="ERROR">
+                                            <Setter Property="Background" Value="#FFF1F2"/>
+                                            <Setter Property="Foreground" Value="#B42318"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Level}" Value="WARN">
+                                            <Setter Property="Background" Value="#FFFAEB"/>
+                                            <Setter Property="Foreground" Value="#B54708"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.CellStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Time" Binding="{Binding Time, StringFormat=yyyy-MM-dd HH:mm:ss.fff}" Width="190"/>
+                                <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="90"/>
+                                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="145"/>
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="3" Margin="0,10,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF" BorderThickness="1" CornerRadius="14" Padding="11,7">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding LastStatusText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding RuntimeSummaryText}" FontSize="11.8" Foreground="{StaticResource Muted}" Margin="12,0,0,0"/>
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>

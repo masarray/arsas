@@ -1,0 +1,58 @@
+name: Build ArIED 61850
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ArIED application
+        uses: actions/checkout@v4
+        with:
+          path: ArIED61850Tester
+
+      - name: Checkout ARIEC61850 engine
+        uses: actions/checkout@v4
+        with:
+          repository: masarray/ARIEC61850
+          path: ARIEC61850
+
+      - name: Verify ARIEC61850 Smart Control API
+        shell: powershell
+        run: |
+          $control = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlService.cs"
+          $models = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlModels.cs"
+          if (!(Test-Path $control) -or !(Test-Path $models)) {
+            throw "ARIEC61850 Smart Control source was not found. ArIED 1.6.5 requires the native Control namespace."
+          }
+          if (!(Select-String -Path $models -Pattern "interface IIec61850ControlService" -Quiet)) {
+            throw "ARIEC61850 does not expose IIec61850ControlService."
+          }
+          if (!(Select-String -Path $models -Pattern "CommandTerminationReceived" -Quiet)) {
+            throw "ARIEC61850 Smart Control result contract is too old for ArIED 1.6.5."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.csproj
+
+      - name: Build
+        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.csproj -c Release --no-restore
+
+      - name: Publish portable x64
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.5 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArIED61850-win-x64
+          path: ArIED61850Tester\dist\*.zip
