@@ -17,8 +17,11 @@ public class SignalDefinition : ObservableObject
     private string _controlModelReference = string.Empty;
     private string _controlStatusReference = string.Empty;
     private string _controlModelText = "Auto-detect";
+    private Iec61850ControlModelKind _controlModelKind = Iec61850ControlModelKind.Unknown;
+    private bool _controlModelResolved;
     private string _controlValueType = string.Empty;
     private string _controlCurrentValue = "-";
+    private string? _deferredControlCurrentValue;
     private string _controlSetPointText = string.Empty;
     private string _controlLastResult = string.Empty;
     private bool _controlIsBusy;
@@ -80,30 +83,57 @@ public class SignalDefinition : ObservableObject
         set
         {
             if (!Set(ref _controlCdc, value?.Trim() ?? string.Empty)) return;
-            Raise(nameof(ControlActionLabel));
-            Raise(nameof(IsPositionControl));
-            Raise(nameof(IsRaiseOnlyControl));
-            Raise(nameof(IsLowerOnlyControl));
-            Raise(nameof(IsRaiseLowerControl));
-            Raise(nameof(IsBooleanControl));
-            Raise(nameof(IsSetPointControl));
-            Raise(nameof(IsGenericControl));
+            RaiseControlActionProperties();
         }
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
     public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
-    public string ControlModelText { get => _controlModelText; set => Set(ref _controlModelText, string.IsNullOrWhiteSpace(value) ? "Auto-detect" : value.Trim()); }
+    public string ControlModelText
+    {
+        get => _controlModelText;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? "Auto-detect" : value.Trim();
+            var changed = Set(ref _controlModelText, normalized);
+
+            if (normalized.Contains("auto-detect", StringComparison.OrdinalIgnoreCase))
+                ApplyControlModel(Iec61850ControlModelKind.Unknown, resolved: false, updateDisplay: false);
+            else
+                UpdateControlModelFromEvidence(normalized, updateDisplay: false);
+
+            if (changed)
+                Raise(nameof(SignalPropertiesSummary));
+        }
+    }
+    public Iec61850ControlModelKind ControlModelKind => _controlModelKind;
+    public bool ControlModelResolved => _controlModelResolved;
+    public bool ControlSupportsOperate => _controlModelResolved && _controlModelKind is
+        Iec61850ControlModelKind.DirectNormal or
+        Iec61850ControlModelKind.SboNormal or
+        Iec61850ControlModelKind.DirectEnhanced or
+        Iec61850ControlModelKind.SboEnhanced;
+    public bool IsReadOnlyControl => _controlModelResolved && !ControlSupportsOperate;
     public string ControlValueType { get => _controlValueType; set => Set(ref _controlValueType, value?.Trim() ?? string.Empty); }
 
-    /// <summary>Current process feedback shown in the fast Command Panel. This is runtime-only and is never persisted as live truth.</summary>
+    /// <summary>
+    /// Current process feedback shown in the fast Command Panel. While a command is in
+    /// progress, report/poll updates are coalesced and the final command observation is
+    /// published atomically. This prevents a stale pre-operate sample from making an SBO
+    /// command look as though it changed and immediately reverted.
+    /// </summary>
     public string ControlCurrentValue
     {
         get => _controlCurrentValue;
         set
         {
             var normalized = NormalizeControlDisplayValue(value);
-            if (Set(ref _controlCurrentValue, normalized))
-                Raise(nameof(ControlCurrentTone));
+            if (ControlIsBusy)
+            {
+                _deferredControlCurrentValue = normalized;
+                return;
+            }
+
+            ApplyControlCurrentValue(normalized);
         }
     }
 
@@ -120,10 +150,43 @@ public class SignalDefinition : ObservableObject
     }
 
     public string ControlSetPointText { get => _controlSetPointText; set => Set(ref _controlSetPointText, value?.Trim() ?? string.Empty); }
-    public string ControlLastResult { get => _controlLastResult; set => Set(ref _controlLastResult, value?.Trim() ?? string.Empty); }
-    public bool ControlIsBusy { get => _controlIsBusy; set => Set(ref _controlIsBusy, value); }
+    public string ControlLastResult
+    {
+        get => _controlLastResult;
+        set
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            UpdateControlModelFromEvidence(normalized, updateDisplay: true);
+            normalized = NormalizeControlResultText(normalized);
+            Set(ref _controlLastResult, normalized);
+        }
+    }
+    public bool ControlIsBusy
+    {
+        get => _controlIsBusy;
+        set
+        {
+            if (!Set(ref _controlIsBusy, value))
+                return;
 
-    public bool IsPositionControl
+            if (value)
+            {
+                _deferredControlCurrentValue = null;
+                return;
+            }
+
+            if (_deferredControlCurrentValue != null)
+            {
+                var deferred = _deferredControlCurrentValue;
+                _deferredControlCurrentValue = null;
+                ApplyControlCurrentValue(deferred);
+            }
+        }
+    }
+
+    private bool CanExposeControlActions => !_controlModelResolved || ControlSupportsOperate;
+
+    private bool IsPositionSemanticControl
     {
         get
         {
@@ -137,35 +200,38 @@ public class SignalDefinition : ObservableObject
         }
     }
 
-    public bool IsRaiseOnlyControl => ContainsControlToken("TapOpR") || ContainsControlToken("Raise");
-    public bool IsLowerOnlyControl => ContainsControlToken("TapOpL") || ContainsControlToken("Lower");
+    public bool IsPositionControl => CanExposeControlActions && IsPositionSemanticControl;
+    public bool IsRaiseOnlyControl => CanExposeControlActions && (ContainsControlToken("TapOpR") || ContainsControlToken("Raise"));
+    public bool IsLowerOnlyControl => CanExposeControlActions && (ContainsControlToken("TapOpL") || ContainsControlToken("Lower"));
     public bool IsRaiseLowerControl
     {
         get
         {
-            if (IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl) return false;
+            if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
             return cdc is "INC" or "ISC" or "INC/ISC";
         }
     }
-    public bool IsBooleanControl => !IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl && !IsRaiseLowerControl &&
+    public bool IsBooleanControl => CanExposeControlActions && !IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl && !IsRaiseLowerControl &&
                                     (ControlCdc ?? string.Empty).Trim().Equals("SPC", StringComparison.OrdinalIgnoreCase);
     public bool IsSetPointControl
     {
         get
         {
-            if (IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl || IsRaiseLowerControl || IsBooleanControl) return false;
+            if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl || IsRaiseLowerControl || IsBooleanControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
             return cdc is "APC" or "BAC" or "BSC";
         }
     }
-    public bool IsGenericControl => !IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl &&
-                                    !IsRaiseLowerControl && !IsBooleanControl && !IsSetPointControl;
+    public bool IsGenericControl => !CanExposeControlActions ||
+                                    (!IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl &&
+                                     !IsRaiseLowerControl && !IsBooleanControl && !IsSetPointControl);
 
     public string ControlActionLabel
     {
         get
         {
+            if (IsReadOnlyControl) return "Read only";
             if (IsPositionControl) return "Open / Close";
             if (IsRaiseOnlyControl) return "Raise";
             if (IsLowerOnlyControl) return "Lower";
@@ -189,13 +255,150 @@ public class SignalDefinition : ObservableObject
         }
     }
 
+    private void ApplyControlCurrentValue(string normalized)
+    {
+        if (Set(ref _controlCurrentValue, normalized, nameof(ControlCurrentValue)))
+            Raise(nameof(ControlCurrentTone));
+    }
+
+    private void UpdateControlModelFromEvidence(string? evidence, bool updateDisplay)
+    {
+        if (!TryParseControlModel(evidence, out var model))
+            return;
+
+        ApplyControlModel(model, resolved: true, updateDisplay);
+    }
+
+    private void ApplyControlModel(Iec61850ControlModelKind model, bool resolved, bool updateDisplay)
+    {
+        var modelChanged = _controlModelKind != model;
+        var resolvedChanged = _controlModelResolved != resolved;
+        _controlModelKind = model;
+        _controlModelResolved = resolved;
+
+        if (updateDisplay && resolved)
+        {
+            var friendly = FriendlyControlModel(model);
+            if (!string.Equals(_controlModelText, friendly, StringComparison.Ordinal))
+            {
+                _controlModelText = friendly;
+                Raise(nameof(ControlModelText));
+            }
+        }
+
+        if (!modelChanged && !resolvedChanged)
+            return;
+
+        Raise(nameof(ControlModelKind));
+        Raise(nameof(ControlModelResolved));
+        Raise(nameof(ControlSupportsOperate));
+        Raise(nameof(IsReadOnlyControl));
+        RaiseControlActionProperties();
+    }
+
+    private void RaiseControlActionProperties()
+    {
+        Raise(nameof(ControlActionLabel));
+        Raise(nameof(IsPositionControl));
+        Raise(nameof(IsRaiseOnlyControl));
+        Raise(nameof(IsLowerOnlyControl));
+        Raise(nameof(IsRaiseLowerControl));
+        Raise(nameof(IsBooleanControl));
+        Raise(nameof(IsSetPointControl));
+        Raise(nameof(IsGenericControl));
+        Raise(nameof(SignalPropertiesSummary));
+    }
+
+    private string NormalizeControlResultText(string text)
+    {
+        if (IsReadOnlyControl && ControlModelKind == Iec61850ControlModelKind.StatusOnly)
+            return "Status only — read-only object; commands disabled by the IED ctlModel.";
+        if (IsReadOnlyControl && ControlModelKind == Iec61850ControlModelKind.Unknown)
+            return "Unknown ctlModel — commands disabled until the live control model is resolved.";
+
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var sequence = ControlModelKind switch
+        {
+            Iec61850ControlModelKind.SboEnhanced => "SBOw → Operate",
+            Iec61850ControlModelKind.SboNormal => "SBO Select → Operate",
+            _ => string.Empty
+        };
+        if (string.IsNullOrWhiteSpace(sequence) || text.Contains("SBO", StringComparison.OrdinalIgnoreCase))
+            return text;
+
+        return text.StartsWith("Sending", StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith("Feedback", StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith("Command", StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith("Control", StringComparison.OrdinalIgnoreCase)
+            ? $"{sequence} • {text}"
+            : text;
+    }
+
+    private static bool TryParseControlModel(string? text, out Iec61850ControlModelKind model)
+    {
+        model = Iec61850ControlModelKind.Unknown;
+        if (string.IsNullOrWhiteSpace(text) || text.Contains("auto-detect", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var normalized = text.Trim().ToLowerInvariant();
+        var numeric = Regex.Match(normalized, @"ctlmodel\s*[:=]\s*([0-4])", RegexOptions.IgnoreCase);
+        if (numeric.Success)
+        {
+            model = numeric.Groups[1].Value switch
+            {
+                "0" => Iec61850ControlModelKind.StatusOnly,
+                "1" => Iec61850ControlModelKind.DirectNormal,
+                "2" => Iec61850ControlModelKind.SboNormal,
+                "3" => Iec61850ControlModelKind.DirectEnhanced,
+                "4" => Iec61850ControlModelKind.SboEnhanced,
+                _ => Iec61850ControlModelKind.Unknown
+            };
+            return true;
+        }
+
+        if (normalized.Contains("statusonly") || normalized.Contains("status only"))
+            model = Iec61850ControlModelKind.StatusOnly;
+        else if (normalized.Contains("selectbeforeoperateenhanced") ||
+                 (normalized.Contains("sbo") && normalized.Contains("enhanced")))
+            model = Iec61850ControlModelKind.SboEnhanced;
+        else if (normalized.Contains("selectbeforeoperatenormal") ||
+                 (normalized.Contains("sbo") && normalized.Contains("normal")))
+            model = Iec61850ControlModelKind.SboNormal;
+        else if (normalized.Contains("directenhanced") ||
+                 (normalized.Contains("direct") && normalized.Contains("enhanced")))
+            model = Iec61850ControlModelKind.DirectEnhanced;
+        else if (normalized.Contains("directnormal") ||
+                 (normalized.Contains("direct") && normalized.Contains("normal")))
+            model = Iec61850ControlModelKind.DirectNormal;
+        else if (normalized == "unknown" ||
+                 (normalized.Contains("ctlmodel") && normalized.Contains("unknown")))
+            model = Iec61850ControlModelKind.Unknown;
+        else
+            return false;
+
+        return true;
+    }
+
+    private static string FriendlyControlModel(Iec61850ControlModelKind model)
+        => model switch
+        {
+            Iec61850ControlModelKind.DirectNormal => "Direct Operate (DO) • Normal security",
+            Iec61850ControlModelKind.SboNormal => "Select Before Operate (SBO) • Normal security",
+            Iec61850ControlModelKind.DirectEnhanced => "Direct Operate (DO) • Enhanced security",
+            Iec61850ControlModelKind.SboEnhanced => "Select Before Operate (SBO) • Enhanced security",
+            Iec61850ControlModelKind.StatusOnly => "Status only",
+            _ => "Unknown"
+        };
+
     private bool ContainsControlToken(string token)
         => $"{Name} {ObjectReference}".Contains(token, StringComparison.OrdinalIgnoreCase);
 
     private string NormalizeControlDisplayValue(string? value)
     {
         var text = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
-        if (IsPositionControl && ArIED61850Tester.Services.Iec61850ValueFormatter.TryNormalizeDbpos(text, out var code))
+        if (IsPositionSemanticControl && ArIED61850Tester.Services.Iec61850ValueFormatter.TryNormalizeDbpos(text, out var code))
         {
             return code switch
             {
@@ -209,8 +412,8 @@ public class SignalDefinition : ObservableObject
 
         if (bool.TryParse(text, out var boolean))
             return boolean ? "True" : "False";
-        if (text.Equals("ON", StringComparison.OrdinalIgnoreCase)) return IsPositionControl ? "Closed" : "True";
-        if (text.Equals("OFF", StringComparison.OrdinalIgnoreCase)) return IsPositionControl ? "Open" : "False";
+        if (text.Equals("ON", StringComparison.OrdinalIgnoreCase)) return IsPositionSemanticControl ? "Closed" : "True";
+        if (text.Equals("OFF", StringComparison.OrdinalIgnoreCase)) return IsPositionSemanticControl ? "Open" : "False";
         return text;
     }
 
