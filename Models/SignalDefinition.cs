@@ -25,6 +25,12 @@ public class SignalDefinition : ObservableObject
     private string _controlSetPointText = string.Empty;
     private string _controlLastResult = string.Empty;
     private bool _controlIsBusy;
+    private bool _controlInterlockCheck = true;
+    private bool _controlSynchroCheck;
+    private bool _controlTestMode;
+    private bool _controlConfirmationPending;
+    private string _controlPendingValue = string.Empty;
+    private string _controlPendingAction = string.Empty;
 
     private static readonly HashSet<string> ControlServiceLeafNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -169,6 +175,8 @@ public class SignalDefinition : ObservableObject
             if (!Set(ref _controlIsBusy, value))
                 return;
 
+            Raise(nameof(ControlCanConfirm));
+
             if (value)
             {
                 _deferredControlCurrentValue = null;
@@ -182,6 +190,53 @@ public class SignalDefinition : ObservableObject
                 ApplyControlCurrentValue(deferred);
             }
         }
+    }
+
+    public bool ControlInterlockCheck
+    {
+        get => _controlInterlockCheck;
+        set => Set(ref _controlInterlockCheck, value);
+    }
+
+    public bool ControlSynchroCheck
+    {
+        get => _controlSynchroCheck;
+        set => Set(ref _controlSynchroCheck, value);
+    }
+
+    public bool ControlTestMode
+    {
+        get => _controlTestMode;
+        set => Set(ref _controlTestMode, value);
+    }
+
+    public bool ControlConfirmationPending => _controlConfirmationPending;
+    public string ControlPendingValue => _controlPendingValue;
+    public string ControlPendingAction => _controlPendingAction;
+    public string ControlPendingConfirmationLabel =>
+        string.IsNullOrWhiteSpace(_controlPendingAction) ? "Confirm command" : $"Confirm {_controlPendingAction}";
+    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlIsBusy;
+
+    public void StageControlConfirmation(string requestedValue, string actionLabel)
+    {
+        var normalizedValue = requestedValue?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedValue))
+            return;
+
+        Set(ref _controlPendingValue, normalizedValue, nameof(ControlPendingValue));
+        if (Set(ref _controlPendingAction, actionLabel?.Trim() ?? string.Empty, nameof(ControlPendingAction)))
+            Raise(nameof(ControlPendingConfirmationLabel));
+        if (Set(ref _controlConfirmationPending, true, nameof(ControlConfirmationPending)))
+            Raise(nameof(ControlCanConfirm));
+    }
+
+    public void ClearControlConfirmation()
+    {
+        Set(ref _controlPendingValue, string.Empty, nameof(ControlPendingValue));
+        if (Set(ref _controlPendingAction, string.Empty, nameof(ControlPendingAction)))
+            Raise(nameof(ControlPendingConfirmationLabel));
+        if (Set(ref _controlConfirmationPending, false, nameof(ControlConfirmationPending)))
+            Raise(nameof(ControlCanConfirm));
     }
 
     private bool CanExposeControlActions => !_controlModelResolved || ControlSupportsOperate;
@@ -292,6 +347,7 @@ public class SignalDefinition : ObservableObject
         Raise(nameof(ControlModelKind));
         Raise(nameof(ControlModelResolved));
         Raise(nameof(ControlSupportsOperate));
+        Raise(nameof(ControlCanConfirm));
         Raise(nameof(IsReadOnlyControl));
         RaiseControlActionProperties();
     }

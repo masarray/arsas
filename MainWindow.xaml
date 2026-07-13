@@ -403,12 +403,6 @@
                                                 <TextBlock Text="Fast IEC 61850 Control" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                             </StackPanel>
                                             <WrapPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                                <CheckBox Content="Live control armed" IsChecked="{Binding LiveControlArmed}" FontWeight="SemiBold"
-                                                          Foreground="#B42318" VerticalAlignment="Center" Margin="0,0,14,0"
-                                                          ToolTip="Safety arm for direct row commands. It resets when another IED is selected."/>
-                                                <CheckBox Content="Interlock" IsChecked="{Binding CommandInterlockCheck}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                                <CheckBox Content="Synchrocheck" IsChecked="{Binding CommandSynchroCheck}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                                <CheckBox Content="Test" IsChecked="{Binding CommandTestMode}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                                 <Button Content="Refresh values" Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0"/>
                                                 <Button Content="Edit signals" Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
                                                         Style="{StaticResource SoftButton}" Padding="11,6" IsEnabled="{Binding SelectedDevice.CanEditSignals}"/>
@@ -466,21 +460,96 @@
                                                     </DataGridTemplateColumn>
                                                     <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="0.72*" MinWidth="88" IsReadOnly="True"/>
                                                     <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.35*" MinWidth="175" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.45*" MinWidth="200">
+                                                    <DataGridTemplateColumn Header="Checks" Width="1.35*" MinWidth="210">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2">
+                                                                    <CheckBox Content="Interlock"
+                                                                              IsChecked="{Binding ControlInterlockCheck, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              Margin="0,0,10,0"
+                                                                              ToolTip="Set the IEC 61850 interlock check flag for this signal only."/>
+                                                                    <CheckBox Content="Sync"
+                                                                              IsChecked="{Binding ControlSynchroCheck, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              Margin="0,0,10,0"
+                                                                              ToolTip="Set the IEC 61850 synchrocheck flag for this signal only."/>
+                                                                    <CheckBox Content="Test"
+                                                                              IsChecked="{Binding ControlTestMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              ToolTip="Send this signal in IEC 61850 Test mode."/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTemplateColumn Header="Control" Width="1.7*" MinWidth="250">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3">
                                                                     <Grid>
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
-                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsPositionControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                <Style TargetType="StackPanel">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers>
+                                                                                        <MultiDataTrigger>
+                                                                                            <MultiDataTrigger.Conditions>
+                                                                                                <Condition Binding="{Binding IsPositionControl}" Value="True"/>
+                                                                                                <Condition Binding="{Binding ControlConfirmationPending}" Value="False"/>
+                                                                                            </MultiDataTrigger.Conditions>
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </MultiDataTrigger>
+                                                                                    </Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                                                            <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                            <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                            <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <StackPanel.Style>
+                                                                                <Style TargetType="StackPanel">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers>
+                                                                                        <MultiDataTrigger>
+                                                                                            <MultiDataTrigger.Conditions>
+                                                                                                <Condition Binding="{Binding IsPositionControl}" Value="True"/>
+                                                                                                <Condition Binding="{Binding ControlConfirmationPending}" Value="True"/>
+                                                                                            </MultiDataTrigger.Conditions>
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </MultiDataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </StackPanel.Style>
+                                                                            <Button Content="Confirm Open" Tag="{Binding}" Click="ControlConfirmAction_Click"
+                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0">
+                                                                                <Button.Style>
+                                                                                    <Style TargetType="Button" BasedOn="{StaticResource CommandOpenButton}">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding ControlPendingAction}" Value="Open">
+                                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </Button.Style>
+                                                                            </Button>
+                                                                            <Button Content="Confirm Close" Tag="{Binding}" Click="ControlConfirmAction_Click"
+                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0">
+                                                                                <Button.Style>
+                                                                                    <Style TargetType="Button" BasedOn="{StaticResource CommandCloseButton}">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding ControlPendingAction}" Value="Close">
+                                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </Button.Style>
+                                                                            </Button>
+                                                                            <Button Content="Cancel" Tag="{Binding}" Click="ControlCancelAction_Click"
+                                                                                    Style="{StaticResource SoftButton}" Padding="12,6"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -490,7 +559,7 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -500,7 +569,7 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -510,9 +579,9 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                             <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -522,9 +591,9 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <Button Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                             <Button Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -535,7 +604,7 @@
                                                                             </StackPanel.Style>
                                                                             <TextBox Text="{Binding ControlSetPointText, UpdateSourceTrigger=PropertyChanged}" Width="105" Height="31" Padding="8,4" Margin="0,0,7,0" ToolTip="Target value"/>
                                                                             <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding DataContext.LiveControlArmed, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
                                                                     </Grid>
                                                                 </StackPanel>

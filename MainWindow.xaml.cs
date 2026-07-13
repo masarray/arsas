@@ -42,10 +42,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _hasUnreadDiagnosticError;
     private bool _signalSelectionWizardOpen;
     private bool _connectAllInProgress;
-    private bool _liveControlArmed;
-    private bool _commandInterlockCheck = true;
-    private bool _commandSynchroCheck;
-    private bool _commandTestMode;
 
     public ObservableCollection<Iec61850MonitorDevice> Devices { get; } = new();
     public BulkObservableCollection<Iec61850MonitorPoint> GlobalPoints { get; } = new();
@@ -58,10 +54,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string NewDevicePort { get => _newDevicePort; set => Set(ref _newDevicePort, value); }
     public int PollingIntervalMs { get => _pollingIntervalMs; set => Set(ref _pollingIntervalMs, Math.Clamp(value, 50, 600000)); }
     public string LastStatusText { get => _lastStatusText; set => Set(ref _lastStatusText, value); }
-    public bool LiveControlArmed { get => _liveControlArmed; set => Set(ref _liveControlArmed, value); }
-    public bool CommandInterlockCheck { get => _commandInterlockCheck; set => Set(ref _commandInterlockCheck, value); }
-    public bool CommandSynchroCheck { get => _commandSynchroCheck; set => Set(ref _commandSynchroCheck, value); }
-    public bool CommandTestMode { get => _commandTestMode; set => Set(ref _commandTestMode, value); }
 
     public Iec61850MonitorDevice? SelectedDevice
     {
@@ -69,11 +61,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set
         {
             if (ReferenceEquals(_selectedDevice, value)) return;
-            if (_selectedDevice != null) _selectedDevice.IsActive = false;
-            LiveControlArmed = false;
+            if (_selectedDevice != null)
+            {
+                _selectedDevice.IsActive = false;
+                ClearPendingControlConfirmations(_selectedDevice);
+            }
             _selectedDevice = value;
             if (_selectedDevice != null)
             {
+                ClearPendingControlConfirmations(_selectedDevice);
                 _selectedDevice.IsActive = true;
                 NewDeviceIp = _selectedDevice.IpAddress;
                 NewDevicePort = _selectedDevice.Port.ToString(CultureInfo.InvariantCulture);
@@ -748,6 +744,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
 
+    private void ControlStageAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsPositionControl)
+            return;
+        if (signal.ControlIsBusy || !signal.ControlSupportsOperate)
+            return;
+
+        var requestedValue = button.CommandParameter?.ToString()?.Trim() ?? string.Empty;
+        var actionLabel = button.Content?.ToString()?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(requestedValue) || string.IsNullOrWhiteSpace(actionLabel))
+            return;
+
+        signal.StageControlConfirmation(requestedValue, actionLabel);
+        var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        SetStatus($"{device?.Name ?? "IED"}: review {signal.Name} — {signal.ControlPendingConfirmationLabel}, or Cancel.");
+    }
+
+    private async void ControlConfirmAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not SignalDefinition signal)
+            return;
+        if (!signal.ControlCanConfirm || string.IsNullOrWhiteSpace(signal.ControlPendingValue))
+            return;
+
+        var requestedValue = signal.ControlPendingValue;
+        signal.ClearControlConfirmation();
+        await ExecuteQuickControlAsync(signal, requestedValue);
+    }
+
+    private void ControlCancelAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not SignalDefinition signal)
+            return;
+
+        var action = signal.ControlPendingAction;
+        signal.ClearControlConfirmation();
+        var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        SetStatus($"{device?.Name ?? "IED"}: {signal.Name} {action} cancelled before dispatch.");
+    }
+
     private async void ControlQuickAction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsControlSignal)
@@ -777,19 +813,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (!CommandTestMode && !LiveControlArmed)
-        {
-            signal.ControlLastResult = "Enable Live control armed before sending a command.";
-            SetStatus("Live control is not armed. Review the selected IED and enable the Command Panel safety switch.");
-            return;
-        }
-
         var clickStopwatch = Stopwatch.StartNew();
         signal.ControlIsBusy = true;
         signal.ControlLastResult = $"Dispatching {requestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {requestedValue}…");
         AddLog("INFO", device.Name,
-            $"Control click accepted: {signal.ObjectReference} value={requestedValue}; test={CommandTestMode}; interlock={CommandInterlockCheck}; synchro={CommandSynchroCheck}.");
+            $"Control click accepted: {signal.ObjectReference} value={requestedValue}; test={signal.ControlTestMode}; interlock={signal.ControlInterlockCheck}; synchro={signal.ControlSynchroCheck}.");
         await Dispatcher.Yield(DispatcherPriority.Render);
 
         try
@@ -813,9 +842,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     Signal = signal,
                     ValueText = requestedValue,
-                    InterlockCheck = CommandInterlockCheck,
-                    SynchroCheck = CommandSynchroCheck,
-                    TestMode = CommandTestMode,
+                    InterlockCheck = signal.ControlInterlockCheck,
+                    SynchroCheck = signal.ControlSynchroCheck,
+                    TestMode = signal.ControlTestMode,
                     FeedbackTimeoutMs = signal.IsPositionControl ? 12000 :
                         (signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl || signal.IsRaiseLowerControl) ? 15000 : 8000,
                     CommandTerminationTimeoutMs = 10000,
@@ -849,6 +878,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         finally
         {
             signal.ControlIsBusy = false;
+            signal.ClearControlConfirmation();
         }
     }
 
@@ -925,6 +955,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static string ControlFeedbackKey(string deviceId, string reference)
         => $"{deviceId}|{NormalizeReference(reference)}";
+
+    private static void ClearPendingControlConfirmations(Iec61850MonitorDevice? device)
+    {
+        if (device == null)
+            return;
+
+        foreach (var signal in device.Signals.Where(item => item.IsControlSignal))
+            signal.ClearControlConfirmation();
+    }
 
     private async void IedRescan_Click(object sender, RoutedEventArgs e)
     {

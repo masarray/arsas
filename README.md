@@ -37,6 +37,8 @@ Version 1.6.5 integrates directly with `AR.Iec61850.Control.Iec61850ControlServi
 - Pulse controls: **Raise** or **Lower**
 - Boolean/SPC: **True** and **False**
 - Setpoint controls: value field and **Set**
+- Per-signal **Interlock**, **Synchrocheck**, and **Test** flags directly in each command row
+- Two-step breaker safety: **Open/Close** becomes **Confirm Open/Confirm Close** plus **Cancel** before dispatch
 - Optional **Details** window for the full ctlModel, sequence, checks, and protocol evidence
 
 
