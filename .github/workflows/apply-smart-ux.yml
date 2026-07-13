@@ -22,37 +22,41 @@ jobs:
           ref: fix/smart-command-card-reporting
           fetch-depth: 0
 
-      - name: Inspect patch transport lengths
+      - name: Decode reviewed source patch
         shell: powershell
         run: |
           $parts = Get-ChildItem .\tools\smart-ux-patch.part*.b64 | Sort-Object Name
-          $lines = @()
-          foreach ($part in $parts) {
-            $value = (Get-Content $part.FullName -Raw).Trim()
-            $lines += "$($part.Name)=$($value.Length)"
-          }
           $encoded = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
-          $lines += "encoded=$($encoded.Length)"
-          $lines += "mod4=$($encoded.Length % 4)"
-          try {
-            $bytes = [Convert]::FromBase64String($encoded)
-            $patch = Join-Path $env:RUNNER_TEMP 'smart-command-card-reporting.patch'
-            [IO.File]::WriteAllBytes($patch, $bytes)
-            $hash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
-            $lines += "decoded=$($bytes.Length)"
-            $lines += "sha256=$hash"
+          $bytes = [Convert]::FromBase64String($encoded)
+          $patch = Join-Path $env:RUNNER_TEMP 'smart-command-card-reporting.patch'
+          [IO.File]::WriteAllBytes($patch, $bytes)
+          $hash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "Decoded patch bytes=$($bytes.Length) sha256=$hash"
+          if ($bytes.Length -ne 33112 -or $hash -ne 'f19059d89b4ddd9f48cbd06e2542949fd0bca3902dc15124bcdc927487cf42f4') {
+            throw "Patch transport integrity check failed."
           }
-          catch {
-            $lines += "decodeError=$($_.Exception.Message)"
-          }
-          $lines | Set-Content .\patch-transport-debug.txt
-          $lines | ForEach-Object { Write-Host $_ }
+          "PATCH_PATH=$patch" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Commit transport diagnostics
+      - name: Validate and apply source patch
+        shell: powershell
+        run: |
+          git apply --check --whitespace=nowarn $env:PATCH_PATH
+          git apply --whitespace=nowarn $env:PATCH_PATH
+
+      - name: Remove patch transport and restore normal CI
+        shell: powershell
+        run: |
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/build.yml
+          git rm .github/workflows/apply-smart-ux.yml
+          git rm tools/smart-ux-patch.part*.b64
+          if (Test-Path .\patch-transport-debug.txt) { git rm patch-transport-debug.txt }
+
+      - name: Commit applied source
         shell: powershell
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add patch-transport-debug.txt
-          git commit -m 'chore: record patch transport diagnostics [patch-debug]'
+          git add -A
+          git commit -m 'fix: stabilize relay cards, command panel, and report recovery [smart-ux-applied]'
           git push origin HEAD:fix/smart-command-card-reporting
