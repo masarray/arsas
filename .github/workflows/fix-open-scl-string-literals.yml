@@ -1,0 +1,42 @@
+name: Fix Open SCL string literals
+
+on:
+  push:
+    branches:
+      - feat/open-scl-import
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/open-scl-import
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Repair and validate source
+        shell: pwsh
+        run: |
+          python tools/fix_open_scl_string_literals.py
+          python -c "import xml.etree.ElementTree as E; E.parse('MainWindow.xaml'); print('XAML XML validation passed')"
+          git diff --check
+
+      - name: Commit repaired source
+        shell: pwsh
+        run: |
+          git rm tools/fix_open_scl_string_literals.py
+          git rm .github/workflows/fix-open-scl-string-literals.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MainWindow.xaml.cs
+          git commit -m 'fix: use escaped newlines in SCL dialogs'
+          git push origin HEAD:feat/open-scl-import
