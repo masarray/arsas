@@ -27,15 +27,11 @@ public partial class MainWindow
 
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            var liveArmed = values.ElementAtOrDefault(0) is true;
-            var testMode = values.ElementAtOrDefault(1) is true;
-            var busy = values.ElementAtOrDefault(2) is true;
-            var supportsOperate = values.ElementAtOrDefault(3) is true;
-            // Never disable Open/Close from the last displayed process value. Report and
-            // UI batching can be stale for a short time, which previously made the first
-            // click disappear. The live MMS preflight in the control engine is the only
-            // authority that may suppress a redundant command.
-            return (liveArmed || testMode) && supportsOperate && !busy;
+            var busy = values.ElementAtOrDefault(0) is true;
+            var supportsOperate = values.ElementAtOrDefault(1) is true;
+            // Fast workflow is always armed. Runtime ctlModel/type validation remains the
+            // authority, while Open/Close gains an explicit row-level confirmation step.
+            return supportsOperate && !busy;
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
@@ -209,8 +205,6 @@ public partial class MainWindow
             Converter = CommandButtonEnabledConverter.Instance,
             Mode = BindingMode.OneWay
         };
-        enabledBinding.Bindings.Add(new Binding(nameof(LiveControlArmed)) { Source = this });
-        enabledBinding.Bindings.Add(new Binding(nameof(CommandTestMode)) { Source = this });
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlIsBusy)));
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlSupportsOperate)));
         BindingOperations.SetBinding(button, UIElement.IsEnabledProperty, enabledBinding);
