@@ -1,1 +1,1 @@
-global using System.Windows.Shapes;
+global using Ellipse = System.Windows.Shapes.Ellipse;
