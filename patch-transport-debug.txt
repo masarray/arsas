@@ -1,11 +1,11 @@
 smart-ux-patch.part01.b64=6000
 smart-ux-patch.part02.b64=6000
 smart-ux-patch.part03.b64=6000
-smart-ux-patch.part04.b64=6032
+smart-ux-patch.part04.b64=3000
 smart-ux-patch.part05.b64=6000
 smart-ux-patch.part06.b64=6000
 smart-ux-patch.part07.b64=6004
 smart-ux-patch.part08.b64=2152
-encoded=44188
+encoded=41156
 mod4=0
 decodeError=Exception calling "FromBase64String" with "1" argument(s): "The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters. "
