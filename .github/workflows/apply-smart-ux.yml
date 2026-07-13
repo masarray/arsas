@@ -22,7 +22,7 @@ jobs:
           ref: fix/smart-command-card-reporting
           fetch-depth: 0
 
-      - name: Inspect patch transport
+      - name: Inspect patch transport lengths
         shell: powershell
         run: |
           $parts = Get-ChildItem .\tools\smart-ux-patch.part*.b64 | Sort-Object Name
@@ -32,13 +32,19 @@ jobs:
             $lines += "$($part.Name)=$($value.Length)"
           }
           $encoded = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
-          $bytes = [Convert]::FromBase64String($encoded)
-          $patch = Join-Path $env:RUNNER_TEMP 'smart-command-card-reporting.patch'
-          [IO.File]::WriteAllBytes($patch, $bytes)
-          $hash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
           $lines += "encoded=$($encoded.Length)"
-          $lines += "decoded=$($bytes.Length)"
-          $lines += "sha256=$hash"
+          $lines += "mod4=$($encoded.Length % 4)"
+          try {
+            $bytes = [Convert]::FromBase64String($encoded)
+            $patch = Join-Path $env:RUNNER_TEMP 'smart-command-card-reporting.patch'
+            [IO.File]::WriteAllBytes($patch, $bytes)
+            $hash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "decoded=$($bytes.Length)"
+            $lines += "sha256=$hash"
+          }
+          catch {
+            $lines += "decodeError=$($_.Exception.Message)"
+          }
           $lines | Set-Content .\patch-transport-debug.txt
           $lines | ForEach-Object { Write-Host $_ }
 
