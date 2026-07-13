@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -8,20 +7,16 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Direct visual-tree UX behavior for the dense IEC 61850 workspaces.
-///
-/// The previous implementation depended on individual DataGrid Loaded events and
-/// attempted to insert a separate filter host beside the grid. That was too fragile
-/// for hidden TabItem content and virtualized command rows. This implementation hooks
-/// the MainWindow itself, configures the actual column headers, and attaches directly
-/// to the generators that create IED cards and command rows.
+/// Dense engineering-grid behavior shared by the main ArIED workspaces.
+/// The behavior attaches to the real MainWindow visual tree, then follows the
+/// item/row generators so hidden tabs and virtualized rows are configured when
+/// they actually exist.
 /// </summary>
 internal static class GridUxBehavior
 {
@@ -96,7 +91,7 @@ internal static class GridUxBehavior
 
         state.RetryTimer = new DispatcherTimer(DispatcherPriority.Background, owner.Dispatcher)
         {
-            Interval = TimeSpan.FromMilliseconds(450)
+            Interval = TimeSpan.FromMilliseconds(400)
         };
         state.RetryTimer.Tick += (_, _) => TryInstallMainWindowUx(owner, state);
         owner.Closed += (_, _) => state.RetryTimer?.Stop();
@@ -191,6 +186,7 @@ internal static class GridUxBehavior
 
         list.ItemContainerGenerator.StatusChanged += (_, _) => ApplyCards();
         list.Loaded += (_, _) => ApplyCards();
+        list.LayoutUpdated += (_, _) => ApplyCompactIedCards(list);
         ApplyCards();
     }
 
@@ -214,31 +210,41 @@ internal static class GridUxBehavior
             card.Padding = new Thickness(8);
         }
 
-        var nameText = FindVisualChildren<TextBlock>(container)
-            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
-                .Equals("Name", StringComparison.Ordinal));
-        if (nameText?.Parent is not StackPanel identityPanel || identityPanel.Parent is not Grid cardContent)
+        var cardContent = FindVisualChildren<Grid>(container)
+            .FirstOrDefault(grid => grid.Name.Equals("CardContent", StringComparison.Ordinal));
+        if (cardContent == null)
             return;
 
-        var root = cardContent.Parent as Grid;
-        if (root != null)
-            root.MinHeight = 70;
+        if (FindAncestor<Grid>(cardContent) is Grid cardRoot)
+            cardRoot.MinHeight = 70;
 
         cardContent.VerticalAlignment = VerticalAlignment.Center;
+        cardContent.RowDefinitions.Clear();
+        cardContent.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         cardContent.ColumnDefinitions.Clear();
         cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
         cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        Grid.SetRow(identityPanel, 0);
-        Grid.SetColumn(identityPanel, 1);
-        identityPanel.VerticalAlignment = VerticalAlignment.Center;
-        identityPanel.Margin = new Thickness(0);
+        var nameText = FindVisualChildren<TextBlock>(cardContent)
+            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
+                .Equals("Name", StringComparison.Ordinal));
+        var identityPanel = FindAncestor<StackPanel>(nameText);
+        if (identityPanel != null)
+        {
+            Grid.SetRow(identityPanel, 0);
+            Grid.SetColumn(identityPanel, 1);
+            identityPanel.VerticalAlignment = VerticalAlignment.Center;
+            identityPanel.Margin = new Thickness(0);
+        }
 
-        nameText.FontSize = 13;
-        nameText.FontWeight = FontWeights.SemiBold;
+        if (nameText != null)
+        {
+            nameText.FontSize = 13;
+            nameText.FontWeight = FontWeights.SemiBold;
+        }
 
-        var endpointText = FindVisualChildren<TextBlock>(identityPanel)
+        var endpointText = FindVisualChildren<TextBlock>(cardContent)
             .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
                 .Equals("IdentityText", StringComparison.Ordinal));
         if (endpointText != null)
@@ -253,28 +259,29 @@ internal static class GridUxBehavior
 
         foreach (var noisyPath in new[] { "SummaryText", "AcquisitionMode" })
         {
-            var noisyText = FindVisualChildren<TextBlock>(identityPanel)
+            var noisyText = FindVisualChildren<TextBlock>(cardContent)
                 .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
                     .Equals(noisyPath, StringComparison.Ordinal));
             if (noisyText != null)
                 noisyText.Visibility = Visibility.Collapsed;
         }
 
-        var unreadText = FindVisualChildren<TextBlock>(container)
-            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
-                .Equals("UnreadEventText", StringComparison.Ordinal));
-        var unreadBadge = FindAncestor<Border>(unreadText);
+        var unreadBadge = FindVisualChildren<Border>(cardContent)
+            .FirstOrDefault(border => border.Name.Equals("UnreadEventBadge", StringComparison.Ordinal));
         if (unreadBadge != null)
             unreadBadge.Visibility = Visibility.Collapsed;
 
-        var statusHost = cardContent.Children
-            .OfType<Grid>()
-            .FirstOrDefault(grid => Grid.GetRow(grid) == 0 && Grid.GetColumn(grid) == 0);
+        var connectionDot = FindVisualChildren<Ellipse>(cardContent)
+            .FirstOrDefault(ellipse => ellipse.Name.Equals("ConnectionDot", StringComparison.Ordinal));
+        var statusHost = FindAncestor<Grid>(connectionDot);
         if (statusHost != null)
+        {
+            Grid.SetRow(statusHost, 0);
+            Grid.SetColumn(statusHost, 0);
             ConfigureIedIcon(statusHost);
+        }
 
-        var actionHost = cardContent.Children
-            .OfType<Border>()
+        var actionHost = FindVisualChildren<Border>(cardContent)
             .FirstOrDefault(border => FindVisualChildren<Button>(border).Count() >= 4);
         if (actionHost != null)
         {
@@ -282,14 +289,21 @@ internal static class GridUxBehavior
             Grid.SetColumn(actionHost, 2);
             actionHost.HorizontalAlignment = HorizontalAlignment.Right;
             actionHost.VerticalAlignment = VerticalAlignment.Center;
-            actionHost.Margin = new Thickness(8, 0, 0, 0);
+            actionHost.Margin = new Thickness(7, 0, 0, 0);
             actionHost.Padding = new Thickness(0);
             actionHost.Background = Brushes.Transparent;
             actionHost.BorderThickness = new Thickness(0);
             actionHost.CornerRadius = new CornerRadius(0);
 
             foreach (var button in FindVisualChildren<Button>(actionHost))
-                button.Margin = new Thickness(1.5, 0, 1.5, 0);
+            {
+                button.Width = 30;
+                button.Height = 30;
+                button.MinWidth = 30;
+                button.MinHeight = 30;
+                button.Padding = new Thickness(5);
+                button.Margin = new Thickness(1, 0, 1, 0);
+            }
         }
     }
 
@@ -297,11 +311,25 @@ internal static class GridUxBehavior
     {
         statusHost.Width = 36;
         statusHost.Height = 36;
-        statusHost.Margin = new Thickness(0, 0, 8, 0);
+        statusHost.Margin = new Thickness(0, 0, 7, 0);
         statusHost.VerticalAlignment = VerticalAlignment.Center;
 
         if (statusHost.Children.OfType<Border>().Any(border => Equals(border.Tag, "CompactIedIcon")))
             return;
+
+        var iconPath = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M4,3 H20 V21 H4 Z M8,8 H16 M8,12 H16 M8,16 H14"),
+            Width = 19,
+            Height = 19,
+            Stretch = Stretch.Uniform,
+            Stroke = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            StrokeThickness = 1.8,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent
+        };
 
         var icon = new Border
         {
@@ -314,19 +342,7 @@ internal static class GridUxBehavior
             BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new System.Windows.Shapes.Path
-            {
-                Data = Geometry.Parse("M4,3 H20 V21 H4 Z M8,8 H16 M8,12 H16 M8,16 H14"),
-                Width = 19,
-                Height = 19,
-                Stretch = Stretch.Uniform,
-                Stroke = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-                StrokeThickness = 1.8,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                StrokeLineJoin = PenLineJoin.Round,
-                Fill = Brushes.Transparent
-            }
+            Child = iconPath
         };
 
         statusHost.Children.Insert(0, icon);
@@ -479,19 +495,52 @@ internal static class GridUxBehavior
         };
         state.View.Filter = item => FilterGlobalPoint(item, state.Filters);
 
+        grid.HorizontalAlignment = HorizontalAlignment.Stretch;
+        grid.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        grid.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+
+        ApplyGlobalColumnStretch(grid);
+
         var baseHeaderStyle = owner.TryFindResource(typeof(DataGridColumnHeader)) as Style;
         var headerStyle = new Style(typeof(DataGridColumnHeader), baseHeaderStyle);
         headerStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
         headerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
         headerStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
-        headerStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 70d));
+        headerStyle.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(243, 246, 250))));
+        headerStyle.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(220, 227, 236))));
+        headerStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 1, 1)));
+        headerStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 74d));
         grid.ColumnHeaderStyle = headerStyle;
-        grid.ColumnHeaderHeight = 70;
+        grid.ColumnHeaderHeight = 74;
 
         foreach (var column in grid.Columns)
         {
             var caption = column.Header?.ToString() ?? string.Empty;
             column.Header = BuildRapidFilterHeader(state, caption);
+        }
+    }
+
+    private static void ApplyGlobalColumnStretch(DataGrid grid)
+    {
+        var layout = new Dictionary<string, (double Weight, double Minimum)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["IED"] = (0.85, 90),
+            ["Signal"] = (1.35, 145),
+            ["IEC Telegram"] = (2.20, 250),
+            ["Value"] = (0.85, 95),
+            ["Quality"] = (1.00, 105),
+            ["IED Timestamp"] = (1.35, 155),
+            ["Acquisition"] = (1.25, 150)
+        };
+
+        foreach (var column in grid.Columns)
+        {
+            var caption = column.Header?.ToString() ?? string.Empty;
+            if (!layout.TryGetValue(caption, out var specification))
+                continue;
+
+            column.MinWidth = specification.Minimum;
+            column.Width = new DataGridLength(specification.Weight, DataGridLengthUnitType.Star);
         }
     }
 
@@ -502,16 +551,16 @@ internal static class GridUxBehavior
             Background = Brushes.Transparent,
             SnapsToDevicePixels = true
         };
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(33) });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(37) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
 
         var title = new TextBlock
         {
             Text = caption,
             Margin = new Thickness(10, 0, 8, 0),
-            Foreground = new SolidColorBrush(Color.FromRgb(71, 84, 103)),
+            Foreground = new SolidColorBrush(Color.FromRgb(52, 64, 84)),
             FontWeight = FontWeights.SemiBold,
-            FontSize = 12.3,
+            FontSize = 12.5,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -519,68 +568,44 @@ internal static class GridUxBehavior
         root.Children.Add(title);
 
         var filterBox = CreateRapidFilterTextBox(state, caption);
-        var filterBorder = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(220, 227, 236)),
-            BorderThickness = new Thickness(0, 1, 1, 0),
-            CornerRadius = new CornerRadius(0),
-            Child = filterBox
-        };
-        Grid.SetRow(filterBorder, 1);
-        root.Children.Add(filterBorder);
+        Grid.SetRow(filterBox, 1);
+        root.Children.Add(filterBox);
 
         return root;
     }
 
-    private static Grid CreateRapidFilterTextBox(GlobalRapidFilterState state, string key)
+    private static TextBox CreateRapidFilterTextBox(GlobalRapidFilterState state, string key)
     {
         var box = new TextBox
         {
             Tag = key,
             Height = 36,
-            Padding = new Thickness(9, 0, 7, 0),
-            FontSize = 12.1,
+            Padding = new Thickness(10, 0, 7, 0),
+            FontSize = 12.5,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(Color.FromRgb(29, 41, 57)),
             CaretBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-            Background = Brushes.White,
-            BorderThickness = new Thickness(0),
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 222, 233)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             FocusVisualStyle = null,
-            Template = BuildSquareTextBoxTemplate()
+            Template = BuildRapidFilterTextBoxTemplate()
         };
-
-        var watermark = new TextBlock
-        {
-            Text = "Filter…",
-            Margin = new Thickness(9, 0, 7, 0),
-            Foreground = new SolidColorBrush(Color.FromRgb(152, 162, 179)),
-            FontSize = 12.1,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-
-        void UpdateWatermark()
-            => watermark.Visibility = string.IsNullOrEmpty(box.Text) && !box.IsKeyboardFocused
-                ? Visibility.Visible
-                : Visibility.Collapsed;
 
         box.PreviewMouseLeftButtonDown += (_, e) =>
         {
             if (box.IsKeyboardFocusWithin)
                 return;
+
             e.Handled = true;
             box.Focus();
         };
         box.PreviewMouseLeftButtonUp += (_, e) => e.Handled = true;
-        box.GotKeyboardFocus += (_, _) => UpdateWatermark();
-        box.LostKeyboardFocus += (_, _) => UpdateWatermark();
         box.TextChanged += (_, _) =>
         {
             state.Filters[key] = box.Text ?? string.Empty;
-            UpdateWatermark();
             state.RefreshTimer.Stop();
             state.RefreshTimer.Start();
         };
@@ -600,10 +625,74 @@ internal static class GridUxBehavior
             }
         };
 
-        var host = new Grid();
-        host.Children.Add(box);
-        host.Children.Add(watermark);
-        return host;
+        return box;
+    }
+
+    private static ControlTemplate BuildRapidFilterTextBoxTemplate()
+    {
+#pragma warning disable CS0618
+        var chrome = new FrameworkElementFactory(typeof(Border), "Chrome");
+        chrome.SetBinding(Border.BackgroundProperty, new Binding(nameof(Control.Background))
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+        });
+        chrome.SetBinding(Border.BorderBrushProperty, new Binding(nameof(Control.BorderBrush))
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+        });
+        chrome.SetBinding(Border.BorderThicknessProperty, new Binding(nameof(Control.BorderThickness))
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+        });
+        chrome.SetValue(Border.CornerRadiusProperty, new CornerRadius(0));
+
+        var contentGrid = new FrameworkElementFactory(typeof(Grid));
+
+        var contentHost = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
+        contentHost.SetBinding(FrameworkElement.MarginProperty, new Binding(nameof(Control.Padding))
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+        });
+        contentHost.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        contentHost.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        contentHost.SetBinding(System.Windows.Documents.TextElement.ForegroundProperty, new Binding(nameof(Control.Foreground))
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+        });
+        contentGrid.AppendChild(contentHost);
+
+        var watermark = new FrameworkElementFactory(typeof(TextBlock), "Watermark");
+        watermark.SetValue(TextBlock.TextProperty, "Filter…");
+        watermark.SetValue(FrameworkElement.MarginProperty, new Thickness(10, 0, 7, 0));
+        watermark.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(152, 162, 179)));
+        watermark.SetValue(TextBlock.FontSizeProperty, 12.5d);
+        watermark.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        watermark.SetValue(UIElement.IsHitTestVisibleProperty, false);
+        watermark.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+        contentGrid.AppendChild(watermark);
+
+        chrome.AppendChild(contentGrid);
+
+        var template = new ControlTemplate(typeof(TextBox)) { VisualTree = chrome };
+
+        var watermarkTrigger = new MultiTrigger();
+        watermarkTrigger.Conditions.Add(new Condition(TextBox.TextProperty, string.Empty));
+        watermarkTrigger.Conditions.Add(new Condition(UIElement.IsKeyboardFocusedProperty, false));
+        watermarkTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "Watermark"));
+        template.Triggers.Add(watermarkTrigger);
+
+        var focusTrigger = new Trigger
+        {
+            Property = UIElement.IsKeyboardFocusedProperty,
+            Value = true
+        };
+        focusTrigger.Setters.Add(new Setter(Border.BackgroundProperty, Brushes.White, "Chrome"));
+        focusTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(37, 99, 235)), "Chrome"));
+        focusTrigger.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(0, 2, 0, 0), "Chrome"));
+        template.Triggers.Add(focusTrigger);
+
+        return template;
+#pragma warning restore CS0618
     }
 
     private static bool FilterGlobalPoint(object item, IReadOnlyDictionary<string, string> filters)
@@ -709,28 +798,6 @@ internal static class GridUxBehavior
         }
 
         return null;
-    }
-
-    private static ControlTemplate BuildSquareTextBoxTemplate()
-    {
-#pragma warning disable CS0618
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.SetBinding(Border.BackgroundProperty, new Binding(nameof(Control.Background))
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
-        });
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(0));
-
-        var host = new FrameworkElementFactory(typeof(ScrollViewer));
-        host.SetValue(FrameworkElement.NameProperty, "PART_ContentHost");
-        host.SetBinding(FrameworkElement.MarginProperty, new Binding(nameof(Control.Padding))
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
-        });
-        border.AppendChild(host);
-
-        return new ControlTemplate(typeof(TextBox)) { VisualTree = border };
-#pragma warning restore CS0618
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
