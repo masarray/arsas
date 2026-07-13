@@ -1,0 +1,63 @@
+name: Capture Open SCL build diagnostics
+
+on:
+  push:
+    branches:
+      - feat/open-scl-import
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ArIED application
+        uses: actions/checkout@v4
+        with:
+          ref: feat/open-scl-import
+          path: ArIED61850Tester
+          fetch-depth: 0
+
+      - name: Checkout ARIEC61850 engine
+        uses: actions/checkout@v4
+        with:
+          repository: masarray/ARIEC61850
+          path: ARIEC61850
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Capture restore and build output
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:GITHUB_WORKSPACE 'ArIED61850Tester\open-scl-build-diagnostic.txt'
+          "Open SCL build diagnostic" | Set-Content $log
+          "Commit: $env:GITHUB_SHA" | Add-Content $log
+          "" | Add-Content $log
+          dotnet restore .\ArIED61850Tester\ArIED61850Tester.csproj *>&1 | Tee-Object -FilePath $log -Append
+          $restoreExit = $LASTEXITCODE
+          "" | Add-Content $log
+          "RESTORE_EXIT=$restoreExit" | Add-Content $log
+          if ($restoreExit -eq 0) {
+            dotnet build .\ArIED61850Tester\ArIED61850Tester.csproj -c Release --no-restore *>&1 | Tee-Object -FilePath $log -Append
+            $buildExit = $LASTEXITCODE
+          } else {
+            $buildExit = -1
+          }
+          "" | Add-Content $log
+          "BUILD_EXIT=$buildExit" | Add-Content $log
+          exit 0
+
+      - name: Commit diagnostic file and remove helper workflow
+        shell: pwsh
+        working-directory: ArIED61850Tester
+        run: |
+          git rm .github/workflows/capture-open-scl-build.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add open-scl-build-diagnostic.txt
+          git commit -m 'ci: capture Open SCL build diagnostic'
+          git push origin HEAD:feat/open-scl-import
