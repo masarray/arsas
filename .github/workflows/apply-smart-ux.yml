@@ -1,0 +1,47 @@
+name: Apply smart command/card patch
+
+on:
+  push:
+    branches: [ fix/smart-command-card-reporting ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[smart-ux-applied]') }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout patch branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/smart-command-card-reporting
+          fetch-depth: 0
+
+      - name: Decode and apply reviewed source patch
+        shell: powershell
+        run: |
+          $parts = Get-ChildItem .\tools\smart-ux-patch.part*.b64 | Sort-Object Name
+          $encoded = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $bytes = [Convert]::FromBase64String($encoded)
+          $patch = Join-Path $env:RUNNER_TEMP 'smart-command-card-reporting.patch'
+          [IO.File]::WriteAllBytes($patch, $bytes)
+          git apply --check --whitespace=nowarn $patch
+          git apply --whitespace=nowarn $patch
+
+      - name: Remove patch transport and restore normal CI
+        shell: powershell
+        run: |
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/build.yml
+          git rm .github/workflows/apply-smart-ux.yml
+          git rm tools/smart-ux-patch.part*.b64
+
+      - name: Commit applied source
+        shell: powershell
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: stabilize relay cards, command panel, and report recovery [smart-ux-applied]'
+          git push origin HEAD:fix/smart-command-card-reporting
