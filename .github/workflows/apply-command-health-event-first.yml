@@ -1,0 +1,43 @@
+name: Apply command health event-first follow-up
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/command-health-event-first-ui
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply reviewed source patches
+        shell: pwsh
+        run: |
+          python tools/apply_command_health_ui.py
+          python tools/apply_runtime_health_event_first.py
+          python -c "import xml.etree.ElementTree as E; E.parse('App.xaml'); E.parse('MainWindow.xaml'); print('XAML XML validation passed')"
+
+      - name: Commit source changes
+        shell: pwsh
+        run: |
+          git rm tools/apply_command_health_ui.py
+          git rm tools/apply_runtime_health_event_first.py
+          git rm .github/workflows/apply-command-health-event-first.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add App.xaml MainWindow.CommandPanelUx.cs MainWindow.xaml MainWindow.xaml.cs Services/Iec61850MonitorRuntime.cs
+          git commit -m 'fix: reliable command state, fast liveness, event-first monitoring'
+          git push origin HEAD:fix/command-health-event-first-ui
