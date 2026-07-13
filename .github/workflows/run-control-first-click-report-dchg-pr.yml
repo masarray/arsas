@@ -26,14 +26,10 @@ jobs:
       - name: Apply reviewed patch from source workflow
         shell: bash
         run: |
+          grep '^H4sI' .github/workflows/apply-control-first-click-report-dchg.yml > /tmp/control-first-click.patch.gz.b64
+          base64 -d /tmp/control-first-click.patch.gz.b64 | gzip -d > /tmp/control-first-click.patch
           python - <<'PY'
           from pathlib import Path
-          import base64, gzip
-          workflow = Path('.github/workflows/apply-control-first-click-report-dchg.yml').read_text(encoding='utf-8')
-          start = workflow.index("PATCH_B64'\n") + len("PATCH_B64'\n")
-          end = workflow.index('\nPATCH_B64', start)
-          patch = gzip.decompress(base64.b64decode(workflow[start:end].strip()))
-          Path('/tmp/control-first-click.patch').write_bytes(patch)
           for name in [
               'MainWindow.CommandPanelUx.cs',
               'MainWindow.xaml.cs',
