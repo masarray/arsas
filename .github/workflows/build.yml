@@ -15,6 +15,20 @@ jobs:
         with:
           path: ArIED61850Tester
 
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArIED61850-source-snapshot
+          path: |
+            ArIED61850Tester/App.xaml
+            ArIED61850Tester/MainWindow.xaml
+            ArIED61850Tester/MainWindow.xaml.cs
+            ArIED61850Tester/MainWindow.CommandPanelUx.cs
+            ArIED61850Tester/MainWindow.ControlDiagnostics.cs
+            ArIED61850Tester/GridUxBehavior.cs
+            ArIED61850Tester/Models
+            ArIED61850Tester/Services
+
       - name: Checkout ARIEC61850 engine
         uses: actions/checkout@v4
         with:
