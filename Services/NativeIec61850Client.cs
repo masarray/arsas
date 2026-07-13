@@ -516,6 +516,7 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
                 DataSetReference = header.DataSetReference,
                 SequenceNumber = header.SequenceNumber,
                 ConfRev = header.ConfRev,
+                ReportTimestamp = header.TimeOfEntry,
                 UpdatedAt = update.UpdatedAt
             }));
         }
