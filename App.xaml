@@ -597,13 +597,6 @@
                                 <Setter TargetName="RowBorder" Property="Background" Value="#EAF2FF"/>
                                 <Setter TargetName="RowBorder" Property="BorderBrush" Value="#C7DAFF"/>
                             </Trigger>
-                            <!-- Runtime live-value edge highlight. This trigger is placed
-                                 after selection so a selected commissioning row still flashes. -->
-                            <DataTrigger Binding="{Binding IsRecentlyChanged}" Value="True">
-                                <Setter TargetName="RowBorder" Property="Background" Value="#FFF0A8"/>
-                                <Setter TargetName="RowBorder" Property="BorderBrush" Value="#F59E0B"/>
-                                <Setter TargetName="RowBorder" Property="BorderThickness" Value="4,1,1,1"/>
-                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>

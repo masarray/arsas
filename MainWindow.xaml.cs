@@ -688,7 +688,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
         if (SelectedDevice != null)
-            await RefreshControlValuesAsync(SelectedDevice);
+            await RefreshControlValuesAsync(SelectedDevice, force: true);
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
@@ -800,12 +800,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
           return;
   }
 
-  if (signal.ControlModelText == "Auto-detect" || signal.ControlCurrentValue == "-")
+  var capabilities = await _runtime.InspectControlAsync(device.DeviceId, signal, _applicationCancellation.Token);
+  signal.ControlCurrentValue = capabilities.CurrentValue;
+  device.RefreshCommandSignalProjection();
+  RebuildControlFeedbackIndex(device);
+  if (!capabilities.SupportsOperate)
+      throw new InvalidOperationException($"{signal.ObjectReference} is not command-ready: {capabilities.ControlModelText}.");
+  if (!CommandTestMode && SameControlState(signal, requestedValue, capabilities.CurrentValue))
   {
-      var capabilities = await _runtime.InspectControlAsync(device.DeviceId, signal, _applicationCancellation.Token);
-      signal.ControlCurrentValue = capabilities.CurrentValue;
-      device.RefreshCommandSignalProjection();
-      RebuildControlFeedbackIndex(device);
+      var current = string.IsNullOrWhiteSpace(capabilities.CurrentValue) ? "the requested state" : capabilities.CurrentValue;
+      signal.ControlLastResult = $"Already {current} — no command was sent.";
+      SetStatus($"{device.Name}: {signal.Name} is already {current}; duplicate control suppressed.");
+      return;
   }
 
   var result = await _runtime.ExecuteControlAsync(
@@ -846,6 +852,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
   signal.ControlIsBusy = false;
         }
+    }
+
+    private static bool SameControlState(SignalDefinition signal, string requested, string current)
+    {
+        if (signal.IsPositionControl && Iec61850ValueFormatter.TryNormalizeDbpos(requested, out var requestCode) && Iec61850ValueFormatter.TryNormalizeDbpos(current, out var currentCode)) return requestCode == currentCode;
+        if (signal.IsBooleanControl && bool.TryParse(requested, out var requestBool) && bool.TryParse(current, out var currentBool)) return requestBool == currentBool;
+        return requested.Trim().Equals(current.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildQuickControlResult(Iec61850ControlCommandResult result)

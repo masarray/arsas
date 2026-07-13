@@ -111,20 +111,17 @@
             <TabItem Header="IEC 61850 Explorer">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="250"/>
+                        <ColumnDefinition Width="258"/>
                         <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">
                         <DockPanel>
-                            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="IED Explorer" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                    </StackPanel>
-                                    <TextBlock Text="Independent MMS session per IED" FontSize="11.8" Foreground="{StaticResource Muted}" Margin="16,3,0,0"/>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="IED Explorer" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                 </StackPanel>
                             </Grid>
 
@@ -136,13 +133,13 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" Click="ConnectAllIeds_Click" Style="{StaticResource SoftButton}"
+                                    <Button Grid.Column="0" Click="ConnectAllIeds_Click" Style="{StaticResource SoftButton}" Padding="8,7" FontSize="11.5"
                                             ToolTip="Fast-connect every saved IED and start live monitoring for its saved selections">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0">
+                                            <Viewbox Width="13" Height="13" Margin="0,0,4,0">
                                                 <Canvas Width="24" Height="24">
                                                     <Path Data="M5,3 L19,12 L5,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
                                                 </Canvas>
@@ -150,7 +147,7 @@
                                             <TextBlock Text="Connect All" FontWeight="SemiBold"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Grid.Column="2" Click="AddRelay_Click" Style="{StaticResource PrimaryButton}"
+                                    <Button Grid.Column="2" Click="AddRelay_Click" Style="{StaticResource PrimaryButton}" Padding="8,7" FontSize="11.5"
                                             ToolTip="Add another IEC 61850 IED">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="＋" FontSize="15" FontWeight="SemiBold" Margin="0,-1,5,0"/>
@@ -173,7 +170,7 @@
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="ListBoxItem">
-                                                    <Border x:Name="Card" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10">
+                                                    <Border x:Name="Card" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="14" Padding="8">
                                                         <ContentPresenter/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
@@ -192,19 +189,19 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid MinHeight="86">
+                                        <Grid MinHeight="72">
                                             <Grid x:Name="CardContent">
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="64"/>
+                                                    <ColumnDefinition Width="66"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Large borderless relay / BCU icon; icon color is the connection state. -->
-                                      <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="58" Height="58" Margin="0,-2,6,0" VerticalAlignment="Top" Panel.ZIndex="2">
-                                          <Viewbox Width="55" Height="55" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                      <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="62" Height="62" Margin="0,0,4,0" VerticalAlignment="Center" Panel.ZIndex="2">
+                                          <Viewbox Width="60" Height="60" HorizontalAlignment="Center" VerticalAlignment="Center">
                                               <Path x:Name="RelayDeviceIcon" Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z" Fill="#EF4444" Stretch="Uniform">
                                                   <Path.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.58" Color="#EF4444"/></Path.Effect>
                                               </Path>
@@ -221,7 +218,7 @@
 
                                                 <!-- Direct, unobstructed hit targets below the IP address. -->
                                                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                                                            HorizontalAlignment="Left" Margin="0,7,0,0" Panel.ZIndex="10">
+                                                            HorizontalAlignment="Left" Margin="0,4,0,0" Panel.ZIndex="10">
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedPlayAction_Click"
                                                             IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
                                                         <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M6,3 L20,12 L6,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
@@ -361,12 +358,12 @@
                                             </Style>
                                         </DataGrid.CellStyle>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="220*" MinWidth="175"/>
-                                            <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320*" MinWidth="250"/>
-                                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="120*" MinWidth="100"/>
-                                            <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="150*" MinWidth="125"/>
-                                            <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185*" MinWidth="150"/>
-                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190*" MinWidth="160"/>
+                                            <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="1.05*" MinWidth="145"/>
+                                            <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="1.55*" MinWidth="205"/>
+                                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="0.8*" MinWidth="125"/>
+                                            <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
+                                            <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
+                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="1.05*" MinWidth="150"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
 
@@ -425,8 +422,8 @@
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                                       ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="280" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Value" Width="115">
+                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="2.1*" MinWidth="210" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Value" Width="0.85*" MinWidth="105">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <Border Padding="9,5" CornerRadius="10" HorizontalAlignment="Left" MinWidth="76">
@@ -467,9 +464,9 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="105" IsReadOnly="True"/>
-                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="210" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Control" Width="*" MinWidth="220">
+                                                    <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="0.72*" MinWidth="88" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.35*" MinWidth="175" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Control" Width="1.45*" MinWidth="200">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3">

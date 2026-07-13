@@ -65,6 +65,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime ReportSetupDeadlineUtc { get; set; } = DateTime.MinValue;
         public DateTime NextReconnectUtc { get; set; } = DateTime.MinValue;
         public int ConsecutiveSessionErrors { get; set; }
+        public DateTime LastSuccessfulIoUtc { get; set; } = DateTime.UtcNow;
+        public DateTime NextHealthProbeUtc { get; set; } = DateTime.MinValue;
+        public int ConsecutiveHealthProbeFailures { get; set; }
+        public string HealthProbePointKey { get; set; } = string.Empty;
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
@@ -357,6 +361,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportSetupNotBeforeUtc = DateTime.MinValue;
         session.ReportSetupDeadlineUtc = DateTime.MinValue;
         session.ConsecutiveSessionErrors = 0;
+        session.LastSuccessfulIoUtc = DateTime.UtcNow;
+        session.NextHealthProbeUtc = DateTime.UtcNow.AddSeconds(1);
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.HealthProbePointKey = string.Empty;
 
         var safePollMs = Math.Clamp(pollingIntervalMs <= 0 ? 1000 : pollingIntervalMs, 50, 600000);
         foreach (var signal in selected)
@@ -371,6 +379,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Reason = signal.IsReportCapable ? "report plan pending" : "cyclic"
             };
         }
+
+        session.HealthProbePointKey = session.Points.Values
+            .OrderByDescending(IsFastPoint)
+            .ThenBy(point => point.SignalName, StringComparer.OrdinalIgnoreCase)
+            .Select(point => point.PointKey)
+            .FirstOrDefault() ?? string.Empty;
 
         var plans = Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
         session.PendingReportPlans = plans;
@@ -604,15 +618,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 if (!session.Client.IsConnected)
                 {
+                    MarkSessionOffline(session, "IEC 61850 transport is offline; smart reconnect is pending.");
                     await TryReconnectAsync(session, cancellationToken).ConfigureAwait(false);
-                    await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(200, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
                 await ReceiveReportSlicesAsync(session, cancellationToken).ConfigureAwait(false);
                 await PollDuePointsAsync(session, cancellationToken).ConfigureAwait(false);
+                await ProbeSessionHealthAsync(session, cancellationToken).ConfigureAwait(false);
                 await TryStartPendingReportSetupAsync(session, cancellationToken).ConfigureAwait(false);
-                session.ConsecutiveSessionErrors = 0;
 
                 await Task.Delay(CalculateLoopDelayMs(session), cancellationToken).ConfigureAwait(false);
             }
@@ -626,8 +641,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Log("WARN", session.Device.Name,
                     $"Monitor loop recovered from {ex.GetType().Name}: {ex.Message}");
 
-                if (session.ConsecutiveSessionErrors >= 5)
-                    await ForceReconnectAsync(session).ConfigureAwait(false);
+                if (session.ConsecutiveSessionErrors >= 2)
+                    await ForceReconnectAsync(session, "Repeated monitor I/O failures.").ConfigureAwait(false);
 
                 try
                 {
@@ -684,8 +699,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 ? $"Smart reporting • static {staticReportCount} • fallback {pollingFallbackCount}"
                 : $"MMS polling fallback • {pollingFallbackCount} point(s)";
         session.Device.Detail = session.ActiveReportPlans.Count > 0
-            ? $"{session.Points.Count} point(s): live values started by MMS, then report-first acquisition was armed; MMS remains for q/t and low-rate verification."
-            : $"{session.Points.Count} point(s): reporting could not be armed; MMS polling fallback remains active.";
+            ? $"{session.Points.Count} point(s): event-driven reporting is primary; one lightweight MMS heartbeat and low-rate verification keep connection health reliable."
+            : $"{session.Points.Count} point(s): reporting could not be armed; bounded MMS polling fallback remains active.";
         session.Device.RefreshComputed();
 
         Log("INFO", session.Device.Name,
@@ -694,14 +709,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private static int CalculateLoopDelayMs(DeviceSession session)
     {
-        var defaultDelay = session.ActiveReportPlans.Count > 0 ? 5 : 10;
+        var defaultDelay = session.ActiveReportPlans.Count > 0 ? 12 : 25;
         if (!session.PollQueue.TryPeek(out _, out var dueTicks))
             return defaultDelay;
 
         var remainingMs = TimeSpan.FromTicks(Math.Max(0, dueTicks - DateTime.UtcNow.Ticks)).TotalMilliseconds;
         if (remainingMs <= 0)
-            return 1;
-        return Math.Clamp((int)Math.Ceiling(remainingMs), 1, defaultDelay);
+            return 2;
+        return Math.Clamp((int)Math.Ceiling(remainingMs), 2, defaultDelay);
     }
 
     private async Task ReceiveReportSlicesAsync(DeviceSession session, CancellationToken cancellationToken)
@@ -712,7 +727,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         // Avoid N × blocking slices when an IED exposes many RCBs. A bounded
         // round-robin drain keeps reporting responsive without starving polling.
-        var batchCount = Math.Min(plans.Count, 8);
+        var batchCount = Math.Min(plans.Count, 4);
         for (var offset = 0; offset < batchCount; offset++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -720,10 +735,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             var plan = plans[index];
             var slice = await session.Client.ReceiveReportMonitorSliceAsync(
                 plan.PlanId,
-                TimeSpan.FromMilliseconds(4),
+                TimeSpan.FromMilliseconds(3),
                 cancellationToken).ConfigureAwait(false);
 
             ProcessReportHealth(session, plan, slice);
+            if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
+                RecordSuccessfulIo(session);
 
             foreach (var update in slice.Updates)
             {
@@ -925,7 +942,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private async Task PollDuePointsAsync(DeviceSession session, CancellationToken cancellationToken)
     {
         var processed = 0;
-        while (processed < 12 && session.PollQueue.TryPeek(out var pointKey, out var dueTicks))
+        while (processed < 8 && session.PollQueue.TryPeek(out var pointKey, out var dueTicks))
         {
             var nowUtc = DateTime.UtcNow;
             if (dueTicks > nowUtc.Ticks)
@@ -968,6 +985,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 }
 
                 state.ConsecutiveErrors = 0;
+                RecordSuccessfulIo(session);
                 if (resolved.UsedAlternateReference(point.IecReference))
                 {
                     Log("INFO", session.Device.Name,
@@ -1057,7 +1075,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 state.ConsecutiveErrors++;
                 EmitStatusSnapshot(point, state, $"Read error: {ex.Message}", "Bad / communication error");
-                if (state.ConsecutiveErrors >= 5)
+                if (state.ConsecutiveErrors >= 2)
                     session.ConsecutiveSessionErrors++;
             }
         }
@@ -1171,33 +1189,29 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private async Task TryReconnectAsync(DeviceSession session, CancellationToken cancellationToken)
     {
-        if (DateTime.UtcNow < session.NextReconnectUtc)
-            return;
-
-        session.NextReconnectUtc = DateTime.UtcNow.AddSeconds(3);
+        if (DateTime.UtcNow < session.NextReconnectUtc) return;
+        session.NextReconnectUtc = DateTime.UtcNow.AddSeconds(2);
+        MarkSessionOffline(session, $"Reconnecting MMS association to {session.Device.EndpointText}.");
         session.Device.Status = "Reconnecting";
-        session.Device.Detail = $"Retrying MMS association to {session.Device.EndpointText}.";
         Log("WARN", session.Device.Name, "IEC 61850 session is offline. Smart reconnect started.");
-
-        try
-        {
-            await session.Client.DisposeAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-            // Old session cleanup must not block reconnect.
-        }
-
+        try { await session.Client.DisposeAsync().ConfigureAwait(false); } catch { }
         session.Client = new NativeIec61850Client();
-        await session.Client.ConnectAsync(session.Device.IpAddress, session.Device.Port, cancellationToken).ConfigureAwait(false);
+        try { await session.Client.ConnectAsync(session.Device.IpAddress, session.Device.Port, cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            session.Device.Status = "Reconnect pending";
+            session.Device.Detail = ex.Message;
+            session.Device.RefreshComputed();
+            return;
+        }
         if (!session.Client.IsConnected)
         {
-            session.Device.IsConnected = false;
             session.Device.Status = "Reconnect pending";
             session.Device.Detail = session.Client.LastErrorMessage;
+            session.Device.RefreshComputed();
             return;
         }
-
         session.ActiveReportPlans.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
@@ -1207,26 +1221,71 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
         ResetPollQueue(session);
         UpdateDeviceAcquisitionSummary(session);
-
         session.ConsecutiveSessionErrors = 0;
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.LastSuccessfulIoUtc = DateTime.UtcNow;
+        session.NextHealthProbeUtc = DateTime.UtcNow.AddSeconds(1);
         session.Device.IsConnected = true;
         session.Device.Status = "Monitoring";
         session.Device.Detail = $"MMS reconnected. {session.Points.Count} point(s) resumed.";
+        session.Device.RefreshComputed();
         Log("INFO", session.Device.Name, "MMS reconnect successful. Monitoring resumed automatically.");
     }
 
-    private async Task ForceReconnectAsync(DeviceSession session)
+    private async Task ForceReconnectAsync(DeviceSession session, string reason)
     {
+        MarkSessionOffline(session, reason);
         session.ConsecutiveSessionErrors = 0;
+        session.ConsecutiveHealthProbeFailures = 0;
         session.NextReconnectUtc = DateTime.MinValue;
+        try { await session.Client.DisposeAsync().ConfigureAwait(false); } catch { }
+    }
+
+    private void RecordSuccessfulIo(DeviceSession session)
+    {
+        session.LastSuccessfulIoUtc = DateTime.UtcNow;
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.ConsecutiveSessionErrors = 0;
+    }
+
+    private void MarkSessionOffline(DeviceSession session, string detail)
+    {
+        var wasConnected = session.Device.IsConnected;
+        session.Device.IsConnected = false;
+        session.Device.Status = "Offline";
+        session.Device.Detail = detail;
+        session.Device.AcquisitionMode = "Connection lost • reconnect pending";
+        session.Device.RefreshComputed();
+        if (wasConnected) Log("WARN", session.Device.Name, detail);
+    }
+
+    private async Task ProbeSessionHealthAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        if (now < session.NextHealthProbeUtc || now - session.LastSuccessfulIoUtc < TimeSpan.FromMilliseconds(900)) return;
+        session.NextHealthProbeUtc = now.AddSeconds(1);
+        if (string.IsNullOrWhiteSpace(session.HealthProbePointKey) || !session.Points.TryGetValue(session.HealthProbePointKey, out var point))
+        {
+            point = session.Points.Values.FirstOrDefault();
+            if (point == null) return;
+            session.HealthProbePointKey = point.PointKey;
+        }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMilliseconds(900));
         try
         {
-            await session.Client.DisposeAsync().ConfigureAwait(false);
+            var signal = new SignalDefinition { Name = point.SignalName, ObjectReference = point.IecReference, FunctionalConstraint = point.FunctionalConstraint, DataType = point.IecDataType, Category = point.Category, Unit = point.Unit };
+            if (await IecSignalReadResolver.ReadAsync(session.Client, signal, timeout.Token).ConfigureAwait(false) != null)
+            {
+                RecordSuccessfulIo(session);
+                return;
+            }
         }
-        catch
-        {
-            // Reconnect loop will create a fresh client.
-        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is not OperationCanceledException) { Log("WARN", session.Device.Name, $"MMS health probe failed: {ex.Message}"); }
+        session.ConsecutiveHealthProbeFailures++;
+        if (session.ConsecutiveHealthProbeFailures >= 2)
+            await ForceReconnectAsync(session, "IED stopped responding to two consecutive MMS health probes.").ConfigureAwait(false);
     }
 
     private static async Task<(string Quality, string DeviceTimestamp)> ReadCompanionAttributesAsync(
@@ -1530,14 +1589,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         RuntimePointState state,
         bool reportAssigned)
     {
-        if (!reportAssigned || !state.ReportChangeVerified)
-            return point.PollingIntervalMs;
-
-        // Once an actual dchg/qchg/dupd edge is observed, report is primary. Keep a
-        // lightweight safety read so a misconfigured or later-stalled RCB cannot freeze
-        // the tester silently. Fast status points are validated more often than analogs.
-        var minimum = IsFastPoint(point) ? 5000 : 15000;
-        return Math.Clamp(Math.Max(point.PollingIntervalMs * 10, minimum), minimum, 60000);
+        if (!reportAssigned) return point.PollingIntervalMs;
+        if (state.ReportTrafficSeen)
+        {
+            var minimum = state.ReportChangeVerified ? (IsFastPoint(point) ? 10000 : 30000) : (IsFastPoint(point) ? 5000 : 15000);
+            return Math.Clamp(Math.Max(point.PollingIntervalMs * 15, minimum), minimum, 60000);
+        }
+        var awaitingReportMinimum = IsFastPoint(point) ? 2000 : 5000;
+        return Math.Clamp(Math.Max(point.PollingIntervalMs * 3, awaitingReportMinimum), awaitingReportMinimum, 15000);
     }
 
     private static string BuildPlanAcquisitionLabel(ReportControlPlan plan, bool dynamicDataSet)

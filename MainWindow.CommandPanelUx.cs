@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -31,7 +32,18 @@ public partial class MainWindow
             var testMode = values.ElementAtOrDefault(1) is true;
             var busy = values.ElementAtOrDefault(2) is true;
             var supportsOperate = values.ElementAtOrDefault(3) is true;
-            return (liveArmed || testMode) && supportsOperate && !busy;
+            var current = values.ElementAtOrDefault(4)?.ToString() ?? string.Empty;
+            var command = parameter?.ToString() ?? string.Empty;
+            return (liveArmed || testMode) && supportsOperate && !busy && !AlreadyActive(command, current);
+        }
+
+        private static bool AlreadyActive(string command, string current)
+        {
+            if (string.IsNullOrWhiteSpace(command) || string.IsNullOrWhiteSpace(current) || current.Trim() == "-") return false;
+            if (Iec61850ValueFormatter.TryNormalizeDbpos(command, out var requested) &&
+                Iec61850ValueFormatter.TryNormalizeDbpos(current, out var actual)) return requested == actual;
+            if (bool.TryParse(command, out var requestedBool) && bool.TryParse(current, out var actualBool)) return requestedBool == actualBool;
+            return command.Trim().Equals(current.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
@@ -51,17 +63,10 @@ public partial class MainWindow
                 return "Status only";
             }
 
-            if (text.Contains("select before operate", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("SBO", StringComparison.OrdinalIgnoreCase))
-            {
-                return "SBO";
-            }
-
-            if (text.Contains("direct operate", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("(DO)", StringComparison.OrdinalIgnoreCase))
-            {
-                return "DO";
-            }
+            if ((text.Contains("select before operate", StringComparison.OrdinalIgnoreCase) || text.Contains("SBO", StringComparison.OrdinalIgnoreCase)) && text.Contains("enhanced", StringComparison.OrdinalIgnoreCase)) return "SBO • Enhanced security";
+            if (text.Contains("select before operate", StringComparison.OrdinalIgnoreCase) || text.Contains("SBO", StringComparison.OrdinalIgnoreCase)) return "SBO • Normal security";
+            if ((text.Contains("direct operate", StringComparison.OrdinalIgnoreCase) || text.Contains("(DO)", StringComparison.OrdinalIgnoreCase)) && text.Contains("enhanced", StringComparison.OrdinalIgnoreCase)) return "Direct • Enhanced security";
+            if (text.Contains("direct operate", StringComparison.OrdinalIgnoreCase) || text.Contains("(DO)", StringComparison.OrdinalIgnoreCase)) return "Direct • Normal security";
 
             if (text.Contains("auto-detect", StringComparison.OrdinalIgnoreCase) ||
                 string.IsNullOrWhiteSpace(text))
@@ -105,7 +110,7 @@ public partial class MainWindow
 
         _commandPanelUxTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(500)
+            Interval = TimeSpan.FromMilliseconds(1500)
         };
         _commandPanelUxTimer.Tick += CommandPanelUxTimer_Tick;
         _commandPanelUxTimer.Start();
@@ -210,12 +215,14 @@ public partial class MainWindow
         var enabledBinding = new MultiBinding
         {
             Converter = CommandButtonEnabledConverter.Instance,
+            ConverterParameter = content,
             Mode = BindingMode.OneWay
         };
         enabledBinding.Bindings.Add(new Binding(nameof(LiveControlArmed)) { Source = this });
         enabledBinding.Bindings.Add(new Binding(nameof(CommandTestMode)) { Source = this });
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlIsBusy)));
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlSupportsOperate)));
+        enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlCurrentValue)));
         BindingOperations.SetBinding(button, UIElement.IsEnabledProperty, enabledBinding);
 
         _configuredCommandButtons.Add(button, new Marker());
