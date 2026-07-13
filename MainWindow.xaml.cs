@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -768,97 +769,87 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device == null)
-  return;
+            return;
 
         if (signal.ControlIsBusy)
         {
-  SetStatus($"{device.Name}: {signal.Name} command is already in progress.");
-  return;
+            SetStatus($"{device.Name}: {signal.Name} command is already in progress.");
+            return;
         }
 
         if (!CommandTestMode && !LiveControlArmed)
         {
-  signal.ControlLastResult = "Enable Live control armed before sending a command.";
-  SetStatus("Live control is not armed. Review the selected IED and enable the Command Panel safety switch.");
-  return;
+            signal.ControlLastResult = "Enable Live control armed before sending a command.";
+            SetStatus("Live control is not armed. Review the selected IED and enable the Command Panel safety switch.");
+            return;
         }
 
+        var clickStopwatch = Stopwatch.StartNew();
         signal.ControlIsBusy = true;
         signal.ControlLastResult = $"Dispatching {requestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {requestedValue}…");
+        AddLog("INFO", device.Name,
+            $"Control click accepted: {signal.ObjectReference} value={requestedValue}; test={CommandTestMode}; interlock={CommandInterlockCheck}; synchro={CommandSynchroCheck}.");
         await Dispatcher.Yield(DispatcherPriority.Render);
 
         try
         {
-  if (!device.IsConnected)
-  {
-      SetStatus($"{device.Name}: connecting before control…");
-      var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-          ? await ConnectUsingSavedModelAsync(device)
-          : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
-      if (!connected)
-          return;
-  }
+            if (!device.IsConnected)
+            {
+                SetStatus($"{device.Name}: connecting before control…");
+                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                    ? await ConnectUsingSavedModelAsync(device)
+                    : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
+                if (!connected)
+                    return;
+            }
 
-  var capabilities = await _runtime.InspectControlAsync(device.DeviceId, signal, _applicationCancellation.Token);
-  signal.ControlCurrentValue = capabilities.CurrentValue;
-  device.RefreshCommandSignalProjection();
-  RebuildControlFeedbackIndex(device);
-  if (!capabilities.SupportsOperate)
-      throw new InvalidOperationException($"{signal.ObjectReference} is not command-ready: {capabilities.ControlModelText}.");
-  if (!CommandTestMode && SameControlState(signal, requestedValue, capabilities.CurrentValue))
-  {
-      var current = string.IsNullOrWhiteSpace(capabilities.CurrentValue) ? "the requested state" : capabilities.CurrentValue;
-      signal.ControlLastResult = $"Already {current} — no command was sent.";
-      SetStatus($"{device.Name}: {signal.Name} is already {current}; duplicate control suppressed.");
-      return;
-  }
+            // ExecuteControlAsync owns one live status preflight and the complete control
+            // sequence. The old UI path performed a second status read before this call,
+            // which added queue latency and created a stale-value race.
+            var result = await _runtime.ExecuteControlAsync(
+                device.DeviceId,
+                new Iec61850ControlCommandRequest
+                {
+                    Signal = signal,
+                    ValueText = requestedValue,
+                    InterlockCheck = CommandInterlockCheck,
+                    SynchroCheck = CommandSynchroCheck,
+                    TestMode = CommandTestMode,
+                    FeedbackTimeoutMs = signal.IsPositionControl ? 12000 :
+                        (signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl || signal.IsRaiseLowerControl) ? 15000 : 8000,
+                    CommandTerminationTimeoutMs = 10000,
+                    OriginCategory = "Maintenance"
+                },
+                _applicationCancellation.Token);
 
-  var result = await _runtime.ExecuteControlAsync(
-      device.DeviceId,
-      new Iec61850ControlCommandRequest
-      {
-          Signal = signal,
-          ValueText = requestedValue,
-          InterlockCheck = CommandInterlockCheck,
-          SynchroCheck = CommandSynchroCheck,
-          TestMode = CommandTestMode,
-          FeedbackTimeoutMs = signal.IsPositionControl ? 12000 :
-              (signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl || signal.IsRaiseLowerControl) ? 15000 : 8000,
-          CommandTerminationTimeoutMs = 10000,
-          OriginCategory = "Maintenance"
-      },
-      _applicationCancellation.Token);
+            if (!string.IsNullOrWhiteSpace(result.ControlModelText))
+                signal.ControlModelText = result.ControlModelText;
+            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
+                signal.ControlCurrentValue = result.FeedbackValue;
 
-  if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
-      signal.ControlCurrentValue = result.FeedbackValue;
-
-  signal.ControlLastResult = BuildQuickControlResult(result);
-  SetStatus($"{device.Name}: {signal.Name} — {signal.ControlLastResult}");
+            signal.ControlLastResult = BuildQuickControlResult(result);
+            SetStatus($"{device.Name}: {signal.Name} — {signal.ControlLastResult}");
+            clickStopwatch.Stop();
+            AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
+                $"Control UI timing: {signal.ObjectReference}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
         }
         catch (OperationCanceledException)
         {
-  signal.ControlLastResult = "Command cancelled.";
-  SetStatus($"{device.Name}: {signal.Name} command cancelled.");
+            signal.ControlLastResult = "Command cancelled.";
+            SetStatus($"{device.Name}: {signal.Name} command cancelled.");
         }
         catch (Exception ex)
         {
-  signal.ControlLastResult = $"Command failed: {ex.Message}";
-  AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
-  SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
-  MarkDiagnosticAlert();
+            signal.ControlLastResult = $"Command failed: {ex.Message}";
+            AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
+            SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
+            MarkDiagnosticAlert();
         }
         finally
         {
-  signal.ControlIsBusy = false;
+            signal.ControlIsBusy = false;
         }
-    }
-
-    private static bool SameControlState(SignalDefinition signal, string requested, string current)
-    {
-        if (signal.IsPositionControl && Iec61850ValueFormatter.TryNormalizeDbpos(requested, out var requestCode) && Iec61850ValueFormatter.TryNormalizeDbpos(current, out var currentCode)) return requestCode == currentCode;
-        if (signal.IsBooleanControl && bool.TryParse(requested, out var requestBool) && bool.TryParse(current, out var currentBool)) return requestBool == currentBool;
-        return requested.Trim().Equals(current.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildQuickControlResult(Iec61850ControlCommandResult result)
@@ -1095,6 +1086,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
+            if (snapshot.Sequence < point.Sequence)
+                continue;
             var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
@@ -1758,7 +1751,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private sealed record PendingPointUpdate(Iec61850PointSnapshot Snapshot, bool HasValueEdge)
     {
         public PendingPointUpdate Merge(Iec61850PointSnapshot next)
-            => new(next, HasValueEdge || next.IsValueEdge);
+        {
+            // A command-confirmed snapshot can overtake an older report/poll snapshot in
+            // the 100 ms UI batching queue. Never let a lower process sequence roll the
+            // command row and live grid back to the previous breaker state.
+            var newest = next.Sequence < Snapshot.Sequence ? Snapshot : next;
+            return new PendingPointUpdate(newest, HasValueEdge || next.IsValueEdge);
+        }
     }
 
     private static string Csv(string value)

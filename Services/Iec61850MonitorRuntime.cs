@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Diagnostics;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
@@ -69,6 +70,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime NextHealthProbeUtc { get; set; } = DateTime.MinValue;
         public int ConsecutiveHealthProbeFailures { get; set; }
         public string HealthProbePointKey { get; set; } = string.Empty;
+        public int ControlCommandActive;
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
@@ -454,10 +456,28 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
 
-        Log("WARN", session.Device.Name,
-            $"Control requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}.");
+        Log("INFO", session.Device.Name,
+            $"Control intent accepted: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}.");
 
-        var result = await session.Client.ExecuteControlAsync(request, cancellationToken).ConfigureAwait(false);
+        var clientStopwatch = Stopwatch.StartNew();
+        Interlocked.Increment(ref session.ControlCommandActive);
+        Iec61850ControlCommandResult result;
+        try
+        {
+            result = await session.Client.ExecuteControlAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref session.ControlCommandActive);
+        }
+        clientStopwatch.Stop();
+
+        if (result.ServiceAccepted || result.FeedbackConfirmed || result.IsSuccess)
+            RecordSuccessfulIo(session);
+
+        if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
+            ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);
+
         var protocolEvidence = string.Join("; ", new[]
         {
             string.IsNullOrWhiteSpace(result.CompletionState) ? null : $"completion={result.CompletionState}",
@@ -467,12 +487,45 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             result.ControlNumber == "-" ? null : $"ctlNum={result.ControlNumber}",
             result.ElapsedText == "-" ? null : $"control={result.ElapsedText}",
             result.FeedbackElapsedText == "-" ? null : $"feedback={result.FeedbackElapsedText}",
-            result.TotalElapsedText == "-" ? null : $"total={result.TotalElapsedText}"
+            result.TotalElapsedText == "-" ? null : $"engineTotal={result.TotalElapsedText}",
+            $"clientTotal={clientStopwatch.Elapsed.TotalMilliseconds:0.###} ms"
         }.Where(text => !string.IsNullOrWhiteSpace(text)));
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
         return result;
+    }
+
+    private void ApplyControlFeedbackToMonitor(DeviceSession session, SignalDefinition signal, string feedbackValue)
+    {
+        var references = new[]
+        {
+            signal.ControlStatusReference,
+            string.IsNullOrWhiteSpace(signal.ObjectReference) ? string.Empty : signal.ObjectReference.TrimEnd('.') + ".stVal"
+        };
+
+        Iec61850MonitorPoint? point = null;
+        foreach (var reference in references.Where(reference => !string.IsNullOrWhiteSpace(reference)))
+        {
+            point = FindPointForReportReference(session, reference);
+            if (point != null)
+                break;
+        }
+
+        if (point == null || !session.States.TryGetValue(point.PointKey, out var state))
+            return;
+
+        ApplyValueUpdate(
+            session,
+            point,
+            feedbackValue,
+            state.Quality,
+            state.DeviceTimestamp,
+            "Control feedback",
+            "confirmed command feedback",
+            DateTime.UtcNow,
+            "Live / control feedback confirmed",
+            trustReportEdge: false);
     }
 
     public async Task StopMonitoringAsync(string deviceId)
@@ -616,6 +669,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             try
             {
+                if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                {
+                    await Task.Delay(5, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
                 if (!session.Client.IsConnected)
                 {
                     MarkSessionOffline(session, "IEC 61850 transport is offline; smart reconnect is pending.");
@@ -730,6 +789,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var batchCount = Math.Min(plans.Count, 4);
         for (var offset = 0; offset < batchCount; offset++)
         {
+            if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                break;
             cancellationToken.ThrowIfCancellationRequested();
             var index = (session.ReportPlanCursor + offset) % plans.Count;
             var plan = plans[index];
@@ -942,8 +1003,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private async Task PollDuePointsAsync(DeviceSession session, CancellationToken cancellationToken)
     {
         var processed = 0;
-        while (processed < 8 && session.PollQueue.TryPeek(out var pointKey, out var dueTicks))
+        while (processed < 4 && session.PollQueue.TryPeek(out var pointKey, out var dueTicks))
         {
+            if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                break;
             var nowUtc = DateTime.UtcNow;
             if (dueTicks > nowUtc.Ticks)
                 break;
@@ -1261,6 +1324,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private async Task ProbeSessionHealthAsync(DeviceSession session, CancellationToken cancellationToken)
     {
+        if (Volatile.Read(ref session.ControlCommandActive) > 0)
+            return;
         var now = DateTime.UtcNow;
         if (now < session.NextHealthProbeUtc || now - session.LastSuccessfulIoUtc < TimeSpan.FromMilliseconds(900)) return;
         session.NextHealthProbeUtc = now.AddSeconds(1);

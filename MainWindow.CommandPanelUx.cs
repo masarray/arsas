@@ -7,7 +7,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
-using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -32,18 +31,11 @@ public partial class MainWindow
             var testMode = values.ElementAtOrDefault(1) is true;
             var busy = values.ElementAtOrDefault(2) is true;
             var supportsOperate = values.ElementAtOrDefault(3) is true;
-            var current = values.ElementAtOrDefault(4)?.ToString() ?? string.Empty;
-            var command = parameter?.ToString() ?? string.Empty;
-            return (liveArmed || testMode) && supportsOperate && !busy && (testMode || !AlreadyActive(command, current));
-        }
-
-        private static bool AlreadyActive(string command, string current)
-        {
-            if (string.IsNullOrWhiteSpace(command) || string.IsNullOrWhiteSpace(current) || current.Trim() == "-") return false;
-            if (Iec61850ValueFormatter.TryNormalizeDbpos(command, out var requested) &&
-                Iec61850ValueFormatter.TryNormalizeDbpos(current, out var actual)) return requested == actual;
-            if (bool.TryParse(command, out var requestedBool) && bool.TryParse(current, out var actualBool)) return requestedBool == actualBool;
-            return command.Trim().Equals(current.Trim(), StringComparison.OrdinalIgnoreCase);
+            // Never disable Open/Close from the last displayed process value. Report and
+            // UI batching can be stale for a short time, which previously made the first
+            // click disappear. The live MMS preflight in the control engine is the only
+            // authority that may suppress a redundant command.
+            return (liveArmed || testMode) && supportsOperate && !busy;
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
@@ -110,7 +102,7 @@ public partial class MainWindow
 
         _commandPanelUxTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(1500)
+            Interval = TimeSpan.FromMilliseconds(2500)
         };
         _commandPanelUxTimer.Tick += CommandPanelUxTimer_Tick;
         _commandPanelUxTimer.Start();
@@ -215,14 +207,12 @@ public partial class MainWindow
         var enabledBinding = new MultiBinding
         {
             Converter = CommandButtonEnabledConverter.Instance,
-            ConverterParameter = content,
             Mode = BindingMode.OneWay
         };
         enabledBinding.Bindings.Add(new Binding(nameof(LiveControlArmed)) { Source = this });
         enabledBinding.Bindings.Add(new Binding(nameof(CommandTestMode)) { Source = this });
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlIsBusy)));
         enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlSupportsOperate)));
-        enabledBinding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlCurrentValue)));
         BindingOperations.SetBinding(button, UIElement.IsEnabledProperty, enabledBinding);
 
         _configuredCommandButtons.Add(button, new Marker());
@@ -267,6 +257,11 @@ public partial class MainWindow
         {
             foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
             {
+                // One MMS association is serialized. Do not queue background ctlModel
+                // inspection while an operator command owns the session.
+                if (device.CommandSignals.Any(signal => signal.ControlIsBusy))
+                    continue;
+
                 var candidates = device.Signals
                     .Where(signal => signal.IsSelected && signal.IsValidControlObject)
                     .Where(signal => !signal.ControlModelResolved)
@@ -279,7 +274,7 @@ public partial class MainWindow
                     continue;
                 }
 
-                using var throttle = new SemaphoreSlim(3, 3);
+                using var throttle = new SemaphoreSlim(1, 1);
                 await Task.WhenAll(candidates.Select(async signal =>
                 {
                     await throttle.WaitAsync(_applicationCancellation.Token);

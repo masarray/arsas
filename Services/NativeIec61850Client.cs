@@ -27,6 +27,7 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
     private readonly Dictionary<string, IReadOnlyList<string>> _reportMonitorCoverage = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ArControl.Iec61850ControlObjectSession> _controlSessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _controlSessionGate = new(1, 1);
+    private readonly SemaphoreSlim _controlCommandGate = new(1, 1);
     private string _host = string.Empty;
     private int _port = 102;
     private int _engineCompatibilityWarningIssued;
@@ -715,8 +716,18 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
             });
         }
 
+        var forceDynamicPlan = ShouldForceDynamicReportPlan(plan);
         foreach (var rcb in source.ReportControls)
-            inventory.ReportControls.Add(CloneReportControl(rcb));
+        {
+            var clone = CloneReportControl(rcb);
+            // A temporary dynamic DataSet must be paired with explicit dchg/qchg/dupd
+            // trigger options. Previously the dynamic planner inherited whatever TrgOps
+            // happened to be stored in the free URCB, so GI/integrity worked while CB
+            // position changes were never reported.
+            if (forceDynamicPlan)
+                ApplyDynamicPlanRequirements(clone, plan);
+            inventory.ReportControls.Add(clone);
+        }
 
         if (!string.IsNullOrWhiteSpace(plan.DataSetReference) &&
             !inventory.DataSets.Any(ds => ReferencesEqual(ds.Reference, plan.DataSetReference)))
@@ -801,9 +812,24 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
             target.ReportId = plan.ReportId;
         if (string.IsNullOrWhiteSpace(target.IntegrityPeriodMs) && plan.IntegrityPeriodMs > 0)
             target.IntegrityPeriodMs = plan.IntegrityPeriodMs.ToString(CultureInfo.InvariantCulture);
+
+        if (plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyDynamicPlanRequirements(target, plan);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(target.TriggerOptions) && !string.IsNullOrWhiteSpace(plan.TriggerOptions))
             target.TriggerOptions = plan.TriggerOptions;
         if (string.IsNullOrWhiteSpace(target.OptionalFields) && !string.IsNullOrWhiteSpace(plan.OptionalFields))
+            target.OptionalFields = plan.OptionalFields;
+    }
+
+    private static void ApplyDynamicPlanRequirements(ArMms.MmsReportControlCandidate target, ReportControlPlan plan)
+    {
+        if (!string.IsNullOrWhiteSpace(plan.TriggerOptions))
+            target.TriggerOptions = plan.TriggerOptions;
+        if (!string.IsNullOrWhiteSpace(plan.OptionalFields))
             target.OptionalFields = plan.OptionalFields;
     }
 
@@ -1103,6 +1129,21 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
     {
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await ExecuteControlCoreAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
+    private async Task<Iec61850ControlCommandResult> ExecuteControlCoreAsync(
+        Iec61850ControlCommandRequest request,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(request);
         if (!_session.IsMmsInitiated)
             throw new InvalidOperationException("The IEC 61850 MMS association is not active.");
@@ -1144,6 +1185,25 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
             request.Signal.ControlValueType,
             effectiveCdc,
             cancellationToken).ConfigureAwait(false);
+
+        capabilities = BuildControlCapabilities(descriptor, request.Signal, initialFeedback.Value, effectiveCdc);
+        request.Signal.ControlCdc = capabilities.ControlCdc;
+        request.Signal.ControlValueType = capabilities.ControlValueType;
+        request.Signal.ControlStatusReference = capabilities.StatusReference;
+        request.Signal.ControlModelReference = capabilities.ControlModelReference;
+        request.Signal.ControlModelText = capabilities.ControlModelText;
+        request.Signal.ControlCurrentValue = initialFeedback.Value;
+
+        if (!request.TestMode && initialFeedback.IsSuccess &&
+            ControlFeedbackMatches(effectiveCdc, expectedValue, initialFeedback.Value, initialFeedback.Value))
+        {
+            totalStopwatch.Stop();
+            return ControlAlreadyAtRequestedState(
+                capabilities,
+                expectedValue,
+                initialFeedback.Value,
+                totalStopwatch.Elapsed);
+        }
 
         var nativeRequest = new ArControl.Iec61850ControlRequest
         {
@@ -1769,6 +1829,30 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
             : string.Empty;
     }
 
+    private static Iec61850ControlCommandResult ControlAlreadyAtRequestedState(
+        Iec61850ControlCapabilities capabilities,
+        string requestedValue,
+        string currentValue,
+        TimeSpan elapsed)
+        => new()
+        {
+            IsSuccess = true,
+            ServiceAccepted = false,
+            FeedbackConfirmed = true,
+            CommandTerminationReceived = false,
+            PositiveTermination = false,
+            CompletionState = "NotSent",
+            Stage = "Already at requested state",
+            Message = $"Live MMS preflight confirmed {currentValue}; no SBOw/Operate command was sent.",
+            ControlModelText = capabilities.ControlModelText,
+            SequenceText = "Live preflight only • no command sent",
+            RequestedValue = requestedValue,
+            FeedbackValue = currentValue,
+            ElapsedText = "0 ms",
+            FeedbackElapsedText = "0 ms",
+            TotalElapsedText = $"{elapsed.TotalMilliseconds:0.###} ms"
+        };
+
     private static Iec61850ControlCommandResult ControlFailure(
         string stage,
         string message,
@@ -1803,6 +1887,7 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
         }
         _mmsIoGate.Dispose();
         _controlSessionGate.Dispose();
+        _controlCommandGate.Dispose();
     }
 
     private async Task<ArControl.Iec61850ControlObjectSession> GetOrOpenControlSessionAsync(
