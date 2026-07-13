@@ -107,7 +107,7 @@ public static class Iec61850ReportPlanner
             // forcing a five-second engineering value.
             IntegrityPeriodMs = 0,
             TriggerOptions = "dchg qchg dupd integrity GI",
-            OptionalFields = "sequence-number report-timestamp reason-for-inclusion data-set data-reference",
+            OptionalFields = "sequence-number report-timestamp reason-for-inclusion data-set data-reference conf-revision",
             AllowDynamicDataSetWrites = allowDynamicDataSetWrites,
             Bindings = members
                 .OrderByDescending(IsFastPoint)

@@ -68,5 +68,6 @@ public sealed class NativeReportValueUpdate
     public string DataSetReference { get; init; } = string.Empty;
     public ulong? SequenceNumber { get; init; }
     public ulong? ConfRev { get; init; }
+    public string ReportTimestamp { get; init; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; init; }
 }
