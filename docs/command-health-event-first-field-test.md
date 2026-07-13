@@ -8,3 +8,4 @@ Validate this follow-up with the IED connected and reporting active:
 4. Restore the IED. The app should reconnect, re-arm report acquisition, and return the icon to green.
 5. Confirm report-covered values show report acquisition as primary; per-point MMS reads should be low-rate verification rather than continuous primary polling.
 6. Confirm the Visual Studio Output window no longer floods `IsRecentlyChanged` binding errors for `SignalDefinition` rows.
+7. With Test enabled, the active-state command remains available so test controls are not suppressed by the process-state guard.
