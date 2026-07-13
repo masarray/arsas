@@ -1,0 +1,236 @@
+name: Apply command and IED card follow-up
+
+on:
+  push:
+    branches: [ fix/smart-command-card-reporting ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[command-card-followup-applied]') }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout follow-up branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/smart-command-card-reporting
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply deterministic command and compact card changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          def regex_once(text: str, pattern: str, replacement: str, label: str) -> str:
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected exactly one regex match, found {count}")
+              return updated
+
+          # Compact IED Explorer and connection-state relay icon.
+          xaml_path = Path('MainWindow.xaml')
+          xaml = xaml_path.read_text(encoding='utf-8')
+          xaml = replace_once(xaml, '<ColumnDefinition Width="292"/>', '<ColumnDefinition Width="250"/>', 'narrow explorer column')
+          xaml = replace_once(xaml, '<ColumnDefinition Width="14"/>', '<ColumnDefinition Width="12"/>', 'narrow explorer spacer')
+          xaml = replace_once(xaml, '<Border Grid.Column="0" Style="{StaticResource Card}" Padding="12">', '<Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">', 'compact explorer padding')
+          xaml = replace_once(xaml, '<Grid MinHeight="82">', '<Grid MinHeight="86">', 'card height for large relay icon')
+          xaml = replace_once(xaml, '<ColumnDefinition Width="44"/>', '<ColumnDefinition Width="64"/>', 'relay icon column')
+
+          icon_block = '''                                                <!-- Large borderless relay / BCU silhouette. The icon itself is the connection state. -->
+                                                <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
+                                                      Width="58" Height="58" Margin="0,-2,6,0"
+                                                      VerticalAlignment="Top" Panel.ZIndex="2">
+                                                    <Viewbox Width="55" Height="55" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <Path x:Name="RelayDeviceIcon"
+                                                              Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z"
+                                                              Fill="#EF4444" Stretch="Uniform">
+                                                            <Path.Effect>
+                                                                <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.58" Color="#EF4444"/>
+                                                            </Path.Effect>
+                                                        </Path>
+                                                    </Viewbox>
+                                                </Grid>
+
+'''
+          xaml = regex_once(
+              xaml,
+              r'\s*<!-- Protection relay / BCU silhouette supplied by the user\. -->.*?</Grid>\s*(?=<StackPanel Grid.Row="0" Grid.Column="1")',
+              '\n' + icon_block,
+              'replace relay icon and remove both status dots')
+
+          connected_trigger = '''                                            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                <Setter TargetName="RelayDeviceIcon" Property="Fill" Value="#16A34A"/>
+                                                <Setter TargetName="RelayDeviceIcon" Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect BlurRadius="15" ShadowDepth="0" Opacity="0.64" Color="#16A34A"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+'''
+          xaml = regex_once(
+              xaml,
+              r'\s*<DataTrigger Binding="\{Binding IsConnected\}" Value="True">.*?</DataTrigger>\s*<DataTrigger Binding="\{Binding HasReportStream\}" Value="True">.*?</DataTrigger>\s*<DataTrigger Binding="\{Binding ReportPulseActive\}" Value="True">.*?</DataTrigger>\s*(?=<DataTrigger Binding="\{Binding IsBusy\}" Value="True">)',
+              '\n' + connected_trigger,
+              'replace dot triggers with icon color trigger')
+
+          xaml = replace_once(xaml, 'VerticalAlignment="Center" Width="238">', 'VerticalAlignment="Center" Width="190">', 'compact busy overlay')
+          xaml = replace_once(xaml, 'MinHeight="28" MaxWidth="224"', 'MinHeight="28" MaxWidth="184"', 'compact busy message')
+          xaml = replace_once(xaml, 'Style="{StaticResource DiscoveryProgressBar}" Width="218" Height="8"', 'Style="{StaticResource DiscoveryProgressBar}" Width="178" Height="8"', 'compact busy progress')
+          xaml = replace_once(xaml, '<Grid Width="218" Margin="0,5,0,0">', '<Grid Width="178" Margin="0,5,0,0">', 'compact busy progress labels')
+          xaml_path.write_text(xaml, encoding='utf-8', newline='\n')
+
+          # Make the first click a real, visible, single dispatch and bind it to the signal owner IED.
+          main_path = Path('MainWindow.xaml.cs')
+          main = main_path.read_text(encoding='utf-8')
+          new_method = r'''    private async Task ExecuteQuickControlAsync(SignalDefinition signal, string requestedValue)
+    {
+        var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (device == null)
+            return;
+
+        if (signal.ControlIsBusy)
+        {
+            SetStatus($"{device.Name}: {signal.Name} command is already in progress.");
+            return;
+        }
+
+        if (!CommandTestMode && !LiveControlArmed)
+        {
+            signal.ControlLastResult = "Enable Live control armed before sending a command.";
+            SetStatus("Live control is not armed. Review the selected IED and enable the Command Panel safety switch.");
+            return;
+        }
+
+        // Latch the row immediately on the first click. Previously the busy state was set
+        // only after connection preparation, leaving a window where repeated clicks looked
+        // necessary and could queue duplicate user intent.
+        signal.ControlIsBusy = true;
+        signal.ControlLastResult = $"Dispatching {requestedValue}…";
+        SetStatus($"{device.Name}: dispatching {signal.Name} = {requestedValue}…");
+        await Dispatcher.Yield(DispatcherPriority.Render);
+
+        try
+        {
+            if (!device.IsConnected)
+            {
+                SetStatus($"{device.Name}: connecting before control…");
+                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                    ? await ConnectUsingSavedModelAsync(device)
+                    : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
+                if (!connected)
+                    return;
+            }
+
+            if (signal.ControlModelText == "Auto-detect" || signal.ControlCurrentValue == "-")
+            {
+                var capabilities = await _runtime.InspectControlAsync(
+                    device.DeviceId,
+                    signal,
+                    _applicationCancellation.Token);
+                signal.ControlCurrentValue = capabilities.CurrentValue;
+                device.RefreshCommandSignalProjection();
+                RebuildControlFeedbackIndex(device);
+            }
+
+            var result = await _runtime.ExecuteControlAsync(
+                device.DeviceId,
+                new Iec61850ControlCommandRequest
+                {
+                    Signal = signal,
+                    ValueText = requestedValue,
+                    InterlockCheck = CommandInterlockCheck,
+                    SynchroCheck = CommandSynchroCheck,
+                    TestMode = CommandTestMode,
+                    FeedbackTimeoutMs = signal.IsPositionControl ? 12000 :
+                        (signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl || signal.IsRaiseLowerControl) ? 15000 : 8000,
+                    CommandTerminationTimeoutMs = 10000,
+                    OriginCategory = "Maintenance"
+                },
+                _applicationCancellation.Token);
+
+            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
+                signal.ControlCurrentValue = result.FeedbackValue;
+
+            signal.ControlLastResult = BuildQuickControlResult(result);
+            SetStatus($"{device.Name}: {signal.Name} — {signal.ControlLastResult}");
+        }
+        catch (OperationCanceledException)
+        {
+            signal.ControlLastResult = "Command cancelled.";
+            SetStatus($"{device.Name}: {signal.Name} command cancelled.");
+        }
+        catch (Exception ex)
+        {
+            signal.ControlLastResult = $"Command failed: {ex.Message}";
+            AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
+            SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
+            MarkDiagnosticAlert();
+        }
+        finally
+        {
+            signal.ControlIsBusy = false;
+        }
+    }
+
+    private static string BuildQuickControlResult'''
+          main = regex_once(
+              main,
+              r'    private async Task ExecuteQuickControlAsync\(SignalDefinition signal, string requestedValue\)\s*\{.*?\n    \}\n\n    private static string BuildQuickControlResult',
+              new_method,
+              'replace quick-control dispatch method')
+          main_path.write_text(main, encoding='utf-8', newline='\n')
+
+          # Serialize every actual MMS control transaction with report/poll traffic.
+          native_path = Path('Services/NativeIec61850Client.cs')
+          native = native_path.read_text(encoding='utf-8')
+          status_old = 'var status = await control.ReadStatusAsync(cancellationToken).ConfigureAwait(false);'
+          status_new = '''var status = await RunMmsOperationAsync(
+            () => control.ReadStatusAsync(cancellationToken),
+            cancellationToken).ConfigureAwait(false);'''
+          count = native.count(status_old)
+          if count != 2:
+              raise RuntimeError(f'serialize control status reads: expected 2 matches, found {count}')
+          native = native.replace(status_old, status_new)
+
+          native = replace_once(
+              native,
+              'action = await control.OperateAsync(nativeRequest, cancellationToken).ConfigureAwait(false);',
+              '''action = await RunMmsOperationAsync(
+                () => control.OperateAsync(nativeRequest, cancellationToken),
+                cancellationToken).ConfigureAwait(false);''',
+              'serialize Operate request')
+
+          native = replace_once(
+              native,
+              'var opened = await service.OpenAsync(_session, signal.ObjectReference, cancellationToken).ConfigureAwait(false);',
+              '''var opened = await RunMmsOperationAsync(
+                () => service.OpenAsync(_session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);''',
+              'serialize control session opening')
+          native_path.write_text(native, encoding='utf-8', newline='\n')
+          PY
+
+      - name: Remove temporary workflow and commit follow-up
+        shell: pwsh
+        run: |
+          git rm .github/workflows/apply-command-card-followup.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MainWindow.xaml MainWindow.xaml.cs Services/NativeIec61850Client.cs
+          git commit -m 'fix: make command dispatch deterministic and compact IED cards [command-card-followup-applied]'
+          git push origin HEAD:fix/smart-command-card-reporting
