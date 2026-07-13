@@ -34,7 +34,7 @@ public partial class MainWindow
             var supportsOperate = values.ElementAtOrDefault(3) is true;
             var current = values.ElementAtOrDefault(4)?.ToString() ?? string.Empty;
             var command = parameter?.ToString() ?? string.Empty;
-            return (liveArmed || testMode) && supportsOperate && !busy && !AlreadyActive(command, current);
+            return (liveArmed || testMode) && supportsOperate && !busy && (testMode || !AlreadyActive(command, current));
         }
 
         private static bool AlreadyActive(string command, string current)
