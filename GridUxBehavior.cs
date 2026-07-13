@@ -4,46 +4,55 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Shared dense-grid behavior for commissioning workspaces. It keeps DataGrid
-/// selection flat, removes redundant command-row chrome, and adds a virtualized
-/// per-column rapid filter to the global live monitor.
+/// Direct visual-tree UX behavior for the dense IEC 61850 workspaces.
+///
+/// The previous implementation depended on individual DataGrid Loaded events and
+/// attempted to insert a separate filter host beside the grid. That was too fragile
+/// for hidden TabItem content and virtualized command rows. This implementation hooks
+/// the MainWindow itself, configures the actual column headers, and attaches directly
+/// to the generators that create IED cards and command rows.
 /// </summary>
 internal static class GridUxBehavior
 {
+    private sealed class Marker { }
+
     private sealed class FilterWatermarkState
     {
         public object? OriginalToolTip { get; set; }
     }
 
-    private sealed class CommandGridState
+    private sealed class MainWindowState
     {
-        public bool LayoutHooked { get; set; }
+        public DispatcherTimer? RetryTimer { get; set; }
+        public bool IedListInstalled { get; set; }
+        public bool CommandGridInstalled { get; set; }
+        public bool GlobalGridInstalled { get; set; }
     }
 
     private sealed class GlobalRapidFilterState
     {
         public required DataGrid Grid { get; init; }
         public required ICollectionView View { get; init; }
-        public required ScrollViewer FilterScrollViewer { get; init; }
-        public required Grid FilterGrid { get; init; }
         public required DispatcherTimer RefreshTimer { get; init; }
         public Dictionary<string, string> Filters { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public ScrollViewer? GridScrollViewer { get; set; }
-        public bool UpdatingWidths { get; set; }
     }
 
+    private static readonly ConditionalWeakTable<MainWindow, MainWindowState> MainWindows = new();
+    private static readonly ConditionalWeakTable<ListBox, Marker> IedLists = new();
+    private static readonly ConditionalWeakTable<DataGrid, Marker> CommandGrids = new();
+    private static readonly ConditionalWeakTable<DataGrid, GlobalRapidFilterState> GlobalGrids = new();
     private static readonly ConditionalWeakTable<TextBox, FilterWatermarkState> FilterWatermarks = new();
-    private static readonly ConditionalWeakTable<DataGrid, CommandGridState> CommandGrids = new();
-    private static readonly ConditionalWeakTable<DataGrid, GlobalRapidFilterState> GlobalFilterGrids = new();
     private static int _installed;
 
     public static void Install()
@@ -52,15 +61,15 @@ internal static class GridUxBehavior
             return;
 
         EventManager.RegisterClassHandler(
-            typeof(DataGridRow),
+            typeof(MainWindow),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(DataGridRow_Loaded),
+            new RoutedEventHandler(MainWindow_Loaded),
             true);
 
         EventManager.RegisterClassHandler(
-            typeof(DataGrid),
+            typeof(DataGridRow),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(DataGrid_Loaded),
+            new RoutedEventHandler(DataGridRow_Loaded),
             true);
 
         EventManager.RegisterClassHandler(
@@ -75,6 +84,71 @@ internal static class GridUxBehavior
             new KeyboardFocusChangedEventHandler(FilterTextBox_LostKeyboardFocus),
             true);
     }
+
+    private static void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MainWindow owner)
+            return;
+
+        var state = MainWindows.GetValue(owner, _ => new MainWindowState());
+        if (state.RetryTimer != null)
+            return;
+
+        state.RetryTimer = new DispatcherTimer(DispatcherPriority.Background, owner.Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(450)
+        };
+        state.RetryTimer.Tick += (_, _) => TryInstallMainWindowUx(owner, state);
+        owner.Closed += (_, _) => state.RetryTimer?.Stop();
+        state.RetryTimer.Start();
+
+        owner.Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            new Action(() => TryInstallMainWindowUx(owner, state)));
+    }
+
+    private static void TryInstallMainWindowUx(MainWindow owner, MainWindowState state)
+    {
+        if (!state.IedListInstalled)
+        {
+            var list = FindVisualChildren<ListBox>(owner)
+                .FirstOrDefault(candidate => ReferenceEquals(candidate.ItemsSource, owner.Devices));
+            if (list != null)
+            {
+                InstallCompactIedList(list);
+                state.IedListInstalled = true;
+            }
+        }
+
+        if (!state.CommandGridInstalled)
+        {
+            var commandGrid = FindVisualChildren<DataGrid>(owner)
+                .FirstOrDefault(IsCommandGrid);
+            if (commandGrid != null)
+            {
+                InstallCommandGridCleanup(commandGrid);
+                state.CommandGridInstalled = true;
+            }
+        }
+
+        if (!state.GlobalGridInstalled)
+        {
+            var globalGrid = FindVisualChildren<DataGrid>(owner)
+                .FirstOrDefault(IsGlobalLiveGrid);
+            if (globalGrid != null)
+            {
+                InstallGlobalRapidFilters(owner, globalGrid);
+                state.GlobalGridInstalled = true;
+            }
+        }
+
+        if (state.IedListInstalled && state.CommandGridInstalled && state.GlobalGridInstalled)
+            state.RetryTimer?.Stop();
+    }
+
+    // -------------------------------------------------------------------------
+    // Flat engineering grids
+    // -------------------------------------------------------------------------
 
     private static void DataGridRow_Loaded(object sender, RoutedEventArgs e)
     {
@@ -99,57 +173,204 @@ internal static class GridUxBehavior
         }
     }
 
-    private static void DataGrid_Loaded(object sender, RoutedEventArgs e)
+    // -------------------------------------------------------------------------
+    // Compact IED cards
+    // -------------------------------------------------------------------------
+
+    private static void InstallCompactIedList(ListBox list)
     {
-        if (sender is not DataGrid grid)
+        if (IedLists.TryGetValue(list, out _))
             return;
 
-        var headers = grid.Columns
-            .Select(column => column.Header?.ToString() ?? string.Empty)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        IedLists.Add(list, new Marker());
 
-        if (headers.Contains("Control model") && headers.Contains("CDC / Type") && headers.Contains("Control"))
+        void ApplyCards()
+            => list.Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(() => ApplyCompactIedCards(list)));
+
+        list.ItemContainerGenerator.StatusChanged += (_, _) => ApplyCards();
+        list.Loaded += (_, _) => ApplyCards();
+        ApplyCards();
+    }
+
+    private static void ApplyCompactIedCards(ListBox list)
+    {
+        for (var index = 0; index < list.Items.Count; index++)
         {
-            InstallCommandGridCleanup(grid);
-            return;
+            if (list.ItemContainerGenerator.ContainerFromIndex(index) is ListBoxItem container)
+                ConfigureCompactIedCard(container);
+        }
+    }
+
+    private static void ConfigureCompactIedCard(ListBoxItem container)
+    {
+        container.Margin = new Thickness(0, 0, 0, 6);
+        container.ApplyTemplate();
+
+        if (container.Template.FindName("Card", container) is Border card)
+        {
+            card.CornerRadius = new CornerRadius(10);
+            card.Padding = new Thickness(8);
         }
 
-        if (headers.SetEquals(new[]
+        var nameText = FindVisualChildren<TextBlock>(container)
+            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
+                .Equals("Name", StringComparison.Ordinal));
+        if (nameText?.Parent is not StackPanel identityPanel || identityPanel.Parent is not Grid cardContent)
+            return;
+
+        var root = cardContent.Parent as Grid;
+        if (root != null)
+            root.MinHeight = 70;
+
+        cardContent.VerticalAlignment = VerticalAlignment.Center;
+        cardContent.ColumnDefinitions.Clear();
+        cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+        cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        cardContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        Grid.SetRow(identityPanel, 0);
+        Grid.SetColumn(identityPanel, 1);
+        identityPanel.VerticalAlignment = VerticalAlignment.Center;
+        identityPanel.Margin = new Thickness(0);
+
+        nameText.FontSize = 13;
+        nameText.FontWeight = FontWeights.SemiBold;
+
+        var endpointText = FindVisualChildren<TextBlock>(identityPanel)
+            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
+                .Equals("IdentityText", StringComparison.Ordinal));
+        if (endpointText != null)
+        {
+            BindingOperations.SetBinding(
+                endpointText,
+                TextBlock.TextProperty,
+                new Binding("EndpointText") { Mode = BindingMode.OneWay });
+            endpointText.FontSize = 11.5;
+            endpointText.Margin = new Thickness(0, 3, 0, 0);
+        }
+
+        foreach (var noisyPath in new[] { "SummaryText", "AcquisitionMode" })
+        {
+            var noisyText = FindVisualChildren<TextBlock>(identityPanel)
+                .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
+                    .Equals(noisyPath, StringComparison.Ordinal));
+            if (noisyText != null)
+                noisyText.Visibility = Visibility.Collapsed;
+        }
+
+        var unreadText = FindVisualChildren<TextBlock>(container)
+            .FirstOrDefault(text => GetBindingPath(text, TextBlock.TextProperty)
+                .Equals("UnreadEventText", StringComparison.Ordinal));
+        var unreadBadge = FindAncestor<Border>(unreadText);
+        if (unreadBadge != null)
+            unreadBadge.Visibility = Visibility.Collapsed;
+
+        var statusHost = cardContent.Children
+            .OfType<Grid>()
+            .FirstOrDefault(grid => Grid.GetRow(grid) == 0 && Grid.GetColumn(grid) == 0);
+        if (statusHost != null)
+            ConfigureIedIcon(statusHost);
+
+        var actionHost = cardContent.Children
+            .OfType<Border>()
+            .FirstOrDefault(border => FindVisualChildren<Button>(border).Count() >= 4);
+        if (actionHost != null)
+        {
+            Grid.SetRow(actionHost, 0);
+            Grid.SetColumn(actionHost, 2);
+            actionHost.HorizontalAlignment = HorizontalAlignment.Right;
+            actionHost.VerticalAlignment = VerticalAlignment.Center;
+            actionHost.Margin = new Thickness(8, 0, 0, 0);
+            actionHost.Padding = new Thickness(0);
+            actionHost.Background = Brushes.Transparent;
+            actionHost.BorderThickness = new Thickness(0);
+            actionHost.CornerRadius = new CornerRadius(0);
+
+            foreach (var button in FindVisualChildren<Button>(actionHost))
+                button.Margin = new Thickness(1.5, 0, 1.5, 0);
+        }
+    }
+
+    private static void ConfigureIedIcon(Grid statusHost)
+    {
+        statusHost.Width = 36;
+        statusHost.Height = 36;
+        statusHost.Margin = new Thickness(0, 0, 8, 0);
+        statusHost.VerticalAlignment = VerticalAlignment.Center;
+
+        if (statusHost.Children.OfType<Border>().Any(border => Equals(border.Tag, "CompactIedIcon")))
+            return;
+
+        var icon = new Border
+        {
+            Tag = "CompactIedIcon",
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(7),
+            Background = new SolidColorBrush(Color.FromRgb(238, 244, 255)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(210, 224, 251)),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new System.Windows.Shapes.Path
             {
-                "IED", "Signal", "IEC Telegram", "Value", "Quality", "IED Timestamp", "Acquisition"
-            }))
-        {
-            InstallGlobalRapidFilter(grid);
-        }
+                Data = Geometry.Parse("M4,3 H20 V21 H4 Z M8,8 H16 M8,12 H16 M8,16 H14"),
+                Width = 19,
+                Height = 19,
+                Stretch = Stretch.Uniform,
+                Stroke = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                StrokeThickness = 1.8,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Fill = Brushes.Transparent
+            }
+        };
+
+        statusHost.Children.Insert(0, icon);
+    }
+
+    // -------------------------------------------------------------------------
+    // Command Panel cleanup
+    // -------------------------------------------------------------------------
+
+    private static bool IsCommandGrid(DataGrid grid)
+    {
+        var headers = HeaderNames(grid);
+        return headers.Contains("Control model") &&
+               headers.Contains("CDC / Type") &&
+               headers.Contains("Control");
     }
 
     private static void InstallCommandGridCleanup(DataGrid grid)
     {
-        var state = CommandGrids.GetValue(grid, _ => new CommandGridState());
-        if (state.LayoutHooked)
+        if (CommandGrids.TryGetValue(grid, out _))
             return;
 
-        state.LayoutHooked = true;
-        grid.LayoutUpdated += (_, _) => ApplyCommandGridCleanup(grid);
-        ApplyCommandGridCleanup(grid);
+        CommandGrids.Add(grid, new Marker());
+        grid.RowHeight = 44;
+        grid.MinRowHeight = 42;
+        grid.LoadingRow += (_, args) =>
+            args.Row.Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(() => CleanupCommandRow(args.Row)));
+
+        foreach (var row in FindVisualChildren<DataGridRow>(grid))
+            CleanupCommandRow(row);
     }
 
-    private static void ApplyCommandGridCleanup(DataGrid grid)
+    private static void CleanupCommandRow(DataGridRow row)
     {
-        // The previous 60 px row was only needed for the second-line result text.
-        // The simplified panel is a single-line operating grid.
-        if (Math.Abs(grid.RowHeight - 44d) > 0.1)
-            grid.RowHeight = 44d;
-        if (Math.Abs(grid.MinRowHeight - 42d) > 0.1)
-            grid.MinRowHeight = 42d;
+        row.ApplyTemplate();
 
-        foreach (var button in FindVisualChildren<Button>(grid).ToArray())
+        foreach (var button in FindVisualChildren<Button>(row).ToArray())
         {
             var content = ExtractButtonText(button);
             if (content.Equals("Details", StringComparison.OrdinalIgnoreCase))
             {
-                button.Visibility = Visibility.Collapsed;
-                button.IsHitTestVisible = false;
+                RemoveOrCollapse(button);
                 continue;
             }
 
@@ -159,42 +380,56 @@ internal static class GridUxBehavior
                 continue;
             }
 
-            if (button.Parent is not Panel parent)
+            if (button.Parent is Panel parent)
             {
-                button.Visibility = Visibility.Collapsed;
-                button.IsHitTestVisible = false;
+                var label = parent.Children
+                    .OfType<TextBlock>()
+                    .FirstOrDefault(text => Equals(text.Tag, "CommandUnavailableLabel"));
+                if (label == null)
+                {
+                    label = new TextBlock
+                    {
+                        Tag = "CommandUnavailableLabel",
+                        Text = "Not available",
+                        Foreground = new SolidColorBrush(Color.FromRgb(102, 112, 133)),
+                        FontSize = 12,
+                        FontWeight = FontWeights.SemiBold,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    parent.Children.Add(label);
+                }
+
+                parent.Children.Remove(button);
+            }
+            else
+            {
+                RemoveOrCollapse(button);
+            }
+        }
+
+        foreach (var text in FindVisualChildren<TextBlock>(row))
+        {
+            if (!GetBindingPath(text, TextBlock.TextProperty)
+                    .Equals(nameof(SignalDefinition.ControlLastResult), StringComparison.Ordinal))
+            {
                 continue;
             }
 
-            var signal = button.DataContext as SignalDefinition;
-            var unavailableLabel = parent.Children
-                .OfType<TextBlock>()
-                .FirstOrDefault(text => Equals(text.Tag, "CommandUnavailableLabel"));
-
-            if (unavailableLabel == null)
-            {
-                unavailableLabel = new TextBlock
-                {
-                    Tag = "CommandUnavailableLabel",
-                    Foreground = new SolidColorBrush(Color.FromRgb(102, 112, 133)),
-                    FontSize = 12,
-                    FontWeight = FontWeights.SemiBold,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                parent.Children.Add(unavailableLabel);
-            }
-
-            unavailableLabel.Text = signal?.ControlModelResolved == true
-                ? "Not available"
-                : "Reading…";
-            parent.Children.Remove(button);
+            if (FindAncestor<DockPanel>(text) is DockPanel resultLine)
+                resultLine.Visibility = Visibility.Collapsed;
+            else
+                text.Visibility = Visibility.Collapsed;
         }
+    }
 
-        foreach (var textBlock in FindVisualChildren<TextBlock>(grid))
+    private static void RemoveOrCollapse(FrameworkElement element)
+    {
+        if (element.Parent is Panel panel)
+            panel.Children.Remove(element);
+        else
         {
-            var expression = BindingOperations.GetBindingExpression(textBlock, TextBlock.TextProperty);
-            if (expression?.ParentBinding.Path?.Path == nameof(SignalDefinition.ControlLastResult))
-                textBlock.Visibility = Visibility.Collapsed;
+            element.Visibility = Visibility.Collapsed;
+            element.IsHitTestVisible = false;
         }
     }
 
@@ -205,6 +440,214 @@ internal static class GridUxBehavior
             TextBlock textBlock => textBlock.Text?.Trim() ?? string.Empty,
             _ => button.Content?.ToString()?.Trim() ?? string.Empty
         };
+
+    // -------------------------------------------------------------------------
+    // Global Live Monitor rapid filters
+    // -------------------------------------------------------------------------
+
+    private static bool IsGlobalLiveGrid(DataGrid grid)
+    {
+        var headers = HeaderNames(grid);
+        return headers.SetEquals(new[]
+        {
+            "IED", "Signal", "IEC Telegram", "Value", "Quality", "IED Timestamp", "Acquisition"
+        });
+    }
+
+    private static void InstallGlobalRapidFilters(MainWindow owner, DataGrid grid)
+    {
+        if (GlobalGrids.TryGetValue(grid, out _))
+            return;
+
+        var view = CollectionViewSource.GetDefaultView(owner.GlobalPoints);
+        var timer = new DispatcherTimer(DispatcherPriority.Background, owner.Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(160)
+        };
+        var state = new GlobalRapidFilterState
+        {
+            Grid = grid,
+            View = view,
+            RefreshTimer = timer
+        };
+        GlobalGrids.Add(grid, state);
+
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            state.View.Refresh();
+        };
+        state.View.Filter = item => FilterGlobalPoint(item, state.Filters);
+
+        var baseHeaderStyle = owner.TryFindResource(typeof(DataGridColumnHeader)) as Style;
+        var headerStyle = new Style(typeof(DataGridColumnHeader), baseHeaderStyle);
+        headerStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
+        headerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+        headerStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
+        headerStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 70d));
+        grid.ColumnHeaderStyle = headerStyle;
+        grid.ColumnHeaderHeight = 70;
+
+        foreach (var column in grid.Columns)
+        {
+            var caption = column.Header?.ToString() ?? string.Empty;
+            column.Header = BuildRapidFilterHeader(state, caption);
+        }
+    }
+
+    private static FrameworkElement BuildRapidFilterHeader(GlobalRapidFilterState state, string caption)
+    {
+        var root = new Grid
+        {
+            Background = Brushes.Transparent,
+            SnapsToDevicePixels = true
+        };
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(33) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(37) });
+
+        var title = new TextBlock
+        {
+            Text = caption,
+            Margin = new Thickness(10, 0, 8, 0),
+            Foreground = new SolidColorBrush(Color.FromRgb(71, 84, 103)),
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12.3,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetRow(title, 0);
+        root.Children.Add(title);
+
+        var filterBox = CreateRapidFilterTextBox(state, caption);
+        var filterBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(220, 227, 236)),
+            BorderThickness = new Thickness(0, 1, 1, 0),
+            CornerRadius = new CornerRadius(0),
+            Child = filterBox
+        };
+        Grid.SetRow(filterBorder, 1);
+        root.Children.Add(filterBorder);
+
+        return root;
+    }
+
+    private static Grid CreateRapidFilterTextBox(GlobalRapidFilterState state, string key)
+    {
+        var box = new TextBox
+        {
+            Tag = key,
+            Height = 36,
+            Padding = new Thickness(9, 0, 7, 0),
+            FontSize = 12.1,
+            FontWeight = FontWeights.Normal,
+            Foreground = new SolidColorBrush(Color.FromRgb(29, 41, 57)),
+            CaretBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            Background = Brushes.White,
+            BorderThickness = new Thickness(0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            FocusVisualStyle = null,
+            Template = BuildSquareTextBoxTemplate()
+        };
+
+        var watermark = new TextBlock
+        {
+            Text = "Filter…",
+            Margin = new Thickness(9, 0, 7, 0),
+            Foreground = new SolidColorBrush(Color.FromRgb(152, 162, 179)),
+            FontSize = 12.1,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+
+        void UpdateWatermark()
+            => watermark.Visibility = string.IsNullOrEmpty(box.Text) && !box.IsKeyboardFocused
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        box.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (box.IsKeyboardFocusWithin)
+                return;
+            e.Handled = true;
+            box.Focus();
+        };
+        box.PreviewMouseLeftButtonUp += (_, e) => e.Handled = true;
+        box.GotKeyboardFocus += (_, _) => UpdateWatermark();
+        box.LostKeyboardFocus += (_, _) => UpdateWatermark();
+        box.TextChanged += (_, _) =>
+        {
+            state.Filters[key] = box.Text ?? string.Empty;
+            UpdateWatermark();
+            state.RefreshTimer.Stop();
+            state.RefreshTimer.Start();
+        };
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                box.Clear();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
+            {
+                state.RefreshTimer.Stop();
+                state.View.Refresh();
+                state.Grid.Focus();
+                e.Handled = true;
+            }
+        };
+
+        var host = new Grid();
+        host.Children.Add(box);
+        host.Children.Add(watermark);
+        return host;
+    }
+
+    private static bool FilterGlobalPoint(object item, IReadOnlyDictionary<string, string> filters)
+    {
+        if (item is not Iec61850MonitorPoint point)
+            return false;
+
+        foreach (var (key, rawFilter) in filters)
+        {
+            var tokens = Tokenize(rawFilter);
+            if (tokens.Length == 0)
+                continue;
+
+            var field = key switch
+            {
+                "IED" => point.DeviceName,
+                "Signal" => point.SignalName,
+                "IEC Telegram" => point.IecTelegram,
+                "Value" => point.Value,
+                "Quality" => point.Quality,
+                "IED Timestamp" => point.DeviceTimestamp,
+                "Acquisition" => point.SourceMode,
+                _ => string.Empty
+            };
+
+            if (!tokens.All(token => (field ?? string.Empty)
+                    .Contains(token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string[] Tokenize(string? text)
+        => Regex.Matches(text ?? string.Empty, @"[^\s]+")
+            .Select(match => match.Value.Trim())
+            .Where(token => token.Length > 0)
+            .ToArray();
+
+    // -------------------------------------------------------------------------
+    // Selection Wizard filter watermark
+    // -------------------------------------------------------------------------
 
     private static void FilterTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
@@ -236,174 +679,36 @@ internal static class GridUxBehavior
                FilterWatermarks.TryGetValue(textBox, out _);
     }
 
-    private static void InstallGlobalRapidFilter(DataGrid grid)
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static HashSet<string> HeaderNames(DataGrid grid)
+        => grid.Columns
+            .Select(column => column.Header?.ToString() ?? string.Empty)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string GetBindingPath(DependencyObject target, DependencyProperty property)
+        => BindingOperations.GetBindingExpression(target, property)?.ParentBinding.Path?.Path ?? string.Empty;
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
     {
-        if (GlobalFilterGrids.TryGetValue(grid, out _))
-            return;
-        if (Window.GetWindow(grid) is not MainWindow owner)
-            return;
-        if (grid.Parent is not DockPanel parent)
-            return;
-
-        var view = CollectionViewSource.GetDefaultView(owner.GlobalPoints);
-        var filterGrid = new Grid
+        while (current != null)
         {
-            Background = Brushes.White,
-            SnapsToDevicePixels = true
-        };
+            if (current is T match)
+                return match;
 
-        for (var i = 0; i < grid.Columns.Count; i++)
-            filterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = ToGridLength(grid.Columns[i].Width) });
-
-        var filterScroll = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            CanContentScroll = false,
-            Content = filterGrid,
-            Focusable = false
-        };
-
-        var host = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(220, 227, 236)),
-            BorderThickness = new Thickness(1, 0, 1, 1),
-            CornerRadius = new CornerRadius(0),
-            Height = 37,
-            ClipToBounds = true,
-            Child = filterScroll
-        };
-        DockPanel.SetDock(host, Dock.Top);
-
-        var refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(160)
-        };
-
-        var state = new GlobalRapidFilterState
-        {
-            Grid = grid,
-            View = view,
-            FilterScrollViewer = filterScroll,
-            FilterGrid = filterGrid,
-            RefreshTimer = refreshTimer
-        };
-        GlobalFilterGrids.Add(grid, state);
-
-        refreshTimer.Tick += (_, _) =>
-        {
-            refreshTimer.Stop();
-            state.View.Refresh();
-        };
-        state.View.Filter = item => FilterGlobalPoint(item, state.Filters);
-
-        var fields = new[]
-        {
-            ("IED", "Filter IED…"),
-            ("Signal", "Filter signal…"),
-            ("Telegram", "Filter IEC Telegram…"),
-            ("Value", "Filter value…"),
-            ("Quality", "Filter quality…"),
-            ("Timestamp", "Filter timestamp…"),
-            ("Acquisition", "Filter acquisition…")
-        };
-
-        for (var i = 0; i < fields.Length; i++)
-        {
-            var cell = BuildRapidFilterCell(state, fields[i].Item1, fields[i].Item2);
-            Grid.SetColumn(cell, i);
-            filterGrid.Children.Add(cell);
+            try
+            {
+                current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+            }
+            catch (InvalidOperationException)
+            {
+                current = LogicalTreeHelper.GetParent(current);
+            }
         }
 
-        // Preserve the existing title area, then place the rapid-filter row directly
-        // above the virtualized signal grid.
-        parent.Children.Remove(grid);
-        parent.Children.Add(host);
-        parent.Children.Add(grid);
-        grid.ItemsSource = view;
-
-        grid.LayoutUpdated += (_, _) =>
-        {
-            UpdateRapidFilterWidths(state);
-            AttachGridScrollSync(state);
-        };
-
-        UpdateRapidFilterWidths(state);
-        AttachGridScrollSync(state);
-    }
-
-    private static Border BuildRapidFilterCell(GlobalRapidFilterState state, string key, string placeholder)
-    {
-        var box = new TextBox
-        {
-            Tag = key,
-            Height = 35,
-            Padding = new Thickness(9, 0, 7, 0),
-            FontSize = 12.2,
-            Foreground = new SolidColorBrush(Color.FromRgb(29, 41, 57)),
-            CaretBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-            Background = Brushes.White,
-            BorderBrush = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            VerticalContentAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            FocusVisualStyle = null,
-            Template = BuildSquareTextBoxTemplate()
-        };
-
-        var watermark = new TextBlock
-        {
-            Text = placeholder,
-            Foreground = new SolidColorBrush(Color.FromRgb(152, 162, 179)),
-            FontSize = 12.1,
-            Margin = new Thickness(9, 0, 7, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-
-        void UpdateWatermark()
-            => watermark.Visibility = string.IsNullOrEmpty(box.Text) && !box.IsKeyboardFocused
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        box.TextChanged += (_, _) =>
-        {
-            state.Filters[key] = box.Text ?? string.Empty;
-            UpdateWatermark();
-            state.RefreshTimer.Stop();
-            state.RefreshTimer.Start();
-        };
-        box.GotKeyboardFocus += (_, _) => UpdateWatermark();
-        box.LostKeyboardFocus += (_, _) => UpdateWatermark();
-        box.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                box.Clear();
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Enter)
-            {
-                state.RefreshTimer.Stop();
-                state.View.Refresh();
-                state.Grid.Focus();
-                e.Handled = true;
-            }
-        };
-
-        var content = new Grid();
-        content.Children.Add(box);
-        content.Children.Add(watermark);
-
-        return new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(220, 227, 236)),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            CornerRadius = new CornerRadius(0),
-            Child = content
-        };
+        return null;
     }
 
     private static ControlTemplate BuildSquareTextBoxTemplate()
@@ -411,14 +716,6 @@ internal static class GridUxBehavior
 #pragma warning disable CS0618
         var border = new FrameworkElementFactory(typeof(Border));
         border.SetBinding(Border.BackgroundProperty, new Binding(nameof(Control.Background))
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
-        });
-        border.SetBinding(Border.BorderBrushProperty, new Binding(nameof(Control.BorderBrush))
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
-        });
-        border.SetBinding(Border.BorderThicknessProperty, new Binding(nameof(Control.BorderThickness))
         {
             RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
         });
@@ -436,101 +733,12 @@ internal static class GridUxBehavior
 #pragma warning restore CS0618
     }
 
-    private static bool FilterGlobalPoint(object item, IReadOnlyDictionary<string, string> filters)
-    {
-        if (item is not Iec61850MonitorPoint point)
-            return false;
-
-        foreach (var (key, rawFilter) in filters)
-        {
-            var tokens = Tokenize(rawFilter);
-            if (tokens.Length == 0)
-                continue;
-
-            var field = key switch
-            {
-                "IED" => point.DeviceName,
-                "Signal" => point.SignalName,
-                "Telegram" => point.IecTelegram,
-                "Value" => point.Value,
-                "Quality" => point.Quality,
-                "Timestamp" => point.DeviceTimestamp,
-                "Acquisition" => point.SourceMode,
-                _ => string.Empty
-            };
-
-            if (!tokens.All(token => (field ?? string.Empty).Contains(token, StringComparison.OrdinalIgnoreCase)))
-                return false;
-        }
-
-        return true;
-    }
-
-    private static string[] Tokenize(string? text)
-        => Regex.Matches(text ?? string.Empty, @"[^\s]+")
-            .Select(match => match.Value.Trim())
-            .Where(token => token.Length > 0)
-            .ToArray();
-
-    private static void UpdateRapidFilterWidths(GlobalRapidFilterState state)
-    {
-        if (state.UpdatingWidths || state.FilterGrid.ColumnDefinitions.Count != state.Grid.Columns.Count)
-            return;
-
-        state.UpdatingWidths = true;
-        try
-        {
-            var total = 0d;
-            for (var i = 0; i < state.Grid.Columns.Count; i++)
-            {
-                var width = Math.Max(20d, state.Grid.Columns[i].ActualWidth);
-                total += width;
-                var current = state.FilterGrid.ColumnDefinitions[i].Width;
-                if (!current.IsAbsolute || Math.Abs(current.Value - width) > 0.5)
-                    state.FilterGrid.ColumnDefinitions[i].Width = new GridLength(width);
-            }
-            state.FilterGrid.Width = total;
-        }
-        finally
-        {
-            state.UpdatingWidths = false;
-        }
-    }
-
-    private static void AttachGridScrollSync(GlobalRapidFilterState state)
-    {
-        if (state.GridScrollViewer != null)
-            return;
-
-        var viewer = FindVisualChildren<ScrollViewer>(state.Grid)
-            .FirstOrDefault(candidate => candidate.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled);
-        if (viewer == null)
-            return;
-
-        state.GridScrollViewer = viewer;
-        viewer.ScrollChanged += (_, e) =>
-        {
-            if (Math.Abs(e.HorizontalChange) > 0.001)
-                state.FilterScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
-        };
-        state.FilterScrollViewer.ScrollToHorizontalOffset(viewer.HorizontalOffset);
-    }
-
-    private static GridLength ToGridLength(DataGridLength value)
-    {
-        if (value.IsAbsolute)
-            return new GridLength(value.Value);
-        if (value.IsStar)
-            return new GridLength(value.Value, GridUnitType.Star);
-        return GridLength.Auto;
-    }
-
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
+        for (var index = 0; index < count; index++)
         {
-            var child = VisualTreeHelper.GetChild(root, i);
+            var child = VisualTreeHelper.GetChild(root, index);
             if (child is T match)
                 yield return match;
 
