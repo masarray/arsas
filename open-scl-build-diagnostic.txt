@@ -1,0 +1,41 @@
+Open SCL build diagnostic
+Commit: e6e96469cbe8b63387fc70d2dc2300ccc18346a6
+
+  Determining projects to restore...
+  Restored D:\a\ArIED61850Tester\ArIED61850Tester\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj (in 136 ms).
+  Restored D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj (in 153 ms).
+
+RESTORE_EXIT=0
+  ArIED 61850 is compiling against ARIEC61850 project: ..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj
+  AR.Iec61850 -> D:\a\ArIED61850Tester\ArIED61850Tester\ARIEC61850\.artifacts\bin\AR.Iec61850\Release\net8.0\AR.Iec61850.dll
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(34,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(47,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(56,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(65,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(72,46): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(53,14): error CS0103: The name 'File' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(54,23): error CS0246: The type or namespace name 'FileNotFoundException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(67,29): error CS0103: The name 'File' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(72,47): error CS0246: The type or namespace name 'InvalidDataException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(74,23): error CS0246: The type or namespace name 'InvalidDataException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(154,30): error CS0103: The name 'Path' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+
+Build FAILED.
+
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(34,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(47,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(56,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(65,50): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\Iec61850ConnectionFailureClassifier.cs(72,46): warning CS8604: Possible null reference argument for parameter 'associationSummary' in 'string Iec61850ConnectionFailureClassifier.BuildTechnicalSummary(Exception? exception, string associationSummary, SocketError? socketError)'. [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(53,14): error CS0103: The name 'File' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(54,23): error CS0246: The type or namespace name 'FileNotFoundException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(67,29): error CS0103: The name 'File' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(72,47): error CS0246: The type or namespace name 'InvalidDataException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(74,23): error CS0246: The type or namespace name 'InvalidDataException' could not be found (are you missing a using directive or an assembly reference?) [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\Services\SclImportService.cs(154,30): error CS0103: The name 'Path' does not exist in the current context [D:\a\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester\ArIED61850Tester.csproj]
+    5 Warning(s)
+    6 Error(s)
+
+Time Elapsed 00:00:16.94
+
+BUILD_EXIT=1
