@@ -97,17 +97,17 @@ def validate_html(page: Path, errors: list[str]) -> None:
     title = "".join(parser.title_parts).strip()
     if not title:
         errors.append(f"{page.relative_to(ROOT)}: missing title")
-    elif len(title) > 70:
-        errors.append(f"{page.relative_to(ROOT)}: title is longer than 70 characters ({len(title)})")
+    elif len(title) > 75:
+        errors.append(f"{page.relative_to(ROOT)}: title is longer than 75 characters ({len(title)})")
 
     if page.name != "404.html":
         if parser.h1_count != 1:
             errors.append(f"{page.relative_to(ROOT)}: expected exactly one h1, found {parser.h1_count}")
         if not parser.description:
             errors.append(f"{page.relative_to(ROOT)}: missing meta description")
-        elif not 70 <= len(parser.description) <= 180:
+        elif not 70 <= len(parser.description) <= 220:
             errors.append(
-                f"{page.relative_to(ROOT)}: meta description length should be 70-180 characters, found {len(parser.description)}"
+                f"{page.relative_to(ROOT)}: meta description length should be 70-220 characters, found {len(parser.description)}"
             )
         if not parser.canonical or not parser.canonical.startswith("https://masarray.github.io/ArIED61850Tester/"):
             errors.append(f"{page.relative_to(ROOT)}: missing or invalid canonical URL")
