@@ -1,0 +1,27 @@
+name: Compile SCL integration
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  compile:
+    if: ${{ github.event.pull_request.head.ref == 'agent/use-engine-scl-workspace' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ArIED branch
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch agent/use-engine-scl-workspace https://github.com/masarray/ArIED61850Tester.git ArIED61850Tester
+
+      - name: Checkout engine workspace branch
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch agent/scl-workspace-api https://github.com/masarray/ARIEC61850.git ARIEC61850
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile
+        shell: powershell
+        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.csproj -c Release -v:q --nologo
