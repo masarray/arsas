@@ -1,0 +1,103 @@
+--- a/Models/MonitorModels.cs
++++ b/Models/MonitorModels.cs
+@@ -320,28 +385,42 @@
+     public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+     public bool CanStopAction => !IsBusy && (IsConnected || IsMonitoring);
+     public bool CanRescan => !IsBusy && !IsMonitoring;
+-    public string CacheStateText => HasDiscoveryCache
+-        ? $"Saved model ready • {SignalCount:N0} signals"
+-        : "No saved model • discovery required";
+-    public string ReadyWorkspaceTitle => HasDiscoveryCache ? "Saved IED model is ready" : "IED is ready";
+-    public string ReadyWorkspaceMessage => HasDiscoveryCache && SelectedLiveSignalCount > 0
+-        ? $"{SelectedLiveSignalCount:N0} saved live signal(s) are selected. Use Play or Connect All for immediate live values without a full discovery scan."
++    public string CacheStateText => HasSclDesignModel
++        ? $"SCL design model • {SignalCount:N0} signals"
+         : HasDiscoveryCache
+-            ? "The complete signal model is restored. Choose signals offline; Apply & Start Live connects and starts monitoring automatically."
+-            : "Choose signals in the wizard; Apply & Start Live begins monitoring automatically.";
++            ? $"Saved live model • {SignalCount:N0} signals"
++            : "No cached model • discovery required";
++    public string ReadyWorkspaceTitle => HasSclDesignModel
++        ? RequiresEndpointBinding ? "SCL model ready — endpoint required" : "SCL design model is ready"
++        : HasDiscoveryCache ? "Saved IED model is ready" : "IED is ready";
++    public string ReadyWorkspaceMessage => HasSclDesignModel
++        ? RequiresEndpointBinding
++            ? "The LD/LN/DO/DA model is available offline. Press Play to bind an MMS endpoint before connecting."
++            : SelectedLiveSignalCount > 0
++                ? $"{SelectedLiveSignalCount:N0} SCL signal(s) are selected. Play performs a fast MMS association; Re-scan compares the complete live model."
++                : "Browse and choose signals offline. Play associates without repeating full discovery; Re-scan performs design-versus-live verification."
++        : HasDiscoveryCache && SelectedLiveSignalCount > 0
++            ? $"{SelectedLiveSignalCount:N0} saved live signal(s) are selected. Use Play or Connect All for immediate live values without a full discovery scan."
++            : HasDiscoveryCache
++                ? "The complete signal model is restored. Choose signals offline; Apply & Start Live connects and starts monitoring automatically."
++                : "Choose signals in the wizard; Apply & Start Live begins monitoring automatically.";
+     public string ConnectionActionLabel => IsBusy ? "Working…" : IsConnected ? "Disconnect" : "Connect";
+     public string MonitorActionLabel => IsBusy ? "Working…" : IsMonitoring ? "Stop Monitor" : "Start Monitor";
+     public string ActivityText => IsBusy ? "Working…" : IsMonitoring ? "Monitoring" : Status;
+     public string SummaryText => $"{SignalCount} scanned • {SelectedSignalCount} selected • {PointCount} live";
+     public string IdentityText => string.IsNullOrWhiteSpace(LogicalDeviceSummary)
+         ? EndpointText
+-        : $"{EndpointText} • LD {LogicalDeviceSummary}";
++        : HasSclDesignModel
++            ? $"{EndpointText} • {LogicalDeviceSummary}"
++            : $"{EndpointText} • LD {LogicalDeviceSummary}";
+     public string ConnectionGlyph => IsBusy ? "…" : IsConnected ? "⏻" : "↗";
+     public string ConnectionToolTip => IsBusy
+         ? "IED connection operation is running"
+         : IsConnected
+             ? $"Disconnect {Name}"
+-            : $"Connect and discover {EndpointText}";
++            : HasSclDesignModel
++                ? $"Connect {Name} using the SCL design model"
++                : $"Connect and discover {EndpointText}";
+     public string MonitorGlyph => IsBusy ? "…" : IsMonitoring ? "■" : "▶";
+     public string MonitorToolTip => IsBusy
+         ? "IED session operation is running"
+@@ -354,9 +433,13 @@
+         ? $"Stop monitoring {Name} before changing its signal selection"
+         : $"Open signal selection wizard for {Name}";
+     public string PlayToolTip => !IsConnected
+-        ? HasDiscoveryCache
+-            ? $"Fast-connect {Name} from the saved model and start its selected live values"
+-            : $"Connect and discover {EndpointText}"
++        ? RequiresEndpointBinding
++            ? $"Bind an MMS endpoint for {Name}, then fast-connect from the SCL design model"
++            : HasSclDesignModel
++                ? $"Fast-connect {Name} from the SCL design model; use Re-scan for full live comparison"
++                : HasDiscoveryCache
++                    ? $"Fast-connect {Name} from the saved model and start its selected live values"
++                    : $"Connect and discover {EndpointText}"
+         : IsMonitoring
+             ? $"{Name} is already monitoring"
+             : SelectedLiveSignalCount == 0
+@@ -436,6 +519,10 @@
+         Raise(nameof(CanStopAction));
+         Raise(nameof(CanRescan));
+         Raise(nameof(CacheStateText));
++        Raise(nameof(HasSclDesignModel));
++        Raise(nameof(RequiresEndpointBinding));
++        Raise(nameof(HasSclConfigurationDrift));
++        Raise(nameof(SclVerificationText));
+         Raise(nameof(ReadyWorkspaceTitle));
+         Raise(nameof(ReadyWorkspaceMessage));
+         Raise(nameof(ConnectionActionLabel));
+@@ -681,7 +768,7 @@
+ 
+ public sealed class Iec61850TesterProject
+ {
+-    public int SchemaVersion { get; set; } = 2;
++    public int SchemaVersion { get; set; } = 3;
+     public string ProjectName { get; set; } = "ArIED 61850 Session";
+     public int DefaultPollingIntervalMs { get; set; } = 1000;
+     public List<Iec61850TesterDeviceProfile> Devices { get; set; } = new();
+@@ -697,6 +784,10 @@
+     public int Port { get; set; } = 102;
+     public bool AllowDynamicDataSetWrites { get; set; } = true;
+     public bool DiscoverySucceeded { get; set; }
++    public string SclSourcePath { get; set; } = string.Empty;
++    public string SclSourceSha256 { get; set; } = string.Empty;
++    public string SclIedName { get; set; } = string.Empty;
++    public string SclAccessPointName { get; set; } = string.Empty;
+     public List<string> SelectedReferences { get; set; } = new();
+     public List<Iec61850CachedSignalProfile> CachedSignals { get; set; } = new();
+ }
