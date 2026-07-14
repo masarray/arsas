@@ -1,7 +1,12 @@
 ArIED 61850
-Copyright (c) ArIED 61850 contributors.
+Copyright (C) 2026 Mas Ari / masarray
 
-Smart IED Explorer & Monitor for IEC 61850 engineering, FAT, SAT, commissioning,
-and substation automation troubleshooting.
+Current public license: GNU General Public License v3.0 or later.
+Commercial licensing may be obtained separately from the copyright holder.
 
-Licensed under the Apache License, Version 2.0. See LICENSE.
+License transition effective 2026-07-14:
+- Last Apache-2.0 revision: 0df1007d9538b978edba67218136bc5c4f8019ad
+- Historical branch: archive/apache-2.0-final
+- Historical license copy: LICENSE-APACHE-2.0
+
+The ARIEC61850 engine and third-party components remain governed by their own applicable licenses. See THIRD_PARTY_NOTICES.md.

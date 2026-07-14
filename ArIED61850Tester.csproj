@@ -10,6 +10,7 @@
     <RootNamespace>ArIED61850Tester</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Authors>Mas Ari / masarray</Authors>
+    <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
     <Product>ArIED 61850</Product>
     <AssemblyTitle>ArIED 61850</AssemblyTitle>
     <Description>Smart IED Explorer &amp; Monitor for live IEC 61850 discovery, multi-IED monitoring, reporting, control-object inspection, quality, timestamps, and event logging.</Description>
@@ -17,7 +18,7 @@
     <AssemblyVersion>1.6.5.0</AssemblyVersion>
     <FileVersion>1.6.5.0</FileVersion>
     <PackageTags>iec61850;iec-61850;mms;ied;relay-testing;substation-automation;digital-substation;report-control-block;wpf;dotnet</PackageTags>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>
   </PropertyGroup>

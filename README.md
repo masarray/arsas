@@ -4,6 +4,8 @@
 
 ArIED 61850 is a Windows desktop engineering tool for IEC 61850 MMS discovery, multi-IED monitoring, reporting diagnostics, sequence-of-events viewing, project caching, and native IEC 61850 control through the ARIEC61850 Smart Control service.
 
+> **Licensing:** the public community edition is `GPL-3.0-or-later`. A separate commercial license is available for proprietary integration, OEM/white-label distribution, and contractual engineering support. See [docs/LICENSING.md](docs/LICENSING.md).
+
 ## Core workflow
 
 ```text
@@ -166,7 +168,13 @@ Static source validation was completed in the packaging environment. A full Wind
 
 ## License
 
-Apache-2.0. See `LICENSE` and `NOTICE`.
+The public community edition is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
+
+A separate negotiated commercial license is available for proprietary integration, OEM/white-label distribution, closed-source redistribution, warranty, maintenance, priority support, training, and engineering services. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
+Names, logos, icons, and official-release branding are not granted under the software license. See [TRADEMARK.md](TRADEMARK.md).
+
+Revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain available under Apache-2.0 on branch `archive/apache-2.0-final`. The former license is preserved in [LICENSE-APACHE-2.0](LICENSE-APACHE-2.0).
 
 ## Copy Diagnostic
 

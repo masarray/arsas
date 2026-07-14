@@ -57,6 +57,15 @@ if (-not (Test-Path $exe)) {
 }
 
 Copy-Item (Join-Path $root "README.md") (Join-Path $publishDir "README.txt") -Force
+# ARIED_LEGAL_FILES: include licensing and attribution documents in every distributed package.
+$legalFiles = @("LICENSE", "LICENSE-APACHE-2.0", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
+foreach ($legalFile in $legalFiles) {
+    $sourceLegalFile = Join-Path $root $legalFile
+    if (Test-Path $sourceLegalFile) {
+        Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
+    }
+}
+
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
 
 Write-Host "==> Portable executable: $exe"
