@@ -1,0 +1,264 @@
+--- /dev/null
++++ b/Services/SclWorkspaceSignalMapper.cs
+@@ -0,0 +1,261 @@
++using AR.Iec61850.Discovery;
++using AR.Iec61850.Scl.Workspace;
++using ArIED61850Tester.Models;
++
++namespace ArIED61850Tester.Services;
++
++/// <summary>
++/// Presentation adapter from the engine-owned SCL workspace model to ArIED signal rows.
++/// This class deliberately contains no XML parsing or IEC 61850 type-template traversal.
++/// </summary>
++public static class SclWorkspaceSignalMapper
++{
++    private static readonly HashSet<string> RuntimeLeafNames = new(StringComparer.OrdinalIgnoreCase)
++    {
++        "stVal", "general", "posVal", "actVal", "setVal", "f", "i"
++    };
++
++    public static IReadOnlyList<SignalDefinition> BuildSignals(SclIedWorkspace workspace)
++    {
++        ArgumentNullException.ThrowIfNull(workspace);
++
++        var dataSetBindings = BuildDataSetBindings(workspace.DesignModel);
++        var reportBindings = BuildReportBindings(workspace.DesignModel);
++        var signals = new List<SignalDefinition>();
++
++        foreach (var logicalDevice in workspace.DesignModel.LogicalDevices)
++        {
++            foreach (var logicalNode in logicalDevice.LogicalNodes)
++            {
++                foreach (var dataObject in logicalNode.DataObjects)
++                {
++                    AddRuntimeSignals(signals, logicalNode, dataObject, dataSetBindings, reportBindings);
++                    AddControlSignal(signals, logicalNode, dataObject, dataSetBindings, reportBindings);
++                }
++            }
++        }
++
++        return signals
++            .Where(signal => signal.CanPublishAsSignal || signal.IsControlSignal)
++            .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
++            .Select(group => group.First())
++            .OrderBy(signal => signal.SortPriority)
++            .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
++            .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
++            .ToArray();
++    }
++
++    private static void AddRuntimeSignals(
++        ICollection<SignalDefinition> signals,
++        LiveIedLogicalNodeModel logicalNode,
++        LiveIedDataObjectModel dataObject,
++        IReadOnlyDictionary<string, string> dataSetBindings,
++        IReadOnlyDictionary<string, string> reportBindings)
++    {
++        var quality = FindCompanion(dataObject, "q");
++        var timestamp = FindCompanion(dataObject, "t");
++
++        foreach (var attribute in dataObject.Attributes)
++        {
++            var fc = (attribute.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
++            if (fc is not ("ST" or "MX") || IsCompanion(attribute.AttributePath))
++                continue;
++            if (!IsRuntimeLeaf(attribute.AttributePath))
++                continue;
++
++            var reference = attribute.ObjectReference;
++            var normalized = NormalizeReference(reference);
++            dataSetBindings.TryGetValue(normalized, out var dataSetReference);
++            reportBindings.TryGetValue(NormalizeReference(dataSetReference), out var reportReference);
++            var category = ResolveCategory(logicalNode.LnClass, dataObject.Name, dataObject.InferredCdc, fc);
++
++            signals.Add(new SignalDefinition
++            {
++                Name = BuildDisplayName(logicalNode.Name, dataObject.Name, attribute.AttributePath),
++                ObjectReference = reference,
++                DisplayReference = reference,
++                FunctionalConstraint = fc,
++                DataType = ResolveDataType(attribute),
++                Category = category,
++                Confidence = attribute.TypeConfidence is LiveIedDiscoveryConfidenceLevel.Exact or LiveIedDiscoveryConfidenceLevel.High
++                    ? "High"
++                    : "Medium",
++                DataSetReference = dataSetReference ?? string.Empty,
++                ReportControlReference = reportReference ?? string.Empty,
++                ReportCoverageReason = string.IsNullOrWhiteSpace(reportReference)
++                    ? "SCL design model contains no static ReportControl coverage; polling remains the safe fallback."
++                    : $"Static SCL report candidate {reportReference}; live RCB attributes are verified before enable.",
++                QualityReference = quality?.ObjectReference ?? string.Empty,
++                TimestampReference = timestamp?.ObjectReference ?? string.Empty,
++                Source = "SCL design model",
++                IsReportCapable = !string.IsNullOrWhiteSpace(reportReference),
++                ReportCoverage = string.IsNullOrWhiteSpace(reportReference)
++                    ? "MMS polling fallback"
++                    : "Static SCL report candidate",
++                IsSelected = false,
++                Value = "-",
++                Quality = "Unknown",
++                DeviceTimestamp = "-",
++                ProbeStatus = "Projected from SCL; live read verification pending"
++            });
++        }
++    }
++
++    private static void AddControlSignal(
++        ICollection<SignalDefinition> signals,
++        LiveIedLogicalNodeModel logicalNode,
++        LiveIedDataObjectModel dataObject,
++        IReadOnlyDictionary<string, string> dataSetBindings,
++        IReadOnlyDictionary<string, string> reportBindings)
++    {
++        var controlAttributes = dataObject.Attributes
++            .Where(attribute => string.Equals(attribute.FunctionalConstraint, "CO", StringComparison.OrdinalIgnoreCase) ||
++                                Leaf(attribute.AttributePath).Equals("ctlModel", StringComparison.OrdinalIgnoreCase))
++            .ToArray();
++        if (controlAttributes.Length == 0)
++            return;
++
++        var controlReference = dataObject.Reference;
++        var ctlModel = dataObject.Attributes.FirstOrDefault(attribute =>
++            Leaf(attribute.AttributePath).Equals("ctlModel", StringComparison.OrdinalIgnoreCase));
++        var status = dataObject.Attributes.FirstOrDefault(attribute =>
++            Leaf(attribute.AttributePath).Equals("stVal", StringComparison.OrdinalIgnoreCase));
++        var normalizedStatus = NormalizeReference(status?.ObjectReference);
++        dataSetBindings.TryGetValue(normalizedStatus, out var dataSetReference);
++        reportBindings.TryGetValue(NormalizeReference(dataSetReference), out var reportReference);
++
++        signals.Add(new SignalDefinition
++        {
++            Name = $"{logicalNode.Name} {dataObject.Name}",
++            ObjectReference = controlReference,
++            DisplayReference = controlReference,
++            FunctionalConstraint = "CO",
++            DataType = string.IsNullOrWhiteSpace(dataObject.InferredCdc)
++                ? "IEC 61850 control"
++                : $"{dataObject.InferredCdc} control",
++            Category = "Control",
++            Confidence = "High",
++            DataSetReference = dataSetReference ?? string.Empty,
++            ReportControlReference = reportReference ?? string.Empty,
++            ReportCoverageReason = "Control execution is disabled until the live ctlModel and exact MMS Oper/SBOw/Cancel structures are inspected.",
++            Source = "SCL design model",
++            IsControlSignal = true,
++            ControlCdc = dataObject.InferredCdc,
++            ControlModelReference = ctlModel?.ObjectReference ?? $"{controlReference}.ctlModel",
++            ControlStatusReference = status?.ObjectReference ?? string.Empty,
++            ControlModelText = "SCL design • live verification required",
++            ControlValueType = ResolveControlValueType(dataObject.InferredCdc),
++            IsSelected = false,
++            Value = "-",
++            Quality = "Unknown",
++            DeviceTimestamp = "-",
++            ProbeStatus = "SCL control candidate; live verification required"
++        });
++    }
++
++    private static Dictionary<string, string> BuildDataSetBindings(LiveIedModelDiscoveryDocument model)
++    {
++        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
++        foreach (var dataSet in model.DataSets)
++        {
++            foreach (var member in dataSet.Members)
++            {
++                var key = NormalizeReference(member.Reference);
++                if (!string.IsNullOrWhiteSpace(key))
++                    bindings.TryAdd(key, dataSet.Reference);
++            }
++        }
++        return bindings;
++    }
++
++    private static Dictionary<string, string> BuildReportBindings(LiveIedModelDiscoveryDocument model)
++    {
++        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
++        foreach (var report in model.ReportControls)
++        {
++            var key = NormalizeReference(report.DataSetReference);
++            if (!string.IsNullOrWhiteSpace(key))
++                bindings.TryAdd(key, report.Reference);
++        }
++        return bindings;
++    }
++
++    private static LiveIedDataAttributeModel? FindCompanion(LiveIedDataObjectModel dataObject, string leaf)
++        => dataObject.Attributes.FirstOrDefault(attribute => Leaf(attribute.AttributePath).Equals(leaf, StringComparison.OrdinalIgnoreCase));
++
++    private static bool IsCompanion(string path)
++    {
++        var leaf = Leaf(path);
++        return leaf.Equals("q", StringComparison.OrdinalIgnoreCase) ||
++               leaf.Equals("t", StringComparison.OrdinalIgnoreCase) ||
++               leaf.Equals("ctlModel", StringComparison.OrdinalIgnoreCase);
++    }
++
++    private static bool IsRuntimeLeaf(string path)
++    {
++        var leaf = Leaf(path);
++        if (RuntimeLeafNames.Contains(leaf))
++            return true;
++
++        var normalized = path.Replace('$', '.');
++        return normalized.EndsWith("mag.f", StringComparison.OrdinalIgnoreCase) ||
++               normalized.EndsWith("ang.f", StringComparison.OrdinalIgnoreCase) ||
++               normalized.EndsWith("instMag.i", StringComparison.OrdinalIgnoreCase);
++    }
++
++    private static string ResolveDataType(LiveIedDataAttributeModel attribute)
++    {
++        if (!string.IsNullOrWhiteSpace(attribute.SclBType))
++            return attribute.SclBType;
++        if (!string.IsNullOrWhiteSpace(attribute.MmsType))
++            return attribute.MmsType;
++        return "IEC 61850 value";
++    }
++
++    private static string ResolveCategory(string lnClass, string doName, string cdc, string fc)
++    {
++        if (fc.Equals("MX", StringComparison.OrdinalIgnoreCase))
++            return "Measurement";
++        if (doName.Equals("Pos", StringComparison.OrdinalIgnoreCase) || cdc.Equals("DPC", StringComparison.OrdinalIgnoreCase))
++            return "Position";
++        if (lnClass.StartsWith('P') || doName.Equals("Op", StringComparison.OrdinalIgnoreCase) || doName.Equals("Str", StringComparison.OrdinalIgnoreCase))
++            return "Protection";
++        return "Status";
++    }
++
++    private static string ResolveControlValueType(string cdc)
++        => (cdc ?? string.Empty).Trim().ToUpperInvariant() switch
++        {
++            "DPC" => "Dbpos",
++            "SPC" => "Boolean",
++            "INC" or "ISC" or "BSC" => "Int32",
++            "APC" or "BAC" => "Float32",
++            _ => string.Empty
++        };
++
++    private static string BuildDisplayName(string logicalNode, string dataObject, string attributePath)
++        => $"{logicalNode} {dataObject} {attributePath}";
++
++    private static string Leaf(string? path)
++    {
++        var text = (path ?? string.Empty).Replace('$', '.').Trim('.');
++        var index = text.LastIndexOf('.');
++        return index >= 0 ? text[(index + 1)..] : text;
++    }
++
++    private static string NormalizeReference(string? reference)
++    {
++        var text = (reference ?? string.Empty).Trim();
++        var fcMarker = text.LastIndexOf(" [", StringComparison.Ordinal);
++        if (fcMarker >= 0)
++            text = text[..fcMarker];
++        text = text.Replace('$', '.').Replace("//", "/", StringComparison.Ordinal).Trim();
++
++        // SCL FCDA display references commonly use IED/LD/LN while MMS domains use IEDLD/LN.
++        var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
++        if (parts.Length >= 3)
++            text = string.Concat(parts[0], parts[1], "/", string.Join("/", parts.Skip(2)));
++
++        return text.ToUpperInvariant();
++    }
++}
