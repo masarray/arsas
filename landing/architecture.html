@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArIED 61850 Architecture — Multi-IED Sessions, Reporting & Runtime Scale</title>
+  <meta name="description" content="Explore the ArIED 61850 architecture: independent device sessions, ARIEC61850 engine services, report-first acquisition, bounded polling, WPF virtualization, event coalescing, and IED timestamp semantics." />
+  <meta name="keywords" content="IEC 61850 architecture, multi IED session, MMS reporting architecture, WPF virtualization, RCB DataSet, polling fallback, ARIEC61850, substation software architecture" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#07111f" />
+  <link rel="canonical" href="https://masarray.github.io/ArIED61850Tester/architecture.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ArIED 61850 Application Architecture" />
+  <meta property="og:description" content="Independent IED sessions, typed engine services, report-first acquisition, bounded polling, virtualized UI, and explicit evidence boundaries." />
+  <meta property="og:url" content="https://masarray.github.io/ArIED61850Tester/architecture.html" />
+  <meta property="og:image" content="https://masarray.github.io/ArIED61850Tester/assets/social-card.svg" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="container nav-shell"><a class="brand" href="./" aria-label="ArIED 61850 home"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ArIED 61850 <small>Engineering workstation</small></span></a><button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="features.html">Features</a><a href="control.html">Smart Control</a><a href="architecture.html" aria-current="page">Architecture</a><a class="nav-cta" href="https://github.com/masarray/ArIED61850Tester">GitHub</a></nav></div></header>
+
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Architecture</div><span class="eyebrow">Application and engine boundaries</span><h1>Independent device ownership above a <span class="gradient-text">reusable IEC 61850 engine.</span></h1><p>ArIED keeps the Windows operator experience and project workflow separate from protocol implementation. Each configured IED owns a dedicated runtime session while shared UI pipelines coalesce updates for responsive monitoring at scale.</p></div></section>
+
+    <section class="section section-tight"><div class="container code-panel reveal"><div class="code-head"><span>System boundary</span><span class="traffic-lights"><i></i><i></i><i></i></span></div><pre>┌────────────────────────────────────────────────────────────────────┐
+│                             ArIED 61850                            │
+│                                                                    │
+│  IED Explorer  ·  Signal Workspace  ·  Live Monitor  ·  Event Log │
+│  Diagnostics   ·  Project Cache     ·  Command Panel               │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │ typed application services
+┌───────────────────────────────▼────────────────────────────────────┐
+│                             ARIEC61850                             │
+│  MMS Session · Discovery · Reporting · SCL Workspace · Control    │
+│  Type Binding · CommandTermination · Protocol Diagnostics          │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │ IEC 61850 over TCP / report traffic
+                          Laboratory IEDs</pre></div></section>
+
+    <section class="section"><div class="container"><div class="section-head center reveal"><span class="kicker">Per-device ownership</span><h2>One IED card, one session, one lifecycle.</h2><p>Connection and monitoring state are not global. Stopping one device does not stop another, and a failure on one endpoint can be diagnosed without destroying the rest of the project workspace.</p></div><div class="feature-grid">
+      <article class="card reveal"><h3>Device session</h3><p>Endpoint, identity, configured context, cached model, selected points, status, and lifecycle state are owned by the device.</p></article>
+      <article class="card reveal"><h3>MMS association</h3><p>Each connected IED has its own association, discovery progress, request routing, report sessions, and reconnect context.</p></article>
+      <article class="card reveal"><h3>Acquisition plan</h3><p>Report candidates, dynamic reporting, uncovered polling points, aliases, and coverage evidence remain scoped to that session.</p></article>
+      <article class="card reveal"><h3>Event state</h3><p>Unread indicators and semantic process events retain their originating IED and reference context.</p></article>
+      <article class="card reveal"><h3>Control context</h3><p>Control descriptors and cached control-object sessions are associated with the live IED association that produced them.</p></article>
+      <article class="card reveal"><h3>Diagnostics</h3><p>Connection, discovery, report, fallback, command, and cleanup evidence is recorded with the affected device.</p></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container workflow"><div class="section-head reveal"><span class="kicker">Report-first acquisition</span><h2>Coverage is proven before polling is reduced.</h2><p>Static configuration is useful evidence, but it is not treated as proof that every selected point will arrive in a usable report. The runtime validates coverage and maintains bounded fallback for anything still uncovered.</p></div><div class="step-list">
+      <article class="step reveal"><span class="step-number">01</span><div><h3>Build candidates</h3><p>Use discovered RCB and DataSet hints to prepare the most relevant configured report groups.</p></div></article>
+      <article class="step reveal"><span class="step-number">02</span><div><h3>Attempt static reporting</h3><p>Reserve or enable appropriate report control blocks and validate the actual member references.</p></div></article>
+      <article class="step reveal"><span class="step-number">03</span><div><h3>Cover the remainder</h3><p>Create temporary dynamic plans for exact points not covered by usable static groups where the IED permits it.</p></div></article>
+      <article class="step reveal"><span class="step-number">04</span><div><h3>Bound polling</h3><p>Place only still-uncovered or unverified points in a priority queue serviced by the device monitor loop.</p></div></article>
+      <article class="step reveal"><span class="step-number">05</span><div><h3>Retain evidence</h3><p>Associate each value update with its acquisition source and keep alias or reference proof available for diagnostics.</p></div></article>
+    </div></div></section>
+
+    <section class="section"><div class="container split-panel"><article class="panel reveal"><span class="kicker">Runtime scale</span><h3>Bounded work instead of one task per signal</h3><ul class="check-list"><li>One monitoring loop per IED</li><li>Priority queue for uncovered polling points</li><li>Bounded round-robin report draining</li><li>Latest-value coalescing by point key</li><li>Batched UI updates on a shared timer</li><li>Bounded event and diagnostic collections</li><li>Row and column virtualization</li></ul></article><article class="panel reveal"><span class="kicker">Time semantics</span><h3>IED time remains distinct from PC receive time</h3><p>Process views use the timestamp supplied by the IED, report, or companion timestamp attribute. Local runtime time may be used internally for diagnostic ordering but is not presented as the process event timestamp.</p><ul class="check-list"><li>No local PC timestamp presented as IED event time</li><li>Quality and timestamp remain part of signal evidence</li><li>CSV and SOE exports retain process-time semantics</li><li>Missing or invalid source time remains diagnosable</li></ul></article></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head center reveal"><span class="kicker">Separation of concerns</span><h2>The UI stays focused because protocol state remains in the engine.</h2></div><div class="feature-grid">
+      <article class="card reveal"><h3>ArIED application layer</h3><p>Workflow navigation, device cards, signal selection, project persistence, live grids, event presentation, diagnostics UX, and command staging.</p></article>
+      <article class="card reveal"><h3>ARIEC61850 engine layer</h3><p>Transport, association, MMS services, model discovery, report sessions, SCL workspace services, control sequencing, type binding, and protocol decoding.</p></article>
+      <article class="card reveal"><h3>CI compatibility gate</h3><p>The build checks for required engine contracts before restore and compilation so missing APIs fail explicitly rather than producing hidden runtime degradation.</p></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container callout reveal"><div class="callout-grid"><div><span class="kicker">Source documentation</span><h2>Read the detailed architecture and validation records.</h2><p>The repository contains the multi-IED ownership model, engine compatibility requirements, validation checklist, reporting behavior, control integration, and clean-room boundaries.</p></div><div class="section-actions"><a class="btn btn-primary" href="https://github.com/masarray/ArIED61850Tester/blob/main/docs/ARCHITECTURE.md">Architecture document</a><a class="btn" href="https://github.com/masarray/ArIED61850Tester/blob/main/ENGINE_COMPATIBILITY.md">Engine compatibility</a></div></div></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ArIED 61850</span></a><p>Independent IED sessions above typed ARIEC61850 protocol services.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="features.html">Features</a><a href="control.html">Smart Control</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/ArIED61850Tester">Repository</a><a href="https://github.com/masarray/ArIED61850Tester/issues">Issues</a><a href="https://github.com/masarray/ARIEC61850">Engine</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div></div></footer>
+  <script src="app.js" defer></script>
+</body>
+</html>

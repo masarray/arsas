@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
 
 env:
-  # Temporary integration pin. Switch this to main after ARIEC61850 PR #25 is merged.
-  ARIEC61850_REF: agent/scl-workspace-api
+  ARIEC61850_REF: main
 
 jobs:
   build-windows:
+    name: Build, validate and package Windows application
     runs-on: windows-latest
     steps:
       - name: Checkout ArIED application
@@ -20,7 +20,7 @@ jobs:
           $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
           git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
 
-      - name: Verify ArIED clean-room source
+      - name: Verify source, website and license boundaries
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
@@ -37,6 +37,8 @@ jobs:
             ArIED61850Tester/GridUxBehavior.cs
             ArIED61850Tester/Models
             ArIED61850Tester/Services
+            ArIED61850Tester/docs
+            ArIED61850Tester/landing
 
       - name: Checkout ARIEC61850 engine
         shell: powershell

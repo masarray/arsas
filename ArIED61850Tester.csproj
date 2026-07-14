@@ -9,15 +9,15 @@
     <AssemblyName>ArIED61850</AssemblyName>
     <RootNamespace>ArIED61850Tester</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
-    <Authors>Mas Ari / masarray</Authors>
-    <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
+    <Authors>Ari Sulistiono / masarray</Authors>
+    <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
     <Product>ArIED 61850</Product>
-    <AssemblyTitle>ArIED 61850</AssemblyTitle>
-    <Description>Smart IED Explorer &amp; Monitor for SCL-based offline engineering, live IEC 61850 discovery, multi-IED monitoring, reporting, control-object inspection, quality, timestamps, and event logging.</Description>
+    <AssemblyTitle>ArIED 61850 — IEC 61850 Engineering Workstation</AssemblyTitle>
+    <Description>Windows IEC 61850 engineering workstation for SCL-assisted project setup, live MMS model discovery, independent multi-IED monitoring, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
     <Version>1.6.6</Version>
     <AssemblyVersion>1.6.6.0</AssemblyVersion>
     <FileVersion>1.6.6.0</FileVersion>
-    <PackageTags>iec61850;iec-61850;mms;scl;ied;relay-testing;substation-automation;digital-substation;report-control-block;wpf;dotnet</PackageTags>
+    <PackageTags>iec61850;iec-61850;mms;scl;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>

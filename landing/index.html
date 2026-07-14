@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArIED 61850 — IEC 61850 IED Explorer, Monitor & Smart Control</title>
+  <meta name="description" content="ArIED 61850 is a Windows engineering workstation for SCL-assisted IEC 61850 workflows, MMS model discovery, multi-IED monitoring, reporting diagnostics, sequence of events, and guarded Direct/SBO control." />
+  <meta name="keywords" content="IEC 61850, IED explorer, IEC 61850 client, MMS client, SCL viewer, SCD CID ICD, report control block, RCB monitor, substation automation, digital substation, relay testing, sequence of events, SBO control, WPF, .NET" />
+  <meta name="author" content="Ari Sulistiono" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="https://masarray.github.io/ArIED61850Tester/" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ArIED 61850" />
+  <meta property="og:title" content="ArIED 61850 — Smart IEC 61850 Engineering Workstation" />
+  <meta property="og:description" content="Explore SCL and live MMS models, monitor multiple IEDs independently, inspect reports and SOE, and execute guarded IEC 61850 control workflows." />
+  <meta property="og:url" content="https://masarray.github.io/ArIED61850Tester/" />
+  <meta property="og:image" content="https://masarray.github.io/ArIED61850Tester/assets/social-card.svg" />
+  <meta property="og:image:alt" content="ArIED 61850 engineering workstation interface" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ArIED 61850 — IEC 61850 IED Explorer & Monitor" />
+  <meta name="twitter:description" content="A modern Windows workstation for SCL-assisted engineering, live MMS discovery, report-first monitoring, SOE, diagnostics, and guarded control." />
+  <meta name="twitter:image" content="https://masarray.github.io/ArIED61850Tester/assets/social-card.svg" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "ArIED 61850",
+    "alternateName": "ArIED61850",
+    "applicationCategory": "DeveloperApplication",
+    "applicationSubCategory": "Substation automation engineering software",
+    "operatingSystem": "Windows 10, Windows 11",
+    "softwareVersion": "1.6.6",
+    "description": "Windows IEC 61850 engineering workstation for SCL-assisted workflows, live MMS model discovery, multi-IED monitoring, reporting diagnostics, sequence of events, and guarded control.",
+    "url": "https://masarray.github.io/ArIED61850Tester/",
+    "codeRepository": "https://github.com/masarray/ArIED61850Tester",
+    "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
+    "programmingLanguage": ["C#", "XAML"],
+    "runtimePlatform": ".NET 8",
+    "author": {
+      "@type": "Person",
+      "name": "Ari Sulistiono",
+      "url": "https://github.com/masarray"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "category": "Community edition"
+    },
+    "featureList": [
+      "IEC 61850 MMS discovery",
+      "SCL endpoint import",
+      "Multi-IED monitoring",
+      "Report-first acquisition",
+      "Sequence-of-events logging",
+      "Direct and Select-Before-Operate control workflows",
+      "Connection and protocol diagnostics",
+      "Project and model caching"
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="./" aria-label="ArIED 61850 home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span>ArIED 61850 <small>Engineering workstation</small></span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <nav class="nav-links" aria-label="Primary navigation" data-nav-links>
+        <a href="./" aria-current="page">Overview</a>
+        <a href="features.html">Features</a>
+        <a href="control.html">Smart Control</a>
+        <a href="architecture.html">Architecture</a>
+        <a class="nav-cta" href="https://github.com/masarray/ArIED61850Tester">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="eyebrow">Open engineering workstation · .NET 8</span>
+          <h1><span class="gradient-text">See the model.</span><br />Understand the event.<br />Control with evidence.</h1>
+          <p class="hero-copy">ArIED 61850 combines SCL-assisted project setup, live MMS discovery, independent multi-IED monitoring, report and SOE diagnostics, and control-model-aware command workflows in one focused Windows application.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/masarray/ArIED61850Tester#quick-start">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Build from source
+            </a>
+            <a class="btn" href="features.html">
+              Explore capabilities
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+          </div>
+          <div class="hero-proof" aria-label="Product highlights">
+            <span>SCL and live model workflow</span>
+            <span>Independent IED sessions</span>
+            <span>GPL community edition</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="ArIED 61850 application preview">
+          <div class="hero-window">
+            <img src="assets/hero.svg" alt="Stylized ArIED 61850 interface showing IED explorer, live values and command evidence" width="1440" height="760" />
+          </div>
+          <div class="floating-chip one"><span class="dot"></span> Report-first monitoring</div>
+          <div class="floating-chip two"><span class="dot blue"></span> Control-model-aware workflow</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="Product scope">
+      <div class="container metric-grid reveal">
+        <div class="metric"><strong>Multi-IED</strong><span>Independent connection and runtime ownership</span></div>
+        <div class="metric"><strong>SCL + Live</strong><span>Configured context and observed MMS model</span></div>
+        <div class="metric"><strong>Report first</strong><span>RCB coverage before bounded polling fallback</span></div>
+        <div class="metric"><strong>Typed control</strong><span>Direct and SBO sequences from live descriptors</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="capabilities">
+      <div class="container">
+        <div class="section-head center reveal">
+          <span class="kicker">One engineering workspace</span>
+          <h2>From configured intent to live protocol evidence</h2>
+          <p>ArIED is organized around the questions engineers ask on site: What is configured? What is actually online? Which values are changing? Which report path is active? Why did a command complete or fail?</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5zM15 3v5h5M8 12h8M8 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>SCL-assisted setup</h3>
+            <p>Import common SCL file types, extract configured IED endpoints, preserve project context, and prepare design-to-live verification without manually retyping every device.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h6v6H4zM14 5h6v6h-6zM9 14h6v6H9zM7 11v2h10v-2M12 13v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Live MMS model discovery</h3>
+            <p>Explore Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, and type information from the connected IED.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 18V8M10 18V4M16 18v-7M22 18H2M5 6l4-3 6 6 5-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Report-first acquisition</h3>
+            <p>Use configured static coverage first, add temporary dynamic reporting where appropriate, and place only the remaining uncovered points into bounded MMS polling.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 6h14v12H5zM8 9h8M8 12h5M8 15h7M3 8v8M21 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Independent IED sessions</h3>
+            <p>Every IED owns its connection, discovery state, selected signals, monitoring lifecycle, report subscriptions, event badge, and diagnostic history.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5M17 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Events and diagnostics</h3>
+            <p>Review semantic process transitions, report reasons, quality and timestamp evidence, association progress, TCP reachability context, and a copyable support report.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+            <h3>Guarded Smart Control</h3>
+            <p>Discover the control model, bind the live `ctlVal` type, execute the required Direct or SBO sequence, and surface completion, error, timing, and feedback evidence.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight">
+      <div class="container workflow">
+        <div class="section-head reveal">
+          <span class="kicker">Fast workflow</span>
+          <h2>Move from file or IP address to focused evidence</h2>
+          <p>The interface keeps setup, live model verification, signal selection, monitoring, events, diagnostics, and command evidence close together while preserving per-device ownership.</p>
+          <div class="section-actions"><a class="btn" href="architecture.html">Review the architecture</a></div>
+        </div>
+        <div class="step-list">
+          <article class="step reveal"><span class="step-number">01</span><div><h3>Open SCL, project, or endpoint</h3><p>Start from configured engineering context or add an IED directly by IP address.</p></div></article>
+          <article class="step reveal"><span class="step-number">02</span><div><h3>Verify the live model</h3><p>Connect, discover, and compare the observed MMS structure with the expected project context.</p></div></article>
+          <article class="step reveal"><span class="step-number">03</span><div><h3>Select the engineering scope</h3><p>Search, filter, sort, and persist the exact live and control objects needed for the task.</p></div></article>
+          <article class="step reveal"><span class="step-number">04</span><div><h3>Monitor independently</h3><p>Start each IED on its own lifecycle with report-first acquisition and bounded fallback.</p></div></article>
+          <article class="step reveal"><span class="step-number">05</span><div><h3>Review evidence</h3><p>Correlate values, events, report reasons, diagnostics, control completion, and process feedback.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container split-panel">
+        <article class="panel reveal">
+          <span class="kicker">Engine relationship</span>
+          <h3>Application UX above a reusable protocol engine</h3>
+          <p>ArIED owns the operator workflow, device cards, signal workspace, live views, event experience, diagnostics, project persistence, and command presentation. ARIEC61850 owns protocol codecs, sessions, discovery, reporting, SCL services, control sequencing, and protocol evidence.</p>
+          <ul class="check-list">
+            <li>Direct project reference during build</li>
+            <li>No duplicated protocol stack inside the UI project</li>
+            <li>Explicit compatibility checks in CI</li>
+            <li>Native .NET service contracts end to end</li>
+          </ul>
+        </article>
+        <article class="panel reveal">
+          <span class="kicker">Claim boundary</span>
+          <h3>Engineering evidence, not automatic authority</h3>
+          <p>The software can validate protocol readiness and record observed behavior. It cannot establish switching authority, plant isolation, cybersecurity approval, functional safety, or universal conformance.</p>
+          <ul class="check-list">
+            <li>Use active functions only in an approved test boundary</li>
+            <li>Validate feedback and negative command paths</li>
+            <li>Sanitize SCL, captures, logs, and diagnostic reports</li>
+            <li>Keep customer and employer material out of public issues</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section section-tight">
+      <div class="container callout reveal">
+        <div class="callout-grid">
+          <div>
+            <span class="kicker">Open community edition</span>
+            <h2>Build a clearer IEC 61850 troubleshooting workflow</h2>
+            <p>Clone ArIED beside ARIEC61850, build with .NET 8, and use the documentation and validation checklists to reproduce the intended laboratory workflow.</p>
+          </div>
+          <div class="section-actions">
+            <a class="btn btn-primary" href="https://github.com/masarray/ArIED61850Tester">Open on GitHub</a>
+            <a class="btn" href="https://github.com/masarray/ArIED61850Tester/issues">View issues</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ArIED 61850</span></a>
+          <p>IEC 61850 engineering workstation for SCL-assisted setup, live MMS discovery, independent multi-IED monitoring, SOE, diagnostics, and guarded control.</p>
+        </div>
+        <div><div class="footer-title">Product</div><div class="footer-links"><a href="features.html">Features</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="https://github.com/masarray/ArIED61850Tester#quick-start">Quick start</a></div></div>
+        <div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/ArIED61850Tester">Repository</a><a href="https://github.com/masarray/ArIED61850Tester/issues">Issues</a><a href="https://github.com/masarray/ArIED61850Tester/blob/main/SECURITY.md">Security</a><a href="https://github.com/masarray/ArIED61850Tester/blob/main/LICENSE">License</a></div></div>
+      </div>
+      <div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono. Community edition: GPL-3.0-or-later.</span><span>Laboratory and approved commissioning use. No formal conformance claim.</span></div>
+    </div>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

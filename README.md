@@ -1,185 +1,191 @@
+<div align="center">
+  <img src="Assets/app-icon.png" alt="ArIED 61850 application icon" width="104" height="104" />
+
 # ArIED 61850
 
-**Smart IED Explorer & Monitor**
+### IEC 61850 IED Explorer, Multi-Device Monitor & Smart Control Workstation
 
-ArIED 61850 is a Windows desktop engineering tool for IEC 61850 MMS discovery, multi-IED monitoring, reporting diagnostics, sequence-of-events viewing, project caching, and native IEC 61850 control through the ARIEC61850 Smart Control service.
+**A modern Windows engineering application for SCL-assisted workflows, live MMS model discovery, report-first monitoring, sequence-of-events analysis, diagnostics, and guarded IEC 61850 control.**
 
-> **Licensing:** the current public community edition and current release packages are licensed **only** under `GPL-3.0-or-later`. A separate commercial license is available for proprietary integration, OEM/white-label distribution, and contractual engineering support. See [docs/LICENSING.md](docs/LICENSING.md).
+[![Build](https://github.com/masarray/ArIED61850Tester/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/ArIED61850Tester/actions/workflows/build.yml)
+[![Pages](https://github.com/masarray/ArIED61850Tester/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/ArIED61850Tester/)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-2563eb)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows-0ea5e9)](#requirements)
 
-## Core workflow
+[**Product website**](https://masarray.github.io/ArIED61850Tester/) · [**Quick start**](#quick-start) · [**Architecture**](docs/ARCHITECTURE.md) · [**Validation**](docs/VALIDATION_CHECKLIST.md) · [**Report an issue**](https://github.com/masarray/ArIED61850Tester/issues)
+</div>
 
-```text
-Add IED by IP, open a project, or import SCL
-→ connect and verify the live model, or restore a cached model
-→ select live and control objects
-→ start independent per-IED monitoring
-→ inspect reports, SOE, diagnostics, and commands
-```
+![ArIED 61850 engineering workspace](landing/assets/hero.svg)
 
-Each IED keeps its own connection, discovery progress, selected signals, report subscriptions, event indicator, and start/stop lifecycle.
+## Built for practical IEC 61850 engineering
 
-## Main capabilities
+ArIED 61850 brings the most common commissioning and troubleshooting workflows into one focused desktop workspace. Add an IED by IP address, import endpoints from an SCL file, verify the live MMS model, select the required signals, monitor each device independently, inspect report and event evidence, and stage supported control operations through the native ARIEC61850 control service.
 
-- Live MMS discovery of Logical Devices, Logical Nodes, data objects, values, quality, and IED timestamps.
-- Real IEDName and Logical Device boundary resolution.
-- SCL endpoint import from SCD, CID, ICD, IID, SSD, or XML files, including multi-IED ConnectedAP/IP extraction and duplicate protection.
-- Multi-IED independent connections and monitoring.
-- Static RCB/DataSet first, dynamic reporting when needed, and bounded MMS fallback for uncovered or unverified points.
-- Saved project model cache for fast reconnect without repeating full discovery.
-- Virtualized signal selection with search, filters, visible-row bulk selection, and persisted choices.
-- Live value highlighting for recent process changes.
-- SCADA-style event log focused on semantic process-state transitions.
-- Per-IED unread event badges.
-- Native Smart Control for command-ready IEC 61850 Data Objects.
+The application is designed for **substation automation laboratories, FAT/SAT preparation, relay and BCU integration, commissioning support, protocol investigation, and repeatable engineering diagnostics**. It is not a formal conformance certificate and does not replace approved switching procedures, test plans, or site authority.
 
-## Native Smart Control
+## Engineering capabilities
 
-Version 1.6.5 integrates directly with `AR.Iec61850.Control.Iec61850ControlService` and adds a fast row-control workflow. The Command Panel shows the current process value and exposes semantic actions directly on each command row:
+| Area | Current capability |
+|---|---|
+| **SCL workspace** | Import SCD, CID, ICD, IID, SSD, or XML files; extract configured endpoints; preserve multi-IED project context; support design-to-live verification workflows. |
+| **MMS discovery** | Discover Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, and available model metadata. |
+| **Multi-IED sessions** | Maintain independent connection, discovery, monitoring, report, event, and lifecycle state for every configured IED. |
+| **Report-first monitoring** | Prefer configured RCB/DataSet coverage, use temporary dynamic reporting where appropriate, and poll only still-uncovered points. |
+| **Signal workspace** | Search, filter, sort, select visible rows, persist selections, and work efficiently with large IED models through WPF virtualization. |
+| **Live monitoring** | Coalesced live values, recent-change highlighting, IED-provided timestamps, quality display, and bounded UI updates. |
+| **Sequence of events** | Process-oriented event log, per-IED unread indicators, report reasons, and semantic state transitions. |
+| **Smart Control** | Discover `ctlModel`, inspect live MMS types, execute supported Direct or Select-Before-Operate sequences, and surface termination/error evidence. |
+| **Diagnostics** | Connection journal, association evidence, TCP reachability context, report diagnostics, command evidence, and copyable support reports. |
+| **Project persistence** | Save device definitions, cached model context, selected signals, and operator workspace state for faster return visits. |
 
-- Position/DPC: **Open** and **Close**
-- Pulse controls: **Raise** or **Lower**
-- Boolean/SPC: **True** and **False**
-- Setpoint controls: value field and **Set**
-- Per-signal **Interlock**, **Synchrocheck**, and **Test** flags directly in each command row
-- Two-step breaker safety: **Open/Close** becomes **Confirm Open/Confirm Close** plus **Cancel** before dispatch
-- Optional **Details** window for the full ctlModel, sequence, checks, and protocol evidence
-
-The command workflow reads the live IED model before enabling **Send Command**:
-
-1. Validate the Data Object root.
-2. Read `ctlModel`.
-3. Retrieve the exact live `Oper`, `SBOw`, and optional `Cancel` type specifications.
-4. Locate the named `ctlVal` field without positional guessing.
-5. Select Direct Operate or SBO automatically.
-6. Bind the requested value to the exact live MMS type.
-7. Preserve origin, `ctlNum`, timestamp `T`, Test, interlock, and synchrocheck flags for the sequence.
-8. Wait for CommandTermination for enhanced-security control models.
-9. Show `ControlError`, `AddCause`, `LastApplError`, control number, control-service time, feedback time, total time, and process feedback.
-
-For position objects such as `CSWI.Pos`, ArIED keeps the user-facing semantics **Open/Closed** even when a vendor encodes the wire `ctlVal` as Boolean. The feedback status is decoded independently as DPC/Dbpos. Control-object sessions are cached per IED association so opening the Command Panel and sending repeated commands does not repeat the full ctlModel/type discovery every time.
-
-Supported typed command families include DPC, SPC, INC/ISC, BSC, and APC when the live descriptor is operationally valid.
-
-ArIED intentionally has **no unsafe generic MMS-write fallback** for `.Oper`, `.SBOw`, or `.Cancel`.
-
-## Engine requirement
-
-ArIED is an app-only project. It references the user's existing ARIEC61850 source at build time and does not replace that repository.
-
-This version was integrated against ARIEC61850 revision:
+## Workflow
 
 ```text
-41d003ae02b1003d16cd5a8baf5f7a95be4434fa
+Open SCL / Open Project / Add IED
+                 ↓
+Review configured endpoint and live connection state
+                 ↓
+Discover or restore the IEC 61850 model
+                 ↓
+Select signals and control-ready Data Objects
+                 ↓
+Start monitoring independently per IED
+                 ↓
+Inspect live values, reports, SOE, diagnostics, and command evidence
 ```
 
-Required source includes:
+Each device owns its own session. Connecting, monitoring, stopping, or diagnosing one IED does not implicitly change another device session.
+
+## Smart Control, without protocol guessing
+
+For supported control objects, ArIED reads the live model before enabling command dispatch:
+
+1. Validate the selected Data Object root.
+2. Read `ctlModel` and determine the required control sequence.
+3. Resolve the live `Oper`, `SBOw`, and optional `Cancel` type descriptions.
+4. Locate and bind the named `ctlVal` field using the actual MMS type.
+5. Preserve origin, `ctlNum`, timestamp `T`, Test, interlock, and synchrocheck values across the sequence.
+6. Wait for `CommandTermination` when required by enhanced-security control models.
+7. Present `ControlError`, `AddCause`, `LastApplError`, timing, and process-feedback evidence.
+
+Supported command families currently include DPC, SPC, INC/ISC, BSC, and APC when the discovered live descriptor is operationally usable. Position objects retain operator-facing **Open / Closed** semantics while wire encoding and feedback decoding remain independently type-aware.
+
+> ArIED does not provide a generic control-write fallback for `.Oper`, `.SBOw`, or `.Cancel`. If the required native control contract is unavailable, the build or control readiness gate fails explicitly.
+
+## Architecture at a glance
 
 ```text
-ARIEC61850/
-└─ src/AR.Iec61850/
-   ├─ AR.Iec61850.csproj
-   └─ Control/
-      ├─ Iec61850ControlService.cs
-      ├─ Iec61850ControlObjectSession.cs
-      ├─ Iec61850ControlModels.cs
-      ├─ Iec61850ControlValueBinder.cs
-      └─ Iec61850CommandTerminationDecoder.cs
+┌──────────────────────────────────────────────────────────────┐
+│                         ArIED 61850                          │
+│ Explorer · Live Monitor · Event Log · Diagnostics · Control │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ typed application services
+┌──────────────────────────────▼───────────────────────────────┐
+│                         ARIEC61850                           │
+│ MMS · Reporting · Control · SCL Workspace · Diagnostics     │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ IEC 61850 / TCP 102
+                         Laboratory IEDs
 ```
 
-The default folder layout is:
+ArIED is the Windows application layer. The protocol implementation remains in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) source repository and is referenced as a sibling .NET project at build time.
+
+## Quick start
+
+### Requirements
+
+- Windows 10 or Windows 11
+- .NET 8 SDK
+- Visual Studio 2022 with **.NET desktop development**, or the .NET CLI
+- A compatible ARIEC61850 source checkout
+- An isolated laboratory or approved commissioning network for active functions
+
+### Recommended folder layout
 
 ```text
 D:\Git\
 ├─ ARIEC61850\
 │  └─ src\AR.Iec61850\AR.Iec61850.csproj
-└─ ArIED61850\
+└─ ArIED61850Tester\
    └─ ArIED61850Tester.csproj
 ```
 
-A different engine checkout can be selected explicitly:
+### Build
 
 ```powershell
-dotnet build .\ArIED61850Tester.csproj -c Release `
-  -p:ArIec61850Project="D:\Git\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
-```
+git clone https://github.com/masarray/ARIEC61850.git
+git clone https://github.com/masarray/ArIED61850Tester.git
 
-Or set:
-
-```powershell
-$env:ARIEC61850_PROJECT = "D:\Git\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
-```
-
-## Build requirements
-
-- Windows 10 or Windows 11
-- .NET 8 SDK
-- ARIEC61850 Smart Control source
-- Visual Studio 2022 with .NET desktop development, or the .NET CLI
-
-Build:
-
-```powershell
+cd ArIED61850Tester
 dotnet restore .\ArIED61850Tester.csproj
 dotnet build .\ArIED61850Tester.csproj -c Release
 ```
 
-Portable self-contained package:
+To use an engine checkout in another location:
+
+```powershell
+dotnet build .\ArIED61850Tester.csproj -c Release `
+  -p:ArIec61850Project="D:\Engineering\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+```
+
+### Create a portable Windows package
 
 ```powershell
 .\scripts\publish-windows-portable.ps1 `
-  -Version 1.6.5 `
-  -EngineProject "D:\Git\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+  -Version 1.6.6 `
+  -EngineProject "D:\Engineering\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
 ```
 
 Expected output:
 
 ```text
-dist\ArIED61850-1.6.5-win-x64-portable.zip
+dist\ArIED61850-1.6.6-win-x64-portable.zip
 ```
 
-## Control safety
+## Operational boundary
 
-IEC 61850 commands can operate primary equipment. Before using live commands:
+IEC 61850 control, report writes, temporary DataSet creation, and active network functions can affect equipment state or IED resources. Use active features only when:
 
-- Test all four control models with the IED Simulator.
-- Verify DPC/SPC/INC/BSC/APC type variants.
-- Verify positive and negative CommandTermination.
-- Test interlock and synchrocheck rejection with `AddCause`.
-- Verify Test mode causes no process movement.
-- Test selection timeout, Cancel, association loss, and competing-client ownership.
-- Confirm process feedback mapping for breaker and tap-changer controls.
-- Use relay test/maintenance mode before energised commissioning.
+- the test boundary, isolation, and switching authority are approved;
+- the selected IED is in the intended test or maintenance condition;
+- control models, feedback mapping, interlock/synchrocheck behavior, timeout, Cancel, and negative termination have been validated;
+- another qualified person can independently verify the expected process response where required by the test plan.
 
-The application enables Send Command only when the native descriptor reports `IsOperationallyReady=true` and the selected value can be represented safely by the live `ctlVal` type.
+A successful command or report session is protocol evidence for that test condition. It is not a universal interoperability, cybersecurity, functional-safety, or conformance claim.
 
-## Additional documentation
+## Documentation
 
-- `ARIEC61850_SMART_CONTROL_INTEGRATION.md`
-- `SMART_CONTROL_FEEDBACK_AUDIT.md`
-- `ENGINE_COMPATIBILITY.md`
-- `NEXT_PHASE_PROGRESS.md`
-- [Architecture](docs/ARCHITECTURE.md)
-- [Validation Checklist](docs/VALIDATION_CHECKLIST.md)
-- [Clean-Room and Interoperability Policy](docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md)
-- [External IP Cleanliness Audit — 2026-07-14](docs/EXTERNAL_IP_CLEANLINESS_AUDIT_2026-07-14.md)
-- [License and Provenance Audit — 2026-07-14](docs/LICENSE_AUDIT_2026-07-14.md)
+| Document | Purpose |
+|---|---|
+| [Documentation hub](docs/README.md) | Starting point for engineering, validation, legal, and contribution documents. |
+| [Architecture](docs/ARCHITECTURE.md) | Multi-IED ownership, acquisition strategy, runtime scaling, and timestamp semantics. |
+| [Validation checklist](docs/VALIDATION_CHECKLIST.md) | Build, simulator, reporting, control, and live-test acceptance checks. |
+| [Engine compatibility](ENGINE_COMPATIBILITY.md) | Required ARIEC61850 contracts and supported project-reference layout. |
+| [Smart Control integration](ARIEC61850_SMART_CONTROL_INTEGRATION.md) | Native control-service integration details. |
+| [Control feedback audit](SMART_CONTROL_FEEDBACK_AUDIT.md) | Feedback and completion evidence boundaries. |
+| [Licensing](docs/LICENSING.md) | Current GPL community edition and separate commercial licensing path. |
+| [Clean-room policy](docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md) | Independent-development, fixture provenance, UI, and interoperability boundaries. |
 
-## Validation status
+## Contributing and support
 
-Static source validation was completed in the packaging environment. A full Windows `.NET 8` build, simulator run, and live relay control test could not be executed there because the environment does not contain the .NET SDK or an IEC 61850 target.
+Engineering contributions are welcome when they are focused, reproducible, independently authored, and free of confidential customer or employer material. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SUPPORT.md](SUPPORT.md) before opening a pull request or support issue.
+
+For a failed connection, use **Diagnostics → Copy Diagnostic** and attach the sanitized report to the issue. Remove customer names, station identifiers, IP addressing that must remain private, credentials, and confidential SCL content before sharing.
 
 ## License
 
-The current `main` branch and current public release packages are licensed **only** under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
+The current `main` branch and current community release packages are licensed **only** under the [GNU General Public License v3.0 or later](LICENSE).
 
-A separate negotiated commercial license is available for proprietary integration, OEM/white-label distribution, closed-source redistribution, warranty, maintenance, priority support, training, and engineering services. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+A separate negotiated commercial license is available for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, priority engineering support, training, and project-specific development. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
-Names, logos, icons, and official-release branding are not granted under the software license. See [TRADEMARK.md](TRADEMARK.md).
+Project names, logos, icons, and official-release branding are handled separately from the software license. See [TRADEMARK.md](TRADEMARK.md).
 
-Revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` were previously released under Apache-2.0 and remain available on branch `archive/apache-2.0-final`. Those historical grants apply only to those earlier revisions; they do not apply to later changes or current release binaries. See [docs/LICENSING.md](docs/LICENSING.md).
+Historical revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain available under their original terms on branch `archive/apache-2.0-final`. Those historical terms apply only to those earlier revisions. See [docs/LICENSING.md](docs/LICENSING.md).
 
-## Copy Diagnostic
+---
 
-The Diagnostics tab includes **Copy Diagnostic**. Use it after a failed connection and paste the generated report into the support conversation. The report includes the app and engine versions, active Windows network adapters, IED endpoints, a short TCP reachability probe, native association state, association/discovery evidence, and the recent communication journal.
-
-A message such as `TCP_CONNECTION_REFUSED` means port 102 rejected the socket before IEC 61850 COTP/ACSE/MMS negotiation. In that case an association-profile label such as `BalancedApTitle` is not the root cause.
+<div align="center">
+  <strong>ArIED 61850</strong><br />
+  Clear model evidence. Independent device sessions. Guarded control workflows.
+</div>

@@ -1,0 +1,19 @@
+{
+  "name": "ArIED 61850 — IEC 61850 Engineering Workstation",
+  "short_name": "ArIED 61850",
+  "description": "SCL-assisted IEC 61850 engineering, live MMS discovery, multi-IED monitoring, SOE, diagnostics, and Smart Control.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "categories": ["developer", "utilities", "productivity", "education"],
+  "icons": [
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

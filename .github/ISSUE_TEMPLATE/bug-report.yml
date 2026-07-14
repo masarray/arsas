@@ -1,0 +1,111 @@
+name: Engineering bug report
+description: Report a reproducible ArIED connection, discovery, monitoring, event, control, packaging, or UI defect.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve ArIED 61850. Use synthetic or sanitized data only. Do not include credentials, customer names, station identifiers, confidential SCL, restricted addressing, or proprietary material.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Connection / association
+        - SCL import / project workspace
+        - MMS discovery / model browser
+        - Signal selection
+        - Reporting / monitoring
+        - Event log / timestamps / quality
+        - Smart Control
+        - Diagnostics
+        - Build / packaging
+        - UI / accessibility / performance
+        - Documentation / website
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: ArIED version or commit
+      placeholder: "1.6.6 or commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: engine-version
+    attributes:
+      label: ARIEC61850 branch or commit
+      placeholder: "main or commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, .NET SDK/runtime, and display scaling when relevant.
+      placeholder: "Windows 11 24H2, .NET SDK 8.0.x, 125% scaling"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open...
+        2. Connect...
+        3. Select...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostic evidence
+      description: Paste a sanitized Copy Diagnostic report or the smallest relevant excerpt. Remove confidential data first.
+      render: text
+
+  - type: dropdown
+    id: evidence-source
+    attributes:
+      label: Validation environment
+      options:
+        - Static source review only
+        - Unit or integration test
+        - Simulator / loopback
+        - Isolated laboratory IED
+        - Approved commissioning environment
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I removed confidential customer, employer, station, credential, and restricted network information.
+          required: true
+        - label: I did not include external proprietary screenshots, manuals, code, or support material.
+          required: true
+        - label: Any active control or network test was performed under the required authority and test boundary.
+          required: true

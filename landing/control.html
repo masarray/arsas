@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IEC 61850 Smart Control — Direct, SBO & Command Evidence | ArIED 61850</title>
+  <meta name="description" content="Learn how ArIED 61850 discovers ctlModel, resolves live MMS control types, executes Direct or Select-Before-Operate sequences, and presents CommandTermination, AddCause, timing, and feedback evidence." />
+  <meta name="keywords" content="IEC 61850 control, Select Before Operate, SBO, Direct Operate, ctlModel, CommandTermination, AddCause, DPC SPC BSC APC, breaker control testing" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#07111f" />
+  <link rel="canonical" href="https://masarray.github.io/ArIED61850Tester/control.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="IEC 61850 Smart Control in ArIED 61850" />
+  <meta property="og:description" content="Control-model-aware Direct and SBO workflows with live type binding, completion evidence, and explicit operational boundaries." />
+  <meta property="og:url" content="https://masarray.github.io/ArIED61850Tester/control.html" />
+  <meta property="og:image" content="https://masarray.github.io/ArIED61850Tester/assets/social-card.svg" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="container nav-shell"><a class="brand" href="./" aria-label="ArIED 61850 home"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ArIED 61850 <small>Engineering workstation</small></span></a><button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="features.html">Features</a><a href="control.html" aria-current="page">Smart Control</a><a href="architecture.html">Architecture</a><a class="nav-cta" href="https://github.com/masarray/ArIED61850Tester">GitHub</a></nav></div></header>
+
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Smart Control</div><span class="eyebrow">Control-model-aware workflow</span><h1>Control the intended object through the <span class="gradient-text">sequence the live IED actually requires.</span></h1><p>ArIED does not infer a command from a button label alone. It reads the live control model, resolves the command type, constructs the required Direct or Select-Before-Operate sequence, and records completion and feedback evidence for the test condition.</p><div class="hero-actions"><a class="btn btn-primary" href="https://github.com/masarray/ArIED61850Tester#smart-control-without-protocol-guessing">Read the implementation overview</a><a class="btn" href="features.html">All features</a></div></div></section>
+
+    <section class="section section-tight"><div class="container metric-grid reveal"><div class="metric"><strong>Direct + SBO</strong><span>Normal and enhanced security models</span></div><div class="metric"><strong>Live types</strong><span>Named ctlVal binding from actual descriptors</span></div><div class="metric"><strong>Typed families</strong><span>DPC, SPC, INC/ISC, BSC, APC</span></div><div class="metric"><strong>Evidence</strong><span>Termination, error, timing, and feedback</span></div></div></section>
+
+    <section class="section"><div class="container workflow"><div class="section-head reveal"><span class="kicker">Discovery before dispatch</span><h2>The command panel is the end of a model-resolution process.</h2><p>A semantic action becomes available only after ArIED and ARIEC61850 have enough live evidence to represent the command without positional field guessing or a generic write fallback.</p></div><div class="step-list">
+      <article class="step reveal"><span class="step-number">01</span><div><h3>Resolve the Data Object root</h3><p>Normalize the selected reference and verify the expected control-object boundary.</p></div></article>
+      <article class="step reveal"><span class="step-number">02</span><div><h3>Read `ctlModel`</h3><p>Determine whether the object requires Direct or Select-Before-Operate, with normal or enhanced completion handling.</p></div></article>
+      <article class="step reveal"><span class="step-number">03</span><div><h3>Inspect live command types</h3><p>Retrieve `Oper`, `SBOw`, and optional `Cancel` type descriptions and locate the named `ctlVal` field.</p></div></article>
+      <article class="step reveal"><span class="step-number">04</span><div><h3>Bind semantic intent</h3><p>Represent Open, Close, Raise, Lower, Boolean, counter, or setpoint intent using the actual live MMS type.</p></div></article>
+      <article class="step reveal"><span class="step-number">05</span><div><h3>Execute one immutable sequence</h3><p>Preserve origin, `ctlNum`, timestamp `T`, Test, interlock, and synchrocheck values across selection and operation.</p></div></article>
+      <article class="step reveal"><span class="step-number">06</span><div><h3>Record completion evidence</h3><p>Present confirmed service results, CommandTermination, errors, AddCause, elapsed time, and mapped process feedback.</p></div></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head center reveal"><span class="kicker">Supported operator semantics</span><h2>Engineering actions remain readable while wire handling stays type-aware.</h2><p>The UI presents the action an engineer intends. The engine independently handles the control model and command value representation discovered from the IED.</p></div><div class="feature-grid">
+      <article class="card reveal"><h3>Position / DPC</h3><p>Open and Close actions with position feedback decoded separately from the command wire representation.</p></article>
+      <article class="card reveal"><h3>Boolean / SPC</h3><p>True and False actions represented through the discovered single-point control type.</p></article>
+      <article class="card reveal"><h3>Pulse / BSC</h3><p>Raise and Lower actions for supported binary step command structures.</p></article>
+      <article class="card reveal"><h3>Counter / INC or ISC</h3><p>Typed integer command values when the live descriptor is operationally usable.</p></article>
+      <article class="card reveal"><h3>Setpoint / APC</h3><p>Explicit setpoint entry and type-aware value binding for supported analog control objects.</p></article>
+      <article class="card reveal"><h3>Per-signal checks</h3><p>Test, interlock, and synchrocheck request flags remain attached to the exact command row being staged.</p></article>
+    </div></div></section>
+
+    <section class="section"><div class="container split-panel"><article class="panel reveal"><span class="kicker">Evidence shown</span><h3>Protocol completion and process response</h3><ul class="check-list"><li>Detected control model and sequence</li><li>Confirmed MMS service result</li><li>Positive or negative CommandTermination</li><li>`ControlError`, `AddCause`, and `LastApplError`</li><li>Control number and origin context</li><li>Control-service, feedback, and total elapsed time</li><li>Mapped process feedback when available</li></ul></article><article class="panel reveal"><span class="kicker">Operational guardrails</span><h3>Readiness is not switching authority</h3><ul class="check-list"><li>Two-step confirmation for Open and Close dispatch</li><li>No generic `.Oper`, `.SBOw`, or `.Cancel` write fallback</li><li>Control actions disabled when the descriptor is not ready</li><li>Test and check flags visible on the same signal row</li><li>Negative outcomes surfaced instead of hidden</li><li>Approved isolation and test authority remain external requirements</li></ul></article></div></section>
+
+    <section class="section section-tight"><div class="container code-panel reveal"><div class="code-head"><span>Control-model sequence matrix</span><span class="traffic-lights"><i></i><i></i><i></i></span></div><pre><span class="code-key">Direct · normal</span>      Oper                         → confirmed result
+<span class="code-key">SBO · normal</span>         SBO → Oper                   → confirmed result
+<span class="code-accent">Direct · enhanced</span>    Oper                         → CommandTermination
+<span class="code-accent">SBO · enhanced</span>       SBOw → Oper                  → CommandTermination
+
+<span class="code-ok">Completion evidence:</span> service result · ControlError · AddCause · LastApplError · feedback</pre></div></section>
+
+    <section class="section section-tight"><div class="container callout reveal"><div class="callout-grid"><div><span class="kicker">Validation first</span><h2>Exercise every control model before energised commissioning.</h2><p>Validate positive and negative termination, interlock and synchrocheck rejection, Test mode, timeout, Cancel, association loss, competing-client ownership, and process feedback mapping in the approved test environment.</p></div><div class="section-actions"><a class="btn btn-primary" href="https://github.com/masarray/ArIED61850Tester/blob/main/docs/VALIDATION_CHECKLIST.md">Open validation checklist</a><a class="btn" href="architecture.html">View architecture</a></div></div></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ArIED 61850</span></a><p>Control-model-aware IEC 61850 workflows with explicit command and feedback evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="features.html">Features</a><a href="architecture.html">Architecture</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/ArIED61850Tester">Repository</a><a href="https://github.com/masarray/ArIED61850Tester/issues">Issues</a><a href="https://github.com/masarray/ArIED61850Tester/blob/main/LICENSE">License</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>No formal conformance or functional-safety claim.</span></div></div></footer>
+  <script src="app.js" defer></script>
+</body>
+</html>

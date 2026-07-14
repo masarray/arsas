@@ -1,0 +1,67 @@
+name: Deploy product website
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "landing/**"
+      - "scripts/validate-landing.py"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "landing/**"
+      - "scripts/validate-landing.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate static website
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate HTML, local links and SEO metadata
+        run: python scripts/validate-landing.py
+
+      - name: Verify public website boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number --fixed-strings 'LICENSE-APACHE-2.0' landing
+          ! grep -R --line-number -E '(href|src|content)="http://' landing --include='*.html'
+
+      - name: Upload website artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: landing
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

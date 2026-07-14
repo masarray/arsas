@@ -4,7 +4,7 @@
 .SYNOPSIS
   Verifies that every Git-tracked ArIED path is free from prohibited binaries,
   captures, confidential evidence, external-product identifiers, proprietary assets,
-  and obsolete license files that could make the current release ambiguous.
+  obsolete license files, and superseded public wording.
 
 .DESCRIPTION
   The gate scans every Git-tracked file. Disallowed external identifiers are
@@ -19,6 +19,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
 $ForbiddenFilePatterns = @(
     "LICENSE-APACHE-2.0",
+    "*EXTERNAL_IP_CLEANLINESS_AUDIT*",
     "*.dll", "*.exe", "*.pdb", "*.deps.json", "*.runtimeconfig.json",
     "*.nupkg", "*.snupkg", "*.pcap", "*.pcapng", "*.etl", "*.binlog",
     "*.log", "*.tmp", "*.cache", "*.suo", "*.user", "*.rsuser",
@@ -42,12 +43,17 @@ $CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
 @(7, 8, 12, 22) | ForEach-Object { [void]$CandidateLengths.Add($_) }
 
 $ForbiddenTextPatterns = @(
-    "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
+    "C:\Users\",
+    "C:\Program Files\dotnet\sdk",
+    "blocked in the current sandbox",
+    "_wpftmp",
+    "External IP Cleanliness Audit"
 )
 
 $TextExtensions = @(
-    ".md", ".cs", ".xml", ".xaml", ".ps1", ".cmd", ".yml", ".yaml",
-    ".html", ".css", ".js", ".json", ".props", ".targets", ".sln", ".slnx", ".txt"
+    ".md", ".cs", ".xml", ".xaml", ".ps1", ".py", ".cmd", ".yml", ".yaml",
+    ".html", ".css", ".js", ".json", ".webmanifest", ".svg",
+    ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
 $Problems = New-Object System.Collections.Generic.List[string]
@@ -145,4 +151,4 @@ if ($Problems.Count -gt 0) {
     throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked ArIED content passed clean-room, external-IP, and current-license checks." -ForegroundColor Green
+Write-Host "All Git-tracked ArIED content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
