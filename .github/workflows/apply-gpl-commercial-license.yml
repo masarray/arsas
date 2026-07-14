@@ -1,0 +1,65 @@
+name: Apply GPL and commercial licensing
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'legal/gpl3-commercial-licensing')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: legal/gpl3-commercial-licensing
+
+      - name: Apply audited license transition
+        id: transition
+        shell: bash
+        env:
+          APACHE_BASE_SHA: 0df1007d9538b978edba67218136bc5c4f8019ad
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          rm -f LICENSE_TRANSITION_FAILURE.txt
+          python scripts/apply-license-transition.py > /tmp/license-transition.log 2>&1
+          status=$?
+          cat /tmp/license-transition.log
+          if [ "$status" -ne 0 ]; then
+            git reset --hard HEAD
+            cp /tmp/license-transition.log LICENSE_TRANSITION_FAILURE.txt
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f LICENSE_TRANSITION_FAILURE.txt
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Commit transition or diagnostics
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No licensing changes to commit."
+            exit 0
+          fi
+          if [ "${{ steps.transition.outputs.failed }}" = "true" ]; then
+            git commit -m "ci(legal): persist license transition failure"
+          else
+            git commit -m "chore(legal): adopt GPL-3.0-or-later and commercial licensing"
+          fi
+          git push origin HEAD:legal/gpl3-commercial-licensing
+
+      - name: Fail after preserving diagnostics
+        if: steps.transition.outputs.failed == 'true'
+        run: exit 1
