@@ -1,0 +1,84 @@
+--- a/Models/MonitorModels.cs
++++ b/Models/MonitorModels.cs
+@@ -1,3 +1,5 @@
++using AR.Iec61850.Scl.Workspace;
++
+ namespace ArIED61850Tester.Models;
+ 
+ public sealed class Iec61850MonitorDevice : ObservableObject
+@@ -28,12 +30,75 @@
+     private bool _hasDiscoveryCache;
+     private string _busyTitle = "Discovering IEC 61850 IED";
+     private int _unreadEventCount;
++    private SclIedWorkspace? _sclWorkspace;
++    private SclLiveModelComparisonResult? _sclComparison;
++    private string _sclSourcePath = string.Empty;
++    private string _sclSourceSha256 = string.Empty;
++    private string _sclIedName = string.Empty;
++    private string _sclAccessPointName = string.Empty;
+ 
+     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
+     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
+     public BulkObservableCollection<Iec61850MonitorPoint> Points { get; } = new();
+     public BulkObservableCollection<SignalDefinition> CommandSignals { get; } = new();
+     public Iec61850DeviceDiagnosticSnapshot LastDiagnosticSnapshot { get; set; } = new();
++
++    public SclIedWorkspace? SclWorkspace
++    {
++        get => _sclWorkspace;
++        set
++        {
++            if (ReferenceEquals(_sclWorkspace, value)) return;
++            _sclWorkspace = value;
++            RefreshComputed();
++        }
++    }
++
++    public SclLiveModelComparisonResult? SclComparison
++    {
++        get => _sclComparison;
++        set
++        {
++            if (ReferenceEquals(_sclComparison, value)) return;
++            _sclComparison = value;
++            RefreshComputed();
++        }
++    }
++
++    public string SclSourcePath
++    {
++        get => _sclSourcePath;
++        set => Set(ref _sclSourcePath, value?.Trim() ?? string.Empty);
++    }
++
++    public string SclSourceSha256
++    {
++        get => _sclSourceSha256;
++        set => Set(ref _sclSourceSha256, value?.Trim() ?? string.Empty);
++    }
++
++    public string SclIedName
++    {
++        get => _sclIedName;
++        set => Set(ref _sclIedName, value?.Trim() ?? string.Empty);
++    }
++
++    public string SclAccessPointName
++    {
++        get => _sclAccessPointName;
++        set => Set(ref _sclAccessPointName, value?.Trim() ?? string.Empty);
++    }
++
++    public bool HasSclDesignModel => SclWorkspace != null || !string.IsNullOrWhiteSpace(SclSourceSha256);
++    public bool RequiresEndpointBinding => HasSclDesignModel && string.IsNullOrWhiteSpace(IpAddress);
++    public bool HasSclConfigurationDrift => SclComparison?.RequiresFullDiscovery == true;
++    public string SclVerificationText => !HasSclDesignModel
++        ? string.Empty
++        : SclComparison == null
++            ? IsConnected ? "SCL associated • full model unverified" : "SCL offline model"
++            : SclComparison.IsCompatible
++                ? "SCL verified against live model"
++                : $"SCL drift • {SclComparison.BlockingFindingCount} blocking finding(s)";
+ 
+     // Smart Auto reporting: existing static RCB/DataSet first, temporary association-
+     // scoped dynamic DataSet/URCB second, MMS polling only when reporting cannot be armed.
