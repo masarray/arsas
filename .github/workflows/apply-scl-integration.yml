@@ -1,0 +1,54 @@
+name: Apply staged SCL integration
+
+on:
+  push:
+    branches: [ agent/use-engine-scl-workspace ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/use-engine-scl-workspace
+          fetch-depth: 0
+
+      - name: Apply staged source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in \
+            .integration/mainwindow-1.patch \
+            .integration/mainwindow-2.patch \
+            .integration/mainwindow-3.patch \
+            .integration/mainwindow-4.patch \
+            .integration/monitormodels-1.patch \
+            .integration/monitormodels-2.patch \
+            .integration/mapper.patch \
+            .integration/projection.patch
+          do
+            git apply --check --ignore-space-change --ignore-whitespace "$patch"
+            git apply --ignore-space-change --ignore-whitespace "$patch"
+          done
+
+          cp .integration/build.yml .github/workflows/build.yml
+          mkdir -p docs
+          cp .integration/SCL_WORKSPACE_INTEGRATION.md docs/SCL_WORKSPACE_INTEGRATION.md
+          rm Services/SclImportService.cs
+          rm -rf .integration
+          rm .github/workflows/apply-scl-integration.yml
+
+      - name: Commit final integration source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Integrate engine-owned SCL workspace [applied]"
+          git push origin HEAD:agent/use-engine-scl-workspace
