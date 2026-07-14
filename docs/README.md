@@ -35,7 +35,7 @@ This directory contains the engineering, validation, licensing, provenance, and 
 | [Licensing model](LICENSING.md) | GPL community edition, historical boundary, and separate commercial licensing path. |
 | [License and provenance audit](LICENSE_AUDIT_2026-07-14.md) | Repository-evidence review and remaining manual checks. |
 | [Clean-room and interoperability policy](CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md) | Independent-development, test-fixture, UI, and external-material boundaries. |
-| [External IP and provenance review](EXTERNAL_IP_CLEANLINESS_AUDIT_2026-07-14.md) | Repository evidence concerning external implementation and proprietary-asset contamination. |
+| [External IP and provenance review](EXTERNAL_IP_AND_PROVENANCE_REVIEW_2026-07-14.md) | Repository evidence concerning external implementation and proprietary-asset contamination. |
 
 ## Project policies
 
