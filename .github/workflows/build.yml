@@ -15,6 +15,10 @@ jobs:
         with:
           path: ArIED61850Tester
 
+      - name: Verify ArIED clean-room source
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
+
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
