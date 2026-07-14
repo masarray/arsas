@@ -27,7 +27,7 @@ The captured native attempt returned TCP `ConnectionRefused`, while the later di
 1. Correct the test Ethernet subnet (`192.16` versus `192.168`).
 2. Temporarily disable Wi-Fi so there is only one route to `192.168.1.0/24`.
 3. Verify `ping 192.168.1.5` and `Test-NetConnection 192.168.1.5 -Port 102`.
-4. Close IEDScout and other MMS clients if the relay has a small association limit.
+4. Close other MMS clients if the relay has a small association limit.
 5. Retry ArIED and copy the new diagnostic report.
 
 ## Shutdown defect
