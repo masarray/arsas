@@ -1,0 +1,126 @@
+--- a/MainWindow.xaml.cs
++++ b/MainWindow.xaml.cs
+@@ -11,6 +11,7 @@
+ using System.Windows.Threading;
+ using System.Windows.Media;
+ using System.Windows.Media.Animation;
++using AR.Iec61850.Scl.Workspace;
+ using ArIED61850Tester.Models;
+ using ArIED61850Tester.Services;
+ using Microsoft.Win32;
+@@ -20,6 +21,7 @@
+ public partial class MainWindow : Window, INotifyPropertyChanged
+ {
+     private readonly Iec61850MonitorRuntime _runtime = new();
++    private readonly SclWorkspaceService _sclWorkspaceService = new();
+     private readonly CancellationTokenSource _applicationCancellation = new();
+     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
+     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
+@@ -160,28 +162,18 @@
+             return;
+ 
+         var sourceName = Path.GetFileName(dialog.FileName);
+-        SetStatus($"Reading IED endpoints from {sourceName}…");
++        SetStatus($"Opening {sourceName} as an offline IEC 61850 design model…");
+         try
+         {
+-            var result = await SclImportService.LoadAsync(dialog.FileName, _applicationCancellation.Token);
+-            foreach (var warning in result.Warnings.Take(25))
+-                AddLog("WARN", "SCL", warning);
+-            if (result.Warnings.Count > 25)
+-                AddLog("WARN", "SCL", $"{result.Warnings.Count - 25} additional SCL warning(s) were omitted from the live log.");
+-
+-            if (result.Endpoints.Count == 0)
+-            {
+-                var reason = result.ConnectedAccessPointCount == 0
+-                    ? "No ConnectedAP communication entries were found."
+-                    : "ConnectedAP entries were found, but none contained a valid IP address.";
+-                SetStatus($"{sourceName}: no usable IEC 61850 MMS endpoints. {reason}");
+-                AddLog("WARN", "SCL", $"{sourceName}: {reason}");
+-                MessageBox.Show(
+-                    this,
+-                    $"No usable IEC 61850 MMS endpoint was found in {sourceName}.\n\n{reason}\n\nThe file may contain only an IED template without a Communication section.",
+-                    "Open SCL",
+-                    MessageBoxButton.OK,
+-                    MessageBoxImage.Information);
++            var document = await _sclWorkspaceService.OpenAsync(
++                dialog.FileName,
++                cancellationToken: _applicationCancellation.Token);
++            LogSclFindings(sourceName, document.Findings);
++
++            if (document.Ieds.Count == 0)
++            {
++                SetStatus($"{sourceName}: no IED model was found.");
++                AddLog("WARN", "SCL", $"{sourceName}: the engine returned no IED workspace.");
+                 return;
+             }
+ 
+@@ -190,51 +182,33 @@
+             var retained = 0;
+             Iec61850MonitorDevice? firstImported = null;
+ 
+-            foreach (var endpoint in result.Endpoints)
++            foreach (var workspace in document.Ieds)
+             {
+                 var device = Devices.FirstOrDefault(item =>
+-                    item.IpAddress.Equals(endpoint.IpAddress, StringComparison.OrdinalIgnoreCase) &&
+-                    item.Port == endpoint.Port);
+-
++                    item.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
++                    item.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
++                    item.SclAccessPointName.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase));
++
++                if (device != null && (device.IsConnected || device.IsBusy || device.IsMonitoring))
++                {
++                    retained++;
++                    firstImported ??= device;
++                    continue;
++                }
++
++                var signals = SclWorkspaceSignalMapper.BuildSignals(workspace);
+                 if (device == null)
+                 {
+-                    device = new Iec61850MonitorDevice
+-                    {
+-                        Name = endpoint.IedName,
+-                        IdentitySource = $"SCL • {sourceName}",
+-                        LogicalDeviceSummary = BuildSclEndpointSummary(endpoint),
+-                        IpAddress = endpoint.IpAddress,
+-                        Port = endpoint.Port,
+-                        AllowDynamicDataSetWrites = true,
+-                        Status = "SCL endpoint ready",
+-                        Detail = $"Imported from {sourceName}. Press Play to connect and verify the live IEC 61850 model.",
+-                        AcquisitionMode = "SCL • live discovery pending"
+-                    };
++                    device = new Iec61850MonitorDevice();
+                     Devices.Add(device);
+                     added++;
+                 }
+-                else if (!device.IsConnected && !device.IsBusy && !device.HasDiscoveryCache)
++                else
+                 {
+-                    if (string.IsNullOrWhiteSpace(device.Name) ||
+-                        device.Name.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase))
+-                    {
+-                        device.Name = endpoint.IedName;
+-                    }
+-                    device.IdentitySource = $"SCL • {sourceName}";
+-                    device.LogicalDeviceSummary = BuildSclEndpointSummary(endpoint);
+-                    device.Status = "SCL endpoint ready";
+-                    device.Detail = $"Endpoint refreshed from {sourceName}. Press Play to connect and verify the live IEC 61850 model.";
+-                    device.AcquisitionMode = "SCL • live discovery pending";
+-                    device.RefreshComputed();
+                     refreshed++;
+                 }
+-                else
+-                {
+-                    // Preserve active sessions and successful discovery caches. SCL is an
+-                    // endpoint-import path, never authority over a verified live model.
+-                    retained++;
+-                }
+-
++
++                ApplySclWorkspaceToDevice(device, document, workspace, signals);
+                 firstImported ??= device;
+             }
+ 
