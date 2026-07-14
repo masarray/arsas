@@ -60,7 +60,7 @@ jobs:
         if: steps.transform.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_BRANCH: fix/scl-workflow-layout-repair
+          TARGET_BRANCH: fix/scl-workflow-layout-final
         shell: bash
         run: |
           set -euo pipefail
