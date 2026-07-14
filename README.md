@@ -44,7 +44,6 @@ Version 1.6.5 integrates directly with `AR.Iec61850.Control.Iec61850ControlServi
 - Two-step breaker safety: **Open/Close** becomes **Confirm Open/Confirm Close** plus **Cancel** before dispatch
 - Optional **Details** window for the full ctlModel, sequence, checks, and protocol evidence
 
-
 The command workflow reads the live IED model before enabling **Send Command**:
 
 1. Validate the Data Object root.
@@ -162,7 +161,7 @@ The application enables Send Command only when the native descriptor reports `Is
 - [Architecture](docs/ARCHITECTURE.md)
 - [Validation Checklist](docs/VALIDATION_CHECKLIST.md)
 - [Clean-Room and Interoperability Policy](docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md)
-- [Third-Party Clean-Room Audit — 2026-07-14](docs/THIRD_PARTY_CLEAN_ROOM_AUDIT_2026-07-14.md)
+- [External IP Cleanliness Audit — 2026-07-14](docs/EXTERNAL_IP_CLEANLINESS_AUDIT_2026-07-14.md)
 - [License and Provenance Audit — 2026-07-14](docs/LICENSE_AUDIT_2026-07-14.md)
 
 ## Validation status

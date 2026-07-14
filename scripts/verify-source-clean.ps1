@@ -3,14 +3,12 @@
 <#
 .SYNOPSIS
   Verifies that every Git-tracked ArIED path is free from prohibited binaries,
-  captures, confidential evidence, external IEC 61850 stack material, and
-  proprietary-tool assets.
+  captures, confidential evidence, external-product identifiers, and proprietary assets.
 
 .DESCRIPTION
-  The gate scans Git-tracked files rather than ignoring directories by name.
-  A committed capture, manual, log, or product asset therefore cannot bypass the
-  check by being placed below folders such as evidence, captures, logs, or a
-  product-named directory. Untracked local build output is naturally excluded.
+  The gate scans every Git-tracked file. Disallowed external identifiers are
+  represented only by one-way fingerprints so the repository itself does not
+  publish or repeat unrelated product and company names.
 #>
 [CmdletBinding()]
 param()
@@ -25,28 +23,29 @@ $ForbiddenFilePatterns = @(
     "*.pdf", "*.chm", "*.hlp"
 )
 
-# Match the complete repo-relative path so a product-named directory cannot hide
-# an otherwise generic file such as assets/vendor-name/logo.png.
-$ForbiddenThirdPartyPathPatterns = @(
-    "*libiec61850*", "*iedscout*", "*ied scout*", "*svscout*", "*sv scout*",
-    "*stationscout*", "*station scout*", "*omicron*", "*mz-automation*"
-)
+$ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(
+    "dee5292b6aa3319833a7fb015d79494b0f1b69c3dc90258b39c042db388ccd71",
+    "1343b354d479ded45dde0d7f4ea01daddf1d411a669724f9f3e3de78db038ffc",
+    "439003d0d54d022f61a705da700bff916414fdf8308f0cae6a5b9e5903e86fdf",
+    "bec65696741e77e0dd0de446b99fe3c069edb3a8f5c81a9939f9813b33e595ea",
+    "4ed56753cb552f928aca8147069753f0f3741e28598c56533d8cddcd79fa574e",
+    "bbfd365f0891c3e0205503f5d2a1678a0a6ea60d68f3dcc174ed4f60dd87e708",
+    "d6a2feb71892b018d0ffec8d3cd438dabe599369d5a1921c7044137146107230",
+    "048832a53880fe4fc5feeee9fa0ae445b143c99a956356bee231d3faadbb7af0",
+    "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8"
+) | ForEach-Object { [void]$ForbiddenIdentifierHashes.Add($_) }
+
+$CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
+@(7, 8, 12, 22) | ForEach-Object { [void]$CandidateLengths.Add($_) }
 
 $ForbiddenTextPatterns = @(
-    "libiec61850", "MZ Automation", "IEDScout", "IED Scout",
-    "StationScout", "Station Scout", "SVScout", "SV Scout", "OMICRON_CMC",
     "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
 )
 
 $TextExtensions = @(
     ".md", ".cs", ".xml", ".xaml", ".ps1", ".cmd", ".yml", ".yaml",
     ".html", ".css", ".js", ".json", ".props", ".targets", ".sln", ".slnx", ".txt"
-)
-
-$AllowedLegalReferenceFiles = @(
-    "THIRD_PARTY_NOTICES.md",
-    "docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md",
-    "docs/THIRD_PARTY_CLEAN_ROOM_AUDIT_2026-07-14.md"
 )
 
 $Problems = New-Object System.Collections.Generic.List[string]
@@ -56,9 +55,37 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
-function Test-IsAllowedLegalReference {
-    param([Parameter(Mandatory=$true)][string]$RelativePath)
-    return $AllowedLegalReferenceFiles -contains (Normalize-RelativePath $RelativePath)
+function Get-Sha256Hex {
+    param([Parameter(Mandatory=$true)][string]$Value)
+
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $algorithm.Dispose()
+    }
+}
+
+function Test-ContainsForbiddenIdentifier {
+    param([AllowEmptyString()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+    $words = @([regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9]+') | ForEach-Object { $_.Value })
+
+    for ($index = 0; $index -lt $words.Count; $index++) {
+        $candidate = ""
+        for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
+            $candidate += $words[$index + $count - 1]
+            if ($candidate.Length -gt 22) { break }
+            if ($CandidateLengths.Contains($candidate.Length) -and $ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $candidate))) {
+                return $true
+            }
+        }
+    }
+
+    return $false
 }
 
 function Get-TrackedRelativePaths {
@@ -90,23 +117,21 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    if (-not (Test-IsAllowedLegalReference $relative)) {
-        foreach ($pattern in $ForbiddenThirdPartyPathPatterns) {
-            if ($relative -like $pattern) {
-                $Problems.Add("Forbidden third-party-named path: $relative")
-                break
-            }
-        }
+    if (Test-ContainsForbiddenIdentifier $relative) {
+        $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
     if ($relative -eq "scripts/verify-source-clean.ps1") { continue }
-    if (Test-IsAllowedLegalReference $relative) { continue }
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
+    if (Test-ContainsForbiddenIdentifier $content) {
+        $Problems.Add("Forbidden external identifier in text: $relative")
+    }
+
     foreach ($pattern in $ForbiddenTextPatterns) {
         if ($content -match [regex]::Escape($pattern)) {
-            $Problems.Add("Forbidden text '$pattern': $relative")
+            $Problems.Add("Forbidden internal-release text: $relative")
         }
     }
 }
@@ -118,4 +143,4 @@ if ($Problems.Count -gt 0) {
     throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked ArIED content passed clean-room and third-party contamination checks." -ForegroundColor Green
+Write-Host "All Git-tracked ArIED content passed clean-room and external-IP checks." -ForegroundColor Green
