@@ -1,16 +1,22 @@
 # Licensing Model
 
-## Community edition
+## Current community edition
 
-The current public source is licensed under **GNU GPL v3.0 or later** (`GPL-3.0-or-later`). Anyone may run, inspect, modify, and redistribute it subject to the GPL. Distribution of object code must satisfy corresponding-source obligations.
+The current `main` branch and current public release packages are licensed **only** under **GNU GPL v3.0 or later** (`GPL-3.0-or-later`). Anyone may run, inspect, modify, and redistribute the current community edition subject to the GPL. Distribution of object code must satisfy the GPL corresponding-source obligations.
+
+The presence of historical repository records does not give recipients a choice to apply an earlier license to current revisions or current release binaries.
 
 ## Commercial licensing and services
 
 A separately negotiated commercial license is available for proprietary integration, OEM/white-label distribution, private product branches, and contractual support. See [COMMERCIAL-LICENSE.md](../COMMERCIAL-LICENSE.md).
 
-## Historical Apache boundary
+This commercial path is separate from the public GPL community license. It does not make the current public source dual-licensed under GPL and Apache-2.0.
 
-Revision `0df1007d9538b978edba67218136bc5c4f8019ad` and earlier public revisions remain available under Apache-2.0 on branch `archive/apache-2.0-final`. Existing Apache rights are not withdrawn. The historical text is in [LICENSE-APACHE-2.0](../LICENSE-APACHE-2.0).
+## Historical release boundary
+
+Revision `0df1007d9538b978edba67218136bc5c4f8019ad` and earlier public revisions were released under Apache-2.0 and remain available on branch `archive/apache-2.0-final`. Existing rights previously granted for those historical revisions are not withdrawn.
+
+The historical Apache license text is retained on that archive branch, not in the current `main` branch or current release package. Apache-2.0 does **not** apply to changes made after the historical boundary.
 
 ## Engine dependency
 

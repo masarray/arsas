@@ -57,14 +57,23 @@ if (-not (Test-Path $exe)) {
 }
 
 Copy-Item (Join-Path $root "README.md") (Join-Path $publishDir "README.txt") -Force
-# ARIED_LEGAL_FILES: include licensing and attribution documents in every distributed package.
-$legalFiles = @("LICENSE", "LICENSE-APACHE-2.0", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
+
+# Current release packages carry one public software license: GPL-3.0-or-later.
+$legalFiles = @("LICENSE", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
 foreach ($legalFile in $legalFiles) {
     $sourceLegalFile = Join-Path $root $legalFile
-    if (Test-Path $sourceLegalFile) {
-        Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
+    if (-not (Test-Path $sourceLegalFile)) {
+        throw "Required legal file was not found: $sourceLegalFile"
     }
+
+    Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
 }
+
+$licensingGuide = Join-Path $root "docs\LICENSING.md"
+if (-not (Test-Path $licensingGuide)) {
+    throw "Required licensing guide was not found: $licensingGuide"
+}
+Copy-Item $licensingGuide (Join-Path $publishDir "LICENSING.md") -Force
 
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
 

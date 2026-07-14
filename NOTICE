@@ -1,12 +1,15 @@
 ArIED 61850
 Copyright (C) 2026 Mas Ari / masarray
 
-Current public license: GNU General Public License v3.0 or later.
+Current main branch and current public release packages:
+GNU General Public License v3.0 or later only.
+
 Commercial licensing may be obtained separately from the copyright holder.
 
-License transition effective 2026-07-14:
-- Last Apache-2.0 revision: 0df1007d9538b978edba67218136bc5c4f8019ad
-- Historical branch: archive/apache-2.0-final
-- Historical license copy: LICENSE-APACHE-2.0
+Historical license transition effective 2026-07-14:
+- Last historical Apache-2.0 revision: 0df1007d9538b978edba67218136bc5c4f8019ad
+- Historical source branch: archive/apache-2.0-final
+- The historical license text is retained on that archive branch only.
+- Historical Apache-2.0 rights do not apply to later revisions or current release binaries.
 
 The ARIEC61850 engine and third-party components remain governed by their own applicable licenses. See THIRD_PARTY_NOTICES.md.
