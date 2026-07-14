@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/masarray/ArIED61850Tester/security
+    about: Review SECURITY.md and use private vulnerability reporting when available.
+  - name: Support and diagnostics guide
+    url: https://github.com/masarray/ArIED61850Tester/blob/main/SUPPORT.md
+    about: Review connection checks, required environment details, and sanitization rules before filing an issue.
+  - name: Product website
+    url: https://masarray.github.io/ArIED61850Tester/
+    about: Product overview, features, Smart Control, and architecture.
