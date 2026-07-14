@@ -13,7 +13,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Compact navigation row: the large top application bar was removed to free vertical space. -->
+        <!-- Compact navigation row: the large top application bar is removed to free vertical space. -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -98,12 +98,12 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ArIED project" Margin="0,0,6,0">
                                         <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                            <Path Data="M6,3 H14 L19,8 V21 H6 Z M14,3 V8 H19 M9,12 H16 M9,16 H16" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
+                                            <Path Data="M4,7 H10 L12,9 H20 V20 H4 Z M4,7 V5 H10 L12,7" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
                                         </Canvas></Viewbox>
                                     </Button>
                                     <Button Style="{StaticResource IedIconButton}" Click="SaveProject_Click" ToolTip="Save ArIED project">
                                         <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                            <Path Data="M5,4 H17 L19,6 V20 H5 Z M8,4 V9 H16 V4 M9,20 V14 H15 V20" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
+                                            <Path Data="M5,4 H17 L20,7 V20 H5 Z M8,4 V9 H16 V4 M9,20 V14 H16 V20" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
                                         </Canvas></Viewbox>
                                     </Button>
                                 </StackPanel>
@@ -528,32 +528,9 @@
                                                                                     </Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Confirm Open" Tag="{Binding}" Click="ControlConfirmAction_Click"
-                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0">
-                                                                                <Button.Style>
-                                                                                    <Style TargetType="Button" BasedOn="{StaticResource CommandOpenButton}">
-                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding ControlPendingAction}" Value="Open">
-                                                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </Button.Style>
-                                                                            </Button>
-                                                                            <Button Content="Confirm Close" Tag="{Binding}" Click="ControlConfirmAction_Click"
-                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0">
-                                                                                <Button.Style>
-                                                                                    <Style TargetType="Button" BasedOn="{StaticResource CommandCloseButton}">
-                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding ControlPendingAction}" Value="Close">
-                                                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </Button.Style>
-                                                                            </Button>
+                                                                            <Button Content="{Binding ControlPendingConfirmationLabel}" Tag="{Binding}" Click="ControlConfirmAction_Click"
+                                                                                    Style="{StaticResource CommandConfirmButton}"
+                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0"/>
                                                                             <Button Content="Cancel" Tag="{Binding}" Click="ControlCancelAction_Click"
                                                                                     Style="{StaticResource SoftButton}" Padding="12,6"/>
                                                                         </StackPanel>
