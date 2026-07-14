@@ -37,12 +37,10 @@ jobs:
             git apply --ignore-space-change --ignore-whitespace "$patch"
           done
 
-          cp .integration/build.yml .github/workflows/build.yml
           mkdir -p docs
           cp .integration/SCL_WORKSPACE_INTEGRATION.md docs/SCL_WORKSPACE_INTEGRATION.md
           rm Services/SclImportService.cs
           rm -rf .integration
-          rm .github/workflows/apply-scl-integration.yml
 
       - name: Commit final integration source
         shell: bash
