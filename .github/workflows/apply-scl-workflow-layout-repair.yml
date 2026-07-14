@@ -22,6 +22,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.repair/apply.py')
+          text = path.read_text(encoding='utf-8')
+          marker = 'Path("docs/SCL_SMART_DYNAMIC_REPORTING.md").write_text('
+          start = text.index(marker)
+          replacement = '''Path("docs/SCL_SMART_DYNAMIC_REPORTING.md").write_text(
+              "# SCL-assisted Smart Dynamic reporting\\n\\n"
+              "Opening an SCL file is an offline operation. After the model is loaded, ArIED opens the signal-selection workflow immediately. Saving a valid live selection continues to endpoint binding, MMS association, and monitoring.\\n\\n"
+              "When selected signals have complete static DataSet and ReportControl coverage, ArIED prefers that configuration. When coverage is missing or partial, ArIED prepares an association-scoped dynamic DataSet from the uncovered selected signals and asks the native engine to use a safe free RCB. MMS polling remains the final fallback.\\n\\n"
+              "Unassigned or unresolved ReportControl DataSet references reported as warnings are retained in the typed SCL workspace but are not promoted into noisy live Diagnostics because they are capability hints handled by Smart Dynamic reporting. A positively resolved empty DataSet and other blocking SCL findings remain actionable diagnostics.\\n\\n"
+              "The command panel expands automatically only once per IED, after the live control model has produced at least one proven executable command row.\\n",
+              encoding="utf-8")
+          '''
+          path.write_text(text[:start] + replacement, encoding='utf-8')
+          PY
+
           python3 .repair/apply.py
           base64 --decode .repair/app-icon.b64 > Assets/app-icon.ico
 
