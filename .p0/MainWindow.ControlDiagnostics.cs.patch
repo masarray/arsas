@@ -1,0 +1,22 @@
+--- a/MainWindow.ControlDiagnostics.cs
++++ b/MainWindow.ControlDiagnostics.cs
+@@ -379,7 +379,7 @@
+             {
+                 state.StableConfirmed = true;
+                 SetStableFeedbackResult(state);
+-                if (!state.Signal.ControlIsBusy)
++                if (!state.Signal.ControlCommandBusy)
+                     RemovePositionCommand(state.Key);
+                 return;
+             }
+@@ -413,8 +413,8 @@
+             return;
+         }
+ 
+-        if (propertyName == nameof(SignalDefinition.ControlIsBusy) &&
+-            !state.Signal.ControlIsBusy && state.StableConfirmed)
++        if (propertyName == nameof(SignalDefinition.ControlCommandBusy) &&
++            !state.Signal.ControlCommandBusy && state.StableConfirmed)
+         {
+             SetStableFeedbackResult(state);
+             RemovePositionCommand(state.Key);
