@@ -44,6 +44,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _hasUnreadDiagnosticError;
     private bool _signalSelectionWizardOpen;
     private bool _connectAllInProgress;
+    private readonly HashSet<string> _autoExpandedCommandDevices = new(StringComparer.OrdinalIgnoreCase);
 
     public ObservableCollection<Iec61850MonitorDevice> Devices { get; } = new();
     public BulkObservableCollection<Iec61850MonitorPoint> GlobalPoints { get; } = new();
@@ -85,6 +86,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Raise(nameof(ActiveIedTitle));
             Raise(nameof(ActiveIedSubtitle));
             RaiseWorkspaceCounts();
+            TryAutoExpandCommandPanelOnce(_selectedDevice);
             // ctlModel inspection is preloaded independently of the Expander. Avoid
             // changing the row set after the panel's first frame has already painted.
         }
@@ -223,6 +225,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var status = $"{sourceName}: {document.Ieds.Count} IED/AP workspace(s), {offlineCount} offline model(s), {endpointCount} MMS endpoint(s) — {added} added, {refreshed} refreshed, {retained} active retained.";
             SetStatus(status);
             AddLog("INFO", "SCL", status);
+
+            if (firstImported != null && firstImported.Signals.Count > 0)
+            {
+                AddLog("INFO", "SCL", $"{firstImported.Name}: SCL model ready. Choose signals; saving the selection will continue to endpoint binding, connection, and monitoring.");
+                await OpenSignalSelectionWizardAsync(firstImported);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -272,7 +280,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.Port = 102;
         }
 
-        device.AllowDynamicDataSetWrites = false;
+        var allowDynamicReporting = ShouldAllowDynamicReportingForScl(signals);
+        device.AllowDynamicDataSetWrites = allowDynamicReporting;
         device.SclWorkspace = workspace;
         device.SclComparison = null;
         device.SclSourcePath = document.SourcePath;
@@ -281,10 +290,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.SclAccessPointName = workspace.AccessPointName;
         device.HasDiscoveryCache = signals.Count > 0;
         device.Status = workspace.RequiresEndpointBinding ? "SCL model ready — bind endpoint" : "SCL model ready";
-        device.Detail = workspace.RequiresEndpointBinding
-            ? "LD/LN/DO/DA are available offline. Press Play to bind an MMS endpoint; no discovery traffic was sent while opening the file."
-            : "LD/LN/DO/DA were loaded offline. Play performs a fast MMS association; Re-scan performs full design-versus-live verification.";
-        device.AcquisitionMode = "SCL offline design model";
+        device.Detail = allowDynamicReporting
+            ? (workspace.RequiresEndpointBinding
+                ? "LD/LN/DO/DA are available offline. Static report coverage is incomplete; after signal selection and endpoint binding, ArIED will create an association-scoped dynamic DataSet and use a safe free RCB before polling fallback."
+                : "LD/LN/DO/DA were loaded offline. Static report coverage is incomplete; ArIED will use static coverage where available and create an association-scoped dynamic DataSet for uncovered selected signals before polling fallback.")
+            : (workspace.RequiresEndpointBinding
+                ? "LD/LN/DO/DA are available offline. Press Play to bind an MMS endpoint; no discovery traffic was sent while opening the file."
+                : "LD/LN/DO/DA were loaded offline. Play performs a fast MMS association; Re-scan performs full design-versus-live verification.");
+        device.AcquisitionMode = allowDynamicReporting
+            ? "SCL design • Smart Dynamic reporting prepared"
+            : "SCL offline design model";
 
         foreach (var signal in signals)
         {
@@ -306,16 +321,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void LogSclFindings(string sourceName, IReadOnlyList<SclWorkspaceFinding> findings)
     {
-        if (findings.Count == 0)
+        var actionableFindings = findings
+            .Where(finding => !IsSmartDynamicCapabilityHint(finding))
+            .ToArray();
+        if (actionableFindings.Length == 0)
             return;
 
-        var groups = SclFindingAggregator.Group(findings);
-        if (groups.Count != findings.Count)
+        var groups = SclFindingAggregator.Group(actionableFindings);
+        if (groups.Count != actionableFindings.Length)
         {
             AddLog(
                 "INFO",
                 "SCL",
-                $"{sourceName} • grouped {findings.Count} raw finding(s) into {groups.Count} diagnostic group(s). Full typed evidence remains attached to the SCL workspace.");
+                $"{sourceName} • grouped {actionableFindings.Length} actionable finding(s) into {groups.Count} diagnostic group(s). Full typed evidence remains attached to the SCL workspace.");
         }
 
         foreach (var group in groups.Take(40))
@@ -328,17 +346,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (groups.Count > 40)
         {
-            var omittedRawCount = groups
-                .Skip(40)
-                .Sum(group => group.Count);
+            var omittedRawCount = groups.Skip(40).Sum(group => group.Count);
             AddLog(
                 "WARN",
                 "SCL",
-                $"{groups.Count - 40} additional diagnostic group(s), representing {omittedRawCount} raw finding(s), were omitted from the live log.");
+                $"{groups.Count - 40} additional diagnostic group(s), representing {omittedRawCount} actionable finding(s), were omitted from the live log.");
         }
 
         if (groups.Any(group => SclFindingAggregator.IsBlockingSeverity(group.Severity)))
             MarkDiagnosticAlert();
+    }
+
+    private static bool IsSmartDynamicCapabilityHint(SclWorkspaceFinding finding)
+    {
+        if (!finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return finding.Code.Equals("SCL_REPORT_DATASET_UNASSIGNED", StringComparison.OrdinalIgnoreCase) ||
+               finding.Code.Equals("SCL_REPORT_DATASET_UNRESOLVED", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldAllowDynamicReportingForScl(IReadOnlyCollection<SignalDefinition> signals)
+    {
+        return signals.Any(signal =>
+            signal.CanPublishAsSignal &&
+            (string.IsNullOrWhiteSpace(signal.DataSetReference) ||
+             string.IsNullOrWhiteSpace(signal.ReportControlReference)));
+    }
+
+    private void TryAutoExpandCommandPanelOnce(Iec61850MonitorDevice? device)
+    {
+        if (device == null || CommandPanelExpander == null || device.CommandSignals.Count == 0)
+            return;
+        if (!_autoExpandedCommandDevices.Add(device.DeviceId))
+            return;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (ReferenceEquals(SelectedDevice, device) && CommandPanelExpander != null)
+                CommandPanelExpander.IsExpanded = true;
+        }));
     }
 
     private bool EnsureSclEndpointBinding(Iec61850MonitorDevice device)
@@ -357,7 +404,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.IpAddress = wizard.RelayIpAddress;
         device.Port = wizard.MmsPort;
         device.Status = "SCL model ready";
-        device.Detail = "Endpoint bound locally. Play will fast-connect from the SCL design model; Re-scan performs full comparison.";
+        device.Detail = device.AllowDynamicDataSetWrites
+            ? "Endpoint bound locally. Saving the selected signals will connect and arm Smart Dynamic reporting with a safe free RCB before polling fallback."
+            : "Endpoint bound locally. Play will fast-connect from the SCL design model; Re-scan performs full comparison.";
         device.RefreshComputed();
         NewDeviceIp = device.IpAddress;
         NewDevicePort = device.Port.ToString(CultureInfo.InvariantCulture);
@@ -1024,6 +1073,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         device.RefreshCommandSignalProjection();
         RebuildControlFeedbackIndex(device);
+        TryAutoExpandCommandPanelOnce(device);
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
 
@@ -1677,7 +1727,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     LogicalDeviceSummary = profile.LogicalDeviceSummary,
                     IpAddress = profile.IpAddress,
                     Port = profile.Port <= 0 ? 102 : profile.Port,
-                    AllowDynamicDataSetWrites = hasSclProvenance ? false : profile.AllowDynamicDataSetWrites,
+                    AllowDynamicDataSetWrites = hasSclProvenance
+                        ? ShouldAllowDynamicReportingForScl(cachedSignals)
+                        : profile.AllowDynamicDataSetWrites,
                     SclWorkspace = restoredSclWorkspace,
                     SclSourcePath = profile.SclSourcePath,
                     SclSourceSha256 = profile.SclSourceSha256,
