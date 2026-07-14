@@ -1,0 +1,144 @@
+--- a/MainWindow.xaml.cs
++++ b/MainWindow.xaml.cs
+@@ -326,6 +391,14 @@
+         {
+             if (device.IsMonitoring)
+                 return true;
++            if (device.RequiresEndpointBinding)
++            {
++                device.Status = "SCL model ready — endpoint required";
++                device.Detail = "Connect All skipped this offline SCL workspace because no MMS endpoint is bound.";
++                device.RefreshComputed();
++                AddLog("WARN", device.Name, "Connect All skipped the SCL workspace because its MMS endpoint is unassigned.");
++                return false;
++            }
+ 
+             var connected = device.IsConnected;
+             if (!connected)
+@@ -448,6 +521,7 @@
+         bool selectDevice = true)
+     {
+         if (device.IsBusy) return false;
++        if (!EnsureSclEndpointBinding(device)) return false;
+ 
+         RememberCurrentSelectionForReconnect(device);
+         RemoveDevicePoints(device.DeviceId);
+@@ -482,6 +556,7 @@
+             }
+             device.Signals.AddRange(signals);
+             device.HasDiscoveryCache = signals.Count > 0;
++            ApplySclLiveComparison(device, signals);
+ 
+             try
+             {
+@@ -576,6 +651,7 @@
+         bool selectDevice = true)
+     {
+         if (device.IsBusy) return false;
++        if (!EnsureSclEndpointBinding(device)) return false;
+         if (!device.HasDiscoveryCache || device.Signals.Count == 0)
+             return await ConnectAndConfigureDeviceAsync(device, openWizard: true, selectDevice: selectDevice);
+ 
+@@ -601,7 +677,17 @@
+             device.RecountSelectedSignals();
+             await WaitForDiscoveryProgressAnimationAsync(device, TimeSpan.FromMilliseconds(900));
+             RaiseWorkspaceCounts();
+-            SetStatus($"{device.Name}: fast connected from saved project model; full discovery skipped.");
++            if (device.HasSclDesignModel)
++            {
++                device.Status = "Connected — SCL design model";
++                device.Detail = "MMS association is live and the SCL workspace remains the active model. Re-scan performs a complete design-versus-live comparison.";
++                device.AcquisitionMode = "SCL design model • live association";
++                SetStatus($"{device.Name}: fast connected from the SCL design model; full discovery skipped. Use Re-scan to compare the complete live model.");
++            }
++            else
++            {
++                SetStatus($"{device.Name}: fast connected from saved project model; full discovery skipped.");
++            }
+             return true;
+         }
+         catch (OperationCanceledException)
+@@ -642,6 +728,47 @@
+             device.IsBusy = false;
+             device.RefreshComputed();
+         }
++    }
++
++    private void ApplySclLiveComparison(Iec61850MonitorDevice device, IReadOnlyList<SignalDefinition> liveSignals)
++    {
++        if (device.SclWorkspace == null)
++            return;
++
++        var expectedModel = SclLiveSignalModelProjection.Build(
++            device.SclWorkspace.IedName,
++            device.SclWorkspace.AccessPointName,
++            SclWorkspaceSignalMapper.BuildSignals(device.SclWorkspace));
++        var observedModel = SclLiveSignalModelProjection.Build(
++            device.Name,
++            device.SclWorkspace.AccessPointName,
++            liveSignals);
++        var comparison = SclLiveModelComparer.Compare(expectedModel, observedModel);
++        device.SclComparison = comparison;
++        foreach (var finding in comparison.Findings.Take(30))
++        {
++            var level = finding.Severity.Equals("Error", StringComparison.OrdinalIgnoreCase) ? "ERROR" : "INFO";
++            AddLog(level, "SCL Compare", $"{finding.Kind} • {finding.Message}");
++        }
++        if (comparison.Findings.Count > 30)
++            AddLog("WARN", "SCL Compare", $"{comparison.Findings.Count - 30} additional comparison finding(s) were omitted from the live log.");
++
++        if (comparison.IsCompatible)
++        {
++            device.IdentitySource = $"SCL + live verified • {Path.GetFileName(device.SclSourcePath)}";
++            device.AcquisitionMode = "SCL design • live model verified";
++            device.Detail = $"SCL and live MMS structures are compatible: {comparison.MatchedAttributeCount}/{comparison.ExpectedAttributeCount} expected attributes matched.";
++            AddLog("INFO", device.Name, device.Detail);
++        }
++        else
++        {
++            device.IdentitySource = $"SCL drift detected • {Path.GetFileName(device.SclSourcePath)}";
++            device.AcquisitionMode = "Live discovery • SCL configuration drift";
++            device.Detail = $"Live discovery found {comparison.BlockingFindingCount} blocking SCL mismatch(es). Live data is shown; review Diagnostics before testing control or reporting.";
++            MarkDiagnosticAlert();
++            AddLog("ERROR", device.Name, device.Detail);
++        }
++        device.RefreshComputed();
+     }
+ 
+     private async Task<bool> OpenSignalSelectionWizardAsync(
+@@ -1102,11 +1229,15 @@
+             return;
+ 
+         SelectedDevice = device;
++        if (!EnsureSclEndpointBinding(device))
++            return;
+         RememberCurrentSelectionForReconnect(device);
+         if (device.IsConnected)
+             await StopDeviceConnectionAsync(device);
+ 
+-        SetStatus($"{device.Name}: running a forced full live-model discovery. The saved cache will be replaced only after success.");
++        SetStatus(device.HasSclDesignModel
++            ? $"{device.Name}: discovering the complete live model and comparing it with the SCL design model."
++            : $"{device.Name}: running a forced full live-model discovery. The saved cache will be replaced only after success.");
+         await ConnectAndConfigureDeviceAsync(device, openWizard: false);
+     }
+ 
+@@ -1395,6 +1526,10 @@
+                 Port = device.Port,
+                 AllowDynamicDataSetWrites = device.AllowDynamicDataSetWrites,
+                 DiscoverySucceeded = device.HasDiscoveryCache && device.Signals.Count > 0,
++                SclSourcePath = device.SclSourcePath,
++                SclSourceSha256 = device.SclSourceSha256,
++                SclIedName = device.SclIedName,
++                SclAccessPointName = device.SclAccessPointName,
+                 SelectedReferences = device.Signals
+                     .Where(signal => signal.IsSelected)
+                     .Select(signal => NormalizeReference(signal.ObjectReference))
+@@ -1459,6 +1594,7 @@
+ 
+             foreach (var profile in project.Devices ?? new List<Iec61850TesterDeviceProfile>())
+             {
++                var restoredSclWorkspace = await TryRestoreSclWorkspaceAsync(profile);
+                 var cachedSignals = (profile.CachedSignals ?? new List<Iec61850CachedSignalProfile>())
+                     .Where(item => !string.IsNullOrWhiteSpace(item.ObjectReference))
+                     .Select(item => item.ToSignal())
