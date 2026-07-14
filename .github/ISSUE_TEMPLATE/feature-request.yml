@@ -1,0 +1,76 @@
+name: Engineering feature request
+description: Propose a focused ArIED workflow, usability, diagnostics, monitoring, or control improvement.
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the engineering problem before proposing the UI or implementation. Protocol behavior should remain in ARIEC61850; ArIED should consume typed engine services.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - SCL / project workflow
+        - MMS explorer / discovery
+        - Signal selection
+        - Reporting / live monitoring
+        - Events / diagnostics
+        - Smart Control
+        - Performance / scalability
+        - Accessibility / keyboard workflow
+        - Packaging / release
+        - Documentation / website
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Engineering problem
+      description: What is difficult, slow, ambiguous, or currently impossible?
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Desired workflow
+      description: Describe the user steps and expected evidence, not only the final screen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - Given...
+        - When...
+        - Then...
+    validations:
+      required: true
+
+  - type: textarea
+    id: protocol-boundary
+    attributes:
+      label: Application / engine boundary
+      description: Identify whether the request needs a new ARIEC61850 engine contract, an ArIED-only change, or both.
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Proposed validation
+      description: Unit test, simulator, loopback, laboratory IED, performance measurement, or UI verification.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This request does not include confidential or proprietary customer or employer material.
+          required: true
+        - label: This request does not depend on copying another product's UI, wording, code, or documentation.
+          required: true
