@@ -19,27 +19,92 @@ jobs:
           fetch-depth: 0
 
       - name: Apply and validate reviewed transformations
+        id: transform
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          python3 -m py_compile .repair/apply.py
-          python3 .repair/apply.py
-          base64 --decode .repair/app-icon.b64 > Assets/app-icon.ico
-          grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
-          ! grep -q 'Content="Confirm Open"' MainWindow.xaml
-          ! grep -q 'Content="Confirm Close"' MainWindow.xaml
-          grep -q 'TryClaimControlConfirmation' MainWindow.xaml.cs
-          grep -q 'SclFindingAggregator.Group(actionableFindings)' MainWindow.xaml.cs
-          grep -q '<Version>1.6.9</Version>' ArIED61850Tester.csproj
-          test -s Assets/app-icon.ico
+          set -u
+          rm -f .repair/apply-error.txt
+          set +e
+          {
+            set -x
+            python3 -m py_compile .repair/apply.py
+            python3 .repair/apply.py
+            base64 --decode .repair/app-icon.b64 > Assets/app-icon.ico
+            grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
+            ! grep -q 'Content="Confirm Open"' MainWindow.xaml
+            ! grep -q 'Content="Confirm Close"' MainWindow.xaml
+            grep -q 'TryClaimControlConfirmation' MainWindow.xaml.cs
+            grep -q 'SclFindingAggregator.Group(actionableFindings)' MainWindow.xaml.cs
+            grep -q '<Version>1.6.9</Version>' ArIED61850Tester.csproj
+            test -s Assets/app-icon.ico
+          } > .repair/apply-error.txt 2>&1
+          status=$?
+          set -e
+          exit "$status"
 
-      - name: Commit repaired source
+      - name: Upload transformation failure evidence
+        if: steps.transform.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scl-workflow-repair-error
+          path: .repair/apply-error.txt
+          if-no-files-found: error
+
+      - name: Stop after transformation failure
+        if: steps.transform.outcome == 'failure'
+        shell: bash
+        run: exit 1
+
+      - name: Publish repaired non-workflow files
+        if: steps.transform.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: fix/scl-workflow-layout-repair
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -- .github/workflows/build.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MainWindow.xaml MainWindow.xaml.cs ArIED61850Tester.csproj scripts/publish-windows-portable.ps1 Assets/app-icon.ico docs/SCL_SMART_DYNAMIC_REPORTING.md
-          git commit -m "fix: repair SCL-first workflow and compact application layout"
-          git push origin HEAD:fix/scl-workflow-layout-repair
+
+          update_existing() {
+            local path="$1"
+            local current_sha local_sha content payload
+            current_sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$TARGET_BRANCH" --jq .sha)
+            local_sha=$(git hash-object "$path")
+            if [ "$current_sha" = "$local_sha" ]; then
+              echo "$path already current"
+              return
+            fi
+            content=$(base64 -w0 "$path")
+            payload=$(jq -n \
+              --arg message "fix: publish repaired $path" \
+              --arg content "$content" \
+              --arg sha "$current_sha" \
+              --arg branch "$TARGET_BRANCH" \
+              '{message:$message,content:$content,sha:$sha,branch:$branch}')
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$path" --input - <<<"$payload" >/dev/null
+          }
+
+          create_or_update() {
+            local path="$1"
+            local current_sha local_sha content payload
+            local_sha=$(git hash-object "$path")
+            current_sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$TARGET_BRANCH" --jq .sha 2>/dev/null || true)
+            if [ -n "$current_sha" ] && [ "$current_sha" = "$local_sha" ]; then
+              echo "$path already current"
+              return
+            fi
+            content=$(base64 -w0 "$path")
+            if [ -n "$current_sha" ]; then
+              payload=$(jq -n --arg message "fix: publish repaired $path" --arg content "$content" --arg sha "$current_sha" --arg branch "$TARGET_BRANCH" '{message:$message,content:$content,sha:$sha,branch:$branch}')
+            else
+              payload=$(jq -n --arg message "docs: add Smart Dynamic SCL workflow" --arg content "$content" --arg branch "$TARGET_BRANCH" '{message:$message,content:$content,branch:$branch}')
+            fi
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$path" --input - <<<"$payload" >/dev/null
+          }
+
+          update_existing MainWindow.xaml
+          update_existing MainWindow.xaml.cs
+          update_existing ArIED61850Tester.csproj
+          update_existing scripts/publish-windows-portable.ps1
+          update_existing Assets/app-icon.ico
+          create_or_update docs/SCL_SMART_DYNAMIC_REPORTING.md
