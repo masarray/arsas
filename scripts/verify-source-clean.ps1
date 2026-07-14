@@ -3,7 +3,8 @@
 <#
 .SYNOPSIS
   Verifies that every Git-tracked ArIED path is free from prohibited binaries,
-  captures, confidential evidence, external-product identifiers, and proprietary assets.
+  captures, confidential evidence, external-product identifiers, proprietary assets,
+  and obsolete license files that could make the current release ambiguous.
 
 .DESCRIPTION
   The gate scans every Git-tracked file. Disallowed external identifiers are
@@ -17,6 +18,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
 $ForbiddenFilePatterns = @(
+    "LICENSE-APACHE-2.0",
     "*.dll", "*.exe", "*.pdb", "*.deps.json", "*.runtimeconfig.json",
     "*.nupkg", "*.snupkg", "*.pcap", "*.pcapng", "*.etl", "*.binlog",
     "*.log", "*.tmp", "*.cache", "*.suo", "*.user", "*.rsuser",
@@ -143,4 +145,4 @@ if ($Problems.Count -gt 0) {
     throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked ArIED content passed clean-room and external-IP checks." -ForegroundColor Green
+Write-Host "All Git-tracked ArIED content passed clean-room, external-IP, and current-license checks." -ForegroundColor Green
