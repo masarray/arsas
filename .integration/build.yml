@@ -1,0 +1,87 @@
+name: Build ArIED 61850
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Temporary integration pin. Switch this to main after ARIEC61850 PR #25 is merged.
+  ARIEC61850_REF: agent/scl-workspace-api
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ArIED application
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+
+      - name: Verify ArIED clean-room source
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArIED61850-source-snapshot
+          path: |
+            ArIED61850Tester/App.xaml
+            ArIED61850Tester/MainWindow.xaml
+            ArIED61850Tester/MainWindow.xaml.cs
+            ArIED61850Tester/MainWindow.CommandPanelUx.cs
+            ArIED61850Tester/MainWindow.ControlDiagnostics.cs
+            ArIED61850Tester/GridUxBehavior.cs
+            ArIED61850Tester/Models
+            ArIED61850Tester/Services
+
+      - name: Checkout ARIEC61850 engine
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
+
+      - name: Verify required ARIEC61850 APIs
+        shell: powershell
+        run: |
+          $control = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlService.cs"
+          $models = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlModels.cs"
+          $workspace = ".\ARIEC61850\src\AR.Iec61850\Scl\Workspace\SclWorkspaceService.cs"
+          $workspaceModels = ".\ARIEC61850\src\AR.Iec61850\Scl\Workspace\SclWorkspaceModels.cs"
+          if (!(Test-Path $control) -or !(Test-Path $models)) {
+            throw "ARIEC61850 Smart Control source was not found. ArIED requires the native Control namespace."
+          }
+          if (!(Select-String -Path $models -Pattern "interface IIec61850ControlService" -Quiet)) {
+            throw "ARIEC61850 does not expose IIec61850ControlService."
+          }
+          if (!(Select-String -Path $models -Pattern "CommandTerminationReceived" -Quiet)) {
+            throw "ARIEC61850 Smart Control result contract is too old for ArIED."
+          }
+          if (!(Test-Path $workspace) -or !(Test-Path $workspaceModels)) {
+            throw "ARIEC61850 SCL Workspace API was not found. ArIED Open SCL must use the engine-owned workspace service."
+          }
+          if (!(Select-String -Path $workspace -Pattern "CompareLive" -Quiet)) {
+            throw "ARIEC61850 SCL Workspace API does not expose design-versus-live comparison."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.csproj
+
+      - name: Build
+        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.csproj -c Release --no-restore
+
+      - name: Publish portable x64
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.6 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArIED61850-win-x64
+          path: ArIED61850Tester\dist\*.zip
