@@ -1,0 +1,266 @@
+--- a/Models/SignalDefinition.cs
++++ b/Models/SignalDefinition.cs
+@@ -1,6 +1,8 @@
+ using System.Text.RegularExpressions;
+ 
+ namespace ArIED61850Tester.Models;
++
++public sealed record ControlCommandClaim(long Sequence, string RequestedValue, string ActionLabel);
+ 
+ public class SignalDefinition : ObservableObject
+ {
+@@ -24,7 +26,11 @@
+     private string? _deferredControlCurrentValue;
+     private string _controlSetPointText = string.Empty;
+     private string _controlLastResult = string.Empty;
+-    private bool _controlIsBusy;
++    private readonly object _controlCommandSync = new();
++    private bool _controlInspectionBusy;
++    private bool _controlCommandBusy;
++    private long _nextControlCommandSequence;
++    private long _activeControlCommandSequence;
+     private bool _controlInterlockCheck = true;
+     private bool _controlSynchroCheck;
+     private bool _controlTestMode;
+@@ -133,7 +139,7 @@
+         set
+         {
+             var normalized = NormalizeControlDisplayValue(value);
+-            if (ControlIsBusy)
++            if (ControlCommandBusy)
+             {
+                 _deferredControlCurrentValue = normalized;
+                 return;
+@@ -167,30 +173,19 @@
+             Set(ref _controlLastResult, normalized);
+         }
+     }
+-    public bool ControlIsBusy
++    public bool ControlInspectionBusy
+     {
+-        get => _controlIsBusy;
++        get => _controlInspectionBusy;
+         set
+         {
+-            if (!Set(ref _controlIsBusy, value))
++            if (!Set(ref _controlInspectionBusy, value))
+                 return;
+-
+-            Raise(nameof(ControlCanConfirm));
+-
+-            if (value)
+-            {
+-                _deferredControlCurrentValue = null;
+-                return;
+-            }
+-
+-            if (_deferredControlCurrentValue != null)
+-            {
+-                var deferred = _deferredControlCurrentValue;
+-                _deferredControlCurrentValue = null;
+-                ApplyControlCurrentValue(deferred);
+-            }
++            Raise(nameof(ControlIsBusy));
+         }
+     }
++
++    public bool ControlCommandBusy => _controlCommandBusy;
++    public bool ControlIsBusy => _controlInspectionBusy || _controlCommandBusy;
+ 
+     public bool ControlInterlockCheck
+     {
+@@ -215,28 +210,178 @@
+     public string ControlPendingAction => _controlPendingAction;
+     public string ControlPendingConfirmationLabel =>
+         string.IsNullOrWhiteSpace(_controlPendingAction) ? "Confirm command" : $"Confirm {_controlPendingAction}";
+-    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlIsBusy;
+-
+-    public void StageControlConfirmation(string requestedValue, string actionLabel)
++    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlCommandBusy;
++
++    public bool TryStageControlConfirmation(string requestedValue, string actionLabel, out string rejectionReason)
+     {
+         var normalizedValue = requestedValue?.Trim() ?? string.Empty;
+-        if (string.IsNullOrWhiteSpace(normalizedValue))
+-            return;
+-
+-        Set(ref _controlPendingValue, normalizedValue, nameof(ControlPendingValue));
+-        if (Set(ref _controlPendingAction, actionLabel?.Trim() ?? string.Empty, nameof(ControlPendingAction)))
+-            Raise(nameof(ControlPendingConfirmationLabel));
+-        if (Set(ref _controlConfirmationPending, true, nameof(ControlConfirmationPending)))
+-            Raise(nameof(ControlCanConfirm));
++        var normalizedAction = actionLabel?.Trim() ?? string.Empty;
++        lock (_controlCommandSync)
++        {
++            if (!ControlSupportsOperate)
++            {
++                rejectionReason = "the live control model does not permit operation";
++                return false;
++            }
++            if (_controlCommandBusy)
++            {
++                rejectionReason = "another command already owns this control object";
++                return false;
++            }
++            if (string.IsNullOrWhiteSpace(normalizedValue) || string.IsNullOrWhiteSpace(normalizedAction))
++            {
++                rejectionReason = "the requested command value or action is empty";
++                return false;
++            }
++
++            _controlPendingValue = normalizedValue;
++            _controlPendingAction = normalizedAction;
++            _controlConfirmationPending = true;
++        }
++
++        Raise(nameof(ControlPendingValue));
++        Raise(nameof(ControlPendingAction));
++        Raise(nameof(ControlPendingConfirmationLabel));
++        Raise(nameof(ControlConfirmationPending));
++        Raise(nameof(ControlCanConfirm));
++        rejectionReason = string.Empty;
++        return true;
++    }
++
++    public bool TryClaimControlConfirmation(out ControlCommandClaim? claim, out string rejectionReason)
++    {
++        lock (_controlCommandSync)
++        {
++            if (!_controlConfirmationPending)
++            {
++                claim = null;
++                rejectionReason = "no pending confirmation exists";
++                return false;
++            }
++            if (!ControlSupportsOperate)
++            {
++                claim = null;
++                rejectionReason = "the live control model no longer permits operation";
++                return false;
++            }
++            if (_controlCommandBusy)
++            {
++                claim = null;
++                rejectionReason = "another command already owns this control object";
++                return false;
++            }
++            if (string.IsNullOrWhiteSpace(_controlPendingValue))
++            {
++                claim = null;
++                rejectionReason = "the pending command value is empty";
++                return false;
++            }
++
++            var sequence = ++_nextControlCommandSequence;
++            _activeControlCommandSequence = sequence;
++            _controlCommandBusy = true;
++            claim = new ControlCommandClaim(sequence, _controlPendingValue, _controlPendingAction);
++            _controlPendingValue = string.Empty;
++            _controlPendingAction = string.Empty;
++            _controlConfirmationPending = false;
++        }
++
++        PublishCommandClaimed();
++        rejectionReason = string.Empty;
++        return true;
++    }
++
++    public bool TryBeginDirectControlCommand(
++        string requestedValue,
++        string actionLabel,
++        out ControlCommandClaim? claim,
++        out string rejectionReason)
++    {
++        var normalizedValue = requestedValue?.Trim() ?? string.Empty;
++        var normalizedAction = actionLabel?.Trim() ?? normalizedValue;
++        lock (_controlCommandSync)
++        {
++            if (!ControlSupportsOperate)
++            {
++                claim = null;
++                rejectionReason = "the live control model does not permit operation";
++                return false;
++            }
++            if (_controlCommandBusy)
++            {
++                claim = null;
++                rejectionReason = "another command already owns this control object";
++                return false;
++            }
++            if (string.IsNullOrWhiteSpace(normalizedValue))
++            {
++                claim = null;
++                rejectionReason = "the requested command value is empty";
++                return false;
++            }
++
++            var sequence = ++_nextControlCommandSequence;
++            _activeControlCommandSequence = sequence;
++            _controlCommandBusy = true;
++            claim = new ControlCommandClaim(sequence, normalizedValue, normalizedAction);
++            _controlPendingValue = string.Empty;
++            _controlPendingAction = string.Empty;
++            _controlConfirmationPending = false;
++        }
++
++        PublishCommandClaimed();
++        rejectionReason = string.Empty;
++        return true;
++    }
++
++    public bool CompleteControlCommand(ControlCommandClaim claim)
++    {
++        string? deferred = null;
++        lock (_controlCommandSync)
++        {
++            if (!_controlCommandBusy || _activeControlCommandSequence != claim.Sequence)
++                return false;
++
++            _activeControlCommandSequence = 0;
++            _controlCommandBusy = false;
++            deferred = _deferredControlCurrentValue;
++            _deferredControlCurrentValue = null;
++        }
++
++        Raise(nameof(ControlCommandBusy));
++        Raise(nameof(ControlIsBusy));
++        Raise(nameof(ControlCanConfirm));
++        if (deferred != null)
++            ApplyControlCurrentValue(deferred);
++        return true;
+     }
+ 
+     public void ClearControlConfirmation()
+     {
+-        Set(ref _controlPendingValue, string.Empty, nameof(ControlPendingValue));
+-        if (Set(ref _controlPendingAction, string.Empty, nameof(ControlPendingAction)))
+-            Raise(nameof(ControlPendingConfirmationLabel));
+-        if (Set(ref _controlConfirmationPending, false, nameof(ControlConfirmationPending)))
+-            Raise(nameof(ControlCanConfirm));
++        lock (_controlCommandSync)
++        {
++            _controlPendingValue = string.Empty;
++            _controlPendingAction = string.Empty;
++            _controlConfirmationPending = false;
++        }
++
++        Raise(nameof(ControlPendingValue));
++        Raise(nameof(ControlPendingAction));
++        Raise(nameof(ControlPendingConfirmationLabel));
++        Raise(nameof(ControlConfirmationPending));
++        Raise(nameof(ControlCanConfirm));
++    }
++
++    private void PublishCommandClaimed()
++    {
++        _deferredControlCurrentValue = null;
++        Raise(nameof(ControlPendingValue));
++        Raise(nameof(ControlPendingAction));
++        Raise(nameof(ControlPendingConfirmationLabel));
++        Raise(nameof(ControlConfirmationPending));
++        Raise(nameof(ControlCommandBusy));
++        Raise(nameof(ControlIsBusy));
++        Raise(nameof(ControlCanConfirm));
+     }
+ 
+     private bool CanExposeControlActions => !_controlModelResolved || ControlSupportsOperate;
