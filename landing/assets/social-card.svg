@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="t d">
+  <title id="t">ArIED 61850</title><desc id="d">IEC 61850 IED Explorer, Multi-Device Monitor and Smart Control Workstation</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset=".55" stop-color="#0b2140"/><stop offset="1" stop-color="#172554"/></linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#38bdf8"/><stop offset=".55" stop-color="#3b82f6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="55"/></filter>
+    <filter id="shadow"><feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000" flood-opacity=".45"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="170" cy="100" r="180" fill="#38bdf8" opacity=".17" filter="url(#blur)"/>
+  <circle cx="1040" cy="540" r="220" fill="#8b5cf6" opacity=".16" filter="url(#blur)"/>
+  <g transform="translate(74 75)">
+    <rect width="72" height="72" rx="22" fill="url(#g)"/>
+    <path d="M18 54 36 16l18 38M24 43h24" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="170" y="118" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="32" font-weight="780" fill="#fff">ArIED 61850</text>
+  <text x="74" y="242" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="68" font-weight="820" letter-spacing="-3" fill="#fff">See the model.</text>
+  <text x="74" y="316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="68" font-weight="820" letter-spacing="-3" fill="#8bdcff">Understand the event.</text>
+  <text x="74" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="68" font-weight="820" letter-spacing="-3" fill="#b9a7ff">Control with evidence.</text>
+  <text x="78" y="448" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" fill="#b7c8df">SCL-assisted engineering · Live MMS discovery · Multi-IED monitoring · SOE · Smart Control</text>
+  <g transform="translate(760 112)" filter="url(#shadow)">
+    <rect width="360" height="330" rx="26" fill="#f7fbff"/>
+    <rect width="360" height="48" rx="26" fill="#fff"/>
+    <circle cx="25" cy="24" r="5" fill="#fb7185"/><circle cx="43" cy="24" r="5" fill="#fbbf24"/><circle cx="61" cy="24" r="5" fill="#34d399"/>
+    <rect x="20" y="70" width="92" height="234" rx="15" fill="#eef4fb"/>
+    <rect x="130" y="70" width="210" height="116" rx="15" fill="#0f2544"/>
+    <path d="M148 159c25-22 37 2 58-30s39-10 58-21 36 7 58-22" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+    <rect x="130" y="202" width="210" height="102" rx="15" fill="#eef5ff"/>
+    <rect x="147" y="222" width="176" height="13" rx="6.5" fill="#c6d8f4"/>
+    <rect x="147" y="245" width="118" height="13" rx="6.5" fill="#93b4f8"/>
+    <rect x="147" y="269" width="76" height="20" rx="10" fill="url(#g)"/>
+  </g>
+  <text x="76" y="574" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="650" fill="#dbeafe">github.com/masarray/ArIED61850Tester</text>
+</svg>
