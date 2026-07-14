@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
@@ -58,13 +58,17 @@ jobs:
         shell: bash
         run: exit 1
 
-      - name: Commit repaired implementation
+      - name: Upload validated repaired source
         if: steps.transform.outcome == 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
-          git add MainWindow.xaml MainWindow.xaml.cs ArIED61850Tester.csproj .github/workflows/build.yml scripts/publish-windows-portable.ps1 Assets/app-icon.ico docs/SCL_SMART_DYNAMIC_REPORTING.md
-          git commit -m "fix: repair SCL-first workflow and compact application layout"
-          git push origin HEAD:fix/scl-workflow-layout-repair
+        uses: actions/upload-artifact@v4
+        with:
+          name: scl-workflow-repaired-source
+          path: |
+            MainWindow.xaml
+            MainWindow.xaml.cs
+            ArIED61850Tester.csproj
+            .github/workflows/build.yml
+            scripts/publish-windows-portable.ps1
+            Assets/app-icon.ico
+            docs/SCL_SMART_DYNAMIC_REPORTING.md
+          if-no-files-found: error
