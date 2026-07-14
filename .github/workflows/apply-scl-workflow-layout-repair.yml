@@ -1,14 +1,15 @@
 name: Apply repaired SCL workflow and layout
 
 on:
-  push:
-    branches: [ fix/scl-workflow-layout-repair ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: ${{ github.event.pull_request.head.ref == 'fix/scl-workflow-layout-repair' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repair branch
