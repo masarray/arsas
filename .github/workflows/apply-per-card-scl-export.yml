@@ -19,114 +19,89 @@ jobs:
           fetch-depth: 0
 
       - name: Apply and validate reviewed source
-        id: transform
-        continue-on-error: true
         shell: bash
         run: |
-          set +e
-          {
-            set -x
-            git fetch origin main
-            git checkout origin/main -- \
-              MainWindow.xaml \
-              MainWindow.xaml.cs \
-              Models/MonitorModels.cs \
-              Services/NativeIec61850Client.cs \
-              Services/Iec61850MonitorRuntime.cs \
-              ArIED61850Tester.csproj \
-              scripts/publish-windows-portable.ps1
-            rm -f SaveSclWindow.xaml SaveSclWindow.xaml.cs docs/SCL_EXPORT.md
-            python3 - <<'PY'
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main -- \
+            MainWindow.xaml \
+            MainWindow.xaml.cs \
+            Models/MonitorModels.cs \
+            Services/NativeIec61850Client.cs \
+            Services/Iec61850MonitorRuntime.cs \
+            ArIED61850Tester.csproj \
+            scripts/publish-windows-portable.ps1
+          rm -f SaveSclWindow.xaml SaveSclWindow.xaml.cs docs/SCL_EXPORT.md
+          python3 - <<'PY'
           from pathlib import Path
           import base64, zlib
           payload = Path('.staging/apply_scl_export.py.zlib.b64').read_text(encoding='utf-8').strip()
           source = zlib.decompress(base64.b64decode(payload)).decode('utf-8')
           exec(compile(source, 'apply_scl_export.py', 'exec'))
           PY
-            python3 - <<'PY'
+          python3 - <<'PY'
           import xml.etree.ElementTree as ET
           ET.parse('MainWindow.xaml')
           ET.parse('SaveSclWindow.xaml')
           PY
-            grep -q 'Click="IedSaveScl_Click"' MainWindow.xaml
-            grep -q 'HorizontalAlignment="Right" VerticalAlignment="Top"' MainWindow.xaml
-            grep -q 'InteroperableSclConverter.WriteFiles' MainWindow.xaml.cs
-            grep -q 'LiveIedSclExporter.WriteFiles' MainWindow.xaml.cs
-            grep -q 'LiveDiscoveryModel' Models/MonitorModels.cs
-            grep -q 'LastLiveModel' Services/NativeIec61850Client.cs
-            grep -q '<Version>1.6.10</Version>' ArIED61850Tester.csproj
-            grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
-            ! grep -q 'Content="Confirm Open"' MainWindow.xaml
-            ! grep -q 'Content="Confirm Close"' MainWindow.xaml
-          } > .staging/transform-mismatch.log 2>&1
-          status=$?
-          set -e
-          exit "$status"
-
-      - name: Upload transform mismatch
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: per-card-scl-export-transform-mismatch
-          path: .staging/transform-mismatch.log
-          if-no-files-found: error
-
-      - name: Stop after transform failure
-        if: steps.transform.outcome == 'failure'
-        shell: bash
-        run: exit 1
+          grep -q 'Click="IedSaveScl_Click"' MainWindow.xaml
+          grep -q 'HorizontalAlignment="Right" VerticalAlignment="Top"' MainWindow.xaml
+          grep -q 'InteroperableSclConverter.WriteFiles' MainWindow.xaml.cs
+          grep -q 'LiveIedSclExporter.WriteFiles' MainWindow.xaml.cs
+          grep -q 'LiveDiscoveryModel' Models/MonitorModels.cs
+          grep -q 'LastLiveModel' Services/NativeIec61850Client.cs
+          grep -q '<Version>1.6.10</Version>' ArIED61850Tester.csproj
+          grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
+          ! grep -q 'Content="Confirm Open"' MainWindow.xaml
+          ! grep -q 'Content="Confirm Close"' MainWindow.xaml
 
       - name: Create atomic production commit
-        if: steps.transform.outcome == 'success'
-        id: publish
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_BRANCH: feat/per-card-scl-export
         shell: bash
         run: |
-          set +e
-          {
-            set -x
-            repo="repos/$GITHUB_REPOSITORY"
-            base_commit=$(git rev-parse HEAD)
-            base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
-            tree_entries='[]'
-            add_blob() {
-              local path="$1"
-              local content blob
-              content=$(base64 -w0 "$path")
-              blob=$(jq -n --arg content "$content" '{content:$content,encoding:"base64"}' | gh api --method POST "$repo/git/blobs" --input - --jq .sha)
-              tree_entries=$(jq --arg path "$path" --arg sha "$blob" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
-            }
-            add_blob MainWindow.xaml
-            add_blob MainWindow.xaml.cs
-            add_blob Models/MonitorModels.cs
-            add_blob Services/NativeIec61850Client.cs
-            add_blob Services/Iec61850MonitorRuntime.cs
-            add_blob SaveSclWindow.xaml
-            add_blob SaveSclWindow.xaml.cs
-            add_blob docs/SCL_EXPORT.md
-            add_blob ArIED61850Tester.csproj
-            add_blob scripts/publish-windows-portable.ps1
-            tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" '{base_tree:$base_tree,tree:$tree}' | gh api --method POST "$repo/git/trees" --input - --jq .sha)
-            commit_sha=$(jq -n --arg message "feat: add per-card interoperable SCL export" --arg tree "$tree_sha" --arg parent "$base_commit" '{message:$message,tree:$tree,parents:[$parent]}' | gh api --method POST "$repo/git/commits" --input - --jq .sha)
-            echo "COMMIT_SHA=$commit_sha"
-            jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' | gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input -
-          } > .staging/atomic-publish.log 2>&1
-          status=$?
-          set -e
-          exit "$status"
+          set -euo pipefail
+          exec > >(tee .staging/atomic-publish.log) 2>&1
+          repo="repos/$GITHUB_REPOSITORY"
+          base_commit=$(git rev-parse HEAD)
+          base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
+          tree_entries='[]'
+          add_blob() {
+            local path="$1"
+            local blob
+            blob=$(base64 -w0 "$path" |
+              jq -Rs '{content:.,encoding:"base64"}' |
+              gh api --method POST "$repo/git/blobs" --input - --jq .sha)
+            tree_entries=$(jq --arg path "$path" --arg sha "$blob" \
+              '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
+          }
+          add_blob MainWindow.xaml
+          add_blob MainWindow.xaml.cs
+          add_blob Models/MonitorModels.cs
+          add_blob Services/NativeIec61850Client.cs
+          add_blob Services/Iec61850MonitorRuntime.cs
+          add_blob SaveSclWindow.xaml
+          add_blob SaveSclWindow.xaml.cs
+          add_blob docs/SCL_EXPORT.md
+          add_blob ArIED61850Tester.csproj
+          add_blob scripts/publish-windows-portable.ps1
+          tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" \
+            '{base_tree:$base_tree,tree:$tree}' |
+            gh api --method POST "$repo/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg message "feat: add per-card interoperable SCL export" \
+            --arg tree "$tree_sha" --arg parent "$base_commit" \
+            '{message:$message,tree:$tree,parents:[$parent]}' |
+            gh api --method POST "$repo/git/commits" --input - --jq .sha)
+          echo "COMMIT_SHA=$commit_sha"
+          jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' |
+            gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input - >/dev/null
+          echo "Published production commit $commit_sha"
 
       - name: Upload atomic publication log
-        if: steps.transform.outcome == 'success' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: per-card-scl-export-atomic-log
           path: .staging/atomic-publish.log
-          if-no-files-found: error
-
-      - name: Stop after atomic publication failure
-        if: steps.publish.outcome == 'failure'
-        shell: bash
-        run: exit 1
+          if-no-files-found: ignore
