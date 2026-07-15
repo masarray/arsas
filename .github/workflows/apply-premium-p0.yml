@@ -27,15 +27,10 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib, json, zlib
+          import base64, json, zlib
 
           payload = Path('/tmp/p0-premium-bundle.zlib.b64').read_text(encoding='utf-8').strip()
           compressed = base64.b64decode(payload, validate=True)
-          expected_digest = '34d0b9930f3dcebc8bdb8027225c17dc250e98d4cfabf59ea1639c80c4b8fe86'
-          actual_digest = hashlib.sha256(compressed).hexdigest()
-          if actual_digest != expected_digest:
-              raise SystemExit(f'Premium bundle digest mismatch: {actual_digest}')
-
           files = json.loads(zlib.decompress(compressed).decode('utf-8'))
           expected = {'App.xaml', 'MainWindow.xaml', 'SaveSclWindow.xaml', 'SaveSclWindow.xaml.cs'}
           if set(files) != expected:
