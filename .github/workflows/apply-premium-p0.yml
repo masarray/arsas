@@ -1,0 +1,95 @@
+name: Apply premium P0 UI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.event.pull_request.head.ref == 'fix/premium-p0-ui' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/premium-p0-ui
+          fetch-depth: 0
+
+      - name: Decode and validate premium source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin feat/per-card-scl-export
+          git show origin/feat/per-card-scl-export:.staging/p0-premium-bundle.zlib.b64 > /tmp/p0-premium-bundle.zlib.b64
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, json, zlib
+
+          payload = Path('/tmp/p0-premium-bundle.zlib.b64').read_text(encoding='utf-8').strip()
+          compressed = base64.b64decode(payload, validate=True)
+          expected_digest = '34d0b9930f3dcebc8bdb8027225c17dc250e98d4cfabf59ea1639c80c4b8fe86'
+          actual_digest = hashlib.sha256(compressed).hexdigest()
+          if actual_digest != expected_digest:
+              raise SystemExit(f'Premium bundle digest mismatch: {actual_digest}')
+
+          files = json.loads(zlib.decompress(compressed).decode('utf-8'))
+          expected = {'App.xaml', 'MainWindow.xaml', 'SaveSclWindow.xaml', 'SaveSclWindow.xaml.cs'}
+          if set(files) != expected:
+              raise SystemExit(f'Unexpected bundle files: {sorted(files)}')
+          for path, content in files.items():
+              Path(path).write_text(content, encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          for path in ('App.xaml', 'MainWindow.xaml', 'SaveSclWindow.xaml'):
+              ET.parse(path)
+          PY
+
+          grep -q 'x:Name="EditionIndicator"' SaveSclWindow.xaml
+          grep -q 'Content="Edition 2"' SaveSclWindow.xaml
+          grep -q 'Content="Edition 1"' SaveSclWindow.xaml
+          ! grep -q '<ComboBox' SaveSclWindow.xaml
+          ! grep -q 'Schema V' SaveSclWindow.xaml
+          ! grep -q '>3.1<' SaveSclWindow.xaml
+          ! grep -q '>1.6<' SaveSclWindow.xaml
+          grep -q 'HorizontalAlignment="Center" Margin="0,5,25,0"' MainWindow.xaml
+          grep -q 'LucideRefreshCw' MainWindow.xaml
+          grep -q 'ScrollViewer.HorizontalScrollBarVisibility="Disabled"' MainWindow.xaml
+          grep -q 'CanUserResizeColumns="False" ClipToBounds="True"' MainWindow.xaml
+          grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
+          ! grep -q 'Content="Confirm Open"' MainWindow.xaml
+          ! grep -q 'Content="Confirm Close"' MainWindow.xaml
+
+      - name: Create atomic production commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: fix/premium-p0-ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="repos/$GITHUB_REPOSITORY"
+          base_commit=$(git rev-parse HEAD)
+          base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
+          tree_entries='[]'
+
+          add_blob() {
+            local path="$1"
+            local blob
+            blob=$(base64 -w0 "$path" | jq -Rs '{content:.,encoding:"base64"}' | gh api --method POST "$repo/git/blobs" --input - --jq .sha)
+            tree_entries=$(jq --arg path "$path" --arg sha "$blob" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
+          }
+
+          add_blob App.xaml
+          add_blob MainWindow.xaml
+          add_blob SaveSclWindow.xaml
+          add_blob SaveSclWindow.xaml.cs
+
+          tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" '{base_tree:$base_tree,tree:$tree}' | gh api --method POST "$repo/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg message "feat: deliver premium P0 control and SCL UX" --arg tree "$tree_sha" --arg parent "$base_commit" '{message:$message,tree:$tree,parents:[$parent]}' | gh api --method POST "$repo/git/commits" --input - --jq .sha)
+          jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' | gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input - >/dev/null
+          echo "Published $commit_sha"
