@@ -24,11 +24,13 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
-      - name: Verify premium P0 UX invariants
+      - name: Verify premium P0 and P1 UX invariants
         shell: powershell
         run: |
+          $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
           $main = Get-Content .\ArIED61850Tester\MainWindow.xaml -Raw
           $save = Get-Content .\ArIED61850Tester\SaveSclWindow.xaml -Raw
+
           if ($save -notmatch 'x:Name="EditionIndicator"' -or
               $save -notmatch 'Content="Edition 2"' -or
               $save -notmatch 'Content="Edition 1"') {
@@ -36,6 +38,31 @@ jobs:
           }
           if ($save -match '<ComboBox' -or $save -match 'Schema V3\.1' -or $save -match 'Schema V1\.6') {
             throw "Save SCL still exposes the legacy schema ComboBox or technical schema revision labels."
+          }
+
+          $itemStyleMatch = [regex]::Match(
+            $main,
+            '<ListBox\.ItemContainerStyle>(?<body>.*?)</ListBox\.ItemContainerStyle>',
+            [System.Text.RegularExpressions.RegexOptions]::Singleline)
+          if (-not $itemStyleMatch.Success) {
+            throw "IED card item-container style was not found."
+          }
+          $itemStyle = $itemStyleMatch.Groups['body'].Value
+          if ($itemStyle -match 'ScaleTransform\s+ScaleX="1\.012"' -or
+              $itemStyle -match 'Property="RenderTransform"') {
+            throw "IED card hover must not resize or transform the card. Hover may change colors only."
+          }
+          if ($main -notmatch 'x:Name="ConnectedBadge"' -or
+              $app -notmatch 'x:Key="IedCardConnected"' -or
+              $app -notmatch 'x:Key="IedCardConnectedSelected"') {
+            throw "Premium connected IED-card states were not found."
+          }
+
+          if ($main -notmatch 'Style="\{StaticResource CommandDataGrid\}"' -or
+              $main -notmatch 'RowStyle="\{StaticResource CommandDataGridRow\}"' -or
+              $app -notmatch 'x:Key="CommandDataGridRow"' -or
+              $app -notmatch 'x:Key="LucideSlidersHorizontal"') {
+            throw "Premium Command Panel hierarchy and row styles were not found."
           }
           if ($main -notmatch 'ScrollViewer.HorizontalScrollBarVisibility="Disabled"' -or
               $main -notmatch 'CanUserResizeColumns="False"') {
@@ -126,7 +153,7 @@ jobs:
 
       - name: Publish portable x64
         shell: powershell
-        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.11 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.12 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4

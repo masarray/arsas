@@ -14,9 +14,9 @@
     <Product>ArIED 61850</Product>
     <AssemblyTitle>ArIED 61850 — IEC 61850 Engineering Workstation</AssemblyTitle>
     <Description>Windows IEC 61850 engineering workstation for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
-    <Version>1.6.11</Version>
-    <AssemblyVersion>1.6.11.0</AssemblyVersion>
-    <FileVersion>1.6.11.0</FileVersion>
+    <Version>1.6.12</Version>
+    <AssemblyVersion>1.6.12.0</AssemblyVersion>
+    <FileVersion>1.6.12.0</FileVersion>
     <PackageTags>iec61850;iec-61850;mms;scl;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
