@@ -22,6 +22,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.staging/premium-p0/part-05')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'PdttiI+yo': 'PdktiI+yo',
+              'KVTbinYV': 'KVTBinYV',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one staging typo {old!r}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
           cat .staging/premium-p0/part-* > .staging/premium-p0-assembled.zlib.b64
           wc -c .staging/premium-p0-assembled.zlib.b64
           sha256sum .staging/premium-p0-assembled.zlib.b64
