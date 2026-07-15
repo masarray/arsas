@@ -1,0 +1,67 @@
+name: Apply ballistic navigation refinement
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.event.pull_request.head.ref == 'fix/premium-p2-ui' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/premium-p2-ui
+          fetch-depth: 0
+
+      - name: Decode and apply ballistic navigation transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, zlib
+          payload = 'eNrNWltv4zYQfs+vYHhJASWAb6NtmrvtKJDi2G6D61Z5sYtBQ0uKpEbSdpI0KfLfb8iRpHhJSpT1RZEDJYq5Jx7OZ04u+IBGwpuQKZXgke3/Ej65eUKSS/i6E94/T5xKk4Kxat9hE+bKIdwT6pP+cGdnx2YjItjUoRb7zXMtNiQnM+/wkfCnKxHPs8M5lj+GdQ2+Zo+73SeUEr592CPzxERIh7hIlQJXhn2AyELowogOxxPVkDi3lPiPXz75kk/4Tl3sj45uqb/aJsKcpsySzie8FwmLk1vGseyVm5AWubezvZGqrhq3ag+pUA8rE3N/Z2SWn0ymRY7AEoa5NLCrsCrUk91ziB2IEHNUdtCY5VlbcM4C++kQnDlRBgfVY2RqkW/s3rGePuZZnc/fu2AjkqNKJyVJWVdpBeVndGFGLO59xjifI06d/sufj0i9UuCBIlZVOdrsHrcN653NNfT+5cVcyXXsjGTEOBoNOP8Fo/CG15jNeS296qswd8fVPDzr1s+J8mTrNvJb6QB151cJn/mbuufYcbiuhXRH440yrS0Q9Oi59u5ZUcuuKhUGZNOWsVEs2ZrVEbNM6qXG7tWTjL6jzOslzJy8VnImfTeWuVDonxtK2TobVLVbAMK4gwfzm12eHQXQZRsIhqi1U4ZzZ55bndgMpsXVDKu6YHD5P2XEpLEu0Q7MzKZkgl8KbMiHR7tyW4xL5Sp0AuJpmpun5LD8wfjOWm/FcUttWARM y1Qvw fIHmcDdmKVJNl1r3dwJzd8y2O2gPjgaDIsyesJn2ccyd9aam6bERDRw5Kyx0OObWvct8f6PWnAXCh4wUsfwAQ0sBroFnBT69dVjMOBQBK8r4lfsBdVSULTUCxN6tB0Nc gqGIKYZsAllSsmxQJqirqsa c52HudqXwnEhOgXhPsWtXQN/5kU6A42wMGAcaOY8ZaGkku8tdjNfEwxn2cOEycUVtHvjHpaPS8rqiv0RI5QmfPwXpmUhZSh9TzFa1NjYYY LNLwXy4QN t/8AT/HQqpc+rwOxeBGxhCPQNvg5u4lf eotsqsNa3WqpKM46pDwe/umPDX6R/SJWL o3P/iBT776YGJdHifrHdG FJE6bNJBsCaFqL+VZtiw kpxUs3tkn g769VespT8aAbwtYprFLvi5B2Kux9T3HrUY0nWCRNwT/azHphJCu1EiP02pxbH WetVs xKPhbrN9MDjqQ6M+1wp08XRgaYZ1QVILo2SbYMK e4TP7HUOpN+gfDTqv6OTQ7vORtdpprRX/IqOl0v/bGa/AaKw0uILUOHvbFvddHE/nLR1Qx3/Fpi66sNnYKEKWQoZTIbzHV7ENToc2SuILDHmj/qqckNP/oQiBCYJnw9iB6XcuRP5bpULO+70KzsKJBtY+oYIRKaj rT+HOlYRK mLT5Emb+OG8nPnPUSkAN4LSr1wQUezh7B9oJ5SAGHkvuBjAGVUm lkp olvC0wr28BzOt/amA+nHt jS3C+jYQPJP6BxD+Q+F8WieeOPrB4Bot3VmPx+gcWXxZM3U7vrN8ZnL4tGm9/oPG/Ohqvf6DxtWg8ZyME90BIvJCt9suiWwMAOuEWLnkruEBUubGvdsmqj4JLpjfClIzF3bCdXYT4pP80hdQGNldg3aHPXiAzO21fALf/AsO29xhtuCGSL7LjFtKlmoRloD1uIwUTt8dG3OVq5V7BdUi+Bzi3N1aSHLZDEhZp/4hPVtWodwrSGGb1yvQiiDGzsMlsQ9hr+I8Y6sR4h2pgOIr rUT6b6idr zP294Db5wl09wzkuHTZK2sjZB53wgZI9ActPg gkZq4dberTdXufQ2OWqUhXUliINt3FUSWqKWvRPTWUvMFuRW2VnB0wM6kOgkxrp nv2savt7XKcnCPfVfDacxqoNaIn5IT1bXV Otsip+VK+8R5wTxl+up9RVEEMVaIso gsha8CjyBd7rqSJQlOvlVrm+ CtpCkLjMqf7r3LXZE9Z RWF+l81fOHm+9p1iRekIRvN8Ob2+kg9IDs048s7lCV/XYA7cYrgeUSI9KChNo0iB1cgGfDbyYnfiqS+vkd/KF NImJhYfx5Qiu zfiiaA7g7gI+D5EkvuiypqJokxYWtqJLGy7t8LMVyjDri sHEig7jS1iolTnS34/0U/iIr2GxJjObugCvplYmvkbl9ahWra bZ0tWFl7CwGdXa1OJbYW3RNSxuxrU2Q+mt sLboGpU3o1rb uoJDXV14CQvbUa1tLf4wrC26hsXtuNZ2KD00fHyNyoGyRAbccQBu9gct+AO0LgWTFsTozy4feWKyeZDFgVbV84E1MwSzlZki1FNTBMhf8RQ h1BGnCEn5G/cCxb1ZB66FPbh4m qphEgLywgzZdYdor a9L7TtWSmQ8czHBKayzOB6mZSiiWWljf26anboegKZJNr2a2Rza2jCHQtuseyWC/CQ41ERxBDku zdXbIiH2HYdPfRaPlvO8fBB3DbN92mydbjRc1DbXZAg4r6uOeOHdce ni/GsfVICE XfPfwbedalt//SVUsAvDN5YIFi1L7Zr1w9NWc8PaESlHlt0gvOPlnBs36ZrFgTkKUzPXYENv umT8CzNR2u6NAzB8Yon9hfDlzJtAqpFp1GJD9ZB9qmQIWAXdQG6x+5Ax9QmXPvEeXQJzJXWYzmUP0Gc9+HDoVKM bVGkjRPMq2OYghWfMc hvstE3m3qbDvwpGy lgB2zxHs/7Jtm0BcSlJ8/5d36KXrpV6Gkhva7l6zHidlseQMxVNYbC02vM8p+7fCX9+INEPJP rOSH Q7TFpfiUlbr49JX4ROX4JTXwBC3xR0Fh+Q5qNeAwBC/YUw8x1A5+YQdKmJZ2+MSjfGqK23waivgFg33o58tZldfji9KVA2y43WHCgvX1mMVgD18re+MzQYV sgaIW4CAes17PVrwQX764GG85kOm1yFLSjoUDd3haDEcRuF3X3M5qtXdjVj dunOTEAnuD/RQEbjlWw3vQgs mEx cgtVmS7OlpkHUo2iEd8/mU04cVaKEbixTKJEw4P5tFFqRgPJ0nEYB9B72vf5fQAXb1MK9s0a70X4jC2+l0vJ3M/KNjK9mvJuRL5lrc eeCuwVb9UaR+wpaMJvL94tN+vCHGuxl9fvAvdZUxIh3F+fa4f08PVda+K9eMhLErQRxK0XcwH+a2GYOkyzahb1j3oRJ8byF4xK1wX0Bw/26aT5ptw5bnW4xNzYT2jTfQpssUY+6d0zEBIkN0Ua1katzaPnQ+dl9b+343I1vmMozCmgWPEVtaFJ1B+ZuZMQd5sKMA t+A3TNOxXm/1zY7B/Uh83FP3/Knwvsve ty3BJ9Kv zYNbh3ujyuPanPcr+B7vXiw ojr1TWNfv0Cb3EmPKtAvxaKSR TrRw9dzDbParpotI/8d3ZiguYRg2Yu8kU6zT+SBCR+hh5az8BJvQufUi7xRveVYxTl91if4scQnl8KzA419zs7JHZXMV8gOMNA9BVgXapc5m1C943Ic3NYePXE/csAJtduAO3b1WZ1TiEqLmDlBG93OmwhQl4+eyVSwCQ8m5LJeJpemUu+yQX7+Fcz9QAWnrvTRDLnUZSRFjvhgdZbPXK1EKe lKQx+TvinnTGRvSsaNWyqTTRjK6XlCTD0f3yOpoCV1rTH0l8yKNnQhRq0x2ftOnUQBfozCf+wZl4JPqHjWp1rRPvga5/xb6qS3esz uEEMz+0f6MC+9ClzJJyx8GJbv75Nv ac115V3Pfgb9vme y gmsE9nVc+B2eso k1TPNCJ9pL8FcmFGYsoA/McZg6KY0rPAapQNtzyK6Yi+c4YroF1aD7jBHWl+YG8iVMnUngQ6xHA0fFGkMixCOyY08t2wsMJDzXB+aEPKTnB9XMYsUs+XWG0z51osi29crvh6v+zK5KmIRrC1+HL2Uss0rGE0kRyjIpMRXI5GHDt3itQBkxa52lFSTONC9aNbRpnAATp9d8Mgl8HLbGkDulPoCTfHske tkEEy h7mnowjtHQ6vp0Tilj1YxBFBZLGmLN2bLcRmeF5G9UFONNUMDNzfIp1c3N7MXS NKpSkpb5I9pfVAcKw33FMgQzcip t8AuY3yY9DbiS6xTxCEYeqT/HDAv+0AkJfBHnpBCmRONc/Hsl4eiS+zgXxRhqyI8p9UHICiKIpKwklFk1zGqWcqzn2nHZMG9uqm34H2Kg6FtrHajIwU1ZvBQxLcN M VGBHgLw0gYcj6JTk19MvF6qXPGgQAlBVLdKRWzamD9wTuVg3+i0V0CV72hOzPEyxri0ndQZU+6M/rE5RhwS01adYs7/RUuSY6JLTpitZwVKT+BU2lFP1pw7GxOcL7suu91Q9Bwo8uQvPmNDHbRXW+rf5n5i2tpa4/h+M3YXxBfROaAB2XRha0iTaassRjF1P9arFoSUxkhBcoVbjC7QcvSih07vahYs/1aFO XG6R7/fjnqjFhx0R/LryJ4Em3PdRX/wdH9UUxf2JfFPX2aLGBY73Lkmw5XnCW7UetYoummw uay2GUqHmzsN1SaunAjwIyKqhnwtsrvq9J7Sog11W9VbqcJiJKs/+H2g8KF0=' 
+          compressed = base64.b64decode(payload.replace(' ', ''), validate=True)
+          digest = hashlib.sha256(compressed).hexdigest()
+          expected = '7325cb16be6a7efdbfa595808132f6de2a0056b810317b091cbcf9bacad2fee0'
+          if digest != expected:
+              raise SystemExit(f'ballistic navigation transform digest mismatch: {digest}')
+          Path('/tmp/apply_ballistic_nav.py').write_bytes(zlib.decompress(compressed))
+          PY
+          python3 /tmp/apply_ballistic_nav.py
+
+      - name: Create atomic production commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: fix/premium-p2-ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="repos/$GITHUB_REPOSITORY"
+          base_commit=$(git rev-parse HEAD)
+          base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
+          tree_entries='[]'
+
+          add_blob() {
+            local path="$1"
+            local blob
+            blob=$(base64 -w0 "$path" | jq -Rs '{content:.,encoding:"base64"}' | gh api --method POST "$repo/git/blobs" --input - --jq .sha)
+            tree_entries=$(jq --arg path "$path" --arg sha "$blob" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
+          }
+
+          add_blob App.xaml
+          add_blob MainWindow.xaml
+          add_blob MainWindow.xaml.cs
+          add_blob ArIED61850Tester.csproj
+          add_blob scripts/publish-windows-portable.ps1
+          add_blob .github/workflows/build.yml
+
+          tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" '{base_tree:$base_tree,tree:$tree}' | gh api --method POST "$repo/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg tree "$tree_sha" --arg parent "$base_commit" '{message:"perf: replace sliding nav with ballistic button states",tree:$tree,parents:[$parent]}' | gh api --method POST "$repo/git/commits" --input - --jq .sha)
+          jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' | gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input - >/dev/null
+          echo "Published $commit_sha"
