@@ -1,0 +1,38 @@
+name: Apply direct UI correction
+
+on:
+  push:
+    branches:
+      - fix/direct-xaml-ied-card-navbar-command
+    paths:
+      - scripts/apply-direct-ui-fix.py
+      - .github/workflows/apply-direct-ui-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout correction branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/direct-xaml-ied-card-navbar-command
+          fetch-depth: 0
+
+      - name: Apply direct XAML patch
+        run: python3 scripts/apply-direct-ui-fix.py
+
+      - name: Commit generated XAML changes
+        shell: bash
+        run: |
+          if git diff --quiet -- App.xaml MainWindow.xaml; then
+            echo "No generated changes were required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.xaml MainWindow.xaml
+          git commit -m "fix: apply navbar and IED command visuals directly in XAML"
+          git push origin HEAD:fix/direct-xaml-ied-card-navbar-command
