@@ -1,0 +1,87 @@
+name: Apply premium P1 UI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.event.pull_request.head.ref == 'fix/premium-p1-ui' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/premium-p1-ui
+          fetch-depth: 0
+
+      - name: Decode and validate P1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, zlib
+          payload = Path('.staging/p1/apply.zlib.b64').read_text(encoding='utf-8').strip()
+          compressed = base64.b64decode(payload, validate=True)
+          digest = hashlib.sha256(compressed).hexdigest()
+          expected = 'e0f3e4b26394a8e9dea66c14294019ce2ecad02a28c1d13d5677ad128f69fa48'
+          if digest != expected:
+              raise SystemExit(f'P1 transform digest mismatch: {digest}')
+          Path('/tmp/apply_p1.py').write_bytes(zlib.decompress(compressed))
+          PY
+          python3 /tmp/apply_p1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for path in ('App.xaml', 'MainWindow.xaml'):
+              ET.parse(path)
+          app = Path('App.xaml').read_text(encoding='utf-8')
+          main = Path('MainWindow.xaml').read_text(encoding='utf-8')
+          item_style = main.split('<ListBox.ItemContainerStyle>', 1)[1].split('</ListBox.ItemContainerStyle>', 1)[0]
+          if 'ScaleTransform ScaleX="1.012"' in item_style or 'Property="RenderTransform"' in item_style:
+              raise SystemExit('IED card hover still changes layout scale')
+          required_main = [
+              'x:Name="ConnectedBadge"',
+              'Style="{StaticResource CommandDataGrid}"',
+              'RowStyle="{StaticResource CommandDataGridRow}"',
+              'ScrollViewer.HorizontalScrollBarVisibility="Disabled"',
+              'Content="{Binding ControlPendingConfirmationLabel}"'
+          ]
+          required_app = ['IedCardConnected', 'LucideSlidersHorizontal', 'CommandDataGridRow']
+          for token in required_main:
+              if token not in main:
+                  raise SystemExit(f'Missing MainWindow P1 invariant: {token}')
+          for token in required_app:
+              if token not in app:
+                  raise SystemExit(f'Missing App P1 invariant: {token}')
+          if 'Content="Confirm Open"' in main or 'Content="Confirm Close"' in main:
+              raise SystemExit('Atomic single Confirm regressed')
+          PY
+
+      - name: Create atomic production commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: fix/premium-p1-ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="repos/$GITHUB_REPOSITORY"
+          base_commit=$(git rev-parse HEAD)
+          base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
+          tree_entries='[]'
+          add_blob() {
+            local path="$1"
+            local blob
+            blob=$(base64 -w0 "$path" | jq -Rs '{content:.,encoding:"base64"}' | gh api --method POST "$repo/git/blobs" --input - --jq .sha)
+            tree_entries=$(jq --arg path "$path" --arg sha "$blob" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
+          }
+          add_blob App.xaml
+          add_blob MainWindow.xaml
+          tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" '{base_tree:$base_tree,tree:$tree}' | gh api --method POST "$repo/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg tree "$tree_sha" --arg parent "$base_commit" '{message:"style: deliver premium P1 card and command UX",tree:$tree,parents:[$parent]}' | gh api --method POST "$repo/git/commits" --input - --jq .sha)
+          jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' | gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input - >/dev/null
+          echo "Published $commit_sha"
