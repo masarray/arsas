@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.6.12",
+    [string]$Version = "1.6.13",
     [string]$Runtime = "win-x64",
     [bool]$SingleFile = $true,
     [bool]$SelfContained = $true,
@@ -23,7 +23,7 @@ if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreC
     $normalizedVersion = $normalizedVersion.Substring(1)
 }
 if ($normalizedVersion -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
-    throw "Invalid version '$Version'. Use a value such as 1.6.12 or v1.6.12."
+    throw "Invalid version '$Version'. Use a value such as 1.6.13 or v1.6.13."
 }
 
 $outputRoot = Join-Path $root "dist"
