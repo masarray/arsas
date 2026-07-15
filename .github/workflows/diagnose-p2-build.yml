@@ -1,0 +1,49 @@
+name: Diagnose premium P2 build
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  diagnose:
+    if: ${{ github.event.pull_request.head.ref == 'fix/premium-p2-ui' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ArIED
+        uses: actions/checkout@v4
+        with:
+          ref: fix/premium-p2-ui
+
+      - name: Checkout ARIEC61850
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch main https://github.com/masarray/ARIEC61850.git ..\ARIEC61850
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        shell: powershell
+        run: dotnet restore .\ArIED61850Tester.csproj
+
+      - name: Capture build output
+        id: build
+        continue-on-error: true
+        shell: powershell
+        run: |
+          dotnet build .\ArIED61850Tester.csproj -c Release --no-restore *>&1 | Tee-Object -FilePath .\p2-build.log
+          exit $LASTEXITCODE
+
+      - name: Upload build diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: premium-p2-build-diagnostic
+          path: p2-build.log
+          if-no-files-found: error
+
+      - name: Fail when compiler failed
+        if: steps.build.outcome == 'failure'
+        shell: powershell
+        run: throw 'Premium P2 diagnostic build failed. Inspect the uploaded compiler log.'
