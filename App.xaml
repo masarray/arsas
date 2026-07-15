@@ -8,7 +8,7 @@
         <Color x:Key="AccentColor">#2563EB</Color>
         <Color x:Key="AccentDeepColor">#1D4ED8</Color>
         <Color x:Key="SoftBlueColor">#EAF1FF</Color>
-        <Color x:Key="BgColor">#F5F7FB</Color>
+        <Color x:Key="BgColor">#EEF3F9</Color>
         <Color x:Key="LineColor">#E5EAF3</Color>
 
         <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}"/>
@@ -23,15 +23,77 @@
         <SolidColorBrush x:Key="RowSelected" Color="#EAF2FF"/>
         <SolidColorBrush x:Key="RowSelectedBorder" Color="#C7DAFF"/>
 
+        <!-- Premium surface hierarchy. Gradients remain subtle so dense engineering data stays readable. -->
+        <LinearGradientBrush x:Key="AppBackgroundGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#EAF0F8" Offset="0"/>
+            <GradientStop Color="#F5F8FC" Offset="0.55"/>
+            <GradientStop Color="#EDF3FA" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="PremiumSurface" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#F7FAFF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="PremiumSurfaceHover" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#EEF5FF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="PremiumSurfaceSelected" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F8FBFF" Offset="0"/>
+            <GradientStop Color="#E6F0FF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#3B82F6" Offset="0"/>
+            <GradientStop Color="#4F46E5" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SoftButtonGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F8FAFF" Offset="0"/>
+            <GradientStop Color="#EAF1FF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="IedCardSurface" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#F5F9FF" Offset="0.68"/>
+            <GradientStop Color="#EEF4FF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="IedCardHover" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#EAF3FF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="IedCardSelected" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F7FBFF" Offset="0"/>
+            <GradientStop Color="#DCEAFF" Offset="1"/>
+        </LinearGradientBrush>
+
+        <!-- Lucide-compatible 24 px outline geometries used by every visible application action. -->
+        <Geometry x:Key="LucidePlay">M8,5 L19,12 L8,19 Z</Geometry>
+        <Geometry x:Key="LucideSquare">M6,6 H18 V18 H6 Z</Geometry>
+        <Geometry x:Key="LucidePencilLine">M12,20 H21 M16.5,3.5 A2.12,2.12 0 0 1 19.5,6.5 L7,19 L3,20 L4,16 Z</Geometry>
+        <Geometry x:Key="LucideSave">M19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 H16 L21,8 V19 A2,2 0 0 1 19,21 Z M17,21 V13 H7 V21 M7,3 V8 H15</Geometry>
+        <Geometry x:Key="LucideX">M18,6 L6,18 M6,6 L18,18</Geometry>
+        <Geometry x:Key="LucideRefreshCw">M20,11 A8,8 0 1 0 18.3,16 M20,4 V11 H13</Geometry>
+        <Geometry x:Key="LucideFolderOpen">M3,7 H9 L11,9 H21 L19,20 H3 Z M3,7 V5 H9 L11,7</Geometry>
+        <Geometry x:Key="LucideFileInput">M14,2 V8 H20 M14,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V8 Z M9,15 H15 M12,12 L15,15 L12,18</Geometry>
+        <Geometry x:Key="LucideFileOutput">M14,2 V8 H20 M14,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V8 Z M10,15 H16 M13,12 L16,15 L13,18</Geometry>
+        <Geometry x:Key="LucidePlus">M12,5 V19 M5,12 H19</Geometry>
+
+        <Style x:Key="LucideIcon" TargetType="Path">
+            <Setter Property="Fill" Value="Transparent"/>
+            <Setter Property="Stroke" Value="{StaticResource Accent}"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+            <Setter Property="StrokeStartLineCap" Value="Round"/>
+            <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+        </Style>
+
         <DropShadowEffect x:Key="CardShadow" BlurRadius="22" ShadowDepth="8" Opacity="0.075" Color="#172033"/>
         <DropShadowEffect x:Key="ButtonShadow" BlurRadius="18" ShadowDepth="5" Opacity="0.16" Color="#2563EB"/>
         <DropShadowEffect x:Key="SoftShadow" BlurRadius="16" ShadowDepth="4" Opacity="0.07" Color="#172033"/>
 
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource PremiumSurface}"/>
             <Setter Property="CornerRadius" Value="18"/>
             <Setter Property="Padding" Value="14"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderBrush" Value="#D6E1F0"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
         </Style>
@@ -78,7 +140,7 @@
 
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="{StaticResource Accent}"/>
+            <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="14,8"/>
@@ -91,7 +153,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid SnapsToDevicePixels="True">
-                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                                 </Border.RenderTransform>
@@ -143,9 +205,9 @@
 
         <Style x:Key="SoftButton" TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-            <Setter Property="Background" Value="#EEF3FF"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="{StaticResource SoftButtonGradient}"/>
+            <Setter Property="BorderBrush" Value="#CBD9EE"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,8"/>
             <Setter Property="MinHeight" Value="34"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -156,7 +218,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid SnapsToDevicePixels="True">
-                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                                 </Border.RenderTransform>
@@ -297,22 +359,23 @@
             <Setter Property="Height" Value="31"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="1"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="#F6F9FF"/>
+            <Setter Property="BorderBrush" Value="#D6E1F0"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="9"
-                                BorderBrush="#DCE5F3" BorderThickness="0" RenderTransformOrigin="0.5,0.5">
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" RenderTransformOrigin="0.5,0.5">
                             <Border.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1"/></Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background" Value="#FFFFFF"/>
-                                <Setter TargetName="Chrome" Property="BorderThickness" Value="1"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#9CB8E8"/>
                                 <Setter TargetName="Chrome" Property="RenderTransform">
                                     <Setter.Value><ScaleTransform ScaleX="1.06" ScaleY="1.06"/></Setter.Value>
                                 </Setter>
@@ -550,8 +613,8 @@
             <Setter Property="HeadersVisibility" Value="Column"/>
             <Setter Property="GridLinesVisibility" Value="None"/>
             <Setter Property="RowHeaderWidth" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="Background" Value="#FBFDFF"/>
+            <Setter Property="BorderBrush" Value="#D4DFEE"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="HorizontalGridLinesBrush" Value="Transparent"/>
             <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
@@ -564,7 +627,7 @@
             <Setter Property="CanUserDeleteRows" Value="False"/>
             <Setter Property="RowHeight" Value="34"/>
             <Setter Property="ColumnHeaderHeight" Value="34"/>
-            <Setter Property="AlternatingRowBackground" Value="#FBFCFF"/>
+            <Setter Property="AlternatingRowBackground" Value="#F5F8FD"/>
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>

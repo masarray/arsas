@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ArIED 61850 — Smart IED Explorer &amp; Monitor"
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
-        WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico" Closing="Window_Closing">
     <Grid Margin="12">
@@ -97,14 +97,14 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ArIED project" Margin="0,0,6,0">
-                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                            <Path Data="M4,7 H10 L12,9 H20 V20 H4 Z M4,7 V5 H10 L12,7" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
-                                        </Canvas></Viewbox>
+                                        <Viewbox Width="16" Height="16">
+                                            <Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/>
+                                        </Viewbox>
                                     </Button>
                                     <Button Style="{StaticResource IedIconButton}" Click="SaveProject_Click" ToolTip="Save ArIED project">
-                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                            <Path Data="M5,4 H17 L20,7 V20 H5 Z M8,4 V9 H16 V4 M9,20 V14 H16 V20" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
-                                        </Canvas></Viewbox>
+                                        <Viewbox Width="16" Height="16">
+                                            <Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/>
+                                        </Viewbox>
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -130,10 +130,8 @@
                                             Style="{StaticResource SoftButton}" Padding="8,7" FontSize="11.5"
                                             ToolTip="Fast-connect every saved or SCL-imported IED and start live monitoring for saved selections">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Viewbox Width="13" Height="13" Margin="0,0,4,0">
-                                                <Canvas Width="24" Height="24">
-                                                    <Path Data="M5,3 L19,12 L5,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
-                                                </Canvas>
+                                            <Viewbox Width="13" Height="13" Margin="0,0,5,0">
+                                                <Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/>
                                             </Viewbox>
                                             <TextBlock Text="Connect All" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -143,10 +141,8 @@
                                             Style="{StaticResource SoftButton}" Padding="7,7" FontSize="11.2"
                                             ToolTip="Import one or more IED endpoints from SCD, CID, ICD, IID, SSD, or XML SCL files">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Viewbox Width="13" Height="13" Margin="0,0,4,0">
-                                                <Canvas Width="24" Height="24">
-                                                    <Path Data="M6,2 H14 L19,7 V22 H6 Z M14,2 V7 H19" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" Fill="Transparent"/>
-                                                </Canvas>
+                                            <Viewbox Width="13" Height="13" Margin="0,0,5,0">
+                                                <Path Data="{StaticResource LucideFileInput}" Style="{StaticResource LucideIcon}"/>
                                             </Viewbox>
                                             <TextBlock Text="Open SCL" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -156,7 +152,9 @@
                                             Style="{StaticResource PrimaryButton}" Padding="7,7" FontSize="11.2"
                                             ToolTip="Add an IEC 61850 IED by IP address">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="＋" FontSize="15" FontWeight="SemiBold" Margin="0,-1,4,0"/>
+                                            <Viewbox Width="13" Height="13" Margin="0,0,5,0">
+                                                <Path Data="{StaticResource LucidePlus}" Style="{StaticResource LucideIcon}" Stroke="White"/>
+                                            </Viewbox>
                                             <TextBlock Text="Add IED" FontWeight="SemiBold"/>
                                         </StackPanel>
                                     </Button>
@@ -176,16 +174,22 @@
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="ListBoxItem">
-                                                    <Border x:Name="Card" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="14" Padding="8">
+                                                    <Border x:Name="Card" Background="{StaticResource IedCardSurface}"
+                                                            BorderBrush="#CDD9EA" BorderThickness="1" CornerRadius="16" Padding="9"
+                                                            RenderTransformOrigin="0.5,0.5">
+                                                        <Border.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1"/></Border.RenderTransform>
+                                                        <Border.Effect><DropShadowEffect BlurRadius="15" ShadowDepth="4" Opacity="0.09" Color="#1E3355"/></Border.Effect>
                                                         <ContentPresenter/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
                                                         <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Card" Property="Background" Value="#F3F7FF"/>
-                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#9ABAFB"/>
+                                                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardSelected}"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#79A7F8"/>
                                                         </Trigger>
                                                         <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Card" Property="Background" Value="#F8FAFD"/>
+                                                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardHover}"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#9AB8E8"/>
+                                                            <Setter TargetName="Card" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="1.012" ScaleY="1.012"/></Setter.Value></Setter>
                                                         </Trigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
@@ -214,37 +218,33 @@
                                           </Viewbox>
                                       </Grid>
 
-<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis" Margin="0,0,28,0"/>
+<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,25,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13.2" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
+                                                               TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <TextBlock Text="{Binding EndpointText}" FontSize="11.6"
                                                                Foreground="{StaticResource Muted}" Margin="0,2,0,0"
-                                                               TextTrimming="CharacterEllipsis"/>
+                                                               TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                 </StackPanel>
 
                                                 <!-- Direct, unobstructed hit targets below the IP address. -->
                                                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                                                            HorizontalAlignment="Left" Margin="0,4,0,0" Panel.ZIndex="10">
+                                                            HorizontalAlignment="Center" Margin="0,5,25,0" Panel.ZIndex="10">
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedPlayAction_Click"
                                                             IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
-                                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M6,3 L20,12 L6,21 Z" Stroke="#16A34A" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                                                        <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>
                                                     </Button>
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedStopAction_Click"
                                                             IsEnabled="{Binding CanStopAction}" ToolTip="{Binding StopToolTip}">
-                                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M6,6 L18,6 L18,18 L6,18 Z" Stroke="#DC2626" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                                                        <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="#DC2626"/></Viewbox>
                                                     </Button>
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedConfigureSignals_Click"
                                                             IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
-                                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                                            <Path Data="M12,20 L21,20" Stroke="#2563EB" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                                            <Path Data="M16.5,3.5 A2.12,2.12 0 0 1 19.5,6.5 L7,19 L3,20 L4,16 Z" Stroke="#2563EB" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
-                                                        </Canvas></Viewbox>
+                                                        <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
                                                     </Button>
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedSaveScl_Click"
                                                             IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
-                                                        <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24">
-                                                            <Path Data="M5,4 H17 L20,7 V20 H5 Z M8,4 V9 H16 V4 M9,20 V14 H16 V20" Stroke="#2563EB" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
-                                                        </Canvas></Viewbox>
+                                                        <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
                                                     </Button>
                                                 </StackPanel>
                                             </Grid>
@@ -253,9 +253,7 @@
                                                     IsEnabled="{Binding IsActionEnabled}" ToolTip="{Binding RemoveToolTip}"
                                                     Width="25" Height="25" Margin="0,-4,-4,0"
                                                     HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="12">
-                                                <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
-                                                    <Path Data="M18,6 L6,18 M6,6 L18,18" Stroke="#64748B" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                                </Canvas></Viewbox>
+                                                <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#64748B"/></Viewbox>
                                             </Button>
 
                                             <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F2F7FDFA" CornerRadius="12"
@@ -329,7 +327,12 @@
                                         <TextBlock Text="Connect a relay by IP, let ArIED discover the live IEC 61850 MMS model, choose only the signals you need, then monitor every IED independently."
                                                    TextWrapping="Wrap" FontSize="13.4" Foreground="{StaticResource Muted}" Margin="0,10,0,18"/>
                                         <WrapPanel>
-                                            <Button Content="📂 Open Project" Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0"/>
+                                            <Button Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Viewbox Width="15" Height="15" Margin="0,0,7,0"><Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                    <TextBlock Text="Open Project"/>
+                                                </StackPanel>
+                                            </Button>
                                             <TextBlock Text="Use the always-visible Add IED action below the Explorer list."
                                                        Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                                         </WrapPanel>
@@ -402,7 +405,7 @@
 
                             <Expander x:Name="CommandPanelExpander" Grid.Row="1" Header="IED Command Panel" Margin="0,9,0,0"
                                       IsExpanded="False">
-                                <Border Style="{StaticResource Card}" Padding="12">
+                                <Border Style="{StaticResource Card}" Padding="14" BorderBrush="#C7D7EC">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -418,9 +421,19 @@
                                                 <TextBlock Text="Fast IEC 61850 Control" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                             </StackPanel>
                                             <WrapPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                                <Button Content="Refresh values" Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0"/>
-                                                <Button Content="Edit signals" Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
-                                                        Style="{StaticResource SoftButton}" Padding="11,6" IsEnabled="{Binding SelectedDevice.CanEditSignals}"/>
+                                                <Button Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                        <TextBlock Text="Refresh values"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
+                                                        Style="{StaticResource SoftButton}" Padding="11,6" IsEnabled="{Binding SelectedDevice.CanEditSignals}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                        <TextBlock Text="Edit signals"/>
+                                                    </StackPanel>
+                                                </Button>
                                             </WrapPanel>
                                         </Grid>
 
@@ -429,10 +442,11 @@
                                                       AutoGenerateColumns="False" MaxHeight="300" MinHeight="52" RowHeight="44" MinRowHeight="42" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="2.1*" MinWidth="210" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Value" Width="0.85*" MinWidth="105">
+                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.9*" MinWidth="145" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Value" Width="0.78*" MinWidth="88">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <Border Padding="9,5" CornerRadius="10" HorizontalAlignment="Left" MinWidth="76">
@@ -473,28 +487,28 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="0.72*" MinWidth="88" IsReadOnly="True"/>
-                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.35*" MinWidth="175" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Checks" Width="1.35*" MinWidth="210">
+                                                    <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="0.7*" MinWidth="74" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.15*" MinWidth="130" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Checks" Width="1.22*" MinWidth="165">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2">
-                                                                    <CheckBox Content="Interlock"
+                                                                <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2">
+                                                                    <CheckBox Content="Interlock" FontSize="11.6"
                                                                               IsChecked="{Binding ControlInterlockCheck, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                               Margin="0,0,10,0"
                                                                               ToolTip="Set the IEC 61850 interlock check flag for this signal only."/>
-                                                                    <CheckBox Content="Sync"
+                                                                    <CheckBox Content="Sync" FontSize="11.6"
                                                                               IsChecked="{Binding ControlSynchroCheck, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                               Margin="0,0,10,0"
                                                                               ToolTip="Set the IEC 61850 synchrocheck flag for this signal only."/>
-                                                                    <CheckBox Content="Test"
+                                                                    <CheckBox Content="Test" FontSize="11.6"
                                                                               IsChecked="{Binding ControlTestMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                               ToolTip="Send this signal in IEC 61850 Test mode."/>
-                                                                </StackPanel>
+                                                                </WrapPanel>
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.7*" MinWidth="250">
+                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="190">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3">
