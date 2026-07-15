@@ -67,6 +67,20 @@ jobs:
             throw "Atomic Confirm or Command Panel overflow protection regressed."
           }
 
+          if ($main -notmatch 'WorkflowNavShell" Width="672" Height="56"' -or
+              $main -notmatch '<ColumnDefinition Width="56"/>' -or
+              $main -notmatch '<Viewbox Width="44" Height="44" Stretch="Uniform"' -or
+              $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
+              $main -notmatch 'LucideX.*Stroke="\{StaticResource Danger\}"' -or
+              $app -notmatch 'x:Key="CommandOpenGradient"' -or
+              $app -notmatch 'x:Key="CommandCloseGradient"' -or
+              $app -notmatch 'x:Key="CommandActionButtonBase"' -or
+              $app -notmatch '<Setter Property="Foreground" Value="White"/>' -or
+              $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="Background" Value="Transparent"/>' -or
+              $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="BorderBrush" Value="Transparent"/>') {
+            throw "Direct navbar, IED-card action, relay-icon, or command-action visual invariants regressed."
+          }
+
           if ($sasPolicy -notmatch 'public static bool IsVisible' -or
               $sasPolicy -notmatch 'IsOperationalProtectionLeaf' -or
               $sasPolicy -notmatch 'IsFundamentalMeasurement' -or
@@ -77,7 +91,7 @@ jobs:
           if ($sasUi -notmatch 'ModuleInitializer' -or
               $sasUi -notmatch 'ApplyBallisticNavigation' -or
               $sasUi -notmatch 'legacyPill.Visibility = Visibility.Collapsed' -or
-              $sasUi -notmatch 'shell.Height = 48' -or
+              $sasUi -notmatch 'shell.Height = 56' -or
               $sasUi -notmatch '#D8E2F0' -or
               $sasUi -notmatch 'SasOperationalSignalPolicy.IsVisible' -or
               $sclMapper -notmatch 'SasOperationalSignalPolicy.IsVisible') {
