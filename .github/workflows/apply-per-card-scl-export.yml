@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -f SaveSclWindow.xaml SaveSclWindow.xaml.cs docs/SCL_EXPORT.md
           python3 - <<'PY'
           from pathlib import Path
           import base64, zlib
@@ -45,48 +46,46 @@ jobs:
           ! grep -q 'Content="Confirm Open"' MainWindow.xaml
           ! grep -q 'Content="Confirm Close"' MainWindow.xaml
 
-      - name: Commit and push production source
-        id: publish
-        continue-on-error: true
+      - name: Create atomic production commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: feat/per-card-scl-export
         shell: bash
         run: |
-          set +e
-          {
-            set -x
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add \
-              MainWindow.xaml \
-              MainWindow.xaml.cs \
-              Models/MonitorModels.cs \
-              Services/NativeIec61850Client.cs \
-              Services/Iec61850MonitorRuntime.cs \
-              SaveSclWindow.xaml \
-              SaveSclWindow.xaml.cs \
-              docs/SCL_EXPORT.md \
-              ArIED61850Tester.csproj \
-              scripts/publish-windows-portable.ps1
-            git status --short
-            if git diff --cached --quiet; then
-              echo "Production source is already current."
-              exit 0
-            fi
-            git commit -m "feat: add per-card interoperable SCL export"
-            git push origin HEAD:feat/per-card-scl-export
-          } > .staging/publish-error.txt 2>&1
-          status=$?
-          set -e
-          exit "$status"
+          set -euo pipefail
+          repo="repos/$GITHUB_REPOSITORY"
+          base_commit=$(git rev-parse HEAD)
+          base_tree=$(gh api "$repo/git/commits/$base_commit" --jq .tree.sha)
+          tree_entries='[]'
 
-      - name: Upload publication log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: per-card-scl-export-publication-log
-          path: .staging/publish-error.txt
-          if-no-files-found: error
+          add_blob() {
+            local path="$1"
+            local content blob
+            content=$(base64 -w0 "$path")
+            blob=$(jq -n --arg content "$content" '{content:$content,encoding:"base64"}' |
+              gh api --method POST "$repo/git/blobs" --input - --jq .sha)
+            tree_entries=$(jq --arg path "$path" --arg sha "$blob" \
+              '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' <<<"$tree_entries")
+          }
 
-      - name: Stop after publication failure
-        if: steps.publish.outcome == 'failure'
-        shell: bash
-        run: exit 1
+          add_blob MainWindow.xaml
+          add_blob MainWindow.xaml.cs
+          add_blob Models/MonitorModels.cs
+          add_blob Services/NativeIec61850Client.cs
+          add_blob Services/Iec61850MonitorRuntime.cs
+          add_blob SaveSclWindow.xaml
+          add_blob SaveSclWindow.xaml.cs
+          add_blob docs/SCL_EXPORT.md
+          add_blob ArIED61850Tester.csproj
+          add_blob scripts/publish-windows-portable.ps1
+
+          tree_sha=$(jq -n --arg base_tree "$base_tree" --argjson tree "$tree_entries" \
+            '{base_tree:$base_tree,tree:$tree}' |
+            gh api --method POST "$repo/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg message "feat: add per-card interoperable SCL export" \
+            --arg tree "$tree_sha" --arg parent "$base_commit" \
+            '{message:$message,tree:$tree,parents:[$parent]}' |
+            gh api --method POST "$repo/git/commits" --input - --jq .sha)
+          jq -n --arg sha "$commit_sha" '{sha:$sha,force:false}' |
+            gh api --method PATCH "$repo/git/refs/heads/$TARGET_BRANCH" --input - >/dev/null
+          echo "Published production commit $commit_sha"
