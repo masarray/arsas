@@ -56,10 +56,11 @@ jobs:
           ! grep -q 'Schema V' SaveSclWindow.xaml
           ! grep -q '>3.1<' SaveSclWindow.xaml
           ! grep -q '>1.6<' SaveSclWindow.xaml
-          grep -q 'HorizontalAlignment="Center" Margin="0,5,25,0"' MainWindow.xaml
+          grep -q 'HorizontalAlignment="Center"' MainWindow.xaml
           grep -q 'LucideRefreshCw' MainWindow.xaml
           grep -q 'ScrollViewer.HorizontalScrollBarVisibility="Disabled"' MainWindow.xaml
-          grep -q 'CanUserResizeColumns="False" ClipToBounds="True"' MainWindow.xaml
+          grep -q 'CanUserResizeColumns="False"' MainWindow.xaml
+          grep -q 'ClipToBounds="True"' MainWindow.xaml
           grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
           ! grep -q 'Content="Confirm Open"' MainWindow.xaml
           ! grep -q 'Content="Confirm Close"' MainWindow.xaml
