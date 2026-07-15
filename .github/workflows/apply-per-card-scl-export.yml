@@ -19,10 +19,15 @@ jobs:
           fetch-depth: 0
 
       - name: Apply reviewed source transformation
+        id: transform
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
+          set -u
+          set +e
+          {
+            set -x
+            python3 - <<'PY'
           from pathlib import Path
           import base64
           import zlib
@@ -32,27 +37,45 @@ jobs:
           exec(compile(source, 'apply_scl_export.py', 'exec'))
           PY
 
-          python3 - <<'PY'
+            python3 - <<'PY'
           import xml.etree.ElementTree as ET
           ET.parse('MainWindow.xaml')
           ET.parse('SaveSclWindow.xaml')
           PY
 
-          grep -q 'Click="IedSaveScl_Click"' MainWindow.xaml
-          grep -q 'Click="IedRemove_Click"' MainWindow.xaml
-          grep -q 'HorizontalAlignment="Right" VerticalAlignment="Top"' MainWindow.xaml
-          grep -q 'InteroperableSclConverter.WriteFiles' MainWindow.xaml.cs
-          grep -q 'LiveIedSclExporter.WriteFiles' MainWindow.xaml.cs
-          grep -q 'Edition2V31' SaveSclWindow.xaml.cs
-          grep -q 'Edition1V16' SaveSclWindow.xaml.cs
-          grep -q 'LiveDiscoveryModel' Models/MonitorModels.cs
-          grep -q 'LastLiveModel' Services/NativeIec61850Client.cs
-          grep -q '<Version>1.6.10</Version>' ArIED61850Tester.csproj
-          grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
-          ! grep -q 'Content="Confirm Open"' MainWindow.xaml
-          ! grep -q 'Content="Confirm Close"' MainWindow.xaml
+            grep -q 'Click="IedSaveScl_Click"' MainWindow.xaml
+            grep -q 'Click="IedRemove_Click"' MainWindow.xaml
+            grep -q 'HorizontalAlignment="Right" VerticalAlignment="Top"' MainWindow.xaml
+            grep -q 'InteroperableSclConverter.WriteFiles' MainWindow.xaml.cs
+            grep -q 'LiveIedSclExporter.WriteFiles' MainWindow.xaml.cs
+            grep -q 'Edition2V31' SaveSclWindow.xaml.cs
+            grep -q 'Edition1V16' SaveSclWindow.xaml.cs
+            grep -q 'LiveDiscoveryModel' Models/MonitorModels.cs
+            grep -q 'LastLiveModel' Services/NativeIec61850Client.cs
+            grep -q '<Version>1.6.10</Version>' ArIED61850Tester.csproj
+            grep -q 'Content="{Binding ControlPendingConfirmationLabel}"' MainWindow.xaml
+            ! grep -q 'Content="Confirm Open"' MainWindow.xaml
+            ! grep -q 'Content="Confirm Close"' MainWindow.xaml
+          } > .staging/apply-error.txt 2>&1
+          status=$?
+          set -e
+          exit "$status"
+
+      - name: Upload transformation evidence
+        if: steps.transform.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: per-card-scl-export-transform-error
+          path: .staging/apply-error.txt
+          if-no-files-found: error
+
+      - name: Stop after transformation failure
+        if: steps.transform.outcome == 'failure'
+        shell: bash
+        run: exit 1
 
       - name: Commit production source
+        if: steps.transform.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
