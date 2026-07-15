@@ -34,9 +34,8 @@ jobs:
           $saveCode = Get-Content .\ArIED61850Tester\SaveSclWindow.xaml.cs -Raw
           $project = Get-Content .\ArIED61850Tester\ArIED61850Tester.csproj -Raw
           $publish = Get-Content .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Raw
-          $signalDefinition = Get-Content .\ArIED61850Tester\Models\SignalDefinition.cs -Raw
-          $nativeClient = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.cs -Raw
-          $nativeMapper = Get-Content .\ArIED61850Tester\Services\NativeMmsDiscoveryMapper.cs -Raw
+          $sasPolicy = Get-Content .\ArIED61850Tester\Services\SasOperationalSignalPolicy.cs -Raw
+          $sasUi = Get-Content .\ArIED61850Tester\SasOperationalUiPolicy.cs -Raw
           $sclMapper = Get-Content .\ArIED61850Tester\Services\SclWorkspaceSignalMapper.cs -Raw
 
           if ($save -notmatch 'x:Name="EditionIndicator"' -or
@@ -60,19 +59,6 @@ jobs:
             throw "IED card interaction must not resize or transform the card."
           }
 
-          if ($main -notmatch 'x:Name="WorkflowNavShell"[^>]*Height="48"' -or
-              $main -notmatch 'Background="#D8E2F0"' -or
-              $main -notmatch 'BorderBrush="#B7C6DA"') {
-            throw "Ballistic navigation shell geometry or contrast regressed."
-          }
-          if ($main -match 'WorkflowPill' -or
-              $main -match 'WorkflowPillTranslate' -or
-              $main -match 'WorkflowPillScale' -or
-              $code -notmatch 'PulseNavigationButton' -or
-              $code -notmatch 'TimeSpan\.FromMilliseconds\(82\)') {
-            throw "Legacy fluid navigation remained or ballistic navigation regressed."
-          }
-
           if ($main -notmatch 'Content="\{Binding ControlPendingConfirmationLabel\}"' -or
               $main -match 'Content="Confirm Open"' -or
               $main -match 'Content="Confirm Close"' -or
@@ -81,22 +67,23 @@ jobs:
             throw "Atomic Confirm or Command Panel overflow protection regressed."
           }
 
-          if ($signalDefinition -notmatch 'IsSasOperationalSignal' -or
-              $signalDefinition -notmatch 'IsSasOperationalControl' -or
-              $signalDefinition -notmatch 'IsSasVisibleSignal' -or
-              $signalDefinition -notmatch 'dataObject is "mod" or "beh"' -or
-              $signalDefinition -notmatch '\\.op\\.general' -or
-              $signalDefinition -notmatch '\\.str\\.general' -or
-              $signalDefinition -notmatch 'IsDefaultScadaMeasurementMagnitude') {
+          if ($sasPolicy -notmatch 'public static bool IsVisible' -or
+              $sasPolicy -notmatch 'IsOperationalProtectionLeaf' -or
+              $sasPolicy -notmatch '\\.op\\.general' -or
+              $sasPolicy -notmatch '\\.str\\.general' -or
+              $sasPolicy -notmatch 'IsFundamentalMeasurement' -or
+              $sasPolicy -notmatch 'IsUnprovenSyntheticCandidate' -or
+              $sasPolicy -notmatch 'dataObject is "mod" or "beh"') {
             throw "Typed SAS operational signal policy is incomplete."
           }
-          if ($nativeClient -notmatch 'IsExactLiveDataAttributeTarget' -or
-              $nativeClient -notmatch 'SAS operational points=' -or
-              $nativeClient -notmatch 'IsOperationalSasDiscoverySignal' -or
-              $nativeMapper -notmatch 'Native MMS inferred leaf candidate' -or
-              $nativeMapper -notmatch 'IsSasVisibleSignal' -or
-              $sclMapper -notmatch 'Where\(signal => signal\.IsSasVisibleSignal\)') {
-            throw "Discovery or SCL projection is not enforcing exact SAS operational leaves."
+          if ($sasUi -notmatch 'ModuleInitializer' -or
+              $sasUi -notmatch 'ApplyBallisticNavigation' -or
+              $sasUi -notmatch 'legacyPill.Visibility = Visibility.Collapsed' -or
+              $sasUi -notmatch 'shell.Height = 48' -or
+              $sasUi -notmatch '#D8E2F0' -or
+              $sasUi -notmatch 'SasOperationalSignalPolicy.IsVisible' -or
+              $sclMapper -notmatch 'SasOperationalSignalPolicy.IsVisible') {
+            throw "Operator signal pruning or ballistic navigation policy is not installed."
           }
 
           if ($project -notmatch '<Version>1\.6\.16</Version>' -or
