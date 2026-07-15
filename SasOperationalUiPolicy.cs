@@ -94,10 +94,10 @@ internal static class SasOperationalUiPolicy
         if (window.FindName("WorkflowNavShell") is not Border shell)
             return;
 
-        shell.Width = 640;
-        shell.Height = 48;
-        shell.Padding = new Thickness(4);
-        shell.CornerRadius = new CornerRadius(18);
+        shell.Width = 672;
+        shell.Height = 56;
+        shell.Padding = new Thickness(5);
+        shell.CornerRadius = new CornerRadius(20);
         shell.Background = Brush("#D8E2F0");
         shell.BorderBrush = Brush("#B7C6DA");
         shell.BorderThickness = new Thickness(1);
@@ -120,8 +120,8 @@ internal static class SasOperationalUiPolicy
         foreach (var button in buttons)
         {
             button.Template = template;
-            button.Height = 36;
-            button.Margin = new Thickness(1);
+            button.Height = 38;
+            button.Margin = new Thickness(2);
             button.Padding = new Thickness(12, 0, 12, 0);
             button.BorderThickness = new Thickness(1);
             button.Cursor = Cursors.Hand;
