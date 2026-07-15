@@ -60,13 +60,13 @@
             </Border>
 
             <WrapPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
+                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
                     <TextBlock Text="{Binding ConnectionInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
                 </Border>
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
+                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
                     <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
                 </Border>
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
+                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6">
                     <TextBlock Text="{Binding EventInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
                 </Border>
             </WrapPanel>
@@ -93,7 +93,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="IED Explorer" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="IED Explorer" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ArIED project" Margin="0,0,6,0">
@@ -237,20 +237,20 @@
 
                                       <Border x:Name="ConnectedBadge" Grid.Row="1" Grid.Column="0"
                                               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,4,1"
-                                              Background="#E8F8EF" BorderBrush="#9DD8B7" BorderThickness="1"
+                                              Background="#E5F7ED" BorderBrush="#8CCDA8" BorderThickness="1"
                                               CornerRadius="9" Padding="6,2" Visibility="Collapsed" Panel.ZIndex="4">
                                           <StackPanel Orientation="Horizontal">
-                                              <Ellipse Width="5" Height="5" Fill="#16A34A" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                              <TextBlock Text="LIVE" FontSize="8.6" FontWeight="Bold" Foreground="#107A43"/>
+                                              <Ellipse Width="5" Height="5" Fill="{StaticResource Success}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                              <TextBlock Text="LIVE" FontSize="8.6" FontWeight="Bold" Foreground="{StaticResource Success}"/>
                                           </StackPanel>
                                       </Border>
 
 <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,25,0">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13.2" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Display" TextTrimming="CharacterEllipsis"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
-                                                    <TextBlock Text="{Binding EndpointText}" FontSize="11.6"
-                                                               Foreground="{StaticResource Muted}" Margin="0,2,0,0"
+                                                    <TextBlock Text="{Binding EndpointText}" FontSize="11.1"
+                                                               Foreground="{StaticResource Muted}" TextOptions.TextFormattingMode="Display" Margin="0,2,0,0"
                                                                TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                 </StackPanel>
 
