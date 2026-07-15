@@ -24,7 +24,7 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
-      - name: Verify premium P0 and P1 UX invariants
+      - name: Verify premium P0, P1 and P2 UX invariants
         shell: powershell
         run: |
           $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
@@ -75,6 +75,15 @@ jobs:
           }
           if ($main -notmatch 'LucideRefreshCw' -or $main -notmatch 'HorizontalAlignment="Center"') {
             throw "Premium Lucide icon or centered IED card layout invariant was not found."
+          }
+          if ($app -notmatch 'x:Key="SurfaceColor"' -or
+              $app -notmatch 'x:Key="BorderStrongColor"' -or
+              $app -notmatch 'x:Key="BodyText"' -or
+              $app -notmatch 'x:Key="MicroLabel"') {
+            throw "P2 semantic theme tokens or compact typography scale were not found."
+          }
+          if ($app -match 'To="1\.018"' -or $app -match 'To="1\.012"' -or $app -match 'ScaleX="1\.06" ScaleY="1\.06"') {
+            throw "P2 standard button interactions must remain geometry-stable; hover/press may not scale controls."
           }
 
       - name: Upload source snapshot
@@ -153,7 +162,7 @@ jobs:
 
       - name: Publish portable x64
         shell: powershell
-        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.12 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.13 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4
