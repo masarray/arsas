@@ -5,6 +5,7 @@
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
         WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         Icon="Assets/app-icon.ico" Closing="Window_Closing">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -21,7 +22,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Border x:Name="WorkflowNavShell" Width="720" Height="42" HorizontalAlignment="Left"
-                    Background="#E7ECF5" CornerRadius="21" Padding="4" Effect="{StaticResource SoftShadow}">
+                    Background="#E3EAF4" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" CornerRadius="21" Padding="3" Effect="{StaticResource SoftShadow}">
                 <Grid x:Name="WorkflowNavGrid" ClipToBounds="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -60,14 +61,14 @@
             </Border>
 
             <WrapPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
-                    <TextBlock Text="{Binding ConnectionInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                <Border Style="{StaticResource InsightPill}" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding ConnectionInsightText}" Style="{StaticResource InsightText}"/>
                 </Border>
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
-                    <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                <Border Style="{StaticResource InsightPill}" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding MonitoringInsightText}" Style="{StaticResource InsightText}"/>
                 </Border>
-                <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
-                    <TextBlock Text="{Binding EventInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
+                <Border Style="{StaticResource InsightPill}">
+                    <TextBlock Text="{Binding EventInsightText}" Style="{StaticResource InsightText}"/>
                 </Border>
             </WrapPanel>
         </Grid>
@@ -93,7 +94,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="IED Explorer" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="IED Explorer" Style="{StaticResource PanelTitle}" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ArIED project" Margin="0,0,6,0">
@@ -112,7 +113,7 @@
                             <!-- Always-visible fast workflow actions. They remain anchored below the
                                  independently scrolling IED list and never move with its content. -->
                             <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="5"
-                                    Background="#F7FAFF" BorderBrush="#DCE6F5" BorderThickness="1"
+                                    Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1"
                                     CornerRadius="15" Effect="{StaticResource SoftShadow}" Panel.ZIndex="30">
                                 <Grid>
                                     <Grid.RowDefinitions>
@@ -175,22 +176,22 @@
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="ListBoxItem">
                                                     <Border x:Name="Card" Background="{StaticResource IedCardSurface}"
-                                                            BorderBrush="#CDD9EA" BorderThickness="1" CornerRadius="16" Padding="9">
+                                                            BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" CornerRadius="16" Padding="9">
                                                         <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.08" Color="#1E3355"/></Border.Effect>
                                                         <ContentPresenter/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
                                                         <DataTrigger Binding="{Binding IsConnected}" Value="True">
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnected}"/>
-                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#83C7A1"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#7FC19C"/>
                                                         </DataTrigger>
                                                         <Trigger Property="IsSelected" Value="True">
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardSelected}"/>
-                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#6F9FF1"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#6A96E2"/>
                                                         </Trigger>
                                                         <Trigger Property="IsMouseOver" Value="True">
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardHover}"/>
-                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#8EAFE3"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#86A7D8"/>
                                                         </Trigger>
                                                         <MultiDataTrigger>
                                                             <MultiDataTrigger.Conditions>
@@ -198,7 +199,7 @@
                                                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
                                                             </MultiDataTrigger.Conditions>
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnectedSelected}"/>
-                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#55A77E"/>
+                                                            <Setter TargetName="Card" Property="BorderBrush" Value="#4E9C74"/>
                                                         </MultiDataTrigger>
                                                         <MultiTrigger>
                                                             <MultiTrigger.Conditions>
@@ -235,10 +236,8 @@
                                           </Viewbox>
                                       </Grid>
 
-                                      <Border x:Name="ConnectedBadge" Grid.Row="1" Grid.Column="0"
-                                              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,4,1"
-                                              Background="#E8F8EF" BorderBrush="#9DD8B7" BorderThickness="1"
-                                              CornerRadius="9" Padding="6,2" Visibility="Collapsed" Panel.ZIndex="4">
+                                      <Border x:Name="ConnectedBadge" Grid.Row="1" Grid.Column="0" Style="{StaticResource ConnectedBadgeStyle}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,4,1" Panel.ZIndex="4">
                                           <StackPanel Orientation="Horizontal">
                                               <Ellipse Width="5" Height="5" Fill="#16A34A" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                               <TextBlock Text="LIVE" FontSize="8.6" FontWeight="Bold" Foreground="#107A43"/>
@@ -246,12 +245,10 @@
                                       </Border>
 
 <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,25,0">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13.2" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
+                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource DeviceTitle}"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
-                                                    <TextBlock Text="{Binding EndpointText}" FontSize="11.6"
-                                                               Foreground="{StaticResource Muted}" Margin="0,2,0,0"
-                                                               TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
+                                                    <TextBlock Text="{Binding EndpointText}" Style="{StaticResource DeviceEndpoint}" Margin="0,2,0,0"
+                                                               TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                 </StackPanel>
 
                                                 <!-- Direct, unobstructed hit targets below the IP address. -->
@@ -283,7 +280,7 @@
                                                 <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#64748B"/></Viewbox>
                                             </Button>
 
-                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F2F7FDFA" CornerRadius="12"
+                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Opacity="0" Background="#F2F7FDFA" CornerRadius="12"
                                                     BorderBrush="#B8CEF3" BorderThickness="1" Padding="12" Panel.ZIndex="20">
                                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="190">
                                                     <!-- Eight identical rounded dashes recreate the original loading circle
@@ -326,14 +323,28 @@
                                         </Grid>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                                                <Setter TargetName="RelayDeviceIcon" Property="Fill" Value="#16A34A"/>
-                                                <Setter TargetName="RelayDeviceIcon" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="13" ShadowDepth="0" Opacity="0.48" Color="#16A34A"/></Setter.Value></Setter>
+                                                <Setter TargetName="RelayDeviceIcon" Property="Fill" Value="{StaticResource Connected}"/>
+                                                <Setter TargetName="RelayDeviceIcon" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="13" ShadowDepth="0" Opacity="0.44" Color="#168754"/></Setter.Value></Setter>
                                                 <Setter TargetName="ConnectedBadge" Property="Visibility" Value="Visible"/>
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ConnectedBadge" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.16"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
                                             </DataTrigger>
 <DataTrigger Binding="{Binding IsBusy}" Value="True">
                                                 <Setter TargetName="CardContent" Property="Opacity" Value="0.22"/>
                                                 <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="BusyOverlay" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.14"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
@@ -351,9 +362,9 @@
                                 <Border Background="#F8FAFC" Opacity="0.91" CornerRadius="22" Padding="22"
                                         HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="34" MaxWidth="535">
                                     <StackPanel>
-                                        <TextBlock Text="Start by adding your first IED" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                        <TextBlock Text="Start by adding your first IED" Style="{StaticResource DialogTitle}" FontSize="25"/>
                                         <TextBlock Text="Connect a relay by IP, let ArIED discover the live IEC 61850 MMS model, choose only the signals you need, then monitor every IED independently."
-                                                   TextWrapping="Wrap" FontSize="13.4" Foreground="{StaticResource Muted}" Margin="0,10,0,18"/>
+                                                   Style="{StaticResource PanelSubtitle}" FontSize="13.1" Margin="0,10,0,18"/>
                                         <WrapPanel>
                                             <Button Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0">
                                                 <StackPanel Orientation="Horizontal">
@@ -439,8 +450,8 @@
                                                 <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
                                             </Viewbox>
                                         </Border>
-                                        <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
-                                        <Border Background="#EAF2FF" BorderBrush="#C7D8F2" BorderThickness="1" CornerRadius="10" Padding="7,2" Margin="9,0,0,0">
+                                        <TextBlock Text="IED Command Panel" Style="{StaticResource PanelTitle}" FontSize="13.8" VerticalAlignment="Center"/>
+                                        <Border Background="{StaticResource SoftBlue}" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" CornerRadius="10" Padding="7,2" Margin="9,0,0,0">
                                             <TextBlock Text="{Binding SelectedDevice.CommandSignals.Count, StringFormat={}{0} controls}" FontSize="10.8" FontWeight="SemiBold" Foreground="#45648E"/>
                                         </Border>
                                     </StackPanel>
@@ -460,9 +471,9 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="Fast IEC 61850 Control" FontSize="14.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                                    <TextBlock Text="Fast IEC 61850 Control" Style="{StaticResource PanelTitle}" FontSize="14.2"/>
                                                     <TextBlock Text="Operate only the validated control objects selected for this IED."
-                                                               FontSize="11.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                                               Style="{StaticResource PanelSubtitle}" FontSize="11.2" Margin="0,3,0,0"/>
                                                 </StackPanel>
                                                 <WrapPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                                                     <Button Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0">
@@ -695,9 +706,9 @@
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Global Multi-IED Live Monitor" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="Global Multi-IED Live Monitor" Style="{StaticResource PanelTitle}"/>
                                 <TextBlock Text="Every IED keeps its own connection, report subscription, validation reads, and start/stop state."
-                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                           Style="{StaticResource PanelSubtitle}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
                                 <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.4" Foreground="{StaticResource Ink}"/>
@@ -749,9 +760,9 @@
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="IEC 61850 Sequence of Events" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="IEC 61850 Sequence of Events" Style="{StaticResource PanelTitle}"/>
                                 <TextBlock Text="SCADA/SAS SOE: each row shows the new process value directly. Closed/ON/true is red, Open/OFF/false is green, and intermediate/bad states are amber. Non-events stay out."
-                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                           Style="{StaticResource PanelSubtitle}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
                                 <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>

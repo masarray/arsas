@@ -5,6 +5,7 @@
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource Bg}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded">
     <Window.Resources>
         <Style x:Key="EditionSegmentButton" TargetType="Button">
@@ -15,6 +16,7 @@
             <Setter Property="FontSize" Value="13.5"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -41,7 +43,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border CornerRadius="24" BorderBrush="#D5E1F0" BorderThickness="1" Padding="24" Effect="{StaticResource CardShadow}">
+        <Border x:Name="DialogCard" Opacity="0" CornerRadius="24" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" Padding="24" Effect="{StaticResource CardShadow}">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                     <GradientStop Color="#FFFFFF" Offset="0"/>
@@ -73,9 +75,9 @@
                         </Viewbox>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="Save SCL" FontSize="21" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                        <TextBlock Text="Save SCL" Style="{StaticResource DialogTitle}"/>
                         <TextBlock Text="Export a clean interoperable IEC 61850 model" Margin="0,4,0,0"
-                                   FontSize="12.5" Foreground="{StaticResource Muted}"/>
+                                   Style="{StaticResource PanelSubtitle}" FontSize="12.5"/>
                     </StackPanel>
                 </Grid>
 
@@ -85,26 +87,24 @@
                         <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="1.5*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Background="#F8FAFD" BorderBrush="#D9E3F1" BorderThickness="1" CornerRadius="14" Padding="14,11">
+                    <Border Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" CornerRadius="14" Padding="14,11">
                         <StackPanel>
-                            <TextBlock Text="IED" FontSize="10.5" FontWeight="SemiBold" Foreground="#77859B"/>
-                            <TextBlock Text="{Binding IedName}" Margin="0,4,0,0" FontSize="13.2" FontWeight="SemiBold"
-                                       Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="IED" Style="{StaticResource MetaLabel}"/>
+                            <TextBlock Text="{Binding IedName}" Margin="0,4,0,0" Style="{StaticResource DeviceTitle}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Background="#F8FAFD" BorderBrush="#D9E3F1" BorderThickness="1" CornerRadius="14" Padding="14,11">
+                    <Border Grid.Column="2" Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1" CornerRadius="14" Padding="14,11">
                         <StackPanel>
-                            <TextBlock Text="SOURCE" FontSize="10.5" FontWeight="SemiBold" Foreground="#77859B"/>
-                            <TextBlock Text="{Binding SourceDescription}" Margin="0,4,0,0" FontSize="13.2"
-                                       Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="SOURCE" Style="{StaticResource MetaLabel}"/>
+                            <TextBlock Text="{Binding SourceDescription}" Margin="0,4,0,0" Style="{StaticResource DeviceTitle}" FontWeight="Medium"/>
                         </StackPanel>
                     </Border>
                 </Grid>
 
                 <StackPanel Grid.Row="2" Margin="0,22,0,0">
-                    <TextBlock Text="IEC 61850 edition" FontSize="12.2" FontWeight="SemiBold" Foreground="#475467" Margin="1,0,0,8"/>
-                    <Border Width="390" Height="52" HorizontalAlignment="Left" Background="#E7EDF7"
-                            BorderBrush="#D0DBEB" BorderThickness="1" CornerRadius="20" Padding="4">
+                    <TextBlock Text="IEC 61850 edition" Style="{StaticResource PanelTitle}" FontSize="12.4" Margin="1,0,0,8"/>
+                    <Border Width="390" Height="52" HorizontalAlignment="Left" Background="#E5EBF4"
+                            BorderBrush="{StaticResource BorderStrong}" BorderThickness="1" CornerRadius="20" Padding="4">
                         <Grid ClipToBounds="True">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -135,7 +135,7 @@
                                Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <Border Grid.Row="3" Margin="0,18,0,0" Background="#EEF4FF" BorderBrush="#D5E3FA" BorderThickness="1"
+                <Border Grid.Row="3" Margin="0,18,0,0" Background="{StaticResource SoftBlue}" BorderBrush="{StaticResource BorderDefault}" BorderThickness="1"
                         CornerRadius="12" Padding="12,9">
                     <StackPanel Orientation="Horizontal">
                         <Viewbox Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center">

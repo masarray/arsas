@@ -90,7 +90,15 @@ public partial class SaveSclWindow : Window
     public SaveSclDialogViewModel ViewModel => (SaveSclDialogViewModel)DataContext;
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
-        => ApplyEditionVisuals(animate: false);
+    {
+        ApplyEditionVisuals(animate: false);
+        DialogCard.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0d, 1d, TimeSpan.FromMilliseconds(170))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            });
+    }
 
     private void Edition2_Click(object sender, RoutedEventArgs e)
     {
