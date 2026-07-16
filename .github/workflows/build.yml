@@ -24,7 +24,7 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
-      - name: Verify premium UX and SAS operational-signal invariants
+      - name: Verify premium UX, GOOSE and SAS invariants
         shell: powershell
         run: |
           $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
@@ -74,6 +74,9 @@ jobs:
               $main -notmatch 'x:Name="NavGooseButton"' -or
               $main -notmatch '<TabItem Header="GOOSE Subscriber">' -or
               $main -notmatch 'ItemsSource="\{Binding SelectedGooseStream.Leaves\}"' -or
+              $main -notmatch 'Header="confRev"' -or
+              $main -notmatch 'Header="Flags"' -or
+              $main -notmatch 'Header="Diagnostics" Binding="\{Binding DiagnosticsSummary\}"' -or
               $main -notmatch '<ColumnDefinition Width="56"/>' -or
               $main -notmatch '<Viewbox Width="44" Height="44" Stretch="Uniform"' -or
               $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
@@ -94,13 +97,18 @@ jobs:
               $gooseUi -notmatch 'BuildGooseBindingCatalog' -or
               $gooseUi -notmatch 'SclWorkspace' -or
               $gooseUi -notmatch 'LiveDiscoveryModel' -or
-              $gooseUi -notmatch 'stream.Entries.OrderBy' -or
-              $gooseUi -notmatch 'Members.OrderBy' -or
+              $gooseUi -notmatch 'Select\(\(entry, position\)' -or
+              $gooseUi -notmatch 'Select\(\(member, position\)' -or
+              $gooseUi -notmatch 'FirstNonEmpty' -or
+              $gooseUi -notmatch 'GOOSE APPID differs from model' -or
+              $gooseUi -notmatch 'GOOSE confRev differs from model' -or
+              $gooseUi -match 'signal\?\.Category' -or
               $gooseModels -notmatch 'class GooseLeafValueRow' -or
               $gooseModels -notmatch 'public int Order' -or
+              $gooseModels -notmatch 'FlagsText' -or
               $project -notmatch 'ArIec61850NpcapProject' -or
               $project -notmatch 'AR.Iec61850.Transports.Npcap') {
-            throw "SCL/discovery-aware GOOSE Subscriber runtime or ordered-leaf binding regressed."
+            throw "SCL/discovery-aware GOOSE Subscriber runtime, canonical leaf order, or semantic metadata binding regressed."
           }
 
           if ($sasPolicy -notmatch 'public static bool IsVisible' -or
@@ -179,8 +187,10 @@ jobs:
             throw "Required ARIEC61850 SCL Workspace API was not found."
           }
           if (!(Test-Path $sclModels) -or
-              !(Select-String -Path $sclModels -Pattern "SclDataSetBindingStatus" -Quiet)) {
-            throw "Typed SCL DataSet binding contract was not found."
+              !(Select-String -Path $sclModels -Pattern "SclDataSetBindingStatus" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "class SclDataSetEntry" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "public int Index" -Quiet)) {
+            throw "Typed SCL DataSet binding and ordered-entry contracts were not found."
           }
           if (!(Test-Path $sclExporter) -or
               !(Select-String -Path $sclExporter -Pattern "WriteFiles" -Quiet) -or
