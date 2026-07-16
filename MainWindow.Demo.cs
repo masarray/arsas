@@ -82,6 +82,7 @@ public partial class MainWindow
         SelectedDevice = Devices.FirstOrDefault();
         MainTabs.SelectedIndex = 0;
         UpdateNavigationVisuals(0, animate: false);
+        QueueExplorerSignalGridLayout();
 
         _demoTimer.Stop();
         _demoTimer.Interval = TimeSpan.FromMilliseconds(1100);
@@ -93,7 +94,7 @@ public partial class MainWindow
         Raise(nameof(DemoModeVisibility));
         Raise(nameof(DemoModeText));
         RaiseWorkspaceCounts();
-        SetStatus($"Communication workspace ready • 10 connected IEDs • {GlobalPoints.Count:N0} live values • {GooseStreams.Count:N0} GOOSE publishers.");
+        SetStatus($"Online • {Devices.Count(device => device.IsConnected)} MMS associations • {Devices.Count(device => device.IsMonitoring)} BRCB monitoring • {GlobalPoints.Count:N0} values • {GooseStreams.Count:N0} GOOSE publishers");
     }
 
     private void DeactivateDemoMode()
@@ -174,7 +175,7 @@ public partial class MainWindow
                 IpAddress = spec.IpAddress,
                 Port = 102,
                 Status = "Monitoring • BRCB active",
-                Detail = $"Active {spec.Description} communication session with report acquisition, MMS verification and GOOSE model binding.",
+                Detail = $"Active {spec.Description} communication session with report acquisition, model verification and GOOSE binding.",
                 AcquisitionMode = $"Dynamic: {reportInstances[deviceIndex]}",
                 HasDiscoveryCache = true,
                 IsConnected = true,
