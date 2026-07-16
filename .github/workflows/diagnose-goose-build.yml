@@ -1,6 +1,10 @@
 name: Apply GOOSE VLAN nullable fix
 
 on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/workflows/diagnose-goose-build.yml
   push:
     branches: [ feature/goose-subscriber ]
     paths:
@@ -37,12 +41,11 @@ jobs:
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Commit fix and remove temporary workflow
+      - name: Commit source fix
         shell: bash
         run: |
-          rm -f .github/workflows/diagnose-goose-build.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add MainWindow.GooseSubscriber.cs
           git commit -m "fix: unwrap nullable GOOSE VLAN tag before display"
           git push origin HEAD:feature/goose-subscriber
