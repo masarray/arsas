@@ -457,11 +457,11 @@ public partial class MainWindow
         var signal = FindSignal(device, reference);
         return new GooseLeafBindingDefinition(
             index,
-            signal?.Name ?? BuildSignalName(reference, index),
+            FirstNonEmpty(signal?.Name, BuildSignalName(reference, index)),
             reference,
-            string.IsNullOrWhiteSpace(fc) ? signal?.FunctionalConstraint ?? string.Empty : fc,
-            cdc,
-            string.IsNullOrWhiteSpace(bType) ? signal?.DataType ?? string.Empty : bType);
+            FirstNonEmpty(fc, signal?.FunctionalConstraint),
+            FirstNonEmpty(cdc),
+            FirstNonEmpty(bType, signal?.DataType));
     }
 
     private static GooseLeafBindingDefinition BuildLiveLeafBinding(
@@ -475,11 +475,11 @@ public partial class MainWindow
         var dataObject = FindLiveDataObject(model, member.Reference);
         return new GooseLeafBindingDefinition(
             index,
-            signal?.Name ?? BuildSignalName(member.Reference, index),
+            FirstNonEmpty(signal?.Name, BuildSignalName(member.Reference, index)),
             member.Reference,
-            string.IsNullOrWhiteSpace(member.FunctionalConstraint) ? signal?.FunctionalConstraint ?? string.Empty : member.FunctionalConstraint,
-            dataObject?.InferredCdc ?? signal?.ControlCdc ?? string.Empty,
-            signal?.DataType ?? attribute?.SclBType ?? attribute?.MmsType ?? string.Empty);
+            FirstNonEmpty(member.FunctionalConstraint, signal?.FunctionalConstraint),
+            FirstNonEmpty(dataObject?.InferredCdc, signal?.ControlCdc),
+            FirstNonEmpty(signal?.DataType, attribute?.SclBType, attribute?.MmsType));
     }
 
     private static SignalDefinition? FindSignal(Iec61850MonitorDevice device, string reference)
@@ -628,6 +628,9 @@ public partial class MainWindow
             frame.Pdu.NeedsCommissioning,
             leaves);
     }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private static string BuildSignalName(string reference, int index)
     {
