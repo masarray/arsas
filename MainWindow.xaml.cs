@@ -93,11 +93,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public string HeaderStatusText => $"{Devices.Count} IED • {_runtime.MonitoringDeviceCount} monitoring";
+    public string HeaderStatusText => $"{Devices.Count} IED • {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring";
     public string DeviceCountText => $"{Devices.Count} device(s)";
-    public string RuntimeSummaryText => $"Connected {_runtime.ConnectedDeviceCount} • Monitoring {_runtime.MonitoringDeviceCount} • Values {GlobalPoints.Count} • Events {Events.Count}";
-    public string ConnectionInsightText => $"{_runtime.ConnectedDeviceCount} connected / {Devices.Count} discovered";
-    public string MonitoringInsightText => $"{_runtime.MonitoringDeviceCount} monitoring / {GlobalPoints.Count} values";
+    public string RuntimeSummaryText => $"Connected {(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} • Monitoring {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} • Values {GlobalPoints.Count} • Events {Events.Count}";
+    public string ConnectionInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} connected / {Devices.Count} discovered";
+    public string MonitoringInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring / {GlobalPoints.Count} values";
     public string EventInsightText => $"{Events.Count} event(s)";
     public Visibility DiagnosticsAlertVisibility => _hasUnreadDiagnosticError ? Visibility.Visible : Visibility.Collapsed;
     public Visibility EmptyExplorerVisibility => SelectedDevice == null ? Visibility.Visible : Visibility.Collapsed;
