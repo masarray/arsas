@@ -1,0 +1,35 @@
+name: Apply demo shell patch
+
+on:
+  push:
+    branches:
+      - feat/realistic-demo-mock
+    paths:
+      - scripts/apply-demo-shell-patch.py
+      - .github/workflows/apply-demo-shell-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/realistic-demo-mock
+          fetch-depth: 0
+      - name: Apply demo UI and read-only model changes
+        run: python3 scripts/apply-demo-shell-patch.py
+      - name: Commit generated source changes
+        shell: bash
+        run: |
+          if git diff --quiet -- MainWindow.xaml.cs MainWindow.xaml Models/MonitorModels.cs; then
+            echo "No generated changes were required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml.cs MainWindow.xaml Models/MonitorModels.cs
+          git commit -m "feat: expose keyboard demo mode and read-only demo UI"
+          git push origin HEAD:feat/realistic-demo-mock
