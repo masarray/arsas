@@ -135,6 +135,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         AddLog("INFO", "System", "ArIED 61850 started — Smart IED Explorer & Monitor.");
         AddLog("INFO", "IEC61850", "Acquisition: static report → dynamic report → MMS verification/fallback; each IED remains independent.");
+        InitializeGooseSubscriber();
         UpdateNavigationVisuals(0, animate: false);
     }
 
@@ -538,7 +539,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, 3);
+        index = Math.Clamp(index, 0, 4);
         MainTabs.SelectedIndex = index;
         UpdateNavigationVisuals(index, animate: true);
     }
@@ -555,6 +556,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (MainTabs.SelectedIndex == 3)
         {
+            RefreshGooseBindingPreview();
+        }
+        else if (MainTabs.SelectedIndex == 4)
+        {
             ClearDiagnosticAlert();
         }
 
@@ -566,7 +571,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        var target = Math.Clamp(index, 0, 3) * 180d;
+        var target = Math.Clamp(index, 0, 4) * 150d;
         if (animate)
         {
             var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(190))
@@ -581,7 +586,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             WorkflowPillTranslate.X = target;
         }
 
-        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavDiagnosticsButton };
+        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavGooseButton, NavDiagnosticsButton };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));
     }
@@ -1647,6 +1652,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UiFlushTimer_Tick(object? sender, EventArgs e)
     {
+        FlushGooseSubscriberUi();
+
         var pointChanged = false;
         foreach (var pointKey in _pendingPointSnapshots.Keys.ToArray())
         {
@@ -2128,6 +2135,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _applicationCancellation.Cancel();
             try
             {
+                var gooseDisposeTask = _gooseSubscriberRuntime.DisposeAsync().AsTask();
+                var gooseCompleted = await Task.WhenAny(gooseDisposeTask, Task.Delay(TimeSpan.FromSeconds(5)));
+                if (gooseCompleted == gooseDisposeTask)
+                    await gooseDisposeTask;
+            }
+            catch
+            {
+                // Raw capture cleanup must not keep the application open.
+            }
+
+            try
+            {
                 var disposeTask = _runtime.DisposeAsync().AsTask();
                 var completed = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(5)));
                 if (completed == disposeTask)
@@ -2349,7 +2368,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MarkDiagnosticAlert()
     {
-        if (MainTabs?.SelectedIndex == 3 || _hasUnreadDiagnosticError)
+        if (MainTabs?.SelectedIndex == 4 || _hasUnreadDiagnosticError)
             return;
 
         _hasUnreadDiagnosticError = true;

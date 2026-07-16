@@ -20,7 +20,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border x:Name="WorkflowNavShell" Width="672" Height="56" HorizontalAlignment="Left"
+            <Border x:Name="WorkflowNavShell" Width="760" Height="56" HorizontalAlignment="Left"
                     Background="#E7ECF5" CornerRadius="20" Padding="5" Effect="{StaticResource SoftShadow}"
                     ClipToBounds="False">
                 <Grid x:Name="WorkflowNavGrid" ClipToBounds="False">
@@ -29,8 +29,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="4" Width="172" Height="34"
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="5" Width="148" Height="34"
                             HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
                             Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
@@ -46,7 +47,8 @@
                     <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavEventsButton" Grid.Column="2" Content="Event Log" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavDiagnosticsButton" Grid.Column="3" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
+                    <Button x:Name="NavGooseButton" Grid.Column="3" Content="GOOSE Subscriber" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavDiagnosticsButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
@@ -804,6 +806,295 @@
                         </DataGrid>
                     </DockPanel>
                 </Border>
+            </TabItem>
+
+            <!-- SCL / DISCOVERY-AWARE GOOSE SUBSCRIBER -->
+            <TabItem Header="GOOSE Subscriber">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="0.88*" MinHeight="205"/>
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="1.12*" MinHeight="230"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Style="{StaticResource Card}" Padding="12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="IEC 61850-8-1 GOOSE Subscriber" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Read-only raw Ethernet capture with ARIEC61850 decoding, sequence/TAL supervision, and ordered DataSet binding from loaded SCL or live MMS discovery."
+                                               FontSize="11.7" Foreground="{StaticResource Muted}" Margin="16,3,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" CornerRadius="11" Padding="10,5" Margin="12,0,0,0" VerticalAlignment="Top"
+                                        BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#F2F4F7"/>
+                                            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True">
+                                                    <Setter Property="Background" Value="#E8F8EF"/>
+                                                    <Setter Property="BorderBrush" Value="#86D3A7"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding GooseCaptureStateText}" FontSize="10.8" FontWeight="Bold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#667085"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True">
+                                                        <Setter Property="Foreground" Value="#067647"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="300"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="290"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="7"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="7"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="Adapter" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
+                                           VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding GooseAdapters}" SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                                          DisplayMemberPath="DisplayText" Style="{StaticResource ModernComboBox}" MinHeight="34" Padding="9,5"
+                                          IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Npcap interface used for read-only IEC 61850 process-bus capture"/>
+                                <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
+                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh Npcap adapters">
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                </Button>
+
+                                <TextBlock Grid.Column="5" Text="BPF filter" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
+                                           VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                <TextBox Grid.Column="6" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
+                                         MinHeight="34" Padding="9,5" FontFamily="Cascadia Mono, Consolas" FontSize="10.6"
+                                         IsEnabled="{Binding CanRefreshGooseConfiguration}"
+                                         ToolTip="Default captures untagged and VLAN-tagged IEC 61850 GOOSE EtherType 0x88B8"/>
+                                <Button Grid.Column="8" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
+                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Rebuild stream and leaf bindings from loaded SCL and live discovery models">
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                </Button>
+
+                                <Button Grid.Column="10" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
+                                        IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
+                                        <TextBlock Text="Start" Foreground="White"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="12" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
+                                        IsEnabled="{Binding CanStopGooseSubscriber}" Padding="12,6" MinHeight="34">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                        <TextBlock Text="Stop"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="14" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
+                                        Padding="12,6" MinHeight="34" ToolTip="Clear detected streams and leaf values from the view">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                        <TextBlock Text="Clear"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <Grid Grid.Row="4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding GooseStatusText}" FontSize="11.4" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding GooseBindingText}" FontSize="10.8" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Right" Margin="14,0,0,0">
+                                    <TextBlock Text="{Binding GooseCounterText}" FontSize="11.2" FontWeight="SemiBold" Foreground="#45648E" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="{Binding SelectedGooseAdapterDetail}" FontSize="10.4" Foreground="{StaticResource Muted}" Margin="0,2,0,0" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" MaxWidth="350"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Detected GOOSE streams" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Grid.Column="1" Text="Select a stream to inspect allData in exact DataSet order" FontSize="10.8" Foreground="{StaticResource Muted}"/>
+                            </Grid>
+                            <Grid Grid.Row="2">
+                                <DataGrid ItemsSource="{Binding GooseStreams}" SelectedItem="{Binding SelectedGooseStream, Mode=TwoWay}"
+                                          IsReadOnly="True" Style="{StaticResource ModernDataGrid}" AutoGenerateColumns="False"
+                                          EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="38">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDiagnostics}" Value="True">
+                                                    <Setter Property="Background" Value="#FFFAEB"/>
+                                                    <Setter Property="BorderBrush" Value="#FEC84B"/>
+                                                    <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                                </DataTrigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#E7F0FF"/>
+                                                    <Setter Property="BorderBrush" Value="#6F9FF1"/>
+                                                    <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="IED / model" Binding="{Binding ModelIedName}" Width="115" MinWidth="90"/>
+                                        <DataGridTextColumn Header="APPID" Binding="{Binding AppIdText}" Width="76"/>
+                                        <DataGridTextColumn Header="GoCB reference" Binding="{Binding GoCbRef}" Width="220" MinWidth="160"/>
+                                        <DataGridTextColumn Header="DataSet" Binding="{Binding DataSetReference}" Width="220" MinWidth="160"/>
+                                        <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="125"/>
+                                        <DataGridTextColumn Header="Destination" Binding="{Binding DestinationMac}" Width="125"/>
+                                        <DataGridTextColumn Header="VLAN" Binding="{Binding VlanText}" Width="105"/>
+                                        <DataGridTextColumn Header="stNum" Binding="{Binding StateNumberText}" Width="68"/>
+                                        <DataGridTextColumn Header="sqNum" Binding="{Binding SequenceNumberText}" Width="68"/>
+                                        <DataGridTextColumn Header="Sequence" Binding="{Binding SequenceStatus}" Width="112"/>
+                                        <DataGridTextColumn Header="TAL" Binding="{Binding TimeAllowedToLiveText}" Width="82"/>
+                                        <DataGridTextColumn Header="Packets" Binding="{Binding PacketCount}" Width="76"/>
+                                        <DataGridTextColumn Header="Binding" Binding="{Binding BindingSource}" Width="100"/>
+                                        <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeenText}" Width="105"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <Border Visibility="{Binding GooseNoStreamsVisibility}" Background="#F9FBFE" BorderBrush="#D7E2F0" BorderThickness="1"
+                                        CornerRadius="13" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="550">
+                                    <StackPanel>
+                                        <TextBlock Text="Waiting for GOOSE traffic" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Select the approved adapter and start capture. Loaded SCL or live discovery data will bind each received allData value to the corresponding ordered DataSet signal."
+                                                   FontSize="11.2" Foreground="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="4" Style="{StaticResource Card}" Padding="10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Ordered GOOSE DataSet leaf values" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="{Binding GooseSelectedStreamText}" FontSize="10.8" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" CornerRadius="10" Padding="8,4" VerticalAlignment="Center">
+                                    <TextBlock Text="Leaf order = GOOSE allData order" FontSize="10.5" FontWeight="SemiBold" Foreground="#45648E"/>
+                                </Border>
+                            </Grid>
+                            <Grid Grid.Row="2">
+                                <DataGrid ItemsSource="{Binding SelectedGooseStream.Leaves}" IsReadOnly="True"
+                                          Style="{StaticResource ModernDataGrid}" AutoGenerateColumns="False"
+                                          EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="40">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                                                    <Setter Property="Background" Value="#FFF6D8"/>
+                                                    <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                                    <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="48"/>
+                                        <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" Width="185" MinWidth="135"/>
+                                        <DataGridTextColumn Header="Signal reference" Binding="{Binding SignalReference}" Width="2*" MinWidth="240"/>
+                                        <DataGridTemplateColumn Header="Value" Width="1.15*" MinWidth="145">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border CornerRadius="9" Padding="9,4" HorizontalAlignment="Left" MinWidth="90" BorderThickness="1">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#F2F4F7"/>
+                                                                <Setter Property="BorderBrush" Value="#D0D5DD"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                                                                        <Setter Property="Background" Value="#FFF1C7"/>
+                                                                        <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Value}" Value="&lt;missing in frame&gt;">
+                                                                        <Setter Property="Background" Value="#FFF1F2"/>
+                                                                        <Setter Property="BorderBrush" Value="#FDA29B"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding Value}" FontWeight="SemiBold" Foreground="#344054" TextTrimming="CharacterEllipsis" ToolTip="{Binding Value}"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}" Width="58"/>
+                                        <DataGridTextColumn Header="CDC / bType" Binding="{Binding TypeText}" Width="125"/>
+                                        <DataGridTextColumn Header="Previous" Binding="{Binding PreviousValue}" Width="145"/>
+                                        <DataGridTextColumn Header="Binding" Binding="{Binding BindingSource}" Width="105"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <Border Visibility="{Binding GooseNoLeafValuesVisibility}" Background="#F9FBFE" BorderBrush="#D7E2F0" BorderThickness="1"
+                                        CornerRadius="13" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                                    <StackPanel>
+                                        <TextBlock Text="No stream selected" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Received values will appear here in their exact GOOSE allData/DataSet sequence, with signal names and references recovered from SCL or the live discovery model."
+                                                   FontSize="11.1" Foreground="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
             </TabItem>
 
             <!-- DIAGNOSTICS -->
