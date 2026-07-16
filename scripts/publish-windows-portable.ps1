@@ -32,9 +32,10 @@ $normalizedVersion = $Version.Trim()
 if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
     $normalizedVersion = $normalizedVersion.Substring(1)
 }
-if ($normalizedVersion -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-.][0-9A-Za-z.-]+)?$') {
     throw "Invalid version '$Version'. Use a value such as 1.6.16 or v1.6.16."
 }
+$numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 
 $outputRoot = Join-Path $root "dist"
 $publishDir = Join-Path $outputRoot "ArIED61850-$normalizedVersion-$Runtime"
@@ -59,6 +60,9 @@ $publishArguments = @(
     "-p:DebugType=None",
     "-p:DebugSymbols=false",
     "-p:Version=$normalizedVersion",
+    "-p:AssemblyVersion=$numericVersion",
+    "-p:FileVersion=$numericVersion",
+    "-p:InformationalVersion=$normalizedVersion",
     "-p:ArIec61850Project=$EngineProject",
     "-p:ArIec61850NpcapProject=$NpcapProject",
     "-o", $publishDir
