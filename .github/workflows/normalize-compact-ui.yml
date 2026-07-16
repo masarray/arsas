@@ -1,0 +1,49 @@
+name: Normalize compact UI line endings
+
+on:
+  push:
+    branches: [ fix/compact-ied-goose-ui ]
+    paths:
+      - .github/workflows/normalize-compact-ui.yml
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/workflows/normalize-compact-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/compact-ied-goose-ui
+          fetch-depth: 0
+      - name: Normalize modified sources to LF
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in [
+              'App.xaml',
+              'MainWindow.xaml',
+              'MainWindow.xaml.cs',
+              'Models/MonitorModels.cs',
+              'SaveSclWindow.xaml',
+              'SaveSclWindow.xaml.cs',
+          ]:
+              path = Path(name)
+              data = path.read_bytes().replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+              path.write_bytes(data)
+          PY
+          git diff --stat
+      - name: Commit normalized sources
+        shell: bash
+        run: |
+          git add App.xaml MainWindow.xaml MainWindow.xaml.cs Models/MonitorModels.cs SaveSclWindow.xaml SaveSclWindow.xaml.cs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: preserve source line endings for focused UI diff"
+          git push origin HEAD:fix/compact-ied-goose-ui
