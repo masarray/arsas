@@ -8,6 +8,7 @@ This directory contains the engineering, validation, licensing, provenance, and 
 |---|---|
 | [Project README](../README.md) | Product overview, feature summary, quick start, build instructions, and public claim boundary. |
 | [Architecture](ARCHITECTURE.md) | Multi-IED ownership, model identity, report-first acquisition, runtime scaling, and timestamp semantics. |
+| [GOOSE Subscriber](GOOSE_SUBSCRIBER.md) | Read-only Npcap capture, ARIEC61850 GOOSE decoding, SCL/live-discovery DataSet binding, ordered `allData` leaf semantics, diagnostics, and field validation. |
 | [Validation checklist](VALIDATION_CHECKLIST.md) | Discovery, reporting, monitoring, recovery, and control acceptance checks. |
 | [UI validation](UI_VALIDATION.md) | Windows scaling, keyboard workflow, accessibility, multi-IED, and command-panel checks. |
 | [Engine compatibility](../ENGINE_COMPATIBILITY.md) | Required ARIEC61850 source contracts and project-reference layout. |

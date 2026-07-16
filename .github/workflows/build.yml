@@ -24,7 +24,7 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
-      - name: Verify premium UX and SAS operational-signal invariants
+      - name: Verify premium UX, GOOSE and SAS invariants
         shell: powershell
         run: |
           $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
@@ -37,6 +37,9 @@ jobs:
           $sasPolicy = Get-Content .\ArIED61850Tester\Services\SasOperationalSignalPolicy.cs -Raw
           $sasUi = Get-Content .\ArIED61850Tester\SasOperationalUiPolicy.cs -Raw
           $sclMapper = Get-Content .\ArIED61850Tester\Services\SclWorkspaceSignalMapper.cs -Raw
+          $gooseUi = Get-Content .\ArIED61850Tester\MainWindow.GooseSubscriber.cs -Raw
+          $gooseRuntime = Get-Content .\ArIED61850Tester\Services\GooseSubscriberRuntime.cs -Raw
+          $gooseModels = Get-Content .\ArIED61850Tester\Models\GooseSubscriberModels.cs -Raw
 
           if ($save -notmatch 'x:Name="EditionIndicator"' -or
               $save -notmatch 'Content="Edition 2"' -or
@@ -67,7 +70,13 @@ jobs:
             throw "Atomic Confirm or Command Panel overflow protection regressed."
           }
 
-          if ($main -notmatch 'WorkflowNavShell" Width="672" Height="56"' -or
+          if ($main -notmatch 'WorkflowNavShell" Width="760" Height="56"' -or
+              $main -notmatch 'x:Name="NavGooseButton"' -or
+              $main -notmatch '<TabItem Header="GOOSE Subscriber">' -or
+              $main -notmatch 'ItemsSource="\{Binding SelectedGooseStream.Leaves\}"' -or
+              $main -notmatch 'Header="confRev"' -or
+              $main -notmatch 'Header="Flags"' -or
+              $main -notmatch 'Header="Diagnostics" Binding="\{Binding DiagnosticsSummary\}"' -or
               $main -notmatch '<ColumnDefinition Width="56"/>' -or
               $main -notmatch '<Viewbox Width="44" Height="44" Stretch="Uniform"' -or
               $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
@@ -78,7 +87,28 @@ jobs:
               $app -notmatch '<Setter Property="Foreground" Value="White"/>' -or
               $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="Background" Value="Transparent"/>' -or
               $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="BorderBrush" Value="Transparent"/>') {
-            throw "Direct navbar, IED-card action, relay-icon, or command-action visual invariants regressed."
+            throw "Direct navbar, IED-card action, relay-icon, command-action, or GOOSE-tab visual invariants regressed."
+          }
+
+          if ($gooseRuntime -notmatch 'NpcapProcessBusFrameSource' -or
+              $gooseRuntime -notmatch 'ProcessBusStreamMonitor' -or
+              $gooseRuntime -notmatch 'GooseFrameParser.TryParseEthernetFrame' -or
+              $gooseRuntime -notmatch 'ether proto 0x88b8' -or
+              $gooseUi -notmatch 'BuildGooseBindingCatalog' -or
+              $gooseUi -notmatch 'SclWorkspace' -or
+              $gooseUi -notmatch 'LiveDiscoveryModel' -or
+              $gooseUi -notmatch 'Select\(\(entry, position\)' -or
+              $gooseUi -notmatch 'Select\(\(member, position\)' -or
+              $gooseUi -notmatch 'FirstNonEmpty' -or
+              $gooseUi -notmatch 'GOOSE APPID differs from model' -or
+              $gooseUi -notmatch 'GOOSE confRev differs from model' -or
+              $gooseUi -match 'signal\?\.Category' -or
+              $gooseModels -notmatch 'class GooseLeafValueRow' -or
+              $gooseModels -notmatch 'public int Order' -or
+              $gooseModels -notmatch 'FlagsText' -or
+              $project -notmatch 'ArIec61850NpcapProject' -or
+              $project -notmatch 'AR.Iec61850.Transports.Npcap') {
+            throw "SCL/discovery-aware GOOSE Subscriber runtime, canonical leaf order, or semantic metadata binding regressed."
           }
 
           if ($sasPolicy -notmatch 'public static bool IsVisible' -or
@@ -91,7 +121,9 @@ jobs:
           if ($sasUi -notmatch 'ModuleInitializer' -or
               $sasUi -notmatch 'ApplyBallisticNavigation' -or
               $sasUi -notmatch 'legacyPill.Visibility = Visibility.Collapsed' -or
+              $sasUi -notmatch 'shell.Width = 760' -or
               $sasUi -notmatch 'shell.Height = 56' -or
+              $sasUi -notmatch 'NavGooseButton' -or
               $sasUi -notmatch '#D8E2F0' -or
               $sasUi -notmatch 'SasOperationalSignalPolicy.IsVisible' -or
               $sclMapper -notmatch 'SasOperationalSignalPolicy.IsVisible') {
@@ -115,6 +147,7 @@ jobs:
             ArIED61850Tester/MainWindow.xaml.cs
             ArIED61850Tester/MainWindow.CommandPanelUx.cs
             ArIED61850Tester/MainWindow.ControlDiagnostics.cs
+            ArIED61850Tester/MainWindow.GooseSubscriber.cs
             ArIED61850Tester/SaveSclWindow.xaml
             ArIED61850Tester/SaveSclWindow.xaml.cs
             ArIED61850Tester/GridUxBehavior.cs
@@ -138,6 +171,11 @@ jobs:
           $sclExporter = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs"
           $schemaProfiles = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\SclSchemaProfiles.cs"
           $interoperableConverter = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\InteroperableSclConverter.cs"
+          $gooseParser = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseFrameParser.cs"
+          $gooseDecoded = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseDecodedValue.cs"
+          $processBusMonitor = ".\ARIEC61850\src\AR.Iec61850\Monitoring\ProcessBusStreamMonitor.cs"
+          $npcapSource = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\NpcapProcessBusFrameSource.cs"
+          $npcapProject = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 
           if (!(Test-Path $control) -or !(Test-Path $models) -or
               !(Select-String -Path $models -Pattern "interface IIec61850ControlService" -Quiet) -or
@@ -149,8 +187,10 @@ jobs:
             throw "Required ARIEC61850 SCL Workspace API was not found."
           }
           if (!(Test-Path $sclModels) -or
-              !(Select-String -Path $sclModels -Pattern "SclDataSetBindingStatus" -Quiet)) {
-            throw "Typed SCL DataSet binding contract was not found."
+              !(Select-String -Path $sclModels -Pattern "SclDataSetBindingStatus" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "class SclDataSetEntry" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "public int Index" -Quiet)) {
+            throw "Typed SCL DataSet binding and ordered-entry contracts were not found."
           }
           if (!(Test-Path $sclExporter) -or
               !(Select-String -Path $sclExporter -Pattern "WriteFiles" -Quiet) -or
@@ -160,6 +200,18 @@ jobs:
               !(Select-String -Path $schemaProfiles -Pattern "Edition2V31" -Quiet) -or
               !(Select-String -Path $schemaProfiles -Pattern "Edition1V16" -Quiet)) {
             throw "Required ARIEC61850 interoperable SCL export APIs were not found."
+          }
+          if (!(Test-Path $gooseParser) -or
+              !(Test-Path $gooseDecoded) -or
+              !(Test-Path $processBusMonitor) -or
+              !(Test-Path $npcapSource) -or
+              !(Test-Path $npcapProject) -or
+              !(Select-String -Path $gooseParser -Pattern "TryParseEthernetFrame" -Quiet) -or
+              !(Select-String -Path $gooseDecoded -Pattern "SignalReference" -Quiet) -or
+              !(Select-String -Path $processBusMonitor -Pattern "GooseValues" -Quiet) -or
+              !(Select-String -Path $processBusMonitor -Pattern "TimeAllowedToLiveMilliseconds" -Quiet) -or
+              !(Select-String -Path $npcapSource -Pattern "CaptureAsync" -Quiet)) {
+            throw "Required ARIEC61850 live GOOSE subscribe, ordered decode, supervision, or Npcap APIs were not found."
           }
 
       - name: Setup .NET 8

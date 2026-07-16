@@ -13,14 +13,16 @@
     <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
     <Product>ArIED 61850</Product>
     <AssemblyTitle>ArIED 61850 — IEC 61850 Engineering Workstation</AssemblyTitle>
-    <Description>Windows IEC 61850 engineering workstation for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
+    <Description>Windows IEC 61850 engineering workstation for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, SCL-aware GOOSE subscription, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
     <Version>1.6.16</Version>
     <AssemblyVersion>1.6.16.0</AssemblyVersion>
     <FileVersion>1.6.16.0</FileVersion>
-    <PackageTags>iec61850;iec-61850;mms;scl;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
+    <PackageTags>iec61850;iec-61850;mms;goose;goose-subscriber;scl;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>
+    <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == '' and '$(ARIEC61850_NPCAP_PROJECT)' != ''">$(ARIEC61850_NPCAP_PROJECT)</ArIec61850NpcapProject>
+    <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == ''">..\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj</ArIec61850NpcapProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,11 +34,15 @@
 
   <ItemGroup>
     <ProjectReference Include="$(ArIec61850Project)" Properties="Configuration=$(Configuration)" />
+    <ProjectReference Include="$(ArIec61850NpcapProject)" Properties="Configuration=$(Configuration)" />
   </ItemGroup>
 
   <Target Name="ValidateArIec61850Project" BeforeTargets="PrepareForBuild">
     <Message Importance="High" Text="ArIED 61850 is compiling against ARIEC61850 project: $(ArIec61850Project)" />
+    <Message Importance="High" Text="ArIED 61850 GOOSE Subscriber is compiling against Npcap transport: $(ArIec61850NpcapProject)" />
     <Error Condition="!Exists('$(ArIec61850Project)')"
            Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
+    <Error Condition="!Exists('$(ArIec61850NpcapProject)')"
+           Text="ARIEC61850 Npcap transport project was not found at '$(ArIec61850NpcapProject)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850NpcapProject=FULL_PATH_TO_AR.Iec61850.Transports.Npcap.csproj." />
   </Target>
 </Project>
