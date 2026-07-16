@@ -22,7 +22,7 @@ if ([string]::IsNullOrWhiteSpace($NpcapProject)) {
 }
 
 if (-not (Test-Path $EngineProject)) {
-    throw "ARIEC61850 engine project was not found: $EngineProject. Put the ArIED source folder beside the ARIEC61850 repository or pass -EngineProject with the full path."
+    throw "ARIEC61850 engine project was not found: $EngineProject. Put the ARSAS source folder beside the ARIEC61850 repository or pass -EngineProject with the full path."
 }
 if (-not (Test-Path $NpcapProject)) {
     throw "ARIEC61850 Npcap transport project was not found: $NpcapProject. Pass -NpcapProject with the full path to AR.Iec61850.Transports.Npcap.csproj."
@@ -38,14 +38,14 @@ if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 
 $outputRoot = Join-Path $root "dist"
-$publishDir = Join-Path $outputRoot "ArIED61850-$normalizedVersion-$Runtime"
-$zipPath = Join-Path $outputRoot "ArIED61850-$normalizedVersion-$Runtime-portable.zip"
+$publishDir = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime"
+$zipPath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.zip"
 
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 
-Write-Host "==> Restoring ArIED 61850"
+Write-Host "==> Restoring ARSAS"
 dotnet restore $project `
     -p:ArIec61850Project="$EngineProject" `
     -p:ArIec61850NpcapProject="$NpcapProject"
@@ -82,7 +82,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
 
-$exe = Join-Path $publishDir "ArIED61850.exe"
+$exe = Join-Path $publishDir "ARSAS.exe"
 if (-not (Test-Path $exe)) {
     throw "Published executable was not found: $exe"
 }

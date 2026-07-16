@@ -33,16 +33,16 @@ public partial class MainWindow
             },
             DemoDeviceRole.Ocr => new[]
             {
-                Boolean("Overcurrent stage 1 pickup", "PTOC1.Str.general", false, true),
-                Boolean("Overcurrent stage 2 trip", "PTOC2.Op.general", false, true),
-                Boolean("Earth-fault pickup", "PTOC3.Str.general", false, true),
-                Boolean("Master trip", "PTRC1.Tr.general", false, true)
+                Boolean("Overcurrent trip phase A", "PTOC1.Op.phsA", false, true),
+                Boolean("Overcurrent trip phase B", "PTOC1.Op.phsB", false, true),
+                Boolean("Earth-fault trip", "PTOC2.Op.general", false, true),
+                Boolean("Master trip", "PTRC1.Op.general", false, true)
             },
             DemoDeviceRole.LineDiff => new[]
             {
-                Boolean("Line differential pickup", "PDIF1.Str.general", false, true),
+                Boolean("Line differential trip phase A", "PDIF1.Op.phsA", false, true),
+                Boolean("Line differential trip phase B", "PDIF1.Op.phsB", false, true),
                 Boolean("Line differential trip", "PDIF1.Op.general", false, true),
-                Boolean("Teleprotection receive", "PSCH1.Op.general", false, true),
                 Analog("Differential current", "PDIF1.Idiff.mag.f", "A", 0.18, 0.08)
             },
             DemoDeviceRole.Distance => new[]
@@ -54,9 +54,9 @@ public partial class MainWindow
             },
             DemoDeviceRole.TrafoDiff => new[]
             {
-                Boolean("Transformer differential pickup", "PDIF1.Str.general", false, true),
+                Boolean("Transformer differential trip phase A", "PDIF1.Op.phsA", false, true),
+                Boolean("Transformer differential trip phase B", "PDIF1.Op.phsB", false, true),
                 Boolean("Transformer differential trip", "PDIF1.Op.general", false, true),
-                Boolean("Inrush restraint", "PHAR1.Str.general", false, true),
                 Analog("Winding temperature", "STMP1.Tmp.mag.f", "°C", 57.8, 1.7)
             },
             DemoDeviceRole.BusbarDiff => new[]
@@ -86,12 +86,12 @@ public partial class MainWindow
         return common;
     }
 
-    private void AddDemoPoint(Iec61850MonitorDevice device, DemoSignalSeed seed, int deviceIndex)
+    private void AddDemoPoint(Iec61850MonitorDevice device, DemoSignalSeed seed, int deviceIndex, string reportInstance)
     {
-        var reference = $"{device.Name}LD0/{seed.Path}";
+        var reference = $"{device.Name}{ResolveDemoLogicalDevice(seed)}/{seed.Path}";
         var sidecarRoot = BuildSidecarRoot(reference);
-        var dataSet = $"{device.Name}LD0/LLN0$DataSet$dsOperational";
-        var rcb = $"{device.Name}LD0/LLN0$BR$brcbOperational01";
+        var dataSet = $"{device.Name}DR/LLN0$DataSet$A_DS01";
+        var rcb = $"{device.Name}DR/LLN0$BR${reportInstance}";
         var timestamp = DateTime.Now.AddMilliseconds(-_demoRandom.Next(20, 780));
 
         var signal = new SignalDefinition
@@ -109,12 +109,12 @@ public partial class MainWindow
             ReportCoverageReason = "Configured operational DataSet with active report control block.",
             QualityReference = sidecarRoot + ".q",
             TimestampReference = sidecarRoot + ".t",
-            Source = "DEMO • live discovery",
+            Source = "Live MMS discovery",
             IsSelected = true,
             IsReportCapable = true,
-            ReportCoverage = deviceIndex % 2 == 0 ? "Buffered Report • dchg/qchg" : "Unbuffered Report • dchg/dupd",
+            ReportCoverage = $"Dynamic: {reportInstance}",
             Value = seed.InitialValue,
-            Quality = "Good • validity=good",
+            Quality = "Good",
             DeviceTimestamp = timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
             ProbeStatus = "Read OK",
             Timestamp = timestamp
@@ -137,9 +137,9 @@ public partial class MainWindow
             ReportControlReference = rcb,
             PollingIntervalMs = 1000,
             Value = seed.InitialValue,
-            Quality = "Good • validity=good",
+            Quality = "Good",
             DeviceTimestamp = timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
-            SourceMode = deviceIndex % 2 == 0 ? "Buffered Report • dchg" : "Unbuffered Report • dupd",
+            SourceMode = $"Dynamic: {reportInstance}",
             Reason = seed.EventEligible ? "dchg" : "integrity",
             Status = "Live",
             Sequence = 1000 + _demoPointStates.Count

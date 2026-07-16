@@ -14,6 +14,7 @@ public sealed class GooseAdapterOption
     public string DetailText => string.Join(" • ", new[] { FriendlyName, Description, MacAddress, Name }
         .Where(value => !string.IsNullOrWhiteSpace(value))
         .Distinct(StringComparer.OrdinalIgnoreCase));
+    public override string ToString() => DisplayText;
 
     private static string FirstReadable(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "Network adapter";

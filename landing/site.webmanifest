@@ -1,6 +1,6 @@
 {
-  "name": "ArIED 61850 — IEC 61850 Engineering Workstation",
-  "short_name": "ArIED 61850",
+  "name": "ARSAS — IEC 61850 Engineering Workstation",
+  "short_name": "ARSAS",
   "description": "SCL-assisted IEC 61850 engineering, live MMS discovery, multi-IED monitoring, SOE, diagnostics, and Smart Control.",
   "start_url": "./",
   "scope": "./",

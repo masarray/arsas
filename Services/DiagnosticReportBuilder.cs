@@ -27,7 +27,7 @@ internal static class DiagnosticReportBuilder
         var probeByEndpoint = probes.ToDictionary(result => result.Endpoint, StringComparer.OrdinalIgnoreCase);
 
         var builder = new StringBuilder(64 * 1024);
-        builder.AppendLine("ArIED 61850 Diagnostic Report");
+        builder.AppendLine("ARSAS Diagnostic Report");
         builder.AppendLine("Smart IED Explorer & Monitor");
         builder.AppendLine(new string('=', 72));
         builder.AppendLine($"Generated local : {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}");

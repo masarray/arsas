@@ -22,7 +22,7 @@ if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?
 
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 if ([string]::IsNullOrWhiteSpace($PublishedDirectory)) {
-    $PublishedDirectory = Join-Path $root "dist\ArIED61850-$normalizedVersion-$Runtime"
+    $PublishedDirectory = Join-Path $root "dist\ARSAS-$normalizedVersion-$Runtime"
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $root "dist"
@@ -40,7 +40,7 @@ if (-not (Test-Path $installerDefinition -PathType Leaf)) {
 }
 
 $requiredFiles = @(
-    "ArIED61850.exe",
+    "ARSAS.exe",
     "AR.Iec61850.Transports.Npcap.dll",
     "SharpPcap.dll",
     "PacketDotNet.dll",
@@ -78,7 +78,7 @@ if ([string]::IsNullOrWhiteSpace($InnoCompiler) -or -not (Test-Path $InnoCompile
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-$outputBaseName = "ArIED61850-$normalizedVersion-$Runtime-setup"
+$outputBaseName = "ARSAS-$normalizedVersion-$Runtime-setup"
 $expectedInstaller = Join-Path $OutputDirectory "$outputBaseName.exe"
 if (Test-Path $expectedInstaller) {
     Remove-Item $expectedInstaller -Force

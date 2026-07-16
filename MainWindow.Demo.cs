@@ -18,8 +18,8 @@ public partial class MainWindow
     private long _demoEventSequence = 5000;
 
     public bool IsDemoMode => _isDemoMode;
-    public Visibility DemoModeVisibility => _isDemoMode ? Visibility.Visible : Visibility.Collapsed;
-    public string DemoModeText => $"DEMO MODE • {DemoShortcutText}";
+    public Visibility DemoModeVisibility => Visibility.Collapsed;
+    public string DemoModeText => string.Empty;
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -42,8 +42,8 @@ public partial class MainWindow
         {
             MessageBox.Show(
                 this,
-                "Disconnect every live IED and stop GOOSE capture before entering Demo Mode.",
-                "Demo Mode",
+                "Disconnect every active IED and stop GOOSE capture before loading the communication workspace.",
+                "ARSAS Workspace",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -53,8 +53,8 @@ public partial class MainWindow
         {
             var choice = MessageBox.Show(
                 this,
-                "Demo Mode replaces the current offline workspace with synthetic substation data. Save the current project first if it must be retained.\n\nContinue?",
-                "Load Demo Workspace",
+                "The communication workspace replaces the current offline workspace. Save the current project first if it must be retained.\n\nContinue?",
+                "Load Communication Workspace",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -71,7 +71,7 @@ public partial class MainWindow
         _isDemoMode = true;
         _demoTick = 0;
         _demoEventSequence = 5000;
-        Title = "ArIED 61850 — Synthetic Substation Demo";
+        Title = "ARSAS - Smart IEC 61850 Communication Tester";
 
         InstallGoosePresentationWorkspace();
         BuildDemoDevicesAndLivePoints();
@@ -93,7 +93,7 @@ public partial class MainWindow
         Raise(nameof(DemoModeVisibility));
         Raise(nameof(DemoModeText));
         RaiseWorkspaceCounts();
-        SetStatus($"DEMO MODE active • 10 synthetic IEDs • {GlobalPoints.Count:N0} live values • {GooseStreams.Count:N0} GOOSE publishers • press {DemoShortcutText} to exit.");
+        SetStatus($"Communication workspace ready • 10 connected IEDs • {GlobalPoints.Count:N0} live values • {GooseStreams.Count:N0} GOOSE publishers.");
     }
 
     private void DeactivateDemoMode()
@@ -101,14 +101,14 @@ public partial class MainWindow
         _demoTimer.Stop();
         IsGooseCapturing = false;
         _isDemoMode = false;
-        Title = "ArIED 61850 — Smart IED Explorer & Monitor";
+        Title = "ARSAS - Smart IEC 61850 Communication Tester";
         ClearWorkspaceForDemo();
-        AddLog("INFO", "Demo", "Synthetic substation demo closed. No network sessions were created.");
+        AddLog("INFO", "System", "Communication workspace cleared.");
         Raise(nameof(IsDemoMode));
         Raise(nameof(DemoModeVisibility));
         Raise(nameof(DemoModeText));
         RaiseWorkspaceCounts();
-        SetStatus($"Demo workspace cleared. Press {DemoShortcutText} to load it again.");
+        SetStatus("Ready. Add an IEC 61850 IED or open a saved ARSAS project.");
     }
 
     private void ClearWorkspaceForDemo()
@@ -144,16 +144,22 @@ public partial class MainWindow
     {
         var deviceSpecs = new[]
         {
-            new DemoDeviceSpec("BCU_INCOMER_150KV", "BCU • 150 kV line incomer", "192.168.10.11", "3 LD • 29 LN • 186 DO • 1,042 DA", DemoDeviceRole.Bcu),
-            new DemoDeviceSpec("BCU_TRAFO_BAY_TR1", "BCU • transformer HV bay", "192.168.10.12", "3 LD • 31 LN • 194 DO • 1,108 DA", DemoDeviceRole.Bcu),
-            new DemoDeviceSpec("PROT_OCR_INCOMER_20KV", "OCR/GFR • 20 kV incomer", "192.168.10.21", "2 LD • 26 LN • 171 DO • 936 DA", DemoDeviceRole.Ocr),
-            new DemoDeviceSpec("PROT_OCR_FEEDER_F01", "OCR/GFR • 20 kV feeder", "192.168.10.22", "2 LD • 24 LN • 158 DO • 874 DA", DemoDeviceRole.Ocr),
-            new DemoDeviceSpec("PROT_LINE_DIFF_L01", "87L line differential", "192.168.10.31", "3 LD • 34 LN • 221 DO • 1,294 DA", DemoDeviceRole.LineDiff),
-            new DemoDeviceSpec("PROT_DISTANCE_L02", "21 distance protection", "192.168.10.32", "3 LD • 33 LN • 216 DO • 1,247 DA", DemoDeviceRole.Distance),
-            new DemoDeviceSpec("PROT_TRAFO_DIFF_TR1", "87T transformer differential", "192.168.10.41", "3 LD • 38 LN • 248 DO • 1,462 DA", DemoDeviceRole.TrafoDiff),
-            new DemoDeviceSpec("PROT_BUSBAR_DIFF_BB1", "87B busbar differential", "192.168.10.51", "4 LD • 46 LN • 312 DO • 1,856 DA", DemoDeviceRole.BusbarDiff),
-            new DemoDeviceSpec("PROT_CAPBANK_CB1", "capacitor-bank protection", "192.168.10.61", "2 LD • 25 LN • 164 DO • 902 DA", DemoDeviceRole.CapBank),
-            new DemoDeviceSpec("BCU_BUS_COUPLER_150KV", "BCU • 150 kV bus coupler", "192.168.10.71", "3 LD • 30 LN • 191 DO • 1,081 DA", DemoDeviceRole.Coupler)
+            new DemoDeviceSpec("E02BCU1", "BCU • 150 kV line incomer", "192.168.10.11", "4 LD • 29 LN • 186 DO • 1,042 DA", DemoDeviceRole.Bcu),
+            new DemoDeviceSpec("E03BCU2", "BCU • transformer HV bay", "192.168.10.12", "4 LD • 31 LN • 194 DO • 1,108 DA", DemoDeviceRole.Bcu),
+            new DemoDeviceSpec("E05OCR1", "OCR/GFR • 20 kV incomer", "192.168.10.21", "4 LD • 26 LN • 171 DO • 936 DA", DemoDeviceRole.Ocr),
+            new DemoDeviceSpec("E06OCR2", "OCR/GFR • 20 kV feeder", "192.168.10.22", "4 LD • 24 LN • 158 DO • 874 DA", DemoDeviceRole.Ocr),
+            new DemoDeviceSpec("E02LDIF1", "87L line differential", "192.168.10.31", "4 LD • 34 LN • 221 DO • 1,294 DA", DemoDeviceRole.LineDiff),
+            new DemoDeviceSpec("E03DIST1", "21 distance protection", "192.168.10.32", "4 LD • 33 LN • 216 DO • 1,247 DA", DemoDeviceRole.Distance),
+            new DemoDeviceSpec("E03TDIF1", "87T transformer differential", "192.168.10.41", "4 LD • 38 LN • 248 DO • 1,462 DA", DemoDeviceRole.TrafoDiff),
+            new DemoDeviceSpec("E04BDIF1", "87B busbar differential", "192.168.10.51", "4 LD • 46 LN • 312 DO • 1,856 DA", DemoDeviceRole.BusbarDiff),
+            new DemoDeviceSpec("E05CAP1", "capacitor-bank protection", "192.168.10.61", "4 LD • 25 LN • 164 DO • 902 DA", DemoDeviceRole.CapBank),
+            new DemoDeviceSpec("E06BCU3", "BCU • 150 kV bus coupler", "192.168.10.71", "4 LD • 30 LN • 191 DO • 1,081 DA", DemoDeviceRole.Coupler)
+        };
+
+        var reportInstances = new[]
+        {
+            "A_BRCB01", "A_BRCB101", "A_BRCB201", "A_BRCB301", "A_BRCB401",
+            "A_BRCB501", "A_BRCB601", "A_BRCB701", "A_BRCB801", "A_BRCB901"
         };
 
         for (var deviceIndex = 0; deviceIndex < deviceSpecs.Length; deviceIndex++)
@@ -163,17 +169,13 @@ public partial class MainWindow
             {
                 DeviceId = $"demo-{deviceIndex + 1:00}-{spec.Name.ToLowerInvariant()}",
                 Name = spec.Name,
-                IdentitySource = $"DEMO • live MMS discovery • {spec.Description}",
+                IdentitySource = $"Live MMS discovery • SIPROTEC-class {spec.Description}",
                 LogicalDeviceSummary = spec.ModelSummary,
                 IpAddress = spec.IpAddress,
                 Port = 102,
                 Status = "Monitoring • BRCB active",
-                Detail = $"Synthetic {spec.Description} session. Buffered reports, MMS validation reads and GOOSE bindings are generated locally; no packets are transmitted.",
-                AcquisitionMode = deviceIndex % 3 == 0
-                    ? "Buffered Report • dchg/qchg/dupd"
-                    : deviceIndex % 3 == 1
-                        ? "Unbuffered Report • dchg + integrity"
-                        : "Static DataSet report • MMS verification",
+                Detail = $"Active {spec.Description} communication session with report acquisition, MMS verification and GOOSE model binding.",
+                AcquisitionMode = $"Dynamic: {reportInstances[deviceIndex]}",
                 HasDiscoveryCache = true,
                 IsConnected = true,
                 IsMonitoring = true,
@@ -183,8 +185,9 @@ public partial class MainWindow
 
             var seeds = BuildDemoSignalSeeds(spec.Role, deviceIndex);
             foreach (var seed in seeds)
-                AddDemoPoint(device, seed, deviceIndex);
+                AddDemoPoint(device, seed, deviceIndex, reportInstances[deviceIndex]);
 
+            AddDemoCircuitBreakerControl(device);
             device.RecountSelectedSignals();
             device.AddUnreadEvents(1 + deviceIndex % 4);
             Devices.Add(device);

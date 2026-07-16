@@ -39,7 +39,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _newDeviceIp = "192.168.1.10";
     private string _newDevicePort = "102";
     private int _pollingIntervalMs = 1000;
-    private string _lastStatusText = "Ready. Add an IEC 61850 IED or open a saved ArIED project.";
+    private string _lastStatusText = "Ready. Add an IEC 61850 IED or open a saved ARSAS project.";
     private bool _allowClose;
     private bool _shutdownStarted;
     private bool _hasUnreadDiagnosticError;
@@ -133,7 +133,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _uiFlushTimer.Start();
         _progressAnimationTimer.Start();
 
-        AddLog("INFO", "System", "ArIED 61850 started — Smart IED Explorer & Monitor.");
+        AddLog("INFO", "System", "ARSAS started — Smart IEC 61850 Communication Tester.");
         AddLog("INFO", "IEC61850", "Acquisition: static report → dynamic report → MMS verification/fallback; each IED remains independent.");
         InitializeGooseSubscriber();
         UpdateNavigationVisuals(0, animate: false);
@@ -245,7 +245,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             MarkDiagnosticAlert();
             MessageBox.Show(
                 this,
-                $"ArIED could not open this SCL file through the ARIEC61850 engine.\n\n{ex.Message}",
+                $"ARSAS could not open this SCL file through the ARIEC61850 engine.\n\n{ex.Message}",
                 "Open SCL",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -294,8 +294,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.Status = workspace.RequiresEndpointBinding ? "SCL model ready — bind endpoint" : "SCL model ready";
         device.Detail = allowDynamicReporting
             ? (workspace.RequiresEndpointBinding
-                ? "LD/LN/DO/DA are available offline. Static report coverage is incomplete; after signal selection and endpoint binding, ArIED will create an association-scoped dynamic DataSet and use a safe free RCB before polling fallback."
-                : "LD/LN/DO/DA were loaded offline. Static report coverage is incomplete; ArIED will use static coverage where available and create an association-scoped dynamic DataSet for uncovered selected signals before polling fallback.")
+                ? "LD/LN/DO/DA are available offline. Static report coverage is incomplete; after signal selection and endpoint binding, ARSAS will create an association-scoped dynamic DataSet and use a safe free RCB before polling fallback."
+                : "LD/LN/DO/DA were loaded offline. Static report coverage is incomplete; ARSAS will use static coverage where available and create an association-scoped dynamic DataSet for uncovered selected signals before polling fallback.")
             : (workspace.RequiresEndpointBinding
                 ? "LD/LN/DO/DA are available offline. Press Play to bind an MMS endpoint; no discovery traffic was sent while opening the file."
                 : "LD/LN/DO/DA were loaded offline. Play performs a fast MMS association; Re-scan performs full design-versus-live verification.");
@@ -947,6 +947,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
         SelectedDevice = device;
+        if (device.IsDemo)
+        {
+            StartDemoDevice(device);
+            return;
+        }
 
         if (!device.IsConnected)
         {
@@ -971,6 +976,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
         SelectedDevice = device;
+        if (device.IsDemo)
+        {
+            StopDemoDevice(device);
+            return;
+        }
 
         if (device.IsMonitoring)
             await StopDeviceMonitorAsync(device);
@@ -1046,6 +1056,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task RefreshControlValuesAsync(Iec61850MonitorDevice device, bool force = false)
     {
+        if (device.IsDemo)
+        {
+            foreach (var signal in device.CommandSignals)
+                signal.ControlLastResult = "Ready • live feedback available";
+            return;
+        }
         if (!device.IsConnected || device.CommandSignals.Count == 0)
             return;
 
@@ -1209,6 +1225,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            if (device.IsDemo)
+            {
+                await ExecuteDemoControlAsync(device, signal, claim);
+                return;
+            }
             if (!device.IsConnected)
             {
                 SetStatus($"{device.Name}: connecting before control…");
@@ -1531,6 +1552,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async void IedRemove_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
+        if (device.IsDemo)
+        {
+            RemoveDemoDevice(device);
+            return;
+        }
         SaveSignalSelectionMemory(device);
         await _runtime.StopDeviceAsync(device.DeviceId);
         device.HasReportStream = false;
@@ -1794,9 +1820,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var dialog = new SaveFileDialog
         {
-            Title = "Save ArIED 61850 Project",
-            Filter = "ArIED 61850 Project (*.aried.json)|*.aried.json|JSON files (*.json)|*.json",
-            FileName = "ArIED-61850-Session.aried.json",
+            Title = "Save ARSAS Project",
+            Filter = "ARSAS Project (*.arsas.json)|*.arsas.json|Legacy ArIED Project (*.aried.json)|*.aried.json|JSON files (*.json)|*.json",
+            FileName = "ARSAS-Session.arsas.json",
             AddExtension = true
         };
         if (dialog.ShowDialog(this) != true) return;
@@ -1849,8 +1875,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Open ArIED 61850 Project",
-            Filter = "ArIED 61850 Project (*.aried.json)|*.aried.json|JSON files (*.json)|*.json"
+            Title = "Open ARSAS Project",
+            Filter = "ARSAS Project (*.arsas.json)|*.arsas.json|Legacy ArIED Project (*.aried.json)|*.aried.json|JSON files (*.json)|*.json"
         };
         if (dialog.ShowDialog(this) != true) return;
 
@@ -2010,7 +2036,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Title = "Export IEC 61850 Event Log",
             Filter = "CSV file (*.csv)|*.csv",
-            FileName = $"ArIED-61850-Events-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+            FileName = $"ARSAS-Events-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
             AddExtension = true
         };
         if (dialog.ShowDialog(this) != true) return;

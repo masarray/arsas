@@ -34,9 +34,9 @@ public partial class MainWindow
             var timestamp = DateTime.Now.AddMilliseconds(-_demoRandom.Next(8, 95));
 
             state.Point.Value = formatted;
-            state.Point.Quality = "Good • validity=good";
+            state.Point.Quality = "Good";
             state.Point.DeviceTimestamp = timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-            state.Point.SourceMode = _demoTick % 5 == 0 ? "MMS validation read" : "Buffered Report • dupd";
+            state.Point.SourceMode = _demoTick % 5 == 0 ? "MMS validation read" : state.Device.AcquisitionMode;
             state.Point.Reason = _demoTick % 5 == 0 ? "verification" : "dupd";
             state.Point.Sequence++;
             state.Signal.Value = formatted;
@@ -64,9 +64,9 @@ public partial class MainWindow
         var timestamp = DateTime.Now.AddMilliseconds(-_demoRandom.Next(5, 45));
 
         state.Point.Value = nextValue;
-        state.Point.Quality = "Good • validity=good";
+        state.Point.Quality = "Good";
         state.Point.DeviceTimestamp = timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        state.Point.SourceMode = "Buffered Report • dchg";
+        state.Point.SourceMode = state.Device.AcquisitionMode;
         state.Point.Reason = "dchg";
         state.Point.Sequence++;
         state.Point.IsRecentlyChanged = true;
@@ -99,8 +99,8 @@ public partial class MainWindow
             IecReference = state.Point.IecReference,
             OldValue = oldValue,
             NewValue = newValue,
-            Quality = "Good • validity=good",
-            SourceMode = "Buffered Report • dchg",
+            Quality = "Good",
+            SourceMode = state.Device.AcquisitionMode,
             Reason = "dchg"
         };
 }

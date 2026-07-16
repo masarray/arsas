@@ -6,14 +6,14 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>ArIED61850</AssemblyName>
+    <AssemblyName>ARSAS</AssemblyName>
     <RootNamespace>ArIED61850Tester</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Authors>Ari Sulistiono / masarray</Authors>
     <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
-    <Product>ArIED 61850</Product>
-    <AssemblyTitle>ArIED 61850 — IEC 61850 Engineering Workstation</AssemblyTitle>
-    <Description>Windows IEC 61850 engineering workstation for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, SCL-aware GOOSE subscription, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
+    <Product>ARSAS</Product>
+    <AssemblyTitle>ARSAS - Smart IEC 61850 Communication Tester</AssemblyTitle>
+    <Description>Smart Windows IEC 61850 communication tester for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, SCL-aware GOOSE subscription, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
     <Version>1.6.16</Version>
     <AssemblyVersion>1.6.16.0</AssemblyVersion>
     <FileVersion>1.6.16.0</FileVersion>
@@ -38,8 +38,8 @@
   </ItemGroup>
 
   <Target Name="ValidateArIec61850Project" BeforeTargets="PrepareForBuild">
-    <Message Importance="High" Text="ArIED 61850 is compiling against ARIEC61850 project: $(ArIec61850Project)" />
-    <Message Importance="High" Text="ArIED 61850 GOOSE Subscriber is compiling against Npcap transport: $(ArIec61850NpcapProject)" />
+    <Message Importance="High" Text="ARSAS is compiling against ARIEC61850 project: $(ArIec61850Project)" />
+    <Message Importance="High" Text="ARSAS GOOSE Subscriber is compiling against Npcap transport: $(ArIec61850NpcapProject)" />
     <Error Condition="!Exists('$(ArIec61850Project)')"
            Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
     <Error Condition="!Exists('$(ArIec61850NpcapProject)')"

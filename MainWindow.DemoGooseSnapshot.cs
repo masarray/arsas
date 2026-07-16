@@ -7,25 +7,26 @@ public partial class MainWindow
 {
     private GooseStreamSnapshot BuildDemoGooseSnapshot(DemoGooseStreamState state, int changedIndex, string diagnostics, DateTimeOffset timestamp)
     {
+        var logicalDevice = state.Spec.IedName.Contains("BCU", StringComparison.OrdinalIgnoreCase) ? "CTRL" : "PROT";
         var leaves = state.Leaves.Select((leaf, index) => new GooseLeafValueSnapshot(
             index + 1,
             index,
             leaf.Name,
-            $"{state.Spec.IedName}LD0/{leaf.Path}",
+            $"{state.Spec.IedName}{logicalDevice}/{leaf.Path}",
             leaf.Path.Contains(".mag.", StringComparison.OrdinalIgnoreCase) ? "MX" : "ST",
             leaf.TypeText.Split('/')[0].Trim(),
             leaf.TypeText.Contains('/') ? leaf.TypeText.Split('/')[1].Trim() : string.Empty,
             leaf.Value,
             index == changedIndex ? leaf.PreviousValue : leaf.Value,
             index == changedIndex,
-            "DEMO model")).ToArray();
+            "SCL / live model")).ToArray();
 
         return new GooseStreamSnapshot(
             state.Spec.StreamKey,
             state.Spec.AppId,
-            $"{state.Spec.IedName}LD0/LLN0$GO${state.Spec.ControlBlock}",
+            $"{state.Spec.IedName}{logicalDevice}/LLN0$GO${state.Spec.ControlBlock}",
             $"{state.Spec.IedName}_{state.Spec.ControlBlock}",
-            $"{state.Spec.IedName}LD0/LLN0$DataSet${state.Spec.DataSet}",
+            $"{state.Spec.IedName}{logicalDevice}/LLN0$DataSet${state.Spec.DataSet}",
             state.Spec.SourceMac,
             state.Spec.DestinationMac,
             $"VID {state.Spec.Vlan} / PCP 4",
@@ -35,7 +36,7 @@ public partial class MainWindow
             "2000 ms",
             "1",
             state.Spec.IedName,
-            "DEMO model",
+            "SCL / live model",
             diagnostics,
             timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture),
             state.PacketCount,

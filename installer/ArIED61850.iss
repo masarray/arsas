@@ -1,4 +1,4 @@
-; ArIED 61850 Windows installer
+; ARSAS Windows installer
 ; Values are injected by scripts/build-windows-installer.ps1 through ISCC /D switches.
 
 #ifndef AppVersion
@@ -14,11 +14,11 @@
   #define OutputDir ".\dist"
 #endif
 #ifndef OutputBaseFilename
-  #define OutputBaseFilename "ArIED61850-setup"
+  #define OutputBaseFilename "ARSAS-setup"
 #endif
 
-#define AppName "ArIED 61850"
-#define AppExeName "ArIED61850.exe"
+#define AppName "ARSAS - Smart IEC 61850 Communication Tester"
+#define AppExeName "ARSAS.exe"
 #define AppPublisher "Ari Sulistiono / masarray"
 #define AppUrl "https://github.com/masarray/ArIED61850Tester"
 
@@ -35,8 +35,8 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}/issues
 AppUpdatesURL={#AppUrl}/releases
-DefaultDirName={autopf}\ArIED 61850
-DefaultGroupName=ArIED 61850
+DefaultDirName={autopf}\ARSAS
+DefaultGroupName=ARSAS
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBaseFilename}
@@ -69,11 +69,11 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\ArIED 61850"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\ArIED 61850"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch ArIED 61850"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function IsNpcapInstalled: Boolean;
@@ -90,7 +90,7 @@ begin
   if (CurStep = ssPostInstall) and (not WizardSilent) and (not IsNpcapInstalled) then
   begin
     SuppressibleMsgBox(
-      'ArIED 61850 is installed and its MMS/SCL features are ready.' + #13#10 + #13#10 +
+      'ARSAS is installed and its MMS/SCL features are ready.' + #13#10 + #13#10 +
       'Npcap was not detected. Install Npcap separately before using the GOOSE Subscriber. ' +
       'Keep WinPcap API compatibility enabled when required by your engineering workstation policy.',
       mbInformation,

@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="Assets/app-icon.png" alt="ArIED 61850 application icon" width="104" height="104" />
+  <img src="Assets/app-icon.png" alt="ARSAS application icon" width="104" height="104" />
 
-# ArIED 61850
+# ARSAS
 
 ### IEC 61850 IED Explorer, Multi-Device Monitor, GOOSE Subscriber & Smart Control Workstation
 
@@ -16,11 +16,11 @@
 [**Product website**](https://masarray.github.io/ArIED61850Tester/) · [**Quick start**](#quick-start) · [**Architecture**](docs/ARCHITECTURE.md) · [**GOOSE Subscriber**](docs/GOOSE_SUBSCRIBER.md) · [**Validation**](docs/VALIDATION_CHECKLIST.md) · [**Report an issue**](https://github.com/masarray/ArIED61850Tester/issues)
 </div>
 
-![ArIED 61850 engineering workspace](landing/assets/hero.svg)
+![ARSAS engineering workspace](landing/assets/hero.svg)
 
 ## Built for practical IEC 61850 engineering
 
-ArIED 61850 brings the most common commissioning and troubleshooting workflows into one focused desktop workspace. Add an IED by IP address, import endpoints from an SCL file, verify the live MMS model, select the required signals, monitor each device independently, subscribe to station/process-bus GOOSE streams without transmitting, inspect report and event evidence, and stage supported control operations through the native ARIEC61850 control service.
+ARSAS brings the most common commissioning and troubleshooting workflows into one focused desktop workspace. Add an IED by IP address, import endpoints from an SCL file, verify the live MMS model, select the required signals, monitor each device independently, subscribe to station/process-bus GOOSE streams without transmitting, inspect report and event evidence, and stage supported control operations through the native ARIEC61850 control service.
 
 The application is designed for **substation automation laboratories, FAT/SAT preparation, relay and BCU integration, commissioning support, protocol investigation, and repeatable engineering diagnostics**. It is not a formal conformance certificate and does not replace approved switching procedures, test plans, or site authority.
 
@@ -65,7 +65,7 @@ Each device owns its own MMS session. GOOSE capture is a separate read-only Ethe
 
 The **GOOSE Subscriber** tab uses ARIEC61850's raw-Ethernet parser, Npcap frame source, and `ProcessBusStreamMonitor`. It never publishes GOOSE or writes a GSEControl object.
 
-For each detected stream, ArIED displays:
+For each detected stream, ARSAS displays:
 
 1. APPID, source/destination MAC, VLAN ID/priority, `goCBRef`, `goID`, DataSet reference, and `confRev`.
 2. `stNum`, `sqNum`, TimeAllowedToLive, Test, `ndsCom`, packet count, retransmission/state-change classification, and sequence/TAL diagnostics.
@@ -76,7 +76,7 @@ Binding priority is **loaded SCL GOOSE/DataSet model → live MMS discovery GOOS
 
 ## Smart Control, without protocol guessing
 
-For supported control objects, ArIED reads the live model before enabling command dispatch:
+For supported control objects, ARSAS reads the live model before enabling command dispatch:
 
 1. Validate the selected Data Object root.
 2. Read `ctlModel` and determine the required control sequence.
@@ -88,13 +88,13 @@ For supported control objects, ArIED reads the live model before enabling comman
 
 Supported command families currently include DPC, SPC, INC/ISC, BSC, and APC when the discovered live descriptor is operationally usable. Position objects retain operator-facing **Open / Closed** semantics while wire encoding and feedback decoding remain independently type-aware.
 
-> ArIED does not provide a generic control-write fallback for `.Oper`, `.SBOw`, or `.Cancel`. If the required native control contract is unavailable, the build or control readiness gate fails explicitly.
+> ARSAS does not provide a generic control-write fallback for `.Oper`, `.SBOw`, or `.Cancel`. If the required native control contract is unavailable, the build or control readiness gate fails explicitly.
 
 ## Architecture at a glance
 
 ```text
 ┌────────────────────────────────────────────────────────────────────┐
-│                            ArIED 61850                             │
+│                            ARSAS                             │
 │ Explorer · Live Monitor · Event Log · GOOSE · Diagnostics · Control│
 └───────────────────────────────┬────────────────────────────────────┘
                                 │ typed application services
@@ -106,7 +106,7 @@ Supported command families currently include DPC, SPC, INC/ISC, BSC, and APC whe
                   Laboratory IEDs            Station/process bus
 ```
 
-ArIED is the Windows application layer. The protocol implementation remains in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) source repository and is referenced as sibling .NET projects at build time.
+ARSAS is the Windows application layer. The protocol implementation remains in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) source repository and is referenced as sibling .NET projects at build time.
 
 ## Quick start
 
@@ -210,6 +210,6 @@ Historical revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain a
 ---
 
 <div align="center">
-  <strong>ArIED 61850</strong><br />
+  <strong>ARSAS</strong><br />
   Clear model evidence. Independent device sessions. Ordered GOOSE leaves. Guarded control workflows.
 </div>

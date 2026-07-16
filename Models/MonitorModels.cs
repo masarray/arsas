@@ -402,12 +402,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public int SelectedControlSignalCount => _selectedControlSignalCount;
     public bool IsBulkSignalSelectionUpdate => _isBulkSignalSelectionUpdate;
     public int PointCount => Points.Count;
-    public bool IsActionEnabled => !IsBusy && !IsDemo;
+    public bool IsActionEnabled => !IsBusy;
     public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
-    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy && !IsDemo;
-    public bool CanStartOrStopMonitor => !IsBusy && !IsDemo && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsBusy && !IsDemo && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
-    public bool CanStopAction => !IsBusy && !IsDemo && (IsConnected || IsMonitoring);
+    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
+    public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
+    public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool CanStopAction => !IsBusy && (IsConnected || IsMonitoring);
     public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
@@ -803,7 +803,7 @@ public sealed class Iec61850EventEntry
 public sealed class Iec61850TesterProject
 {
     public int SchemaVersion { get; set; } = 3;
-    public string ProjectName { get; set; } = "ArIED 61850 Session";
+    public string ProjectName { get; set; } = "ARSAS Session";
     public int DefaultPollingIntervalMs { get; set; } = 1000;
     public List<Iec61850TesterDeviceProfile> Devices { get; set; } = new();
 }
