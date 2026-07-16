@@ -25,8 +25,18 @@ jobs:
       - name: Apply requested corrections once
         shell: bash
         run: |
+          rm -f patch-error.log
           if grep -q 'GooseEvents.Insert(0, eventRow)' MainWindow.GooseTimeline.cs; then
-            python3 scripts/apply-goose-append-modeless-fix.py
+            if ! python3 scripts/apply-goose-append-modeless-fix.py >patch-error.log 2>&1; then
+              cat patch-error.log
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add patch-error.log
+              git commit -m "chore: capture GOOSE patch failure"
+              git push origin HEAD:fix/goose-append-modeless-selection-v2
+              exit 1
+            fi
+            rm -f patch-error.log
           else
             echo "GOOSE correction is already applied."
           fi
