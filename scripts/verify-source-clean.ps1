@@ -17,27 +17,6 @@ param()
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-# Temporary branch integration: apply the reviewed ARSAS/demo source patch inside
-# the pull-request worktree, then export the resulting files into docs so the
-# standard source-snapshot artifact can be inspected and committed atomically.
-$arsasPatch = Join-Path $RepoRoot "scripts\apply-arsas-rebrand-demo.py"
-$arsasExport = Join-Path $RepoRoot "scripts\export-arsas-patch-files.py"
-$previousLocation = Get-Location
-try {
-    Set-Location $RepoRoot
-    if (Test-Path $arsasPatch -PathType Leaf) {
-        & python $arsasPatch
-        if ($LASTEXITCODE -ne 0) { throw "ARSAS source patch failed with exit code $LASTEXITCODE." }
-    }
-    if (Test-Path $arsasExport -PathType Leaf) {
-        & python $arsasExport
-        if ($LASTEXITCODE -ne 0) { throw "ARSAS patch export failed with exit code $LASTEXITCODE." }
-    }
-}
-finally {
-    Set-Location $previousLocation
-}
-
 $ForbiddenFilePatterns = @(
     "LICENSE-APACHE-2.0",
     "*EXTERNAL_IP_CLEANLINESS_AUDIT*",
@@ -172,4 +151,4 @@ if ($Problems.Count -gt 0) {
     throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
+Write-Host "All Git-tracked ArIED content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
