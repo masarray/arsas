@@ -142,17 +142,10 @@ jobs:
       - name: Create SHA-256 checksums
         shell: powershell
         run: |
-          $dist = ".\ArIED61850Tester\dist"
-          $assets = @(
-            (Join-Path $dist "ArIED61850-$env:RELEASE_VERSION-win-x64-portable.zip")
-            (Join-Path $dist "ArIED61850-$env:RELEASE_VERSION-win-x64-setup.exe")
-          )
-          $lines = foreach ($asset in $assets) {
-            if (-not (Test-Path $asset -PathType Leaf)) { throw "Release asset was not found: $asset" }
-            $hash = Get-FileHash -Path $asset -Algorithm SHA256
-            "$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($asset))"
-          }
-          $lines | Set-Content -Path (Join-Path $dist "SHA256SUMS.txt") -Encoding ascii
+          .\ArIED61850Tester\scripts\create-windows-release-checksums.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -Runtime win-x64 `
+            -DistDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
