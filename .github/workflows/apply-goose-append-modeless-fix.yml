@@ -27,6 +27,7 @@ jobs:
       - name: Commit generated changes
         shell: bash
         run: |
+          # This workflow is intentionally one-shot and is removed by the production PR.
           if git diff --quiet -- MainWindow.GooseTimeline.cs MainWindow.GooseSubscriber.cs MainWindow.xaml.cs MainWindow.xaml App.xaml SignalSelectionWizardWindow.xaml.cs Views/GooseSubscriberLiteView.xaml .github/workflows/build.yml; then
             echo "No generated changes were required."
             exit 0
