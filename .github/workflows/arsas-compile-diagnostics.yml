@@ -21,6 +21,7 @@ jobs:
         run: |
           Set-Location $env:GITHUB_WORKSPACE
           python .\scripts\apply-arsas-rebrand-demo.py
+          python .\scripts\fix-arsas-generated-source.py
       - name: Checkout engine
         shell: powershell
         run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ..\ARIEC61850
@@ -36,11 +37,12 @@ jobs:
         shell: powershell
         run: |
           $output = & dotnet build .\ArIED61850Tester.csproj -c Release --no-restore 2>&1
+          $buildExit = $LASTEXITCODE
           $output | Set-Content .\arsas-build.log
           $errors = $output | Select-String -Pattern ': error (CS|MC|XDG|NETSDK)[0-9]+|Build FAILED|[0-9]+ Error\(s\)'
           $errors | Set-Content .\arsas-errors.txt
           $errors | ForEach-Object { Write-Host $_.Line }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($buildExit -ne 0) { exit $buildExit }
       - name: Upload compiler diagnostics
         if: always()
         uses: actions/upload-artifact@v4
