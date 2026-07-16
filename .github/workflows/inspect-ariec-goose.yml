@@ -1,47 +1,39 @@
-name: Inspect ARIEC61850 GOOSE source
+name: Apply GOOSE MainWindow patch
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - .github/workflows/inspect-ariec-goose.yml
   push:
     branches: [ feature/goose-subscriber ]
     paths:
+      - scripts/apply-goose-mainwindow.py
       - .github/workflows/inspect-ariec-goose.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  snapshot:
-    runs-on: windows-latest
+  apply:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout ArIED feature branch
+      - name: Checkout feature branch
         uses: actions/checkout@v4
-
-      - name: Checkout ARIEC61850 engine
-        shell: powershell
-        run: git clone --quiet --depth 1 --branch main https://github.com/masarray/ARIEC61850.git ARIEC61850
-
-      - name: Build source inventory
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path snapshot | Out-Null
-          Get-ChildItem .\ARIEC61850 -Recurse -File |
-            Where-Object { $_.Extension -in '.cs','.csproj','.xaml','.md','.scl','.scd','.cid','.icd' } |
-            Select-String -Pattern 'Goose|GOOSE|GseControl|GoCB|ProcessBus|Npcap' -List |
-            ForEach-Object { $_.Path.Substring((Resolve-Path .\ARIEC61850).Path.Length + 1) } |
-            Sort-Object -Unique |
-            Set-Content .\snapshot\goose-files.txt
-          Copy-Item .\ARIEC61850\src .\snapshot\src -Recurse
-          Copy-Item .\ARIEC61850\apps\AR.Iec61850.Cli .\snapshot\cli -Recurse
-          Copy-Item .\ARIEC61850\samples\scl .\snapshot\samples-scl -Recurse
-          Copy-Item .\ARIEC61850\tests\AR.Iec61850.Tests .\snapshot\tests -Recurse
-
-      - name: Upload GOOSE source snapshot
-        uses: actions/upload-artifact@v4
         with:
-          name: ariec61850-goose-source
-          path: snapshot
-          retention-days: 1
+          ref: feature/goose-subscriber
+          fetch-depth: 0
+
+      - name: Apply deterministic MainWindow patch
+        run: python3 scripts/apply-goose-mainwindow.py
+
+      - name: Commit generated application changes
+        shell: bash
+        run: |
+          rm -f scripts/apply-goose-mainwindow.py
+          rm -f .github/workflows/inspect-ariec-goose.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes were required."
+            exit 0
+          fi
+          git commit -m "feat: add GOOSE Subscriber tab and lifecycle integration"
+          git push origin HEAD:feature/goose-subscriber
