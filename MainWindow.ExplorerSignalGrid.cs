@@ -16,7 +16,7 @@ public partial class MainWindow
 
     private void ConfigureExplorerSignalGridForCompactFit()
     {
-        var signalGrid = FindVisualChildren<DataGrid>(MainTabs)
+        var signalGrid = FindExplorerVisualChildren<DataGrid>(MainTabs)
             .FirstOrDefault(grid =>
             {
                 if (grid.Columns.Count != 6)
@@ -54,7 +54,7 @@ public partial class MainWindow
         }
     }
 
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject? root)
+    private static IEnumerable<T> FindExplorerVisualChildren<T>(DependencyObject? root)
         where T : DependencyObject
     {
         if (root == null)
@@ -66,7 +66,7 @@ public partial class MainWindow
             if (child is T typed)
                 yield return typed;
 
-            foreach (var descendant in FindVisualChildren<T>(child))
+            foreach (var descendant in FindExplorerVisualChildren<T>(child))
                 yield return descendant;
         }
     }
