@@ -1,0 +1,40 @@
+name: ARSAS online workspace compile diagnostics
+
+on:
+  push:
+    branches: [ fix/arsas-real-online-workspace ]
+
+permissions:
+  contents: read
+
+env:
+  ARIEC61850_REF: main
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ArIED61850Tester
+      - name: Checkout engine
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        shell: powershell
+        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.csproj
+      - name: Build and show concise errors
+        shell: powershell
+        run: |
+          $output = & dotnet build .\ArIED61850Tester\ArIED61850Tester.csproj -c Release --no-restore 2>&1
+          $exitCode = $LASTEXITCODE
+          $matches = $output | Select-String -Pattern 'error (CS|MC|XDG|NETSDK)[0-9]+'
+          if ($matches) {
+            $matches | ForEach-Object { Write-Host $_.Line }
+          } else {
+            $output | Select-Object -Last 80 | ForEach-Object { Write-Host $_ }
+          }
+          if ($exitCode -ne 0) { exit $exitCode }
