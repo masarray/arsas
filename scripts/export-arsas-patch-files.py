@@ -1,7 +1,13 @@
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 root = Path(__file__).resolve().parents[1]
+fix_script = root / "scripts" / "fix-arsas-generated-source.py"
+if fix_script.exists():
+    subprocess.run([sys.executable, str(fix_script)], cwd=root, check=True)
+
 out = root / "docs" / "__arsas_patch_export"
 if out.exists():
     shutil.rmtree(out)
