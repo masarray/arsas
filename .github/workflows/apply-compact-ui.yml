@@ -1,0 +1,74 @@
+name: Apply compact premium UI
+
+on:
+  push:
+    branches: [ fix/compact-ied-goose-ui ]
+    paths:
+      - .github/compact-ui.patch.gz.b64
+      - .github/workflows/apply-compact-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/compact-ied-goose-ui
+          fetch-depth: 0
+
+      - name: Decode and apply UI patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, gzip
+          encoded = Path('.github/compact-ui.patch.gz.b64').read_text(encoding='utf-8').strip()
+          Path('/tmp/compact-ui.patch').write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          PY
+          git apply --ignore-whitespace /tmp/compact-ui.patch
+
+      - name: Preserve repository line endings and validate XAML
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          files = [
+              'App.xaml',
+              'MainWindow.xaml',
+              'SaveSclWindow.xaml',
+              'SaveSclWindow.xaml.cs',
+              'MainWindow.xaml.cs',
+              'Models/MonitorModels.cs',
+          ]
+          for name in files:
+              path = Path(name)
+              data = path.read_bytes().replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+              path.write_bytes(data.replace(b'\n', b'\r\n'))
+
+          for name in ['App.xaml', 'MainWindow.xaml', 'SaveSclWindow.xaml']:
+              ET.parse(name)
+          PY
+          grep -q 'Binding IsMonitoring' MainWindow.xaml
+          grep -q 'x:Name="MonitorStateText" Text="STOP"' MainWindow.xaml
+          grep -q 'x:Name="Edition2Toggle"' SaveSclWindow.xaml
+          grep -q 'x:Name="Edition1Toggle"' SaveSclWindow.xaml
+          ! grep -q 'EditionIndicatorTranslate' SaveSclWindow.xaml SaveSclWindow.xaml.cs
+          grep -q 'Text="GOOSE Subscriber"' MainWindow.xaml
+          grep -q 'Style="{StaticResource ModernComboBox}"' MainWindow.xaml
+          git diff --check
+
+      - name: Commit compact premium UI
+        shell: bash
+        run: |
+          git rm .github/compact-ui.patch.gz.b64 .github/workflows/apply-compact-ui.yml
+          git add App.xaml MainWindow.xaml MainWindow.xaml.cs Models/MonitorModels.cs SaveSclWindow.xaml SaveSclWindow.xaml.cs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: compact IED discovery and simplify premium GOOSE UI"
+          git push origin HEAD:fix/compact-ied-goose-ui
