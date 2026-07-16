@@ -1,7 +1,4 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
@@ -17,7 +14,6 @@ public partial class MainWindow
         UpdateDemoAnalogValues();
         if (_demoTick % 3 == 0)
             GenerateDemoProcessEvent();
-        UpdateDemoGooseTraffic();
         RaiseWorkspaceCounts();
     }
 
