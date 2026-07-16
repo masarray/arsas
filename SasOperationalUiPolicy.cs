@@ -24,7 +24,7 @@ internal static class SasOperationalUiPolicy
     private static readonly ConditionalWeakTable<object, CollectionSubscription> Subscriptions = new();
     private static readonly string[] NavigationButtonNames =
     {
-        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavDiagnosticsButton"
+        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavGooseButton", "NavDiagnosticsButton"
     };
 
     [ModuleInitializer]
@@ -94,7 +94,7 @@ internal static class SasOperationalUiPolicy
         if (window.FindName("WorkflowNavShell") is not Border shell)
             return;
 
-        shell.Width = 672;
+        shell.Width = 760;
         shell.Height = 56;
         shell.Padding = new Thickness(5);
         shell.CornerRadius = new CornerRadius(20);
