@@ -87,13 +87,14 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and (not IsNpcapInstalled) then
+  if (CurStep = ssPostInstall) and (not WizardSilent) and (not IsNpcapInstalled) then
   begin
-    MsgBox(
+    SuppressibleMsgBox(
       'ArIED 61850 is installed and its MMS/SCL features are ready.' + #13#10 + #13#10 +
       'Npcap was not detected. Install Npcap separately before using the GOOSE Subscriber. ' +
       'Keep WinPcap API compatibility enabled when required by your engineering workstation policy.',
       mbInformation,
-      MB_OK);
+      MB_OK,
+      IDOK);
   end;
 end;
