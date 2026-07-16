@@ -1,6 +1,10 @@
 name: Inspect ARIEC61850 GOOSE source
 
 on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/workflows/inspect-ariec-goose.yml
   push:
     branches: [ feature/goose-subscriber ]
     paths:
