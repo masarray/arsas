@@ -7,27 +7,39 @@
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded">
     <Window.Resources>
-        <Style x:Key="EditionSegmentButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <LinearGradientBrush x:Key="EditionToggleSelected" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#3B82F6" Offset="0"/>
+            <GradientStop Color="#4F46E5" Offset="1"/>
+        </LinearGradientBrush>
+        <Style x:Key="EditionToggleButton" TargetType="ToggleButton">
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Background" Value="#F8FAFD"/>
+            <Setter Property="BorderBrush" Value="#D7E1EF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#475467"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontSize" Value="13.2"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="Transparent" CornerRadius="17">
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.82"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#9FB7D8"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="#F1F6FE"/>
                             </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Opacity" Value="0.62"/>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource EditionToggleSelected}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#779BEE"/>
+                                <Setter Property="Foreground" Value="White"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.82"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderThickness" Value="2"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -103,32 +115,18 @@
 
                 <StackPanel Grid.Row="2" Margin="0,22,0,0">
                     <TextBlock Text="IEC 61850 edition" FontSize="12.2" FontWeight="SemiBold" Foreground="#475467" Margin="1,0,0,8"/>
-                    <Border Width="390" Height="52" HorizontalAlignment="Left" Background="#E7EDF7"
-                            BorderBrush="#D0DBEB" BorderThickness="1" CornerRadius="20" Padding="4">
-                        <Grid ClipToBounds="True">
+                    <Border x:Name="EditionIndicator" Width="390" Height="52" HorizontalAlignment="Left"
+                            Background="#EEF3FA" BorderBrush="#D7E1EF" BorderThickness="1" CornerRadius="18" Padding="4">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="6"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="EditionIndicator" Grid.ColumnSpan="2" Width="190" Height="42"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17" RenderTransformOrigin="0.5,0.5">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#3B82F6" Offset="0"/>
-                                        <GradientStop Color="#4F46E5" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                                <Border.RenderTransform>
-                                    <TranslateTransform x:Name="EditionIndicatorTranslate" X="0"/>
-                                </Border.RenderTransform>
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="13" ShadowDepth="3" Opacity="0.22" Color="#3159CC"/>
-                                </Border.Effect>
-                            </Border>
-                            <Button x:Name="Edition2Button" Grid.Column="0" Content="Edition 2"
-                                    Style="{StaticResource EditionSegmentButton}" Foreground="White" Click="Edition2_Click"/>
-                            <Button x:Name="Edition1Button" Grid.Column="1" Content="Edition 1"
-                                    Style="{StaticResource EditionSegmentButton}" Click="Edition1_Click"/>
+                            <ToggleButton x:Name="Edition2Toggle" Grid.Column="0" Content="Edition 2"
+                                          Style="{StaticResource EditionToggleButton}" Click="Edition2_Click"/>
+                            <ToggleButton x:Name="Edition1Toggle" Grid.Column="2" Content="Edition 1"
+                                          Style="{StaticResource EditionToggleButton}" Click="Edition1_Click"/>
                         </Grid>
                     </Border>
                     <TextBlock Text="{Binding EditionHint}" Margin="2,10,0,0" FontSize="11.7"

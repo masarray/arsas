@@ -1,8 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
 using AR.Iec61850.Scl.Export;
 
 namespace ArIED61850Tester;
@@ -76,8 +74,6 @@ public sealed class SaveSclDialogViewModel : INotifyPropertyChanged
 
 public partial class SaveSclWindow : Window
 {
-    private const double IndicatorOffset = 192d;
-
     public SaveSclWindow(
         string iedName,
         string sourceDescription,
@@ -90,39 +86,24 @@ public partial class SaveSclWindow : Window
     public SaveSclDialogViewModel ViewModel => (SaveSclDialogViewModel)DataContext;
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
-        => ApplyEditionVisuals(animate: false);
+        => ApplyEditionVisuals();
 
     private void Edition2_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.Select(SclSchemaProfile.Edition2V31);
-        ApplyEditionVisuals(animate: true);
+        ApplyEditionVisuals();
     }
 
     private void Edition1_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.Select(SclSchemaProfile.Edition1V16);
-        ApplyEditionVisuals(animate: true);
+        ApplyEditionVisuals();
     }
 
-    private void ApplyEditionVisuals(bool animate)
+    private void ApplyEditionVisuals()
     {
-        var target = ViewModel.IsEdition2 ? 0d : IndicatorOffset;
-        Edition2Button.Foreground = ViewModel.IsEdition2 ? Brushes.White : new SolidColorBrush(Color.FromRgb(52, 64, 84));
-        Edition1Button.Foreground = ViewModel.IsEdition2 ? new SolidColorBrush(Color.FromRgb(52, 64, 84)) : Brushes.White;
-
-        if (!animate)
-        {
-            EditionIndicatorTranslate.X = target;
-            return;
-        }
-
-        var animation = new DoubleAnimation
-        {
-            To = target,
-            Duration = TimeSpan.FromMilliseconds(185),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        EditionIndicatorTranslate.BeginAnimation(TranslateTransform.XProperty, animation, HandoffBehavior.SnapshotAndReplace);
+        Edition2Toggle.IsChecked = ViewModel.IsEdition2;
+        Edition1Toggle.IsChecked = !ViewModel.IsEdition2;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

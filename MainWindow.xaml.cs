@@ -608,7 +608,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         device.ResetDiscoveryProgress(
             $"Opening {device.EndpointText}…",
-            "Discovering IEC 61850 IED");
+            "Discovering IED");
         device.IsBusy = true;
         await Dispatcher.Yield(DispatcherPriority.Render);
 

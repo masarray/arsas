@@ -183,7 +183,7 @@
                                                         <ContentPresenter/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
-                                                        <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                        <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnected}"/>
                                                             <Setter TargetName="Card" Property="BorderBrush" Value="#83C7A1"/>
                                                         </DataTrigger>
@@ -197,7 +197,7 @@
                                                         </Trigger>
                                                         <MultiDataTrigger>
                                                             <MultiDataTrigger.Conditions>
-                                                                <Condition Binding="{Binding IsConnected}" Value="True"/>
+                                                                <Condition Binding="{Binding IsMonitoring}" Value="True"/>
                                                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
                                                             </MultiDataTrigger.Conditions>
                                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnectedSelected}"/>
@@ -240,17 +240,17 @@
                                           </Viewbox>
                                       </Grid>
 
-                                      <Border x:Name="ConnectedBadge" Grid.Row="1" Grid.Column="0"
-                                              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,4,1"
-                                              Background="#E5F7ED" BorderBrush="#8CCDA8" BorderThickness="1"
-                                              CornerRadius="9" Padding="6,2" Visibility="Collapsed" Panel.ZIndex="4">
+                                      <Border x:Name="MonitorStateBadge" Grid.Row="0" Grid.Column="0"
+                                              HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-7,4,0"
+                                              Background="#FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
+                                              CornerRadius="9" Padding="6,2" Panel.ZIndex="5">
                                           <StackPanel Orientation="Horizontal">
-                                              <Ellipse Width="5" Height="5" Fill="{StaticResource Success}" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                              <TextBlock Text="LIVE" FontSize="8.6" FontWeight="Bold" Foreground="{StaticResource Success}"/>
+                                              <Ellipse x:Name="MonitorStateDot" Width="5" Height="5" Fill="#E5484D" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                              <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="8.4" FontWeight="Bold" Foreground="#C92A32"/>
                                           </StackPanel>
                                       </Border>
 
-<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,25,0">
+<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,12,0">
                                                     <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"
                                                                Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Display" TextTrimming="CharacterEllipsis"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
@@ -261,7 +261,7 @@
 
                                                 <!-- Direct, unobstructed hit targets below the IP address. -->
                                                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                                                            HorizontalAlignment="Center" Margin="0,5,25,0" Panel.ZIndex="10">
+                                                            HorizontalAlignment="Right" Margin="0,4,7,0" Panel.ZIndex="10">
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedPlayAction_Click"
                                                             IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
                                                         <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>
@@ -288,12 +288,15 @@
                                                 <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
                                             </Button>
 
-                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F2F7FDFA" CornerRadius="12"
-                                                    BorderBrush="#B8CEF3" BorderThickness="1" Padding="12" Panel.ZIndex="20">
-                                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="190">
-                                                    <!-- Eight identical rounded dashes recreate the original loading circle
-                                                         without the asymmetric final dash produced by Ellipse.StrokeDashArray. -->
-                                                    <Grid Width="32" Height="32" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F7FAFEF7" CornerRadius="12"
+                                                    BorderBrush="#B8CEF3" BorderThickness="1" Padding="8,6" Panel.ZIndex="20">
+                                                <Grid Height="56">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="32"/>
+                                                        <ColumnDefinition Width="8"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
                                                         <Grid.RenderTransform><RotateTransform x:Name="CardSpinnerRotate"/></Grid.RenderTransform>
                                                         <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                             <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
@@ -315,28 +318,42 @@
                                                             </EventTrigger>
                                                         </Grid.Triggers>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding BusyTitle}" FontSize="12.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
-                                                               HorizontalAlignment="Center" Margin="0,7,0,0"/>
-                                                    <TextBlock Text="{Binding BusyStage}" FontSize="10.8" Foreground="{StaticResource Muted}" TextAlignment="Center"
-                                                               TextWrapping="Wrap" Margin="0,3,0,0" MinHeight="28" MaxWidth="184"/>
-                                                    <ProgressBar Value="{Binding DiscoveryProgressPercent, Mode=OneWay}" Minimum="0" Maximum="100"
-                                                                 Style="{StaticResource DiscoveryProgressBar}" Width="178" Height="8" Margin="0,8,0,0"/>
-                                                    <Grid Width="178" Margin="0,5,0,0">
-                                                        <TextBlock Text="{Binding DiscoveryProgressStepText}" FontSize="10.2" Foreground="#5D6B82"/>
-                                                        <TextBlock Text="{Binding DiscoveryProgressPercentText}" FontSize="10.4" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource Accent}" HorizontalAlignment="Right"/>
+                                                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <TextBlock Text="{Binding BusyTitle}" FontSize="11.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Row="1" Text="{Binding BusyStage}" FontSize="10.2" Foreground="{StaticResource Muted}"
+                                                                   TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
+                                                        <Grid Grid.Row="2" Margin="0,5,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <ProgressBar Value="{Binding DiscoveryProgressPercent, Mode=OneWay}" Minimum="0" Maximum="100"
+                                                                         Style="{StaticResource DiscoveryProgressBar}" Height="5" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding DiscoveryProgressPercentText}" FontSize="9.6" FontWeight="SemiBold"
+                                                                       Foreground="{StaticResource Accent}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                                        </Grid>
                                                     </Grid>
-                                                </StackPanel>
+                                                </Grid>
                                             </Border>
                                         </Grid>
                                         <DataTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                            <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
                                                 <Setter TargetName="RelayDeviceIcon" Property="Fill" Value="#16A34A"/>
                                                 <Setter TargetName="RelayDeviceIcon" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.40" Color="#16A34A"/></Setter.Value></Setter>
-                                                <Setter TargetName="ConnectedBadge" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="MonitorStateBadge" Property="Background" Value="#E5F7ED"/>
+                                                <Setter TargetName="MonitorStateBadge" Property="BorderBrush" Value="#8CCDA8"/>
+                                                <Setter TargetName="MonitorStateDot" Property="Fill" Value="{StaticResource Success}"/>
+                                                <Setter TargetName="MonitorStateText" Property="Text" Value="LIVE"/>
+                                                <Setter TargetName="MonitorStateText" Property="Foreground" Value="{StaticResource Success}"/>
                                             </DataTrigger>
-<DataTrigger Binding="{Binding IsBusy}" Value="True">
-                                                <Setter TargetName="CardContent" Property="Opacity" Value="0.22"/>
+                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                                <Setter TargetName="CardContent" Property="Opacity" Value="0.10"/>
                                                 <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
@@ -813,37 +830,94 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="10"/>
-                        <RowDefinition Height="0.88*" MinHeight="205"/>
-                        <RowDefinition Height="10"/>
-                        <RowDefinition Height="1.12*" MinHeight="230"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="0.9*" MinHeight="205"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="1.1*" MinHeight="230"/>
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Style="{StaticResource Card}" Padding="12">
+                    <Border Grid.Row="0" Style="{StaticResource Card}" Padding="10">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="10"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="6"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="300"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="235"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0"/>
+                                    <TextBlock Text="GOOSE Subscriber" FontSize="14.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                    <Border Margin="8,0,0,0" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" CornerRadius="8" Padding="6,2"
+                                            ToolTip="Read-only IEC 61850-8-1 Ethernet capture">
+                                        <TextBlock Text="READ ONLY" FontSize="8.7" FontWeight="Bold" Foreground="#45648E"/>
+                                    </Border>
+                                </StackPanel>
+
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding GooseAdapters}" SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                                          DisplayMemberPath="DisplayText" Style="{StaticResource ModernComboBox}" MinHeight="34" Height="34" Padding="10,4"
+                                          IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="{Binding SelectedGooseAdapterDetail}"/>
+                                <Button Grid.Column="4" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
+                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh adapters">
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                </Button>
+
+                                <TextBox Grid.Column="6" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
+                                         MinHeight="34" Height="34" Padding="10,4" FontFamily="Cascadia Mono, Consolas" FontSize="10.2"
+                                         IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
+                                <Button Grid.Column="8" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
+                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="{Binding GooseBindingText}">
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                </Button>
+
+                                <Button Grid.Column="10" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
+                                        IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
+                                        <TextBlock Text="Start" Foreground="White"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="12" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
+                                        IsEnabled="{Binding CanStopGooseSubscriber}" Padding="11,6" MinHeight="34">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                        <TextBlock Text="Stop"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="14" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
+                                        Padding="11,6" MinHeight="34" ToolTip="Clear streams">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                        <TextBlock Text="Clear"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="10"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="IEC 61850-8-1 GOOSE Subscriber" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                    </StackPanel>
-                                    <TextBlock Text="Read-only raw Ethernet capture with ARIEC61850 decoding, sequence/TAL supervision, and ordered DataSet binding from loaded SCL or live MMS discovery."
-                                               FontSize="11.7" Foreground="{StaticResource Muted}" Margin="16,3,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <Border Grid.Column="1" CornerRadius="11" Padding="10,5" Margin="12,0,0,0" VerticalAlignment="Top"
-                                        BorderThickness="1">
+                                <Border CornerRadius="9" Padding="8,3" BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="#F2F4F7"/>
@@ -856,118 +930,38 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <TextBlock Text="{Binding GooseCaptureStateText}" FontSize="10.8" FontWeight="Bold">
+                                    <TextBlock Text="{Binding GooseCaptureStateText}" FontSize="9.8" FontWeight="Bold">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#667085"/>
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True">
-                                                        <Setter Property="Foreground" Value="#067647"/>
-                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True"><Setter Property="Foreground" Value="#067647"/></DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
                                 </Border>
-                            </Grid>
-
-                            <Grid Grid.Row="2">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="300"/>
-                                    <ColumnDefinition Width="6"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="14"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="290"/>
-                                    <ColumnDefinition Width="6"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="7"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="7"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Text="Adapter" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
-                                           VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                <ComboBox Grid.Column="1" ItemsSource="{Binding GooseAdapters}" SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
-                                          DisplayMemberPath="DisplayText" Style="{StaticResource ModernComboBox}" MinHeight="34" Padding="9,5"
-                                          IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Npcap interface used for read-only IEC 61850 process-bus capture"/>
-                                <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
-                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh Npcap adapters">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                </Button>
-
-                                <TextBlock Grid.Column="5" Text="BPF filter" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
-                                           VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                <TextBox Grid.Column="6" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
-                                         MinHeight="34" Padding="9,5" FontFamily="Cascadia Mono, Consolas" FontSize="10.6"
-                                         IsEnabled="{Binding CanRefreshGooseConfiguration}"
-                                         ToolTip="Default captures untagged and VLAN-tagged IEC 61850 GOOSE EtherType 0x88B8"/>
-                                <Button Grid.Column="8" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
-                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Rebuild stream and leaf bindings from loaded SCL and live discovery models">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                </Button>
-
-                                <Button Grid.Column="10" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
-                                        IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
-                                        <TextBlock Text="Start" Foreground="White"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Grid.Column="12" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
-                                        IsEnabled="{Binding CanStopGooseSubscriber}" Padding="12,6" MinHeight="34">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
-                                        <TextBlock Text="Stop"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Grid.Column="14" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
-                                        Padding="12,6" MinHeight="34" ToolTip="Clear detected streams and leaf values from the view">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
-                                        <TextBlock Text="Clear"/>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
-
-                            <Grid Grid.Row="4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding GooseStatusText}" FontSize="11.4" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding GooseBindingText}" FontSize="10.8" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Right" Margin="14,0,0,0">
-                                    <TextBlock Text="{Binding GooseCounterText}" FontSize="11.2" FontWeight="SemiBold" Foreground="#45648E" HorizontalAlignment="Right"/>
-                                    <TextBlock Text="{Binding SelectedGooseAdapterDetail}" FontSize="10.4" Foreground="{StaticResource Muted}" Margin="0,2,0,0" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" MaxWidth="350"/>
-                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding GooseStatusText}" FontSize="10.7" Foreground="{StaticResource Muted}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
+                                <TextBlock Grid.Column="3" Text="{Binding GooseCounterText}" FontSize="10.7" FontWeight="SemiBold" Foreground="#45648E"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </Grid>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="10">
+                    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="9">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="6"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Detected GOOSE streams" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Grid.Column="1" Text="Select a stream to inspect allData in exact DataSet order" FontSize="10.8" Foreground="{StaticResource Muted}"/>
-                            </Grid>
+                            <TextBlock Text="Streams" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                             <Grid Grid.Row="2">
                                 <DataGrid ItemsSource="{Binding GooseStreams}" SelectedItem="{Binding SelectedGooseStream, Mode=TwoWay}"
                                           IsReadOnly="True" Style="{StaticResource ModernDataGrid}" AutoGenerateColumns="False"
                                           EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="38">
+                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="37">
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                                             <Setter Property="ToolTip" Value="{Binding DiagnosticsSummary}"/>
@@ -986,61 +980,60 @@
                                         </Style>
                                     </DataGrid.RowStyle>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="IED / model" Binding="{Binding ModelIedName}" Width="115" MinWidth="90"/>
-                                        <DataGridTextColumn Header="APPID" Binding="{Binding AppIdText}" Width="76"/>
-                                        <DataGridTextColumn Header="GoCB reference" Binding="{Binding GoCbRef}" Width="220" MinWidth="160"/>
-                                        <DataGridTextColumn Header="DataSet" Binding="{Binding DataSetReference}" Width="220" MinWidth="160"/>
-                                        <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="125"/>
-                                        <DataGridTextColumn Header="Destination" Binding="{Binding DestinationMac}" Width="125"/>
-                                        <DataGridTextColumn Header="VLAN" Binding="{Binding VlanText}" Width="105"/>
-                                        <DataGridTextColumn Header="stNum" Binding="{Binding StateNumberText}" Width="68"/>
-                                        <DataGridTextColumn Header="sqNum" Binding="{Binding SequenceNumberText}" Width="68"/>
-                                        <DataGridTextColumn Header="Sequence" Binding="{Binding SequenceStatus}" Width="112"/>
-                                        <DataGridTextColumn Header="TAL" Binding="{Binding TimeAllowedToLiveText}" Width="82"/>
-                                        <DataGridTextColumn Header="confRev" Binding="{Binding ConfigurationRevisionText}" Width="78"/>
-                                        <DataGridTextColumn Header="Flags" Binding="{Binding FlagsText}" Width="96"/>
-                                        <DataGridTextColumn Header="Changed" Binding="{Binding ChangedValueCount}" Width="76"/>
-                                        <DataGridTextColumn Header="Packets" Binding="{Binding PacketCount}" Width="76"/>
-                                        <DataGridTextColumn Header="Binding" Binding="{Binding BindingSource}" Width="100"/>
-                                        <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeenText}" Width="105"/>
-                                        <DataGridTextColumn Header="Diagnostics" Binding="{Binding DiagnosticsSummary}" Width="260" MinWidth="160"/>
+                                        <DataGridTextColumn Header="IED" Binding="{Binding ModelIedName}" Width="105" MinWidth="85"/>
+                                        <DataGridTextColumn Header="APPID" Binding="{Binding AppIdText}" Width="70"/>
+                                        <DataGridTextColumn Header="goCBRef" Binding="{Binding GoCbRef}" Width="205" MinWidth="150"/>
+                                        <DataGridTextColumn Header="DataSet" Binding="{Binding DataSetReference}" Width="205" MinWidth="150"/>
+                                        <DataGridTextColumn Header="Source" Binding="{Binding SourceMac}" Width="118"/>
+                                        <DataGridTextColumn Header="Destination" Binding="{Binding DestinationMac}" Width="118"/>
+                                        <DataGridTextColumn Header="VLAN" Binding="{Binding VlanText}" Width="96"/>
+                                        <DataGridTextColumn Header="stNum" Binding="{Binding StateNumberText}" Width="64"/>
+                                        <DataGridTextColumn Header="sqNum" Binding="{Binding SequenceNumberText}" Width="64"/>
+                                        <DataGridTextColumn Header="State" Binding="{Binding SequenceStatus}" Width="104"/>
+                                        <DataGridTextColumn Header="TAL" Binding="{Binding TimeAllowedToLiveText}" Width="76"/>
+                                        <DataGridTextColumn Header="confRev" Binding="{Binding ConfigurationRevisionText}" Width="74"/>
+                                        <DataGridTextColumn Header="Flags" Binding="{Binding FlagsText}" Width="90"/>
+                                        <DataGridTextColumn Header="Δ" Binding="{Binding ChangedValueCount}" Width="52"/>
+                                        <DataGridTextColumn Header="Packets" Binding="{Binding PacketCount}" Width="70"/>
+                                        <DataGridTextColumn Header="Model" Binding="{Binding BindingSource}" Width="90"/>
+                                        <DataGridTextColumn Header="Seen" Binding="{Binding LastSeenText}" Width="100"/>
+                                        <DataGridTextColumn Header="Diagnostics" Binding="{Binding DiagnosticsSummary}" Width="230" MinWidth="150"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
 
-                                <Border Visibility="{Binding GooseNoStreamsVisibility}" Background="#F9FBFE" BorderBrush="#D7E2F0" BorderThickness="1"
-                                        CornerRadius="13" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="550">
+                                <Border Visibility="{Binding GooseNoStreamsVisibility}" Background="#FAFCFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                        CornerRadius="12" Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360">
                                     <StackPanel>
-                                        <TextBlock Text="Waiting for GOOSE traffic" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Select the approved adapter and start capture. Loaded SCL or live discovery data will bind each received allData value to the corresponding ordered DataSet signal."
-                                                   FontSize="11.2" Foreground="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
+                                        <TextBlock Text="No GOOSE traffic" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Choose an adapter and press Start." FontSize="10.8" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </Grid>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="4" Style="{StaticResource Card}" Padding="10">
+                    <Border Grid.Row="4" Style="{StaticResource Card}" Padding="9">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="6"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Ordered GOOSE DataSet leaf values" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                    <TextBlock Text="{Binding GooseSelectedStreamText}" FontSize="10.8" Foreground="{StaticResource Muted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="DataSet values" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="{Binding GooseSelectedStreamText}" FontSize="10.4" Foreground="{StaticResource Muted}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
-                                <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" CornerRadius="10" Padding="8,4" VerticalAlignment="Center">
-                                    <TextBlock Text="Leaf order = GOOSE allData order" FontSize="10.5" FontWeight="SemiBold" Foreground="#45648E"/>
+                                <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" CornerRadius="8" Padding="7,3" VerticalAlignment="Center">
+                                    <TextBlock Text="allData order" FontSize="9.6" FontWeight="SemiBold" Foreground="#45648E"/>
                                 </Border>
                             </Grid>
                             <Grid Grid.Row="2">
                                 <DataGrid ItemsSource="{Binding SelectedGooseStream.Leaves}" IsReadOnly="True"
                                           Style="{StaticResource ModernDataGrid}" AutoGenerateColumns="False"
                                           EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="40">
+                                          ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="38">
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                                             <Style.Triggers>
@@ -1053,13 +1046,13 @@
                                         </Style>
                                     </DataGrid.RowStyle>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="48"/>
-                                        <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" Width="185" MinWidth="135"/>
-                                        <DataGridTextColumn Header="Signal reference" Binding="{Binding SignalReference}" Width="2*" MinWidth="240"/>
-                                        <DataGridTemplateColumn Header="Value" Width="1.15*" MinWidth="145">
+                                        <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="46"/>
+                                        <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="175" MinWidth="130"/>
+                                        <DataGridTextColumn Header="Reference" Binding="{Binding SignalReference}" Width="2*" MinWidth="230"/>
+                                        <DataGridTemplateColumn Header="Value" Width="1.15*" MinWidth="140">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <Border CornerRadius="9" Padding="9,4" HorizontalAlignment="Left" MinWidth="90" BorderThickness="1">
+                                                    <Border CornerRadius="8" Padding="8,3" HorizontalAlignment="Left" MinWidth="86" BorderThickness="1">
                                                         <Border.Style>
                                                             <Style TargetType="Border">
                                                                 <Setter Property="Background" Value="#F2F4F7"/>
@@ -1081,19 +1074,18 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}" Width="58"/>
-                                        <DataGridTextColumn Header="CDC / bType" Binding="{Binding TypeText}" Width="125"/>
-                                        <DataGridTextColumn Header="Previous" Binding="{Binding PreviousValue}" Width="145"/>
-                                        <DataGridTextColumn Header="Binding" Binding="{Binding BindingSource}" Width="105"/>
+                                        <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}" Width="54"/>
+                                        <DataGridTextColumn Header="CDC / type" Binding="{Binding TypeText}" Width="120"/>
+                                        <DataGridTextColumn Header="Previous" Binding="{Binding PreviousValue}" Width="140"/>
+                                        <DataGridTextColumn Header="Model" Binding="{Binding BindingSource}" Width="96"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
 
-                                <Border Visibility="{Binding GooseNoLeafValuesVisibility}" Background="#F9FBFE" BorderBrush="#D7E2F0" BorderThickness="1"
-                                        CornerRadius="13" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                                <Border Visibility="{Binding GooseNoLeafValuesVisibility}" Background="#FAFCFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                        CornerRadius="12" Padding="15" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="330">
                                     <StackPanel>
-                                        <TextBlock Text="No stream selected" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Received values will appear here in their exact GOOSE allData/DataSet sequence, with signal names and references recovered from SCL or the live discovery model."
-                                                   FontSize="11.1" Foreground="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
+                                        <TextBlock Text="Select a stream" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Ordered values appear here." FontSize="10.8" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </Grid>

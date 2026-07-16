@@ -321,7 +321,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     public void ResetDiscoveryProgress(
         string message = "Preparing IEC 61850 session…",
-        string title = "Discovering IEC 61850 IED")
+        string title = "Discovering IED")
     {
         BusyTitle = title;
         BusyStage = message;
