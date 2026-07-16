@@ -1,4 +1,4 @@
-name: ARSAS compile diagnostics
+name: Finalize ARSAS source migration
 
 on:
   pull_request:
@@ -8,67 +8,32 @@ on:
 permissions:
   contents: write
 
-env:
-  ARIEC61850_REF: main
-
 jobs:
-  compile:
+  finalize:
     if: github.head_ref == 'feat/arsas-realistic-demo'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/arsas-realistic-demo
           fetch-depth: 0
-      - name: Apply generated ARSAS source
-        shell: powershell
+      - name: Restore standard validation and remove migration helpers
+        shell: bash
         run: |
-          Set-Location $env:GITHUB_WORKSPACE
-          python .\scripts\apply-arsas-rebrand-demo.py
-          python .\scripts\fix-arsas-generated-source.py
-      - name: Checkout engine
-        shell: powershell
-        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ..\ARIEC61850
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Restore
-        shell: powershell
-        run: dotnet restore .\ArIED61850Tester.csproj
-      - name: Build
-        shell: powershell
-        run: dotnet build .\ArIED61850Tester.csproj -c Release --no-restore
-      - name: Commit validated production sources
-        shell: powershell
-        run: |
-          $production = @(
-            "MainWindow.xaml",
-            "MainWindow.xaml.cs",
-            "MainWindow.Demo.cs",
-            "MainWindow.DemoSignals.cs",
-            "MainWindow.DemoProcessRuntime.cs",
-            "MainWindow.DemoGooseData.cs",
-            "MainWindow.DemoGooseSnapshot.cs",
-            "MainWindow.DemoInteraction.cs",
-            "MainWindow.DemoCommandModel.cs",
-            "Models/MonitorModels.cs",
-            "Models/GooseSubscriberModels.cs",
-            "Models/ControlModels.cs",
-            "Services/DiagnosticReportBuilder.cs",
-            "ArIED61850Tester.csproj",
-            "scripts/publish-windows-portable.ps1",
-            "scripts/build-windows-installer.ps1",
-            "installer/ArIED61850.iss",
-            "README.md",
-            "landing/index.html",
-            "landing/features.html",
-            "landing/control.html",
-            "landing/architecture.html",
-            "landing/site.webmanifest"
-          )
-          git add -- $production
-          git diff --cached --stat
+          git fetch origin main --depth 1
+          git checkout origin/main -- scripts/verify-source-clean.ps1
+          for path in \
+            scripts/apply-arsas-rebrand-demo.py \
+            scripts/export-arsas-patch-files.py \
+            scripts/fix-arsas-generated-source.py; do
+            if [ -f "$path" ]; then git rm -f -- "$path"; fi
+          done
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Migration helpers already removed."
+            exit 0
+          fi
+          git add scripts/verify-source-clean.ps1
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "feat: rebrand product as ARSAS and refine communication workspace"
+          git commit -m "chore: finalize ARSAS source migration"
           git push origin HEAD:feat/arsas-realistic-demo
