@@ -6,7 +6,22 @@ public partial class MainWindow
 {
     private void AddDemoCircuitBreakerControl(Iec61850MonitorDevice device)
     {
-        var position = _demoPointStates.First(item => ReferenceEquals(item.Device, device) && item.Seed.Path.Contains("CSWI1.Pos.stVal", StringComparison.OrdinalIgnoreCase));
+        var position = _demoPointStates.First(item =>
+            ReferenceEquals(item.Device, device) &&
+            item.Seed.Name.Equals("Breaker position", StringComparison.OrdinalIgnoreCase));
+
+        var oldPointKey = position.Point.PointKey;
+        var statusReference = $"{device.Name}CTRL/CSWI1.Pos.stVal";
+        position.Signal.ObjectReference = statusReference;
+        position.Signal.DisplayReference = "CTRL.CSWI1.Pos.stVal";
+        position.Signal.QualityReference = $"{device.Name}CTRL/CSWI1.Pos.q";
+        position.Signal.TimestampReference = $"{device.Name}CTRL/CSWI1.Pos.t";
+        position.Point.IecReference = statusReference;
+        position.Point.QualityReference = position.Signal.QualityReference;
+        position.Point.TimestampReference = position.Signal.TimestampReference;
+        _pointIndex.Remove(oldPointKey);
+        _pointIndex[position.Point.PointKey] = position.Point;
+
         var signal = new SignalDefinition
         {
             Name = "Circuit breaker control",
@@ -21,11 +36,11 @@ public partial class MainWindow
             IsControlSignal = true,
             ControlCdc = "DPC",
             ControlModelReference = $"{device.Name}CTRL/CSWI1.Pos.ctlModel",
-            ControlStatusReference = $"{device.Name}CTRL/CSWI1.Pos.stVal",
+            ControlStatusReference = statusReference,
             ControlModelText = "Select Before Operate (SBO) • Enhanced security",
             ControlValueType = "Dbpos",
             ControlCurrentValue = position.Point.Value,
-            ControlLastResult = "Ready",
+            ControlLastResult = "Ready • live feedback available",
             ProbeStatus = "Resolved",
             Quality = "Good",
             DeviceTimestamp = position.Point.DeviceTimestamp
