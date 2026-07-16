@@ -230,27 +230,30 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Compact relay / BCU icon; the full SVG and glow stay inside the card. -->
-                                      <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="52" Height="52" Margin="1,0,3,0"
+                                      <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="60" Height="60" Margin="-2,0,-2,0"
                                             VerticalAlignment="Center" ClipToBounds="False" Panel.ZIndex="2">
                                           <Viewbox Width="44" Height="44" Stretch="Uniform"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   RenderTransformOrigin="0.5,0.5">
+                                              <Viewbox.RenderTransform>
+                                                  <ScaleTransform ScaleX="1.36" ScaleY="1.36"/>
+                                              </Viewbox.RenderTransform>
                                               <Path x:Name="RelayDeviceIcon" Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z" Fill="#EF4444" Stretch="Uniform">
                                                   <Path.Effect><DropShadowEffect BlurRadius="7" ShadowDepth="0" Opacity="0.38" Color="#EF4444"/></Path.Effect>
                                               </Path>
                                           </Viewbox>
+                                          <Border x:Name="MonitorStateBadge"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0"
+                                                  Background="#F5FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
+                                                  CornerRadius="9" Padding="6,2" Panel.ZIndex="5">
+                                              <StackPanel Orientation="Horizontal">
+                                                  <Ellipse x:Name="MonitorStateDot" Width="5" Height="5" Fill="#E5484D" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                  <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="8.4" FontWeight="Bold" Foreground="#C92A32"/>
+                                              </StackPanel>
+                                          </Border>
                                       </Grid>
 
-                                      <Border x:Name="MonitorStateBadge" Grid.Row="0" Grid.Column="0"
-                                              HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-7,4,0"
-                                              Background="#FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
-                                              CornerRadius="9" Padding="6,2" Panel.ZIndex="5">
-                                          <StackPanel Orientation="Horizontal">
-                                              <Ellipse x:Name="MonitorStateDot" Width="5" Height="5" Fill="#E5484D" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                              <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="8.4" FontWeight="Bold" Foreground="#C92A32"/>
-                                          </StackPanel>
-                                      </Border>
-
-<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="0,0,12,0">
+<StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="4,0,12,0">
                                                     <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"
                                                                Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Display" TextTrimming="CharacterEllipsis"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
@@ -261,7 +264,7 @@
 
                                                 <!-- Direct, unobstructed hit targets below the IP address. -->
                                                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                                                            HorizontalAlignment="Right" Margin="0,4,7,0" Panel.ZIndex="10">
+                                                            HorizontalAlignment="Right" Margin="4,4,7,0" Panel.ZIndex="10">
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedPlayAction_Click"
                                                             IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
                                                         <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>

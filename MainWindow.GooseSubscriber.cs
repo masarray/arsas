@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Threading;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Goose;
 using AR.Iec61850.Mms;
@@ -27,6 +29,7 @@ public partial class MainWindow
     private long _gooseCapturedFrames;
     private long _gooseFrames;
     private long _gooseOtherFrames;
+    private bool _gooseWorkspaceActivationScheduled;
 
     public BulkObservableCollection<GooseAdapterOption> GooseAdapters { get; } = new();
     public BulkObservableCollection<GooseStreamRow> GooseStreams { get; } = new();
@@ -101,8 +104,37 @@ public partial class MainWindow
     {
         _gooseSubscriberRuntime.FrameReceived += GooseSubscriberRuntime_FrameReceived;
         _gooseSubscriberRuntime.StatusChanged += GooseSubscriberRuntime_StatusChanged;
-        RefreshGooseBindingPreview();
-        RefreshGooseAdapters();
+
+        // Npcap/SharpPcap is an optional native boundary. Do not touch it while the main
+        // window is being constructed; a missing transport must never prevent the GOOSE tab
+        // (or the rest of ArIED) from rendering.
+        GooseStatusText = "Open GOOSE Subscriber to load capture adapters.";
+        GooseBindingText = "Signal names will be resolved from loaded SCL or live discovery.";
+    }
+
+    private void ActivateGooseSubscriberWorkspace()
+    {
+        if (_gooseWorkspaceActivationScheduled || IsGooseCapturing || Dispatcher.HasShutdownStarted)
+            return;
+
+        _gooseWorkspaceActivationScheduled = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            _gooseWorkspaceActivationScheduled = false;
+            try
+            {
+                RefreshGooseBindingPreview();
+                if (GooseAdapters.Count == 0)
+                    RefreshGooseAdapters();
+            }
+            catch (Exception ex)
+            {
+                // The selected tab has already rendered by this point. Keep the workspace
+                // usable in unbound/wire-order mode instead of letting a model or native
+                // dependency exception abort TabControl content creation.
+                ApplyGooseWorkspaceFallback("GOOSE workspace initialization failed", ex);
+            }
+        }));
     }
 
     private void RefreshGooseAdapters_Click(object sender, RoutedEventArgs e)
@@ -119,8 +151,7 @@ public partial class MainWindow
         GooseActionBusy = true;
         try
         {
-            _gooseBindingCatalog = BuildGooseBindingCatalog();
-            GooseBindingText = _gooseBindingCatalog.Summary;
+            RefreshGooseBindingPreview();
             ResetGooseView(resetCounters: true);
             await _gooseSubscriberRuntime.StartAsync(
                 SelectedGooseAdapter.Selector,
@@ -135,7 +166,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             IsGooseCapturing = false;
-            GooseStatusText = $"Could not start GOOSE subscriber: {ex.Message}";
+            GooseStatusText = $"Could not start GOOSE subscriber: {DescribeGooseFailure(ex)}";
             AddLog("ERROR", "GOOSE", GooseStatusText);
             MarkDiagnosticAlert();
         }
@@ -218,7 +249,7 @@ public partial class MainWindow
         {
             GooseAdapters.Clear();
             SelectedGooseAdapter = null;
-            GooseStatusText = $"Npcap adapter discovery failed: {ex.Message}";
+            GooseStatusText = $"Npcap adapter discovery failed: {DescribeGooseFailure(ex)}";
             AddLog("WARN", "GOOSE", GooseStatusText);
         }
     }
@@ -228,8 +259,47 @@ public partial class MainWindow
         if (IsGooseCapturing)
             return;
 
-        _gooseBindingCatalog = BuildGooseBindingCatalog();
-        GooseBindingText = _gooseBindingCatalog.Summary;
+        try
+        {
+            _gooseBindingCatalog = BuildGooseBindingCatalog();
+            GooseBindingText = _gooseBindingCatalog.Summary;
+        }
+        catch (Exception ex)
+        {
+            // Model binding is enrichment, not a prerequisite for subscription. A malformed
+            // cached model, optional assembly load problem, or stale SCL must not disable raw
+            // GOOSE capture; allData remains visible in exact wire order.
+            ApplyGooseWorkspaceFallback("GOOSE model binding unavailable", ex);
+        }
+    }
+
+    private void ApplyGooseWorkspaceFallback(string context, Exception exception)
+    {
+        _gooseBindingCatalog = GooseBindingCatalog.Empty;
+        var detail = DescribeGooseFailure(exception);
+        GooseBindingText = "Unbound capture mode • values remain available in exact GOOSE allData order.";
+        GooseStatusText = $"{context}: {detail}";
+        AddLog("WARN", "GOOSE", GooseStatusText);
+    }
+
+    private static string DescribeGooseFailure(Exception exception)
+    {
+        var root = exception;
+        while (root.InnerException is not null &&
+               root is TypeInitializationException or System.Reflection.TargetInvocationException)
+        {
+            root = root.InnerException;
+        }
+
+        var message = string.IsNullOrWhiteSpace(root.Message)
+            ? root.GetType().Name
+            : root.Message.Trim();
+        if (root is FileNotFoundException or DllNotFoundException or BadImageFormatException)
+        {
+            return $"{message} Verify the complete portable folder, SharpPcap transport files, and the installed Npcap runtime.";
+        }
+
+        return message;
     }
 
     private void GooseSubscriberRuntime_FrameReceived(GooseSubscriberFrameSnapshot snapshot)

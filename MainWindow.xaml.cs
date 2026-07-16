@@ -556,7 +556,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (MainTabs.SelectedIndex == 3)
         {
-            RefreshGooseBindingPreview();
+            // Defer optional Npcap/model work until after the selected tab has rendered.
+            // An unavailable capture dependency must never leave the workspace blank.
+            ActivateGooseSubscriberWorkspace();
         }
         else if (MainTabs.SelectedIndex == 4)
         {
