@@ -326,7 +326,7 @@ public partial class MainWindow
                         stream.DataSetReference,
                         stream.ConfigurationRevision,
                         stream.Entries.OrderBy(entry => entry.Index)
-                            .Select(entry => BuildLeafBinding(device, entry.Index, entry.SignalReference, entry.Fc, entry.Cdc, entry.BType))
+                            .Select((entry, position) => BuildLeafBinding(device, position, entry.SignalReference, entry.Fc, entry.Cdc, entry.BType))
                             .ToArray()));
                     if (!string.IsNullOrWhiteSpace(normalizedDataSet))
                         boundDataSets.Add(normalizedDataSet);
@@ -363,7 +363,7 @@ public partial class MainWindow
                         dataSet.Reference,
                         null,
                         dataSet.Entries.OrderBy(entry => entry.Index)
-                            .Select(entry => BuildLeafBinding(device, entry.Index, entry.SignalReference, entry.Fc, entry.Cdc, entry.BType))
+                            .Select((entry, position) => BuildLeafBinding(device, position, entry.SignalReference, entry.Fc, entry.Cdc, entry.BType))
                             .ToArray()));
                     sclDataSetFallbackCount++;
                 }
@@ -384,7 +384,7 @@ public partial class MainWindow
                         continue;
 
                     var leaves = dataSet.Members.OrderBy(member => member.Index)
-                        .Select(member => BuildLiveLeafBinding(device, liveModel, member))
+                        .Select((member, position) => BuildLiveLeafBinding(device, liveModel, member, position))
                         .ToArray();
                     bindings.Add(new GooseStreamBindingDefinition(
                         device.Name,
@@ -421,7 +421,7 @@ public partial class MainWindow
                         dataSet.Reference,
                         null,
                         dataSet.Members.OrderBy(member => member.Index)
-                            .Select(member => BuildLiveLeafBinding(device, liveModel, member))
+                            .Select((member, position) => BuildLiveLeafBinding(device, liveModel, member, position))
                             .ToArray()));
                     liveBindingCount++;
                 }
@@ -460,24 +460,25 @@ public partial class MainWindow
             signal?.Name ?? BuildSignalName(reference, index),
             reference,
             string.IsNullOrWhiteSpace(fc) ? signal?.FunctionalConstraint ?? string.Empty : fc,
-            string.IsNullOrWhiteSpace(cdc) ? signal?.Category ?? string.Empty : cdc,
+            cdc,
             string.IsNullOrWhiteSpace(bType) ? signal?.DataType ?? string.Empty : bType);
     }
 
     private static GooseLeafBindingDefinition BuildLiveLeafBinding(
         Iec61850MonitorDevice device,
         LiveIedModelDiscoveryDocument model,
-        LiveIedDataSetMemberModel member)
+        LiveIedDataSetMemberModel member,
+        int index)
     {
         var signal = FindSignal(device, member.Reference);
         var attribute = FindLiveAttribute(model, member.Reference, member.MmsReference);
         var dataObject = FindLiveDataObject(model, member.Reference);
         return new GooseLeafBindingDefinition(
-            member.Index,
-            signal?.Name ?? BuildSignalName(member.Reference, member.Index),
+            index,
+            signal?.Name ?? BuildSignalName(member.Reference, index),
             member.Reference,
             string.IsNullOrWhiteSpace(member.FunctionalConstraint) ? signal?.FunctionalConstraint ?? string.Empty : member.FunctionalConstraint,
-            signal?.Category ?? dataObject?.InferredCdc ?? string.Empty,
+            dataObject?.InferredCdc ?? signal?.ControlCdc ?? string.Empty,
             signal?.DataType ?? attribute?.SclBType ?? attribute?.MmsType ?? string.Empty);
     }
 
@@ -581,8 +582,21 @@ public partial class MainWindow
         }
 
         var diagnosticItems = streamEvent.Diagnostics.ToList();
-        if (binding is not null && modelLeafCount != rawValueCount)
-            diagnosticItems.Add($"DataSet leaf count differs from model. Model={modelLeafCount}, frame={rawValueCount}.");
+        if (binding is not null)
+        {
+            if (binding.AppId.HasValue && binding.AppId.Value != frame.AppId)
+                diagnosticItems.Add($"GOOSE APPID differs from model. Model=0x{binding.AppId.Value:X4}, frame=0x{frame.AppId:X4}.");
+            if (binding.ConfigurationRevision.HasValue && binding.ConfigurationRevision.Value != frame.Pdu.ConfigurationRevision)
+                diagnosticItems.Add($"GOOSE confRev differs from model. Model={binding.ConfigurationRevision.Value}, frame={frame.Pdu.ConfigurationRevision}.");
+            if (!string.IsNullOrWhiteSpace(binding.GoCbRef) &&
+                !ReferencesMatch(NormalizeGooseReference(binding.GoCbRef), NormalizeGooseReference(frame.Pdu.GoCbRef)))
+                diagnosticItems.Add($"GOOSE goCBRef differs from selected model. Model={binding.GoCbRef}, frame={frame.Pdu.GoCbRef}.");
+            if (!string.IsNullOrWhiteSpace(binding.DataSetReference) &&
+                !ReferencesMatch(NormalizeGooseReference(binding.DataSetReference), NormalizeGooseReference(frame.Pdu.DataSetReference)))
+                diagnosticItems.Add($"GOOSE DataSet reference differs from selected model. Model={binding.DataSetReference}, frame={frame.Pdu.DataSetReference}.");
+            if (modelLeafCount != rawValueCount)
+                diagnosticItems.Add($"DataSet leaf count differs from model. Model={modelLeafCount}, frame={rawValueCount}.");
+        }
         var diagnostics = diagnosticItems.Count == 0
             ? string.Empty
             : string.Join(" • ", diagnosticItems.Distinct(StringComparer.OrdinalIgnoreCase));
@@ -684,19 +698,14 @@ public partial class MainWindow
             foreach (var candidate in Bindings)
             {
                 var score = 0;
-                if (candidate.AppId.HasValue)
-                {
-                    if (candidate.AppId.Value != frame.AppId)
-                        continue;
-                    score += 45;
-                }
-
+                if (candidate.AppId.HasValue && candidate.AppId.Value == frame.AppId)
+                    score += 50;
                 if (ReferencesMatch(NormalizeGooseReference(candidate.GoCbRef), NormalizeGooseReference(frame.Pdu.GoCbRef)))
-                    score += 100;
+                    score += 120;
                 if (ReferencesMatch(NormalizeGooseReference(candidate.DataSetReference), NormalizeGooseReference(frame.Pdu.DataSetReference)))
-                    score += 80;
+                    score += 90;
                 if (!string.IsNullOrWhiteSpace(candidate.GoId) && candidate.GoId.Equals(frame.Pdu.GoId, StringComparison.OrdinalIgnoreCase))
-                    score += 35;
+                    score += 40;
                 if (candidate.ConfigurationRevision.HasValue && candidate.ConfigurationRevision.Value == frame.Pdu.ConfigurationRevision)
                     score += 10;
                 if (candidate.Source.Equals("SCL", StringComparison.OrdinalIgnoreCase))
@@ -709,7 +718,7 @@ public partial class MainWindow
                 }
             }
 
-            return bestScore >= 45 ? best : null;
+            return bestScore >= 90 ? best : null;
         }
     }
 }

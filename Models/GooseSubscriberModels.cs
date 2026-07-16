@@ -102,6 +102,7 @@ public sealed class GooseStreamRow : ObservableObject
     public bool NeedsCommissioning { get => _needsCommissioning; set => Set(ref _needsCommissioning, value); }
 
     public string IdentityText => !string.IsNullOrWhiteSpace(GoCbRef) ? GoCbRef : (!string.IsNullOrWhiteSpace(GoId) ? GoId : AppIdText);
+    public string FlagsText => Test && NeedsCommissioning ? "TEST • ndsCom" : Test ? "TEST" : NeedsCommissioning ? "ndsCom" : "Normal";
     public string HealthText => HasDiagnostics ? "Attention" : "Healthy";
 
     public void Apply(GooseStreamSnapshot snapshot)
@@ -128,6 +129,7 @@ public sealed class GooseStreamRow : ObservableObject
         NeedsCommissioning = snapshot.NeedsCommissioning;
         ApplyLeaves(snapshot.Leaves);
         Raise(nameof(IdentityText));
+        Raise(nameof(FlagsText));
         Raise(nameof(HealthText));
     }
 

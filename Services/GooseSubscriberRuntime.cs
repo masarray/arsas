@@ -213,8 +213,7 @@ public sealed class GooseSubscriberRuntime : IAsyncDisposable
             frame.Destination.ToString(),
             frame.Vlan?.VlanId.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-",
             frame.Pdu.GoCbRef,
-            frame.Pdu.DataSetReference,
-            frame.Pdu.ConfigurationRevision.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            frame.Pdu.DataSetReference);
 
     public async ValueTask DisposeAsync()
     {

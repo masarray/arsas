@@ -970,6 +970,7 @@
                                           ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" RowHeight="38">
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Setter Property="ToolTip" Value="{Binding DiagnosticsSummary}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding HasDiagnostics}" Value="True">
                                                     <Setter Property="Background" Value="#FFFAEB"/>
@@ -996,9 +997,13 @@
                                         <DataGridTextColumn Header="sqNum" Binding="{Binding SequenceNumberText}" Width="68"/>
                                         <DataGridTextColumn Header="Sequence" Binding="{Binding SequenceStatus}" Width="112"/>
                                         <DataGridTextColumn Header="TAL" Binding="{Binding TimeAllowedToLiveText}" Width="82"/>
+                                        <DataGridTextColumn Header="confRev" Binding="{Binding ConfigurationRevisionText}" Width="78"/>
+                                        <DataGridTextColumn Header="Flags" Binding="{Binding FlagsText}" Width="96"/>
+                                        <DataGridTextColumn Header="Changed" Binding="{Binding ChangedValueCount}" Width="76"/>
                                         <DataGridTextColumn Header="Packets" Binding="{Binding PacketCount}" Width="76"/>
                                         <DataGridTextColumn Header="Binding" Binding="{Binding BindingSource}" Width="100"/>
                                         <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeenText}" Width="105"/>
+                                        <DataGridTextColumn Header="Diagnostics" Binding="{Binding DiagnosticsSummary}" Width="260" MinWidth="160"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
 
