@@ -18,6 +18,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isMonitoring;
     private bool _isActive;
     private bool _hasReportStream;
+    private bool _isDemo;
     private bool _reportPulseActive;
     private string _busyStage = "Preparing IEC 61850 session…";
     private double _discoveryProgressPercent;
@@ -289,6 +290,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    public bool IsDemo
+    {
+        get => _isDemo;
+        set
+        {
+            if (Set(ref _isDemo, value))
+                RefreshComputed();
+        }
+    }
+
     public bool ReportPulseActive
     {
         get => _reportPulseActive;
@@ -391,14 +402,14 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public int SelectedControlSignalCount => _selectedControlSignalCount;
     public bool IsBulkSignalSelectionUpdate => _isBulkSignalSelectionUpdate;
     public int PointCount => Points.Count;
-    public bool IsActionEnabled => !IsBusy;
-    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring;
-    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
-    public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
-    public bool CanStopAction => !IsBusy && (IsConnected || IsMonitoring);
-    public bool CanRescan => !IsBusy && !IsMonitoring;
-    public bool CanSaveScl => !IsBusy && (SclWorkspace != null || LiveDiscoveryModel != null);
+    public bool IsActionEnabled => !IsBusy && !IsDemo;
+    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
+    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy && !IsDemo;
+    public bool CanStartOrStopMonitor => !IsBusy && !IsDemo && (IsMonitoring || SelectedLiveSignalCount > 0);
+    public bool CanPlayAction => !IsBusy && !IsDemo && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool CanStopAction => !IsBusy && !IsDemo && (IsConnected || IsMonitoring);
+    public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
+    public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
         ? $"Save {Name} from the opened SCL design model"
         : LiveDiscoveryModel != null

@@ -5,7 +5,7 @@
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
         WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
-        Icon="Assets/app-icon.ico" Closing="Window_Closing">
+        Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -63,6 +63,11 @@
             </Border>
 
             <WrapPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Border Visibility="{Binding DemoModeVisibility}" Background="#FFF4CC" BorderBrush="#F5B942" BorderThickness="1"
+                        CornerRadius="15" Padding="10,6" Margin="0,0,8,0"
+                        ToolTip="Synthetic read-only substation data. No MMS or Ethernet traffic is generated.">
+                    <TextBlock Text="{Binding DemoModeText}" FontSize="11.8" FontWeight="SemiBold" Foreground="#8A4B08"/>
+                </Border>
                 <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
                     <TextBlock Text="{Binding ConnectionInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
                 </Border>
