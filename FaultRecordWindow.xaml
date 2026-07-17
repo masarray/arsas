@@ -1,0 +1,197 @@
+<Window x:Class="ArIED61850Tester.FaultRecordWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="IEC 61850 Fault Records"
+        Width="1120" Height="720" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        Background="#F4F7FB"
+        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        Loaded="Window_Loaded"
+        Closed="Window_Closed">
+    <Window.Resources>
+        <Style x:Key="PanelStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D9E2EF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+        <Style x:Key="FieldStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="9,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="#FBFCFE"/>
+            <Setter Property="BorderBrush" Value="#C9D5E5"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,5"/>
+            <Setter Property="Background" Value="#EEF3FA"/>
+            <Setter Property="Foreground" Value="#23344D"/>
+            <Setter Property="BorderBrush" Value="#CBD8E8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#EDF2F8"/>
+            <Setter Property="Foreground" Value="#34445C"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="BorderBrush" Value="#D5DFEC"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="7,5"/>
+            <Setter Property="BorderBrush" Value="#E3E9F1"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F2F7FF"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource PanelStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="IEC 61850 Fault Record Transfer" FontSize="18" FontWeight="SemiBold" Foreground="#17243A"/>
+                    <TextBlock Margin="0,3,0,0" FontSize="12.5" Foreground="#607089">
+                        <Run Text="{Binding DeviceName}"/>
+                        <Run Text="  •  "/>
+                        <Run Text="{Binding EndpointText}"/>
+                    </TextBlock>
+                </StackPanel>
+                <Border Grid.Column="1" Background="#E8F0FE" CornerRadius="12" Padding="10,5" VerticalAlignment="Center">
+                    <TextBlock Text="Dedicated MMS session" FontSize="11.5" Foreground="#2457B8"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource PanelStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="135"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Remote directory" VerticalAlignment="Center" FontSize="12.5" Foreground="#42526A"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding RemoteDirectory, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource FieldStyle}" ToolTip="Leave empty to start at the relay file-store root"/>
+                <Button Grid.Row="0" Grid.Column="3" Content="Scan fault records" Click="Scan_Click"
+                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding IsNotBusy}"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Save to" VerticalAlignment="Center" FontSize="12.5" Foreground="#42526A"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DestinationDirectory, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource FieldStyle}"/>
+                <Button Grid.Row="2" Grid.Column="3" Content="Choose folder" Click="ChooseFolder_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsNotBusy}"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Style="{StaticResource PanelStyle}" Padding="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Margin="12,10,12,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Discovered COMTRADE records" FontSize="13.5" FontWeight="SemiBold" Foreground="#26364D"/>
+                    <TextBlock Grid.Column="1" Text="{Binding SelectionSummary}" FontSize="11.5" Foreground="#68778D" VerticalAlignment="Center"/>
+                </Grid>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Records}" AutoGenerateColumns="False"
+                          CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+                          HeadersVisibility="Column" GridLinesVisibility="All" BorderThickness="0"
+                          SelectionMode="Extended" SelectionUnit="FullRow" Background="White">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Get" Width="48">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Record" Binding="{Binding RecordName}" Width="2*" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedText}" Width="145" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" Width="95" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Files" Binding="{Binding FilesText}" Width="125" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Completeness" Binding="{Binding Completeness}" Width="145" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Remote directory" Binding="{Binding RemoteDirectory}" Width="2*" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="155" IsReadOnly="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="6" Style="{StaticResource PanelStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Text="{Binding StatusText}" FontSize="12" Foreground="#4B5D75" TextTrimming="CharacterEllipsis"/>
+                <ProgressBar Grid.Row="2" Grid.Column="0" Height="8" Minimum="0" Maximum="100" Value="{Binding ProgressValue}"
+                             IsIndeterminate="{Binding IsIndeterminate}" Background="#E5EBF3" Foreground="#2563EB"/>
+                <Button Grid.Row="2" Grid.Column="2" Content="Cancel" Click="Cancel_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsBusy}"/>
+                <Button Grid.Row="2" Grid.Column="4" Content="Download selected" Click="Download_Click"
+                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanDownload}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
