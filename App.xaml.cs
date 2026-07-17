@@ -16,6 +16,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         GridUxBehavior.Install();
+        FaultRecordUxBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
     }
