@@ -108,7 +108,7 @@ internal static class FaultRecordUxBehavior
 
     private static Button CreateCapabilityButton(string capability, string pathData, RoutedEventHandler click)
     {
-        var icon = new Path
+        var icon = new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(pathData),
             Stretch = Stretch.Uniform,
