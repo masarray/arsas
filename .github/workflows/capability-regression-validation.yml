@@ -1,0 +1,34 @@
+name: Capability Regression Validation
+
+on:
+  push:
+    branches:
+      - agent/fix-ied-capability-regression
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS
+        uses: actions/checkout@v4
+
+      - name: Checkout ARIEC61850 engine
+        uses: actions/checkout@v4
+        with:
+          repository: masarray/ARIEC61850
+          ref: main
+          path: ../ARIEC61850
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ArIED61850Tester.csproj
+
+      - name: Build
+        run: dotnet build .\ArIED61850Tester.csproj -c Release --no-restore
