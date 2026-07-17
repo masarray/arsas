@@ -80,18 +80,20 @@ internal static class FaultRecordUxBehavior
             {
                 Tag = CapabilityPanelMarker,
                 Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 4, 0, 0)
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(4, 2, 7, 0)
             };
             capabilityPanel.Children.Add(gooseButton);
             capabilityPanel.Children.Add(smvButton);
             capabilityPanel.Children.Add(fileButton);
 
-            Grid.SetRow(capabilityPanel, Grid.GetRow(actionPanel));
-            Grid.SetColumn(capabilityPanel, Grid.GetColumn(actionPanel));
-            Grid.SetColumnSpan(capabilityPanel, Math.Max(1, Grid.GetColumnSpan(actionPanel)));
-            Panel.SetZIndex(capabilityPanel, Math.Max(11, Panel.GetZIndex(actionPanel) + 1));
+            // Keep protocol capabilities on their own card row. The previous overlay shared
+            // the lifecycle-action row and could cover the Stop button when File Transfer was enabled.
+            cardGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(capabilityPanel, cardGrid.RowDefinitions.Count - 1);
+            Grid.SetColumn(capabilityPanel, 1);
+            Panel.SetZIndex(capabilityPanel, 10);
             cardGrid.Children.Add(capabilityPanel);
 
             var registration = new CardRegistration(
@@ -99,11 +101,37 @@ internal static class FaultRecordUxBehavior
                 gooseButton,
                 smvButton,
                 fileButton,
-                (_, _) => RefreshCapabilityState(currentDevice, gooseButton, smvButton, fileButton));
+                (_, _) => QueueCapabilityRefresh(item, currentDevice, gooseButton, smvButton, fileButton));
             Registrations.Add(item, registration);
             currentDevice.PropertyChanged += registration.PropertyChangedHandler;
             RefreshCapabilityState(currentDevice, gooseButton, smvButton, fileButton);
         }));
+    }
+
+    private static void QueueCapabilityRefresh(
+        ListBoxItem item,
+        Iec61850MonitorDevice device,
+        Button gooseButton,
+        Button smvButton,
+        Button fileButton)
+    {
+        void RefreshOnUiThread()
+        {
+            if (!item.IsLoaded || !ReferenceEquals(item.DataContext, device))
+                return;
+
+            RefreshCapabilityState(device, gooseButton, smvButton, fileButton);
+        }
+
+        if (item.Dispatcher.CheckAccess())
+        {
+            RefreshOnUiThread();
+            return;
+        }
+
+        // Discovery and connection state can be published from worker threads. WPF controls
+        // have thread affinity, so every capability-state update must be marshalled to the card UI.
+        item.Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(RefreshOnUiThread));
     }
 
     private static Button CreateCapabilityButton(string capability, string pathData, RoutedEventHandler click)
