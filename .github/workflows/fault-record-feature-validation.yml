@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout ARSAS
         uses: actions/checkout@v4
