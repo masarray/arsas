@@ -42,8 +42,6 @@ public partial class FaultRecordWindow : Window, INotifyPropertyChanged
 
     public ObservableCollection<FaultRecordRow> Records { get; } = new();
 
-    // Immutable window identity is bound OneTime in XAML. Dynamic UI state is bound
-    // OneWay, while only user-editable fields are allowed to use TwoWay bindings.
     public string DeviceName { get; }
     public string EndpointText => $"{_host}:{_port}";
 
