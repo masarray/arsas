@@ -4,9 +4,15 @@ $root = Split-Path -Parent $PSScriptRoot
 $xamlPath = Join-Path $root 'FaultRecordWindow.xaml'
 $xaml = Get-Content $xamlPath -Raw
 
+$requiredOneTimeBindings = @('DeviceName', 'EndpointText')
+foreach ($property in $requiredOneTimeBindings) {
+    $pattern = "\{Binding\s+$([regex]::Escape($property))\s*,[^}]*Mode=OneTime[^}]*\}"
+    if ($xaml -notmatch $pattern) {
+        throw "FaultRecordWindow immutable binding '$property' must explicitly use Mode=OneTime."
+    }
+}
+
 $requiredOneWayBindings = @(
-    'DeviceName',
-    'EndpointText',
     'IsNotBusy',
     'SelectionSummary',
     'Records',
