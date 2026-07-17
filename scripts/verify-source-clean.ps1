@@ -151,4 +151,6 @@ if ($Problems.Count -gt 0) {
     throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
+& (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
+
 Write-Host "All Git-tracked ArIED content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
