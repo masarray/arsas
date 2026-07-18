@@ -91,9 +91,9 @@
                 <StackPanel>
                     <TextBlock Text="IEC 61850 Fault Record Transfer" FontSize="18" FontWeight="SemiBold" Foreground="#17243A"/>
                     <TextBlock Margin="0,3,0,0" FontSize="12.5" Foreground="#607089">
-                        <Run Text="{Binding DeviceName}"/>
+                        <Run Text="{Binding DeviceName, Mode=OneTime}"/>
                         <Run Text="  •  "/>
-                        <Run Text="{Binding EndpointText}"/>
+                        <Run Text="{Binding EndpointText, Mode=OneTime}"/>
                     </TextBlock>
                 </StackPanel>
                 <Border Grid.Column="1" Background="#E8F0FE" CornerRadius="12" Padding="10,5" VerticalAlignment="Center">
@@ -117,16 +117,16 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Remote directory" VerticalAlignment="Center" FontSize="12.5" Foreground="#42526A"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding RemoteDirectory, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding RemoteDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource FieldStyle}" ToolTip="Leave empty to start at the relay file-store root"/>
                 <Button Grid.Row="0" Grid.Column="3" Content="Scan fault records" Click="Scan_Click"
-                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding IsNotBusy}"/>
+                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding IsNotBusy, Mode=OneWay}"/>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Save to" VerticalAlignment="Center" FontSize="12.5" Foreground="#42526A"/>
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DestinationDirectory, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DestinationDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource FieldStyle}"/>
                 <Button Grid.Row="2" Grid.Column="3" Content="Choose folder" Click="ChooseFolder_Click"
-                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsNotBusy}"/>
+                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsNotBusy, Mode=OneWay}"/>
             </Grid>
         </Border>
 
@@ -142,9 +142,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="Discovered COMTRADE records" FontSize="13.5" FontWeight="SemiBold" Foreground="#26364D"/>
-                    <TextBlock Grid.Column="1" Text="{Binding SelectionSummary}" FontSize="11.5" Foreground="#68778D" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding SelectionSummary, Mode=OneWay}" FontSize="11.5" Foreground="#68778D" VerticalAlignment="Center"/>
                 </Grid>
-                <DataGrid Grid.Row="1" ItemsSource="{Binding Records}" AutoGenerateColumns="False"
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Records, Mode=OneWay}" AutoGenerateColumns="False"
                           CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
                           HeadersVisibility="Column" GridLinesVisibility="All" BorderThickness="0"
                           SelectionMode="Extended" SelectionUnit="FullRow" Background="White">
@@ -157,13 +157,13 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Record" Binding="{Binding RecordName}" Width="2*" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedText}" Width="145" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" Width="95" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Files" Binding="{Binding FilesText}" Width="125" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Completeness" Binding="{Binding Completeness}" Width="145" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Remote directory" Binding="{Binding RemoteDirectory}" Width="2*" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="155" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Record" Binding="{Binding RecordName, Mode=OneWay}" Width="2*" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedText, Mode=OneWay}" Width="145" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeText, Mode=OneWay}" Width="95" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Files" Binding="{Binding FilesText, Mode=OneWay}" Width="125" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Completeness" Binding="{Binding Completeness, Mode=OneWay}" Width="145" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Remote directory" Binding="{Binding RemoteDirectory, Mode=OneWay}" Width="2*" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="155" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>
@@ -184,13 +184,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Text="{Binding StatusText}" FontSize="12" Foreground="#4B5D75" TextTrimming="CharacterEllipsis"/>
-                <ProgressBar Grid.Row="2" Grid.Column="0" Height="8" Minimum="0" Maximum="100" Value="{Binding ProgressValue}"
-                             IsIndeterminate="{Binding IsIndeterminate}" Background="#E5EBF3" Foreground="#2563EB"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Text="{Binding StatusText, Mode=OneWay}" FontSize="12" Foreground="#4B5D75" TextTrimming="CharacterEllipsis"/>
+                <ProgressBar Grid.Row="2" Grid.Column="0" Height="8" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}" Background="#E5EBF3" Foreground="#2563EB"/>
                 <Button Grid.Row="2" Grid.Column="2" Content="Cancel" Click="Cancel_Click"
-                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsBusy}"/>
+                        Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsBusy, Mode=OneWay}"/>
                 <Button Grid.Row="2" Grid.Column="4" Content="Download selected" Click="Download_Click"
-                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanDownload}"/>
+                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanDownload, Mode=OneWay}"/>
             </Grid>
         </Border>
     </Grid>
