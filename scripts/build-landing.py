@@ -39,13 +39,14 @@ def build(source: Path, output: Path) -> None:
 
         text = text.replace(SOCIAL_SVG, SOCIAL_PNG)
         text = text.replace(
-            f'<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />',
+            '<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />',
             "",
         )
-        text = text.replace(
-            f'href="{QUICK_START}"',
-            'href="download.html"',
-        )
+        if page.name != "download.html":
+            text = text.replace(
+                f'href="{QUICK_START}"',
+                'href="download.html"',
+            )
         text = text.replace(
             f'"downloadUrl": "{QUICK_START}"',
             f'"downloadUrl": "{DOWNLOAD_PAGE}"',
@@ -65,6 +66,7 @@ def build(source: Path, output: Path) -> None:
         "assets/screenshots/arsas-diagnostics.webp",
         "download.html",
         "download.js",
+        "download.css",
     )]
     missing = [str(path.relative_to(output)) for path in required if not path.exists()]
     if missing:
