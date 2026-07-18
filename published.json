@@ -2,8 +2,8 @@
   "version": "1.6.16",
   "tag": "v1.6.16",
   "channel": "stable",
-  "publishedAtUtc": "2026-07-18T05:23:25.543679+00:00",
-  "sourceCommit": "d56a241b7070c363b1622a6865dc9b3ffcac7f1b",
+  "publishedAtUtc": "2026-07-18T12:11:09.202917+00:00",
+  "sourceCommit": "60e020d0124c3bc81df4bec46b4563fc4bb06dd3",
   "installer": {
     "name": "ARSAS-Windows-x64-Setup.exe",
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
