@@ -1,0 +1,6 @@
+{
+  "version": "1.6.16",
+  "channel": "stable",
+  "platform": "windows-x64",
+  "primaryAsset": "ARSAS-Windows-x64-Setup.exe"
+}

@@ -2,6 +2,9 @@ name: Release ARSAS Windows packages
 
 on:
   push:
+    branches: [ main ]
+    paths:
+      - ".release/windows.json"
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -56,6 +59,14 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME
           }
+          elseif ($env:GITHUB_REF -eq "refs/heads/main") {
+            $manifestPath = ".\ArIED61850Tester\.release\windows.json"
+            if (-not (Test-Path $manifestPath -PathType Leaf)) {
+              throw "Release manifest was not found: $manifestPath"
+            }
+            $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+            $rawVersion = [string]$manifest.version
+          }
           else {
             $rawVersion = "${{ inputs.version }}"
           }
@@ -66,6 +77,12 @@ jobs:
           }
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
             throw "Invalid release version '$rawVersion'. Use semantic versioning such as 1.6.16 or 1.7.0-rc.1."
+          }
+
+          [xml]$project = Get-Content ".\ArIED61850Tester\ArIED61850Tester.csproj"
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          if ($projectVersion -ne $version) {
+            throw "Release manifest version $version does not match project version $projectVersion."
           }
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -139,13 +156,35 @@ jobs:
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
 
-      - name: Create SHA-256 checksums
+      - name: Create versioned SHA-256 checksums
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\create-windows-release-checksums.ps1 `
             -Version $env:RELEASE_VERSION `
             -Runtime win-x64 `
             -DistDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
+
+      - name: Stage stable public download assets
+        shell: powershell
+        run: |
+          $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
+          $versionedInstaller = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-setup.exe"
+          $versionedPortable = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-portable.zip"
+          $publicInstaller = Join-Path $dist "ARSAS-Windows-x64-Setup.exe"
+          $publicPortable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
+          $publicChecksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
+
+          Copy-Item $versionedInstaller $publicInstaller -Force
+          Copy-Item $versionedPortable $publicPortable -Force
+
+          @($publicInstaller, $publicPortable) | ForEach-Object {
+            $hash = Get-FileHash $_ -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($_))"
+          } | Set-Content -Path $publicChecksums -Encoding ascii
+
+          foreach ($path in @($publicInstaller, $publicPortable, $publicChecksums)) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Public release asset was not staged: $path" }
+          }
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
@@ -156,9 +195,12 @@ jobs:
             ArIED61850Tester/dist/ARSAS-${{ steps.release.outputs.version }}-win-x64-portable.zip
             ArIED61850Tester/dist/ARSAS-${{ steps.release.outputs.version }}-win-x64-setup.exe
             ArIED61850Tester/dist/SHA256SUMS.txt
+            ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.zip
+            ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe
+            ArIED61850Tester/dist/ARSAS-Windows-x64-SHA256SUMS.txt
 
       - name: Create or update GitHub Release
-        if: github.ref_type == 'tag' || inputs.publish_release == true
+        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,15 +208,17 @@ jobs:
         run: |
           $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
           $assets = @(
-            (Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-portable.zip")
-            (Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-setup.exe")
-            (Join-Path $dist "SHA256SUMS.txt")
+            (Join-Path $dist "ARSAS-Windows-x64-Setup.exe")
+            (Join-Path $dist "ARSAS-Windows-x64-Portable.zip")
+            (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
           )
 
           gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) { throw "Failed to update GitHub Release assets." }
+            gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --title "ARSAS $env:RELEASE_VERSION" --latest
+            if ($LASTEXITCODE -ne 0) { throw "Failed to mark the GitHub Release as latest." }
             exit 0
           }
 
@@ -183,9 +227,10 @@ jobs:
             "--repo", $env:GITHUB_REPOSITORY,
             "--target", $env:GITHUB_SHA,
             "--title", "ARSAS $env:RELEASE_VERSION",
-            "--generate-notes"
+            "--generate-notes",
+            "--latest"
           )
-          if ($env:RELEASE_VERSION.Contains("-") -or ($env:GITHUB_REF_TYPE -ne "tag" -and $env:MANUAL_PRERELEASE -eq "true")) {
+          if ($env:RELEASE_VERSION.Contains("-") -or ($env:GITHUB_REF_TYPE -ne "tag" -and $env:GITHUB_REF -ne "refs/heads/main" -and $env:MANUAL_PRERELEASE -eq "true")) {
             $arguments += "--prerelease"
           }
           $arguments += $assets

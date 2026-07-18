@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the final GitHub Pages artifact after media localization."""
+"""Validate the final public ARSAS website artifact."""
 
 from __future__ import annotations
 
@@ -28,6 +28,11 @@ EXPECTED_MEDIA = (
     "assets/screenshots/arsas-goose.webp",
     "assets/screenshots/arsas-diagnostics.webp",
 )
+
+DIRECT_INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
+DIRECT_PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
+DIRECT_CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
+ALLOWED_GITHUB_URLS = {DIRECT_INSTALLER, DIRECT_PORTABLE, DIRECT_CHECKSUMS}
 
 
 class AssetParser(HTMLParser):
@@ -59,6 +64,7 @@ def main() -> int:
             errors.append(f"missing deployable file: {relative}")
 
     combined = ""
+    all_refs: list[tuple[str, str]] = []
     for page_name in EXPECTED_PAGES:
         page = site / page_name
         if not page.exists():
@@ -68,28 +74,42 @@ def main() -> int:
         parser = AssetParser()
         parser.feed(text)
         for ref in parser.refs:
+            all_refs.append((page_name, ref))
             if ref.startswith("assets/") and not (site / ref.split("?", 1)[0].split("#", 1)[0]).exists():
                 errors.append(f"{page_name}: missing local asset {ref}")
 
-    forbidden = (
+    forbidden_text = (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
         "https://masarray.github.io/arsas/assets/social-card.svg",
+        '"codeRepository"',
+        ">Repository</a>",
+        ">Issues</a>",
+        "Build from source",
+        "Build instructions",
     )
-    for value in forbidden:
+    for value in forbidden_text:
         if value in combined:
-            errors.append(f"deployable HTML still references {value}")
+            errors.append(f"deployable HTML still exposes forbidden public route or text: {value}")
+
+    for page_name, ref in all_refs:
+        if ref.startswith("https://github.com/") and ref not in ALLOWED_GITHUB_URLS:
+            errors.append(f"{page_name}: public website exposes a GitHub page instead of a direct binary: {ref}")
 
     if "https://masarray.github.io/arsas/assets/social-card.png" not in combined:
         errors.append("PNG social preview is not referenced")
-    if 'href="download.html"' not in combined:
-        errors.append("stable download page is not used by landing CTAs")
+    if DIRECT_INSTALLER not in combined:
+        errors.append("latest stable installer direct-download URL is missing")
+    if 'href="download.html"' in combined:
+        errors.append("public CTA still opens an intermediate download page instead of the EXE")
 
     download = site / "download.html"
     if download.exists():
         text = download.read_text(encoding="utf-8")
-        for required in ("data-installer-link", "data-portable-link", "download.js", "releases/latest"):
-            if required not in text and required not in (site / "download.js").read_text(encoding="utf-8"):
-                errors.append(f"download workflow is missing {required}")
+        for required in (DIRECT_INSTALLER, DIRECT_PORTABLE, DIRECT_CHECKSUMS, "Latest stable channel"):
+            if required not in text:
+                errors.append(f"download page is missing {required}")
+        if "download.js" in text:
+            errors.append("download page still depends on repository-aware JavaScript")
 
     social = site / "assets/social-card.png"
     if social.exists():
@@ -100,12 +120,12 @@ def main() -> int:
             errors.append(f"social-card.png: {exc}")
 
     if errors:
-        print("Deployable landing validation failed:", file=sys.stderr)
+        print("Public landing validation failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
 
-    print("Deployable landing validation passed: local screenshots, PNG social preview, and release-aware download workflow are consistent.")
+    print("Public landing validation passed: landing-only navigation and direct stable Windows downloads are enforced.")
     return 0
 
 
