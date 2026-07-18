@@ -50,8 +50,9 @@ public partial class UpdatePromptWindow : Window
 
             _service.LaunchInstaller(_installerPath);
             _installerLaunched = true;
+            _isDownloading = false;
             Close();
-            Application.Current.Shutdown();
+            Application.Current?.Shutdown();
         }
         catch (OperationCanceledException)
         {
@@ -107,6 +108,9 @@ public partial class UpdatePromptWindow : Window
             _service.Defer(_manifest);
             _deferred = true;
         }
+
+        _downloadCancellation?.Dispose();
+        _downloadCancellation = null;
     }
 
     private void SetDownloadingState(bool downloading)
