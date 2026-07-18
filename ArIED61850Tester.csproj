@@ -12,12 +12,16 @@
     <Authors>Ari Sulistiono / masarray</Authors>
     <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
     <Product>ARSAS</Product>
-    <AssemblyTitle>ARSAS - Smart IEC 61850 Communication Tester</AssemblyTitle>
-    <Description>Smart Windows IEC 61850 communication tester for SCL-assisted project setup, interoperable Edition 1/2 SCL export, live MMS model discovery, independent multi-IED monitoring, SCL-aware GOOSE subscription, reporting diagnostics, sequence of events, and guarded Smart Control.</Description>
+    <AssemblyTitle>ARSAS - IEC 61850 Engineering Workstation</AssemblyTitle>
+    <Description>Open-source Windows IEC 61850 engineering workstation for MMS model discovery, reporting, independent multi-IED monitoring, GOOSE subscription, fault-record file transfer, Sampled Values engineering, SCL workflows, diagnostics, sequence of events, and guarded control validation.</Description>
     <Version>1.6.16</Version>
     <AssemblyVersion>1.6.16.0</AssemblyVersion>
     <FileVersion>1.6.16.0</FileVersion>
-    <PackageTags>iec61850;iec-61850;mms;goose;goose-subscriber;scl;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
+    <PackageProjectUrl>https://github.com/masarray/arsas</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/masarray/arsas</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>iec61850;iec-61850;mms;goose;sampled-values;smv;iec-61850-file-transfer;comtrade;scl;scl-generator;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
     <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>
@@ -30,6 +34,7 @@
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\app-icon-256.png" />
     <Resource Include="Assets\gateway-hero.png" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,7 +44,7 @@
 
   <Target Name="ValidateArIec61850Project" BeforeTargets="PrepareForBuild">
     <Message Importance="High" Text="ARSAS is compiling against ARIEC61850 project: $(ArIec61850Project)" />
-    <Message Importance="High" Text="ARSAS GOOSE Subscriber is compiling against Npcap transport: $(ArIec61850NpcapProject)" />
+    <Message Importance="High" Text="ARSAS process-bus workflows are compiling against Npcap transport: $(ArIec61850NpcapProject)" />
     <Error Condition="!Exists('$(ArIec61850Project)')"
            Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
     <Error Condition="!Exists('$(ArIec61850NpcapProject)')"
