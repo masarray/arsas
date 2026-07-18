@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IEC 61850 Smart Reporting — BRCB, URCB & Polling | ARSAS</title>
+  <meta name="description" content="ARSAS Smart Reporting combines configured BRCB and URCB monitoring, dynamic DataSet recovery where permitted, immediate MMS values, and bounded polling fallback." />
+  <meta name="keywords" content="IEC 61850 Smart Reporting, BRCB, URCB, buffered report, unbuffered report, dynamic DataSet, Report Control Block, MMS polling fallback, IEC 61850 monitoring, relay commissioning" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="https://masarray.github.io/arsas/smart-reporting.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
+  <link rel="stylesheet" href="smart-reporting.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="ARSAS Smart Reporting for IEC 61850" />
+  <meta property="og:description" content="Select signals and see live values without manually engineering DataSets or RCBs. Static reports, dynamic recovery, and polling fallback work together." />
+  <meta property="og:url" content="https://masarray.github.io/arsas/smart-reporting.html" />
+  <meta property="og:image" content="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" />
+  <meta property="og:image:alt" content="ARSAS unified IEC 61850 live-value workspace using Smart Reporting" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "ARSAS",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows 10, Windows 11",
+        "url": "https://masarray.github.io/arsas/",
+        "codeRepository": "https://github.com/masarray/arsas",
+        "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
+        "featureList": [
+          "Immediate MMS values for selected signals",
+          "Configured buffered and unbuffered IEC 61850 reporting",
+          "Dynamic temporary DataSet recovery where permitted",
+          "Bounded MMS polling fallback for uncovered or unverified points",
+          "Quality, IED timestamp, report reason, and acquisition-source evidence"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What happens when a DataSet is empty or no usable RCB is available?",
+            "acceptedAnswer": {"@type": "Answer", "text": "ARSAS keeps the selected points in bounded MMS polling, so the live-value workflow continues instead of being blocked by report configuration."}
+          },
+          {
+            "@type": "Question",
+            "name": "Does ARSAS support both BRCB and URCB monitoring?",
+            "acceptedAnswer": {"@type": "Answer", "text": "ARSAS discovers configured buffered and unbuffered Report Control Blocks and validates actual DataSet membership before treating a selected point as report-covered."}
+          },
+          {
+            "@type": "Question",
+            "name": "Does Smart Reporting always modify the IED?",
+            "acceptedAnswer": {"@type": "Answer", "text": "No. Existing static reports are preferred. Temporary dynamic DataSet and RCB writes are attempted only when enabled, supported, and permitted; otherwise polling remains available."}
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="./" aria-label="ARSAS home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS <small>IEC 61850 workstation</small></span></a>
+      <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="smart-reporting.html" aria-current="page">Smart Reporting</a><a href="./#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a><a class="nav-cta" href="https://github.com/masarray/arsas">GitHub</a></nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero reporting-page-hero">
+      <div class="container reporting-hero-grid">
+        <div>
+          <div class="breadcrumbs"><a href="./">Home</a> / Smart Reporting</div>
+          <span class="eyebrow">Available now · per IED · evidence-driven</span>
+          <h1><span class="gradient-text">Select the signals.</span><br />ARSAS handles the report engineering.</h1>
+          <p>IEC 61850 reporting is powerful, but manually checking DataSets, BRCBs, URCBs, trigger options, reservations, GI, and fallback behavior can delay FAT, SAT, and commissioning. ARSAS automates the acquisition path so engineers can reach trustworthy live values without first repairing every reporting configuration issue.</p>
+          <div class="hero-actions"><a class="btn btn-primary" href="https://github.com/masarray/arsas#quick-start">Build from source</a><a class="btn" href="#workflow">See the workflow</a></div>
+          <div class="hero-proof"><span>Configured BRCB and URCB support</span><span>Dynamic recovery where permitted</span><span>Polling remains available</span></div>
+        </div>
+        <figure class="reporting-visual reveal"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" alt="ARSAS unified IEC 61850 live-value viewer for multiple IEDs" decoding="async" fetchpriority="high" /></a><figcaption>One live-value workspace whether each point comes from a configured report, temporary dynamic report, or bounded MMS polling.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section section-tight" id="workflow">
+      <div class="container">
+        <div class="section-head center reveal"><span class="kicker">Automatic acquisition path</span><h2>Reporting is optimized per selected point—not treated as an all-or-nothing prerequisite.</h2><p>ARSAS begins with live MMS values, proves report coverage, repairs exact gaps where allowed, and keeps fallback only where it is still required.</p></div>
+        <div class="reporting-lane reveal">
+          <article class="reporting-step"><span class="reporting-step-number">01</span><div><strong>Immediate MMS image</strong><p>Selected values begin reading while report setup is validated.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">02</span><div><strong>Configured reports first</strong><p>Discover and validate exact DataSet membership for BRCBs and URCBs.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">03</span><div><strong>Dynamic gap recovery</strong><p>Use an association-scoped temporary DataSet and suitable available URCB/RCB where permitted.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">04</span><div><strong>Bounded polling fallback</strong><p>Poll only uncovered, rejected, unverified, or degraded points.</p></div></article>
+        </div>
+        <div class="reporting-fallback reveal"><strong>No report dead end.</strong><span>Empty DataSet, no usable RCB, rejected write, or missing report change does not block the live-value workflow.</span><a href="features.html">Explore all capabilities →</a></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head reveal"><span class="kicker">Failure-aware by design</span><h2>The application does not trust a report merely because an RCB exists.</h2><p>Coverage must be usable or observed. ARSAS retains MMS verification and can return a point to faster polling when report traffic misses an actual change.</p></div>
+        <div class="scenario-grid">
+          <article class="scenario reveal"><span class="scenario-label">Configured</span><h3>Usable static BRCB or URCB</h3><p>Use event-driven reporting while preserving DataSet order, reasons, sequence information, quality, and IED timestamps.</p></article>
+          <article class="scenario reveal"><span class="scenario-label">Incomplete</span><h3>Partial or empty coverage</h3><p>Attempt dynamic recovery for the exact uncovered selected points when the IED and approved workflow permit writes.</p></article>
+          <article class="scenario reveal"><span class="scenario-label">Unavailable</span><h3>No usable RCB or write permission</h3><p>Continue with bounded MMS polling rather than forcing the engineer into a separate configuration tool.</p></article>
+          <article class="scenario reveal"><span class="scenario-label">Degraded</span><h3>A real change is missed</h3><p>Verification detects the mismatch, records diagnostics, and restores polling until event delivery is proven again.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight"><div class="container reporting-boundary reveal"><span class="kicker">Engineering boundary</span><h2>Automatic does not mean uncontrolled.</h2><p>The engineer selects the required signals. Existing static reporting is preferred. Temporary dynamic changes are association-scoped and attempted only when enabled and supported. Rejections remain visible, cleanup is attempted where permitted by the IED, and polling remains the non-blocking fallback.</p><div class="section-actions"><a class="btn btn-primary" href="features.html">Explore capabilities</a><a class="btn" href="https://github.com/masarray/arsas/blob/main/docs/ARCHITECTURE.md#report-first-acquisition">Read architecture</a></div></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>One focused IEC 61850 engineering workspace for model, reporting, traffic, files, control, and evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="smart-reporting.html">Smart Reporting</a><a href="./#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="roadmap.html">Roadmap</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="architecture.html">Architecture</a><a href="https://github.com/masarray/ARIEC61850">Engine</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div></div></footer>
+  <script src="app.js" defer></script>
+</body>
+</html>
