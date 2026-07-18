@@ -10,10 +10,10 @@
   "categories": ["developer", "utilities", "productivity", "education"],
   "icons": [
     {
-      "src": "assets/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "https://raw.githubusercontent.com/masarray/arsas/main/Assets/app-icon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon",
+      "purpose": "any"
     }
   ]
 }
