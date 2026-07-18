@@ -1,7 +1,7 @@
 {
-  "name": "ARSAS — Complete IEC 61850 Engineering Workstation",
+  "name": "ARSAS — IEC 61850 Engineering Workstation",
   "short_name": "ARSAS",
-  "description": "Open-source IEC 61850 engineering for MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL workflows, diagnostics, and control validation.",
+  "description": "IEC 61850 engineering for Smart Reporting, MMS, GOOSE, fault-record file transfer, Sampled Values, SCL, diagnostics and guarded control.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -10,9 +10,9 @@
   "categories": ["developer", "utilities", "productivity", "education"],
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/masarray/arsas/main/Assets/app-icon.ico",
-      "sizes": "16x16 32x32 48x48",
-      "type": "image/x-icon",
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     }
   ]

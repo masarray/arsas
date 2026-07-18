@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ARSAS — Complete IEC 61850 Engineering Workstation</title>
-  <meta name="description" content="ARSAS is an open-source Windows IEC 61850 workstation for MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL engineering, diagnostics, and guarded control." />
-  <meta name="keywords" content="IEC 61850 software, IEC 61850 client, MMS client, GOOSE subscriber, Sampled Values viewer, SMV, SCL editor, SCL generator, COMTRADE file transfer, IED explorer, relay testing, substation automation, digital substation, FAT SAT commissioning" />
+  <title>ARSAS — Smart IEC 61850 Engineering Workstation</title>
+  <meta name="description" content="Connect an IED, discover its live MMS model, select signals, and reach trustworthy values with Smart Reporting, GOOSE, files, SCL, diagnostics, and guarded control." />
+  <meta name="keywords" content="IEC 61850 software, IEC 61850 client, MMS client, Smart Reporting, BRCB, URCB, GOOSE subscriber, COMTRADE file transfer, IED explorer, relay testing, FAT SAT commissioning" />
   <meta name="author" content="Ari Sulistiono" />
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
   <meta name="theme-color" content="#07111f" />
@@ -14,21 +14,24 @@
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
+  <link rel="preload" as="image" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp" fetchpriority="high" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="screenshots.css" />
-
+  <link rel="stylesheet" href="smart-reporting.css" />
+  <link rel="stylesheet" href="audit.css" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ARSAS" />
-  <meta property="og:title" content="ARSAS — Complete IEC 61850 Engineering Workstation" />
-  <meta property="og:description" content="One focused application for MMS, reporting, GOOSE, file transfer, Sampled Values, SCL, diagnostics, and control validation." />
+  <meta property="og:title" content="ARSAS — IEC 61850 Engineering Without the Setup Maze" />
+  <meta property="og:description" content="Connect an IED, discover the live model, select signals, and reach trustworthy values with Smart Reporting and visible fallback." />
   <meta property="og:url" content="https://masarray.github.io/arsas/" />
   <meta property="og:image" content="https://masarray.github.io/arsas/assets/social-card.svg" />
-  <meta property="og:image:alt" content="ARSAS IEC 61850 engineering workstation interface" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 engineering workstation" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="ARSAS — IEC 61850 Engineering Workstation" />
-  <meta name="twitter:description" content="Explore models, monitor reports, inspect process-bus traffic, retrieve fault records, engineer SCL workflows, and validate control." />
+  <meta name="twitter:title" content="ARSAS — Smart IEC 61850 Engineering" />
+  <meta name="twitter:description" content="Smart Reporting, multi-IED monitoring, GOOSE, file transfer, SCL, diagnostics, and guarded control in one workstation." />
   <meta name="twitter:image" content="https://masarray.github.io/arsas/assets/social-card.svg" />
-
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -39,63 +42,36 @@
     "applicationSubCategory": "Substation automation engineering software",
     "operatingSystem": "Windows 10, Windows 11",
     "softwareVersion": "1.6.16",
-    "description": "Open-source Windows IEC 61850 engineering workstation for MMS model discovery, reporting, GOOSE subscription, fault-record file transfer, Sampled Values, SCL workflows, diagnostics, and guarded control validation.",
+    "description": "Open-source Windows IEC 61850 workstation for live MMS discovery, Smart Reporting, multi-IED monitoring, GOOSE, fault-record file transfer, Sampled Values, SCL workflows, diagnostics, SOE, and guarded control.",
     "url": "https://masarray.github.io/arsas/",
     "codeRepository": "https://github.com/masarray/arsas",
-    "downloadUrl": "https://github.com/masarray/arsas/releases",
+    "downloadUrl": "https://github.com/masarray/arsas#quick-start",
     "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
     "programmingLanguage": ["C#", "XAML"],
     "runtimePlatform": ".NET 8",
-    "screenshot": [
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp",
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp",
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp",
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp",
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp",
-      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp"
-    ],
-    "author": {
-      "@type": "Person",
-      "name": "Ari Sulistiono",
-      "url": "https://github.com/masarray"
-    },
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD",
-      "category": "Open-source community edition"
-    },
+    "author": {"@type": "Person", "name": "Ari Sulistiono", "url": "https://github.com/masarray"},
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD", "category": "Open-source community edition"},
     "featureList": [
-      "IEC 61850 MMS model discovery",
-      "Report-first multi-IED monitoring",
+      "Live IEC 61850 MMS model discovery",
+      "Static BRCB and URCB reporting with dynamic gap recovery",
+      "Bounded MMS polling fallback",
+      "Independent multi-IED monitoring",
       "GOOSE subscription and diagnostics",
       "IEC 61850 file transfer and COMTRADE retrieval",
-      "Sampled Values engineering preview",
-      "SCL import, comparison, export, and generation roadmap",
-      "Direct and Select-Before-Operate control validation",
-      "Sequence of events and diagnostic evidence"
+      "SCL-assisted engineering",
+      "Guarded Direct and Select-Before-Operate control"
     ]
   }
   </script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="./" aria-label="ARSAS home">
-        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span>ARSAS <small>IEC 61850 workstation</small></span>
-      </a>
+      <a class="brand" href="./" aria-label="ARSAS home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19 12 4l7 15M8 15h8" /></svg></span><span>ARSAS <small>IEC 61850 workstation</small></span></a>
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <nav class="nav-links" aria-label="Primary navigation" data-nav-links>
-        <a href="./" aria-current="page">Overview</a>
-        <a href="#screenshots">Screenshots</a>
-        <a href="features.html">Capabilities</a>
-        <a href="control.html">Smart Control</a>
-        <a href="architecture.html">Architecture</a>
-        <a href="roadmap.html">Roadmap</a>
-        <a class="nav-cta" href="https://github.com/masarray/arsas">GitHub</a>
+        <a href="./" aria-current="page">Overview</a><a href="smart-reporting.html">Smart Reporting</a><a href="#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a><a class="nav-cta" href="https://github.com/masarray/arsas#quick-start">Get ARSAS</a>
       </nav>
     </div>
   </header>
@@ -105,141 +81,70 @@
       <div class="container hero-grid">
         <div>
           <span class="eyebrow">Open source · Windows · .NET 8</span>
-          <h1><span class="gradient-text">One IEC 61850 workspace.</span><br />From model discovery<br />to trusted evidence.</h1>
-          <p class="hero-copy">ARSAS brings MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL workflows, diagnostics, sequence of events, and control validation into one focused engineering application.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="https://github.com/masarray/arsas#quick-start">Build from source</a>
-            <a class="btn" href="features.html">Explore capabilities</a>
-            <a class="btn btn-quiet" href="#screenshots">View real application</a>
-          </div>
-          <div class="hero-proof" aria-label="Product highlights">
-            <span>Independent multi-IED sessions</span>
-            <span>Protocol engine separated in ARIEC61850</span>
-            <span>GPL-3.0-or-later community edition</span>
-          </div>
+          <h1><span class="gradient-text">IEC 61850 engineering</span><br />without the setup maze.</h1>
+          <p class="hero-copy">Enter an IED address, discover the live MMS model, select the signals, and begin testing. ARSAS handles reporting complexity with configured BRCB or URCB coverage, dynamic recovery where permitted, and bounded polling when reporting cannot be used.</p>
+          <div class="hero-actions"><a class="btn btn-primary" href="https://github.com/masarray/arsas#quick-start">Get ARSAS</a><a class="btn" href="smart-reporting.html">See Smart Reporting</a><a class="btn btn-quiet" href="#screenshots">View the real app</a></div>
+          <div class="hero-proof" aria-label="Product highlights"><span>Live values without manual RCB setup</span><span>Independent multi-IED sessions</span><span>Visible acquisition evidence</span></div>
         </div>
-
         <div class="hero-visual" aria-label="ARSAS application preview">
-          <div class="hero-window"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp" alt="ARSAS IEC 61850 engineering workstation when first opened" decoding="async" fetchpriority="high" /></div>
-          <div class="floating-chip one"><span class="dot"></span> Start from IP or SCL</div>
-          <div class="floating-chip two"><span class="dot blue"></span> One engineering workspace</div>
+          <div class="hero-window"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp" width="1507" height="893" alt="ARSAS IEC 61850 engineering workstation at first launch" decoding="async" fetchpriority="high" /></div>
+          <div class="floating-chip one"><span class="dot"></span> Static → dynamic → polling</div><div class="floating-chip two"><span class="dot blue"></span> Immediate live values</div>
         </div>
       </div>
     </section>
 
-    <section class="metrics" aria-label="Product scope">
-      <div class="container metric-grid reveal">
-        <div class="metric"><strong>MMS + Reports</strong><span>Live discovery and evidence-driven acquisition</span></div>
-        <div class="metric"><strong>GOOSE + SMV</strong><span>Station and process-bus engineering workflows</span></div>
-        <div class="metric"><strong>Files + COMTRADE</strong><span>Fault-record retrieval from the selected IED</span></div>
-        <div class="metric"><strong>SCL + Control</strong><span>Configured intent, generation roadmap, and typed commands</span></div>
-      </div>
-    </section>
+    <section class="metrics" aria-label="Product scope"><div class="container metric-grid"><div class="metric"><strong>Smart Reporting</strong><span>BRCB · URCB · dynamic DataSet · polling</span></div><div class="metric"><strong>Multi-IED</strong><span>Independent sessions, monitoring, events, and diagnostics</span></div><div class="metric"><strong>GOOSE + Files</strong><span>Stream supervision and fault-record retrieval</span></div><div class="metric"><strong>SCL + Control</strong><span>Configured context and typed command evidence</span></div></div></section>
 
-    <section class="section" id="screenshots">
-      <div class="container">
-        <div class="section-head center reveal">
-          <span class="kicker">Real application workflow</span>
-          <h2>See the IEC 61850 evidence—not a marketing mockup.</h2>
-          <p>These screenshots show the current Windows application moving from simultaneous IED connections to unified monitoring, SCADA-style events, detailed GOOSE supervision, and communication diagnostics.</p>
+    <section class="section smart-reporting" id="smart-reporting">
+      <div class="container"><div class="smart-reporting-shell">
+        <div class="section-head"><span class="kicker">Smart Reporting</span><h2>Select the signals. ARSAS handles the acquisition path.</h2><p>DataSet, BRCB, URCB, reservation, GI, and fallback behavior are verified in the background instead of becoming a manual prerequisite before the engineer can see useful values.</p></div>
+        <div class="reporting-lane" aria-label="ARSAS Smart Reporting acquisition sequence">
+          <article class="reporting-step"><span class="reporting-step-number">01</span><div><strong>Immediate MMS image</strong><p>Selected values begin reading while report setup is evaluated.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">02</span><div><strong>Configured reports first</strong><p>Existing BRCBs, URCBs, and DataSets are discovered and checked for exact coverage.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">03</span><div><strong>Recover exact gaps</strong><p>A temporary DataSet can be used with a suitable available RCB when writes are permitted.</p></div></article>
+          <article class="reporting-step"><span class="reporting-step-number">04</span><div><strong>Polling safety net</strong><p>Only uncovered, rejected, unverified, or degraded points remain in bounded polling.</p></div></article>
         </div>
-        <p class="gallery-note reveal">Select any screenshot to open the original full-resolution WebP image.</p>
-
-        <div class="product-tour-grid feature-evidence">
-          <figure class="screenshot-card reveal">
-            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" alt="ARSAS connected simultaneously to multiple IEC 61850 IEDs" loading="lazy" decoding="async" /></a>
-            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">01</span>Independent multi-IED connections</h3><p>Connect and discover several IEDs simultaneously while each device retains its own MMS association, model, monitoring lifecycle, and diagnostic history.</p></figcaption>
-          </figure>
-
-          <figure class="screenshot-card reveal">
-            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" alt="ARSAS unified live value viewer for all connected IEC 61850 IEDs" loading="lazy" decoding="async" /></a>
-            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">02</span>Unified live-value viewer</h3><p>Bring selected signals from every connected IED into one searchable workspace with value, quality, timestamp, source, and recent-change evidence.</p></figcaption>
-          </figure>
-
-          <figure class="screenshot-card reveal">
-            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" alt="ARSAS SCADA-style IEC 61850 sequence of events log across multiple IEDs" loading="lazy" decoding="async" /></a>
-            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">03</span>SCADA-style event log</h3><p>Correlate semantic changes from multiple IEDs in a common SOE view while retaining originating device, process timestamp, quality, report reason, and transition.</p></figcaption>
-          </figure>
-
-          <figure class="screenshot-card reveal">
-            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" alt="ARSAS detailed IEC 61850 GOOSE subscriber and stream supervision" loading="lazy" decoding="async" /></a>
-            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">04</span>Detailed GOOSE supervision</h3><p>Inspect APPID, VLAN, MAC, <code>goCBRef</code>, DataSet, <code>stNum</code>, <code>sqNum</code>, TAL, retransmissions, ordered payload leaves, and SCL or live-model binding.</p></figcaption>
-          </figure>
-
-          <figure class="screenshot-card wide reveal">
-            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" alt="ARSAS detailed IEC 61850 communication and frame diagnostics workspace" loading="lazy" decoding="async" /></a>
-            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">05</span>Communication and frame diagnostics</h3><p>Analyze association, service, report, sequence, timing, GOOSE, and frame information to isolate IEC 61850 communication problems without losing the originating IED context.</p></figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="capabilities">
-      <div class="container">
-        <div class="section-head center reveal">
-          <span class="kicker">Designed for practical engineering</span>
-          <h2>Replace fragmented setup with one traceable workflow.</h2>
-          <p>Start from an IP address or SCL project, verify what the IED actually exposes, choose the required signals, and keep protocol evidence attached to the correct device session.</p>
-        </div>
-
-        <div class="feature-grid">
-          <article class="card reveal"><span class="kicker">Available</span><h3>MMS discovery and monitoring</h3><p>Discover Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, and live type information.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>Report-first acquisition</h3><p>Use proven report coverage first, add dynamic plans where supported, and poll only points that remain uncovered or unverified.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>GOOSE subscriber</h3><p>Inspect APPID, VLAN, MAC, `goCBRef`, DataSet, `stNum`, `sqNum`, TAL, ordered `allData`, and model-binding evidence.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>Fault-record file transfer</h3><p>Browse the MMS file service and retrieve disturbance or COMTRADE-related records through the selected IED context.</p></article>
-          <article class="card reveal"><span class="kicker">Engineering preview</span><h3>Sampled Values</h3><p>Open per-IED SMV workflows while stream decoding, SCL binding, quality supervision, visualization, and performance validation continue to mature.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>Guarded Smart Control</h3><p>Resolve the live control model and actual MMS types before executing supported Direct or Select-Before-Operate sequences.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>SCL-assisted workspace</h3><p>Import common SCL files, extract endpoints, retain configured project context, compare against live behavior, and use Edition-aware export services.</p></article>
-          <article class="card reveal"><span class="kicker">Roadmap</span><h3>Full SCL generation</h3><p>Create and validate IED, communication, DataSet, report, GOOSE, Sampled Values, and export structures in a visual authoring workflow.</p></article>
-          <article class="card reveal"><span class="kicker">Available</span><h3>SOE and diagnostics</h3><p>Preserve process timestamps, report reasons, sequence changes, association evidence, transfer outcomes, and command completion details.</p></article>
-        </div>
-      </div>
+        <div class="reporting-fallback"><strong>No report dead end.</strong><span>Empty DataSet, no usable RCB, or rejected write does not block the live-value workflow.</span><a href="smart-reporting.html">Explore Smart Reporting →</a></div>
+      </div></div>
     </section>
 
     <section class="section section-tight">
-      <div class="container workflow">
-        <div class="section-head reveal">
-          <span class="kicker">Minutes to useful evidence</span>
-          <h2>Enter an endpoint. Discover. Select. Test.</h2>
-          <p>The product direction is simple: engineers should not need a chain of unrelated tools before they can demonstrate live communication, reporting, process-bus behavior, fault records, or control feedback.</p>
-        </div>
-        <div class="step-list">
-          <article class="step reveal"><span class="step-number">01</span><div><h3>Open SCL or add an IED</h3><p>Begin from configured engineering context or enter the approved MMS endpoint directly.</p></div></article>
-          <article class="step reveal"><span class="step-number">02</span><div><h3>Discover the live model</h3><p>Verify model hierarchy, services, report objects, control blocks, file capability, and data types.</p></div></article>
-          <article class="step reveal"><span class="step-number">03</span><div><h3>Select the engineering scope</h3><p>Choose signals, report coverage, process-bus streams, files, or control objects for the task.</p></div></article>
-          <article class="step reveal"><span class="step-number">04</span><div><h3>Observe and validate</h3><p>Monitor values, reports, SOE, GOOSE, SMV, downloads, diagnostics, and command completion.</p></div></article>
-          <article class="step reveal"><span class="step-number">05</span><div><h3>Preserve evidence</h3><p>Keep the configured intent, live result, timestamp, quality, and diagnostic context available for review.</p></div></article>
-        </div>
+      <div class="container"><div class="section-head center"><span class="kicker">Why it matters</span><h2>Replace days of fragmented preparation with one traceable workflow.</h2><p>ARSAS is designed for FAT, SAT, commissioning, troubleshooting, research, and controlled laboratory testing where reaching trustworthy evidence matters more than operating several disconnected utilities.</p></div>
+        <div class="comparison-grid"><article class="comparison-panel"><span class="kicker">Traditional setup</span><h3>Communication testing starts with tool configuration.</h3><ul><li>Prepare or repair engineering files</li><li>Map signals across separate tools</li><li>Create or update DataSets and RCBs</li><li>Diagnose why values are still unavailable</li><li>Rebuild context for every IED</li></ul></article><article class="comparison-panel highlight"><span class="kicker">ARSAS workflow</span><h3>Communication testing starts from the IED.</h3><ul><li>Enter an endpoint or open SCL</li><li>Discover the live model</li><li>Select the required signals</li><li>Observe values, quality, time, events, and source</li><li>Keep every result attached to its IED session</li></ul></article></div>
       </div>
     </section>
 
-    <section class="section">
-      <div class="container split-panel">
-        <article class="panel reveal"><span class="kicker">Application layer</span><h3>ARSAS</h3><p>Owns the engineer-facing workflow: projects, device sessions, visualization, signal selection, events, file-transfer UX, control staging, and evidence presentation.</p><div class="section-actions"><a class="btn" href="architecture.html">Review architecture</a></div></article>
-        <article class="panel reveal"><span class="kicker">Protocol layer</span><h3>ARIEC61850</h3><p>Owns reusable protocol services: transport, association, MMS, reporting, GOOSE, Sampled Values, file services, SCL, control, type handling, and diagnostics.</p><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850">Open engine repository</a></div></article>
+    <section class="section" id="screenshots"><div class="container">
+      <div class="section-head center"><span class="kicker">Real application evidence</span><h2>See the product—not a marketing mockup.</h2><p>These are current Windows application screenshots showing multi-IED connections, unified live values, SOE, GOOSE supervision, and communication diagnostics.</p></div>
+      <div class="product-tour-grid feature-evidence">
+        <figure class="screenshot-card"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" width="1507" height="893" alt="ARSAS connected simultaneously to multiple IEC 61850 IEDs" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">01</span>Independent multi-IED connections</h3><p>Each IED retains its own MMS association, model, monitoring lifecycle, and diagnostic history.</p></figcaption></figure>
+        <figure class="screenshot-card"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" width="1507" height="893" alt="ARSAS unified IEC 61850 live-value viewer" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">02</span>Unified live-value workspace</h3><p>Search values from connected IEDs with quality, timestamp, source, and recent-change evidence.</p></figcaption></figure>
+        <figure class="screenshot-card"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" width="1507" height="893" alt="ARSAS IEC 61850 sequence-of-events view" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">03</span>SCADA-style event log</h3><p>Correlate semantic changes while retaining the originating IED and process timestamp.</p></figcaption></figure>
+        <figure class="screenshot-card"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" width="1507" height="893" alt="ARSAS detailed GOOSE subscriber and stream supervision" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">04</span>Detailed GOOSE supervision</h3><p>Inspect stream identity, sequence, retransmission, TAL, ordered payload, and model binding.</p></figcaption></figure>
+        <figure class="screenshot-card wide"><a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" width="1507" height="893" alt="ARSAS communication and frame diagnostics workspace" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">05</span>Communication diagnostics</h3><p>Separate network, association, service, report, sequence, and device-behavior problems.</p></figcaption></figure>
       </div>
-    </section>
+    </div></section>
 
-    <section class="section section-tight">
-      <div class="container callout reveal">
-        <div class="callout-grid">
-          <div><span class="kicker">Product direction</span><h2>A complete IEC 61850 suite without hiding maturity.</h2><p>The roadmap labels each area as available, engineering preview, planned, or research—so users can see both the current value and the destination.</p></div>
-          <div class="section-actions"><a class="btn btn-primary" href="roadmap.html">Explore the roadmap</a><a class="btn" href="https://github.com/masarray/arsas">View source</a></div>
-        </div>
-      </div>
-    </section>
+    <section class="section" id="capabilities"><div class="container"><div class="section-head center"><span class="kicker">Practical engineering scope</span><h2>One workspace from endpoint to evidence.</h2><p>Implemented, preview, and roadmap capabilities remain explicitly labeled.</p></div><div class="feature-grid">
+      <article class="card"><span class="kicker">Available</span><h3>MMS discovery</h3><p>Discover the live hierarchy, values, quality, timestamps, DataSets, RCBs, and live type information.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>Smart Reporting</h3><p>Use proven static coverage, recover exact gaps where permitted, and poll only what remains uncovered or unverified.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>GOOSE subscriber</h3><p>Inspect APPID, VLAN, MAC, <code>goCBRef</code>, DataSet, sequence, TAL, payload, and binding evidence.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>Fault-record transfer</h3><p>Browse the MMS file service and retrieve disturbance or COMTRADE-related files in the selected IED context.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>SCL-assisted workspace</h3><p>Open common SCL files, retain configured context, compare live behavior, and use Edition-aware export services.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>Guarded Smart Control</h3><p>Resolve <code>ctlModel</code> and live command types before supported Direct or SBO execution.</p></article>
+      <article class="card"><span class="kicker">Available</span><h3>SOE and diagnostics</h3><p>Preserve process timestamps, report reasons, sequence evidence, transfer outcomes, and command results.</p></article>
+      <article class="card"><span class="kicker">Engineering preview</span><h3>Sampled Values</h3><p>Per-IED SMV entry points and viewer direction while deeper decoding and performance validation continue.</p></article>
+      <article class="card"><span class="kicker">Roadmap</span><h3>Full SCL generation</h3><p>Visual authoring for IED, communication, DataSet, report, GOOSE, SMV, and export structures.</p></article>
+    </div><div class="section-actions" style="justify-content:center"><a class="btn" href="features.html">Explore all capabilities</a></div></div></section>
+
+    <section class="section section-tight"><div class="container workflow"><div class="section-head"><span class="kicker">Minutes to useful evidence</span><h2>Connect. Discover. Select. Test.</h2><p>The workflow stays understandable even when the IED configuration is incomplete or behaves differently from the engineering model.</p></div><div class="step-list">
+      <article class="step"><span class="step-number">01</span><div><h3>Open SCL or add an IED</h3><p>Start from configured context or an approved MMS endpoint.</p></div></article><article class="step"><span class="step-number">02</span><div><h3>Discover the live model</h3><p>Verify the hierarchy, services, report objects, file capability, and data types.</p></div></article><article class="step"><span class="step-number">03</span><div><h3>Select the required signals</h3><p>Choose the process values and control objects needed for the test.</p></div></article><article class="step"><span class="step-number">04</span><div><h3>Observe and validate</h3><p>Monitor values, reports, SOE, GOOSE, files, diagnostics, and command completion.</p></div></article><article class="step"><span class="step-number">05</span><div><h3>Preserve evidence</h3><p>Keep configured intent, live result, time, quality, source, and diagnostics together.</p></div></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container callout"><div class="callout-grid"><div><span class="kicker">Open engineering</span><h2>Start from the real IED—not a chain of setup tools.</h2><p>Build ARSAS from source, review its capability boundaries, and use it only inside an approved laboratory or commissioning workflow.</p></div><div class="section-actions"><a class="btn btn-primary" href="https://github.com/masarray/arsas#quick-start">Get ARSAS</a><a class="btn" href="roadmap.html">Review maturity</a></div></div></div></section>
   </main>
 
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-grid">
-        <div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>One focused IEC 61850 engineering workspace for model, traffic, files, control, and evidence.</p></div>
-        <div><div class="footer-title">Product</div><div class="footer-links"><a href="#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div>
-        <div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="https://github.com/masarray/arsas/blob/main/LICENSE">License</a><a href="https://github.com/masarray/ARIEC61850">Engine</a></div></div>
-      </div>
-      <div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div>
-    </div>
-  </footer>
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"></svg></span><span>ARSAS</span></a><p>One focused IEC 61850 engineering workspace for model, reporting, traffic, files, control, and evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="smart-reporting.html">Smart Reporting</a><a href="#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="roadmap.html">Roadmap</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="architecture.html">Architecture</a><a href="https://github.com/masarray/ARIEC61850">Engine</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div></div></footer>
   <script src="app.js" defer></script>
 </body>
 </html>
