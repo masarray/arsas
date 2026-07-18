@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build the deployable ARSAS website with self-hosted media and stable download CTAs."""
+"""Build the public ARSAS website with local media and direct binary downloads."""
 
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -21,7 +22,72 @@ SCREENSHOT_MAP = {
 SOCIAL_SVG = "https://masarray.github.io/arsas/assets/social-card.svg"
 SOCIAL_PNG = "https://masarray.github.io/arsas/assets/social-card.png"
 QUICK_START = "https://github.com/masarray/arsas#quick-start"
-DOWNLOAD_PAGE = "https://masarray.github.io/arsas/download.html"
+DIRECT_INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
+DIRECT_PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
+DIRECT_CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
+
+PROTECTED_DOWNLOADS = {
+    DIRECT_INSTALLER: "__ARSAS_PUBLIC_INSTALLER__",
+    DIRECT_PORTABLE: "__ARSAS_PUBLIC_PORTABLE__",
+    DIRECT_CHECKSUMS: "__ARSAS_PUBLIC_CHECKSUMS__",
+}
+
+
+def rewrite_public_html(text: str) -> str:
+    for url, placeholder in PROTECTED_DOWNLOADS.items():
+        text = text.replace(url, placeholder)
+
+    for remote, local in SCREENSHOT_MAP.items():
+        text = text.replace(remote, local)
+
+    text = text.replace(SOCIAL_SVG, SOCIAL_PNG)
+    text = text.replace(
+        '<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />',
+        "",
+    )
+
+    # Product CTAs must start the stable installer download, not open the source repository.
+    text = text.replace(f'href="{QUICK_START}"', 'href="__ARSAS_PUBLIC_INSTALLER__" download')
+    text = text.replace('href="download.html"', 'href="__ARSAS_PUBLIC_INSTALLER__" download')
+    text = text.replace(
+        '"downloadUrl": "https://masarray.github.io/arsas/download.html"',
+        '"downloadUrl": "__ARSAS_PUBLIC_INSTALLER__"',
+    )
+    text = text.replace(
+        f'"downloadUrl": "{QUICK_START}"',
+        '"downloadUrl": "__ARSAS_PUBLIC_INSTALLER__"',
+    )
+
+    # Remove source-repository discovery from public structured data.
+    text = re.sub(
+        r'\s*"codeRepository"\s*:\s*"https://github\.com/masarray/arsas"\s*,?',
+        "",
+        text,
+    )
+
+    # Convert every remaining project/repository route into a landing-page route.
+    replacements = (
+        ("https://github.com/masarray/arsas/blob/main/docs/ARCHITECTURE.md#report-first-acquisition", "architecture.html"),
+        ("https://github.com/masarray/arsas/blob/main/ROADMAP.md", "roadmap.html"),
+        ("https://github.com/masarray/arsas/issues", "roadmap.html"),
+        ("https://github.com/masarray/arsas/releases", "__ARSAS_PUBLIC_INSTALLER__"),
+        ("https://github.com/masarray/ARIEC61850", "architecture.html"),
+        ("https://github.com/masarray/arsas", "./"),
+    )
+    for old, new in replacements:
+        text = text.replace(old, new)
+
+    # Keep labels meaningful after repository routes are removed.
+    text = text.replace('>Repository</a>', '>Architecture</a>')
+    text = text.replace('>Issues</a>', '>Roadmap</a>')
+    text = text.replace('>Engine</a>', '>Architecture</a>')
+    text = text.replace('>Build instructions</a>', '>Download installer</a>')
+    text = text.replace('>All releases</a>', '>Download installer</a>')
+
+    for url, placeholder in PROTECTED_DOWNLOADS.items():
+        text = text.replace(placeholder, url)
+
+    return text
 
 
 def build(source: Path, output: Path) -> None:
@@ -32,29 +98,10 @@ def build(source: Path, output: Path) -> None:
     replacements = 0
     for page in output.glob("*.html"):
         text = page.read_text(encoding="utf-8")
-        original = text
-
-        for remote, local in SCREENSHOT_MAP.items():
-            text = text.replace(remote, local)
-
-        text = text.replace(SOCIAL_SVG, SOCIAL_PNG)
-        text = text.replace(
-            '<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />',
-            "",
-        )
-        if page.name != "download.html":
-            text = text.replace(
-                f'href="{QUICK_START}"',
-                'href="download.html"',
-            )
-        text = text.replace(
-            f'"downloadUrl": "{QUICK_START}"',
-            f'"downloadUrl": "{DOWNLOAD_PAGE}"',
-        )
-
-        if text != original:
+        rewritten = rewrite_public_html(text)
+        if rewritten != text:
             replacements += 1
-            page.write_text(text, encoding="utf-8")
+            page.write_text(rewritten, encoding="utf-8")
 
     required = [output / path for path in (
         "assets/social-card.png",
@@ -65,7 +112,6 @@ def build(source: Path, output: Path) -> None:
         "assets/screenshots/arsas-goose.webp",
         "assets/screenshots/arsas-diagnostics.webp",
         "download.html",
-        "download.js",
         "download.css",
     )]
     missing = [str(path.relative_to(output)) for path in required if not path.exists()]
@@ -80,7 +126,7 @@ def build(source: Path, output: Path) -> None:
     if replacements == 0:
         raise SystemExit("Landing build made no expected transformations")
 
-    print(f"Built deployable ARSAS website at {output} ({replacements} transformed pages).")
+    print(f"Built public ARSAS website at {output} ({replacements} transformed pages).")
 
 
 def main() -> int:
