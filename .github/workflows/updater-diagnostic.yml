@@ -35,10 +35,19 @@ jobs:
         shell: powershell
         run: |
           $output = @(& dotnet build .\ArIED61850Tester.csproj -c Release --no-restore -v:q 2>&1)
-          if ($LASTEXITCODE -ne 0) {
-            $matches = @($output | Select-String -Pattern ': error (CS|MC|XDG|NETSDK)[0-9]+')
-            if ($matches.Count -eq 0) { $matches = $output | Select-Object -Last 30 }
-            $matches | ForEach-Object { Write-Host $_ }
-            exit 1
+          $matches = @($output | Select-String -Pattern ': error (CS|MC|XDG|NETSDK)[0-9]+')
+          if ($matches.Count -eq 0 -and $LASTEXITCODE -ne 0) { $matches = $output | Select-Object -Last 30 }
+          if ($matches.Count -gt 0) {
+            $matches | ForEach-Object { $_.ToString() } | Set-Content updater-compiler-errors.txt
+          } else {
+            'Updater compile passed.' | Set-Content updater-compiler-errors.txt
           }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $output | Select-Object -Last 10
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-compiler-diagnostics
+          path: updater-compiler-errors.txt
