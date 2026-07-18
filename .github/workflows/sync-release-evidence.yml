@@ -1,0 +1,80 @@
+name: Sync stable release evidence
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".release/published.json"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: sync-stable-release-evidence
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Publish verified updater evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout stable publication record
+        uses: actions/checkout@v4
+
+      - name: Validate stable publication record
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          record = json.loads(Path('.release/published.json').read_text())
+          required = ('version', 'tag', 'channel', 'publishedAtUtc', 'sourceCommit', 'installer')
+          missing = [key for key in required if not record.get(key)]
+          if missing:
+              raise SystemExit('Missing release evidence fields: ' + ', '.join(missing))
+          if record['channel'] != 'stable':
+              raise SystemExit('Only stable release evidence may update the public updater channel')
+          if not re.fullmatch(r'\d+\.\d+\.\d+', record['version']):
+              raise SystemExit('Release version must use major.minor.patch')
+
+          installer = record['installer']
+          expected_url = 'https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe'
+          if installer.get('name') != 'ARSAS-Windows-x64-Setup.exe':
+              raise SystemExit('Stable installer name is invalid')
+          if installer.get('url') != expected_url:
+              raise SystemExit('Stable installer URL is invalid')
+          if not re.fullmatch(r'[0-9a-f]{64}', installer.get('sha256', '')):
+              raise SystemExit('Stable installer SHA-256 is invalid')
+          if not 1_000_000 <= int(installer.get('sizeBytes', 0)) <= 500_000_000:
+              raise SystemExit('Stable installer size is invalid')
+          PY
+
+      - name: Write independently auditable updater evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-evidence" >/dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref='refs/heads/release-evidence' -f sha="$main_sha" >/dev/null
+          fi
+
+          content="$(base64 -w0 .release/published.json)"
+          api_path="repos/$GITHUB_REPOSITORY/contents/published.json"
+          existing_sha="$(gh api "$api_path?ref=release-evidence" --jq .sha 2>/dev/null || true)"
+          args=(-f message="Sync stable ARSAS updater evidence" -f content="$content" -f branch=release-evidence)
+          if [ -n "$existing_sha" ]; then args+=(-f sha="$existing_sha"); fi
+          gh api --method PUT "$api_path" "${args[@]}" >/dev/null
+
+      - name: Refresh product website updater manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
