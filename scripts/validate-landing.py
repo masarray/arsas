@@ -16,6 +16,7 @@ SITE = ROOT / "landing"
 CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 HTML_FILES = [
     SITE / "index.html",
+    SITE / "smart-reporting.html",
     SITE / "features.html",
     SITE / "control.html",
     SITE / "architecture.html",
@@ -148,7 +149,7 @@ def validate_structured_files(errors: list[str]) -> None:
     sitemap = SITE / "sitemap.xml"
     if sitemap.exists():
         sitemap_text = sitemap.read_text(encoding="utf-8")
-        for page in ("features.html", "control.html", "architecture.html", "roadmap.html"):
+        for page in ("smart-reporting.html", "features.html", "control.html", "architecture.html", "roadmap.html"):
             expected = f"{CANONICAL_ROOT}{page}"
             if expected not in sitemap_text:
                 errors.append(f"landing/sitemap.xml: missing {expected}")
