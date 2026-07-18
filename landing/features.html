@@ -11,7 +11,9 @@
   <link rel="canonical" href="https://masarray.github.io/arsas/features.html" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="ARSAS IEC 61850 Capabilities" />
   <meta property="og:description" content="MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL, diagnostics, SOE, and guarded control in one workstation." />
@@ -24,7 +26,7 @@
     <div class="container nav-shell">
       <a class="brand" href="./" aria-label="ARSAS home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS <small>IEC 61850 workstation</small></span></a>
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      <nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="features.html" aria-current="page">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a><a class="nav-cta" href="https://github.com/masarray/arsas">GitHub</a></nav>
+      <nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="./#screenshots">Screenshots</a><a href="features.html" aria-current="page">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a><a class="nav-cta" href="https://github.com/masarray/arsas">GitHub</a></nav>
     </div>
   </header>
 
@@ -65,6 +67,26 @@
     </section>
 
     <section class="section section-tight">
+      <div class="container">
+        <div class="section-head center reveal"><span class="kicker">Capability evidence</span><h2>Live values, GOOSE, and diagnostics in the real application.</h2><p>The interface keeps engineering context and protocol evidence readable without splitting one investigation across unrelated tools.</p></div>
+        <div class="product-tour-grid feature-evidence">
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" alt="ARSAS IEC 61850 unified multi-IED live value viewer" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">01</span>Multi-IED live values</h3><p>Selected signals from every connected IED share one virtualized engineering workspace while retaining device, quality, timestamp, and acquisition evidence.</p></figcaption>
+          </figure>
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" alt="ARSAS detailed IEC 61850 GOOSE subscriber view" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">02</span>GOOSE stream detail</h3><p>Stream metadata, sequence supervision, ordered payload leaves, retransmissions, and model binding remain visible together.</p></figcaption>
+          </figure>
+          <figure class="screenshot-card wide reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" alt="ARSAS IEC 61850 detailed communication and frame diagnostics" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">03</span>Communication and frame diagnostics</h3><p>Association, service, report, sequence, timing, GOOSE, and frame evidence help engineers distinguish network, protocol, configuration, and device-behavior problems.</p></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight">
       <div class="container split-panel">
         <article class="panel reveal"><span class="kicker">Engineering preview</span><h3>Sampled Values / SMV</h3><p>ARSAS now exposes per-IED SMV entry points and a viewer direction. Production-grade completion requires deeper stream decoding, SCL binding, scaling, sample-rate validation, sequence and synchronization diagnostics, and sustained-performance testing.</p><div class="section-actions"><a class="btn" href="roadmap.html#sampled-values">See the SMV milestone</a></div></article>
         <article class="panel reveal"><span class="kicker">Roadmap</span><h3>Full SCL generation</h3><p>The target is a visual, validated authoring workspace for IED, communication, DataSet, report, GOOSE, Sampled Values, and Edition-aware export structures—not merely a file viewer.</p><div class="section-actions"><a class="btn" href="roadmap.html#scl-generation">See the SCL milestone</a></div></article>
@@ -88,7 +110,7 @@
     </section>
   </main>
 
-  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>Practical IEC 61850 engineering across model, reports, process bus, files, control, and evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="https://github.com/masarray/arsas/blob/main/LICENSE">License</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Capabilities are documented by maturity.</span></div></div></footer>
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>Practical IEC 61850 engineering across model, reports, process bus, files, control, and evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="./#screenshots">Screenshots</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="https://github.com/masarray/arsas/blob/main/LICENSE">License</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Capabilities are documented by maturity.</span></div></div></footer>
   <script src="app.js" defer></script>
 </body>
 </html>

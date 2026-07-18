@@ -1,0 +1,125 @@
+.product-tour-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.screenshot-card {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .038);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .2);
+}
+
+.screenshot-card.wide {
+  grid-column: 1 / -1;
+}
+
+.screenshot-link {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #030812;
+}
+
+.screenshot-link::after {
+  content: "Open full size";
+  position: absolute;
+  right: .75rem;
+  bottom: .75rem;
+  padding: .34rem .58rem;
+  color: #e7f5ff;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 9px;
+  background: rgba(4, 12, 24, .78);
+  backdrop-filter: blur(10px);
+  font-size: .72rem;
+  font-weight: 650;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.screenshot-link:hover::after,
+.screenshot-link:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.screenshot-link img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: transform .28s ease;
+}
+
+.screenshot-link:hover img {
+  transform: scale(1.008);
+}
+
+.screenshot-caption {
+  padding: .95rem 1.05rem 1.05rem;
+}
+
+.screenshot-caption h3 {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  font-size: 1.02rem;
+  letter-spacing: -.015em;
+}
+
+.screenshot-caption p {
+  margin: .42rem 0 0;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.screenshot-number {
+  display: inline-grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #dff6ff;
+  border: 1px solid rgba(56, 189, 248, .22);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, .1);
+  font-size: .68rem;
+  font-weight: 760;
+}
+
+.gallery-note {
+  margin: -1.2rem auto 2rem;
+  max-width: 720px;
+  color: var(--subtle);
+  text-align: center;
+  font-size: .86rem;
+}
+
+.feature-evidence {
+  margin-top: 2rem;
+}
+
+@media (max-width: 760px) {
+  .product-tour-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .screenshot-card.wide {
+    grid-column: auto;
+  }
+
+  .screenshot-link::after {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-link img,
+  .screenshot-link::after {
+    transition: none;
+  }
+}

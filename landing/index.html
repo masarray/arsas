@@ -13,7 +13,9 @@
   <link rel="canonical" href="https://masarray.github.io/arsas/" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ARSAS" />
@@ -44,6 +46,14 @@
     "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
     "programmingLanguage": ["C#", "XAML"],
     "runtimePlatform": ".NET 8",
+    "screenshot": [
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp",
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp",
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp",
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp",
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp",
+      "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp"
+    ],
     "author": {
       "@type": "Person",
       "name": "Ari Sulistiono",
@@ -80,6 +90,7 @@
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <nav class="nav-links" aria-label="Primary navigation" data-nav-links>
         <a href="./" aria-current="page">Overview</a>
+        <a href="#screenshots">Screenshots</a>
         <a href="features.html">Capabilities</a>
         <a href="control.html">Smart Control</a>
         <a href="architecture.html">Architecture</a>
@@ -99,7 +110,7 @@
           <div class="hero-actions">
             <a class="btn btn-primary" href="https://github.com/masarray/arsas#quick-start">Build from source</a>
             <a class="btn" href="features.html">Explore capabilities</a>
-            <a class="btn btn-quiet" href="roadmap.html">View product roadmap</a>
+            <a class="btn btn-quiet" href="#screenshots">View real application</a>
           </div>
           <div class="hero-proof" aria-label="Product highlights">
             <span>Independent multi-IED sessions</span>
@@ -109,9 +120,9 @@
         </div>
 
         <div class="hero-visual" aria-label="ARSAS application preview">
-          <div class="hero-window"><img src="assets/hero.svg" alt="Stylized ARSAS interface showing IEC 61850 IED discovery, live values, events, and control evidence" width="1440" height="760" /></div>
-          <div class="floating-chip one"><span class="dot"></span> Report-first monitoring</div>
-          <div class="floating-chip two"><span class="dot blue"></span> MMS · GOOSE · Files · SMV</div>
+          <div class="hero-window"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp" alt="ARSAS IEC 61850 engineering workstation when first opened" decoding="async" fetchpriority="high" /></div>
+          <div class="floating-chip one"><span class="dot"></span> Start from IP or SCL</div>
+          <div class="floating-chip two"><span class="dot blue"></span> One engineering workspace</div>
         </div>
       </div>
     </section>
@@ -122,6 +133,44 @@
         <div class="metric"><strong>GOOSE + SMV</strong><span>Station and process-bus engineering workflows</span></div>
         <div class="metric"><strong>Files + COMTRADE</strong><span>Fault-record retrieval from the selected IED</span></div>
         <div class="metric"><strong>SCL + Control</strong><span>Configured intent, generation roadmap, and typed commands</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="screenshots">
+      <div class="container">
+        <div class="section-head center reveal">
+          <span class="kicker">Real application workflow</span>
+          <h2>See the IEC 61850 evidence—not a marketing mockup.</h2>
+          <p>These screenshots show the current Windows application moving from simultaneous IED connections to unified monitoring, SCADA-style events, detailed GOOSE supervision, and communication diagnostics.</p>
+        </div>
+        <p class="gallery-note reveal">Select any screenshot to open the original full-resolution WebP image.</p>
+
+        <div class="product-tour-grid feature-evidence">
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp" alt="ARSAS connected simultaneously to multiple IEC 61850 IEDs" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">01</span>Independent multi-IED connections</h3><p>Connect and discover several IEDs simultaneously while each device retains its own MMS association, model, monitoring lifecycle, and diagnostic history.</p></figcaption>
+          </figure>
+
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp" alt="ARSAS unified live value viewer for all connected IEC 61850 IEDs" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">02</span>Unified live-value viewer</h3><p>Bring selected signals from every connected IED into one searchable workspace with value, quality, timestamp, source, and recent-change evidence.</p></figcaption>
+          </figure>
+
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp" alt="ARSAS SCADA-style IEC 61850 sequence of events log across multiple IEDs" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">03</span>SCADA-style event log</h3><p>Correlate semantic changes from multiple IEDs in a common SOE view while retaining originating device, process timestamp, quality, report reason, and transition.</p></figcaption>
+          </figure>
+
+          <figure class="screenshot-card reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp" alt="ARSAS detailed IEC 61850 GOOSE subscriber and stream supervision" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">04</span>Detailed GOOSE supervision</h3><p>Inspect APPID, VLAN, MAC, <code>goCBRef</code>, DataSet, <code>stNum</code>, <code>sqNum</code>, TAL, retransmissions, ordered payload leaves, and SCL or live-model binding.</p></figcaption>
+          </figure>
+
+          <figure class="screenshot-card wide reveal">
+            <a class="screenshot-link" href="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp" alt="ARSAS detailed IEC 61850 communication and frame diagnostics workspace" loading="lazy" decoding="async" /></a>
+            <figcaption class="screenshot-caption"><h3><span class="screenshot-number">05</span>Communication and frame diagnostics</h3><p>Analyze association, service, report, sequence, timing, GOOSE, and frame information to isolate IEC 61850 communication problems without losing the originating IED context.</p></figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
@@ -185,7 +234,7 @@
     <div class="container">
       <div class="footer-grid">
         <div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>One focused IEC 61850 engineering workspace for model, traffic, files, control, and evidence.</p></div>
-        <div><div class="footer-title">Product</div><div class="footer-links"><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div>
+        <div><div class="footer-title">Product</div><div class="footer-links"><a href="#screenshots">Screenshots</a><a href="features.html">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div>
         <div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="https://github.com/masarray/arsas/blob/main/LICENSE">License</a><a href="https://github.com/masarray/ARIEC61850">Engine</a></div></div>
       </div>
       <div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div>
