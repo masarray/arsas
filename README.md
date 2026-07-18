@@ -18,7 +18,13 @@ ARSAS is an open-source Windows engineering workstation for IEC 61850 testing, c
 [**Product website**](https://masarray.github.io/arsas/) · [**Capabilities**](#capability-status) · [**Roadmap**](ROADMAP.md) · [**Architecture**](docs/ARCHITECTURE.md) · [**Report an issue**](https://github.com/masarray/arsas/issues)
 </div>
 
-![ARSAS IEC 61850 workstation](landing/assets/hero.svg)
+<div align="center">
+  <a href="Assets/screenshot/arsas%20(1).webp">
+    <img src="Assets/screenshot/arsas%20(1).webp" alt="ARSAS IEC 61850 engineering workstation first-launch workspace" width="100%" />
+  </a>
+  <br />
+  <sub>ARSAS at first launch — a focused starting point for opening an SCL project, restoring a saved workspace, or adding an IED directly by IP address.</sub>
+</div>
 
 ## Why ARSAS
 
@@ -27,6 +33,42 @@ IEC 61850 FAT, SAT, commissioning, and troubleshooting often require several dis
 ARSAS is being built as a single focused workspace: enter an IED endpoint or open an SCL project, discover the live MMS model, select signals, monitor values and reports, inspect GOOSE and Sampled Values traffic, retrieve COMTRADE fault records, validate control behavior, and preserve diagnostic evidence without constantly switching applications.
 
 The protocol engine lives in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) repository. ARSAS remains the application, workflow, visualization, and operator-experience layer.
+
+## See ARSAS in action
+
+Every screenshot below comes from the real Windows application. Select an image to open the full-resolution view.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="Assets/screenshot/arsas%20(2).webp"><img src="Assets/screenshot/arsas%20(2).webp" alt="ARSAS connected simultaneously to multiple IEC 61850 IEDs" width="100%" /></a>
+      <br /><strong>Independent multi-IED connections</strong><br />Connect, discover, and manage several protection relays or bay-control devices simultaneously while every IED retains its own session, model, monitoring state, and diagnostics.
+    </td>
+    <td width="50%" valign="top">
+      <a href="Assets/screenshot/arsas%20(3).webp"><img src="Assets/screenshot/arsas%20(3).webp" alt="ARSAS unified IEC 61850 live value viewer for multiple IEDs" width="100%" /></a>
+      <br /><strong>Unified live-value workspace</strong><br />View selected values from all connected IEDs in one searchable and virtualized workspace with quality, timestamps, acquisition source, and recent-change evidence.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="Assets/screenshot/arsas%20(4).webp"><img src="Assets/screenshot/arsas%20(4).webp" alt="ARSAS IEC 61850 sequence of events log across multiple IEDs" width="100%" /></a>
+      <br /><strong>SCADA-style sequence of events</strong><br />Correlate semantic events from every IED in a common SOE view while preserving originating device, process timestamp, quality, report reason, and state transition.
+    </td>
+    <td width="50%" valign="top">
+      <a href="Assets/screenshot/arsas%20(5).webp"><img src="Assets/screenshot/arsas%20(5).webp" alt="ARSAS detailed IEC 61850 GOOSE subscriber and frame analysis workspace" width="100%" /></a>
+      <br /><strong>Detailed GOOSE supervision</strong><br />Inspect stream identity, APPID, VLAN, MAC, <code>goCBRef</code>, DataSet, <code>stNum</code>, <code>sqNum</code>, TAL, ordered payload leaves, retransmissions, and model binding.
+    </td>
+  </tr>
+</table>
+
+<div align="center">
+  <a href="Assets/screenshot/arsas%20(6).webp">
+    <img src="Assets/screenshot/arsas%20(6).webp" alt="ARSAS IEC 61850 communication and frame diagnostics workspace" width="100%" />
+  </a>
+  <br />
+  <strong>Communication and frame diagnostics</strong><br />
+  <sub>Use detailed association, service, report, GOOSE, sequence, timing, and frame information to investigate IEC 61850 communication problems without losing the originating IED context.</sub>
+</div>
 
 ## Capability status
 
