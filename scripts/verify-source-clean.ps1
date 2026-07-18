@@ -152,5 +152,6 @@ if ($Problems.Count -gt 0) {
 }
 
 & (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
+& (Join-Path $PSScriptRoot "verify-auto-update.ps1")
 
-Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
+Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, current-license, binding, and updater checks." -ForegroundColor Green

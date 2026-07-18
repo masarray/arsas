@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "product": "ARSAS",
+  "version": "1.6.16",
+  "channel": "stable",
+  "publishedAtUtc": "2026-07-18T05:23:25.543679+00:00",
+  "installer": {
+    "name": "ARSAS-Windows-x64-Setup.exe",
+    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
+    "sha256": "9343ed05939ec8c9d253c1079e39429ed3dcf15db9f40982cc5b9b93335590d6",
+    "sizeBytes": 53372154
+  }
+}

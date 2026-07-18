@@ -11,6 +11,7 @@ public partial class App : Application
     private static string _lastUiErrorSignature = string.Empty;
     private static DateTime _lastUiErrorUtc = DateTime.MinValue;
     private static int _uiErrorHandlerActive;
+    private CancellationTokenSource? _updateCancellation;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,6 +20,19 @@ public partial class App : Application
         FaultRecordUxBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
+
+        _updateCancellation = new CancellationTokenSource();
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.ApplicationIdle,
+            new Action(() => _ = AppUpdateCoordinator.RunLazyAsync(_updateCancellation.Token)));
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _updateCancellation?.Cancel();
+        _updateCancellation?.Dispose();
+        _updateCancellation = null;
+        base.OnExit(e);
     }
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -36,7 +50,7 @@ public partial class App : Application
             if (signature.Equals(_lastUiErrorSignature, StringComparison.Ordinal) &&
                 nowUtc - _lastUiErrorUtc < TimeSpan.FromSeconds(10))
             {
-                Debug.WriteLine($"Suppressed repeated ArIED UI error: {signature}");
+                Debug.WriteLine($"Suppressed repeated ARSAS UI error: {signature}");
                 return;
             }
 
@@ -55,7 +69,7 @@ public partial class App : Application
         }
         catch (Exception reportingError)
         {
-            Debug.WriteLine($"Failed to route ArIED UI error to Diagnostics: {reportingError}");
+            Debug.WriteLine($"Failed to route ARSAS UI error to Diagnostics: {reportingError}");
         }
         finally
         {

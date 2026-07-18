@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
+  actions: write
   contents: write
 
 jobs:
@@ -106,7 +106,7 @@ jobs:
 
           Stable Windows x64 release of the ARSAS IEC 61850 engineering workstation.
 
-          Public users should access ARSAS through the product website. The release assets are used only as the direct-download backend for the landing page.
+          Public users should access ARSAS through the product website. The release assets are used only as the direct-download backend for the landing page and the in-app verified updater.
 
           Included assets:
           - Windows installer
@@ -214,3 +214,12 @@ jobs:
           args=(-f message="Record verified ARSAS $VERSION publication" -f content="$content" -f branch=release-evidence)
           if [ -n "$existing_sha" ]; then args+=(-f sha="$existing_sha"); fi
           gh api --method PUT "$api_path" "${args[@]}" >/dev/null
+
+      - name: Refresh product website updater manifest
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

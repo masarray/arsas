@@ -45,7 +45,37 @@ jobs:
       - name: Build deployable website with local media
         run: python scripts/build-landing.py --output _site
 
-      - name: Validate local screenshots, social preview and downloads
+      - name: Sync verified stable updater manifest
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > /tmp/arsas-published.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(Path('/tmp/arsas-published.json').read_text())
+          installer = evidence['installer']
+          manifest = {
+              'schemaVersion': 1,
+              'product': 'ARSAS',
+              'version': evidence['version'],
+              'channel': evidence['channel'],
+              'publishedAtUtc': evidence['publishedAtUtc'],
+              'installer': {
+                  'name': installer['name'],
+                  'url': installer['url'],
+                  'sha256': installer['sha256'],
+                  'sizeBytes': installer['sizeBytes'],
+              },
+          }
+          Path('_site/latest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+
+      - name: Validate local screenshots, social preview, downloads and updater manifest
         run: python scripts/validate-built-landing.py _site
 
       - name: Verify public website boundaries
