@@ -130,12 +130,17 @@ jobs:
             throw "Operator signal pruning or ballistic navigation policy is not installed."
           }
 
-          if ($project -notmatch '<Version>1\.6\.16</Version>' -or
-              $project -notmatch '<AssemblyVersion>1\.6\.16\.0</AssemblyVersion>' -or
-              $project -notmatch '<FileVersion>1\.6\.16\.0</FileVersion>' -or
-              $publish -notmatch '\[string\]\$Version = "1\.6\.16"') {
-            throw "Release metadata is not aligned to 1.6.16."
+          [xml]$projectXml = $project
+          $releaseVersion = [string]$projectXml.Project.PropertyGroup.Version
+          $assemblyVersion = [string]$projectXml.Project.PropertyGroup.AssemblyVersion
+          $fileVersion = [string]$projectXml.Project.PropertyGroup.FileVersion
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$' -or
+              $assemblyVersion -ne "$releaseVersion.0" -or
+              $fileVersion -ne "$releaseVersion.0" -or
+              $publish -notmatch [regex]::Escape("[string]`$Version = `"$releaseVersion`"")) {
+            throw "Release metadata is not aligned to the project version $releaseVersion."
           }
+          "ARSAS_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
@@ -227,7 +232,7 @@ jobs:
 
       - name: Publish portable x64
         shell: powershell
-        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version 1.6.16 -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version $env:ARSAS_VERSION -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4

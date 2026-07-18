@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.6.16",
+    [string]$Version = "1.6.17",
     [string]$Runtime = "win-x64",
     [bool]$SingleFile = $false,
     [bool]$SelfContained = $true,
@@ -33,7 +33,7 @@ if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreC
     $normalizedVersion = $normalizedVersion.Substring(1)
 }
 if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-.][0-9A-Za-z.-]+)?$') {
-    throw "Invalid version '$Version'. Use a value such as 1.6.16 or v1.6.16."
+    throw "Invalid version '$Version'. Use a value such as 1.6.17 or v1.6.17."
 }
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 
