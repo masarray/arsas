@@ -1,7 +1,7 @@
 {
-  "name": "ARSAS — IEC 61850 Engineering Workstation",
+  "name": "ARSAS — Complete IEC 61850 Engineering Workstation",
   "short_name": "ARSAS",
-  "description": "SCL-assisted IEC 61850 engineering, live MMS discovery, multi-IED monitoring, SOE, diagnostics, and Smart Control.",
+  "description": "Open-source IEC 61850 engineering for MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL workflows, diagnostics, and control validation.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

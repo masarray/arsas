@@ -1,112 +1,126 @@
 <div align="center">
-  <img src="Assets/app-icon.png" alt="ARSAS application icon" width="104" height="104" />
+  <img src="Assets/app-icon.png" alt="ARSAS IEC 61850 engineering workstation logo" width="104" height="104" />
 
 # ARSAS
 
-### IEC 61850 IED Explorer, Multi-Device Monitor, GOOSE Subscriber & Smart Control Workstation
+### One application for practical IEC 61850 engineering
 
-**A modern Windows engineering application for SCL-assisted workflows, live MMS model discovery, report-first monitoring, read-only GOOSE subscription, sequence-of-events analysis, diagnostics, and guarded IEC 61850 control.**
+**MMS · Reporting · GOOSE · File Transfer · Sampled Values · SCL · Control · Diagnostics**
 
-[![Build](https://github.com/masarray/ArIED61850Tester/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/ArIED61850Tester/actions/workflows/build.yml)
-[![Pages](https://github.com/masarray/ArIED61850Tester/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/ArIED61850Tester/)
+ARSAS is an open-source Windows engineering workstation for IEC 61850 testing, commissioning, troubleshooting, model inspection, live monitoring, fault-record retrieval, and evidence-driven control workflows.
+
+[![Build](https://github.com/masarray/arsas/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/arsas/actions/workflows/build.yml)
+[![Pages](https://github.com/masarray/arsas/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/arsas/)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-2563eb)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows-0ea5e9)](#requirements)
 
-[**Product website**](https://masarray.github.io/ArIED61850Tester/) · [**Quick start**](#quick-start) · [**Architecture**](docs/ARCHITECTURE.md) · [**GOOSE Subscriber**](docs/GOOSE_SUBSCRIBER.md) · [**Validation**](docs/VALIDATION_CHECKLIST.md) · [**Report an issue**](https://github.com/masarray/ArIED61850Tester/issues)
+[**Product website**](https://masarray.github.io/arsas/) · [**Capabilities**](#capability-status) · [**Roadmap**](ROADMAP.md) · [**Architecture**](docs/ARCHITECTURE.md) · [**Report an issue**](https://github.com/masarray/arsas/issues)
 </div>
 
-![ARSAS engineering workspace](landing/assets/hero.svg)
+![ARSAS IEC 61850 workstation](landing/assets/hero.svg)
 
-## Built for practical IEC 61850 engineering
+## Why ARSAS
 
-ARSAS brings the most common commissioning and troubleshooting workflows into one focused desktop workspace. Add an IED by IP address, import endpoints from an SCL file, verify the live MMS model, select the required signals, monitor each device independently, subscribe to station/process-bus GOOSE streams without transmitting, inspect report and event evidence, and stage supported control operations through the native ARIEC61850 control service.
+IEC 61850 FAT, SAT, commissioning, and troubleshooting often require several disconnected tools, repeated model preparation, manual DataSet or RCB work, and significant setup before the first useful value appears.
 
-The application is designed for **substation automation laboratories, FAT/SAT preparation, relay and BCU integration, commissioning support, protocol investigation, and repeatable engineering diagnostics**. It is not a formal conformance certificate and does not replace approved switching procedures, test plans, or site authority.
+ARSAS is being built as a single focused workspace: enter an IED endpoint or open an SCL project, discover the live MMS model, select signals, monitor values and reports, inspect GOOSE and Sampled Values traffic, retrieve COMTRADE fault records, validate control behavior, and preserve diagnostic evidence without constantly switching applications.
 
-## Engineering capabilities
+The protocol engine lives in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) repository. ARSAS remains the application, workflow, visualization, and operator-experience layer.
 
-| Area | Current capability |
-|---|---|
-| **SCL workspace** | Import SCD, CID, ICD, IID, SSD, or XML files; extract configured endpoints; preserve multi-IED project context; support design-to-live verification workflows. |
-| **MMS discovery** | Discover Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, GOOSE control blocks, and available model metadata. |
-| **Multi-IED sessions** | Maintain independent connection, discovery, monitoring, report, event, and lifecycle state for every configured IED. |
-| **Report-first monitoring** | Prefer configured RCB/DataSet coverage, use temporary dynamic reporting where appropriate, and poll only still-uncovered points. |
-| **Signal workspace** | Search, filter, sort, select visible rows, persist selections, and work efficiently with large IED models through WPF virtualization. |
-| **Live monitoring** | Coalesced live values, recent-change highlighting, IED-provided timestamps, quality display, and bounded UI updates. |
-| **GOOSE Subscriber** | Capture IEC 61850-8-1 GOOSE through the native ARIEC61850 Npcap transport; show APPID, MAC/VLAN, `goCBRef`, DataSet, `stNum`/`sqNum`, TAL and diagnostics; bind every ordered `allData` leaf to SCL or live-discovery DataSet metadata. |
-| **Sequence of events** | Process-oriented event log, per-IED unread indicators, report reasons, and semantic state transitions. |
-| **Smart Control** | Discover `ctlModel`, inspect live MMS types, execute supported Direct or Select-Before-Operate sequences, and surface termination/error evidence. |
-| **Diagnostics** | Connection journal, association evidence, TCP reachability context, report and GOOSE diagnostics, command evidence, and copyable support reports. |
-| **Project persistence** | Save device definitions, cached model context, selected signals, and operator workspace state for faster return visits. |
+## Capability status
 
-## Workflow
+ARSAS uses explicit maturity labels so the public documentation does not confuse implemented features with the long-term product direction.
+
+| IEC 61850 area | Status | Current scope |
+|---|---|---|
+| **MMS client and model discovery** | Available | Association, Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, type information, and diagnostics. |
+| **Reporting and live monitoring** | Available | Static and dynamic report planning, report-first acquisition, bounded polling fallback, multi-IED monitoring, SOE, and persisted signal selections. |
+| **GOOSE subscriber** | Available | Read-only Npcap capture, stream supervision, APPID/VLAN/MAC metadata, `stNum`/`sqNum`, ordered `allData`, and SCL/live-model binding. |
+| **IEC 61850 file transfer** | Available | Bounded MMS file-service browsing and download workflows for disturbance and COMTRADE fault-record retrieval. |
+| **Smart Control** | Available | Live `ctlModel` discovery, typed Direct and Select-Before-Operate sequences, command termination, error evidence, and process feedback. |
+| **SCL workspace** | Available | SCD/CID/ICD/IID/SSD import, endpoint extraction, configured-to-live comparison context, and Edition 1/2-oriented export services. |
+| **Sampled Values / SMV** | Engineering preview | Per-IED stream entry points and viewer workflow; deeper decoding, quality supervision, validation, and performance work remain active. |
+| **Full SCL generation** | Roadmap | A visual project-authoring workflow for IED, communication, DataSet, report, GOOSE, Sampled Values, and export generation. |
+| **Unified IEC 61850 suite** | Product direction | A complete engineer-facing environment for MMS, GOOSE, file services, Sampled Values, SCL engineering, diagnostics, testing, and evidence export. |
+
+See [ROADMAP.md](ROADMAP.md) for milestones, definitions of done, and non-goals.
+
+## Practical engineering workflow
 
 ```text
-Open SCL / Open Project / Add IED
-                 ↓
-Review configured endpoint and live connection state
-                 ↓
-Discover or restore the IEC 61850 model
-                 ↓
+Open SCL / Open Project / Add IED by IP address
+                         ↓
+Discover or restore the live IEC 61850 model
+                         ↓
 Select signals and control-ready Data Objects
-                 ↓
-Start report/poll monitoring independently per IED
-                 ↓
-Optionally subscribe to GOOSE on an approved Npcap adapter
-                 ↓
-Inspect live values, ordered GOOSE leaves, reports, SOE,
-diagnostics, and command evidence
+                         ↓
+Start report-first monitoring per IED
+                         ↓
+Inspect GOOSE / SMV / reports / SOE / diagnostics
+                         ↓
+Retrieve fault records through MMS file services
+                         ↓
+Validate guarded control and export test evidence
 ```
 
-Each device owns its own MMS session. GOOSE capture is a separate read-only Ethernet subscriber and does not implicitly connect, monitor, control, or reconfigure an IED.
+## Core capabilities
 
-## SCL-aware GOOSE subscription
+### Live MMS engineering
 
-The **GOOSE Subscriber** tab uses ARIEC61850's raw-Ethernet parser, Npcap frame source, and `ProcessBusStreamMonitor`. It never publishes GOOSE or writes a GSEControl object.
+- Independent MMS association and lifecycle per IED.
+- Live discovery of model hierarchy, values, quality, timestamps, DataSets, RCBs, control blocks, and type descriptors.
+- Searchable and virtualized signal workspace for large IED models.
+- Configured SCL context retained beside observed live behavior.
 
-For each detected stream, ARSAS displays:
+### Report-first monitoring
 
-1. APPID, source/destination MAC, VLAN ID/priority, `goCBRef`, `goID`, DataSet reference, and `confRev`.
-2. `stNum`, `sqNum`, TimeAllowedToLive, Test, `ndsCom`, packet count, retransmission/state-change classification, and sequence/TAL diagnostics.
-3. Every `allData` item in exact wire order.
-4. Signal name, object reference, FC, CDC/bType, previous value, changed state, and model-binding source.
+- Prefer usable report coverage before polling.
+- Preserve DataSet order and report reason evidence.
+- Build temporary dynamic coverage where supported.
+- Keep bounded polling only for uncovered or unverified signals.
+- Coalesce UI updates to remain responsive across multiple devices.
 
-Binding priority is **loaded SCL GOOSE/DataSet model → live MMS discovery GOOSE/DataSet model → unbound ordered leaf fallback**. Model/frame count mismatches remain visible instead of being silently truncated. See [GOOSE Subscriber engineering notes](docs/GOOSE_SUBSCRIBER.md).
+### GOOSE and Sampled Values
 
-## Smart Control, without protocol guessing
+- Read-only GOOSE capture through the ARIEC61850 Npcap transport.
+- Stream identity, VLAN, APPID, sequence, retransmission, TAL, and model-binding diagnostics.
+- Ordered `allData` presentation without silently truncating model/frame mismatches.
+- Sampled Values viewer workflow under active engineering development.
 
-For supported control objects, ARSAS reads the live model before enabling command dispatch:
+### Fault-record file transfer
 
-1. Validate the selected Data Object root.
-2. Read `ctlModel` and determine the required control sequence.
-3. Resolve the live `Oper`, `SBOw`, and optional `Cancel` type descriptions.
-4. Locate and bind the named `ctlVal` field using the actual MMS type.
-5. Preserve origin, `ctlNum`, timestamp `T`, Test, interlock, and synchrocheck values across the sequence.
-6. Wait for `CommandTermination` when required by enhanced-security control models.
-7. Present `ControlError`, `AddCause`, `LastApplError`, timing, and process-feedback evidence.
+- Browse the IED MMS file service from the selected device context.
+- Download disturbance files and COMTRADE-related records with bounded operations.
+- Keep transfer diagnostics attached to the originating IED session.
+- Avoid embedding customer-specific paths or assumptions in the application layer.
 
-Supported command families currently include DPC, SPC, INC/ISC, BSC, and APC when the discovered live descriptor is operationally usable. Position objects retain operator-facing **Open / Closed** semantics while wire encoding and feedback decoding remain independently type-aware.
+### Control with evidence
 
-> ARSAS does not provide a generic control-write fallback for `.Oper`, `.SBOw`, or `.Cancel`. If the required native control contract is unavailable, the build or control readiness gate fails explicitly.
+- Discover `ctlModel` before enabling an operation.
+- Resolve live `Oper`, `SBOw`, and optional `Cancel` descriptors.
+- Execute supported Direct or Select-Before-Operate sequences.
+- Preserve origin, `ctlNum`, timestamp, Test, interlock, and synchrocheck context.
+- Surface `CommandTermination`, `ControlError`, `AddCause`, `LastApplError`, timing, and mapped process feedback.
 
-## Architecture at a glance
+## Architecture
 
 ```text
-┌────────────────────────────────────────────────────────────────────┐
-│                            ARSAS                             │
-│ Explorer · Live Monitor · Event Log · GOOSE · Diagnostics · Control│
-└───────────────────────────────┬────────────────────────────────────┘
-                                │ typed application services
-┌───────────────────────────────▼────────────────────────────────────┐
-│                           ARIEC61850                              │
-│ MMS · Reporting · GOOSE · Npcap · Control · SCL · Diagnostics     │
-└──────────────────────┬──────────────────────────┬──────────────────┘
-                       │ IEC 61850 / TCP 102      │ EtherType 0x88B8
-                  Laboratory IEDs            Station/process bus
+┌──────────────────────────────────────────────────────────────────────┐
+│                                ARSAS                                 │
+│ Explorer · Monitor · SOE · GOOSE · SMV · Files · SCL · Control · UX │
+└─────────────────────────────────┬────────────────────────────────────┘
+                                  │ typed application services
+┌─────────────────────────────────▼────────────────────────────────────┐
+│                             ARIEC61850                               │
+│ MMS · Reporting · GOOSE · SMV · File Services · SCL · Control       │
+│ Transport · Type System · Diagnostics · Protocol Validation          │
+└────────────────────────┬──────────────────────┬───────────────────────┘
+                         │ TCP/102              │ Ethernet process bus
+                    Laboratory IEDs         Approved capture network
 ```
 
-ARSAS is the Windows application layer. The protocol implementation remains in the separately maintained [ARIEC61850](https://github.com/masarray/ARIEC61850) source repository and is referenced as sibling .NET projects at build time.
+Detailed design notes are maintained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [ENGINE_COMPATIBILITY.md](ENGINE_COMPATIBILITY.md).
 
 ## Quick start
 
@@ -116,8 +130,8 @@ ARSAS is the Windows application layer. The protocol implementation remains in t
 - .NET 8 SDK
 - Visual Studio 2022 with **.NET desktop development**, or the .NET CLI
 - A compatible ARIEC61850 source checkout
-- Npcap for the GOOSE Subscriber tab; administrator rights may be required by the local Npcap installation policy
-- An isolated laboratory or approved commissioning network for active functions and raw-Ethernet capture
+- Npcap for raw-Ethernet GOOSE and Sampled Values workflows
+- An isolated laboratory or approved commissioning network
 
 ### Recommended folder layout
 
@@ -127,7 +141,7 @@ D:\Git\
 │  └─ src\
 │     ├─ AR.Iec61850\AR.Iec61850.csproj
 │     └─ AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj
-└─ ArIED61850Tester\
+└─ arsas\
    └─ ArIED61850Tester.csproj
 ```
 
@@ -135,14 +149,14 @@ D:\Git\
 
 ```powershell
 git clone https://github.com/masarray/ARIEC61850.git
-git clone https://github.com/masarray/ArIED61850Tester.git
+git clone https://github.com/masarray/arsas.git
 
-cd ArIED61850Tester
+cd arsas
 dotnet restore .\ArIED61850Tester.csproj
 dotnet build .\ArIED61850Tester.csproj -c Release
 ```
 
-To use engine checkouts in another location:
+For a non-sibling engine checkout:
 
 ```powershell
 dotnet build .\ArIED61850Tester.csproj -c Release `
@@ -150,66 +164,44 @@ dotnet build .\ArIED61850Tester.csproj -c Release `
   -p:ArIec61850NpcapProject="D:\Engineering\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 ```
 
-### Create a portable Windows package
-
-```powershell
-.\scripts\publish-windows-portable.ps1 `
-  -Version 1.6.16 `
-  -EngineProject "D:\Engineering\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
-```
-
-Expected output:
-
-```text
-dist\ArIED61850-1.6.16-win-x64-portable.zip
-```
-
-## Operational boundary
-
-IEC 61850 control, report writes, temporary DataSet creation, and active network functions can affect equipment state or IED resources. Use active features only when:
-
-- the test boundary, isolation, and switching authority are approved;
-- the selected IED is in the intended test or maintenance condition;
-- control models, feedback mapping, interlock/synchrocheck behavior, timeout, Cancel, and negative termination have been validated;
-- another qualified person can independently verify the expected process response where required by the test plan.
-
-GOOSE subscription is read-only, but capture still requires an approved adapter/network boundary. Confirm switch mirroring, VLAN/offload behavior, Npcap driver policy, and confidentiality before recording or exporting station traffic.
-
-A successful command, report session, or GOOSE decode is protocol evidence for that test condition. It is not a universal interoperability, cybersecurity, functional-safety, or conformance claim.
-
 ## Documentation
 
 | Document | Purpose |
 |---|---|
-| [Documentation hub](docs/README.md) | Starting point for engineering, validation, legal, and contribution documents. |
-| [Architecture](docs/ARCHITECTURE.md) | Multi-IED ownership, acquisition strategy, runtime scaling, and timestamp semantics. |
-| [GOOSE Subscriber](docs/GOOSE_SUBSCRIBER.md) | Npcap capture, stream supervision, ordered `allData` mapping, SCL/discovery binding, requirements, and field validation. |
-| [Validation checklist](docs/VALIDATION_CHECKLIST.md) | Build, simulator, reporting, control, and live-test acceptance checks. |
-| [Engine compatibility](ENGINE_COMPATIBILITY.md) | Required ARIEC61850 contracts and supported project-reference layout. |
-| [Smart Control integration](ARIEC61850_SMART_CONTROL_INTEGRATION.md) | Native control-service integration details. |
-| [Control feedback audit](SMART_CONTROL_FEEDBACK_AUDIT.md) | Feedback and completion evidence boundaries. |
-| [Licensing](docs/LICENSING.md) | Current GPL community edition and separate commercial licensing path. |
-| [Clean-room policy](docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md) | Independent-development, fixture provenance, UI, and interoperability boundaries. |
+| [Roadmap](ROADMAP.md) | Product direction from the current engineering workstation to a complete IEC 61850 suite. |
+| [Documentation hub](docs/README.md) | Entry point for engineering, validation, legal, and contribution documents. |
+| [Architecture](docs/ARCHITECTURE.md) | Runtime ownership, acquisition strategy, protocol boundaries, and scale. |
+| [GOOSE Subscriber](docs/GOOSE_SUBSCRIBER.md) | Npcap capture, ordered data, model binding, diagnostics, and validation. |
+| [Validation checklist](docs/VALIDATION_CHECKLIST.md) | Build, reporting, control, simulator, and live-test acceptance checks. |
+| [Engine compatibility](ENGINE_COMPATIBILITY.md) | Required ARIEC61850 contracts and project-reference layout. |
+| [Licensing](docs/LICENSING.md) | Community and commercial licensing paths. |
+| [Security policy](SECURITY.md) | Responsible vulnerability reporting. |
 
-## Contributing and support
+## Safety and operational boundaries
 
-Engineering contributions are welcome when they are focused, reproducible, independently authored, and free of confidential customer or employer material. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SUPPORT.md](SUPPORT.md) before opening a pull request or support issue.
+IEC 61850 control, report configuration, temporary DataSet creation, file access, and active network functions can affect IED resources or equipment state. Use active features only inside an approved test boundary with suitable isolation, switching authority, procedures, and independent verification.
 
-For a failed connection, use **Diagnostics → Copy Diagnostic** and attach the sanitized report to the issue. Remove customer names, station identifiers, IP addressing that must remain private, credentials, packet captures, and confidential SCL content before sharing.
+GOOSE and Sampled Values capture is read-only in ARSAS, but packet capture still requires an approved adapter, network boundary, data-handling policy, and permission to inspect or export station traffic.
+
+ARSAS is an engineering tool. It is not an IEC 61850 conformance certificate, functional-safety certification, cybersecurity approval, or substitute for an approved commissioning procedure.
+
+## Contributing
+
+Focused, reproducible, independently authored contributions are welcome. Do not submit confidential employer, customer, substation, relay-setting, SCL, credential, or packet-capture material.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [NOTICE.md](NOTICE.md) before contributing or redistributing the software.
 
 ## License
 
-The current `main` branch and current community release packages are licensed **only** under the [GNU General Public License v3.0 or later](LICENSE).
+The current community edition is licensed under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE).
 
-A separate negotiated commercial license is available for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, priority engineering support, training, and project-specific development. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+A separately negotiated commercial license is available for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, priority support, training, and project-specific development. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
-Project names, logos, icons, and official-release branding are handled separately from the software license. See [TRADEMARK.md](TRADEMARK.md).
-
-Historical revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain available under their original terms on branch `archive/apache-2.0-final`. Those historical terms apply only to those earlier revisions. See [docs/LICENSING.md](docs/LICENSING.md).
+Names, logos, icons, and official-release branding are not granted by the software license. See [TRADEMARK.md](TRADEMARK.md) and [NOTICE.md](NOTICE.md).
 
 ---
 
 <div align="center">
   <strong>ARSAS</strong><br />
-  Clear model evidence. Independent device sessions. Ordered GOOSE leaves. Guarded control workflows.
+  From an IP address or SCL file to trustworthy IEC 61850 evidence—in one engineering workspace.
 </div>

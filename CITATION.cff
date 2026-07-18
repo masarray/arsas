@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If ARSAS supports your engineering, research, training, or validation work, please cite the software using this metadata."
+title: "ARSAS: IEC 61850 Engineering Workstation"
+type: software
+authors:
+  - family-names: "Sulistiono"
+    given-names: "Ari"
+    alias: "masarray"
+repository-code: "https://github.com/masarray/arsas"
+url: "https://masarray.github.io/arsas/"
+license: GPL-3.0-or-later
+version: "1.6.16"
+date-released: "2026-07-18"
+keywords:
+  - IEC 61850
+  - substation automation
+  - MMS
+  - GOOSE
+  - Sampled Values
+  - SCL
+  - COMTRADE
+  - protection relay testing
+  - digital substation
+abstract: >-
+  ARSAS is an open-source Windows engineering workstation for IEC 61850 model discovery,
+  multi-IED monitoring, reporting, GOOSE subscription, file transfer, Sampled Values
+  engineering, SCL workflows, diagnostics, and guarded control validation.

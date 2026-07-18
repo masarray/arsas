@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
-  Verifies that every Git-tracked ArIED path is free from prohibited binaries,
+  Verifies that every Git-tracked ARSAS path is free from prohibited binaries,
   captures, confidential evidence, external-product identifiers, proprietary assets,
   obsolete license files, and superseded public wording.
 
@@ -148,7 +148,7 @@ if ($Problems.Count -gt 0) {
     foreach ($problem in ($Problems | Sort-Object -Unique)) {
         Write-Host "ERROR: $problem" -ForegroundColor Red
     }
-    throw "ArIED source tree failed clean-room validation with $($Problems.Count) problem(s)."
+    throw "ARSAS source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked ArIED content passed source, website, external-IP, and current-license checks." -ForegroundColor Green
+Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, and current-license checks." -ForegroundColor Green

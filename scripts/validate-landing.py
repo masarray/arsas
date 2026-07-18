@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the ArIED static product website without external dependencies."""
+"""Validate the ARSAS static product website without external dependencies."""
 
 from __future__ import annotations
 
@@ -13,11 +13,13 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "landing"
+CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 HTML_FILES = [
     SITE / "index.html",
     SITE / "features.html",
     SITE / "control.html",
     SITE / "architecture.html",
+    SITE / "roadmap.html",
     SITE / "404.html",
 ]
 
@@ -109,7 +111,7 @@ def validate_html(page: Path, errors: list[str]) -> None:
             errors.append(
                 f"{page.relative_to(ROOT)}: meta description length should be 70-220 characters, found {len(parser.description)}"
             )
-        if not parser.canonical or not parser.canonical.startswith("https://masarray.github.io/ArIED61850Tester/"):
+        if not parser.canonical or not parser.canonical.startswith(CANONICAL_ROOT):
             errors.append(f"{page.relative_to(ROOT)}: missing or invalid canonical URL")
 
     for reference in parser.links + parser.scripts + parser.stylesheets:
@@ -122,6 +124,8 @@ def validate_html(page: Path, errors: list[str]) -> None:
 
     if "http://" in text:
         errors.append(f"{page.relative_to(ROOT)}: insecure http:// reference")
+    if "ArIED61850Tester" in text or "ArIED 61850" in text:
+        errors.append(f"{page.relative_to(ROOT)}: contains legacy product or repository branding")
 
 
 def validate_structured_files(errors: list[str]) -> None:
@@ -141,8 +145,17 @@ def validate_structured_files(errors: list[str]) -> None:
         except (OSError, ET.ParseError) as exc:
             errors.append(f"landing/{relative}: {exc}")
 
+    sitemap = SITE / "sitemap.xml"
+    if sitemap.exists():
+        sitemap_text = sitemap.read_text(encoding="utf-8")
+        for page in ("features.html", "control.html", "architecture.html", "roadmap.html"):
+            expected = f"{CANONICAL_ROOT}{page}"
+            if expected not in sitemap_text:
+                errors.append(f"landing/sitemap.xml: missing {expected}")
+
     robots = SITE / "robots.txt"
-    if not robots.exists() or "Sitemap: https://masarray.github.io/ArIED61850Tester/sitemap.xml" not in robots.read_text(encoding="utf-8"):
+    sitemap_declaration = f"Sitemap: {CANONICAL_ROOT}sitemap.xml"
+    if not robots.exists() or sitemap_declaration not in robots.read_text(encoding="utf-8"):
         errors.append("landing/robots.txt: missing canonical sitemap declaration")
 
 
@@ -184,7 +197,7 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
 
-    print("Landing-page validation passed: HTML, links, metadata, JSON, XML and SVG are consistent.")
+    print("Landing-page validation passed: HTML, links, metadata, JSON, XML, SVG, branding, and canonical URLs are consistent.")
     return 0
 
 

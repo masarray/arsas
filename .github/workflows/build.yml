@@ -1,4 +1,4 @@
-name: Build ArIED 61850
+name: Build ARSAS
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
     name: Build, validate and package Windows application
     runs-on: windows-latest
     steps:
-      - name: Checkout ArIED application
+      - name: Checkout ARSAS application
         shell: powershell
         run: |
           $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
@@ -140,7 +140,7 @@ jobs:
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: ArIED61850-source-snapshot
+          name: ARSAS-source-snapshot
           path: |
             ArIED61850Tester/App.xaml
             ArIED61850Tester/MainWindow.xaml
@@ -232,5 +232,5 @@ jobs:
       - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
-          name: ArIED61850-win-x64
+          name: ARSAS-win-x64
           path: ArIED61850Tester\dist\*.zip

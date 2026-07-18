@@ -3,81 +3,92 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IEC 61850 Engineering Features — ARSAS</title>
-  <meta name="description" content="Explore ARSAS features for SCL import, MMS discovery, multi-IED monitoring, report-first acquisition, SOE, diagnostics, project caching, and control-ready signal workflows." />
-  <meta name="keywords" content="IEC 61850 features, IED browser, SCL import, MMS discovery, RCB monitoring, DataSet, sequence of events, multi IED monitor, relay commissioning software" />
+  <title>IEC 61850 Capabilities — MMS, GOOSE, Files, SMV | ARSAS</title>
+  <meta name="description" content="Explore ARSAS capabilities for IEC 61850 MMS discovery, reporting, GOOSE subscription, COMTRADE file transfer, Sampled Values, SCL workflows, SOE, diagnostics, and control." />
+  <meta name="keywords" content="IEC 61850 capabilities, MMS browser, GOOSE subscriber, IEC 61850 file transfer, COMTRADE download, Sampled Values viewer, SMV, SCL engineering, RCB monitoring, relay commissioning software" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#07111f" />
-  <link rel="canonical" href="https://masarray.github.io/ArIED61850Tester/features.html" />
+  <link rel="canonical" href="https://masarray.github.io/arsas/features.html" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="ARSAS Engineering Features" />
-  <meta property="og:description" content="SCL-assisted setup, live MMS discovery, report-first monitoring, SOE, diagnostics, project persistence, and multi-IED session ownership." />
-  <meta property="og:url" content="https://masarray.github.io/ArIED61850Tester/features.html" />
-  <meta property="og:image" content="https://masarray.github.io/ArIED61850Tester/assets/social-card.svg" />
+  <meta property="og:title" content="ARSAS IEC 61850 Capabilities" />
+  <meta property="og:description" content="MMS, reporting, GOOSE, fault-record file transfer, Sampled Values, SCL, diagnostics, SOE, and guarded control in one workstation." />
+  <meta property="og:url" content="https://masarray.github.io/arsas/features.html" />
+  <meta property="og:image" content="https://masarray.github.io/arsas/assets/social-card.svg" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="./" aria-label="ARSAS home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS <small>Engineering workstation</small></span></a>
-      <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      <nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="features.html" aria-current="page">Features</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a class="nav-cta" href="https://github.com/masarray/ArIED61850Tester">GitHub</a></nav>
+      <a class="brand" href="./" aria-label="ARSAS home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS <small>IEC 61850 workstation</small></span></a>
+      <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-toggle><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <nav class="nav-links" aria-label="Primary navigation" data-nav-links><a href="./">Overview</a><a href="features.html" aria-current="page">Capabilities</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a><a class="nav-cta" href="https://github.com/masarray/arsas">GitHub</a></nav>
     </div>
   </header>
 
   <main id="main">
     <section class="page-hero">
       <div class="container">
-        <div class="breadcrumbs"><a href="./">Home</a> / Features</div>
-        <span class="eyebrow">Engineering capabilities</span>
-        <h1><span class="gradient-text">One workspace</span> for configured context, live model evidence, and focused monitoring.</h1>
-        <p>ARSAS is organized around practical commissioning and troubleshooting tasks rather than isolated protocol screens. The application keeps the configured endpoint, discovered model, selected points, report coverage, event evidence, diagnostics, and control readiness connected to the same IED session.</p>
+        <div class="breadcrumbs"><a href="./">Home</a> / Capabilities</div>
+        <span class="eyebrow">Current scope and maturity</span>
+        <h1><span class="gradient-text">IEC 61850 engineering capabilities</span> organized around real commissioning work.</h1>
+        <p>ARSAS connects configured context, live protocol behavior, process-bus traffic, fault records, control evidence, and reusable project state to the same IED session. Maturity labels keep shipped capability separate from preview and roadmap work.</p>
       </div>
     </section>
 
     <section class="section section-tight">
-      <div class="container feature-grid">
-        <article class="card reveal"><span class="kicker">Project input</span><h3>SCL endpoint import</h3><p>Open SCD, CID, ICD, IID, SSD, or XML SCL files and extract configured IED access points for project setup.</p><ul><li>Multi-IED endpoint extraction</li><li>Duplicate endpoint protection</li><li>Configured context retained per device</li><li>Foundation for design-to-live review</li></ul></article>
-        <article class="card reveal"><span class="kicker">Live model</span><h3>MMS discovery</h3><p>Build a usable engineering model from the connected device instead of assuming the SCL file and live server are identical.</p><ul><li>Logical Devices and Logical Nodes</li><li>Data Objects and Data Attributes</li><li>Values, quality, and timestamps</li><li>DataSets, RCBs, and type evidence</li></ul></article>
-        <article class="card reveal"><span class="kicker">Session ownership</span><h3>Independent multi-IED operation</h3><p>Each device has an isolated runtime lifecycle so one connection or monitoring action does not silently change another IED.</p><ul><li>Per-device connection state</li><li>Per-device discovery progress</li><li>Per-device selected signals</li><li>Per-device events and diagnostics</li></ul></article>
-        <article class="card reveal"><span class="kicker">Acquisition</span><h3>Report-first monitoring</h3><p>Prefer event-driven acquisition, preserve DataSet order, and reserve polling for points not proven by report coverage.</p><ul><li>Static RCB/DataSet candidates first</li><li>Dynamic report plans for uncovered points</li><li>Bounded polling priority queue</li><li>Coverage evidence retained per signal</li></ul></article>
-        <article class="card reveal"><span class="kicker">Scale</span><h3>Virtualized signal workspace</h3><p>Search and select large IED models without creating one timer, task, or permanent visual element per signal.</p><ul><li>Search, column filters, and sorting</li><li>Visible-row bulk selection</li><li>Keyboard-driven selection workflow</li><li>WPF row and column virtualization</li></ul></article>
-        <article class="card reveal"><span class="kicker">Operations</span><h3>Live values and SOE</h3><p>Separate continuously changing process values from semantic events while preserving IED-supplied time evidence.</p><ul><li>Recent-change highlighting</li><li>Quality and source visibility</li><li>Semantic process-state transitions</li><li>Per-IED unread event indicators</li></ul></article>
-        <article class="card reveal"><span class="kicker">Troubleshooting</span><h3>Diagnostics journal</h3><p>Expose connection and protocol progress in language that helps engineers distinguish network, association, model, report, and command failures.</p><ul><li>TCP reachability context</li><li>Association and discovery evidence</li><li>Report and fallback diagnostics</li><li>Sanitizable Copy Diagnostic report</li></ul></article>
-        <article class="card reveal"><span class="kicker">Productivity</span><h3>Project and model persistence</h3><p>Save the working context needed to return to a project without repeating every setup decision.</p><ul><li>Device and endpoint definitions</li><li>Cached model context</li><li>Selected signals</li><li>Fast reconnect workflow</li></ul></article>
-        <article class="card reveal"><span class="kicker">Control</span><h3>Control-ready object workflow</h3><p>Present semantic actions only after the native engine resolves the live control model and required MMS type information.</p><ul><li>Direct and SBO model detection</li><li>DPC, SPC, INC/ISC, BSC, APC</li><li>Termination and error evidence</li><li>Process feedback mapping</li></ul></article>
+      <div class="container metric-grid reveal">
+        <div class="metric"><strong>Available</strong><span>MMS, reporting, GOOSE, files, control, SCL-assisted workflows</span></div>
+        <div class="metric"><strong>Preview</strong><span>Sampled Values / SMV engineering workflow</span></div>
+        <div class="metric"><strong>Roadmap</strong><span>Full visual SCL project generation</span></div>
+        <div class="metric"><strong>Boundary</strong><span>No conformance, safety, or universal interoperability claim</span></div>
       </div>
     </section>
 
     <section class="section">
-      <div class="container workflow">
-        <div class="section-head reveal"><span class="kicker">Acquisition strategy</span><h2>Reports where proven. Polling where still required.</h2><p>A point is not removed from polling merely because it was placed in a report candidate. ARSAS waits for usable coverage evidence and limits polling to the points that remain uncovered or unverified.</p></div>
-        <div class="code-panel reveal">
-          <div class="code-head"><span>Per-IED acquisition plan</span><span class="traffic-lights"><i></i><i></i><i></i></span></div>
-          <pre><span class="code-key">1.</span> Discover DataSets and report control blocks
-<span class="code-key">2.</span> Rank configured static coverage
-<span class="code-key">3.</span> Enable and validate report sessions
-<span class="code-key">4.</span> Build dynamic plans for exact uncovered points
-<span class="code-key">5.</span> Place remaining points in bounded polling queue
-<span class="code-ok">✓</span> Retain source and coverage evidence per value</pre>
+      <div class="container">
+        <div class="section-head center reveal"><span class="kicker">Available now</span><h2>A coherent workflow from endpoint to evidence.</h2><p>The current application already covers the highest-friction parts of practical IEC 61850 investigation and validation.</p></div>
+        <div class="feature-grid">
+          <article class="card reveal"><span class="kicker">MMS</span><h3>Live model discovery</h3><p>Discover Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, report control blocks, control blocks, and live MMS type descriptors.</p><ul><li>Independent association per IED</li><li>Configured and live context together</li><li>Searchable large-model workspace</li><li>Diagnostic association evidence</li></ul></article>
+          <article class="card reveal"><span class="kicker">Reporting</span><h3>Report-first monitoring</h3><p>Prefer event-driven report coverage, preserve member order and reasons, create bounded dynamic plans where supported, and poll only points that remain uncovered.</p><ul><li>Static RCB/DataSet candidates</li><li>Dynamic coverage for exact gaps</li><li>Bounded fallback polling</li><li>Per-value source evidence</li></ul></article>
+          <article class="card reveal"><span class="kicker">GOOSE</span><h3>Read-only stream inspection</h3><p>Capture station or process-bus GOOSE through Npcap and retain stream identity, sequence, retransmission, TAL, and ordered payload evidence.</p><ul><li>APPID, VLAN, MAC, `goCBRef`</li><li>`stNum`, `sqNum`, Test, `ndsCom`</li><li>Ordered `allData` leaves</li><li>SCL or live-model binding</li></ul></article>
+          <article class="card reveal"><span class="kicker">File services</span><h3>Fault-record retrieval</h3><p>Use the selected IED context to probe the MMS file service, browse available paths, and download disturbance or COMTRADE-related records with bounded operations.</p><ul><li>Per-IED endpoint ownership</li><li>Directory and service diagnostics</li><li>Progress and failure visibility</li><li>Foundation for COMTRADE grouping</li></ul></article>
+          <article class="card reveal"><span class="kicker">SCL</span><h3>Configured-to-live workflow</h3><p>Open SCD, CID, ICD, IID, SSD, or XML files, extract endpoints, retain project context, and compare configured intent against observed server behavior.</p><ul><li>Multi-IED endpoint extraction</li><li>Edition-aware workspace services</li><li>Configured/live comparison context</li><li>Export foundation</li></ul></article>
+          <article class="card reveal"><span class="kicker">Control</span><h3>Typed Direct and SBO</h3><p>Read `ctlModel`, resolve actual command descriptors, execute supported sequences, and show service, termination, timing, error, and process-feedback evidence.</p><ul><li>DPC, SPC, INC/ISC, BSC, APC</li><li>Direct and Select-Before-Operate</li><li>`CommandTermination` and `AddCause`</li><li>No generic control-write fallback</li></ul></article>
+          <article class="card reveal"><span class="kicker">Operations</span><h3>Live values and SOE</h3><p>Separate continuous values from semantic events while preserving IED-supplied timestamps, quality, report reasons, and originating-device context.</p><ul><li>Recent-change highlighting</li><li>Process timestamp semantics</li><li>Per-IED unread indicators</li><li>Bounded event collections</li></ul></article>
+          <article class="card reveal"><span class="kicker">Scale</span><h3>Independent multi-IED sessions</h3><p>Every IED owns its connection, discovery, selected signals, reports, event state, control context, file-service workflow, and diagnostics.</p><ul><li>Isolated lifecycle per device</li><li>One monitor loop per IED</li><li>Coalesced UI updates</li><li>Virtualized grids</li></ul></article>
+          <article class="card reveal"><span class="kicker">Productivity</span><h3>Project persistence</h3><p>Save endpoints, cached model context, selected signals, and operator workspace state so recurring projects do not restart from zero.</p><ul><li>Fast reconnect workflow</li><li>Retained device definitions</li><li>Persisted selections</li><li>Reusable diagnostic context</li></ul></article>
         </div>
       </div>
     </section>
 
     <section class="section section-tight">
       <div class="container split-panel">
-        <article class="panel reveal"><span class="kicker">Designed for</span><h3>Laboratory and commissioning workflows</h3><ul class="check-list"><li>FAT and SAT preparation</li><li>Protection IED and BCU integration</li><li>SCADA signal and report investigation</li><li>Model and timestamp troubleshooting</li><li>Control-sequence validation</li><li>Repeatable diagnostic evidence</li></ul></article>
-        <article class="panel reveal"><span class="kicker">Not claimed</span><h3>Clear validation boundaries</h3><ul class="check-list"><li>No formal IEC 61850 conformance certificate</li><li>No universal multi-vendor interoperability guarantee</li><li>No automatic switching authority or isolation proof</li><li>No functional-safety certification</li><li>No cybersecurity approval for an operational network</li><li>No permission to share confidential project data</li></ul></article>
+        <article class="panel reveal"><span class="kicker">Engineering preview</span><h3>Sampled Values / SMV</h3><p>ARSAS now exposes per-IED SMV entry points and a viewer direction. Production-grade completion requires deeper stream decoding, SCL binding, scaling, sample-rate validation, sequence and synchronization diagnostics, and sustained-performance testing.</p><div class="section-actions"><a class="btn" href="roadmap.html#sampled-values">See the SMV milestone</a></div></article>
+        <article class="panel reveal"><span class="kicker">Roadmap</span><h3>Full SCL generation</h3><p>The target is a visual, validated authoring workspace for IED, communication, DataSet, report, GOOSE, Sampled Values, and Edition-aware export structures—not merely a file viewer.</p><div class="section-actions"><a class="btn" href="roadmap.html#scl-generation">See the SCL milestone</a></div></article>
       </div>
     </section>
 
-    <section class="section section-tight"><div class="container callout reveal"><div class="callout-grid"><div><span class="kicker">Next</span><h2>Review the control workflow in detail</h2><p>See how ARSAS discovers `ctlModel`, resolves live command types, stages Direct or SBO sequences, and presents command completion evidence.</p></div><div class="section-actions"><a class="btn btn-primary" href="control.html">Explore Smart Control</a><a class="btn" href="architecture.html">View architecture</a></div></div></div></section>
+    <section class="section">
+      <div class="container workflow">
+        <div class="section-head reveal"><span class="kicker">Acquisition strategy</span><h2>Reports where proven. Polling only where required.</h2><p>A point is not removed from polling merely because it was placed in a report candidate. ARSAS waits for usable coverage evidence and keeps bounded fallback for anything still uncovered or unverified.</p></div>
+        <div class="code-panel reveal"><div class="code-head"><span>Per-IED acquisition plan</span><span class="traffic-lights"><i></i><i></i><i></i></span></div><pre><span class="code-key">1.</span> Discover DataSets and report control blocks
+<span class="code-key">2.</span> Rank configured static coverage
+<span class="code-key">3.</span> Enable and validate report sessions
+<span class="code-key">4.</span> Build dynamic plans for exact uncovered points
+<span class="code-key">5.</span> Place remaining points in a bounded polling queue
+<span class="code-ok">✓</span> Retain timestamp, quality, reason, source, and alias evidence</pre></div>
+      </div>
+    </section>
+
+    <section class="section section-tight">
+      <div class="container callout reveal"><div class="callout-grid"><div><span class="kicker">Next</span><h2>See how these capabilities converge into one suite.</h2><p>The public roadmap defines the next engineering milestones and a clear definition of done for file transfer, Sampled Values, SCL generation, and test evidence.</p></div><div class="section-actions"><a class="btn btn-primary" href="roadmap.html">Open roadmap</a><a class="btn" href="architecture.html">View architecture</a></div></div></div>
+    </section>
   </main>
 
-  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>Focused IEC 61850 engineering for configured context, live evidence, events, diagnostics, and control workflows.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/ArIED61850Tester">Repository</a><a href="https://github.com/masarray/ArIED61850Tester/issues">Issues</a><a href="https://github.com/masarray/ArIED61850Tester/blob/main/LICENSE">License</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Community edition: GPL-3.0-or-later.</span></div></div></footer>
+  <footer class="site-footer"><div class="container"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19 12 4l7 15M8 15h8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ARSAS</span></a><p>Practical IEC 61850 engineering across model, reports, process bus, files, control, and evidence.</p></div><div><div class="footer-title">Product</div><div class="footer-links"><a href="./">Overview</a><a href="control.html">Smart Control</a><a href="architecture.html">Architecture</a><a href="roadmap.html">Roadmap</a></div></div><div><div class="footer-title">Project</div><div class="footer-links"><a href="https://github.com/masarray/arsas">Repository</a><a href="https://github.com/masarray/arsas/issues">Issues</a><a href="https://github.com/masarray/arsas/blob/main/LICENSE">License</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Ari Sulistiono.</span><span>Capabilities are documented by maturity.</span></div></div></footer>
   <script src="app.js" defer></script>
 </body>
 </html>

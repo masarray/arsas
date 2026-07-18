@@ -1,11 +1,14 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/masarray/ArIED61850Tester/security
-    about: Review SECURITY.md and use private vulnerability reporting when available.
-  - name: Support and diagnostics guide
-    url: https://github.com/masarray/ArIED61850Tester/blob/main/SUPPORT.md
-    about: Review connection checks, required environment details, and sanitization rules before filing an issue.
+    url: https://github.com/masarray/arsas/security/advisories/new
+    about: Report exploitable vulnerabilities privately. Do not publish credentials, private endpoints, customer SCL, captures, relay settings, or disturbance records.
+  - name: Support and sanitization guidance
+    url: https://github.com/masarray/arsas/blob/main/SUPPORT.md
+    about: Review troubleshooting information and required data sanitization before opening an issue.
+  - name: Product roadmap
+    url: https://github.com/masarray/arsas/blob/main/ROADMAP.md
+    about: Review current capability maturity and planned IEC 61850 milestones.
   - name: Product website
-    url: https://masarray.github.io/ArIED61850Tester/
-    about: Product overview, features, Smart Control, and architecture.
+    url: https://masarray.github.io/arsas/
+    about: Explore ARSAS capabilities, architecture, Smart Control, and the full IEC 61850 product direction.
