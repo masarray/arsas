@@ -1,0 +1,114 @@
+name: Engineering bug report
+description: Report a reproducible ARSAS defect using synthetic or sanitized evidence.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve ARSAS. Do not include credentials, customer SCL files, relay settings, packet captures, disturbance records, private endpoints, or confidential station data.
+
+  - type: input
+    id: arsas-version
+    attributes:
+      label: ARSAS version or commit
+      description: Provide the release version or full commit SHA.
+      placeholder: "1.6.16 or commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: engine-version
+    attributes:
+      label: ARIEC61850 version or commit
+      description: Provide the engine branch, release, or full commit SHA.
+      placeholder: "main at commit SHA"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Affected workflow
+      options:
+        - MMS connection or discovery
+        - Reporting or live monitoring
+        - GOOSE subscriber
+        - Sampled Values / SMV
+        - IEC 61850 file transfer or COMTRADE retrieval
+        - SCL import, comparison, export, or generation
+        - Smart Control
+        - Sequence of events or diagnostics
+        - Project persistence
+        - Windows packaging or installer
+        - UI, accessibility, or performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Windows version, .NET version, connection method, adapter/Npcap details when relevant, and sanitized scale information.
+      placeholder: |
+        Windows 11 24H2
+        .NET 8.x
+        Connection: direct IP / saved project / SCL import
+        Scale: 3 IEDs, 1,200 selected signals
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest deterministic sequence using synthetic or sanitized data.
+      placeholder: |
+        1. Add a synthetic IED endpoint...
+        2. Discover the model...
+        3. Select...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include sanitized diagnostic text and exact error messages when safe.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: validation-source
+    attributes:
+      label: Reproduction source
+      options:
+        - Unit test or deterministic fixture
+        - Loopback or simulator
+        - Authorized laboratory IED
+        - Authorized FAT/SAT/commissioning environment
+        - Unable to reproduce independently
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety and data confirmation
+      options:
+        - label: I removed credentials, private endpoints, customer names, station identifiers, relay settings, packet captures, disturbance records, and confidential SCL or diagnostic content.
+          required: true
+        - label: This report does not claim switching authority, formal conformance, functional-safety certification, or universal interoperability.
+          required: true
+        - label: Any active testing described here was performed inside an approved boundary with the required authorization.
+          required: true
