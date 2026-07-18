@@ -22,7 +22,7 @@ $requiredServiceMarkers = @(
     'HttpCompletionOption.ResponseHeadersRead'
 )
 foreach ($marker in $requiredServiceMarkers) {
-    if (-not $service.Contains($marker, [StringComparison]::Ordinal)) {
+    if ($service.IndexOf($marker, [StringComparison]::Ordinal) -lt 0) {
         throw "ARSAS updater security marker is missing: $marker"
     }
 }
