@@ -237,3 +237,59 @@ jobs:
 
           & gh @arguments
           if ($LASTEXITCODE -ne 0) { throw "Failed to create GitHub Release." }
+
+      - name: Record verified release publication
+        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
+          $installer = Join-Path $dist "ARSAS-Windows-x64-Setup.exe"
+          $portable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
+          $checksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
+
+          $record = [ordered]@{
+            version = $env:RELEASE_VERSION
+            tag = $env:RELEASE_TAG
+            channel = "stable"
+            publishedAtUtc = [DateTime]::UtcNow.ToString("o")
+            sourceCommit = $env:GITHUB_SHA
+            installer = [ordered]@{
+              name = "ARSAS-Windows-x64-Setup.exe"
+              url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
+              sha256 = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+              sizeBytes = (Get-Item $installer).Length
+            }
+            portable = [ordered]@{
+              name = "ARSAS-Windows-x64-Portable.zip"
+              url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
+              sha256 = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+              sizeBytes = (Get-Item $portable).Length
+            }
+            checksums = [ordered]@{
+              name = "ARSAS-Windows-x64-SHA256SUMS.txt"
+              url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
+              sizeBytes = (Get-Item $checksums).Length
+            }
+          }
+
+          $json = $record | ConvertTo-Json -Depth 5
+          $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json + "`n"))
+          $apiPath = "repos/$env:GITHUB_REPOSITORY/contents/.release/published.json"
+          $existingSha = $null
+          $existing = gh api $apiPath 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            $existingSha = ($existing | ConvertFrom-Json).sha
+          }
+
+          $body = [ordered]@{
+            message = "chore: record published ARSAS $env:RELEASE_VERSION release"
+            content = $content
+            branch = "main"
+          }
+          if ($existingSha) { $body.sha = $existingSha }
+
+          $request = $body | ConvertTo-Json -Compress
+          $request | gh api --method PUT $apiPath --input - *> $null
+          if ($LASTEXITCODE -ne 0) { throw "Failed to record verified release publication." }
