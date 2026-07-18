@@ -1,0 +1,94 @@
+name: Engineering feature proposal
+description: Propose a bounded ARSAS or ARIEC61850 capability with a clear engineering outcome.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the engineering problem before the preferred implementation. Large protocol changes may belong in ARIEC61850 rather than the ARSAS application layer.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Engineering problem
+      description: What FAT, SAT, commissioning, troubleshooting, research, or development task is difficult today?
+      placeholder: "During ... engineers must ... which causes ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the observable result and who benefits.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: IEC 61850 area
+      options:
+        - MMS discovery or services
+        - Reporting and DataSets
+        - GOOSE
+        - Sampled Values / SMV
+        - File transfer or COMTRADE
+        - SCL engineering or generation
+        - Smart Control
+        - SOE, diagnostics, or evidence export
+        - Project workflow
+        - UI, accessibility, or performance
+        - Packaging, installer, or release engineering
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Likely implementation layer
+      options:
+        - ARSAS application and UX
+        - ARIEC61850 protocol engine
+        - Both repositories
+        - Documentation or validation only
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed workflow
+      description: Explain the user flow, protocol evidence, failure behavior, and expected diagnostics. Avoid copying another product's UI or internal design.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Which unit tests, deterministic fixtures, simulator cases, laboratory devices, performance limits, and negative paths would demonstrate completion?
+    validations:
+      required: true
+
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Safety, security, and claim boundaries
+      description: Identify active operations, sensitive data, operational authority, interoperability limitations, and non-goals.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: provenance
+    attributes:
+      label: Provenance confirmation
+      options:
+        - label: This proposal is independently authored and does not reproduce proprietary source, documentation, tests, UI, screenshots, or restricted material.
+          required: true
+        - label: I have not attached customer, employer, station, relay-setting, credential, capture, or confidential SCL data.
+          required: true
