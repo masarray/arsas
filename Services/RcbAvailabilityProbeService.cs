@@ -31,13 +31,11 @@ public sealed class RcbAvailabilityProbeService
             maxReportAttributeProbes: 512,
             cancellationToken).ConfigureAwait(false);
 
-        var callerOwned = device.Points
-            .Select(point => point.ReportControlReference)
-            .Concat(device.Signals.Where(signal => signal.IsSelected).Select(signal => signal.ReportControlReference))
-            .Where(reference => !string.IsNullOrWhiteSpace(reference))
-            .Select(reference => reference.Trim())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+        // Do not infer ownership from discovered signal metadata. A point can retain an
+        // RCB reference after discovery even when that RCB was never armed by the current
+        // runtime session. Until the monitor runtime exposes its exact active plan set,
+        // RptEna / Resv / ResvTms / Owner remain the source of truth. This deliberately
+        // favors an honest InUse/Unknown result over a false "ARSAS active" indication.
         return await session.CheckReportControlAvailabilityAsync(
             discovery.ReportInventory,
             discovery.IedDirectory,
@@ -45,7 +43,7 @@ public sealed class RcbAvailabilityProbeService
             {
                 MaxReportControls = 512,
                 ReadDataSetDirectories = true,
-                CallerOwnedRcbReferences = callerOwned
+                CallerOwnedRcbReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             },
             cancellationToken).ConfigureAwait(false);
     }
