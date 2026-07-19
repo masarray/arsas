@@ -17,6 +17,7 @@ public partial class MainWindow
 
         SclReportControlInventoryResult? sourceInventory = null;
         Exception? sourceInspectionError = null;
+        MmsRcbAvailabilityResult? latestAvailability = null;
         if (!string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
         {
             try
@@ -54,12 +55,12 @@ public partial class MainWindow
             RefreshAvailabilityAsync = device.IsConnected
                 ? async cancellationToken =>
                 {
-                    var availability = await _rcbAvailabilityProbe.CheckAsync(device, cancellationToken).ConfigureAwait(false);
-                    return BuildRcbExportRows(device, sourceInventory, availability);
+                    latestAvailability = await _rcbAvailabilityProbe.CheckAsync(device, cancellationToken).ConfigureAwait(false);
+                    return BuildRcbExportRows(device, sourceInventory, latestAvailability);
                 }
                 : null,
             ExportAsync = (row, schema, outputPath, cancellationToken) =>
-                ExportLegacySasRcbAsync(device, row, schema, outputPath, cancellationToken)
+                ExportLegacySasRcbAsync(device, row, schema, outputPath, latestAvailability, cancellationToken)
         };
 
         var dialog = new RcbExportFilterWindow(options)
@@ -233,7 +234,9 @@ public partial class MainWindow
                     ? LastReferenceSegment(reportControl.DataSetReference)
                     : dataSet.Name,
                 DataSetReference = reportControl.DataSetReference,
-                DataSetDetail = dataSet == null ? "Unresolved DataSet" : "Static DataSet • live discovery",
+                DataSetDetail = snapshot?.DataSetDirectorySuccess == true
+                    ? "Static DataSet • live directory verified"
+                    : dataSet == null ? "Unresolved DataSet" : "Static DataSet • live discovery",
                 MemberCount = members,
                 Availability = availabilityState,
                 Confidence = snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
@@ -255,6 +258,7 @@ public partial class MainWindow
         RcbExportRow row,
         SclSchemaProfile schema,
         string outputPath,
+        MmsRcbAvailabilityResult? availability,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -295,7 +299,24 @@ public partial class MainWindow
 
         var liveModel = device.LiveDiscoveryModel
             ?? throw new InvalidOperationException("A source SCL file or complete live discovery model is required for legacy SAS export.");
-        var filteredModel = SclReportControlFilter.FilterLiveModel(liveModel, row.Reference);
+        var selectedDataSet = liveModel.DataSets.FirstOrDefault(dataSet =>
+            NormalizeRcbReference(dataSet.Reference)
+                .Equals(NormalizeRcbReference(row.DataSetReference), StringComparison.OrdinalIgnoreCase));
+        var exportModel = liveModel;
+        if (selectedDataSet is null || selectedDataSet.Members.Count == 0)
+        {
+            if (availability is null)
+            {
+                throw new InvalidOperationException(
+                    "The live discovery model does not contain FCDA member references for this DataSet. Click Check Availability, wait for the read-only audit to finish, then export again.");
+            }
+
+            exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
+                liveModel,
+                row.Reference,
+                availability);
+        }
+        var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
         var liveResult = await Task.Run(() => LiveIedSclExporter.WriteFiles(
             filteredModel,
             outputPath,
