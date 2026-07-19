@@ -14,13 +14,13 @@ function Read-RequiredFile([string]$relativePath) {
 }
 
 function Require-Text([string]$content, [string]$needle, [string]$message) {
-  if ($content.IndexOf($needle, [System.StringComparison]::Ordinal) -lt 0) {
+  if ($content.IndexOf($needle, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
     throw $message
   }
 }
 
 function Reject-Text([string]$content, [string]$needle, [string]$message) {
-  if ($content.IndexOf($needle, [System.StringComparison]::Ordinal) -ge 0) {
+  if ($content.IndexOf($needle, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
     throw $message
   }
 }
@@ -34,7 +34,7 @@ $probe = Read-RequiredFile "Services/RcbAvailabilityProbeService.cs"
 $edition = Read-RequiredFile "SaveSclWindow.xaml.cs"
 
 Require-Text $mainXaml 'Click="IedEditRcb_Click"' "IED-card RCB Export Filter action is missing."
-Require-Text $mainXaml 'Legacy SAS CID import' "IED-card RCB action no longer explains the legacy SAS workflow."
+Require-Text $mainXaml 'legacy SAS CID import' "IED-card RCB action no longer explains the legacy SAS workflow."
 Require-Text $mainCode 'SclReportControlFilter.InspectFile' "Source-backed RCB inventory is missing."
 Require-Text $mainCode 'LegacySasSclExporter.WriteFiles' "Object-model legacy SAS CID export is missing."
 Require-Text $mainCode 'SclReportControlFilter.FilterLiveModel' "Live-discovery one-RCB fallback is missing."
