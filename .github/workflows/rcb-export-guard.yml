@@ -1,0 +1,66 @@
+name: Legacy SAS RCB export guard
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "MainWindow.xaml"
+      - "MainWindow.RcbExport.cs"
+      - "RcbExportFilterWindow.xaml"
+      - "RcbExportFilterWindow.xaml.cs"
+      - "Models/RcbExportModels.cs"
+      - "Services/RcbAvailabilityProbeService.cs"
+      - "SaveSclWindow.xaml.cs"
+      - "scripts/verify-rcb-export.ps1"
+      - ".github/workflows/rcb-export-guard.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "MainWindow.xaml"
+      - "MainWindow.RcbExport.cs"
+      - "RcbExportFilterWindow.xaml"
+      - "RcbExportFilterWindow.xaml.cs"
+      - "Models/RcbExportModels.cs"
+      - "Services/RcbAvailabilityProbeService.cs"
+      - "SaveSclWindow.xaml.cs"
+      - "scripts/verify-rcb-export.ps1"
+      - ".github/workflows/rcb-export-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify selected-RCB CID workflow
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS
+        uses: actions/checkout@v4
+
+      - name: Checkout ARIEC61850 engine
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch main https://github.com/masarray/ARIEC61850.git ARIEC61850
+
+      - name: Verify RCB availability and export invariants
+        id: guard
+        shell: powershell
+        run: |
+          try {
+            .\scripts\verify-rcb-export.ps1 -EngineRoot .\ARIEC61850
+            "PASS: Legacy SAS selected-RCB CID workflow guard passed." | Set-Content rcb-guard-result.txt
+          }
+          catch {
+            $message = "FAIL: " + $_.Exception.Message
+            $message | Set-Content rcb-guard-result.txt
+            Write-Error $message
+            exit 1
+          }
+
+      - name: Upload concise guard result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rcb-guard-result
+          path: rcb-guard-result.txt
+          retention-days: 1

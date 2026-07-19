@@ -1,195 +1,53 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
+using ArIED61850Tester.Models;
+using Microsoft.Win32;
 
 namespace ArIED61850Tester;
 
-public sealed class RcbExportMockRow : INotifyPropertyChanged
-{
-    private bool _isSelected;
-
-    public required string Name { get; init; }
-    public required string Reference { get; init; }
-    public required string Type { get; init; }
-    public required string DataSetName { get; init; }
-    public required string DataSetDetail { get; init; }
-    public required int MemberCount { get; init; }
-    public required bool IsAvailable { get; init; }
-    public required string StatusText { get; init; }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set
-        {
-            if (_isSelected == value)
-                return;
-            _isSelected = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
-        }
-    }
-
-    public bool IsSelectable => IsAvailable && MemberCount > 0;
-    public string MemberCountText => MemberCount > 0 ? $"{MemberCount} FCDA" : "0 FCDA";
-    public string StatusGlyph => IsAvailable && MemberCount > 0 ? "✅" : "❌";
-    public Brush StatusBrush => IsAvailable && MemberCount > 0
-        ? new SolidColorBrush(Color.FromRgb(22, 163, 74))
-        : new SolidColorBrush(Color.FromRgb(201, 42, 50));
-}
-
-public sealed class RcbExportFilterMockViewModel : INotifyPropertyChanged
-{
-    private RcbExportMockRow? _selectedRow;
-    private string _availabilityCheckedText = "Mock result loaded • read-only";
-
-    public RcbExportFilterMockViewModel(string iedName, string endpoint)
-    {
-        IedName = string.IsNullOrWhiteSpace(iedName) ? "IED" : iedName.Trim();
-        Endpoint = string.IsNullOrWhiteSpace(endpoint) ? "MMS endpoint" : endpoint.Trim();
-
-        Rows = new ObservableCollection<RcbExportMockRow>
-        {
-            new()
-            {
-                Name = "A_BRCB01",
-                Reference = $"{IedName}LD0/LLN0.BR.A_BRCB01",
-                Type = "Buffered",
-                DataSetName = "dsTripEvents",
-                DataSetDetail = "Static DataSet • protection events",
-                MemberCount = 128,
-                IsAvailable = true,
-                StatusText = "Available"
-            },
-            new()
-            {
-                Name = "A_URCB01",
-                Reference = $"{IedName}LD0/LLN0.RP.A_URCB01",
-                Type = "Unbuffered",
-                DataSetName = "dsBayStatus",
-                DataSetDetail = "Static DataSet • status indications",
-                MemberCount = 84,
-                IsAvailable = true,
-                StatusText = "Available"
-            },
-            new()
-            {
-                Name = "A_BRCB02",
-                Reference = $"{IedName}LD0/LLN0.BR.A_BRCB02",
-                Type = "Buffered",
-                DataSetName = "dsProtection",
-                DataSetDetail = "Static DataSet • protection start/trip",
-                MemberCount = 96,
-                IsAvailable = false,
-                StatusText = "In use"
-            },
-            new()
-            {
-                Name = "A_BRCB03",
-                Reference = $"{IedName}LD0/LLN0.BR.A_BRCB03",
-                Type = "Buffered",
-                DataSetName = "dsMeasurements",
-                DataSetDetail = "Static DataSet • analog measurements",
-                MemberCount = 64,
-                IsAvailable = false,
-                StatusText = "In use"
-            },
-            new()
-            {
-                Name = "A_URCB02",
-                Reference = $"{IedName}LD0/LLN0.RP.A_URCB02",
-                Type = "Unbuffered",
-                DataSetName = "—",
-                DataSetDetail = "Empty DataSet",
-                MemberCount = 0,
-                IsAvailable = false,
-                StatusText = "No DataSet"
-            }
-        };
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public string IedName { get; }
-    public string Endpoint { get; }
-    public ObservableCollection<RcbExportMockRow> Rows { get; }
-
-    public RcbExportMockRow? SelectedRow
-    {
-        get => _selectedRow;
-        set
-        {
-            if (ReferenceEquals(_selectedRow, value))
-                return;
-            _selectedRow = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(SelectionSummary));
-            OnPropertyChanged(nameof(RemovalSummary));
-            OnPropertyChanged(nameof(CanExport));
-        }
-    }
-
-    public string AvailabilityCheckedText
-    {
-        get => _availabilityCheckedText;
-        set
-        {
-            if (string.Equals(_availabilityCheckedText, value, StringComparison.Ordinal))
-                return;
-            _availabilityCheckedText = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public bool CanExport => SelectedRow?.IsSelectable == true;
-
-    public string SelectionSummary => SelectedRow == null
-        ? "No RCB selected"
-        : $"{SelectedRow.Name} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount} members";
-
-    public string RemovalSummary => SelectedRow == null
-        ? $"0 retained • {Rows.Count} unchanged"
-        : $"1 retained • {Rows.Count - 1} removed";
-
-    public void SelectOnly(RcbExportMockRow? row)
-    {
-        foreach (var candidate in Rows)
-            candidate.IsSelected = ReferenceEquals(candidate, row);
-        SelectedRow = row;
-    }
-
-    public void ClearSelection() => SelectOnly(null);
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-}
-
 public partial class RcbExportFilterWindow : Window
 {
-    private readonly RcbExportFilterMockViewModel _viewModel;
+    private readonly RcbExportFilterViewModel _viewModel;
     private bool _selectionUpdateInProgress;
+    private CancellationTokenSource? _activeOperation;
 
-    public RcbExportFilterWindow(string iedName, string endpoint)
+    public RcbExportFilterWindow(RcbExportWindowOptions options)
     {
         InitializeComponent();
-        _viewModel = new RcbExportFilterMockViewModel(iedName, endpoint);
+        _viewModel = new RcbExportFilterViewModel(options);
         DataContext = _viewModel;
+    }
+
+    public RcbExportFilterWindow(string iedName, string endpoint)
+        : this(BuildMockOptions(iedName, endpoint))
+    {
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _activeOperation?.Cancel();
+        _activeOperation?.Dispose();
+        base.OnClosed(e);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        _viewModel.SelectOnly(_viewModel.Rows.FirstOrDefault(row => row.IsSelectable));
+        var initial = FirstPreferredRow();
+        _viewModel.SelectOnly(initial);
+        RcbGrid.SelectedItem = initial;
+        CheckAvailabilityButton.IsEnabled = _viewModel.Options.IsMock || _viewModel.Options.RefreshAvailabilityAsync != null;
+        MockStatusText.Text = initial == null
+            ? "No selectable populated RCB is currently available."
+            : $"{initial.Name} selected • {initial.DataSetName} • {initial.MemberCount:N0} FCDA.";
         RefreshSelectionUi();
     }
 
     private void RcbCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (_selectionUpdateInProgress || sender is not CheckBox { DataContext: RcbExportMockRow row })
+        if (_selectionUpdateInProgress || sender is not CheckBox { DataContext: RcbExportRow row })
             return;
 
         _selectionUpdateInProgress = true;
@@ -202,12 +60,14 @@ public partial class RcbExportFilterWindow : Window
         {
             _selectionUpdateInProgress = false;
         }
+
+        MockStatusText.Text = $"{row.Name} selected • {row.DataSetName} • {row.MemberCount:N0} FCDA.";
         RefreshSelectionUi();
     }
 
     private void RcbCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (_selectionUpdateInProgress || sender is not CheckBox { DataContext: RcbExportMockRow row })
+        if (_selectionUpdateInProgress || sender is not CheckBox { DataContext: RcbExportRow row })
             return;
 
         if (ReferenceEquals(_viewModel.SelectedRow, row))
@@ -217,17 +77,52 @@ public partial class RcbExportFilterWindow : Window
 
     private async void CheckAvailability_Click(object sender, RoutedEventArgs e)
     {
+        if (_activeOperation != null)
+            return;
+
         CheckAvailabilityButton.IsEnabled = false;
         CheckAvailabilityText.Text = "Checking…";
-        _viewModel.AvailabilityCheckedText = "Reading RptEna / reservation state…";
-        MockStatusText.Text = "Read-only availability check in progress — no RCB will be reserved.";
+        _viewModel.AvailabilityCheckedText = "Reading RptEna, reservation, Owner, and DataSet directory…";
+        MockStatusText.Text = "Read-only availability check in progress — no RCB will be reserved or modified.";
+        _activeOperation = new CancellationTokenSource(TimeSpan.FromSeconds(35));
 
-        await Task.Delay(650);
+        try
+        {
+            if (_viewModel.Options.IsMock)
+            {
+                await Task.Delay(650, _activeOperation.Token);
+            }
+            else
+            {
+                var refresh = _viewModel.Options.RefreshAvailabilityAsync
+                    ?? throw new InvalidOperationException("Connect the IED before checking live RCB availability.");
+                var rows = await refresh(_activeOperation.Token);
+                _viewModel.ReplaceRows(rows);
+                RcbGrid.SelectedItem = _viewModel.SelectedRow;
+            }
 
-        _viewModel.AvailabilityCheckedText = $"Checked {DateTime.Now:HH:mm:ss} • read-only";
-        CheckAvailabilityText.Text = "Check Availability";
-        CheckAvailabilityButton.IsEnabled = true;
-        MockStatusText.Text = "Availability refreshed. Select one green RCB for the legacy SAS CID.";
+            _viewModel.AvailabilityCheckedText = $"Checked {DateTime.Now:HH:mm:ss} • read-only";
+            MockStatusText.Text = "Availability refreshed. Green is proven free; red is occupied/unusable; yellow requires confirmation.";
+        }
+        catch (OperationCanceledException)
+        {
+            _viewModel.AvailabilityCheckedText = "Availability check cancelled or timed out";
+            MockStatusText.Text = "No RCB was modified. Retry after confirming MMS connectivity.";
+        }
+        catch (Exception ex)
+        {
+            _viewModel.AvailabilityCheckedText = "Availability check failed • no RCB modified";
+            MockStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Check RCB Availability", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _activeOperation.Dispose();
+            _activeOperation = null;
+            CheckAvailabilityText.Text = "Check Availability";
+            CheckAvailabilityButton.IsEnabled = _viewModel.Options.IsMock || _viewModel.Options.RefreshAvailabilityAsync != null;
+            RefreshSelectionUi();
+        }
     }
 
     private void ClearAll_Click(object sender, RoutedEventArgs e)
@@ -242,15 +137,19 @@ public partial class RcbExportFilterWindow : Window
         {
             _selectionUpdateInProgress = false;
         }
-        MockStatusText.Text = "All RCBs cleared. Select exactly one available RCB.";
+
+        MockStatusText.Text = "All RCBs cleared. Select exactly one populated RCB.";
         RefreshSelectionUi();
     }
 
     private void SelectAvailable_Click(object sender, RoutedEventArgs e)
     {
-        var row = _viewModel.Rows.FirstOrDefault(candidate => candidate.IsSelectable);
+        var row = FirstPreferredRow();
         if (row == null)
+        {
+            MockStatusText.Text = "No selectable populated RCB is available.";
             return;
+        }
 
         _selectionUpdateInProgress = true;
         try
@@ -263,18 +162,32 @@ public partial class RcbExportFilterWindow : Window
         {
             _selectionUpdateInProgress = false;
         }
+
         MockStatusText.Text = $"{row.Name} selected. Export will retain this RCB only.";
         RefreshSelectionUi();
     }
 
-    private void Export_Click(object sender, RoutedEventArgs e)
+    private async void Export_Click(object sender, RoutedEventArgs e)
     {
+        if (_activeOperation != null)
+            return;
+
         var selected = _viewModel.SelectedRow;
         if (selected?.IsSelectable != true)
         {
-            MockStatusText.Text = "Select exactly one available RCB with a populated DataSet before export.";
+            MockStatusText.Text = "Select exactly one RCB with a populated DataSet before export.";
             RefreshSelectionUi();
             return;
+        }
+
+        if (selected.RequiresConfirmation)
+        {
+            var warning = selected.Availability == MmsRcbOperationalAvailability.UsedByCaller
+                ? "This RCB is active in the current ARSAS session. The CID can be generated, but stop ARSAS reporting before the target SAS tries to reserve or enable this RCB."
+                : "Live availability could not be proven from the attributes exposed by this IED. The CID can still be generated, but verify the RCB is not used by another client before importing it.";
+            if (MessageBox.Show(this, warning + "\n\nContinue with export?", "Confirm RCB Selection",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                return;
         }
 
         var editionDialog = new SaveSclWindow(
@@ -284,18 +197,151 @@ public partial class RcbExportFilterWindow : Window
         {
             Owner = this
         };
+        if (editionDialog.ShowDialog() != true)
+            return;
 
-        if (editionDialog.ShowDialog() == true)
+        var schema = editionDialog.ViewModel.SelectedSchemaProfile;
+        if (_viewModel.Options.IsMock || _viewModel.Options.ExportAsync == null)
         {
-            var edition = editionDialog.ViewModel.SelectedSchemaProfile;
-            MockStatusText.Text = $"UX mock: {selected.Name} prepared for {edition.DisplayName}. Engine export will be connected later.";
+            MockStatusText.Text = $"UX mock: {selected.Name} prepared for {schema.DisplayName}. Production engine export is disabled in demo mode.";
+            return;
         }
+
+        var editionSuffix = schema.IsEdition2 ? "ed2" : "ed1";
+        var fileDialog = new SaveFileDialog
+        {
+            Title = $"Export legacy SAS CID — {selected.Name} — {schema.DisplayName}",
+            Filter = "Configured IED Description (*.cid)|*.cid|All files (*.*)|*.*",
+            DefaultExt = ".cid",
+            AddExtension = true,
+            FileName = $"{SafeFileStem(_viewModel.IedName)}-legacy-sas-{SafeFileStem(selected.Name)}-{editionSuffix}.cid"
+        };
+        if (fileDialog.ShowDialog(this) != true)
+            return;
+
+        _activeOperation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        SetBusyState(true, "Filtering SCL and validating one retained RCB…");
+        try
+        {
+            var completion = await _viewModel.Options.ExportAsync(
+                selected,
+                schema.Profile,
+                fileDialog.FileName,
+                _activeOperation.Token);
+
+            MockStatusText.Text = completion.Message;
+            var resultText =
+                $"Legacy SAS CID export completed.\n\n" +
+                $"Schema: {completion.SchemaDisplayName}\n" +
+                $"Retained RCB: {completion.RetainedReportControl}\n" +
+                $"DataSet: {completion.DataSetName} ({completion.DataSetMemberCount:N0} FCDA)\n" +
+                $"Removed RCBs: {completion.RemovedReportControlCount:N0}\n\n" +
+                $"CID: {completion.OutputPath}\n" +
+                $"Evidence: {completion.ReportPath}";
+            MessageBox.Show(this, resultText, "RCB Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            var directory = Path.GetDirectoryName(completion.OutputPath);
+            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+            {
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{completion.OutputPath}\"")
+                {
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            MockStatusText.Text = "Export cancelled or timed out. The source SCL was not modified.";
+        }
+        catch (Exception ex)
+        {
+            MockStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "RCB Export Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _activeOperation.Dispose();
+            _activeOperation = null;
+            SetBusyState(false, string.Empty);
+            RefreshSelectionUi();
+        }
+    }
+
+    private RcbExportRow? FirstPreferredRow()
+        => _viewModel.Rows.FirstOrDefault(row => row.IsSelectable && row.Availability == MmsRcbOperationalAvailability.Available)
+           ?? _viewModel.Rows.FirstOrDefault(row => row.IsSelectable);
+
+    private void SetBusyState(bool busy, string status)
+    {
+        ExportButton.IsEnabled = !busy && _viewModel.CanExport;
+        CheckAvailabilityButton.IsEnabled = !busy && (_viewModel.Options.IsMock || _viewModel.Options.RefreshAvailabilityAsync != null);
+        RcbGrid.IsEnabled = !busy;
+        if (!string.IsNullOrWhiteSpace(status))
+            MockStatusText.Text = status;
     }
 
     private void RefreshSelectionUi()
     {
-        ExportButton.IsEnabled = _viewModel.CanExport;
-        if (_viewModel.SelectedRow is { } selected)
-            MockStatusText.Text = $"{selected.Name} selected • {selected.DataSetName} • {selected.MemberCount} FCDA.";
+        ExportButton.IsEnabled = _activeOperation == null && _viewModel.CanExport;
     }
+
+    private static string SafeFileStem(string? value)
+    {
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var cleaned = new string((value ?? "IED")
+            .Trim()
+            .Select(character => invalid.Contains(character) ? '_' : character)
+            .ToArray());
+        return string.IsNullOrWhiteSpace(cleaned) ? "IED" : cleaned;
+    }
+
+    private static RcbExportWindowOptions BuildMockOptions(string iedName, string endpoint)
+    {
+        var name = string.IsNullOrWhiteSpace(iedName) ? "IED" : iedName.Trim();
+        var rows = new[]
+        {
+            MockRow(name, "A_BRCB01", true, "dsTripEvents", "Static DataSet • protection events", 128, MmsRcbOperationalAvailability.Available),
+            MockRow(name, "A_URCB01", false, "dsBayStatus", "Static DataSet • status indications", 84, MmsRcbOperationalAvailability.Available),
+            MockRow(name, "A_BRCB02", true, "dsProtection", "Static DataSet • protection start/trip", 96, MmsRcbOperationalAvailability.InUse),
+            MockRow(name, "A_BRCB03", true, "dsMeasurements", "Static DataSet • analog measurements", 64, MmsRcbOperationalAvailability.InUse),
+            MockRow(name, "A_URCB02", false, "—", "Empty DataSet", 0, MmsRcbOperationalAvailability.DataSetEmpty)
+        };
+        return new RcbExportWindowOptions
+        {
+            IedName = name,
+            Endpoint = endpoint,
+            IsMock = true,
+            CanCheckAvailability = true,
+            Rows = rows
+        };
+    }
+
+    private static RcbExportRow MockRow(
+        string iedName,
+        string rcbName,
+        bool buffered,
+        string dataSet,
+        string detail,
+        int memberCount,
+        MmsRcbOperationalAvailability availability)
+        => new()
+        {
+            Name = rcbName,
+            ExportName = rcbName,
+            Reference = $"{iedName}LD0/LLN0.{(buffered ? "BR" : "RP")}.{rcbName}",
+            Type = buffered ? "Buffered" : "Unbuffered",
+            Buffered = buffered,
+            DataSetName = dataSet,
+            DataSetReference = dataSet == "—" ? string.Empty : $"{iedName}LD0/LLN0.{dataSet}",
+            DataSetDetail = detail,
+            MemberCount = memberCount,
+            Availability = availability,
+            Confidence = MmsRcbAvailabilityConfidence.Exact,
+            StatusText = RcbExportRow.ToStatusText(availability),
+            Reason = availability == MmsRcbOperationalAvailability.Available
+                ? "Mock RptEna=false and reservation state free."
+                : availability == MmsRcbOperationalAvailability.InUse
+                    ? "Mock RptEna=true or reservation is held by another client."
+                    : "Mock DataSet is empty."
+        };
 }

@@ -277,6 +277,10 @@
                                                             IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
                                                         <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
                                                     </Button>
+                                                    <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedEditRcb_Click"
+                                                            IsEnabled="{Binding IsActionEnabled}" ToolTip="RCB Export Filter — keep one RCB for legacy SAS CID import">
+                                                        <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}" Stroke="#315DBF"/></Viewbox>
+                                                    </Button>
                                                     <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedSaveScl_Click"
                                                             IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
                                                         <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
