@@ -100,7 +100,8 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="RCB Export Filter" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
                         <Border Background="#EEF4FF" BorderBrush="#CBDCF8" BorderThickness="1" CornerRadius="10"
-                                Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                                Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center"
+                                Visibility="{Binding MockBadgeVisibility}">
                             <TextBlock Text="UX MOCK" FontSize="9.8" FontWeight="Bold" Foreground="#315DBF"/>
                         </Border>
                     </StackPanel>
@@ -194,7 +195,7 @@
                     <DataGridTemplateColumn Header="STATUS" Width="1.25*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" ToolTip="{Binding Reason}">
                                     <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe UI Emoji" FontSize="15" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding StatusText}" Margin="7,0,0,0" FontWeight="SemiBold"
                                                Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/>
@@ -234,7 +235,7 @@
         <Grid Grid.Row="8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Read-only availability mock — no RCB is reserved or modified" FontSize="11.2" Foreground="#6A7B91"/>
+                <TextBlock Text="{Binding SafetyText}" FontSize="11.2" Foreground="#6A7B91"/>
                 <TextBlock x:Name="MockStatusText" Text="Select one available RCB, then continue to SCL edition selection."
                            Margin="0,3,0,0" FontSize="11.2" Foreground="#315DBF"/>
             </StackPanel>
