@@ -7,18 +7,21 @@ namespace ArIED61850Tester;
 
 public sealed class SaveSclDialogViewModel : INotifyPropertyChanged
 {
+    private readonly bool _legacySasCidMode;
     private SclSchemaProfileDescriptor _selectedSchemaProfile;
     private string _editionHint = string.Empty;
 
     public SaveSclDialogViewModel(
         string iedName,
         string sourceDescription,
-        SclSchemaProfile selectedProfile = SclSchemaProfile.Edition2V31)
+        SclSchemaProfile selectedProfile = SclSchemaProfile.Edition2V31,
+        bool legacySasCidMode = false)
     {
         IedName = string.IsNullOrWhiteSpace(iedName) ? "IED" : iedName.Trim();
         SourceDescription = string.IsNullOrWhiteSpace(sourceDescription)
             ? "IEC 61850 model"
             : sourceDescription.Trim();
+        _legacySasCidMode = legacySasCidMode;
         _selectedSchemaProfile = SclSchemaProfiles.Get(selectedProfile);
         UpdateHint();
     }
@@ -63,6 +66,14 @@ public sealed class SaveSclDialogViewModel : INotifyPropertyChanged
 
     private void UpdateHint()
     {
+        if (_legacySasCidMode)
+        {
+            EditionHint = SelectedSchemaProfile.IsEdition2
+                ? "Use when the target SAS accepts Edition 2. This selected-RCB workflow still saves a CID file."
+                : "Recommended for existing legacy SAS systems. The selected-RCB output is saved as an Edition 1 CID file.";
+            return;
+        }
+
         EditionHint = SelectedSchemaProfile.IsEdition2
             ? "Recommended for modern engineering exchange. The output is saved as an IID file."
             : "Use for legacy engineering systems that require Edition 1. The output is saved as an ICD file.";
@@ -77,10 +88,11 @@ public partial class SaveSclWindow : Window
     public SaveSclWindow(
         string iedName,
         string sourceDescription,
-        SclSchemaProfile selectedProfile = SclSchemaProfile.Edition2V31)
+        SclSchemaProfile selectedProfile = SclSchemaProfile.Edition2V31,
+        bool legacySasCidMode = false)
     {
         InitializeComponent();
-        DataContext = new SaveSclDialogViewModel(iedName, sourceDescription, selectedProfile);
+        DataContext = new SaveSclDialogViewModel(iedName, sourceDescription, selectedProfile, legacySasCidMode);
     }
 
     public SaveSclDialogViewModel ViewModel => (SaveSclDialogViewModel)DataContext;
