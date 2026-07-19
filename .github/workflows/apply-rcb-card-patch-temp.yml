@@ -20,6 +20,7 @@ jobs:
       - name: Add production RCB action to IED card
         shell: python
         run: |
+          import re
           from pathlib import Path
 
           path = Path("MainWindow.xaml")
@@ -28,18 +29,22 @@ jobs:
               print("IED card RCB action already installed.")
               raise SystemExit(0)
 
-          save = '''                                                    <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedSaveScl_Click"
-                                                                  IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
-                                                              <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                                          </Button>'''
-          rcb = '''                                                    <Button Style="{StaticResource IedIconButton}" Tag="{Binding}" Click="IedEditRcb_Click"
-                                                                  IsEnabled="{Binding IsActionEnabled}" ToolTip="RCB Export Filter — keep one RCB for legacy SAS CID import">
-                                                              <Viewbox Width="16" Height="16"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}" Stroke="#315DBF"/></Viewbox>
-                                                          </Button>
-          '''
-          if save not in text:
+          pattern = re.compile(
+              r'(?P<indent>[ \t]*)<Button Style="\{StaticResource IedIconButton\}" Tag="\{Binding\}" Click="IedSaveScl_Click"[\s\S]*?</Button>',
+              re.MULTILINE)
+          match = pattern.search(text)
+          if not match:
               raise SystemExit("IED card Save SCL action anchor was not found.")
-          path.write_text(text.replace(save, rcb + save, 1), encoding="utf-8")
+
+          indent = match.group('indent')
+          rcb = (
+              f'{indent}<Button Style="{{StaticResource IedIconButton}}" Tag="{{Binding}}" Click="IedEditRcb_Click"\n'
+              f'{indent}        IsEnabled="{{Binding IsActionEnabled}}" ToolTip="RCB Export Filter — keep one RCB for legacy SAS CID import">\n'
+              f'{indent}    <Viewbox Width="16" Height="16"><Path Data="{{StaticResource LucideSlidersHorizontal}}" Style="{{StaticResource LucideIcon}}" Stroke="#315DBF"/></Viewbox>\n'
+              f'{indent}</Button>\n'
+          )
+          text = text[:match.start()] + rcb + match.group(0) + text[match.end():]
+          path.write_text(text, encoding="utf-8")
 
       - name: Commit branch patch
         shell: bash
