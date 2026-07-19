@@ -1,0 +1,45 @@
+name: Temporary RCB integration diagnostics
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" arsas
+
+      - name: Checkout ARIEC61850 main
+        shell: powershell
+        run: git clone --quiet --depth 1 --branch main https://github.com/masarray/ARIEC61850.git ARIEC61850
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        shell: powershell
+        run: dotnet restore .\arsas\ArIED61850Tester.csproj
+
+      - name: Compile and print focused errors
+        shell: powershell
+        run: |
+          $output = & dotnet build .\arsas\ArIED61850Tester.csproj -c Release --no-restore -v:minimal 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Set-Content build.log
+          $errors = $output | Where-Object { $_ -match ': error (CS|MC|XDG|NETSDK|MSB)' }
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host $_ }
+          } else {
+            $output | Select-Object -Last 120 | ForEach-Object { Write-Host $_ }
+          }
+          if ($exitCode -ne 0) { exit $exitCode }
