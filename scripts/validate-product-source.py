@@ -14,6 +14,7 @@ LANDING = ROOT / "landing"
 TEMPLATES = LANDING / "templates"
 PARTIALS = LANDING / "partials"
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
+VERIFICATION_FILE_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
 KNOWN_TOKENS = {
     "ARSAS_VERSION", "PRODUCT_NAME", "CANONICAL_ROOT", "REPOSITORY_URL",
     "ENGINE_REPOSITORY_URL", "AUTHOR_NAME", "AUTHOR_LINKEDIN", "AUTHOR_GITHUB",
@@ -223,9 +224,16 @@ def validate_contract(errors: list[str]) -> None:
         if value not in about:
             errors.append(f"about template missing {value}")
 
-    root_html = sorted(path.name for path in LANDING.glob("*.html"))
+    root_html = sorted(
+        path.name
+        for path in LANDING.glob("*.html")
+        if not VERIFICATION_FILE_PATTERN.fullmatch(path.name)
+    )
     if root_html:
         errors.append("legacy landing HTML remains outside templates: " + ", ".join(root_html))
+    verification_files = [path.name for path in LANDING.glob("google*.html") if VERIFICATION_FILE_PATTERN.fullmatch(path.name)]
+    if len(verification_files) > 1:
+        errors.append("multiple Google verification HTML files are present")
     if (LANDING / "sitemap.xml").exists():
         errors.append("landing/sitemap.xml must be generated from site.json, not stored as a second source")
 
