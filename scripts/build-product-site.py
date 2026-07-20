@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import shutil
+import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -21,6 +22,22 @@ APP_ICON_SOURCE = ROOT / "Assets" / "app-icon.png"
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION_FILE_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
+
+
+def png_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()[:24]
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit(f"Application icon is not a valid PNG: {path}")
+    return struct.unpack(">II", data[16:24])
+
+
+def icon_dimensions() -> tuple[int, int]:
+    if not APP_ICON_SOURCE.exists():
+        raise SystemExit(f"Missing application icon: {APP_ICON_SOURCE}")
+    width, height = png_size(APP_ICON_SOURCE)
+    if width != height or width < 256:
+        raise SystemExit(f"Application icon must be square and at least 256px, found {width}x{height}")
+    return width, height
 
 
 def read_version() -> str:
@@ -39,12 +56,10 @@ def read_config() -> dict[str, object]:
         config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"Cannot read landing/site.json: {exc}") from exc
-
     required = (
         "product.name", "product.canonicalRoot", "product.repository",
         "product.engineRepository", "author.name", "author.linkedin",
-        "author.github", "downloads.installer", "downloads.portable",
-        "downloads.checksums",
+        "author.github", "downloads.installer", "downloads.portable", "downloads.checksums",
     )
     for dotted in required:
         value: object = config
@@ -54,7 +69,6 @@ def read_config() -> dict[str, object]:
             value = value[key]
         if not isinstance(value, str) or not value.strip():
             raise SystemExit(f"landing/site.json has invalid {dotted}")
-
     if not isinstance(config.get("pages"), list) or not config["pages"]:
         raise SystemExit("landing/site.json must define a non-empty pages registry")
     return config
@@ -88,7 +102,6 @@ def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
         if not path.exists():
             raise SystemExit(f"Missing landing partial: {path.relative_to(ROOT)}")
         return expand_partials(path.read_text(encoding="utf-8"), (*stack, name))
-
     previous = None
     while previous != text:
         previous = text
@@ -96,13 +109,15 @@ def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
     return text
 
 
-def render(text: str, values: dict[str, str]) -> str:
+def render(text: str, values: dict[str, str], icon_size: str) -> str:
     text = expand_partials(text)
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
-    # The public favicon is generated from the latest 512px application artwork.
-    text = text.replace('href="assets/app-icon.png" type="image/png" sizes="256x256"',
-                        'href="assets/app-icon.png" type="image/png" sizes="512x512"')
+    text = re.sub(
+        r'href="assets/app-icon\.png" type="image/png" sizes="[0-9]+x[0-9]+"',
+        f'href="assets/app-icon.png" type="image/png" sizes="{icon_size}"',
+        text,
+    )
     unresolved = sorted(set(TOKEN_PATTERN.findall(text)))
     if unresolved:
         raise SystemExit("Unresolved landing template tokens: " + ", ".join(unresolved))
@@ -137,18 +152,15 @@ def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
     return normalized
 
 
-def install_icon(output: Path) -> None:
-    if not APP_ICON_SOURCE.exists():
-        raise SystemExit(f"Missing application icon: {APP_ICON_SOURCE}")
+def install_icon(output: Path, icon_size: str) -> None:
     destination = output / "assets" / "app-icon.png"
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(APP_ICON_SOURCE, destination)
-
     manifest_path = output / "site.webmanifest"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["icons"] = [{
         "src": "assets/app-icon.png",
-        "sizes": "512x512",
+        "sizes": icon_size,
         "type": "image/png",
         "purpose": "any maskable",
     }]
@@ -164,12 +176,10 @@ def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str,
         path = str(entry["path"])
         loc = root if path == "" else root + path
         lines.extend([
-            "  <url>",
-            f"    <loc>{escape(loc)}</loc>",
+            "  <url>", f"    <loc>{escape(loc)}</loc>",
             f"    <lastmod>{escape(str(entry.get('lastmod', '2026-07-20')))}</lastmod>",
             f"    <changefreq>{escape(str(entry.get('changefreq', 'monthly')))}</changefreq>",
-            f"    <priority>{escape(str(entry.get('priority', '0.7')))}</priority>",
-            "  </url>",
+            f"    <priority>{escape(str(entry.get('priority', '0.7')))}</priority>", "  </url>",
         ])
     lines.append("</urlset>")
     (output / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -197,6 +207,8 @@ def build(output: Path) -> None:
     config = read_config()
     values = token_values(config, version)
     pages = page_registry(config)
+    width, height = icon_dimensions()
+    icon_size = f"{width}x{height}"
 
     if output.exists():
         shutil.rmtree(output)
@@ -210,26 +222,24 @@ def build(output: Path) -> None:
         target_name = "index.html" if str(entry["path"]) == "" else str(entry["path"])
         target = output / target_name
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render((TEMPLATES / template_name).read_text(encoding="utf-8"), values), encoding="utf-8")
+        source_text = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        target.write_text(render(source_text, values, icon_size), encoding="utf-8")
         generated.add(target_name)
 
     source_html = legacy_html_names()
     if source_html:
         raise SystemExit("Legacy landing HTML remains outside templates: " + ", ".join(source_html))
 
-    install_icon(output)
+    install_icon(output, icon_size)
     write_sitemap(output, config, pages)
     write_build_info(output, config, version, pages)
 
     required = {
         *generated, "site.json", "sitemap.xml", "build-info.json",
         "assets/app-icon.png", "assets/social-card.png",
-        "assets/screenshots/arsas-first-launch.webp",
-        "assets/screenshots/arsas-multi-ied.webp",
-        "assets/screenshots/arsas-live-values.webp",
-        "assets/screenshots/arsas-event-log.webp",
-        "assets/screenshots/arsas-goose.webp",
-        "assets/screenshots/arsas-diagnostics.webp",
+        "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
+        "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",
+        "assets/screenshots/arsas-goose.webp", "assets/screenshots/arsas-diagnostics.webp",
         "assets/screenshots/arsas-rcb-scl-export.webp",
     }
     missing = sorted(item for item in required if not (output / item).exists())
@@ -240,13 +250,11 @@ def build(output: Path) -> None:
     for value in (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
         "https://masarray.github.io/arsas/assets/social-card.svg",
-        'href="assets/favicon.svg"', "{{", "github.com/masarray/arsas#quick-start",
-        '<meta name="keywords"',
+        'href="assets/favicon.svg"', "{{", "github.com/masarray/arsas#quick-start", '<meta name="keywords"',
     ):
         if value in combined:
             raise SystemExit(f"Deployable product site still contains forbidden value: {value}")
-
-    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages).")
+    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages, favicon {icon_size}).")
 
 
 def main() -> int:
