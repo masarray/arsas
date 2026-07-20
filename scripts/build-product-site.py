@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the ARSAS product website from explicit templates and product data."""
+"""Build the ARSAS product website from explicit templates, partials and product data."""
 
 from __future__ import annotations
 
@@ -9,22 +9,17 @@ import re
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "landing"
 TEMPLATES = SOURCE / "templates"
+PARTIALS = SOURCE / "partials"
 CONFIG_PATH = SOURCE / "site.json"
 PROJECT_PATH = ROOT / "ArIED61850Tester.csproj"
 APP_ICON_SOURCE = ROOT / "Assets" / "app-icon-256.png"
-
-REMOTE_SCREENSHOTS = {
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%281%29.webp": "assets/screenshots/arsas-first-launch.webp",
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%282%29.webp": "assets/screenshots/arsas-multi-ied.webp",
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%283%29.webp": "assets/screenshots/arsas-live-values.webp",
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%284%29.webp": "assets/screenshots/arsas-event-log.webp",
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%285%29.webp": "assets/screenshots/arsas-goose.webp",
-    "https://raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot/arsas%20%286%29.webp": "assets/screenshots/arsas-diagnostics.webp",
-}
+INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
+TOKEN_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
 
 def read_version() -> str:
@@ -48,6 +43,7 @@ def read_config() -> dict[str, object]:
         "product.name",
         "product.canonicalRoot",
         "product.repository",
+        "product.engineRepository",
         "author.name",
         "author.linkedin",
         "author.github",
@@ -63,6 +59,10 @@ def read_config() -> dict[str, object]:
             value = value[key]
         if not isinstance(value, str) or not value.strip():
             raise SystemExit(f"landing/site.json has invalid {dotted}")
+
+    pages = config.get("pages")
+    if not isinstance(pages, list) or not pages:
+        raise SystemExit("landing/site.json must define a non-empty pages registry")
     return config
 
 
@@ -85,44 +85,62 @@ def token_values(config: dict[str, object], version: str) -> dict[str, str]:
     }
 
 
-def render(text: str, values: dict[str, str]) -> str:
-    for key, value in values.items():
-        text = text.replace("{{" + key + "}}", value)
-    unresolved = sorted(set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", text)))
-    if unresolved:
-        raise SystemExit("Unresolved landing template tokens: " + ", ".join(unresolved))
+def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1).lower()
+        if name in stack:
+            raise SystemExit("Circular landing partial include: " + " -> ".join((*stack, name)))
+        path = PARTIALS / f"{name}.html"
+        if not path.exists():
+            raise SystemExit(f"Missing landing partial: {path.relative_to(ROOT)}")
+        return expand_partials(path.read_text(encoding="utf-8"), (*stack, name))
+
+    previous = None
+    while previous != text:
+        previous = text
+        text = INCLUDE_PATTERN.sub(replace, text)
     return text
 
 
-def normalize_legacy_page(text: str, version: str) -> str:
-    """Only normalize assets and version on pages not migrated to templates yet."""
-    for remote, local in REMOTE_SCREENSHOTS.items():
-        text = text.replace(remote, local)
-    text = text.replace(
-        "https://masarray.github.io/arsas/assets/social-card.svg",
-        "https://masarray.github.io/arsas/assets/social-card.png",
-    )
-    text = text.replace(
-        '<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />',
-        "",
-    )
-    text = re.sub(
-        r'<link\s+rel="preload"\s+as="image"\s+href="https://raw\.githubusercontent\.com/[^\"]+"\s+fetchpriority="high"\s*/?>',
-        '<link rel="preload" as="image" href="assets/screenshots/arsas-first-launch.webp" fetchpriority="high" />',
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r'<link\s+rel="icon"\s+href="assets/favicon\.svg"\s+type="image/svg\+xml"\s*/?>',
-        '<link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />\n  <link rel="apple-touch-icon" href="assets/app-icon.png" />',
-        text,
-        flags=re.IGNORECASE,
-    )
-    return re.sub(
-        r'("softwareVersion"\s*:\s*")\d+\.\d+\.\d+(\")',
-        rf"\g<1>{version}\g<2>",
-        text,
-    )
+def render(text: str, values: dict[str, str]) -> str:
+    text = expand_partials(text)
+    for key, value in values.items():
+        text = text.replace("{{" + key + "}}", value)
+    unresolved = sorted(set(TOKEN_PATTERN.findall(text)))
+    if unresolved:
+        raise SystemExit("Unresolved landing template tokens: " + ", ".join(unresolved))
+    if INCLUDE_PATTERN.search(text):
+        raise SystemExit("Unresolved landing partial include remains")
+    return text
+
+
+def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
+    pages = config.get("pages")
+    if not isinstance(pages, list):
+        raise SystemExit("landing/site.json pages registry is invalid")
+
+    normalized: list[dict[str, object]] = []
+    paths: set[str] = set()
+    templates: set[str] = set()
+    for entry in pages:
+        if not isinstance(entry, dict):
+            raise SystemExit("Every landing page registry entry must be an object")
+        path = entry.get("path")
+        template = entry.get("template")
+        if not isinstance(path, str) or not isinstance(template, str):
+            raise SystemExit("Every landing page registry entry needs string path and template")
+        if path in paths or template in templates:
+            raise SystemExit(f"Duplicate landing page registry entry: {path or template}")
+        if path not in ("", "404.html") and not path.endswith(".html"):
+            raise SystemExit(f"Invalid landing page path: {path}")
+        if not template.endswith(".html"):
+            raise SystemExit(f"Invalid landing template name: {template}")
+        if not (TEMPLATES / template).exists():
+            raise SystemExit(f"Registered landing template is missing: {template}")
+        paths.add(path)
+        templates.add(template)
+        normalized.append(entry)
+    return normalized
 
 
 def install_icon(output: Path) -> None:
@@ -146,14 +164,35 @@ def install_icon(output: Path) -> None:
     )
 
 
-def write_build_info(output: Path, config: dict[str, object], version: str) -> None:
+def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str, object]]) -> None:
+    root = str(config["product"]["canonicalRoot"])
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for entry in pages:
+        if entry.get("index", True) is False:
+            continue
+        path = str(entry["path"])
+        loc = root if path == "" else root + path
+        lines.extend([
+            "  <url>",
+            f"    <loc>{escape(loc)}</loc>",
+            f"    <lastmod>{escape(str(entry.get('lastmod', '2026-07-20')))}</lastmod>",
+            f"    <changefreq>{escape(str(entry.get('changefreq', 'monthly')))}</changefreq>",
+            f"    <priority>{escape(str(entry.get('priority', '0.7')))}</priority>",
+            "  </url>",
+        ])
+    lines.append("</urlset>")
+    (output / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_build_info(output: Path, config: dict[str, object], version: str, pages: list[dict[str, object]]) -> None:
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "product": config["product"]["name"],
         "version": version,
         "canonicalRoot": config["product"]["canonicalRoot"],
         "repository": config["product"]["repository"],
         "author": config["author"],
+        "pages": [entry["path"] or "index.html" for entry in pages],
     }
     (output / "build-info.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
@@ -165,53 +204,65 @@ def build(output: Path) -> None:
     version = read_version()
     config = read_config()
     values = token_values(config, version)
+    pages = page_registry(config)
 
     if output.exists():
         shutil.rmtree(output)
     shutil.copytree(SOURCE, output)
     shutil.rmtree(output / "templates", ignore_errors=True)
+    shutil.rmtree(output / "partials", ignore_errors=True)
 
-    migrated = {"index.html", "download.html"}
-    for template in TEMPLATES.glob("*.html"):
-        target = output / template.name
-        target.write_text(render(template.read_text(encoding="utf-8"), values), encoding="utf-8")
+    generated: set[str] = set()
+    for entry in pages:
+        template_name = str(entry["template"])
+        target_name = "index.html" if str(entry["path"]) == "" else str(entry["path"])
+        target = output / target_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_text = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        target.write_text(render(source_text, values), encoding="utf-8")
+        generated.add(target_name)
 
-    for page in output.glob("*.html"):
-        if page.name in migrated:
-            continue
-        page.write_text(normalize_legacy_page(page.read_text(encoding="utf-8"), version), encoding="utf-8")
+    source_html = sorted(path.name for path in SOURCE.glob("*.html"))
+    if source_html:
+        raise SystemExit("Legacy landing HTML remains outside templates: " + ", ".join(source_html))
 
     install_icon(output)
-    write_build_info(output, config, version)
+    write_sitemap(output, config, pages)
+    write_build_info(output, config, version, pages)
 
-    required = (
-        "index.html",
-        "download.html",
-        "about.html",
+    required = {
+        *generated,
         "site.json",
+        "sitemap.xml",
         "build-info.json",
         "assets/app-icon.png",
         "assets/social-card.png",
         "assets/screenshots/arsas-first-launch.webp",
+        "assets/screenshots/arsas-multi-ied.webp",
+        "assets/screenshots/arsas-live-values.webp",
+        "assets/screenshots/arsas-event-log.webp",
+        "assets/screenshots/arsas-goose.webp",
+        "assets/screenshots/arsas-diagnostics.webp",
         "assets/screenshots/arsas-rcb-scl-export.webp",
-    )
-    missing = [item for item in required if not (output / item).exists()]
+    }
+    missing = sorted(item for item in required if not (output / item).exists())
     if missing:
         raise SystemExit("Missing product-site output: " + ", ".join(missing))
 
-    combined = "\n".join(page.read_text(encoding="utf-8") for page in output.glob("*.html"))
+    combined = "\n".join((output / page).read_text(encoding="utf-8") for page in sorted(generated))
     forbidden = (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
         "https://masarray.github.io/arsas/assets/social-card.svg",
         'href="assets/favicon.svg"',
-        "{{ARSAS_",
-        "{{AUTHOR_",
+        "{{",
+        "github.com/masarray/arsas#quick-start",
+        '<meta name="keywords"',
     )
     for value in forbidden:
         if value in combined:
             raise SystemExit(f"Deployable product site still contains forbidden value: {value}")
 
-    print(f"Built ARSAS product website {version} at {output}")
+    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages).")
 
 
 def main() -> int:
