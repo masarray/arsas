@@ -59,6 +59,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install offline report dependency
+        run: python -m pip install --disable-pip-version-check --quiet requests
+
       - name: Prepare stable release evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,6 +91,15 @@ jobs:
         id: local_health
         continue-on-error: true
         run: python scripts/check-site-health.py --site _site --output _measurement
+
+      - name: Exercise reporting without credentials or network data
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          PAGESPEED_URLS: ""
+          GITHUB_STEP_SUMMARY: ""
+        run: python scripts/build-site-measurement-report.py --site _site --output _measurement/offline --days 7
 
       - name: Add local health summary
         if: always()
@@ -154,9 +166,9 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
-          GSC_SITE_URL: ${{ vars.GSC_SITE_URL }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL || 'https://masarray.github.io/arsas/' }}
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
-          PAGESPEED_URLS: ${{ vars.PAGESPEED_URLS }}
+          PAGESPEED_URLS: ${{ vars.PAGESPEED_URLS || 'https://masarray.github.io/arsas/,https://masarray.github.io/arsas/download.html,https://masarray.github.io/arsas/smart-reporting.html,https://masarray.github.io/arsas/guides.html,https://masarray.github.io/arsas/id.html,https://masarray.github.io/arsas/unduh.html' }}
           REPORT_DAYS: ${{ inputs.days || '28' }}
         shell: bash
         run: python scripts/build-site-measurement-report.py --site _site --output _measurement --days "$REPORT_DAYS"
