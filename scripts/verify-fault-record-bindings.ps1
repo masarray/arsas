@@ -25,13 +25,12 @@ $requiredOneWayBindings = @(
     "SizeText",
     "FilesText",
     "Completeness",
-    "RemoteDirectory",
-    "Status",
     "StatusText",
     "ProgressValue",
     "IsIndeterminate",
     "IsBusy",
-    "CanDownload"
+    "CanDownload",
+    "CanSelectForDownload"
 )
 foreach ($property in $requiredOneWayBindings) {
     $pattern = "\{Binding\s+$([regex]::Escape($property))\s*,[^}]*Mode=OneWay[^}]*\}"
@@ -40,7 +39,16 @@ foreach ($property in $requiredOneWayBindings) {
     }
 }
 
-$requiredTwoWayBindings = @("RemoteDirectory", "DestinationDirectory", "IsSelected")
+# Status is used by DataTriggers and a read-only TextBlock. Those WPF bindings are
+# inherently OneWay; requiring a comma-form binding would reject valid trigger syntax.
+if ($xaml -notmatch '\{Binding\s+Status(?:\s*,[^}]*)?\}') {
+    throw "FaultRecordWindow must display the record Status."
+}
+
+# RemoteDirectory is intentionally not exposed by the compact fast workflow. The
+# window always starts discovery at the relay file-store root and keeps manual
+# refresh in the header.
+$requiredTwoWayBindings = @("DestinationDirectory", "IsSelected")
 foreach ($property in $requiredTwoWayBindings) {
     $pattern = "\{Binding\s+$([regex]::Escape($property))\s*,[^}]*Mode=TwoWay[^}]*\}"
     if ($xaml -notmatch $pattern) {
@@ -48,4 +56,8 @@ foreach ($property in $requiredTwoWayBindings) {
     }
 }
 
-Write-Host "Fault record binding modes are explicit and valid." -ForegroundColor Green
+if ($xaml -match 'Text="Remote directory"' -or $xaml -match 'Header="Remote directory"') {
+    throw "FaultRecordWindow compact workflow must not expose the remote-directory input or grid column."
+}
+
+Write-Host "Fault record binding modes and compact workflow are explicit and valid." -ForegroundColor Green
