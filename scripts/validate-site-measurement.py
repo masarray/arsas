@@ -58,10 +58,24 @@ def main() -> int:
         if required not in client_text:
             errors.append(f"analytics.js missing measurement contract: {required}")
 
-    pages = sorted(site.rglob("*.html"))
-    if not pages:
-        errors.append("rendered site has no HTML pages")
+    build_info_path = site / "build-info.json"
+    build_info: dict[str, object] = {}
+    registered: list[str] = []
+    if not build_info_path.exists():
+        errors.append("build-info.json is missing")
+    else:
+        build_info = json.loads(build_info_path.read_text(encoding="utf-8"))
+        raw_pages = build_info.get("pages")
+        if not isinstance(raw_pages, list) or not raw_pages or not all(isinstance(item, str) for item in raw_pages):
+            errors.append("build-info.json has an invalid page registry")
+        else:
+            registered = list(raw_pages)
+
+    pages = [site / item for item in registered]
     for page in pages:
+        if not page.exists():
+            errors.append(f"registered page is missing: {page.relative_to(site)}")
+            continue
         text = page.read_text(encoding="utf-8")
         label = page.relative_to(site)
         if PLACEHOLDER in text:
@@ -85,23 +99,18 @@ def main() -> int:
         if page.name == "404.html" and parsed.body_page != "none":
             errors.append("404.html must use data-page=none for page_not_found measurement")
 
-    build_info_path = site / "build-info.json"
-    if not build_info_path.exists():
-        errors.append("build-info.json is missing")
+    measurement = build_info.get("measurement")
+    if not isinstance(measurement, dict):
+        errors.append("build-info.json is missing measurement status")
     else:
-        build_info = json.loads(build_info_path.read_text(encoding="utf-8"))
-        measurement = build_info.get("measurement")
-        if not isinstance(measurement, dict):
-            errors.append("build-info.json is missing measurement status")
-        else:
-            if measurement.get("provider") != "google-analytics-4":
-                errors.append("build-info.json has invalid measurement provider")
-            if measurement.get("enabled") is not bool(expected_id):
-                errors.append("build-info.json measurement enabled state is incorrect")
-            if measurement.get("doNotTrackRespected") is not True:
-                errors.append("build-info.json must declare Do Not Track handling")
-            if measurement.get("advertisingSignals") is not False:
-                errors.append("build-info.json must declare advertising signals disabled")
+        if measurement.get("provider") != "google-analytics-4":
+            errors.append("build-info.json has invalid measurement provider")
+        if measurement.get("enabled") is not bool(expected_id):
+            errors.append("build-info.json measurement enabled state is incorrect")
+        if measurement.get("doNotTrackRespected") is not True:
+            errors.append("build-info.json must declare Do Not Track handling")
+        if measurement.get("advertisingSignals") is not False:
+            errors.append("build-info.json must declare advertising signals disabled")
 
     errors = list(dict.fromkeys(errors))
     if errors:
@@ -110,7 +119,7 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
     state = "enabled" if expected_id else "disabled/no-op"
-    print(f"ARSAS site-measurement validation passed: {len(pages)} pages, client {state}, downloads, language, 404 and Core Web Vitals contracts present.")
+    print(f"ARSAS site-measurement validation passed: {len(pages)} registered pages, client {state}, downloads, language, 404 and Core Web Vitals contracts present.")
     return 0
 
 
