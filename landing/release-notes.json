@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "product": "ARSAS",
+  "version": "1.6.17",
+  "title": "Verified updates and safer release delivery",
+  "summary": "ARSAS 1.6.17 adds a verified stable-update workflow, clearer user-controlled update handling, and reliability fixes around IED-card protocol actions and fault-record access.",
+  "highlights": [
+    "Verified in-app update checks use the official ARSAS manifest and accept only the official stable installer URL.",
+    "Downloaded installers are checked against the published byte size and SHA-256 before Windows is allowed to open them.",
+    "The update prompt shows download progress, supports a 24-hour defer action, and keeps installation under user control.",
+    "Release publication uses the exact installer and portable artifacts that passed CI hash verification and installer smoke testing."
+  ],
+  "improvements": [
+    "Protocol capability actions were moved to a dedicated IED-card row so lifecycle controls remain visible.",
+    "Capability-state refreshes are marshalled safely to the WPF UI thread when discovery state changes in the background.",
+    "Installer, portable ZIP and a combined SHA-256 file are published together through the stable release channel.",
+    "The public updater manifest is refreshed only after verified publication evidence has been recorded."
+  ],
+  "knownLimitations": [
+    "Windows x64 is the only packaged desktop platform in the current stable release.",
+    "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
+    "Raw-Ethernet GOOSE and Sampled Values workflows require Npcap, an approved adapter and suitable capture permissions.",
+    "Relay file-service directories and COMTRADE companion sets vary by vendor; a successful transfer does not prove record completeness or scaling correctness.",
+    "Active control and report-configuration writes still require approved procedures, plant authority and independent verification.",
+    "ARSAS is an engineering evidence tool and does not provide IEC 61850 conformance certification or replace calibrated protection testing."
+  ],
+  "codeSigning": {
+    "status": "unsigned",
+    "label": "Not Authenticode-signed",
+    "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users."
+  },
+  "screenshot": {
+    "src": "assets/screenshots/arsas-live-values.webp",
+    "width": 1507,
+    "height": 893,
+    "alt": "ARSAS 1.6.17 stable live-value workspace with IED, value, quality and timestamp evidence",
+    "caption": "Representative ARSAS 1.6.17 stable workspace. Device identity, value, quality, timestamp and acquisition context remain visible together."
+  },
+  "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.17"
+}
