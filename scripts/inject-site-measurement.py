@@ -22,9 +22,18 @@ def configure(site: Path, measurement_id: str) -> None:
     if not (site / "analytics.js").is_file():
         raise SystemExit("Built site is missing analytics.js")
 
-    pages = sorted(site.rglob("*.html"))
-    if not pages:
-        raise SystemExit("Built site contains no HTML pages")
+    build_info_path = site / "build-info.json"
+    if not build_info_path.is_file():
+        raise SystemExit("Built site is missing build-info.json")
+    build_info = json.loads(build_info_path.read_text(encoding="utf-8"))
+    registered = build_info.get("pages")
+    if not isinstance(registered, list) or not registered or not all(isinstance(item, str) for item in registered):
+        raise SystemExit("build-info.json has an invalid page registry")
+
+    pages = [site / item for item in registered]
+    missing = [str(page.relative_to(site)) for page in pages if not page.is_file()]
+    if missing:
+        raise SystemExit("Registered measurement pages are missing: " + ", ".join(missing))
 
     replacements = 0
     for page in pages:
@@ -37,23 +46,20 @@ def configure(site: Path, measurement_id: str) -> None:
         page.write_text(text.replace(PLACEHOLDER, measurement_id), encoding="utf-8")
         replacements += count
 
-    build_info_path = site / "build-info.json"
-    if build_info_path.exists():
-        build_info = json.loads(build_info_path.read_text(encoding="utf-8"))
-        build_info["measurement"] = {
-            "provider": "google-analytics-4",
-            "enabled": bool(measurement_id),
-            "client": "analytics.js",
-            "doNotTrackRespected": True,
-            "advertisingSignals": False,
-        }
-        build_info_path.write_text(
-            json.dumps(build_info, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+    build_info["measurement"] = {
+        "provider": "google-analytics-4",
+        "enabled": bool(measurement_id),
+        "client": "analytics.js",
+        "doNotTrackRespected": True,
+        "advertisingSignals": False,
+    }
+    build_info_path.write_text(
+        json.dumps(build_info, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
     state = "enabled" if measurement_id else "disabled"
-    print(f"ARSAS site measurement {state}: {replacements} pages configured.")
+    print(f"ARSAS site measurement {state}: {replacements} registered pages configured.")
 
 
 def main() -> int:
