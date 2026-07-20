@@ -60,6 +60,8 @@
         <Style TargetType="DataGridRow">
             <Setter Property="Background" Value="White"/>
             <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="ToolTip" Value="{Binding Detail, Mode=OneWay}"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="30000"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#F2F7FF"/>
