@@ -12,6 +12,9 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/generate-privacy-pages.py"
+      - "scripts/stamp-site-build.py"
+      - "scripts/verify-pages-deployment.py"
       - ".github/workflows/pages.yml"
   pull_request:
     branches: [ main ]
@@ -24,6 +27,9 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/generate-privacy-pages.py"
+      - "scripts/stamp-site-build.py"
+      - "scripts/verify-pages-deployment.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -33,6 +39,9 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+
+env:
+  CANONICAL_ROOT: https://masarray.github.io/arsas/
 
 jobs:
   validate:
@@ -109,12 +118,27 @@ jobs:
       - name: Build deterministic product website
         run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
 
+      - name: Generate bilingual privacy pages
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json
+
       - name: Configure optional client measurement
         env:
           GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
         run: python scripts/inject-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
 
-      - name: Validate measurement contract
+      - name: Stamp source and workflow attestation
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit_timestamp="$(git show -s --format=%cI "$GITHUB_SHA")"
+          python scripts/stamp-site-build.py _site \
+            --source-commit "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --commit-timestamp "$commit_timestamp" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Validate consent, privacy and measurement contract
         env:
           GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
         run: python scripts/validate-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
@@ -180,10 +204,50 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  verify-production:
+    name: Verify public Pages attestation
+    if: github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify deployed commit, privacy and measurement state
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable_version="$(python -c 'import json; print(json.load(open("landing/latest.json"))["version"])')"
+          if [ -n "${GA4_MEASUREMENT_ID:-}" ]; then measurement_enabled=true; else measurement_enabled=false; fi
+          python scripts/verify-pages-deployment.py \
+            --base-url "$CANONICAL_ROOT" \
+            --source-commit "$GITHUB_SHA" \
+            --stable-version "$stable_version" \
+            --measurement-enabled "$measurement_enabled" \
+            --output _validation/production-attestation.md
+
+      - name: Upload production attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-pages-attestation
+          path: _validation/production-attestation.*
+          if-no-files-found: error
+          retention-days: 90
+
   notify-indexing:
     name: Notify search engines
     if: github.event_name != 'pull_request'
-    needs: deploy
+    needs: verify-production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
