@@ -24,8 +24,9 @@ The browser client disables Google advertising signals, does not request ad-pers
 - Declining analytics does not change downloads, content access or application behavior.
 - The local key `arsas_analytics_consent_v1` stores only `granted` or `denied`.
 - Do Not Track overrides a stored grant and keeps analytics disabled.
-- Revoking consent reloads the current page to stop the already-loaded client before further interaction.
-- `privacy.html` and `privasi.html` are bilingual `noindex,follow` policy pages and never load the analytics client.
+- Revoking consent on a product page reloads that page to stop the already-loaded client before further interaction.
+- `privacy.html` and `privasi.html` are bilingual `noindex,follow` preference surfaces. They carry only an inert availability configuration, can save the user’s choice, and never load `analytics.js` or Google Tag.
+- A preference saved on a privacy page takes effect when the next product page is opened.
 - Project policy requires a two-month GA4 event-data retention window before analytics is enabled.
 
 ## Repository configuration
@@ -57,9 +58,9 @@ Every Pages artifact is stamped after build with:
 - stable release version;
 - privacy and measurement activation state.
 
-After `actions/deploy-pages`, `scripts/verify-pages-deployment.py` fetches the public `build-info.json` with cache-busting parameters and retries until the public source commit matches the just-deployed commit. It also verifies both privacy routes, denied-by-default consent metadata, the configured measurement state and the shared consent controls on the homepage.
+After `actions/deploy-pages`, `scripts/verify-pages-deployment.py` fetches the public `build-info.json` with cache-busting parameters and retries until the public source commit matches the just-deployed commit. It also verifies both privacy routes, their inert measurement-availability configuration, the absence of any analytics client on those policy pages, denied-by-default consent metadata, the configured measurement state and the shared consent controls on the homepage.
 
-A stale public build, missing privacy route or measurement-state mismatch fails the workflow. IndexNow notification depends on this attestation and is skipped when production is stale.
+A stale public build, missing privacy route, unexpected analytics client or measurement-state mismatch fails the workflow. IndexNow notification depends on this attestation and is skipped when production is stale.
 
 The `production-pages-attestation` artifact retains Markdown and JSON evidence for 90 days.
 

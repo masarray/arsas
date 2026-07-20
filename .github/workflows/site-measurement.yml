@@ -84,7 +84,9 @@ jobs:
         run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
 
       - name: Generate bilingual privacy pages
-        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json --measurement-id "$GA4_MEASUREMENT_ID"
 
       - name: Configure optional client measurement
         env:
@@ -172,7 +174,9 @@ jobs:
         run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
 
       - name: Generate bilingual privacy pages
-        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json --measurement-id "$GA4_MEASUREMENT_ID"
 
       - name: Configure current client measurement
         env:

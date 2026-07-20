@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -13,10 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER_PATH = ROOT / "scripts" / "build-product-site.py"
 SOURCE = ROOT / "landing" / "privacy-source"
-ANALYTICS_SCRIPT = re.compile(
-    r'\s*<script\s+id="arsas-analytics"[^>]*>\s*</script>',
-    re.IGNORECASE,
-)
+MEASUREMENT_PATTERN = re.compile(r"G-[A-Z0-9]+")
+PLACEHOLDER = "__ARSAS_GA4_MEASUREMENT_ID__"
 
 
 def load_builder():
@@ -32,7 +31,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default=str(ROOT / "_site"))
     parser.add_argument("--release-evidence", default=str(ROOT / "landing" / "latest.json"))
+    parser.add_argument(
+        "--measurement-id",
+        default=os.environ.get("GA4_MEASUREMENT_ID", ""),
+        help="Public GA4 web-stream ID. It remains inert on privacy pages.",
+    )
     args = parser.parse_args()
+
+    measurement_id = args.measurement_id.strip().upper()
+    if measurement_id and not MEASUREMENT_PATTERN.fullmatch(measurement_id):
+        raise SystemExit("Measurement ID must use the G-XXXXXXXX format")
 
     output = Path(args.output).resolve()
     evidence_path = Path(args.release_evidence).resolve()
@@ -66,9 +74,12 @@ def main() -> int:
             raise SystemExit(f"Missing privacy source: {source}")
         rendered = builder.render(source.read_text(encoding="utf-8"), values, icon_size)
         rendered = builder.inject_alternate_links(rendered, {"template": source.name, "alternates": alternates}, root)
-        rendered = ANALYTICS_SCRIPT.sub("", rendered)
-        if "__ARSAS_GA4_MEASUREMENT_ID__" in rendered:
-            raise SystemExit(f"Privacy page still contains a measurement placeholder: {target.name}")
+        placeholder_count = rendered.count(PLACEHOLDER)
+        if placeholder_count != 1:
+            raise SystemExit(f"{target.name} must contain exactly one inert analytics configuration")
+        rendered = rendered.replace(PLACEHOLDER, measurement_id)
+        if 'src="analytics.js"' in rendered:
+            raise SystemExit(f"Privacy page must not load analytics.js: {target.name}")
         target.write_text(rendered, encoding="utf-8")
 
     build_info_path = output / "build-info.json"
@@ -80,11 +91,14 @@ def main() -> int:
         "defaultAnalyticsConsent": "denied",
         "preferenceStorage": "localStorage",
         "preferenceKey": "arsas_analytics_consent_v1",
+        "measurementAvailable": bool(measurement_id),
+        "analyticsClientLoadedOnPolicyPages": False,
     }
     build_info_path.write_text(json.dumps(build_info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     shutil.rmtree(output / "privacy-source", ignore_errors=True)
-    print("Generated privacy.html and privasi.html with noindex, consent controls and shared ARSAS chrome.")
+    state = "measurement available" if measurement_id else "measurement disabled"
+    print(f"Generated privacy.html and privasi.html with {state}; policy pages never load analytics.js.")
     return 0
 
 

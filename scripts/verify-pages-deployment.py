@@ -5,12 +5,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin
 from urllib.request import Request, urlopen
+
+MEASUREMENT_CONFIG_PATTERN = re.compile(
+    r'<script\s+id="arsas-analytics"\s+type="application/json"\s+data-measurement-id="([^"]*)"\s+data-stable-version="([^"]+)"\s*>\s*</script>',
+    re.IGNORECASE,
+)
+MEASUREMENT_ID_PATTERN = re.compile(r"G-[A-Z0-9]+")
 
 
 def parse_bool(value: str) -> bool:
@@ -41,6 +48,19 @@ def fetch(url: str, timeout: int = 20) -> tuple[int, str, dict[str, str]]:
         raise RuntimeError(str(exc.reason)) from exc
 
 
+def validate_inert_measurement_config(page: str, measurement_enabled: bool, stable_version: str, label: str) -> list[str]:
+    errors: list[str] = []
+    matches = MEASUREMENT_CONFIG_PATTERN.findall(page)
+    if len(matches) != 1:
+        return [f"{label} must contain exactly one inert analytics availability configuration"]
+    measurement_id, page_stable_version = matches[0]
+    if bool(MEASUREMENT_ID_PATTERN.fullmatch(measurement_id)) is not measurement_enabled:
+        errors.append(f"{label} measurement availability does not match the deployed repository variable")
+    if page_stable_version != stable_version:
+        errors.append(f"{label} stable-version context is {page_stable_version!r}, expected {stable_version}")
+    return errors
+
+
 def check_once(base_url: str, source_commit: str, stable_version: str, measurement_enabled: bool, nonce: str) -> tuple[list[str], dict[str, object]]:
     errors: list[str] = []
     evidence: dict[str, object] = {}
@@ -48,7 +68,11 @@ def check_once(base_url: str, source_commit: str, stable_version: str, measureme
     status, body, headers = fetch(info_url)
     evidence["buildInfoUrl"] = info_url
     evidence["buildInfoStatus"] = status
-    evidence["buildInfoHeaders"] = {key: headers[key] for key in headers if key.lower() in {"etag", "last-modified", "cache-control", "content-type"}}
+    evidence["buildInfoHeaders"] = {
+        key: headers[key]
+        for key in headers
+        if key.lower() in {"etag", "last-modified", "cache-control", "content-type"}
+    }
     if status != 200:
         return [f"build-info.json returned HTTP {status}"], evidence
     try:
@@ -75,30 +99,44 @@ def check_once(base_url: str, source_commit: str, stable_version: str, measureme
             errors.append(f"public measurement enabled={measurement.get('enabled')!r}, expected {measurement_enabled}")
         if measurement.get("consentRequired") is not True or measurement.get("defaultConsent") != "denied":
             errors.append("public measurement metadata does not require denied-by-default consent")
-        if measurement.get("advertisingSignals") is not False:
-            errors.append("public measurement metadata must keep advertising signals disabled")
+        if measurement.get("advertisingSignals") is not False or measurement.get("adPersonalizationSignals") is not False:
+            errors.append("public measurement metadata must keep advertising and personalization signals disabled")
 
     privacy_pages = info.get("privacyPages")
     if privacy_pages != ["privacy.html", "privasi.html"]:
         errors.append("public build does not declare both bilingual privacy pages")
     privacy = info.get("privacy")
-    if not isinstance(privacy, dict) or privacy.get("consentRequired") is not True or privacy.get("defaultAnalyticsConsent") != "denied":
-        errors.append("public privacy metadata is incomplete")
+    if not isinstance(privacy, dict):
+        errors.append("public privacy metadata is missing")
+    else:
+        if privacy.get("consentRequired") is not True or privacy.get("defaultAnalyticsConsent") != "denied":
+            errors.append("public privacy metadata does not require denied-by-default consent")
+        if privacy.get("measurementAvailable") is not measurement_enabled:
+            errors.append("public privacy measurement availability does not match deployment configuration")
+        if privacy.get("analyticsClientLoadedOnPolicyPages") is not False:
+            errors.append("public privacy metadata must prohibit analytics client loading on policy pages")
 
     for relative in ("privacy.html", "privasi.html"):
-        url = urljoin(base_url, relative) + "?" + urlencode({"attest": source_commit})
+        url = urljoin(base_url, relative) + "?" + urlencode({"attest": source_commit, "n": nonce})
         page_status, page, _ = fetch(url)
         evidence[f"{relative}Status"] = page_status
         if page_status != 200:
             errors.append(f"{relative} returned HTTP {page_status}")
             continue
-        for required in ('name="robots" content="noindex,follow"', 'src="consent.js"', 'data-consent-manage', 'data-consent-status'):
+        for required in (
+            'name="robots" content="noindex,follow"',
+            'data-privacy-page="true"',
+            'src="consent.js"',
+            'data-consent-manage',
+            'data-consent-status',
+        ):
             if required not in page:
                 errors.append(f"{relative} is missing {required}")
-        if 'id="arsas-analytics"' in page:
-            errors.append(f"{relative} must not load the analytics client")
+        errors.extend(validate_inert_measurement_config(page, measurement_enabled, stable_version, relative))
+        if 'src="analytics.js"' in page or "googletagmanager.com" in page:
+            errors.append(f"{relative} must never load an analytics client")
 
-    home_url = base_url + "?" + urlencode({"attest": source_commit})
+    home_url = base_url + "?" + urlencode({"attest": source_commit, "n": nonce})
     home_status, home, _ = fetch(home_url)
     evidence["homeStatus"] = home_status
     if home_status != 200:
@@ -107,13 +145,16 @@ def check_once(base_url: str, source_commit: str, stable_version: str, measureme
         for required in ('src="consent.js"', 'id="arsas-analytics"', 'data-consent-banner', 'assets/app-icon.png'):
             if required not in home:
                 errors.append(f"homepage is missing {required}")
+        errors.extend(validate_inert_measurement_config(home, measurement_enabled, stable_version, "homepage"))
+        if 'src="analytics.js"' in home or "googletagmanager.com" in home:
+            errors.append("homepage must not load analytics before consent")
 
     return errors, evidence
 
 
 def write_report(path: Path, success: bool, attempts: int, evidence: dict[str, object], errors: list[str]) -> None:
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "verifiedAtUtc": datetime.now(timezone.utc).isoformat(),
         "success": success,
         "attempts": attempts,
@@ -122,7 +163,12 @@ def write_report(path: Path, success: bool, attempts: int, evidence: dict[str, o
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.with_suffix(".json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    lines = ["# ARSAS production deployment attestation", "", f"- Status: **{'PASS' if success else 'FAIL'}**", f"- Attempts: {attempts}"]
+    lines = [
+        "# ARSAS production deployment attestation",
+        "",
+        f"- Status: **{'PASS' if success else 'FAIL'}**",
+        f"- Attempts: {attempts}",
+    ]
     if errors:
         lines.extend(["", "## Last observed errors", "", *[f"- {error}" for error in errors]])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

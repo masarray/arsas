@@ -20,6 +20,7 @@ class Parser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.scripts: list[dict[str, str | None]] = []
         self.body_page: str | None = None
+        self.privacy_page = False
         self.language: str | None = None
         self.robots: str | None = None
         self.consent_banners = 0
@@ -33,6 +34,7 @@ class Parser(HTMLParser):
             self.language = values.get("lang")
         elif tag == "body":
             self.body_page = values.get("data-page")
+            self.privacy_page = values.get("data-privacy-page") == "true"
         elif tag == "script":
             self.scripts.append(values)
         elif tag == "meta" and values.get("name", "").lower() == "robots":
@@ -52,6 +54,15 @@ def parse_page(path: Path) -> tuple[str, Parser]:
     parsed = Parser()
     parsed.feed(text)
     return text, parsed
+
+
+def validate_inert_config(config: dict[str, str | None], expected_id: str, label: str, errors: list[str]) -> None:
+    if config.get("type") != "application/json" or config.get("src") is not None:
+        errors.append(f"{label}: analytics configuration must be inert and local")
+    if (config.get("data-measurement-id") or "") != expected_id:
+        errors.append(f"{label}: measurement ID does not match deployment configuration")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", config.get("data-stable-version") or ""):
+        errors.append(f"{label}: stable release context is missing")
 
 
 def main() -> int:
@@ -85,7 +96,8 @@ def main() -> int:
     for required in (
         CONSENT_KEY, "analytics_storage: 'denied'", "ad_storage: 'denied'",
         "ad_user_data: 'denied'", "ad_personalization: 'denied'", "navigator.doNotTrack",
-        "const loadAnalytics", "client.src = 'analytics.js'", "window.location.reload()",
+        "const privacyPage", "if (privacyPage || analyticsLoaded", "client.src = 'analytics.js'",
+        "!privacyPage && (analyticsLoaded || previous === 'granted')",
     ):
         if required not in consent_text:
             errors.append(f"consent.js missing privacy contract: {required}")
@@ -123,18 +135,14 @@ def main() -> int:
         if len(configs) != 1:
             errors.append(f"{relative}: expected one inert analytics configuration")
         else:
-            config = configs[0]
-            if config.get("type") != "application/json" or config.get("src") is not None:
-                errors.append(f"{relative}: analytics configuration must be inert and local")
-            if (config.get("data-measurement-id") or "") != expected_id:
-                errors.append(f"{relative}: measurement ID does not match deployment configuration")
-            if not re.fullmatch(r"\d+\.\d+\.\d+", config.get("data-stable-version") or ""):
-                errors.append(f"{relative}: stable release context is missing")
+            validate_inert_config(configs[0], expected_id, relative, errors)
         consent_scripts = [item for item in parsed.scripts if item.get("src") == "consent.js"]
         if len(consent_scripts) != 1 or "defer" not in consent_scripts[0]:
             errors.append(f"{relative}: expected one deferred consent controller")
         if any(item.get("src") == "analytics.js" for item in parsed.scripts):
             errors.append(f"{relative}: analytics.js must not load before consent")
+        if parsed.privacy_page:
+            errors.append(f"{relative}: registered product page must not be marked as a privacy page")
         if parsed.consent_banners != 1 or parsed.consent_manage < 1 or parsed.consent_status < 1:
             errors.append(f"{relative}: consent banner or preference controls are incomplete")
         if parsed.language not in {"en", "id"}:
@@ -153,18 +161,27 @@ def main() -> int:
             errors.append(f"privacy page is missing: {relative}")
             continue
         text, parsed = parse_page(page)
+        if PLACEHOLDER in text:
+            errors.append(f"{relative}: unresolved measurement placeholder")
         if parsed.robots != "noindex,follow":
             errors.append(f"{relative}: privacy page must use noindex,follow")
         if parsed.alternates != expected_privacy_alternates:
             errors.append(f"{relative}: bilingual privacy alternates are incomplete")
-        if any(item.get("id") == "arsas-analytics" or item.get("src") == "analytics.js" for item in parsed.scripts):
-            errors.append(f"{relative}: privacy policy must not load analytics")
+        if not parsed.privacy_page:
+            errors.append(f"{relative}: privacy page marker is missing")
+        configs = [item for item in parsed.scripts if item.get("id") == "arsas-analytics"]
+        if len(configs) != 1:
+            errors.append(f"{relative}: privacy page needs one inert availability configuration")
+        else:
+            validate_inert_config(configs[0], expected_id, relative, errors)
+        if any(item.get("src") == "analytics.js" for item in parsed.scripts):
+            errors.append(f"{relative}: privacy policy must never load analytics.js")
         consent_scripts = [item for item in parsed.scripts if item.get("src") == "consent.js"]
         if len(consent_scripts) != 1 or "defer" not in consent_scripts[0]:
             errors.append(f"{relative}: privacy page must load the consent controller")
         if parsed.consent_banners != 1 or parsed.consent_manage < 2 or parsed.consent_status < 1:
             errors.append(f"{relative}: privacy preference controls are incomplete")
-        if CONSENT_KEY not in text or "two-month" not in text and "dua bulan" not in text:
+        if CONSENT_KEY not in text or ("two-month" not in text and "dua bulan" not in text):
             errors.append(f"{relative}: retention or preference-key disclosure is incomplete")
 
     measurement = build_info.get("measurement")
@@ -186,8 +203,18 @@ def main() -> int:
             if measurement.get(key) != value:
                 errors.append(f"build-info.json measurement.{key} must be {value!r}")
     privacy = build_info.get("privacy")
-    if not isinstance(privacy, dict) or privacy.get("consentRequired") is not True or privacy.get("defaultAnalyticsConsent") != "denied":
-        errors.append("build-info.json privacy contract is incomplete")
+    if not isinstance(privacy, dict):
+        errors.append("build-info.json privacy contract is missing")
+    else:
+        expected_privacy = {
+            "consentRequired": True,
+            "defaultAnalyticsConsent": "denied",
+            "measurementAvailable": bool(expected_id),
+            "analyticsClientLoadedOnPolicyPages": False,
+        }
+        for key, value in expected_privacy.items():
+            if privacy.get(key) != value:
+                errors.append(f"build-info.json privacy.{key} must be {value!r}")
 
     errors = list(dict.fromkeys(errors))
     if errors:
@@ -198,7 +225,7 @@ def main() -> int:
     state = "configured behind consent" if expected_id else "disabled/no-op"
     print(
         f"ARSAS consent and measurement validation passed: {len(registered)} product pages, "
-        f"{len(privacy_pages)} privacy pages, client {state}, denied by default."
+        f"{len(privacy_pages)} preference-capable non-tracking privacy pages, client {state}."
     )
     return 0
 
