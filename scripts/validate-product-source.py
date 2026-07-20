@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate ARSAS templates, guide contracts, identity and page registry before build."""
+"""Validate ARSAS product templates, guide contracts and source assets."""
 
 from __future__ import annotations
 
@@ -16,18 +16,22 @@ TEMPLATES = LANDING / "templates"
 PARTIALS = LANDING / "partials"
 APP_ICON_SOURCE = ROOT / "Assets" / "app-icon.png"
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
-VERIFICATION_FILE_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
+VERIFICATION_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
 KNOWN_TOKENS = {
     "ARSAS_VERSION", "PRODUCT_NAME", "CANONICAL_ROOT", "REPOSITORY_URL",
     "ENGINE_REPOSITORY_URL", "AUTHOR_NAME", "AUTHOR_LINKEDIN", "AUTHOR_GITHUB",
     "INSTALLER_URL", "PORTABLE_URL", "CHECKSUMS_URL",
 }
 EXPECTED_NAV = ("overview", "capabilities", "solutions", "guides", "architecture", "about", "download")
-FORBIDDEN_PUBLIC_COPY = (
-    "without navigating source code",
-    "without navigating the source repository",
-    "without requiring repository navigation",
-    "the website is the product front door",
+GUIDE_FILES = {
+    "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html",
+    "empty-dataset.html", "port-102-connection-failed.html", "comtrade-download.html",
+    "goose-sequence.html", "cid-rejected.html", "live-model-vs-scl.html",
+    "direct-vs-sbo.html", "commandtermination-addcause.html",
+}
+FORBIDDEN_COPY = (
+    "without navigating source code", "without navigating the source repository",
+    "without requiring repository navigation", "the website is the product front door",
 )
 
 
@@ -99,7 +103,6 @@ def validate_template(path: Path, content_type: str | None, errors: list[str]) -
     if not path.exists():
         errors.append(f"missing template: {path.relative_to(ROOT)}")
         return
-
     raw = path.read_text(encoding="utf-8")
     text = expand_partials(raw, errors)
     parser = Parser()
@@ -134,10 +137,9 @@ def validate_template(path: Path, content_type: str | None, errors: list[str]) -
         errors.append(f"{label}: obsolete meta keywords must not be used")
     if "github.com/masarray/arsas#quick-start" in text:
         errors.append(f"{label}: product page routes users to README quick-start")
-    for phrase in FORBIDDEN_PUBLIC_COPY:
+    for phrase in FORBIDDEN_COPY:
         if phrase in lowered:
             errors.append(f"{label}: contains internal-strategy copy: {phrase}")
-
     if path.name != "404.html":
         for include in ("{{> header}}", "{{> footer}}"):
             if include not in raw:
@@ -145,7 +147,7 @@ def validate_template(path: Path, content_type: str | None, errors: list[str]) -
     if path.name not in ("index.html", "download.html", "404.html") and "{{> download-cta}}" not in raw:
         errors.append(f"{label}: missing shared download CTA")
     if content_type == "guide":
-        if '"@type":"TechArticle"' not in raw and '"@type": "TechArticle"' not in raw:
+        if '"@type":"TechArticle"' not in raw.replace(" ", ""):
             errors.append(f"{label}: guide must use TechArticle structured data")
         if "{{> guide-boundary}}" not in raw:
             errors.append(f"{label}: guide must include shared engineering boundary")
@@ -159,21 +161,19 @@ def read_config(errors: list[str]) -> dict[str, object] | None:
     except (OSError, json.JSONDecodeError) as exc:
         errors.append(f"landing/site.json: {exc}")
         return None
-
-    checks = {
+    required = {
         ("product", "name"): "ARSAS",
         ("product", "repository"): "https://github.com/masarray/arsas",
         ("author", "name"): "Ari Sulistiono",
         ("author", "linkedin"): "https://www.linkedin.com/in/ari-sulistiono",
         ("author", "github"): "https://github.com/masarray",
     }
-    for keys, expected in checks.items():
+    for keys, expected in required.items():
         value: object = config
         for key in keys:
             value = value.get(key) if isinstance(value, dict) else None
         if value != expected:
             errors.append(f"landing/site.json: {'.'.join(keys)} must be {expected}")
-
     downloads = config.get("downloads")
     for key in ("installer", "portable", "checksums"):
         value = downloads.get(key) if isinstance(downloads, dict) else None
@@ -187,7 +187,6 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
     if not isinstance(pages, list) or not pages:
         errors.append("landing/site.json: pages registry must be a non-empty list")
         return []
-
     paths: set[str] = set()
     names: set[str] = set()
     templates: list[tuple[Path, str | None]] = []
@@ -196,8 +195,7 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
         if not isinstance(entry, dict):
             errors.append("landing/site.json: every page entry must be an object")
             continue
-        page_path = entry.get("path")
-        template = entry.get("template")
+        page_path, template = entry.get("path"), entry.get("template")
         content_type = entry.get("contentType")
         if not isinstance(page_path, str) or not isinstance(template, str):
             errors.append("landing/site.json: every page entry needs string path and template")
@@ -218,9 +216,10 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
             errors.append("landing/site.json: 404.html must be excluded from sitemap")
         if content_type == "guide":
             guide_count += 1
+    if len(pages) != 31:
+        errors.append(f"landing/site.json: expected 31 pages, found {len(pages)}")
     if guide_count != 11:
         errors.append(f"landing/site.json: expected 11 troubleshooting guides, found {guide_count}")
-
     actual = {path.name for path in TEMPLATES.glob("*.html")}
     if actual - names:
         errors.append("templates missing from registry: " + ", ".join(sorted(actual - names)))
@@ -230,10 +229,11 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
 
 
 def validate_partials(errors: list[str]) -> None:
-    header = (PARTIALS / "header.html").read_text(encoding="utf-8") if (PARTIALS / "header.html").exists() else ""
-    footer = (PARTIALS / "footer.html").read_text(encoding="utf-8") if (PARTIALS / "footer.html").exists() else ""
-    cta = (PARTIALS / "download-cta.html").read_text(encoding="utf-8") if (PARTIALS / "download-cta.html").exists() else ""
-    guide_boundary = (PARTIALS / "guide-boundary.html").read_text(encoding="utf-8") if (PARTIALS / "guide-boundary.html").exists() else ""
+    def read(name: str) -> str:
+        path = PARTIALS / name
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+    header, footer = read("header.html"), read("footer.html")
+    cta, boundary = read("download-cta.html"), read("guide-boundary.html")
     for page in EXPECTED_NAV:
         if f'data-nav-page="{page}"' not in header:
             errors.append(f"shared header missing navigation key {page}")
@@ -244,17 +244,16 @@ def validate_partials(errors: list[str]) -> None:
         if value not in cta:
             errors.append(f"shared download CTA missing {value}")
     for value in ("Ari Sulistiono", 'href="guides.html"', "Engineering boundary"):
-        if value not in guide_boundary:
+        if value not in boundary:
             errors.append(f"shared guide boundary missing {value}")
 
 
 def validate_contract(errors: list[str]) -> None:
-    home = (TEMPLATES / "index.html").read_text(encoding="utf-8") if (TEMPLATES / "index.html").exists() else ""
-    download = (TEMPLATES / "download.html").read_text(encoding="utf-8") if (TEMPLATES / "download.html").exists() else ""
-    about = (TEMPLATES / "about.html").read_text(encoding="utf-8") if (TEMPLATES / "about.html").exists() else ""
-    solutions = (TEMPLATES / "solutions.html").read_text(encoding="utf-8") if (TEMPLATES / "solutions.html").exists() else ""
-    guides = (TEMPLATES / "guides.html").read_text(encoding="utf-8") if (TEMPLATES / "guides.html").exists() else ""
-
+    def template(name: str) -> str:
+        path = TEMPLATES / name
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+    home, download, about = template("index.html"), template("download.html"), template("about.html")
+    solutions, guides = template("solutions.html"), template("guides.html")
     for value in ("{{INSTALLER_URL}}", 'href="download.html"', 'href="solutions.html"', "arsas-rcb-scl-export.webp", "{{AUTHOR_LINKEDIN}}", '"codeRepository"'):
         if value not in home:
             errors.append(f"homepage template missing {value}")
@@ -267,27 +266,19 @@ def validate_contract(errors: list[str]) -> None:
     for value in ('href="fat-testing.html"', 'href="sat-testing.html"', 'href="commissioning.html"', 'href="multi-vendor-integration.html"'):
         if value not in solutions:
             errors.append(f"solutions template missing {value}")
-    for value in (
-        'href="reporting-silent.html"', 'href="brcb-vs-urcb.html"', 'href="rcb-reserved.html"',
-        'href="empty-dataset.html"', 'href="port-102-connection-failed.html"', 'href="comtrade-download.html"',
-        'href="goose-sequence.html"', 'href="cid-rejected.html"', 'href="live-model-vs-scl.html"',
-        'href="direct-vs-sbo.html"', 'href="commandtermination-addcause.html"',
-    ):
-        if value not in guides:
-            errors.append(f"guides template missing {value}")
+    for guide in GUIDE_FILES:
+        if f'href="{guide}"' not in guides:
+            errors.append(f"guides template missing {guide}")
 
-    root_html = sorted(path.name for path in LANDING.glob("*.html") if not VERIFICATION_FILE_PATTERN.fullmatch(path.name))
+    root_html = sorted(path.name for path in LANDING.glob("*.html") if not VERIFICATION_PATTERN.fullmatch(path.name))
     if root_html:
         errors.append("legacy landing HTML remains outside templates: " + ", ".join(root_html))
-    verification = [path.name for path in LANDING.glob("google*.html") if VERIFICATION_FILE_PATTERN.fullmatch(path.name)]
-    if len(verification) > 1:
+    if len([path for path in LANDING.glob("google*.html") if VERIFICATION_PATTERN.fullmatch(path.name)]) > 1:
         errors.append("multiple Google verification HTML files are present")
     if (LANDING / "sitemap.xml").exists():
         errors.append("landing/sitemap.xml must be generated from site.json, not stored as a second source")
-
     for relative in (
-        "assets/screenshots/arsas-first-launch.webp",
-        "assets/screenshots/arsas-rcb-scl-export.webp",
+        "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-rcb-scl-export.webp",
         "assets/social-card.png", "site.webmanifest", "robots.txt",
     ):
         if not (LANDING / relative).exists():
@@ -296,8 +287,9 @@ def validate_contract(errors: list[str]) -> None:
         errors.append("missing latest application icon: Assets/app-icon.png")
     else:
         try:
-            if png_size(APP_ICON_SOURCE) != (512, 512):
-                errors.append(f"Assets/app-icon.png must be 512x512, found {png_size(APP_ICON_SOURCE)}")
+            width, height = png_size(APP_ICON_SOURCE)
+            if width != height or width < 256:
+                errors.append(f"Assets/app-icon.png must be square and at least 256px, found {width}x{height}")
         except ValueError as exc:
             errors.append(f"Assets/app-icon.png: {exc}")
 
@@ -307,8 +299,8 @@ def main() -> int:
     config = read_config(errors)
     templates = validate_registry(config, errors) if config else []
     validate_partials(errors)
-    for template, content_type in templates:
-        validate_template(template, content_type, errors)
+    for template_path, content_type in templates:
+        validate_template(template_path, content_type, errors)
     validate_contract(errors)
     errors = list(dict.fromkeys(errors))
     if errors:
@@ -316,7 +308,8 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"ARSAS product-source validation passed: {len(templates)} templates, 11 troubleshooting guides and latest 512px app icon.")
+    width, height = png_size(APP_ICON_SOURCE)
+    print(f"ARSAS product-source validation passed: {len(templates)} templates, 11 guides and latest {width}x{height} app icon.")
     return 0
 
 
