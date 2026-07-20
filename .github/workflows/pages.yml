@@ -9,6 +9,9 @@ on:
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
       - "scripts/submit-indexnow.py"
+      - "scripts/inject-site-measurement.py"
+      - "scripts/validate-site-measurement.py"
+      - "scripts/check-site-health.py"
       - ".github/workflows/pages.yml"
   pull_request:
     branches: [ main ]
@@ -18,6 +21,9 @@ on:
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
       - "scripts/submit-indexnow.py"
+      - "scripts/inject-site-measurement.py"
+      - "scripts/validate-site-measurement.py"
+      - "scripts/check-site-health.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -103,6 +109,19 @@ jobs:
       - name: Build deterministic product website
         run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
 
+      - name: Configure optional client measurement
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/inject-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Validate measurement contract
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/validate-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Check internal links and fragments
+        run: python scripts/check-site-health.py --site _site --output _validation/site-health
+
       - name: Validate IndexNow payload without network submission
         run: python scripts/submit-indexnow.py --sitemap _site/sitemap.xml --dry-run
 
@@ -119,7 +138,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: product-build-validation
-          path: _validation/build.log
+          path: |
+            _validation/build.log
+            _validation/site-health/
           if-no-files-found: warn
 
       - name: Enforce rendered validation
@@ -136,6 +157,7 @@ jobs:
           ! grep -R --line-number --fixed-strings 'LICENSE-APACHE-2.0' _site
           ! grep -R --line-number -E '(href|src|content)="http://' _site --include='*.html'
           ! grep -R --line-number --fixed-strings 'raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot' _site --include='*.html'
+          ! grep -R --line-number --fixed-strings '__ARSAS_GA4_MEASUREMENT_ID__' _site --include='*.html'
 
       - name: Upload website artifact
         if: github.event_name != 'pull_request'
