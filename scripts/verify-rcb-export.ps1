@@ -44,7 +44,7 @@ Require-Text $mainCode 'latestAvailability' "The latest read-only availability e
 Require-Text $mainCode 'LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory' "Live FCDA directory evidence is not merged before selected-RCB export."
 Require-Text $mainCode 'AuthoritativeLiveIedSclExporter.WriteFiles' "Live CID export must normalize the physical IED identity separately from MMS Logical Device domains."
 Require-Text $mainCode 'IedNameOverride = device.Name' "The IED card identity must be passed as the authoritative SCL IED name."
-Reject-Text $mainCode 'LiveIedSclExporter.WriteFiles(' "Live selected-RCB export must not bypass authoritative IED identity normalization."
+Reject-Text $mainCode 'Task.Run(() => LiveIedSclExporter.WriteFiles(' "Live selected-RCB export must not bypass authoritative IED identity normalization."
 Require-Text $mainXaml 'Adaptive five-slot action bar' "IED-card source action row is no longer protected from clipping."
 Require-Text $mainXaml '<UniformGrid Rows="1" Columns="5"' "IED-card source actions must expose five slots before runtime separation."
 Require-Text $mainCode 'RemoveUnreferencedDataSets = false' "Safe default must preserve DataSets during selected-RCB export."
