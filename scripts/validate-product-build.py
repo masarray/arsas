@@ -24,7 +24,10 @@ CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Wi
 REPOSITORY = "https://github.com/masarray/arsas"
 LINKEDIN = "https://www.linkedin.com/in/ari-sulistiono"
 AUTHOR_GITHUB = "https://github.com/masarray"
+CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 APP_ICON = "assets/app-icon.png"
+INDEXNOW_KEY = "arsas-iec61850-20260720-6f4a9d2c8b"
+INDEXNOW_FILE = INDEXNOW_KEY + ".txt"
 EXPECTED_NAV = {"overview", "capabilities", "solutions", "guides", "architecture", "about", "download"}
 GUIDE_PAGES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html",
@@ -32,6 +35,7 @@ GUIDE_PAGES = {
     "goose-sequence.html", "cid-rejected.html", "live-model-vs-scl.html",
     "direct-vs-sbo.html", "commandtermination-addcause.html",
 }
+LOCALIZED_PAGES = {"id.html", "panduan.html", "unduh.html"}
 FORBIDDEN_COPY = (
     "without navigating source code", "without navigating the source repository",
     "without requiring repository navigation", "the website is the product front door",
@@ -43,16 +47,20 @@ class Parser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.refs: list[str] = []
         self.icons: list[dict[str, str | None]] = []
+        self.images: list[dict[str, str | None]] = []
         self.h1 = 0
         self.title = ""
         self.in_title = False
         self.description: str | None = None
         self.body_page: str | None = None
         self.nav_pages: set[str] = set()
+        self.html_lang: str | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
-        if tag == "title":
+        if tag == "html":
+            self.html_lang = values.get("lang")
+        elif tag == "title":
             self.in_title = True
         elif tag == "h1":
             self.h1 += 1
@@ -68,6 +76,8 @@ class Parser(HTMLParser):
                 self.refs.append(value)
         if tag == "link" and "icon" in (values.get("rel") or "").lower():
             self.icons.append(values)
+        if tag == "img":
+            self.images.append(values)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
@@ -123,8 +133,8 @@ def validate_build_info(site: Path, errors: list[str]) -> tuple[str | None, list
     except (OSError, json.JSONDecodeError) as exc:
         errors.append(f"build-info.json: {exc}")
         return None, []
-    if info.get("schemaVersion") != 2:
-        errors.append("build-info.json schemaVersion must be 2")
+    if info.get("schemaVersion") != 3:
+        errors.append("build-info.json schemaVersion must be 3")
     version = str(info.get("version", ""))
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         errors.append("build-info.json version is invalid")
@@ -133,16 +143,22 @@ def validate_build_info(site: Path, errors: list[str]) -> tuple[str | None, list
     author = info.get("author")
     if not isinstance(author, dict) or author.get("name") != "Ari Sulistiono":
         errors.append("build-info.json author is invalid")
+    if info.get("languages") != ["en", "id"]:
+        errors.append("build-info.json languages must be en and id")
+    if info.get("indexNowKeyLocation") != CANONICAL_ROOT + INDEXNOW_FILE:
+        errors.append("build-info.json IndexNow key location is invalid")
     pages = info.get("pages")
     if not isinstance(pages, list) or not pages or not all(isinstance(page, str) for page in pages):
         errors.append("build-info.json pages registry is invalid")
         return version or None, []
     if len(pages) != len(set(pages)):
         errors.append("build-info.json pages registry contains duplicates")
-    if len(pages) != 31:
-        errors.append(f"build-info.json must contain 31 pages, found {len(pages)}")
+    if len(pages) != 35:
+        errors.append(f"build-info.json must contain 35 pages, found {len(pages)}")
     if not GUIDE_PAGES.issubset(set(pages)):
         errors.append("build-info.json is missing troubleshooting guide pages")
+    if not LOCALIZED_PAGES.issubset(set(pages)) or "technical-review.html" not in pages:
+        errors.append("build-info.json is missing authority or Indonesian pages")
     return version or None, list(pages)
 
 
@@ -152,15 +168,26 @@ def validate_sitemap(site: Path, pages: list[str], errors: list[str]) -> None:
         errors.append("missing sitemap.xml")
         return
     text = path.read_text(encoding="utf-8")
-    root = "https://masarray.github.io/arsas/"
+    if 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' not in text:
+        errors.append("sitemap.xml is missing the xhtml localization namespace")
     for page in pages:
         if page == "404.html":
-            if root + page in text:
+            if CANONICAL_ROOT + page in text:
                 errors.append("sitemap.xml must not index 404.html")
             continue
-        url = root if page == "index.html" else root + page
+        url = CANONICAL_ROOT if page == "index.html" else CANONICAL_ROOT + page
         if url not in text:
             errors.append(f"sitemap.xml missing {page}")
+    alternate_sets = (
+        (("en", CANONICAL_ROOT), ("id", CANONICAL_ROOT + "id.html"), ("x-default", CANONICAL_ROOT)),
+        (("en", CANONICAL_ROOT + "download.html"), ("id", CANONICAL_ROOT + "unduh.html"), ("x-default", CANONICAL_ROOT + "download.html")),
+        (("en", CANONICAL_ROOT + "guides.html"), ("id", CANONICAL_ROOT + "panduan.html"), ("x-default", CANONICAL_ROOT + "guides.html")),
+    )
+    for alternate_set in alternate_sets:
+        for language, url in alternate_set:
+            marker = f'hreflang="{language}" href="{url}"'
+            if text.count(marker) < 2:
+                errors.append(f"sitemap.xml localization pair is incomplete: {marker}")
 
 
 def validate_manifest(site: Path, icon_size: str, errors: list[str]) -> None:
@@ -185,17 +212,21 @@ def main() -> int:
     site = Path(sys.argv[1] if len(sys.argv) > 1 else "_site").resolve()
     errors: list[str] = []
     version, pages = validate_build_info(site, errors)
-    for relative in tuple(pages) + EXPECTED_MEDIA + ("site.json", "build-info.json", "sitemap.xml", "site.webmanifest"):
+    for relative in tuple(pages) + EXPECTED_MEDIA + ("site.json", "build-info.json", "sitemap.xml", "site.webmanifest", INDEXNOW_FILE):
         if not (site / relative).exists():
             errors.append(f"missing deployable file: {relative}")
+    key_path = site / INDEXNOW_FILE
+    if key_path.exists() and key_path.read_text(encoding="utf-8").strip() != INDEXNOW_KEY:
+        errors.append("deployed IndexNow key file does not match the configured key")
 
     icon_path = site / APP_ICON
     icon_size = ""
+    icon_width = icon_height = 0
     if icon_path.exists():
         try:
-            width, height = png_size(icon_path)
-            icon_size = f"{width}x{height}"
-            if width != height or width < 256:
+            icon_width, icon_height = png_size(icon_path)
+            icon_size = f"{icon_width}x{icon_height}"
+            if icon_width != icon_height or icon_width < 256:
                 errors.append(f"app-icon.png must be square and at least 256px, found {icon_size}")
         except ValueError as exc:
             errors.append(f"app-icon.png: {exc}")
@@ -233,18 +264,29 @@ def main() -> int:
         touch = [item for item in parser.icons if (item.get("rel") or "").lower() == "apple-touch-icon"]
         if len(touch) != 1 or touch[0].get("href") != APP_ICON:
             errors.append(f"{name}: apple-touch-icon must use {APP_ICON}")
+        brand_images = [item for item in parser.images if item.get("src") == APP_ICON]
         if name != "404.html":
-            for value in (LINKEDIN, REPOSITORY, 'href="download.html"'):
+            if len(brand_images) < 2:
+                errors.append(f"{name}: header and footer must use app-icon.png brand marks")
+            for image in brand_images:
+                if image.get("width") != str(icon_width) or image.get("height") != str(icon_height):
+                    errors.append(f"{name}: brand mark metadata must match {icon_size}")
+            for value in (LINKEDIN, REPOSITORY, 'href="download.html"', 'href="technical-review.html"'):
                 if value not in text:
-                    errors.append(f"{name}: shared product footer or download route missing {value}")
+                    errors.append(f"{name}: shared authority or download route missing {value}")
         if name in GUIDE_PAGES:
             if parser.body_page != "guides":
                 errors.append(f"{name}: troubleshooting guide must activate Guides navigation")
             if '"@type":"TechArticle"' not in text.replace(" ", ""):
                 errors.append(f"{name}: missing TechArticle structured data")
-            for value in ("Engineering boundary", "Written and reviewed by Ari Sulistiono", 'href="guides.html"'):
+            for value in ("Engineering boundary", "Written and reviewed by Ari Sulistiono", 'href="guides.html"', 'href="technical-review.html"'):
                 if value not in text:
                     errors.append(f"{name}: missing guide trust contract {value}")
+        if name in LOCALIZED_PAGES:
+            if parser.html_lang != "id" or '"inLanguage":"id"' not in text.replace(" ", ""):
+                errors.append(f"{name}: Indonesian language metadata is incomplete")
+            if 'hreflang="en"' not in text:
+                errors.append(f"{name}: missing English counterpart link")
 
     for forbidden in (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
@@ -260,6 +302,8 @@ def main() -> int:
         return path.read_text(encoding="utf-8") if path.exists() else ""
     home, download, about = page_text("index.html"), page_text("download.html"), page_text("about.html")
     solutions, guides = page_text("solutions.html"), page_text("guides.html")
+    review, id_home = page_text("technical-review.html"), page_text("id.html")
+    id_guides, id_download = page_text("panduan.html"), page_text("unduh.html")
     for value in (INSTALLER, 'href="download.html"', 'href="solutions.html"', "arsas-rcb-scl-export.webp", '"codeRepository"'):
         if value not in home:
             errors.append(f"homepage missing product contract: {value}")
@@ -273,8 +317,17 @@ def main() -> int:
         if value not in solutions:
             errors.append(f"solutions page missing {value}")
     for guide in GUIDE_PAGES:
-        if f'href="{guide}"' not in guides:
-            errors.append(f"guides hub missing {guide}")
+        if f'href="{guide}"' not in guides or f'href="{guide}"' not in id_guides:
+            errors.append(f"guide hubs missing {guide}")
+    for value in ("Claim governance", "Not a conformance certificate", LINKEDIN, REPOSITORY):
+        if value not in review:
+            errors.append(f"technical review page missing {value}")
+    for value in ("Pengujian IEC 61850", 'href="panduan.html"', 'href="unduh.html"'):
+        if value not in id_home:
+            errors.append(f"Indonesian homepage missing {value}")
+    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Unduh ARSAS"):
+        if value not in id_download:
+            errors.append(f"Indonesian download page missing {value}")
     if version and f'"softwareVersion":"{version}"' not in home.replace(" ", ""):
         errors.append("homepage softwareVersion does not match build-info.json")
 
@@ -296,7 +349,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"ARSAS product-build validation passed: {len(pages)} pages, 11 guides and latest {icon_size} favicon.")
+    print(f"ARSAS product-build validation passed: {len(pages)} pages, 11 guides, 3 Indonesian pages, authority policy, IndexNow and {icon_size} brand artwork.")
     return 0
 
 

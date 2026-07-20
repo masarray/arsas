@@ -8,6 +8,7 @@ on:
       - "scripts/validate-product-source.py"
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
+      - "scripts/submit-indexnow.py"
       - ".github/workflows/pages.yml"
   pull_request:
     branches: [ main ]
@@ -16,6 +17,7 @@ on:
       - "scripts/validate-product-source.py"
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
+      - "scripts/submit-indexnow.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -66,6 +68,9 @@ jobs:
 
       - name: Build deterministic product website
         run: python scripts/build-product-site.py --output _site
+
+      - name: Validate IndexNow payload without network submission
+        run: python scripts/submit-indexnow.py --sitemap _site/sitemap.xml --dry-run
 
       - name: Sync verified stable updater manifest
         if: github.event_name != 'pull_request'
@@ -173,3 +178,42 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  notify-indexing:
+    name: Notify search engines
+    if: github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build current sitemap
+        run: python scripts/build-product-site.py --output _site
+
+      - name: Submit deployed URLs through IndexNow
+        id: indexnow
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p _validation
+          python scripts/submit-indexnow.py --sitemap _site/sitemap.xml > _validation/indexnow.log 2>&1
+
+      - name: Upload IndexNow submission report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: indexnow-submission
+          path: _validation/indexnow.log
+          if-no-files-found: warn
+
+      - name: Report non-blocking submission result
+        if: steps.indexnow.outcome != 'success'
+        run: echo "IndexNow submission was not accepted; deployment remains valid and the generated sitemap is still available to crawlers."

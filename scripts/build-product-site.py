@@ -21,7 +21,7 @@ PROJECT_PATH = ROOT / "ArIED61850Tester.csproj"
 APP_ICON_SOURCE = ROOT / "Assets" / "app-icon.png"
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
-VERIFICATION_FILE_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
+VERIFICATION_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
 
 
 def png_size(path: Path) -> tuple[int, int]:
@@ -57,9 +57,10 @@ def read_config() -> dict[str, object]:
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"Cannot read landing/site.json: {exc}") from exc
     required = (
-        "product.name", "product.canonicalRoot", "product.repository",
-        "product.engineRepository", "author.name", "author.linkedin",
-        "author.github", "downloads.installer", "downloads.portable", "downloads.checksums",
+        "product.name", "product.canonicalRoot", "product.repository", "product.engineRepository",
+        "author.name", "author.linkedin", "author.github", "downloads.installer",
+        "downloads.portable", "downloads.checksums", "indexNow.endpoint", "indexNow.key",
+        "indexNow.keyFile",
     )
     for dotted in required:
         value: object = config
@@ -71,6 +72,9 @@ def read_config() -> dict[str, object]:
             raise SystemExit(f"landing/site.json has invalid {dotted}")
     if not isinstance(config.get("pages"), list) or not config["pages"]:
         raise SystemExit("landing/site.json must define a non-empty pages registry")
+    key_file = SOURCE / str(config["indexNow"]["keyFile"])
+    if not key_file.exists() or key_file.read_text(encoding="utf-8").strip() != config["indexNow"]["key"]:
+        raise SystemExit("IndexNow key metadata does not match the hosted key file")
     return config
 
 
@@ -118,6 +122,12 @@ def render(text: str, values: dict[str, str], icon_size: str) -> str:
         f'href="assets/app-icon.png" type="image/png" sizes="{icon_size}"',
         text,
     )
+    width, height = icon_size.split("x", 1)
+    text = re.sub(
+        r'src="assets/app-icon\.png" width="[0-9]+" height="[0-9]+"',
+        f'src="assets/app-icon.png" width="{width}" height="{height}"',
+        text,
+    )
     unresolved = sorted(set(TOKEN_PATTERN.findall(text)))
     if unresolved:
         raise SystemExit("Unresolved landing template tokens: " + ", ".join(unresolved))
@@ -136,8 +146,7 @@ def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
     for entry in pages:
         if not isinstance(entry, dict):
             raise SystemExit("Every landing page registry entry must be an object")
-        path = entry.get("path")
-        template = entry.get("template")
+        path, template = entry.get("path"), entry.get("template")
         if not isinstance(path, str) or not isinstance(template, str):
             raise SystemExit("Every landing page registry entry needs string path and template")
         if path in paths or template in templates:
@@ -146,6 +155,12 @@ def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
             raise SystemExit(f"Invalid landing page path: {path}")
         if not template.endswith(".html") or not (TEMPLATES / template).exists():
             raise SystemExit(f"Registered landing template is missing: {template}")
+        alternates = entry.get("alternates")
+        if alternates is not None:
+            if not isinstance(alternates, dict) or not {"en", "id", "x-default"}.issubset(alternates):
+                raise SystemExit(f"Localized page has invalid alternates: {path or 'index.html'}")
+            if path not in alternates.values():
+                raise SystemExit(f"Localized page alternates must reference itself: {path or 'index.html'}")
         paths.add(path)
         templates.add(template)
         normalized.append(entry)
@@ -158,48 +173,57 @@ def install_icon(output: Path, icon_size: str) -> None:
     shutil.copy2(APP_ICON_SOURCE, destination)
     manifest_path = output / "site.webmanifest"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["icons"] = [{
-        "src": "assets/app-icon.png",
-        "sizes": icon_size,
-        "type": "image/png",
-        "purpose": "any maskable",
-    }]
+    manifest["icons"] = [{"src": "assets/app-icon.png", "sizes": icon_size, "type": "image/png", "purpose": "any maskable"}]
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def absolute_url(root: str, path: str) -> str:
+    return root if path == "" else root + path
 
 
 def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str, object]]) -> None:
     root = str(config["product"]["canonicalRoot"])
-    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    has_alternates = any(isinstance(entry.get("alternates"), dict) for entry in pages)
+    namespace = ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' if has_alternates else ""
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"{namespace}>']
     for entry in pages:
         if entry.get("index", True) is False:
             continue
         path = str(entry["path"])
-        loc = root if path == "" else root + path
+        lines.extend(["  <url>", f"    <loc>{escape(absolute_url(root, path))}</loc>"])
+        alternates = entry.get("alternates")
+        if isinstance(alternates, dict):
+            for language in ("en", "id", "x-default"):
+                alternate_path = str(alternates[language])
+                lines.append(f'    <xhtml:link rel="alternate" hreflang="{language}" href="{escape(absolute_url(root, alternate_path))}" />')
         lines.extend([
-            "  <url>", f"    <loc>{escape(loc)}</loc>",
             f"    <lastmod>{escape(str(entry.get('lastmod', '2026-07-20')))}</lastmod>",
             f"    <changefreq>{escape(str(entry.get('changefreq', 'monthly')))}</changefreq>",
-            f"    <priority>{escape(str(entry.get('priority', '0.7')))}</priority>", "  </url>",
+            f"    <priority>{escape(str(entry.get('priority', '0.7')))}</priority>",
+            "  </url>",
         ])
     lines.append("</urlset>")
     (output / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_build_info(output: Path, config: dict[str, object], version: str, pages: list[dict[str, object]]) -> None:
+    languages = sorted({str(entry.get("language", "en")) for entry in pages if entry.get("index", True) is not False})
     payload = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "product": config["product"]["name"],
         "version": version,
         "canonicalRoot": config["product"]["canonicalRoot"],
         "repository": config["product"]["repository"],
         "author": config["author"],
+        "languages": languages,
+        "indexNowKeyLocation": str(config["product"]["canonicalRoot"]) + str(config["indexNow"]["keyFile"]),
         "pages": [entry["path"] or "index.html" for entry in pages],
     }
     (output / "build-info.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def legacy_html_names() -> list[str]:
-    return sorted(path.name for path in SOURCE.glob("*.html") if not VERIFICATION_FILE_PATTERN.fullmatch(path.name))
+    return sorted(path.name for path in SOURCE.glob("*.html") if not VERIFICATION_PATTERN.fullmatch(path.name))
 
 
 def build(output: Path) -> None:
@@ -218,11 +242,10 @@ def build(output: Path) -> None:
 
     generated: set[str] = set()
     for entry in pages:
-        template_name = str(entry["template"])
         target_name = "index.html" if str(entry["path"]) == "" else str(entry["path"])
         target = output / target_name
         target.parent.mkdir(parents=True, exist_ok=True)
-        source_text = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        source_text = (TEMPLATES / str(entry["template"])).read_text(encoding="utf-8")
         target.write_text(render(source_text, values, icon_size), encoding="utf-8")
         generated.add(target_name)
 
@@ -235,7 +258,7 @@ def build(output: Path) -> None:
     write_build_info(output, config, version, pages)
 
     required = {
-        *generated, "site.json", "sitemap.xml", "build-info.json",
+        *generated, "site.json", "sitemap.xml", "build-info.json", str(config["indexNow"]["keyFile"]),
         "assets/app-icon.png", "assets/social-card.png",
         "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
         "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",
@@ -249,12 +272,12 @@ def build(output: Path) -> None:
     combined = "\n".join((output / page).read_text(encoding="utf-8") for page in sorted(generated))
     for value in (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
-        "https://masarray.github.io/arsas/assets/social-card.svg",
-        'href="assets/favicon.svg"', "{{", "github.com/masarray/arsas#quick-start", '<meta name="keywords"',
+        "https://masarray.github.io/arsas/assets/social-card.svg", 'href="assets/favicon.svg"',
+        "{{", "github.com/masarray/arsas#quick-start", '<meta name="keywords"',
     ):
         if value in combined:
             raise SystemExit(f"Deployable product site still contains forbidden value: {value}")
-    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages, favicon {icon_size}).")
+    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages, languages en/id, favicon {icon_size}).")
 
 
 def main() -> int:

@@ -17,16 +17,24 @@
     "portable": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip",
     "checksums": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
   },
+  "indexNow": {
+    "endpoint": "https://api.indexnow.org/indexnow",
+    "key": "arsas-iec61850-20260720-6f4a9d2c8b",
+    "keyFile": "arsas-iec61850-20260720-6f4a9d2c8b.txt"
+  },
   "pages": [
-    {"path": "", "template": "index.html", "changefreq": "weekly", "priority": "1.0", "lastmod": "2026-07-20"},
-    {"path": "download.html", "template": "download.html", "changefreq": "weekly", "priority": "0.98", "lastmod": "2026-07-20"},
+    {"path": "", "template": "index.html", "language": "en", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "1.0", "lastmod": "2026-07-20"},
+    {"path": "id.html", "template": "id.html", "language": "id", "contentType": "localized", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "0.97", "lastmod": "2026-07-20"},
+    {"path": "download.html", "template": "download.html", "language": "en", "alternates": {"en": "download.html", "id": "unduh.html", "x-default": "download.html"}, "changefreq": "weekly", "priority": "0.98", "lastmod": "2026-07-20"},
+    {"path": "unduh.html", "template": "unduh.html", "language": "id", "contentType": "localized", "alternates": {"en": "download.html", "id": "unduh.html", "x-default": "download.html"}, "changefreq": "weekly", "priority": "0.95", "lastmod": "2026-07-20"},
     {"path": "features.html", "template": "features.html", "changefreq": "monthly", "priority": "0.94", "lastmod": "2026-07-20"},
     {"path": "solutions.html", "template": "solutions.html", "changefreq": "monthly", "priority": "0.96", "lastmod": "2026-07-20"},
     {"path": "fat-testing.html", "template": "fat-testing.html", "changefreq": "monthly", "priority": "0.94", "lastmod": "2026-07-20"},
     {"path": "sat-testing.html", "template": "sat-testing.html", "changefreq": "monthly", "priority": "0.93", "lastmod": "2026-07-20"},
     {"path": "commissioning.html", "template": "commissioning.html", "changefreq": "monthly", "priority": "0.94", "lastmod": "2026-07-20"},
     {"path": "multi-vendor-integration.html", "template": "multi-vendor-integration.html", "changefreq": "monthly", "priority": "0.93", "lastmod": "2026-07-20"},
-    {"path": "guides.html", "template": "guides.html", "contentType": "guide-hub", "changefreq": "weekly", "priority": "0.95", "lastmod": "2026-07-20"},
+    {"path": "guides.html", "template": "guides.html", "language": "en", "contentType": "guide-hub", "alternates": {"en": "guides.html", "id": "panduan.html", "x-default": "guides.html"}, "changefreq": "weekly", "priority": "0.95", "lastmod": "2026-07-20"},
+    {"path": "panduan.html", "template": "panduan.html", "language": "id", "contentType": "localized", "alternates": {"en": "guides.html", "id": "panduan.html", "x-default": "guides.html"}, "changefreq": "weekly", "priority": "0.92", "lastmod": "2026-07-20"},
     {"path": "reporting-silent.html", "template": "reporting-silent.html", "contentType": "guide", "changefreq": "monthly", "priority": "0.91", "lastmod": "2026-07-20"},
     {"path": "brcb-vs-urcb.html", "template": "brcb-vs-urcb.html", "contentType": "guide", "changefreq": "monthly", "priority": "0.88", "lastmod": "2026-07-20"},
     {"path": "rcb-reserved.html", "template": "rcb-reserved.html", "contentType": "guide", "changefreq": "monthly", "priority": "0.89", "lastmod": "2026-07-20"},
@@ -46,6 +54,7 @@
     {"path": "control.html", "template": "control.html", "changefreq": "monthly", "priority": "0.90", "lastmod": "2026-07-20"},
     {"path": "multi-ied-monitoring.html", "template": "multi-ied-monitoring.html", "changefreq": "monthly", "priority": "0.89", "lastmod": "2026-07-20"},
     {"path": "architecture.html", "template": "architecture.html", "changefreq": "monthly", "priority": "0.82", "lastmod": "2026-07-20"},
+    {"path": "technical-review.html", "template": "technical-review.html", "contentType": "authority", "changefreq": "monthly", "priority": "0.84", "lastmod": "2026-07-20"},
     {"path": "roadmap.html", "template": "roadmap.html", "changefreq": "monthly", "priority": "0.78", "lastmod": "2026-07-20"},
     {"path": "about.html", "template": "about.html", "changefreq": "monthly", "priority": "0.76", "lastmod": "2026-07-20"},
     {"path": "404.html", "template": "404.html", "index": false, "lastmod": "2026-07-20"}
