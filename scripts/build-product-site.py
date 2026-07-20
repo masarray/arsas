@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the ARSAS product website from templates, partials and product data."""
+"""Build the ARSAS product website from templates, product data and verified release evidence."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import re
 import shutil
 import struct
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -17,11 +18,25 @@ SOURCE = ROOT / "landing"
 TEMPLATES = SOURCE / "templates"
 PARTIALS = SOURCE / "partials"
 CONFIG_PATH = SOURCE / "site.json"
+RELEASE_NOTES_PATH = SOURCE / "release-notes.json"
+DEFAULT_RELEASE_EVIDENCE_PATH = SOURCE / "latest.json"
 PROJECT_PATH = ROOT / "ArIED61850Tester.csproj"
 APP_ICON_SOURCE = ROOT / "Assets" / "app-icon.png"
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
+SEMVER_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+SHA256_PATTERN = re.compile(r"[0-9a-fA-F]{64}")
+
+
+def read_json(path: Path, label: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Cannot read {label}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise SystemExit(f"{label} must contain a JSON object")
+    return value
 
 
 def png_size(path: Path) -> tuple[int, int]:
@@ -46,16 +61,13 @@ def read_version() -> str:
     except (OSError, ET.ParseError) as exc:
         raise SystemExit(f"Cannot read ARSAS project version: {exc}") from exc
     version = (project.findtext(".//Version") or "").strip()
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    if not SEMVER_PATTERN.fullmatch(version):
         raise SystemExit("ARSAS project Version must use major.minor.patch")
     return version
 
 
 def read_config() -> dict[str, object]:
-    try:
-        config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"Cannot read landing/site.json: {exc}") from exc
+    config = read_json(CONFIG_PATH, "landing/site.json")
     required = (
         "product.name", "product.canonicalRoot", "product.repository", "product.engineRepository",
         "author.name", "author.linkedin", "author.github", "downloads.installer",
@@ -80,11 +92,108 @@ def read_config() -> dict[str, object]:
     return config
 
 
-def token_values(config: dict[str, object], version: str) -> dict[str, str]:
+def require_text(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"Invalid release field: {label}")
+    return value.strip()
+
+
+def require_list(value: object, label: str, minimum: int = 1) -> list[str]:
+    if not isinstance(value, list) or len(value) < minimum or not all(isinstance(item, str) and item.strip() for item in value):
+        raise SystemExit(f"Invalid release list: {label}")
+    return [item.strip() for item in value]
+
+
+def read_release_data(path: Path) -> tuple[dict[str, object], dict[str, object]]:
+    evidence = read_json(path, f"stable release evidence {path}")
+    notes = read_json(RELEASE_NOTES_PATH, "landing/release-notes.json")
+    if evidence.get("schemaVersion") != 1 or evidence.get("product") != "ARSAS":
+        raise SystemExit("Stable release evidence has invalid identity")
+    version = require_text(evidence.get("version"), "version")
+    if not SEMVER_PATTERN.fullmatch(version) or notes.get("version") != version:
+        raise SystemExit("Release evidence and release notes versions must match")
+    if evidence.get("channel") != "stable":
+        raise SystemExit("Only stable release evidence may build the public Download Center")
+    require_text(evidence.get("publishedAtUtc"), "publishedAtUtc")
+    require_text(evidence.get("sourceCommit"), "sourceCommit")
+    for key, expected_name in (
+        ("installer", "ARSAS-Windows-x64-Setup.exe"),
+        ("portable", "ARSAS-Windows-x64-Portable.zip"),
+    ):
+        package = evidence.get(key)
+        if not isinstance(package, dict) or package.get("name") != expected_name:
+            raise SystemExit(f"Stable release evidence has invalid {key} identity")
+        if not SHA256_PATTERN.fullmatch(str(package.get("sha256", ""))):
+            raise SystemExit(f"Stable release evidence has invalid {key} SHA-256")
+        if not 1_000_000 <= int(package.get("sizeBytes", 0)) <= 500_000_000:
+            raise SystemExit(f"Stable release evidence has invalid {key} size")
+        require_text(package.get("url"), f"{key}.url")
+    checksums = evidence.get("checksums")
+    if not isinstance(checksums, dict):
+        raise SystemExit("Stable release evidence is missing checksum asset")
+    require_text(checksums.get("url"), "checksums.url")
+    signing = evidence.get("codeSigning")
+    if not isinstance(signing, dict) or signing.get("status") not in {"signed", "unsigned"}:
+        raise SystemExit("Stable release evidence must declare code-signing status")
+
+    for key in ("title", "titleId", "summary", "summaryId", "issuesUrl", "releaseUrl"):
+        require_text(notes.get(key), key)
+    for key in ("highlights", "highlightsId", "improvements", "improvementsId", "knownLimitations", "knownLimitationsId"):
+        require_list(notes.get(key), key, 4)
+    note_signing = notes.get("codeSigning")
+    if not isinstance(note_signing, dict) or note_signing.get("status") != signing.get("status"):
+        raise SystemExit("Release notes code-signing status must match release evidence")
+    for key in ("label", "labelId", "detail", "detailId"):
+        require_text(note_signing.get(key), f"codeSigning.{key}")
+    screenshot = notes.get("screenshot")
+    if not isinstance(screenshot, dict):
+        raise SystemExit("Release notes screenshot metadata is missing")
+    for key in ("src", "alt", "altId", "caption", "captionId"):
+        require_text(screenshot.get(key), f"screenshot.{key}")
+    if not (SOURCE / str(screenshot["src"])).exists():
+        raise SystemExit("Release notes screenshot source does not exist")
+    return evidence, notes
+
+
+def human_size(size_bytes: int) -> str:
+    return f"{size_bytes / (1024 * 1024):.1f} MiB"
+
+
+def release_dates(value: str) -> tuple[str, str, str]:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise SystemExit(f"Invalid stable release publish date: {value}") from exc
+    month_id = (
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    )
+    english = f"{parsed.day} {parsed.strftime('%B')} {parsed.year}"
+    indonesian = f"{parsed.day} {month_id[parsed.month - 1]} {parsed.year}"
+    return value, english, indonesian
+
+
+def list_html(items: list[str]) -> str:
+    return "".join(f"<li>{escape(item)}</li>" for item in items)
+
+
+def token_values(
+    config: dict[str, object],
+    version: str,
+    evidence: dict[str, object],
+    notes: dict[str, object],
+) -> dict[str, str]:
     product = config["product"]
     author = config["author"]
     downloads = config["downloads"]
+    installer = evidence["installer"]
+    portable = evidence["portable"]
+    signing = notes["codeSigning"]
+    screenshot = notes["screenshot"]
     assert isinstance(product, dict) and isinstance(author, dict) and isinstance(downloads, dict)
+    assert isinstance(installer, dict) and isinstance(portable, dict)
+    assert isinstance(signing, dict) and isinstance(screenshot, dict)
+    published_iso, published_en, published_id = release_dates(str(evidence["publishedAtUtc"]))
     return {
         "ARSAS_VERSION": version,
         "PRODUCT_NAME": str(product["name"]),
@@ -97,6 +206,38 @@ def token_values(config: dict[str, object], version: str) -> dict[str, str]:
         "INSTALLER_URL": str(downloads["installer"]),
         "PORTABLE_URL": str(downloads["portable"]),
         "CHECKSUMS_URL": str(downloads["checksums"]),
+        "STABLE_VERSION": str(evidence["version"]),
+        "STABLE_PUBLISHED_ISO": published_iso,
+        "STABLE_PUBLISHED_DATE": published_en,
+        "STABLE_PUBLISHED_DATE_ID": published_id,
+        "INSTALLER_SIZE": human_size(int(installer["sizeBytes"])),
+        "PORTABLE_SIZE": human_size(int(portable["sizeBytes"])),
+        "INSTALLER_SHA256": str(installer["sha256"]),
+        "PORTABLE_SHA256": str(portable["sha256"]),
+        "RELEASE_TITLE": str(notes["title"]),
+        "RELEASE_TITLE_ID": str(notes["titleId"]),
+        "RELEASE_SUMMARY": str(notes["summary"]),
+        "RELEASE_SUMMARY_ID": str(notes["summaryId"]),
+        "RELEASE_HIGHLIGHTS": list_html(require_list(notes["highlights"], "highlights")),
+        "RELEASE_HIGHLIGHTS_ID": list_html(require_list(notes["highlightsId"], "highlightsId")),
+        "RELEASE_IMPROVEMENTS": list_html(require_list(notes["improvements"], "improvements")),
+        "RELEASE_IMPROVEMENTS_ID": list_html(require_list(notes["improvementsId"], "improvementsId")),
+        "RELEASE_LIMITATIONS": list_html(require_list(notes["knownLimitations"], "knownLimitations")),
+        "RELEASE_LIMITATIONS_ID": list_html(require_list(notes["knownLimitationsId"], "knownLimitationsId")),
+        "SIGNING_STATUS": str(signing["status"]),
+        "SIGNING_LABEL": str(signing["label"]),
+        "SIGNING_LABEL_ID": str(signing["labelId"]),
+        "SIGNING_DETAIL": str(signing["detail"]),
+        "SIGNING_DETAIL_ID": str(signing["detailId"]),
+        "RELEASE_SCREENSHOT_SRC": str(screenshot["src"]),
+        "RELEASE_SCREENSHOT_WIDTH": str(screenshot["width"]),
+        "RELEASE_SCREENSHOT_HEIGHT": str(screenshot["height"]),
+        "RELEASE_SCREENSHOT_ALT": str(screenshot["alt"]),
+        "RELEASE_SCREENSHOT_ALT_ID": str(screenshot["altId"]),
+        "RELEASE_SCREENSHOT_CAPTION": str(screenshot["caption"]),
+        "RELEASE_SCREENSHOT_CAPTION_ID": str(screenshot["captionId"]),
+        "ISSUES_URL": str(notes["issuesUrl"]),
+        "RELEASE_URL": str(notes["releaseUrl"]),
     }
 
 
@@ -225,7 +366,13 @@ def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str,
     (output / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_build_info(output: Path, config: dict[str, object], version: str, pages: list[dict[str, object]]) -> None:
+def write_build_info(
+    output: Path,
+    config: dict[str, object],
+    version: str,
+    stable_version: str,
+    pages: list[dict[str, object]],
+) -> None:
     product = config["product"]
     index_now = config["indexNow"]
     assert isinstance(product, dict) and isinstance(index_now, dict)
@@ -234,6 +381,7 @@ def write_build_info(output: Path, config: dict[str, object], version: str, page
         "schemaVersion": 3,
         "product": product["name"],
         "version": version,
+        "stableReleaseVersion": stable_version,
         "canonicalRoot": product["canonicalRoot"],
         "repository": product["repository"],
         "author": config["author"],
@@ -248,10 +396,11 @@ def legacy_html_names() -> list[str]:
     return sorted(path.name for path in SOURCE.glob("*.html") if not VERIFICATION_PATTERN.fullmatch(path.name))
 
 
-def build(output: Path) -> None:
+def build(output: Path, release_evidence_path: Path) -> None:
     version = read_version()
     config = read_config()
-    values = token_values(config, version)
+    evidence, notes = read_release_data(release_evidence_path)
+    values = token_values(config, version, evidence, notes)
     pages = page_registry(config)
     width, height = icon_dimensions()
     icon_size = f"{width}x{height}"
@@ -265,6 +414,7 @@ def build(output: Path) -> None:
     shutil.copytree(SOURCE, output)
     shutil.rmtree(output / "templates", ignore_errors=True)
     shutil.rmtree(output / "partials", ignore_errors=True)
+    (output / "latest.json").write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     generated: set[str] = set()
     for entry in pages:
@@ -283,10 +433,10 @@ def build(output: Path) -> None:
 
     install_icon(output, icon_size)
     write_sitemap(output, config, pages)
-    write_build_info(output, config, version, pages)
+    write_build_info(output, config, version, str(evidence["version"]), pages)
 
     required = {
-        *generated, "site.json", "sitemap.xml", "build-info.json", str(index_now["keyFile"]),
+        *generated, "site.json", "latest.json", "release-notes.json", "sitemap.xml", "build-info.json", str(index_now["keyFile"]),
         "assets/app-icon.png", "assets/social-card.png",
         "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
         "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",
@@ -305,14 +455,18 @@ def build(output: Path) -> None:
     ):
         if value in combined:
             raise SystemExit(f"Deployable product site still contains forbidden value: {value}")
-    print(f"Built ARSAS product website {version} at {output} ({len(generated)} pages, languages en/id, favicon {icon_size}).")
+    print(
+        f"Built ARSAS product website {version} with stable release {evidence['version']} at {output} "
+        f"({len(generated)} pages, languages en/id, favicon {icon_size})."
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default=str(ROOT / "_site"))
+    parser.add_argument("--release-evidence", default=str(DEFAULT_RELEASE_EVIDENCE_PATH))
     args = parser.parse_args()
-    build(Path(args.output).resolve())
+    build(Path(args.output).resolve(), Path(args.release_evidence).resolve())
     return 0
 
 
