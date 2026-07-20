@@ -1,0 +1,346 @@
+name: Temporary apply caption-based IED capabilities
+
+on:
+  push:
+    branches: [ fix/ied-card-caption-capabilities ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ied-card-caption-capabilities
+          fetch-depth: 0
+
+      - name: Patch IED card capability UX
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          xaml_path = Path('MainWindow.xaml')
+          xaml = xaml_path.read_text(encoding='utf-8')
+          xaml = xaml.replace('<Grid MinHeight="74">', '<Grid MinHeight="104">', 1)
+
+          action_pattern = re.compile(
+              r'\s*<!-- Adaptive five-slot action bar\..*?</Grid>\s*(?=</Grid>\s*<Button Style="\{StaticResource IedIconButton\}" Tag="\{Binding\}" Click="IedRemove_Click")',
+              re.S)
+          action_replacement = '''
+                                      <!-- Primary lifecycle actions stay icon-based; protocol tools use the caption row below. -->
+                                      <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                            Tag="ARSAS_IED_PRIMARY_ACTIONS" Margin="62,4,1,0" Panel.ZIndex="10">
+                                          <UniformGrid Rows="1" Columns="4" HorizontalAlignment="Stretch">
+                                              <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedPlayAction_Click"
+                                                      IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>
+                                              </Button>
+                                              <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedStopAction_Click"
+                                                      IsEnabled="{Binding CanStopAction}" ToolTip="{Binding StopToolTip}">
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                              </Button>
+                                              <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedConfigureSignals_Click"
+                                                      IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                              </Button>
+                                              <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedSaveScl_Click"
+                                                      IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                              </Button>
+                                          </UniformGrid>
+                                      </Grid>
+'''
+          xaml, count = action_pattern.subn(action_replacement, xaml, count=1)
+          if count != 1:
+              raise SystemExit('Primary IED action block was not found')
+          xaml_path.write_text(xaml, encoding='utf-8')
+
+          behavior_path = Path('FaultRecordUxBehavior.cs')
+          text = behavior_path.read_text(encoding='utf-8')
+          text = text.replace(
+              '    private const string CapabilityPanelMarker = "ARSAS_IED_CAPABILITIES";\n',
+              '    private const string CapabilityPanelMarker = "ARSAS_IED_CAPABILITIES";\n'
+              '    private const string ActionPanelMarker = "ARSAS_IED_PRIMARY_ACTIONS";\n', 1)
+
+          old = '''            var actionPanel = FindDescendants<StackPanel>(item)
+                .FirstOrDefault(panel =>
+                    panel.Orientation == Orientation.Horizontal &&
+                    panel.HorizontalAlignment == HorizontalAlignment.Right &&
+                    FindDescendants<Button>(panel).Count() >= 3);
+            if (actionPanel?.Parent is not Grid cardGrid)
+                return;
+
+            var existing = cardGrid.Children
+                .OfType<StackPanel>()
+                .FirstOrDefault(panel => Equals(panel.Tag, CapabilityPanelMarker));
+'''
+          new = '''            var actionPanel = FindDescendants<Grid>(item)
+                .FirstOrDefault(panel => Equals(panel.Tag, ActionPanelMarker));
+            if (actionPanel?.Parent is not Grid cardGrid)
+                return;
+
+            var existing = cardGrid.Children
+                .OfType<Grid>()
+                .FirstOrDefault(panel => Equals(panel.Tag, CapabilityPanelMarker));
+'''
+          if old not in text:
+              raise SystemExit('Legacy action-panel lookup was not found')
+          text = text.replace(old, new, 1)
+
+          old = '''            var gooseButton = CreateCapabilityButton(
+                "GOOSE",
+                "M4,6 L9,6 M4,10 L13,10 M4,14 L17,14 M17,6 L20,6 M13,10 L20,10 M9,14 L20,14",
+                (_, _) => OpenGooseWorkspace(currentWindow, currentDevice));
+            var smvButton = CreateCapabilityButton(
+                "SMV",
+                "M2,12 C4,12 4,5 7,5 C10,5 9,19 12,19 C15,19 14,8 17,8 C19,8 19,12 22,12",
+                (_, _) => OpenSmvViewer(currentWindow, currentDevice));
+            var fileButton = CreateCapabilityButton(
+                "File Transfer",
+                "M6,2 L15,2 L20,7 L20,22 L6,22 Z M15,2 L15,7 L20,7 M13,10 L13,17 M10,14 L13,17 L16,14",
+                (_, _) => OpenFaultRecordWindow(currentWindow, currentDevice));
+
+            var capabilityPanel = new StackPanel
+            {
+                Tag = CapabilityPanelMarker,
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(4, 2, 7, 0)
+            };
+            capabilityPanel.Children.Add(gooseButton);
+            capabilityPanel.Children.Add(smvButton);
+            capabilityPanel.Children.Add(fileButton);
+
+            // Keep protocol capabilities on their own card row. The previous overlay shared
+            // the lifecycle-action row and could cover the Stop button when File Transfer was enabled.
+            cardGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(capabilityPanel, cardGrid.RowDefinitions.Count - 1);
+            Grid.SetColumn(capabilityPanel, 1);
+            Panel.SetZIndex(capabilityPanel, 10);
+            cardGrid.Children.Add(capabilityPanel);
+'''
+          new = '''            var gooseButton = CreateCapabilityButton(
+                "GOOSE",
+                (_, _) => OpenGooseWorkspace(currentWindow, currentDevice));
+            var smvButton = CreateCapabilityButton(
+                "SMV",
+                (_, _) => OpenSmvViewer(currentWindow, currentDevice));
+            var fileButton = CreateCapabilityButton(
+                "FILE",
+                (_, _) => OpenFaultRecordWindow(currentWindow, currentDevice));
+            var rcbButton = CreateCapabilityButton(
+                "RCB",
+                (_, _) => currentWindow.OpenRcbExportFilter(currentDevice));
+
+            var capabilityPanel = new Grid
+            {
+                Tag = CapabilityPanelMarker,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 5, 0, 0)
+            };
+            for (var column = 0; column < 4; column++)
+                capabilityPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            AddCapabilityButton(capabilityPanel, gooseButton, 0);
+            AddCapabilityButton(capabilityPanel, smvButton, 1);
+            AddCapabilityButton(capabilityPanel, fileButton, 2);
+            AddCapabilityButton(capabilityPanel, rcbButton, 3);
+
+            cardGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(capabilityPanel, cardGrid.RowDefinitions.Count - 1);
+            Grid.SetColumn(capabilityPanel, 0);
+            Grid.SetColumnSpan(capabilityPanel, 2);
+            Panel.SetZIndex(capabilityPanel, 10);
+            cardGrid.Children.Add(capabilityPanel);
+'''
+          if old not in text:
+              raise SystemExit('Legacy capability-button block was not found')
+          text = text.replace(old, new, 1)
+
+          text = text.replace(
+              '''                fileButton,
+                (_, _) => QueueCapabilityRefresh(item, currentDevice, gooseButton, smvButton, fileButton));''',
+              '''                fileButton,
+                rcbButton,
+                (_, _) => QueueCapabilityRefresh(item, currentDevice, gooseButton, smvButton, fileButton, rcbButton));''', 1)
+          text = text.replace(
+              '''        Button gooseButton,
+        Button smvButton,
+        Button fileButton)''',
+              '''        Button gooseButton,
+        Button smvButton,
+        Button fileButton,
+        Button rcbButton)''', 1)
+          text = text.replace(
+              '            RefreshCapabilityState(device, gooseButton, smvButton, fileButton);',
+              '            RefreshCapabilityState(device, gooseButton, smvButton, fileButton, rcbButton);', 1)
+
+          create_pattern = re.compile(
+              r'    private static Button CreateCapabilityButton\(string capability, string pathData, RoutedEventHandler click\).*?\n    }\n\n    private static void RefreshCapabilityState\(',
+              re.S)
+          create_replacement = '''    private static Button CreateCapabilityButton(string capability, RoutedEventHandler click)
+    {
+        var button = new Button
+        {
+            Height = 25,
+            MinHeight = 0,
+            MinWidth = 0,
+            Padding = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(2, 0, 2, 0),
+            Focusable = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            FontSize = 9.4,
+            FontWeight = FontWeights.SemiBold,
+            Content = capability,
+            Tag = capability
+        };
+        if (Application.Current.TryFindResource("SoftButton") is Style style)
+            button.Style = style;
+        button.Click += click;
+        return button;
+    }
+
+    private static void AddCapabilityButton(Grid panel, Button button, int column)
+    {
+        Grid.SetColumn(button, column);
+        panel.Children.Add(button);
+    }
+
+    private static void RefreshCapabilityState('''
+          text, count = create_pattern.subn(create_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit('Capability button factory was not found')
+
+          text = text.replace(
+              '''        Iec61850MonitorDevice device,
+        Button gooseButton,
+        Button smvButton,
+        Button fileButton)''',
+              '''        Iec61850MonitorDevice device,
+        Button gooseButton,
+        Button smvButton,
+        Button fileButton,
+        Button rcbButton)''', 1)
+          text = text.replace(
+              '''        var endpointReady = !string.IsNullOrWhiteSpace(device.IpAddress) &&
+                            IPAddress.TryParse(device.IpAddress, out _) &&
+                            device.Port is > 0 and <= 65535;
+''',
+              '''        var endpointReady = !string.IsNullOrWhiteSpace(device.IpAddress) &&
+                            IPAddress.TryParse(device.IpAddress, out _) &&
+                            device.Port is > 0 and <= 65535;
+        var hasRcbInventory = device.LiveDiscoveryModel?.ReportControls.Count > 0 ||
+                              !string.IsNullOrWhiteSpace(device.SclSourcePath);
+''', 1)
+          text = text.replace(
+              '''                    : $"Bind a valid MMS endpoint before using File Transfer for {device.Name}");
+''',
+              '''                    : $"Bind a valid MMS endpoint before using File Transfer for {device.Name}");
+        ApplyState(
+            rcbButton,
+            hasRcbInventory ? CapabilityState.Available : CapabilityState.Unavailable,
+            hasRcbInventory
+                ? $"Select and export one RCB for legacy SAS import from {device.Name}"
+                : $"Open SCL or complete live discovery before using RCB Export for {device.Name}");
+''', 1)
+
+          text = text.replace(
+              '''        button.ToolTip = toolTip;
+''',
+              '''        button.ToolTip = toolTip;
+        button.Background = state switch
+        {
+            CapabilityState.Available => new SolidColorBrush(Color.FromRgb(234, 241, 255)),
+            CapabilityState.ProbeReady => new SolidColorBrush(Color.FromRgb(255, 247, 230)),
+            _ => new SolidColorBrush(Color.FromRgb(243, 246, 250))
+        };
+        button.BorderBrush = state switch
+        {
+            CapabilityState.Available => new SolidColorBrush(Color.FromRgb(177, 198, 237)),
+            CapabilityState.ProbeReady => new SolidColorBrush(Color.FromRgb(232, 194, 121)),
+            _ => new SolidColorBrush(Color.FromRgb(215, 223, 234))
+        };
+        button.Foreground = state == CapabilityState.ProbeReady
+            ? new SolidColorBrush(Color.FromRgb(138, 91, 10))
+            : new SolidColorBrush(Color.FromRgb(35, 67, 119));
+''', 1)
+          text = text.replace(
+              '''        Button SmvButton,
+        Button FileButton,
+        PropertyChangedEventHandler PropertyChangedHandler);''',
+              '''        Button SmvButton,
+        Button FileButton,
+        Button RcbButton,
+        PropertyChangedEventHandler PropertyChangedHandler);''', 1)
+
+          behavior_path.write_text(text, encoding='utf-8')
+
+          bridge = Path('MainWindow.RcbCapability.cs')
+          bridge.write_text('''using ArIED61850Tester.Models;
+using System.Windows;
+using System.Windows.Controls;
+
+namespace ArIED61850Tester;
+
+public partial class MainWindow
+{
+    internal void OpenRcbExportFilter(Iec61850MonitorDevice device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        IedEditRcb_Click(new Button { Tag = device }, new RoutedEventArgs());
+    }
+}
+''', encoding='utf-8')
+
+          guard_path = Path('scripts/verify-rcb-export.ps1')
+          guard = guard_path.read_text(encoding='utf-8')
+          guard = guard.replace(
+              '''Require-Text $mainXaml 'Click="IedEditRcb_Click"' "IED-card RCB Export Filter action is missing."
+''',
+              '''Require-Text $mainXaml 'Tag="ARSAS_IED_PRIMARY_ACTIONS"' "IED-card primary action marker is missing."
+Require-Text $mainXaml 'Columns="4"' "IED-card primary actions must remain a four-slot lifecycle row."
+''', 1)
+          guard = guard.replace(
+              '''$probe = Read-RequiredFile "Services/RcbAvailabilityProbeService.cs"
+''',
+              '''$probe = Read-RequiredFile "Services/RcbAvailabilityProbeService.cs"
+$capabilities = Read-RequiredFile "FaultRecordUxBehavior.cs"
+$rcbBridge = Read-RequiredFile "MainWindow.RcbCapability.cs"
+''', 1)
+          guard = guard.replace(
+              '''Require-Text $mainCode 'RemoveUnreferencedDataSets = false' "Safe default must preserve DataSets during selected-RCB export."
+''',
+              '''Require-Text $mainCode 'RemoveUnreferencedDataSets = false' "Safe default must preserve DataSets during selected-RCB export."
+Require-Text $capabilities 'ActionPanelMarker = "ARSAS_IED_PRIMARY_ACTIONS"' "Capability row must bind to the explicit IED action marker."
+Require-Text $capabilities '"GOOSE"' "GOOSE caption action is missing."
+Require-Text $capabilities '"SMV"' "SMV caption action is missing."
+Require-Text $capabilities '"FILE"' "FILE caption action is missing."
+Require-Text $capabilities '"RCB"' "RCB caption action is missing."
+Require-Text $capabilities 'Grid.SetColumnSpan(capabilityPanel, 2)' "Capability caption row must span the full IED card."
+Require-Text $rcbBridge 'OpenRcbExportFilter' "RCB capability bridge is missing."
+''', 1)
+          guard_path.write_text(guard, encoding='utf-8')
+
+      - name: Verify focused patch
+        shell: bash
+        run: |
+          grep -q 'Tag="ARSAS_IED_PRIMARY_ACTIONS"' MainWindow.xaml
+          grep -q 'Content = capability' FaultRecordUxBehavior.cs
+          grep -q 'OpenRcbExportFilter' MainWindow.RcbCapability.cs
+          ! grep -q 'Click="IedEditRcb_Click"' MainWindow.xaml
+
+      - name: Commit source and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-caption-capabilities-temp.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml FaultRecordUxBehavior.cs MainWindow.RcbCapability.cs scripts/verify-rcb-export.ps1
+          git commit -m "Make IED capability actions clear and compact"
+          git push origin HEAD:fix/ied-card-caption-capabilities
