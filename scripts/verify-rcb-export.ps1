@@ -125,7 +125,7 @@ if (![string]::IsNullOrWhiteSpace($EngineRoot)) {
   Require-Text $filter 'Legacy SAS export requires exactly one selected ReportControl.' "Exactly-one-RCB guard is missing."
   Require-Text $export 'Filtered SCL validation expected one ReportControl' "Post-export single-RCB validation is missing."
   Require-Text $export 'The original source file was not modified.' "Engine evidence no longer states source immutability."
-  Require-Text $identity 'LDevice@ldName' "Engine identity boundary no longer documents explicit MMS Logical Device names."
+  Require-Text $identity '"ldName",' "Engine identity boundary must write explicit MMS Logical Device names through LDevice.ldName."
   Require-Text $identity 'ValidateIdentity' "Engine must validate the normalized IED and MMS-domain identity mapping."
   Require-Text $identity 'missingDomains' "Engine must reject loss of discovered MMS Logical Device domains."
 }
