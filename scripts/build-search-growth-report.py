@@ -61,7 +61,17 @@ def localized_counterparts(entries: dict[str, dict[str, Any]]) -> dict[str, str]
     return pairs
 
 
-def add(queue: list[dict[str, Any]], *, priority: int, category: str, page: str = "", query: str = "", evidence: str, action: str, source: str) -> None:
+def add(
+    queue: list[dict[str, Any]],
+    *,
+    priority: int,
+    category: str,
+    page: str = "",
+    query: str = "",
+    evidence: str,
+    action: str,
+    source: str,
+) -> None:
     queue.append({
         "priority": max(1, min(100, int(priority))),
         "category": category,
@@ -127,11 +137,98 @@ def structural_queue(entries: dict[str, dict[str, Any]], graph: dict[str, Any]) 
     return queue, stats
 
 
+def trend_declined(value: Any, minimum_previous: float, threshold: float = -0.30) -> bool:
+    if not isinstance(value, dict):
+        return False
+    previous = float(value.get("previous", 0) or 0)
+    delta = value.get("percent")
+    return previous >= minimum_previous and isinstance(delta, (int, float)) and float(delta) <= threshold
+
+
 def measurement_queue(report: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, str]]:
     queue: list[dict[str, Any]] = []
     ga4 = report.get("ga4") if isinstance(report.get("ga4"), dict) else {}
     search = report.get("searchConsole") if isinstance(report.get("searchConsole"), dict) else {}
     speed = report.get("coreWebVitals") if isinstance(report.get("coreWebVitals"), dict) else {}
+    sitemaps = search.get("sitemaps") if isinstance(search.get("sitemaps"), dict) else {}
+
+    sitemap_status = str(sitemaps.get("status", "not-configured"))
+    if sitemap_status in {"missing", "error", "warning"}:
+        expected = sitemaps.get("expected") if isinstance(sitemaps.get("expected"), dict) else {}
+        add(
+            queue,
+            priority=98 if sitemap_status in {"missing", "error"} else 86,
+            category="sitemap-health",
+            page="sitemap.xml",
+            evidence=(
+                f"Search Console sitemap status is {sitemap_status}; "
+                f"warnings={expected.get('warnings', 'unavailable')}, errors={expected.get('errors', 'unavailable')}."
+            ),
+            action="Repair sitemap submission or processing before interpreting page-level indexing and CTR trends.",
+            source="search-console-sitemaps",
+        )
+    elif sitemap_status == "pending":
+        add(
+            queue,
+            priority=40,
+            category="sitemap-pending",
+            page="sitemap.xml",
+            evidence="Search Console still reports the submitted sitemap as pending.",
+            action="Do not resubmit repeatedly; confirm the next scheduled cycle records a download or a concrete warning/error.",
+            source="search-console-sitemaps",
+        )
+
+    if search.get("status") == "available-no-data":
+        add(
+            queue,
+            priority=52,
+            category="search-baseline",
+            evidence="Search Console authorization works, but no finalized search rows exist in the reporting window.",
+            action="Keep the sitemap healthy and continue the weekly cycle; do not create pages from zero-data assumptions.",
+            source="search-console",
+        )
+    if ga4.get("status") == "available-no-data":
+        add(
+            queue,
+            priority=44,
+            category="collection-baseline",
+            evidence="GA4 authorization works, but no consented page or download data exists in the reporting window.",
+            action="Confirm the public measurement ID and consent flow, then wait for consented visits before interpreting demand.",
+            source="ga4",
+        )
+
+    search_trend = search.get("trend") if isinstance(search.get("trend"), dict) else {}
+    if trend_declined(search_trend.get("impressions"), 100):
+        value = search_trend["impressions"]
+        add(
+            queue,
+            priority=76,
+            category="search-decline",
+            evidence=f"Search impressions changed from {value.get('previous', 0):.0f} to {value.get('current', 0):.0f}.",
+            action="Check sitemap health, page coverage and query mix before rewriting content; compare affected pages and languages.",
+            source="search-console-trend",
+        )
+    if trend_declined(search_trend.get("clicks"), 10):
+        value = search_trend["clicks"]
+        add(
+            queue,
+            priority=80,
+            category="search-click-decline",
+            evidence=f"Search clicks changed from {value.get('previous', 0):.0f} to {value.get('current', 0):.0f}.",
+            action="Inspect page and query CTR changes, ranking position and SERP intent before changing site architecture.",
+            source="search-console-trend",
+        )
+    ga4_trend = ga4.get("trend") if isinstance(ga4.get("trend"), dict) else {}
+    if trend_declined(ga4_trend.get("pageViews"), 20, -0.35):
+        value = ga4_trend["pageViews"]
+        add(
+            queue,
+            priority=62,
+            category="traffic-decline",
+            evidence=f"Consented page views changed from {value.get('previous', 0):.0f} to {value.get('current', 0):.0f}.",
+            action="Compare acquisition, language and top-page changes; do not treat consented GA4 traffic as total site traffic.",
+            source="ga4-trend",
+        )
 
     for item in search.get("lowCtrPages", [])[:50]:
         if not isinstance(item, dict):
@@ -201,6 +298,7 @@ def measurement_queue(report: dict[str, Any]) -> tuple[list[dict[str, Any]], dic
     coverage = {
         "ga4": str(ga4.get("status", "not-configured")),
         "searchConsole": str(search.get("status", "not-configured")),
+        "sitemap": sitemap_status,
         "coreWebVitals": str(speed.get("status", "not-run")),
     }
     return queue, coverage
@@ -226,6 +324,7 @@ def markdown(payload: dict[str, Any]) -> str:
         "",
         f"- GA4: **{coverage['ga4']}**",
         f"- Search Console: **{coverage['searchConsole']}**",
+        f"- Submitted sitemap: **{coverage['sitemap']}**",
         f"- Core Web Vitals: **{coverage['coreWebVitals']}**",
         f"- Authority graph: **available** ({payload['structure']['mappedPages']} mapped pages, {payload['structure']['relationships']} relationships)",
         "",
@@ -267,7 +366,7 @@ def main() -> int:
     measured, coverage = measurement_queue(measurement)
     queue = deduplicate([*measured, *structural])
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "dataCoverage": coverage,
         "structure": structure_stats,

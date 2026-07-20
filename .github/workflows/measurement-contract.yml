@@ -1,0 +1,87 @@
+name: Validate measurement growth contract
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "landing/site.json"
+      - "landing/search-authority.json"
+      - "scripts/check-measurement-readiness.py"
+      - "scripts/build-site-measurement-report.py"
+      - "scripts/validate-measurement-report.py"
+      - "scripts/build-search-growth-report.py"
+      - "scripts/test-measurement-growth-contract.py"
+      - ".github/workflows/measurement-contract.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "landing/site.json"
+      - "landing/search-authority.json"
+      - "scripts/check-measurement-readiness.py"
+      - "scripts/build-site-measurement-report.py"
+      - "scripts/validate-measurement-report.py"
+      - "scripts/build-search-growth-report.py"
+      - "scripts/test-measurement-growth-contract.py"
+      - ".github/workflows/measurement-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measurement-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate readiness, sitemap and growth fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install offline dependency
+        run: python -m pip install --disable-pip-version-check --quiet requests
+
+      - name: Exercise disabled readiness
+        env:
+          GA4_MEASUREMENT_ID: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ""
+          GCP_SERVICE_ACCOUNT: ""
+        run: python scripts/check-measurement-readiness.py --output _contract/readiness --strict
+
+      - name: Build credential-free report
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          PAGESPEED_URLS: ""
+          GITHUB_STEP_SUMMARY: ""
+        run: python scripts/build-site-measurement-report.py --site landing --output _contract/offline --days 7
+
+      - name: Validate credential-free report
+        run: python scripts/validate-measurement-report.py --report _contract/offline/measurement.json --readiness _contract/readiness/readiness.json
+
+      - name: Exercise ready, warning, sitemap and trend fixtures
+        run: python scripts/test-measurement-growth-contract.py --site landing
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: measurement-growth-contract
+          path: _contract/
+          if-no-files-found: error
+          retention-days: 30

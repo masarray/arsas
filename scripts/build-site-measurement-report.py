@@ -15,6 +15,11 @@ from pathlib import Path
 from typing import Any
 
 CANONICAL_ROOT = "https://masarray.github.io/arsas/"
+EXPECTED_SITEMAP = CANONICAL_ROOT + "sitemap.xml"
+GOOGLE_SCOPES = (
+    "https://www.googleapis.com/auth/analytics.readonly",
+    "https://www.googleapis.com/auth/webmasters.readonly",
+)
 DEFAULT_PSI_URLS = (
     CANONICAL_ROOT,
     CANONICAL_ROOT + "download.html",
@@ -37,21 +42,31 @@ def load_service_account() -> dict[str, Any] | None:
     return value
 
 
-def authorized_session(service_account_info: dict[str, Any]):
+def authorized_session(service_account_info: dict[str, Any] | None):
     try:
+        import google.auth
         from google.auth.transport.requests import AuthorizedSession
         from google.oauth2 import service_account
     except ImportError as exc:
         raise RuntimeError("google-auth is required when Google reporting credentials are configured") from exc
 
-    credentials = service_account.Credentials.from_service_account_info(
-        service_account_info,
-        scopes=(
-            "https://www.googleapis.com/auth/analytics.readonly",
-            "https://www.googleapis.com/auth/webmasters.readonly",
-        ),
-    )
-    return AuthorizedSession(credentials)
+    if service_account_info is not None:
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=GOOGLE_SCOPES,
+        )
+        mode = "service-account-secret"
+    else:
+        credentials, _ = google.auth.default(scopes=GOOGLE_SCOPES)
+        mode = "application-default-credentials"
+    return AuthorizedSession(credentials), mode
+
+
+def google_credentials_available(service_account_info: dict[str, Any] | None) -> bool:
+    if service_account_info is not None:
+        return True
+    credential_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    return bool(credential_path and Path(credential_path).is_file())
 
 
 def report_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -111,6 +126,29 @@ def language_totals(rows: list[dict[str, Any]], page_languages: dict[str, str], 
     return dict(sorted(totals.items()))
 
 
+def change(current: float, previous: float) -> dict[str, Any]:
+    absolute = current - previous
+    return {
+        "current": current,
+        "previous": previous,
+        "absolute": absolute,
+        "percent": (absolute / previous) if previous else None,
+    }
+
+
+def ga4_totals(session, property_id: str, start_date: str, end_date: str) -> dict[str, float]:
+    rows = ga4_report(session, property_id, {
+        "dateRanges": [{"startDate": start_date, "endDate": end_date}],
+        "metrics": [{"name": "screenPageViews"}, {"name": "activeUsers"}],
+        "limit": "1",
+    })
+    row = rows[0] if rows else {}
+    return {
+        "screenPageViews": float(row.get("screenPageViews", 0) or 0),
+        "activeUsers": float(row.get("activeUsers", 0) or 0),
+    }
+
+
 def collect_ga4(session, property_id: str, days: int, page_languages: dict[str, str]) -> dict[str, Any]:
     date_range = [{"startDate": f"{days}daysAgo", "endDate": "yesterday"}]
     pages = ga4_report(session, property_id, {
@@ -149,36 +187,152 @@ def collect_ga4(session, property_id: str, days: int, page_languages: dict[str, 
         "orderBys": [{"metric": {"metricName": "eventCount"}, "desc": True}],
         "limit": "500",
     })
+    current = ga4_totals(session, property_id, f"{days}daysAgo", "yesterday")
+    previous = ga4_totals(session, property_id, f"{days * 2}daysAgo", f"{days + 1}daysAgo")
     download_totals: dict[str, int] = defaultdict(int)
     for row in downloads:
         download_totals[str(row.get("eventName", "unknown"))] += int(row.get("eventCount", 0) or 0)
+    status = "available" if pages or downloads else "available-no-data"
     return {
-        "status": "available",
+        "status": status,
         "topPages": pages[:50],
         "languageTraffic": language_totals(pages, page_languages, "screenPageViews"),
         "downloadEvents": downloads,
         "downloadTotals": dict(sorted(download_totals.items())),
         "notFound": not_found,
+        "trend": {
+            "pageViews": change(current["screenPageViews"], previous["screenPageViews"]),
+            "activeUsers": change(current["activeUsers"], previous["activeUsers"]),
+        },
+    }
+
+
+def search_console_query(session, encoded_site: str, body: dict[str, Any]) -> dict[str, Any]:
+    response = session.post(
+        f"https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query",
+        json=body,
+        timeout=60,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return payload if isinstance(payload, dict) else {}
+
+
+def search_console_rows(
+    session,
+    encoded_site: str,
+    start: date,
+    end: date,
+    dimensions: list[str],
+    max_rows: int = 100000,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    start_row = 0
+    page_size = 25000
+    while start_row < max_rows:
+        payload = search_console_query(session, encoded_site, {
+            "startDate": start.isoformat(),
+            "endDate": end.isoformat(),
+            "dimensions": dimensions,
+            "rowLimit": page_size,
+            "startRow": start_row,
+            "dataState": "final",
+            "type": "web",
+        })
+        batch = payload.get("rows", [])
+        if not isinstance(batch, list):
+            break
+        rows.extend(item for item in batch if isinstance(item, dict))
+        if len(batch) < page_size:
+            break
+        start_row += page_size
+    return rows
+
+
+def search_console_summary(session, encoded_site: str, start: date, end: date) -> dict[str, float]:
+    payload = search_console_query(session, encoded_site, {
+        "startDate": start.isoformat(),
+        "endDate": end.isoformat(),
+        "dataState": "final",
+        "type": "web",
+    })
+    row = payload.get("rows", [{}])
+    item = row[0] if isinstance(row, list) and row and isinstance(row[0], dict) else {}
+    return {
+        "clicks": float(item.get("clicks", 0) or 0),
+        "impressions": float(item.get("impressions", 0) or 0),
+        "ctr": float(item.get("ctr", 0) or 0),
+        "position": float(item.get("position", 0) or 0),
+    }
+
+
+def collect_sitemaps(session, encoded_site: str) -> dict[str, Any]:
+    response = session.get(
+        f"https://www.googleapis.com/webmasters/v3/sites/{encoded_site}/sitemaps",
+        timeout=45,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    items = payload.get("sitemap", []) if isinstance(payload, dict) else []
+    normalized: list[dict[str, Any]] = []
+    expected: dict[str, Any] | None = None
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        value = {
+            "path": str(item.get("path", "")),
+            "type": str(item.get("type", "")),
+            "isPending": bool(item.get("isPending", False)),
+            "isSitemapsIndex": bool(item.get("isSitemapsIndex", False)),
+            "lastSubmitted": item.get("lastSubmitted"),
+            "lastDownloaded": item.get("lastDownloaded"),
+            "warnings": int(item.get("warnings", 0) or 0),
+            "errors": int(item.get("errors", 0) or 0),
+        }
+        contents = item.get("contents")
+        if isinstance(contents, list):
+            value["contents"] = [
+                {
+                    "type": content.get("type"),
+                    "submitted": int(content.get("submitted", 0) or 0),
+                    "indexed": int(content.get("indexed", 0) or 0),
+                }
+                for content in contents
+                if isinstance(content, dict)
+            ]
+        normalized.append(value)
+        if value["path"] == EXPECTED_SITEMAP:
+            expected = value
+    if expected is None:
+        status = "missing"
+    elif expected["errors"] > 0:
+        status = "error"
+    elif expected["warnings"] > 0:
+        status = "warning"
+    elif expected["isPending"]:
+        status = "pending"
+    else:
+        status = "healthy"
+    return {
+        "status": status,
+        "expectedPath": EXPECTED_SITEMAP,
+        "expected": expected,
+        "entries": normalized,
     }
 
 
 def collect_search_console(session, site_url: str, days: int, page_languages: dict[str, str]) -> dict[str, Any]:
     end = date.today() - timedelta(days=3)
     start = end - timedelta(days=days - 1)
+    previous_end = start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=days - 1)
     encoded_site = urllib.parse.quote(site_url, safe="")
-    response = session.post(
-        f"https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query",
-        json={
-            "startDate": start.isoformat(),
-            "endDate": end.isoformat(),
-            "dimensions": ["query", "page"],
-            "rowLimit": 25000,
-            "dataState": "final",
-        },
-        timeout=60,
-    )
-    response.raise_for_status()
-    rows = response.json().get("rows", [])
+
+    presence = search_console_rows(session, encoded_site, start, end, ["date"], max_rows=1000)
+    rows = search_console_rows(session, encoded_site, start, end, ["query", "page"]) if presence else []
+    current = search_console_summary(session, encoded_site, start, end)
+    previous = search_console_summary(session, encoded_site, previous_start, previous_end)
+    sitemaps = collect_sitemaps(session, encoded_site)
 
     query_totals: dict[str, dict[str, float]] = defaultdict(lambda: {"clicks": 0, "impressions": 0, "positionWeighted": 0})
     page_totals: dict[str, dict[str, float]] = defaultdict(lambda: {"clicks": 0, "impressions": 0, "positionWeighted": 0})
@@ -236,10 +390,13 @@ def collect_search_console(session, site_url: str, days: int, page_languages: di
         key=lambda item: item["impressions"],
         reverse=True,
     )
+    status = "available" if presence else "available-no-data"
     return {
-        "status": "available",
+        "status": status,
         "siteUrl": site_url,
         "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        "previousDateRange": {"start": previous_start.isoformat(), "end": previous_end.isoformat()},
+        "dataPresenceDays": len(presence),
         "topQueries": queries[:50],
         "topPages": pages[:50],
         "lowCtrQueries": query_opportunities[:50],
@@ -247,6 +404,13 @@ def collect_search_console(session, site_url: str, days: int, page_languages: di
         "languageImpressions": dict(sorted(language_impressions.items())),
         "languageClicks": dict(sorted(language_clicks.items())),
         "rowCount": len(detailed),
+        "trend": {
+            "clicks": change(current["clicks"], previous["clicks"]),
+            "impressions": change(current["impressions"], previous["impressions"]),
+            "ctr": change(current["ctr"], previous["ctr"]),
+            "position": change(current["position"], previous["position"]),
+        },
+        "sitemaps": sitemaps,
     }
 
 
@@ -274,7 +438,7 @@ def collect_pagespeed(urls: tuple[str, ...], api_key: str) -> dict[str, Any]:
                 "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
                 params=params,
                 timeout=90,
-                headers={"User-Agent": "ARSAS-Measurement/1.0"},
+                headers={"User-Agent": "ARSAS-Measurement/2.0"},
             )
             response.raise_for_status()
             payload = response.json()
@@ -297,13 +461,23 @@ def collect_pagespeed(urls: tuple[str, ...], api_key: str) -> dict[str, Any]:
                     "totalBlockingTimeMs": audits.get("total-blocking-time", {}).get("numericValue"),
                 },
             })
-        except Exception as exc:  # network/API errors should not erase other measurement sources
+        except Exception as exc:
             results.append({"url": url, "status": "unavailable", "error": str(exc)})
     return {"status": "available" if any(item["status"] == "available" for item in results) else "unavailable", "pages": results}
 
 
 def percent(value: float) -> str:
     return f"{value * 100:.2f}%"
+
+
+def trend_text(value: dict[str, Any], percent_value: bool = False) -> str:
+    current = float(value.get("current", 0) or 0)
+    previous = float(value.get("previous", 0) or 0)
+    delta = value.get("percent")
+    current_text = percent(current) if percent_value else f"{current:.0f}"
+    previous_text = percent(previous) if percent_value else f"{previous:.0f}"
+    delta_text = "new baseline" if delta is None else f"{float(delta) * 100:+.1f}%"
+    return f"{current_text} vs {previous_text} ({delta_text})"
 
 
 def table(headers: tuple[str, ...], rows: list[tuple[Any, ...]]) -> list[str]:
@@ -327,12 +501,40 @@ def build_markdown(report: dict[str, Any]) -> str:
         "",
         "## Data coverage",
         "",
+        f"- Google authentication: **{report.get('authenticationMode', 'not-configured')}**",
         f"- GA4 aggregated traffic/events: **{ga4['status']}**",
         f"- Search Console queries/impressions/CTR: **{search['status']}**",
+        f"- Search Console sitemap: **{search.get('sitemaps', {}).get('status', 'not-configured')}**",
         f"- CrUX/PageSpeed Core Web Vitals: **{speed['status']}**",
         "- Broken links and deployed 404 behavior: see the paired `site-health.md` artifact.",
         "",
     ]
+
+    lines.extend(["## Period-over-period trend", ""])
+    trend_rows: list[tuple[Any, ...]] = []
+    if isinstance(ga4.get("trend"), dict):
+        trend_rows.extend([
+            ("GA4 page views", trend_text(ga4["trend"].get("pageViews", {}))),
+            ("GA4 active users", trend_text(ga4["trend"].get("activeUsers", {}))),
+        ])
+    if isinstance(search.get("trend"), dict):
+        trend_rows.extend([
+            ("Search clicks", trend_text(search["trend"].get("clicks", {}))),
+            ("Search impressions", trend_text(search["trend"].get("impressions", {}))),
+            ("Search CTR", trend_text(search["trend"].get("ctr", {}), True)),
+        ])
+    lines.extend(table(("Metric", "Current vs previous window"), trend_rows))
+
+    lines.extend(["## Sitemap processing", ""])
+    sitemap = search.get("sitemaps", {})
+    expected = sitemap.get("expected") if isinstance(sitemap, dict) else None
+    sitemap_rows = []
+    if isinstance(expected, dict):
+        sitemap_rows.append((
+            expected.get("path", ""), expected.get("lastDownloaded", "—"),
+            expected.get("warnings", 0), expected.get("errors", 0), expected.get("isPending", False),
+        ))
+    lines.extend(table(("Sitemap", "Last downloaded", "Warnings", "Errors", "Pending"), sitemap_rows))
 
     lines.extend(["## Most visited pages", ""])
     lines.extend(table(
@@ -397,17 +599,24 @@ def build_markdown(report: dict[str, Any]) -> str:
 
     lines.extend(["## Continuous-improvement queue", ""])
     actions: list[str] = []
+    sitemap_status = search.get("sitemaps", {}).get("status") if isinstance(search.get("sitemaps"), dict) else None
+    if sitemap_status in {"missing", "error", "warning"}:
+        actions.append(f"Resolve Search Console sitemap state `{sitemap_status}` before interpreting indexing trends.")
     for item in search.get("lowCtrPages", [])[:5]:
         actions.append(f"Rewrite title/meta and align intent for `{item['page']}` ({int(item['impressions'])} impressions, {percent(item['ctr'])} CTR).")
     for item in speed.get("pages", []):
         if item.get("fieldCategory") in {"slow", "poor"}:
             actions.append(f"Prioritize Core Web Vitals remediation for `{item['url']}`.")
     if ga4.get("notFound"):
-        actions.append("Add redirects or repair inbound links for the highest-frequency 404 paths.")
-    if ga4.get("status") != "available":
-        actions.append("Configure GA4 repository variables and read-only service-account access to activate traffic and download reporting.")
-    if search.get("status") != "available":
-        actions.append("Grant the service account read access to the verified Search Console property to activate query and CTR reporting.")
+        actions.append("Add a precise route or repair the source link for the highest-frequency 404 paths.")
+    if ga4.get("status") not in {"available", "available-no-data"}:
+        actions.append("Configure GA4 property access to activate traffic and download reporting.")
+    if search.get("status") not in {"available", "available-no-data"}:
+        actions.append("Grant read-only access to the exact Search Console URL-prefix property.")
+    if ga4.get("status") == "available-no-data":
+        actions.append("GA4 access works but no consented data exists in this window; do not infer zero demand.")
+    if search.get("status") == "available-no-data":
+        actions.append("Search Console access works but finalized search data is not yet present; continue the weekly cycle.")
     if not actions:
         actions.append("No immediate threshold breach was detected; continue the weekly measurement cycle.")
     lines.extend(f"- {item}" for item in actions)
@@ -431,11 +640,12 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     page_languages = read_page_languages(site)
     report: dict[str, Any] = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "days": args.days,
+        "authenticationMode": "not-configured",
         "ga4": {"status": "not-configured", "topPages": [], "languageTraffic": {}, "downloadTotals": {}, "notFound": []},
-        "searchConsole": {"status": "not-configured", "topQueries": [], "topPages": [], "lowCtrQueries": [], "lowCtrPages": [], "languageImpressions": {}, "languageClicks": {}},
+        "searchConsole": {"status": "not-configured", "topQueries": [], "topPages": [], "lowCtrQueries": [], "lowCtrPages": [], "languageImpressions": {}, "languageClicks": {}, "sitemaps": {"status": "not-configured"}},
         "coreWebVitals": {"status": "not-run", "pages": []},
     }
 
@@ -447,9 +657,10 @@ def main() -> int:
 
     property_id = os.environ.get("GA4_PROPERTY_ID", "").strip()
     search_site = os.environ.get("GSC_SITE_URL", CANONICAL_ROOT).strip()
-    if service_info:
+    if google_credentials_available(service_info):
         try:
-            session = authorized_session(service_info)
+            session, auth_mode = authorized_session(service_info)
+            report["authenticationMode"] = auth_mode
             if property_id.isdigit():
                 try:
                     report["ga4"] = collect_ga4(session, property_id, args.days, page_languages)
@@ -482,7 +693,8 @@ def main() -> int:
             handle.write(markdown)
     print(
         "ARSAS measurement report generated: "
-        f"GA4={report['ga4']['status']}, Search Console={report['searchConsole']['status']}, "
+        f"auth={report['authenticationMode']}, GA4={report['ga4']['status']}, "
+        f"Search Console={report['searchConsole']['status']}, sitemap={report['searchConsole'].get('sitemaps', {}).get('status')}, "
         f"Core Web Vitals={report['coreWebVitals']['status']}."
     )
     return 0

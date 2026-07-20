@@ -20,6 +20,7 @@ on:
       - "scripts/validate-search-authority.py"
       - "scripts/build-search-growth-report.py"
       - "scripts/build-site-measurement-report.py"
+      - "scripts/check-measurement-readiness.py"
       - "scripts/generate-privacy-pages.py"
       - "scripts/inject-site-measurement.py"
       - "scripts/check-site-health.py"
@@ -34,6 +35,7 @@ on:
       - "scripts/validate-search-authority.py"
       - "scripts/build-search-growth-report.py"
       - "scripts/build-site-measurement-report.py"
+      - "scripts/check-measurement-readiness.py"
       - "scripts/generate-privacy-pages.py"
       - "scripts/inject-site-measurement.py"
       - "scripts/check-site-health.py"
@@ -99,6 +101,17 @@ jobs:
       - name: Check internal links and fragments
         run: python scripts/check-site-health.py --site _site --output _growth/health
 
+      - name: Exercise disabled readiness state
+        env:
+          GA4_MEASUREMENT_ID: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ""
+          GCP_SERVICE_ACCOUNT: ""
+        run: python scripts/check-measurement-readiness.py --output _growth/readiness --strict
+
       - name: Build credential-free structural growth queue
         run: python scripts/build-search-growth-report.py --site _site --output _growth/queue
 
@@ -119,6 +132,9 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,6 +148,15 @@ jobs:
 
       - name: Install read-only reporting dependencies
         run: python -m pip install --disable-pip-version-check --quiet google-auth requests
+
+      - name: Authenticate through Workload Identity when configured
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != ''
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Prepare stable release evidence
         env:
@@ -155,7 +180,23 @@ jobs:
           GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
         run: python scripts/inject-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
 
-      - name: Build aggregated traffic, search and CWV evidence
+      - name: Check measurement activation readiness
+        id: readiness
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+          GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL || 'https://masarray.github.io/arsas/' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: python scripts/check-measurement-readiness.py --output _growth/readiness --strict
+
+      - name: Add readiness state to job summary
+        shell: bash
+        run: cat _growth/readiness/readiness.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build aggregated traffic, search, sitemap and CWV evidence
+        if: steps.readiness.outputs.live_ready == 'true'
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
@@ -166,14 +207,22 @@ jobs:
           GITHUB_STEP_SUMMARY: ""
         run: python scripts/build-site-measurement-report.py --site _site --output _growth/measurement --days "$REPORT_DAYS"
 
-      - name: Build prioritized measured growth queue
-        run: python scripts/build-search-growth-report.py --site _site --measurement-json _growth/measurement/measurement.json --output _growth/queue
+      - name: Build prioritized growth queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f _growth/measurement/measurement.json ]; then
+            python scripts/build-search-growth-report.py --site _site --measurement-json _growth/measurement/measurement.json --output _growth/queue
+          else
+            python scripts/build-search-growth-report.py --site _site --output _growth/queue
+          fi
 
-      - name: Add measured queue to job summary
+      - name: Add growth queue to job summary
         shell: bash
         run: cat _growth/queue/search-growth.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload private measured growth evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: search-growth-${{ github.run_number }}

@@ -188,7 +188,7 @@ publish/
 *.publishproj
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
-# checkin your Azure Web App publish settings, but sensitive information contained
+# checkin your web deploy settings, but sensitive information contained
 # in these scripts will be unencrypted
 PublishScripts/
 
@@ -200,7 +200,7 @@ PublishScripts/
 **/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
-# Uncomment if necessary however generally it will be regenerated when needed
+# Uncomment if necessary however generally it will be regenerated if needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
@@ -403,6 +403,9 @@ appsettings.Local.json
 *.suo
 *.rsuser
 .vs/
+
+# Google GitHub Actions may generate temporary ADC credential files
+gha-creds-*.json
 
 # Web/PWA hygiene when docs or test frontends are added
 node_modules/

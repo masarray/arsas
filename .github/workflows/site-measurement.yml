@@ -22,7 +22,9 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/check-measurement-readiness.py"
       - "scripts/build-site-measurement-report.py"
+      - "scripts/validate-measurement-report.py"
       - ".github/workflows/site-measurement.yml"
       - ".github/workflows/pages.yml"
   push:
@@ -36,7 +38,9 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/check-measurement-readiness.py"
       - "scripts/build-site-measurement-report.py"
+      - "scripts/validate-measurement-report.py"
       - ".github/workflows/site-measurement.yml"
       - ".github/workflows/pages.yml"
 
@@ -115,14 +119,29 @@ jobs:
         continue-on-error: true
         run: python scripts/check-site-health.py --site _site --output _measurement
 
+      - name: Exercise disabled readiness state
+        env:
+          GA4_MEASUREMENT_ID: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ""
+          GCP_SERVICE_ACCOUNT: ""
+        run: python scripts/check-measurement-readiness.py --output _measurement/readiness --strict
+
       - name: Exercise reporting without credentials or network data
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
           GA4_PROPERTY_ID: ""
           GSC_SITE_URL: https://masarray.github.io/arsas/
           PAGESPEED_URLS: ""
           GITHUB_STEP_SUMMARY: ""
         run: python scripts/build-site-measurement-report.py --site _site --output _measurement/offline --days 7
+
+      - name: Validate offline report contract
+        run: python scripts/validate-measurement-report.py --report _measurement/offline/measurement.json --readiness _measurement/readiness/readiness.json
 
       - name: Add local health summary
         if: always()
@@ -146,10 +165,13 @@ jobs:
         run: exit 1
 
   insights:
-    name: Build private traffic, search and Web Vitals report
+    name: Build private traffic, search, sitemap and Web Vitals report
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -163,6 +185,15 @@ jobs:
 
       - name: Install read-only reporting dependencies
         run: python -m pip install --disable-pip-version-check --quiet google-auth requests
+
+      - name: Authenticate through Workload Identity when configured
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != ''
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Prepare stable release evidence
         env:
@@ -195,6 +226,21 @@ jobs:
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"
 
+      - name: Check measurement activation readiness
+        id: readiness
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+          GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL || 'https://masarray.github.io/arsas/' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: python scripts/check-measurement-readiness.py --output _measurement/readiness --strict
+
+      - name: Add readiness state to job summary
+        shell: bash
+        run: cat _measurement/readiness/readiness.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check deployed pages, privacy routes, release assets and 404 response
         id: deployed_health
         continue-on-error: true
@@ -210,13 +256,22 @@ jobs:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
           PAGESPEED_URLS: ${{ vars.PAGESPEED_URLS || 'https://masarray.github.io/arsas/,https://masarray.github.io/arsas/download.html,https://masarray.github.io/arsas/smart-reporting.html,https://masarray.github.io/arsas/guides.html,https://masarray.github.io/arsas/id.html,https://masarray.github.io/arsas/unduh.html' }}
           REPORT_DAYS: ${{ inputs.days || '28' }}
+          GITHUB_STEP_SUMMARY: ""
         shell: bash
         run: python scripts/build-site-measurement-report.py --site _site --output _measurement --days "$REPORT_DAYS"
 
-      - name: Add deployed health summary
+      - name: Validate configured live sources
+        id: live_validation
+        continue-on-error: true
+        run: python scripts/validate-measurement-report.py --report _measurement/measurement.json --readiness _measurement/readiness/readiness.json
+
+      - name: Add measurement and deployed health summaries
         if: always()
         shell: bash
         run: |
+          if [ -f _measurement/measurement.md ]; then
+            cat _measurement/measurement.md >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f _measurement/site-health.md ]; then
             cat _measurement/site-health.md >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -231,7 +286,7 @@ jobs:
           retention-days: 90
 
       - name: Enforce measurement execution
-        if: steps.measurement.outcome != 'success'
+        if: steps.measurement.outcome != 'success' || steps.live_validation.outcome != 'success'
         run: exit 1
 
       - name: Enforce deployed link and 404 health
