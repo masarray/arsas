@@ -28,7 +28,20 @@ REPOSITORY = "https://github.com/masarray/arsas"
 LINKEDIN = "https://www.linkedin.com/in/ari-sulistiono"
 AUTHOR_GITHUB = "https://github.com/masarray"
 APP_ICON = "assets/app-icon.png"
-EXPECTED_NAV = {"overview", "capabilities", "solutions", "architecture", "roadmap", "about", "download"}
+EXPECTED_NAV = {"overview", "capabilities", "solutions", "guides", "architecture", "about", "download"}
+GUIDE_PAGES = {
+    "reporting-silent.html",
+    "brcb-vs-urcb.html",
+    "rcb-reserved.html",
+    "empty-dataset.html",
+    "port-102-connection-failed.html",
+    "comtrade-download.html",
+    "goose-sequence.html",
+    "cid-rejected.html",
+    "live-model-vs-scl.html",
+    "direct-vs-sbo.html",
+    "commandtermination-addcause.html",
+}
 FORBIDDEN_PUBLIC_COPY = (
     "without navigating source code",
     "without navigating the source repository",
@@ -138,6 +151,10 @@ def validate_build_info(site: Path, errors: list[str]) -> tuple[str | None, list
         return version or None, []
     if len(pages) != len(set(pages)):
         errors.append("build-info.json pages registry contains duplicates")
+    if len(pages) != 31:
+        errors.append(f"build-info.json must contain 31 pages, found {len(pages)}")
+    if not GUIDE_PAGES.issubset(set(pages)):
+        errors.append("build-info.json is missing troubleshooting guide pages")
     return version or None, list(pages)
 
 
@@ -158,12 +175,33 @@ def validate_sitemap(site: Path, pages: list[str], errors: list[str]) -> None:
             errors.append(f"sitemap.xml missing {page}")
 
 
+def validate_manifest(site: Path, errors: list[str]) -> None:
+    path = site / "site.webmanifest"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"site.webmanifest: {exc}")
+        return
+    icons = manifest.get("icons")
+    if not isinstance(icons, list) or len(icons) != 1:
+        errors.append("site.webmanifest must define one canonical icon")
+        return
+    icon = icons[0]
+    if not isinstance(icon, dict):
+        errors.append("site.webmanifest icon is invalid")
+        return
+    if icon.get("src") != APP_ICON or icon.get("sizes") != "512x512" or icon.get("type") != "image/png":
+        errors.append("site.webmanifest must use the 512x512 ARSAS app icon")
+    if "maskable" not in str(icon.get("purpose", "")):
+        errors.append("site.webmanifest icon must support maskable purpose")
+
+
 def main() -> int:
     site = Path(sys.argv[1] if len(sys.argv) > 1 else "_site").resolve()
     errors: list[str] = []
 
     version, pages = validate_build_info(site, errors)
-    for relative in tuple(pages) + EXPECTED_MEDIA + ("site.json", "build-info.json", "sitemap.xml"):
+    for relative in tuple(pages) + EXPECTED_MEDIA + ("site.json", "build-info.json", "sitemap.xml", "site.webmanifest"):
         if not (site / relative).exists():
             errors.append(f"missing deployable file: {relative}")
 
@@ -196,8 +234,8 @@ def main() -> int:
                     errors.append(f"{name}: missing local asset {reference}")
 
         favicon = [icon for icon in parser.icons if (icon.get("rel") or "").lower() == "icon"]
-        if len(favicon) != 1 or favicon[0].get("href") != APP_ICON:
-            errors.append(f"{name}: favicon must use {APP_ICON}")
+        if len(favicon) != 1 or favicon[0].get("href") != APP_ICON or favicon[0].get("sizes") != "512x512":
+            errors.append(f"{name}: favicon must use the latest 512x512 {APP_ICON}")
         touch = [icon for icon in parser.icons if (icon.get("rel") or "").lower() == "apple-touch-icon"]
         if len(touch) != 1 or touch[0].get("href") != APP_ICON:
             errors.append(f"{name}: apple-touch-icon must use {APP_ICON}")
@@ -205,6 +243,14 @@ def main() -> int:
             for value in (LINKEDIN, REPOSITORY, 'href="download.html"'):
                 if value not in text:
                     errors.append(f"{name}: shared product footer or download route missing {value}")
+        if name in GUIDE_PAGES:
+            if parser.body_page != "guides":
+                errors.append(f"{name}: troubleshooting guide must activate Guides navigation")
+            if '"@type":"TechArticle"' not in text.replace(" ", ""):
+                errors.append(f"{name}: missing TechArticle structured data")
+            for value in ("Engineering boundary", "Written and reviewed by Ari Sulistiono", 'href="guides.html"'):
+                if value not in text:
+                    errors.append(f"{name}: missing guide trust contract {value}")
 
     for forbidden in (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
@@ -220,6 +266,7 @@ def main() -> int:
     download = (site / "download.html").read_text(encoding="utf-8") if (site / "download.html").exists() else ""
     about = (site / "about.html").read_text(encoding="utf-8") if (site / "about.html").exists() else ""
     solutions = (site / "solutions.html").read_text(encoding="utf-8") if (site / "solutions.html").exists() else ""
+    guides = (site / "guides.html").read_text(encoding="utf-8") if (site / "guides.html").exists() else ""
 
     for value in (INSTALLER, 'href="download.html"', 'href="solutions.html"', "arsas-rcb-scl-export.webp", '"codeRepository"'):
         if value not in home:
@@ -233,15 +280,19 @@ def main() -> int:
     for value in ('href="fat-testing.html"', 'href="sat-testing.html"', 'href="commissioning.html"', 'href="multi-vendor-integration.html"'):
         if value not in solutions:
             errors.append(f"solutions page missing {value}")
+    for guide in GUIDE_PAGES:
+        if f'href="{guide}"' not in guides:
+            errors.append(f"guides hub missing {guide}")
     if version and f'"softwareVersion":"{version}"' not in home.replace(" ", ""):
         errors.append("homepage softwareVersion does not match build-info.json")
 
     validate_sitemap(site, pages, errors)
     validate_latest(site, errors)
+    validate_manifest(site, errors)
 
     icon = site / APP_ICON
     social = site / "assets/social-card.png"
-    for path, expected in ((icon, (256, 256)), (social, (1200, 630))):
+    for path, expected in ((icon, (512, 512)), (social, (1200, 630))):
         if path.exists():
             try:
                 actual = png_size(path)
@@ -256,7 +307,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"ARSAS product-build validation passed: {len(pages)} pages share product navigation, author identity, downloads and local assets.")
+    print(f"ARSAS product-build validation passed: {len(pages)} pages, 11 troubleshooting guides and latest 512px favicon.")
     return 0
 
 
