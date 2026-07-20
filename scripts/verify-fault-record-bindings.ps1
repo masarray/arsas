@@ -25,7 +25,6 @@ $requiredOneWayBindings = @(
     "SizeText",
     "FilesText",
     "Completeness",
-    "Status",
     "StatusText",
     "ProgressValue",
     "IsIndeterminate",
@@ -38,6 +37,12 @@ foreach ($property in $requiredOneWayBindings) {
     if ($xaml -notmatch $pattern) {
         throw "FaultRecordWindow display binding '$property' must explicitly use Mode=OneWay."
     }
+}
+
+# Status is used by DataTriggers and a read-only TextBlock. Those WPF bindings are
+# inherently OneWay; requiring a comma-form binding would reject valid trigger syntax.
+if ($xaml -notmatch '\{Binding\s+Status(?:\s*,[^}]*)?\}') {
+    throw "FaultRecordWindow must display the record Status."
 }
 
 # RemoteDirectory is intentionally not exposed by the compact fast workflow. The
