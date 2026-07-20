@@ -19,7 +19,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ARSAS" />
   <meta property="og:title" content="Download ARSAS for Windows" />
-  <meta property="og:description" content="The official product download center for the stable ARSAS installer, portable ZIP and SHA-256 checksums." />
+  <meta property="og:description" content="The official ARSAS Download Center for the stable Windows installer, portable ZIP and SHA-256 checksums." />
   <meta property="og:url" content="{{CANONICAL_ROOT}}download.html" />
   <meta property="og:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
   <meta property="og:image:width" content="1200" />
@@ -27,17 +27,14 @@
   <meta property="og:image:alt" content="ARSAS IEC 61850 engineering workstation" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Download ARSAS" />
-  <meta name="twitter:description" content="Direct Windows installer and portable package for the latest stable ARSAS release." />
+  <meta name="twitter:description" content="Windows installer and portable package for the latest stable ARSAS release." />
   <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@graph": [
-      {"@type": "SoftwareApplication", "name": "ARSAS", "operatingSystem": "Windows 10, Windows 11", "softwareVersion": "{{ARSAS_VERSION}}", "applicationCategory": "DeveloperApplication", "downloadUrl": "{{INSTALLER_URL}}", "codeRepository": "{{REPOSITORY_URL}}", "author": {"@type": "Person", "name": "{{AUTHOR_NAME}}", "sameAs": ["{{AUTHOR_LINKEDIN}}", "{{AUTHOR_GITHUB}}"]}, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
-      {"@type": "BreadcrumbList", "itemListElement": [
-        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{CANONICAL_ROOT}}"},
-        {"@type": "ListItem", "position": 2, "name": "Download", "item": "{{CANONICAL_ROOT}}download.html"}
-      ]}
+      {"@type":"SoftwareApplication","name":"ARSAS","operatingSystem":"Windows 10, Windows 11","softwareVersion":"{{ARSAS_VERSION}}","applicationCategory":"DeveloperApplication","downloadUrl":"{{INSTALLER_URL}}","codeRepository":"{{REPOSITORY_URL}}","author":{"@type":"Person","name":"{{AUTHOR_NAME}}","sameAs":["{{AUTHOR_LINKEDIN}}","{{AUTHOR_GITHUB}}"]},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}},
+      {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"{{CANONICAL_ROOT}}"},{"@type":"ListItem","position":2,"name":"Download","item":"{{CANONICAL_ROOT}}download.html"}]}
     ]
   }
   </script>
@@ -45,7 +42,7 @@
 <body data-page="download">
   {{> header}}
   <main id="main">
-    <section class="page-hero download-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Download</div><span class="eyebrow">Official product route · stable release · Windows x64</span><h1>Download <span class="gradient-text">ARSAS {{ARSAS_VERSION}}</span> for Windows.</h1><p>This page is the official user-facing distribution center. Download the stable installer directly, choose the portable package for controlled test laptops, or verify the release with published SHA-256 checksums—without navigating the source repository.</p><div class="hero-actions"><a class="btn btn-primary" href="{{INSTALLER_URL}}" download>Download Windows installer</a><a class="btn" href="#options">View all options</a></div><div class="release-status"><span class="dot"></span><span>Latest stable channel · ARSAS {{ARSAS_VERSION}}</span></div></div></section>
+    <section class="page-hero download-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Download</div><span class="eyebrow">Download Center · stable release · Windows x64</span><h1>Download <span class="gradient-text">ARSAS {{ARSAS_VERSION}}</span> for Windows.</h1><p>The ARSAS Download Center provides the stable Windows installer, portable package, SHA-256 checksums, system requirements and release guidance for practical IEC 61850 engineering work.</p><div class="hero-actions"><a class="btn btn-primary" href="{{INSTALLER_URL}}" download>Download Windows installer</a><a class="btn" href="#options">View all options</a></div><div class="release-status"><span class="dot"></span><span>Latest stable channel · ARSAS {{ARSAS_VERSION}}</span></div></div></section>
 
     <section class="section section-tight" id="options"><div class="container download-grid"><article class="download-card recommended"><span class="kicker">Recommended</span><h2>Windows installer</h2><p>Best for normal engineering workstations. It provides a predictable installed location, Start menu integration and the standard application update path.</p><div class="download-meta">ARSAS-Windows-x64-Setup.exe · Windows x64 · self-contained</div><a class="btn btn-primary download-action" href="{{INSTALLER_URL}}" download>Download installer</a></article><article class="download-card"><span class="kicker">Portable</span><h2>Portable package</h2><p>Useful for approved test laptops, temporary evaluation or controlled environments where a traditional installation is not preferred.</p><div class="download-meta">ARSAS-Windows-x64-Portable.zip · latest stable release</div><a class="btn download-action" href="{{PORTABLE_URL}}" download>Download portable ZIP</a></article></div></section>
 
@@ -53,7 +50,7 @@
 
     <section class="section section-tight"><div class="container"><div class="section-head center"><span class="kicker">Before active use</span><h2>Download readiness is not switching authority.</h2><p>Confirm the package integrity, network interface, IED scope, access permissions, test procedure and independent verification before using control, report configuration, file access or other active functions.</p></div><div class="metric-grid"><div class="metric"><strong>Free</strong><span>No account, subscription or license key</span></div><div class="metric"><strong>Transparent</strong><span>Public source, maturity labels and known boundaries</span></div><div class="metric"><strong>Verifiable</strong><span>Published checksums and stable release evidence</span></div><div class="metric"><strong>Practical</strong><span>Installer and portable routes for engineering use</span></div></div></div></section>
 
-    <section class="section section-tight"><div class="container callout"><div class="callout-grid"><div><span class="kicker">Need context first?</span><h2>Review the real application and current capability scope.</h2><p>See live MMS discovery, Smart Reporting, GOOSE, fault-record transfer, selected-RCB SCL export, diagnostics and guarded control before installation.</p></div><div class="section-actions"><a class="btn btn-primary" href="features.html">Explore capabilities</a><a class="btn" href="about.html">About ARSAS</a></div></div></div></section>
+    <section class="section section-tight"><div class="container callout"><div class="callout-grid"><div><span class="kicker">Need context first?</span><h2>Review the application and current capability scope.</h2><p>See live MMS discovery, Smart Reporting, GOOSE, fault-record transfer, selected-RCB SCL export, diagnostics and guarded control before installation.</p></div><div class="section-actions"><a class="btn btn-primary" href="features.html">Explore capabilities</a><a class="btn" href="solutions.html">Explore solutions</a></div></div></div></section>
   </main>
   {{> footer}}
 </body>

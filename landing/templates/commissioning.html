@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IEC 61850 Commissioning Software for Live Troubleshooting | ARSAS</title>
+  <meta name="description" content="Use ARSAS during IEC 61850 commissioning to inspect live values, reports, GOOSE, command completion, disturbance files and per-IED diagnostics." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}commissioning.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="IEC 61850 Commissioning with ARSAS" />
+  <meta property="og:description" content="Investigate live communication, reports, GOOSE, control and files during controlled commissioning." />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}commissioning.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 commissioning workflow" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="IEC 61850 Commissioning with ARSAS" />
+  <meta name="twitter:description" content="Live values, SOE, reporting, GOOSE, control completion and diagnostics for commissioning teams." />
+  <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"{{CANONICAL_ROOT}}commissioning.html#webpage","url":"{{CANONICAL_ROOT}}commissioning.html","name":"IEC 61850 Commissioning with ARSAS","author":{"@id":"{{CANONICAL_ROOT}}about.html#ari-sulistiono"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"{{CANONICAL_ROOT}}"},{"@type":"ListItem","position":2,"name":"Solutions","item":"{{CANONICAL_ROOT}}solutions.html"},{"@type":"ListItem","position":3,"name":"Commissioning","item":"{{CANONICAL_ROOT}}commissioning.html"}]}]}
+  </script>
+</head>
+<body data-page="solutions">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / <a href="solutions.html">Solutions</a> / Commissioning</div><span class="eyebrow">Controlled commissioning · live troubleshooting · attributable evidence</span><h1>IEC 61850 commissioning with <span class="gradient-text">clear live-system evidence.</span></h1><p>Use ARSAS to inspect current values, quality, timestamps, reporting state, GOOSE behavior, command completion, fault-record access and per-IED diagnostics while commissioning activities are performed under an approved procedure.</p><div class="hero-actions"><a class="btn btn-primary" href="download.html">Download ARSAS</a><a class="btn" href="#workflow">Review commissioning workflow</a></div></div></section>
+
+    <section class="section section-tight"><div class="container metric-grid"><div class="metric"><strong>Live values</strong><span>Device, quality, timestamp and acquisition source</span></div><div class="metric"><strong>SOE</strong><span>Bounded semantic events with originating IED context</span></div><div class="metric"><strong>Control</strong><span>Direct and SBO outcomes with completion evidence</span></div><div class="metric"><strong>Diagnostics</strong><span>Association, service, report and frame visibility</span></div></div></section>
+
+    <section class="section" id="workflow"><div class="container workflow"><div><span class="kicker">Suggested workflow</span><h2>Investigate the live path before changing configuration.</h2><p>Commissioning pressure can encourage premature changes. Start by preserving the evidence already available from the IED and network.</p></div><div class="step-list"><article class="step"><span class="step-number">01</span><div><h3>Establish device context</h3><p>Confirm the approved endpoint, active interface, device identity and live MMS model before interpreting results.</p></div></article><article class="step"><span class="step-number">02</span><div><h3>Observe values and events</h3><p>Review selected values, quality, process timestamps, reason-for-inclusion and semantic event history.</p></div></article><article class="step"><span class="step-number">03</span><div><h3>Inspect reporting and GOOSE</h3><p>Check RCB state, DataSet coverage, stream identity, sequence counters, retransmission and payload evidence.</p></div></article><article class="step"><span class="step-number">04</span><div><h3>Execute only approved operations</h3><p>Use typed Direct or SBO workflows only when the procedure, role and plant condition permit active control.</p></div></article><article class="step"><span class="step-number">05</span><div><h3>Retain negative evidence</h3><p>Unsupported services, rejected writes, report gaps, timeouts and command failures remain visible for root-cause analysis.</p></div></article></div></div></section>
+
+    <section class="section"><div class="container"><figure class="screenshot-card wide"><a class="screenshot-link" href="assets/screenshots/arsas-event-log.webp" target="_blank" rel="noopener"><img src="assets/screenshots/arsas-event-log.webp" width="1507" height="893" alt="ARSAS IEC 61850 event log used during commissioning troubleshooting" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3>Event evidence with device context</h3><p>Separate continuous values from meaningful changes while retaining timestamp, quality, source and originating-device attribution.</p></figcaption></figure></div></section>
+
+    <section class="section section-tight"><div class="container comparison-grid"><article class="comparison-panel highlight"><span class="kicker">Useful for</span><h2>Controlled live-system investigation.</h2><ul><li>Reporting and quality troubleshooting</li><li>GOOSE sequence and subscription checks</li><li>Control completion and feedback review</li><li>Fault-record retrieval after events</li><li>Multi-IED communication diagnostics</li></ul></article><article class="comparison-panel"><span class="kicker">Boundary</span><h2>Commissioning authority remains external.</h2><p>ARSAS does not grant switching permission, determine plant safety, replace protection testing, approve settings or override site procedures, cybersecurity controls and independent verification.</p></article></div></section>
+
+    <section class="section section-tight"><div class="container panel"><span class="kicker">Related workflows</span><h2>Connect commissioning evidence to the project lifecycle.</h2><div class="section-actions"><a class="btn" href="fat-testing.html">FAT testing</a><a class="btn" href="sat-testing.html">SAT testing</a><a class="btn" href="multi-vendor-integration.html">Multi-vendor integration</a></div></div></section>
+
+    {{> download-cta}}
+  </main>
+  {{> footer}}
+</body>
+</html>

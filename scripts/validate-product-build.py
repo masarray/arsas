@@ -28,6 +28,13 @@ REPOSITORY = "https://github.com/masarray/arsas"
 LINKEDIN = "https://www.linkedin.com/in/ari-sulistiono"
 AUTHOR_GITHUB = "https://github.com/masarray"
 APP_ICON = "assets/app-icon.png"
+EXPECTED_NAV = {"overview", "capabilities", "solutions", "architecture", "roadmap", "about", "download"}
+FORBIDDEN_PUBLIC_COPY = (
+    "without navigating source code",
+    "without navigating the source repository",
+    "without requiring repository navigation",
+    "the website is the product front door",
+)
 
 
 class Parser(HTMLParser):
@@ -161,7 +168,6 @@ def main() -> int:
             errors.append(f"missing deployable file: {relative}")
 
     combined = ""
-    expected_nav = {"overview", "capabilities", "reporting", "control", "architecture", "roadmap", "about", "download"}
     for name in pages:
         page = site / name
         if not page.exists():
@@ -176,7 +182,7 @@ def main() -> int:
             errors.append(f"{name}: title or description is missing")
         if not parser.body_page:
             errors.append(f"{name}: body data-page is missing")
-        if parser.nav_pages != expected_nav:
+        if parser.nav_pages != EXPECTED_NAV:
             errors.append(f"{name}: shared navigation is incomplete")
         for reference in parser.refs:
             target = local_ref(site, page, reference)
@@ -205,23 +211,29 @@ def main() -> int:
         "https://masarray.github.io/arsas/assets/social-card.svg",
         'href="assets/favicon.svg"',
         "{{", "github.com/masarray/arsas#quick-start", '<meta name="keywords"',
+        *FORBIDDEN_PUBLIC_COPY,
     ):
-        if forbidden in combined:
+        if forbidden in combined.lower() if forbidden in FORBIDDEN_PUBLIC_COPY else forbidden in combined:
             errors.append(f"deployable HTML contains forbidden value: {forbidden}")
 
     home = (site / "index.html").read_text(encoding="utf-8") if (site / "index.html").exists() else ""
     download = (site / "download.html").read_text(encoding="utf-8") if (site / "download.html").exists() else ""
     about = (site / "about.html").read_text(encoding="utf-8") if (site / "about.html").exists() else ""
-    for value in (INSTALLER, 'href="download.html"', "arsas-rcb-scl-export.webp", '"codeRepository"'):
+    solutions = (site / "solutions.html").read_text(encoding="utf-8") if (site / "solutions.html").exists() else ""
+
+    for value in (INSTALLER, 'href="download.html"', 'href="solutions.html"', "arsas-rcb-scl-export.webp", '"codeRepository"'):
         if value not in home:
             errors.append(f"homepage missing product contract: {value}")
-    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Latest stable channel"):
+    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Latest stable channel", "Download Center"):
         if value not in download:
             errors.append(f"download page missing {value}")
-    for value in (LINKEDIN, AUTHOR_GITHUB, REPOSITORY):
+    for value in (LINKEDIN, AUTHOR_GITHUB, REPOSITORY, "Download Center"):
         if value not in about + home:
             errors.append(f"author or open-source identity missing {value}")
-    if version and f'"softwareVersion": "{version}"' not in home:
+    for value in ('href="fat-testing.html"', 'href="sat-testing.html"', 'href="commissioning.html"', 'href="multi-vendor-integration.html"'):
+        if value not in solutions:
+            errors.append(f"solutions page missing {value}")
+    if version and f'"softwareVersion":"{version}"' not in home.replace(" ", ""):
         errors.append("homepage softwareVersion does not match build-info.json")
 
     validate_sitemap(site, pages, errors)
