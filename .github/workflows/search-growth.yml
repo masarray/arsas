@@ -1,0 +1,182 @@
+name: Build search growth queue
+
+on:
+  schedule:
+    - cron: "5 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Aggregated evidence window in days
+        required: false
+        default: "28"
+        type: choice
+        options: ["7", "28", "60", "90"]
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "landing/**"
+      - "scripts/build-product-site.py"
+      - "scripts/apply-search-authority.py"
+      - "scripts/validate-search-authority.py"
+      - "scripts/build-search-growth-report.py"
+      - "scripts/build-site-measurement-report.py"
+      - "scripts/generate-privacy-pages.py"
+      - "scripts/inject-site-measurement.py"
+      - "scripts/check-site-health.py"
+      - ".github/workflows/search-growth.yml"
+      - ".github/workflows/pages.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "landing/**"
+      - "scripts/build-product-site.py"
+      - "scripts/apply-search-authority.py"
+      - "scripts/validate-search-authority.py"
+      - "scripts/build-search-growth-report.py"
+      - "scripts/build-site-measurement-report.py"
+      - "scripts/generate-privacy-pages.py"
+      - "scripts/inject-site-measurement.py"
+      - "scripts/check-site-health.py"
+      - ".github/workflows/search-growth.yml"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: search-growth-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CANONICAL_ROOT: https://masarray.github.io/arsas/
+
+jobs:
+  quality:
+    name: Validate authority graph and structural growth queue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare stable release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            cp landing/latest.json /tmp/arsas-published.json
+          else
+            gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > /tmp/arsas-published.json
+          fi
+
+      - name: Build product website
+        run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
+
+      - name: Apply contextual search authority graph
+        run: python scripts/apply-search-authority.py _site
+
+      - name: Generate bilingual privacy pages
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Configure optional consent-gated measurement
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/inject-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Validate rendered authority graph
+        run: python scripts/validate-search-authority.py _site
+
+      - name: Check internal links and fragments
+        run: python scripts/check-site-health.py --site _site --output _growth/health
+
+      - name: Build credential-free structural growth queue
+        run: python scripts/build-search-growth-report.py --site _site --output _growth/queue
+
+      - name: Add structural queue to job summary
+        shell: bash
+        run: cat _growth/queue/search-growth.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload structural growth evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-growth-quality
+          path: _growth/
+          if-no-files-found: error
+          retention-days: 30
+
+  insights:
+    name: Build private measured search growth queue
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install read-only reporting dependencies
+        run: python -m pip install --disable-pip-version-check --quiet google-auth requests
+
+      - name: Prepare stable release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > /tmp/arsas-published.json
+
+      - name: Build current product website
+        run: python scripts/build-product-site.py --output _site --release-evidence /tmp/arsas-published.json
+
+      - name: Apply contextual search authority graph
+        run: python scripts/apply-search-authority.py _site
+
+      - name: Generate bilingual privacy pages
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Configure optional consent-gated measurement
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        run: python scripts/inject-site-measurement.py _site --measurement-id "$GA4_MEASUREMENT_ID"
+
+      - name: Build aggregated traffic, search and CWV evidence
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL || 'https://masarray.github.io/arsas/' }}
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+          PAGESPEED_URLS: ${{ vars.PAGESPEED_URLS || 'https://masarray.github.io/arsas/,https://masarray.github.io/arsas/download.html,https://masarray.github.io/arsas/smart-reporting.html,https://masarray.github.io/arsas/guides.html,https://masarray.github.io/arsas/id.html,https://masarray.github.io/arsas/unduh.html' }}
+          REPORT_DAYS: ${{ inputs.days || '28' }}
+          GITHUB_STEP_SUMMARY: ""
+        run: python scripts/build-site-measurement-report.py --site _site --output _growth/measurement --days "$REPORT_DAYS"
+
+      - name: Build prioritized measured growth queue
+        run: python scripts/build-search-growth-report.py --site _site --measurement-json _growth/measurement/measurement.json --output _growth/queue
+
+      - name: Add measured queue to job summary
+        shell: bash
+        run: cat _growth/queue/search-growth.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload private measured growth evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-growth-${{ github.run_number }}
+          path: _growth/
+          if-no-files-found: error
+          retention-days: 90

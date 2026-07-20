@@ -33,7 +33,7 @@ def fetch(url: str, timeout: int = 20) -> tuple[int, str, dict[str, str]]:
     request = Request(
         url,
         headers={
-            "User-Agent": "ARSAS-Pages-Attestation/1.0",
+            "User-Agent": "ARSAS-Pages-Attestation/1.1",
             "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
@@ -116,6 +116,19 @@ def check_once(base_url: str, source_commit: str, stable_version: str, measureme
         if privacy.get("analyticsClientLoadedOnPolicyPages") is not False:
             errors.append("public privacy metadata must prohibit analytics client loading on policy pages")
 
+    authority = info.get("searchAuthority")
+    if not isinstance(authority, dict):
+        errors.append("public build is missing search-authority metadata")
+    else:
+        if authority.get("schemaVersion") != 1:
+            errors.append("public search-authority schema is invalid")
+        if authority.get("allGuidesHaveCapabilityOrSolutionInbound") is not True:
+            errors.append("public search-authority metadata does not prove guide discovery coverage")
+        if int(authority.get("mappedPageCount", 0) or 0) < 20:
+            errors.append("public search-authority graph maps too few pages")
+        if int(authority.get("relationshipCount", 0) or 0) < 60:
+            errors.append("public search-authority graph has too few contextual relationships")
+
     for relative in ("privacy.html", "privasi.html"):
         url = urljoin(base_url, relative) + "?" + urlencode({"attest": source_commit, "n": nonce})
         page_status, page, _ = fetch(url)
@@ -149,12 +162,37 @@ def check_once(base_url: str, source_commit: str, stable_version: str, measureme
         if 'src="analytics.js"' in home or "googletagmanager.com" in home:
             errors.append("homepage must not load analytics before consent")
 
+    authority_url = urljoin(base_url, "smart-reporting.html") + "?" + urlencode({"attest": source_commit, "n": nonce})
+    authority_status, authority_page, _ = fetch(authority_url)
+    evidence["authorityProbeStatus"] = authority_status
+    if authority_status != 200:
+        errors.append(f"smart-reporting.html returned HTTP {authority_status}")
+    else:
+        for required in (
+            'data-search-authority="reporting"',
+            'href="reporting-silent.html"',
+            'href="brcb-vs-urcb.html"',
+            'href="rcb-reserved.html"',
+            'href="empty-dataset.html"',
+            'data-section="download-cta"',
+        ):
+            if required not in authority_page:
+                errors.append(f"smart-reporting.html is missing contextual authority evidence {required}")
+        if authority_page.find('data-search-authority="reporting"') > authority_page.find('data-section="download-cta"') >= 0:
+            errors.append("smart-reporting.html authority section appears after the download CTA")
+
+    graph_url = urljoin(base_url, "search-authority.json") + "?" + urlencode({"attest": source_commit, "n": nonce})
+    graph_status, _, _ = fetch(graph_url)
+    evidence["privateAuthoritySourceStatus"] = graph_status
+    if graph_status != 404:
+        errors.append(f"search-authority.json must not be publicly deployed; observed HTTP {graph_status}")
+
     return errors, evidence
 
 
 def write_report(path: Path, success: bool, attempts: int, evidence: dict[str, object], errors: list[str]) -> None:
     payload = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "verifiedAtUtc": datetime.now(timezone.utc).isoformat(),
         "success": success,
         "attempts": attempts,
