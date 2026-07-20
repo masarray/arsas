@@ -1,6 +1,9 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
@@ -11,14 +14,24 @@ namespace ArIED61850Tester;
 public partial class RcbExportFilterWindow : Window
 {
     private readonly RcbExportFilterViewModel _viewModel;
+    private readonly DispatcherTimer _successOverlayTimer;
     private bool _selectionUpdateInProgress;
     private CancellationTokenSource? _activeOperation;
+    private Border? _availabilityBusyOverlay;
+    private Border? _successOverlay;
+    private TextBlock? _successOverlayTitle;
+    private TextBlock? _successOverlayDetail;
 
     public RcbExportFilterWindow(RcbExportWindowOptions options)
     {
         InitializeComponent();
         _viewModel = new RcbExportFilterViewModel(options);
         DataContext = _viewModel;
+        _successOverlayTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(3)
+        };
+        _successOverlayTimer.Tick += (_, _) => HideSuccessOverlay();
     }
 
     public RcbExportFilterWindow(string iedName, string endpoint)
@@ -28,13 +41,15 @@ public partial class RcbExportFilterWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _successOverlayTimer.Stop();
         _activeOperation?.Cancel();
         _activeOperation?.Dispose();
         base.OnClosed(e);
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        EnsureTransientOverlays();
         var initial = FirstPreferredRow();
         _viewModel.SelectOnly(initial);
         RcbGrid.SelectedItem = initial;
@@ -43,6 +58,12 @@ public partial class RcbExportFilterWindow : Window
             ? "No selectable populated RCB is currently available."
             : $"{initial.Name} selected • {initial.DataSetName} • {initial.MemberCount:N0} FCDA.";
         RefreshSelectionUi();
+
+        // Production workflow is deliberately eager: opening the window starts a read-only
+        // availability audit immediately. The awaited network work stays off the UI thread in
+        // the probe service while this window presents an animated non-blocking wait state.
+        if (!_viewModel.Options.IsMock && _viewModel.Options.RefreshAvailabilityAsync != null)
+            await RunAvailabilityCheckAsync(automatic: true);
     }
 
     private void RcbCheckBox_Checked(object sender, RoutedEventArgs e)
@@ -76,6 +97,9 @@ public partial class RcbExportFilterWindow : Window
     }
 
     private async void CheckAvailability_Click(object sender, RoutedEventArgs e)
+        => await RunAvailabilityCheckAsync(automatic: false);
+
+    private async Task RunAvailabilityCheckAsync(bool automatic)
     {
         if (_activeOperation != null)
             return;
@@ -83,7 +107,10 @@ public partial class RcbExportFilterWindow : Window
         CheckAvailabilityButton.IsEnabled = false;
         CheckAvailabilityText.Text = "Checking…";
         _viewModel.AvailabilityCheckedText = "Reading RptEna, reservation, Owner, and DataSet directory…";
-        MockStatusText.Text = "Read-only availability check in progress — no RCB will be reserved or modified.";
+        MockStatusText.Text = automatic
+            ? "Checking RCB availability automatically — read-only, no reservation or write."
+            : "Read-only availability check in progress — no RCB will be reserved or modified.";
+        SetAvailabilityBusyState(true);
         _activeOperation = new CancellationTokenSource(TimeSpan.FromSeconds(35));
 
         try
@@ -98,11 +125,16 @@ public partial class RcbExportFilterWindow : Window
                     ?? throw new InvalidOperationException("Connect the IED before checking live RCB availability.");
                 var rows = await refresh(_activeOperation.Token);
                 _viewModel.ReplaceRows(rows);
-                RcbGrid.SelectedItem = _viewModel.SelectedRow;
+
+                var preferred = FirstPreferredRow();
+                _viewModel.SelectOnly(preferred);
+                RcbGrid.SelectedItem = preferred;
+                if (preferred != null)
+                    RcbGrid.ScrollIntoView(preferred);
             }
 
             _viewModel.AvailabilityCheckedText = $"Checked {DateTime.Now:HH:mm:ss} • read-only";
-            MockStatusText.Text = "Availability refreshed. Green is proven free; red is occupied/unusable; yellow requires confirmation.";
+            MockStatusText.Text = "Availability ready. Green is proven free; red is occupied/unusable; yellow requires confirmation.";
         }
         catch (OperationCanceledException)
         {
@@ -113,12 +145,12 @@ public partial class RcbExportFilterWindow : Window
         {
             _viewModel.AvailabilityCheckedText = "Availability check failed • no RCB modified";
             MockStatusText.Text = ex.Message;
-            MessageBox.Show(this, ex.Message, "Check RCB Availability", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
             _activeOperation.Dispose();
             _activeOperation = null;
+            SetAvailabilityBusyState(false);
             CheckAvailabilityText.Text = "Check Availability";
             CheckAvailabilityButton.IsEnabled = _viewModel.Options.IsMock || _viewModel.Options.RefreshAvailabilityAsync != null;
             RefreshSelectionUi();
@@ -230,24 +262,7 @@ public partial class RcbExportFilterWindow : Window
                 _activeOperation.Token);
 
             MockStatusText.Text = completion.Message;
-            var resultText =
-                $"Legacy SAS CID export completed.\n\n" +
-                $"Schema: {completion.SchemaDisplayName}\n" +
-                $"Retained RCB: {completion.RetainedReportControl}\n" +
-                $"DataSet: {completion.DataSetName} ({completion.DataSetMemberCount:N0} FCDA)\n" +
-                $"Removed RCBs: {completion.RemovedReportControlCount:N0}\n\n" +
-                $"CID: {completion.OutputPath}\n" +
-                $"Evidence: {completion.ReportPath}";
-            MessageBox.Show(this, resultText, "RCB Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-
-            var directory = Path.GetDirectoryName(completion.OutputPath);
-            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
-            {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{completion.OutputPath}\"")
-                {
-                    UseShellExecute = true
-                });
-            }
+            ShowSuccessOverlay(completion);
         }
         catch (OperationCanceledException)
         {
@@ -280,9 +295,191 @@ public partial class RcbExportFilterWindow : Window
             MockStatusText.Text = status;
     }
 
+    private void SetAvailabilityBusyState(bool busy)
+    {
+        if (_availabilityBusyOverlay != null)
+            _availabilityBusyOverlay.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        RcbGrid.IsEnabled = !busy;
+        ExportButton.IsEnabled = !busy && _viewModel.CanExport;
+    }
+
     private void RefreshSelectionUi()
     {
         ExportButton.IsEnabled = _activeOperation == null && _viewModel.CanExport;
+    }
+
+    private void EnsureTransientOverlays()
+    {
+        if (Content is not Grid root || _availabilityBusyOverlay != null)
+            return;
+
+        _availabilityBusyOverlay = BuildAvailabilityOverlay();
+        Grid.SetRowSpan(_availabilityBusyOverlay, Math.Max(1, root.RowDefinitions.Count));
+        Panel.SetZIndex(_availabilityBusyOverlay, 100);
+        root.Children.Add(_availabilityBusyOverlay);
+
+        _successOverlay = BuildSuccessOverlay();
+        Grid.SetRowSpan(_successOverlay, Math.Max(1, root.RowDefinitions.Count));
+        Panel.SetZIndex(_successOverlay, 110);
+        root.Children.Add(_successOverlay);
+    }
+
+    private Border BuildAvailabilityOverlay()
+    {
+        var title = new TextBlock
+        {
+            Text = "Checking RCB availability",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(32, 48, 74)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        var detail = new TextBlock
+        {
+            Text = "Reading RptEna, reservation, Owner and DataSet directory\nRead-only — no RCB will be reserved or modified",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(102, 117, 139)),
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 7, 0, 14)
+        };
+        var progress = new ProgressBar
+        {
+            Width = 250,
+            Height = 6,
+            IsIndeterminate = true,
+            Foreground = new SolidColorBrush(Color.FromRgb(49, 93, 191)),
+            Background = new SolidColorBrush(Color.FromRgb(225, 233, 246))
+        };
+        var card = new Border
+        {
+            Width = 390,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(203, 220, 248)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(24, 21, 24, 21),
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 24,
+                ShadowDepth = 5,
+                Opacity = 0.16,
+                Color = Color.FromRgb(30, 51, 85)
+            },
+            Child = new StackPanel
+            {
+                Children = { title, detail, progress }
+            }
+        };
+        return new Border
+        {
+            Visibility = Visibility.Collapsed,
+            Background = new SolidColorBrush(Color.FromArgb(190, 244, 248, 253)),
+            CornerRadius = new CornerRadius(18),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Child = new Grid
+            {
+                Children = { card }
+            }
+        };
+    }
+
+    private Border BuildSuccessOverlay()
+    {
+        _successOverlayTitle = new TextBlock
+        {
+            Text = "CID exported successfully",
+            FontSize = 14.2,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(20, 104, 57))
+        };
+        _successOverlayDetail = new TextBlock
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 10.8,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 93, 113)),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 330
+        };
+        var check = new Border
+        {
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(17),
+            Background = new SolidColorBrush(Color.FromRgb(226, 247, 234)),
+            Child = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(22, 163, 74)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        var content = new Grid();
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.Children.Add(check);
+        var text = new StackPanel { Children = { _successOverlayTitle, _successOverlayDetail } };
+        Grid.SetColumn(text, 2);
+        content.Children.Add(text);
+
+        return new Border
+        {
+            Visibility = Visibility.Collapsed,
+            Opacity = 0,
+            Width = 410,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 10, 10, 0),
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(169, 224, 188)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(15, 13, 15, 13),
+            IsHitTestVisible = false,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 22,
+                ShadowDepth = 4,
+                Opacity = 0.17,
+                Color = Color.FromRgb(30, 70, 48)
+            },
+            Child = content
+        };
+    }
+
+    private void ShowSuccessOverlay(RcbExportCompletion completion)
+    {
+        EnsureTransientOverlays();
+        if (_successOverlay == null || _successOverlayTitle == null || _successOverlayDetail == null)
+            return;
+
+        _successOverlayTitle.Text = "Legacy SAS CID exported";
+        _successOverlayDetail.Text =
+            $"{Path.GetFileName(completion.OutputPath)}  •  {completion.SchemaDisplayName}\n" +
+            $"1 RCB retained  •  {completion.DataSetMemberCount:N0} FCDA  •  {completion.RemovedReportControlCount:N0} removed";
+        _successOverlay.Visibility = Visibility.Visible;
+        _successOverlay.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
+        _successOverlayTimer.Stop();
+        _successOverlayTimer.Start();
+    }
+
+    private void HideSuccessOverlay()
+    {
+        _successOverlayTimer.Stop();
+        if (_successOverlay == null || _successOverlay.Visibility != Visibility.Visible)
+            return;
+
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220));
+        fade.Completed += (_, _) =>
+        {
+            if (_successOverlay != null)
+                _successOverlay.Visibility = Visibility.Collapsed;
+        };
+        _successOverlay.BeginAnimation(OpacityProperty, fade);
     }
 
     private static string SafeFileStem(string? value)
