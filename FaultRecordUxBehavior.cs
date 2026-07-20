@@ -16,6 +16,7 @@ namespace ArIED61850Tester;
 internal static class FaultRecordUxBehavior
 {
     private const string CapabilityPanelMarker = "ARSAS_IED_CAPABILITIES";
+    private const string PrimaryRcbToolTipMarker = "RCB Export Filter";
     private static readonly ConditionalWeakTable<ListBoxItem, CardRegistration> Registrations = new();
     private static int _installed;
 
@@ -49,50 +50,62 @@ internal static class FaultRecordUxBehavior
                 return;
             }
 
-            var actionPanel = FindDescendants<StackPanel>(item)
-                .FirstOrDefault(panel =>
-                    panel.Orientation == Orientation.Horizontal &&
-                    panel.HorizontalAlignment == HorizontalAlignment.Right &&
-                    FindDescendants<Button>(panel).Count() >= 3);
+            var actionPanel = FindDescendants<System.Windows.Controls.Primitives.UniformGrid>(item)
+                .FirstOrDefault(panel => panel.Children
+                    .OfType<Button>()
+                    .Any(button => (button.ToolTip?.ToString() ?? string.Empty)
+                        .Contains(PrimaryRcbToolTipMarker, StringComparison.OrdinalIgnoreCase)));
             if (actionPanel?.Parent is not Grid cardGrid)
                 return;
 
+            // RCB is a protocol-engineering tool, not a lifecycle control. Remove the
+            // icon-only duplicate and keep the primary row as Play / Stop / Edit / Save.
+            var legacyRcbButton = actionPanel.Children
+                .OfType<Button>()
+                .FirstOrDefault(button => (button.ToolTip?.ToString() ?? string.Empty)
+                    .Contains(PrimaryRcbToolTipMarker, StringComparison.OrdinalIgnoreCase));
+            if (legacyRcbButton != null)
+                actionPanel.Children.Remove(legacyRcbButton);
+            actionPanel.Columns = 4;
+            cardGrid.MinHeight = Math.Max(cardGrid.MinHeight, 100);
+
             var existing = cardGrid.Children
-                .OfType<StackPanel>()
+                .OfType<Grid>()
                 .FirstOrDefault(panel => Equals(panel.Tag, CapabilityPanelMarker));
             if (existing != null)
                 cardGrid.Children.Remove(existing);
 
             var gooseButton = CreateCapabilityButton(
                 "GOOSE",
-                "M4,6 L9,6 M4,10 L13,10 M4,14 L17,14 M17,6 L20,6 M13,10 L20,10 M9,14 L20,14",
                 (_, _) => OpenGooseWorkspace(currentWindow, currentDevice));
             var smvButton = CreateCapabilityButton(
                 "SMV",
-                "M2,12 C4,12 4,5 7,5 C10,5 9,19 12,19 C15,19 14,8 17,8 C19,8 19,12 22,12",
                 (_, _) => OpenSmvViewer(currentWindow, currentDevice));
             var fileButton = CreateCapabilityButton(
-                "File Transfer",
-                "M6,2 L15,2 L20,7 L20,22 L6,22 Z M15,2 L15,7 L20,7 M13,10 L13,17 M10,14 L13,17 L16,14",
+                "FILE",
                 (_, _) => OpenFaultRecordWindow(currentWindow, currentDevice));
+            var rcbButton = CreateCapabilityButton(
+                "RCB",
+                (_, _) => currentWindow.OpenRcbExportFilter(currentDevice));
 
-            var capabilityPanel = new StackPanel
+            var capabilityPanel = new Grid
             {
                 Tag = CapabilityPanelMarker,
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(4, 2, 7, 0)
+                Margin = new Thickness(0, 5, 0, 0)
             };
-            capabilityPanel.Children.Add(gooseButton);
-            capabilityPanel.Children.Add(smvButton);
-            capabilityPanel.Children.Add(fileButton);
+            for (var column = 0; column < 4; column++)
+                capabilityPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            AddCapabilityButton(capabilityPanel, gooseButton, 0);
+            AddCapabilityButton(capabilityPanel, smvButton, 1);
+            AddCapabilityButton(capabilityPanel, fileButton, 2);
+            AddCapabilityButton(capabilityPanel, rcbButton, 3);
 
-            // Keep protocol capabilities on their own card row. The previous overlay shared
-            // the lifecycle-action row and could cover the Stop button when File Transfer was enabled.
             cardGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(capabilityPanel, cardGrid.RowDefinitions.Count - 1);
-            Grid.SetColumn(capabilityPanel, 1);
+            Grid.SetColumn(capabilityPanel, 0);
+            Grid.SetColumnSpan(capabilityPanel, 2);
             Panel.SetZIndex(capabilityPanel, 10);
             cardGrid.Children.Add(capabilityPanel);
 
@@ -101,10 +114,11 @@ internal static class FaultRecordUxBehavior
                 gooseButton,
                 smvButton,
                 fileButton,
-                (_, _) => QueueCapabilityRefresh(item, currentDevice, gooseButton, smvButton, fileButton));
+                rcbButton,
+                (_, _) => QueueCapabilityRefresh(item, currentDevice, gooseButton, smvButton, fileButton, rcbButton));
             Registrations.Add(item, registration);
             currentDevice.PropertyChanged += registration.PropertyChangedHandler;
-            RefreshCapabilityState(currentDevice, gooseButton, smvButton, fileButton);
+            RefreshCapabilityState(currentDevice, gooseButton, smvButton, fileButton, rcbButton);
         }));
     }
 
@@ -113,14 +127,15 @@ internal static class FaultRecordUxBehavior
         Iec61850MonitorDevice device,
         Button gooseButton,
         Button smvButton,
-        Button fileButton)
+        Button fileButton,
+        Button rcbButton)
     {
         void RefreshOnUiThread()
         {
             if (!item.IsLoaded || !ReferenceEquals(item.DataContext, device))
                 return;
 
-            RefreshCapabilityState(device, gooseButton, smvButton, fileButton);
+            RefreshCapabilityState(device, gooseButton, smvButton, fileButton, rcbButton);
         }
 
         if (item.Dispatcher.CheckAccess())
@@ -134,41 +149,41 @@ internal static class FaultRecordUxBehavior
         item.Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(RefreshOnUiThread));
     }
 
-    private static Button CreateCapabilityButton(string capability, string pathData, RoutedEventHandler click)
+    private static Button CreateCapabilityButton(string capability, RoutedEventHandler click)
     {
-        var icon = new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse(pathData),
-            Stretch = Stretch.Uniform,
-            Stroke = Application.Current.TryFindResource("Accent") as Brush ?? Brushes.SteelBlue,
-            StrokeThickness = 1.8,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-            Fill = Brushes.Transparent
-        };
-
         var button = new Button
         {
-            Width = 22,
-            Height = 22,
-            Padding = new Thickness(4),
-            Margin = new Thickness(0, 0, 3, 0),
+            Height = 25,
+            MinHeight = 0,
+            MinWidth = 0,
+            Padding = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(2, 0, 2, 0),
             Focusable = false,
-            Content = new Viewbox { Width = 13, Height = 13, Child = icon },
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            FontSize = 9.4,
+            FontWeight = FontWeights.SemiBold,
+            Content = capability,
             Tag = capability
         };
-        if (Application.Current.TryFindResource("IedIconButton") is Style style)
+        if (Application.Current.TryFindResource("SoftButton") is Style style)
             button.Style = style;
         button.Click += click;
         return button;
+    }
+
+    private static void AddCapabilityButton(Grid panel, Button button, int column)
+    {
+        Grid.SetColumn(button, column);
+        panel.Children.Add(button);
     }
 
     private static void RefreshCapabilityState(
         Iec61850MonitorDevice device,
         Button gooseButton,
         Button smvButton,
-        Button fileButton)
+        Button fileButton,
+        Button rcbButton)
     {
         var hasGoose = device.SclWorkspace?.GooseStreams.Count > 0 ||
                        device.LiveDiscoveryModel?.GooseControlBlocks.Count > 0;
@@ -179,6 +194,8 @@ internal static class FaultRecordUxBehavior
         var endpointReady = !string.IsNullOrWhiteSpace(device.IpAddress) &&
                             IPAddress.TryParse(device.IpAddress, out _) &&
                             device.Port is > 0 and <= 65535;
+        var hasRcbInventory = device.LiveDiscoveryModel?.ReportControls.Count > 0 ||
+                              !string.IsNullOrWhiteSpace(device.SclSourcePath);
 
         ApplyState(
             gooseButton,
@@ -202,6 +219,12 @@ internal static class FaultRecordUxBehavior
                 : endpointReady
                     ? $"Probe the MMS file service and browse fault records from {device.Name}"
                     : $"Bind a valid MMS endpoint before using File Transfer for {device.Name}");
+        ApplyState(
+            rcbButton,
+            hasRcbInventory ? CapabilityState.Available : CapabilityState.Unavailable,
+            hasRcbInventory
+                ? $"Select and export one RCB for legacy SAS import from {device.Name}"
+                : $"Open SCL or complete live discovery before using RCB Export for {device.Name}");
     }
 
     private static void ApplyState(Button button, CapabilityState state, string toolTip)
@@ -210,10 +233,25 @@ internal static class FaultRecordUxBehavior
         button.Opacity = state switch
         {
             CapabilityState.Available => 1.0,
-            CapabilityState.ProbeReady => 0.72,
-            _ => 0.32
+            CapabilityState.ProbeReady => 0.78,
+            _ => 0.42
         };
         button.ToolTip = toolTip;
+        button.Background = state switch
+        {
+            CapabilityState.Available => new SolidColorBrush(Color.FromRgb(234, 241, 255)),
+            CapabilityState.ProbeReady => new SolidColorBrush(Color.FromRgb(255, 247, 230)),
+            _ => new SolidColorBrush(Color.FromRgb(243, 246, 250))
+        };
+        button.BorderBrush = state switch
+        {
+            CapabilityState.Available => new SolidColorBrush(Color.FromRgb(177, 198, 237)),
+            CapabilityState.ProbeReady => new SolidColorBrush(Color.FromRgb(232, 194, 121)),
+            _ => new SolidColorBrush(Color.FromRgb(215, 223, 234))
+        };
+        button.Foreground = state == CapabilityState.ProbeReady
+            ? new SolidColorBrush(Color.FromRgb(138, 91, 10))
+            : new SolidColorBrush(Color.FromRgb(35, 67, 119));
     }
 
     private static void OpenGooseWorkspace(MainWindow mainWindow, Iec61850MonitorDevice device)
@@ -300,5 +338,6 @@ internal static class FaultRecordUxBehavior
         Button GooseButton,
         Button SmvButton,
         Button FileButton,
+        Button RcbButton,
         PropertyChangedEventHandler PropertyChangedHandler);
 }
