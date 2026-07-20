@@ -30,7 +30,21 @@ GUIDE_FILES = {
     "goose-sequence.html", "cid-rejected.html", "live-model-vs-scl.html",
     "direct-vs-sbo.html", "commandtermination-addcause.html",
 }
-LOCALIZED_FILES = {"id.html", "panduan.html", "unduh.html"}
+LOCALIZED_PAIRS = {
+    "": "id.html",
+    "download.html": "unduh.html",
+    "guides.html": "panduan.html",
+    "mms-client.html": "mms-client-iec61850.html",
+    "smart-reporting.html": "smart-reporting-iec61850.html",
+    "goose-analyzer.html": "analyzer-goose-iec61850.html",
+    "file-transfer.html": "transfer-file-comtrade-iec61850.html",
+    "scl-workspace.html": "workspace-scl-iec61850.html",
+    "fat-testing.html": "pengujian-fat-iec61850.html",
+    "sat-testing.html": "pengujian-sat-iec61850.html",
+    "commissioning.html": "commissioning-iec61850.html",
+    "multi-vendor-integration.html": "integrasi-multi-vendor-iec61850.html",
+}
+LOCALIZED_FILES = set(LOCALIZED_PAIRS.values())
 FORBIDDEN_COPY = (
     "without navigating source code", "without navigating the source repository",
     "without requiring repository navigation", "the website is the product front door",
@@ -96,6 +110,7 @@ def expand_partials(text: str, errors: list[str], stack: tuple[str, ...] = ()) -
             errors.append(f"missing partial: {path.relative_to(ROOT)}")
             return ""
         return expand_partials(path.read_text(encoding="utf-8"), errors, (*stack, name))
+
     previous = None
     while previous != text:
         previous = text
@@ -149,12 +164,17 @@ def validate_template(path: Path, content_type: str | None, language: str | None
     for phrase in FORBIDDEN_COPY:
         if phrase in lowered:
             errors.append(f"{label}: contains internal-strategy copy: {phrase}")
+
     if path.name != "404.html":
         for include in ("{{> header}}", "{{> footer}}"):
             if include not in raw:
                 errors.append(f"{label}: missing shared include {include}")
-    if path.name not in ("index.html", "download.html", "404.html") and "{{> download-cta}}" not in raw:
+    if content_type == "localized":
+        if "{{> download-cta-id}}" not in raw:
+            errors.append(f"{label}: Indonesian page must use the shared Indonesian download CTA")
+    elif path.name not in ("index.html", "download.html", "404.html") and "{{> download-cta}}" not in raw:
         errors.append(f"{label}: missing shared download CTA")
+
     if content_type == "guide":
         if '"@type":"TechArticle"' not in raw.replace(" ", ""):
             errors.append(f"{label}: guide must use TechArticle structured data")
@@ -216,6 +236,7 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
         return []
     paths: set[str] = set()
     names: set[str] = set()
+    entries: dict[str, dict[str, object]] = {}
     templates: list[tuple[Path, str | None, str | None]] = []
     guide_count = localized_count = authority_count = 0
     for entry in pages:
@@ -233,6 +254,7 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
             errors.append(f"landing/site.json: duplicate template {template}")
         paths.add(page_path)
         names.add(template)
+        entries[page_path] = entry
         template_path = TEMPLATES / template
         templates.append((template_path, content_type if isinstance(content_type, str) else None, language if isinstance(language, str) else None))
         if not template_path.exists():
@@ -253,14 +275,27 @@ def validate_registry(config: dict[str, object], errors: list[str]) -> list[tupl
             localized_count += 1
         elif content_type == "authority":
             authority_count += 1
-    if len(pages) != 35:
-        errors.append(f"landing/site.json: expected 35 pages, found {len(pages)}")
+
+    if len(pages) != 44:
+        errors.append(f"landing/site.json: expected 44 pages, found {len(pages)}")
     if guide_count != 11:
         errors.append(f"landing/site.json: expected 11 troubleshooting guides, found {guide_count}")
-    if localized_count != 3:
-        errors.append(f"landing/site.json: expected 3 Indonesian pages, found {localized_count}")
+    if localized_count != 12:
+        errors.append(f"landing/site.json: expected 12 Indonesian pages, found {localized_count}")
     if authority_count != 1:
         errors.append(f"landing/site.json: expected one authority page, found {authority_count}")
+
+    for english, indonesian in LOCALIZED_PAIRS.items():
+        expected = {"en": english, "id": indonesian, "x-default": english}
+        en_entry, id_entry = entries.get(english), entries.get(indonesian)
+        if en_entry is None or id_entry is None:
+            errors.append(f"landing/site.json: missing localized pair {english or 'index.html'} / {indonesian}")
+            continue
+        if en_entry.get("language") != "en" or en_entry.get("alternates") != expected:
+            errors.append(f"landing/site.json: invalid English alternate contract for {english or 'index.html'}")
+        if id_entry.get("language") != "id" or id_entry.get("contentType") != "localized" or id_entry.get("alternates") != expected:
+            errors.append(f"landing/site.json: invalid Indonesian alternate contract for {indonesian}")
+
     actual = {path.name for path in TEMPLATES.glob("*.html")}
     if actual - names:
         errors.append("templates missing from registry: " + ", ".join(sorted(actual - names)))
@@ -273,8 +308,9 @@ def validate_partials(errors: list[str]) -> None:
     def read(name: str) -> str:
         path = PARTIALS / name
         return path.read_text(encoding="utf-8") if path.exists() else ""
+
     header, footer = read("header.html"), read("footer.html")
-    cta, boundary = read("download-cta.html"), read("guide-boundary.html")
+    cta, cta_id, boundary = read("download-cta.html"), read("download-cta-id.html"), read("guide-boundary.html")
     for page in EXPECTED_NAV:
         if f'data-nav-page="{page}"' not in header:
             errors.append(f"shared header missing navigation key {page}")
@@ -291,6 +327,9 @@ def validate_partials(errors: list[str]) -> None:
     for value in ("{{ARSAS_VERSION}}", "{{INSTALLER_URL}}", 'href="download.html"'):
         if value not in cta:
             errors.append(f"shared download CTA missing {value}")
+    for value in ("{{ARSAS_VERSION}}", "{{INSTALLER_URL}}", 'href="unduh.html"', "Unduh installer"):
+        if value not in cta_id:
+            errors.append(f"shared Indonesian download CTA missing {value}")
     for value in ("Ari Sulistiono", 'href="guides.html"', 'href="technical-review.html"', "Engineering boundary"):
         if value not in boundary:
             errors.append(f"shared guide boundary missing {value}")
@@ -300,6 +339,7 @@ def validate_contract(errors: list[str]) -> None:
     def template(name: str) -> str:
         path = TEMPLATES / name
         return path.read_text(encoding="utf-8") if path.exists() else ""
+
     home, download, about = template("index.html"), template("download.html"), template("about.html")
     solutions, guides = template("solutions.html"), template("guides.html")
     review, localized_home = template("technical-review.html"), template("id.html")
@@ -325,12 +365,32 @@ def validate_contract(errors: list[str]) -> None:
     for value in ("Pengujian IEC 61850", 'href="panduan.html"', 'href="unduh.html"', 'hreflang="en"'):
         if value not in localized_home:
             errors.append(f"Indonesian homepage missing {value}")
-    for value in ("Panduan Troubleshooting", 'href="reporting-silent.html"', 'href="technical-review.html"'):
+    for localized in LOCALIZED_FILES - {"id.html", "panduan.html", "unduh.html"}:
+        if f'href="{localized}"' not in localized_home and f'href="{localized}"' not in localized_guides:
+            errors.append(f"Indonesian hubs do not link to {localized}")
+    for value in ("Panduan Troubleshooting", 'href="reporting-silent.html"', 'href="technical-review.html"', 'href="mms-client-iec61850.html"'):
         if value not in localized_guides:
             errors.append(f"Indonesian guide hub missing {value}")
-    for value in ("{{INSTALLER_URL}}", "{{PORTABLE_URL}}", "{{CHECKSUMS_URL}}", "Unduh ARSAS"):
+    for value in ("{{INSTALLER_URL}}", "{{PORTABLE_URL}}", "{{CHECKSUMS_URL}}", "Unduh ARSAS", "{{> download-cta-id}}"):
         if value not in localized_download:
             errors.append(f"Indonesian download page missing {value}")
+
+    localized_contracts = {
+        "mms-client-iec61850.html": ("MMS Client", "DataSet", "mms-client.html"),
+        "smart-reporting-iec61850.html": ("BRCB", "URCB", "smart-reporting.html"),
+        "analyzer-goose-iec61850.html": ("stNum", "sqNum", "goose-analyzer.html"),
+        "transfer-file-comtrade-iec61850.html": ("COMTRADE", "CFG", "file-transfer.html"),
+        "workspace-scl-iec61850.html": ("Edition 1", "selected-RCB", "scl-workspace.html"),
+        "pengujian-fat-iec61850.html": ("Pengujian FAT", "GOOSE", "fat-testing.html"),
+        "pengujian-sat-iec61850.html": ("Pengujian SAT", "station", "sat-testing.html"),
+        "commissioning-iec61850.html": ("Commissioning", "SOE", "commissioning.html"),
+        "integrasi-multi-vendor-iec61850.html": ("multi-vendor", "selected-RCB", "multi-vendor-integration.html"),
+    }
+    for name, required_values in localized_contracts.items():
+        text = template(name)
+        for value in (*required_values, 'hreflang="en"', '"inLanguage":"id"', "{{> download-cta-id}}"):
+            if value not in text:
+                errors.append(f"{name}: missing localized contract {value}")
 
     root_html = sorted(path.name for path in LANDING.glob("*.html") if not VERIFICATION_PATTERN.fullmatch(path.name))
     if root_html:
@@ -374,7 +434,7 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
     width, height = png_size(APP_ICON_SOURCE)
-    print(f"ARSAS product-source validation passed: {len(templates)} templates, 11 guides, 3 Indonesian pages, authority policy, IndexNow and {width}x{height} app icon.")
+    print(f"ARSAS product-source validation passed: {len(templates)} templates, 11 guides, 12 Indonesian pages and latest {width}x{height} app icon.")
     return 0
 
 

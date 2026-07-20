@@ -72,8 +72,10 @@ def read_config() -> dict[str, object]:
             raise SystemExit(f"landing/site.json has invalid {dotted}")
     if not isinstance(config.get("pages"), list) or not config["pages"]:
         raise SystemExit("landing/site.json must define a non-empty pages registry")
-    key_file = SOURCE / str(config["indexNow"]["keyFile"])
-    if not key_file.exists() or key_file.read_text(encoding="utf-8").strip() != config["indexNow"]["key"]:
+    index_now = config["indexNow"]
+    assert isinstance(index_now, dict)
+    key_file = SOURCE / str(index_now["keyFile"])
+    if not key_file.exists() or key_file.read_text(encoding="utf-8").strip() != index_now["key"]:
         raise SystemExit("IndexNow key metadata does not match the hosted key file")
     return config
 
@@ -82,6 +84,7 @@ def token_values(config: dict[str, object], version: str) -> dict[str, str]:
     product = config["product"]
     author = config["author"]
     downloads = config["downloads"]
+    assert isinstance(product, dict) and isinstance(author, dict) and isinstance(downloads, dict)
     return {
         "ARSAS_VERSION": version,
         "PRODUCT_NAME": str(product["name"]),
@@ -106,6 +109,7 @@ def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
         if not path.exists():
             raise SystemExit(f"Missing landing partial: {path.relative_to(ROOT)}")
         return expand_partials(path.read_text(encoding="utf-8"), (*stack, name))
+
     previous = None
     while previous != text:
         previous = text
@@ -157,7 +161,7 @@ def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
             raise SystemExit(f"Registered landing template is missing: {template}")
         alternates = entry.get("alternates")
         if alternates is not None:
-            if not isinstance(alternates, dict) or not {"en", "id", "x-default"}.issubset(alternates):
+            if not isinstance(alternates, dict) or set(alternates) != {"en", "id", "x-default"}:
                 raise SystemExit(f"Localized page has invalid alternates: {path or 'index.html'}")
             if path not in alternates.values():
                 raise SystemExit(f"Localized page alternates must reference itself: {path or 'index.html'}")
@@ -165,6 +169,23 @@ def page_registry(config: dict[str, object]) -> list[dict[str, object]]:
         templates.add(template)
         normalized.append(entry)
     return normalized
+
+
+def absolute_url(root: str, path: str) -> str:
+    return root if path == "" else root + path
+
+
+def inject_alternate_links(text: str, entry: dict[str, object], root: str) -> str:
+    alternates = entry.get("alternates")
+    if not isinstance(alternates, dict):
+        return text
+    links = "\n".join(
+        f'  <link rel="alternate" hreflang="{language}" href="{escape(absolute_url(root, str(alternates[language])))}" />'
+        for language in ("en", "id", "x-default")
+    )
+    if "</head>" not in text:
+        raise SystemExit(f"Cannot inject alternate-language links into {entry.get('template')}")
+    return text.replace("</head>", links + "\n</head>", 1)
 
 
 def install_icon(output: Path, icon_size: str) -> None:
@@ -177,12 +198,10 @@ def install_icon(output: Path, icon_size: str) -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def absolute_url(root: str, path: str) -> str:
-    return root if path == "" else root + path
-
-
 def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str, object]]) -> None:
-    root = str(config["product"]["canonicalRoot"])
+    product = config["product"]
+    assert isinstance(product, dict)
+    root = str(product["canonicalRoot"])
     has_alternates = any(isinstance(entry.get("alternates"), dict) for entry in pages)
     namespace = ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' if has_alternates else ""
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"{namespace}>']
@@ -207,16 +226,19 @@ def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str,
 
 
 def write_build_info(output: Path, config: dict[str, object], version: str, pages: list[dict[str, object]]) -> None:
+    product = config["product"]
+    index_now = config["indexNow"]
+    assert isinstance(product, dict) and isinstance(index_now, dict)
     languages = sorted({str(entry.get("language", "en")) for entry in pages if entry.get("index", True) is not False})
     payload = {
         "schemaVersion": 3,
-        "product": config["product"]["name"],
+        "product": product["name"],
         "version": version,
-        "canonicalRoot": config["product"]["canonicalRoot"],
-        "repository": config["product"]["repository"],
+        "canonicalRoot": product["canonicalRoot"],
+        "repository": product["repository"],
         "author": config["author"],
         "languages": languages,
-        "indexNowKeyLocation": str(config["product"]["canonicalRoot"]) + str(config["indexNow"]["keyFile"]),
+        "indexNowKeyLocation": str(product["canonicalRoot"]) + str(index_now["keyFile"]),
         "pages": [entry["path"] or "index.html" for entry in pages],
     }
     (output / "build-info.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -233,6 +255,10 @@ def build(output: Path) -> None:
     pages = page_registry(config)
     width, height = icon_dimensions()
     icon_size = f"{width}x{height}"
+    product = config["product"]
+    index_now = config["indexNow"]
+    assert isinstance(product, dict) and isinstance(index_now, dict)
+    root = str(product["canonicalRoot"])
 
     if output.exists():
         shutil.rmtree(output)
@@ -246,7 +272,9 @@ def build(output: Path) -> None:
         target = output / target_name
         target.parent.mkdir(parents=True, exist_ok=True)
         source_text = (TEMPLATES / str(entry["template"])).read_text(encoding="utf-8")
-        target.write_text(render(source_text, values, icon_size), encoding="utf-8")
+        rendered = render(source_text, values, icon_size)
+        rendered = inject_alternate_links(rendered, entry, root)
+        target.write_text(rendered, encoding="utf-8")
         generated.add(target_name)
 
     source_html = legacy_html_names()
@@ -258,7 +286,7 @@ def build(output: Path) -> None:
     write_build_info(output, config, version, pages)
 
     required = {
-        *generated, "site.json", "sitemap.xml", "build-info.json", str(config["indexNow"]["keyFile"]),
+        *generated, "site.json", "sitemap.xml", "build-info.json", str(index_now["keyFile"]),
         "assets/app-icon.png", "assets/social-card.png",
         "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
         "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",

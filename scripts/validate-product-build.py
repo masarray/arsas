@@ -7,6 +7,7 @@ import json
 import re
 import struct
 import sys
+import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse
@@ -35,7 +36,21 @@ GUIDE_PAGES = {
     "goose-sequence.html", "cid-rejected.html", "live-model-vs-scl.html",
     "direct-vs-sbo.html", "commandtermination-addcause.html",
 }
-LOCALIZED_PAGES = {"id.html", "panduan.html", "unduh.html"}
+LOCALIZED_PAIRS = {
+    "index.html": "id.html",
+    "download.html": "unduh.html",
+    "guides.html": "panduan.html",
+    "mms-client.html": "mms-client-iec61850.html",
+    "smart-reporting.html": "smart-reporting-iec61850.html",
+    "goose-analyzer.html": "analyzer-goose-iec61850.html",
+    "file-transfer.html": "transfer-file-comtrade-iec61850.html",
+    "scl-workspace.html": "workspace-scl-iec61850.html",
+    "fat-testing.html": "pengujian-fat-iec61850.html",
+    "sat-testing.html": "pengujian-sat-iec61850.html",
+    "commissioning.html": "commissioning-iec61850.html",
+    "multi-vendor-integration.html": "integrasi-multi-vendor-iec61850.html",
+}
+LOCALIZED_PAGES = set(LOCALIZED_PAIRS.values())
 FORBIDDEN_COPY = (
     "without navigating source code", "without navigating the source repository",
     "without requiring repository navigation", "the website is the product front door",
@@ -48,6 +63,7 @@ class Parser(HTMLParser):
         self.refs: list[str] = []
         self.icons: list[dict[str, str | None]] = []
         self.images: list[dict[str, str | None]] = []
+        self.alternates: dict[str, str] = {}
         self.h1 = 0
         self.title = ""
         self.in_title = False
@@ -74,8 +90,12 @@ class Parser(HTMLParser):
             value = values.get(key)
             if value:
                 self.refs.append(value)
-        if tag == "link" and "icon" in (values.get("rel") or "").lower():
-            self.icons.append(values)
+        if tag == "link":
+            rel = (values.get("rel") or "").lower()
+            if "icon" in rel:
+                self.icons.append(values)
+            if rel == "alternate" and values.get("hreflang") and values.get("href"):
+                self.alternates[values["hreflang"] or ""] = values["href"] or ""
         if tag == "img":
             self.images.append(values)
 
@@ -101,6 +121,10 @@ def local_ref(site: Path, page: Path, reference: str) -> Path | None:
     if not clean or parsed.scheme or parsed.netloc or clean.startswith("#"):
         return None
     return (page.parent / clean).resolve()
+
+
+def page_url(name: str) -> str:
+    return CANONICAL_ROOT if name == "index.html" else CANONICAL_ROOT + name
 
 
 def validate_latest(site: Path, errors: list[str]) -> None:
@@ -153,8 +177,8 @@ def validate_build_info(site: Path, errors: list[str]) -> tuple[str | None, list
         return version or None, []
     if len(pages) != len(set(pages)):
         errors.append("build-info.json pages registry contains duplicates")
-    if len(pages) != 35:
-        errors.append(f"build-info.json must contain 35 pages, found {len(pages)}")
+    if len(pages) != 44:
+        errors.append(f"build-info.json must contain 44 pages, found {len(pages)}")
     if not GUIDE_PAGES.issubset(set(pages)):
         errors.append("build-info.json is missing troubleshooting guide pages")
     if not LOCALIZED_PAGES.issubset(set(pages)) or "technical-review.html" not in pages:
@@ -167,27 +191,50 @@ def validate_sitemap(site: Path, pages: list[str], errors: list[str]) -> None:
     if not path.exists():
         errors.append("missing sitemap.xml")
         return
-    text = path.read_text(encoding="utf-8")
-    if 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' not in text:
-        errors.append("sitemap.xml is missing the xhtml localization namespace")
-    for page in pages:
-        if page == "404.html":
-            if CANONICAL_ROOT + page in text:
-                errors.append("sitemap.xml must not index 404.html")
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as exc:
+        errors.append(f"sitemap.xml parsing failed: {exc}")
+        return
+    ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9", "xhtml": "http://www.w3.org/1999/xhtml"}
+    root = tree.getroot()
+    if root.tag != "{http://www.sitemaps.org/schemas/sitemap/0.9}urlset":
+        errors.append("sitemap.xml has an invalid root namespace")
+        return
+    records: dict[str, dict[str, str]] = {}
+    for node in root.findall("sm:url", ns):
+        loc_node = node.find("sm:loc", ns)
+        if loc_node is None or not (loc_node.text or "").strip():
+            errors.append("sitemap.xml contains a URL without loc")
             continue
-        url = CANONICAL_ROOT if page == "index.html" else CANONICAL_ROOT + page
-        if url not in text:
-            errors.append(f"sitemap.xml missing {page}")
-    alternate_sets = (
-        (("en", CANONICAL_ROOT), ("id", CANONICAL_ROOT + "id.html"), ("x-default", CANONICAL_ROOT)),
-        (("en", CANONICAL_ROOT + "download.html"), ("id", CANONICAL_ROOT + "unduh.html"), ("x-default", CANONICAL_ROOT + "download.html")),
-        (("en", CANONICAL_ROOT + "guides.html"), ("id", CANONICAL_ROOT + "panduan.html"), ("x-default", CANONICAL_ROOT + "guides.html")),
-    )
-    for alternate_set in alternate_sets:
-        for language, url in alternate_set:
-            marker = f'hreflang="{language}" href="{url}"'
-            if text.count(marker) < 2:
-                errors.append(f"sitemap.xml localization pair is incomplete: {marker}")
+        loc = (loc_node.text or "").strip()
+        if loc in records:
+            errors.append(f"sitemap.xml contains duplicate loc {loc}")
+        alternates: dict[str, str] = {}
+        for link in node.findall("xhtml:link", ns):
+            language, href = link.get("hreflang"), link.get("href")
+            if language and href:
+                alternates[language] = href
+        records[loc] = alternates
+
+    expected_urls = {page_url(page) for page in pages if page != "404.html"}
+    if set(records) != expected_urls:
+        for missing in sorted(expected_urls - set(records)):
+            errors.append(f"sitemap.xml missing {missing}")
+        for extra in sorted(set(records) - expected_urls):
+            errors.append(f"sitemap.xml contains unexpected URL {extra}")
+    if len(records) != 43:
+        errors.append(f"sitemap.xml must contain 43 indexable URLs, found {len(records)}")
+
+    for english, indonesian in LOCALIZED_PAIRS.items():
+        expected = {
+            "en": page_url(english),
+            "id": page_url(indonesian),
+            "x-default": page_url(english),
+        }
+        for page in (english, indonesian):
+            if records.get(page_url(page)) != expected:
+                errors.append(f"sitemap.xml localized alternate set is incomplete for {page}")
 
 
 def validate_manifest(site: Path, icon_size: str, errors: list[str]) -> None:
@@ -206,6 +253,17 @@ def validate_manifest(site: Path, icon_size: str, errors: list[str]) -> None:
         errors.append(f"site.webmanifest must use the actual {icon_size} ARSAS app icon")
     if "maskable" not in str(icon.get("purpose", "")):
         errors.append("site.webmanifest icon must support maskable purpose")
+
+
+def expected_alternates_for(name: str) -> dict[str, str] | None:
+    for english, indonesian in LOCALIZED_PAIRS.items():
+        if name in (english, indonesian):
+            return {
+                "en": page_url(english),
+                "id": page_url(indonesian),
+                "x-default": page_url(english),
+            }
+    return None
 
 
 def main() -> int:
@@ -232,6 +290,7 @@ def main() -> int:
             errors.append(f"app-icon.png: {exc}")
 
     combined = ""
+    parsers: dict[str, Parser] = {}
     for name in pages:
         page = site / name
         if not page.exists():
@@ -240,6 +299,7 @@ def main() -> int:
         combined += text
         parser = Parser()
         parser.feed(text)
+        parsers[name] = parser
         if parser.h1 != 1:
             errors.append(f"{name}: expected one h1")
         if not parser.title.strip() or not parser.description:
@@ -274,6 +334,11 @@ def main() -> int:
             for value in (LINKEDIN, REPOSITORY, 'href="download.html"', 'href="technical-review.html"'):
                 if value not in text:
                     errors.append(f"{name}: shared authority or download route missing {value}")
+        expected_alternates = expected_alternates_for(name)
+        if expected_alternates is not None and parser.alternates != expected_alternates:
+            errors.append(f"{name}: page-level hreflang alternates are incomplete")
+        elif expected_alternates is None and parser.alternates:
+            errors.append(f"{name}: unexpected page-level language alternates")
         if name in GUIDE_PAGES:
             if parser.body_page != "guides":
                 errors.append(f"{name}: troubleshooting guide must activate Guides navigation")
@@ -287,6 +352,9 @@ def main() -> int:
                 errors.append(f"{name}: Indonesian language metadata is incomplete")
             if 'hreflang="en"' not in text:
                 errors.append(f"{name}: missing English counterpart link")
+            for value in ('href="unduh.html"', "Semua opsi unduhan"):
+                if value not in text:
+                    errors.append(f"{name}: Indonesian download CTA is incomplete: {value}")
 
     for forbidden in (
         "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot",
@@ -300,6 +368,7 @@ def main() -> int:
     def page_text(name: str) -> str:
         path = site / name
         return path.read_text(encoding="utf-8") if path.exists() else ""
+
     home, download, about = page_text("index.html"), page_text("download.html"), page_text("about.html")
     solutions, guides = page_text("solutions.html"), page_text("guides.html")
     review, id_home = page_text("technical-review.html"), page_text("id.html")
@@ -322,12 +391,30 @@ def main() -> int:
     for value in ("Claim governance", "Not a conformance certificate", LINKEDIN, REPOSITORY):
         if value not in review:
             errors.append(f"technical review page missing {value}")
-    for value in ("Pengujian IEC 61850", 'href="panduan.html"', 'href="unduh.html"'):
-        if value not in id_home:
-            errors.append(f"Indonesian homepage missing {value}")
-    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Unduh ARSAS"):
+    for localized in LOCALIZED_PAGES - {"id.html", "panduan.html", "unduh.html"}:
+        if f'href="{localized}"' not in id_home and f'href="{localized}"' not in id_guides:
+            errors.append(f"Indonesian hubs do not link to {localized}")
+    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Unduh ARSAS", "Semua opsi unduhan"):
         if value not in id_download:
             errors.append(f"Indonesian download page missing {value}")
+
+    localized_contracts = {
+        "mms-client-iec61850.html": ("MMS Client", "DataSet"),
+        "smart-reporting-iec61850.html": ("BRCB", "URCB"),
+        "analyzer-goose-iec61850.html": ("stNum", "sqNum"),
+        "transfer-file-comtrade-iec61850.html": ("COMTRADE", "CFG"),
+        "workspace-scl-iec61850.html": ("Edition 1", "selected-RCB"),
+        "pengujian-fat-iec61850.html": ("Pengujian FAT", "GOOSE"),
+        "pengujian-sat-iec61850.html": ("Pengujian SAT", "station"),
+        "commissioning-iec61850.html": ("Commissioning", "SOE"),
+        "integrasi-multi-vendor-iec61850.html": ("multi-vendor", "selected-RCB"),
+    }
+    for name, values in localized_contracts.items():
+        text = page_text(name)
+        for value in values:
+            if value not in text:
+                errors.append(f"{name}: missing translated technical content {value}")
+
     if version and f'"softwareVersion":"{version}"' not in home.replace(" ", ""):
         errors.append("homepage softwareVersion does not match build-info.json")
 
@@ -349,7 +436,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"ARSAS product-build validation passed: {len(pages)} pages, 11 guides, 3 Indonesian pages, authority policy, IndexNow and {icon_size} brand artwork.")
+    print(f"ARSAS product-build validation passed: {len(pages)} pages, 11 guides, 12 Indonesian pages, 12 hreflang pairs, authority policy, IndexNow and {icon_size} brand artwork.")
     return 0
 
 
