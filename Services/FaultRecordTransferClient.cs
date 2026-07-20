@@ -103,7 +103,9 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
                     MaximumTotalBytes = 1024L * 1024L * 1024L,
                     MaximumFileBytes = 512L * 1024L * 1024L,
                     MaximumReadOperationsPerFile = 100_000,
-                    RequireCompleteRecord = true,
+                    // Completeness describes COMTRADE companion coverage; it must not block
+                    // MMS FileOpen/FileRead of files that the IED actually exposes.
+                    RequireCompleteRecord = false,
                     RequireDeclaredSizeMatch = false
                 },
                 progress,

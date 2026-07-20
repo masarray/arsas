@@ -90,7 +90,7 @@ public partial class FaultRecordWindow : Window, INotifyPropertyChanged
         private set => Set(ref _progressValue, Math.Clamp(value, 0d, 100d));
     }
 
-    public bool CanDownload => !IsBusy && Records.Any(row => row.IsSelected && row.Record.IsComplete);
+    public bool CanDownload => !IsBusy && Records.Any(row => row.IsSelected && row.Record.Files.Count > 0);
 
     public string SelectionSummary
     {
@@ -139,7 +139,7 @@ public partial class FaultRecordWindow : Window, INotifyPropertyChanged
 
             StatusText = catalog.Records.Count == 0
                 ? "No supported fault-record files were found. Try a known remote directory such as COMTRADE or DR."
-                : $"{catalog.Summary} Select one or more complete records to download.";
+                : $"{catalog.Summary} Select one or more available records to download; partial companion sets remain downloadable.";
 
             if (catalog.Diagnostics.Count > 0)
                 StatusText += $" {catalog.Diagnostics.Count} bounded browse diagnostic(s) were reported.";
@@ -183,11 +183,11 @@ public partial class FaultRecordWindow : Window, INotifyPropertyChanged
             return;
 
         var selected = Records
-            .Where(row => row.IsSelected && row.Record.IsComplete)
+            .Where(row => row.IsSelected && row.Record.Files.Count > 0)
             .ToArray();
         if (selected.Length == 0)
         {
-            StatusText = "Select at least one complete COMTRADE record.";
+            StatusText = "Select at least one record that contains an available remote file.";
             return;
         }
 
@@ -344,7 +344,13 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
     public FaultRecordRow(Iec61850FaultRecordSet record)
     {
         Record = record ?? throw new ArgumentNullException(nameof(record));
-        _status = record.IsComplete ? "Ready" : "Incomplete";
+        _status = record.Files.Count == 0
+            ? "Unavailable"
+            : record.IsComplete
+                ? "Ready"
+                : "Partial";
+        if (!record.IsComplete && record.Files.Count > 0)
+            _detail = $"Available file(s) can be downloaded; COMTRADE companion coverage: {record.Completeness}.";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -355,7 +361,10 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
     public string Completeness => Record.Completeness;
     public string ModifiedText => Record.LastModifiedUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "-";
     public string SizeText => Record.HasUnknownSize ? "Unknown" : FormatBytes(Record.KnownSizeBytes);
-    public string FilesText => string.Join(", ", Record.Files.Select(file => file.Extension.TrimStart('.').ToUpperInvariant()));
+    public string FilesText => string.Join(", ", Record.Files.Select(file =>
+        string.IsNullOrWhiteSpace(file.Extension)
+            ? "PACKAGE"
+            : file.Extension.TrimStart('.').ToUpperInvariant()));
 
     public bool IsSelected
     {
