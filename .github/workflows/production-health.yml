@@ -1,0 +1,209 @@
+name: Verify production website health
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      repair:
+        description: Trigger one Pages redeployment when the first attestation fails
+        required: false
+        default: true
+        type: boolean
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "landing/**"
+      - "scripts/resolve-site-source-commit.py"
+      - "scripts/check-measurement-readiness.py"
+      - "scripts/verify-pages-deployment.py"
+      - ".github/workflows/pages.yml"
+      - ".github/workflows/production-health.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-health
+  cancel-in-progress: false
+
+env:
+  CANONICAL_ROOT: https://masarray.github.io/arsas/
+  HEALTH_ISSUE_TITLE: "[Pages Health] ARSAS production deployment is stale"
+
+jobs:
+  quality:
+    name: Validate production-health tooling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve latest deployable site source
+        run: python scripts/resolve-site-source-commit.py --output _health/site-source.json
+
+      - name: Exercise disabled measurement readiness
+        env:
+          GA4_MEASUREMENT_ID: ""
+          GA4_PROPERTY_ID: ""
+          GSC_SITE_URL: https://masarray.github.io/arsas/
+          GOOGLE_SERVICE_ACCOUNT_JSON: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ""
+          GCP_SERVICE_ACCOUNT: ""
+        run: python scripts/check-measurement-readiness.py --output _health/readiness --strict
+
+      - name: Validate verifier command contract
+        run: python scripts/verify-pages-deployment.py --help >/dev/null
+
+      - name: Upload production-health quality evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-health-quality
+          path: _health/
+          if-no-files-found: error
+          retention-days: 30
+
+  production:
+    name: Attest and repair public Pages
+    if: github.event_name != 'pull_request'
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+    steps:
+      - name: Checkout complete main history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve expected public site source
+        id: source
+        run: python scripts/resolve-site-source-commit.py --output _health/site-source.json
+
+      - name: Resolve stable release and measurement state
+        id: contract
+        env:
+          GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable_version="$(python -c 'import json; print(json.load(open("landing/latest.json"))["version"])')"
+          if [ -n "${GA4_MEASUREMENT_ID:-}" ]; then measurement_enabled=true; else measurement_enabled=false; fi
+          echo "stable_version=$stable_version" >> "$GITHUB_OUTPUT"
+          echo "measurement_enabled=$measurement_enabled" >> "$GITHUB_OUTPUT"
+
+      - name: First public attestation
+        id: initial
+        continue-on-error: true
+        run: |
+          python scripts/verify-pages-deployment.py \
+            --base-url "$CANONICAL_ROOT" \
+            --source-commit "${{ steps.source.outputs.site_source_commit }}" \
+            --stable-version "${{ steps.contract.outputs.stable_version }}" \
+            --measurement-enabled "${{ steps.contract.outputs.measurement_enabled }}" \
+            --attempts 3 \
+            --delay 5 \
+            --output _health/initial-attestation.md
+
+      - name: Trigger one self-healing Pages deployment
+        id: repair
+        if: steps.initial.outcome != 'success' && (github.event_name == 'schedule' || inputs.repair != false)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml --ref main
+          echo "triggered=true" >> "$GITHUB_OUTPUT"
+          echo "Triggered Deploy product website for main after stale public attestation."
+
+      - name: Wait for deployment startup
+        if: steps.repair.outputs.triggered == 'true'
+        run: sleep 25
+
+      - name: Final public attestation after repair
+        id: final
+        if: steps.initial.outcome != 'success'
+        continue-on-error: true
+        run: |
+          python scripts/verify-pages-deployment.py \
+            --base-url "$CANONICAL_ROOT" \
+            --source-commit "${{ steps.source.outputs.site_source_commit }}" \
+            --stable-version "${{ steps.contract.outputs.stable_version }}" \
+            --measurement-enabled "${{ steps.contract.outputs.measurement_enabled }}" \
+            --attempts 36 \
+            --delay 10 \
+            --output _health/final-attestation.md
+
+      - name: Write production-health summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# ARSAS production website health"
+            echo
+            echo "- Expected site source: \`${{ steps.source.outputs.site_source_commit }}\`"
+            echo "- Repository HEAD: \`${{ steps.source.outputs.head_commit }}\`"
+            echo "- Stable release: \`${{ steps.contract.outputs.stable_version }}\`"
+            echo "- Initial attestation: **${{ steps.initial.outcome }}**"
+            echo "- Repair triggered: **${{ steps.repair.outputs.triggered || 'false' }}**"
+            echo "- Final attestation: **${{ steps.final.outcome || 'not-needed' }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload public attestation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-production-attestation-${{ github.run_number }}
+          path: _health/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Open or update persistent health issue
+        if: steps.initial.outcome != 'success' && steps.final.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_number="$(gh issue list --state open --search "${HEALTH_ISSUE_TITLE} in:title" --json number,title --jq '.[] | select(.title == env.HEALTH_ISSUE_TITLE) | .number' | head -n 1)"
+          body="Production attestation could not prove the current deployable website commit after one automatic redeployment.\n\nExpected site source: \`${{ steps.source.outputs.site_source_commit }}\`\nRepository HEAD: \`${{ steps.source.outputs.head_commit }}\`\nWorkflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n\nReview the \`scheduled-production-attestation-${{ github.run_number }}\` artifact before changing DNS, Pages settings or cache behavior."
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body "$body"
+          else
+            gh issue create --title "$HEALTH_ISSUE_TITLE" --body "$body"
+          fi
+
+      - name: Close recovered health issue
+        if: steps.initial.outcome == 'success' || steps.final.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_number="$(gh issue list --state open --search "${HEALTH_ISSUE_TITLE} in:title" --json number,title --jq '.[] | select(.title == env.HEALTH_ISSUE_TITLE) | .number' | head -n 1)"
+          if [ -n "$issue_number" ]; then
+            gh issue close "$issue_number" --comment "Production attestation recovered in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          fi
+
+      - name: Enforce public production health
+        if: steps.initial.outcome != 'success' && steps.final.outcome != 'success'
+        run: exit 1
