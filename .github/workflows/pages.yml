@@ -33,6 +33,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          show-progress: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,7 +42,27 @@ jobs:
           python-version: "3.12"
 
       - name: Validate product source, templates and SEO contract
-        run: python scripts/validate-product-source.py
+        id: source_validation
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p _validation
+          python scripts/validate-product-source.py > _validation/source.log 2>&1
+
+      - name: Upload source validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-source-validation
+          path: _validation/source.log
+          if-no-files-found: error
+
+      - name: Enforce source validation
+        if: steps.source_validation.outcome != 'success'
+        shell: bash
+        run: |
+          cat _validation/source.log
+          exit 1
 
       - name: Build deterministic product website
         run: python scripts/build-product-site.py --output _site
@@ -101,7 +123,27 @@ jobs:
           PY
 
       - name: Validate rendered product website
-        run: python scripts/validate-product-build.py _site
+        id: build_validation
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p _validation
+          python scripts/validate-product-build.py _site > _validation/build.log 2>&1
+
+      - name: Upload rendered validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-build-validation
+          path: _validation/build.log
+          if-no-files-found: warn
+
+      - name: Enforce rendered validation
+        if: steps.build_validation.outcome != 'success'
+        shell: bash
+        run: |
+          cat _validation/build.log
+          exit 1
 
       - name: Verify public website boundaries
         shell: bash
