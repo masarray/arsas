@@ -2,6 +2,7 @@
   const STORAGE_KEY = 'arsas_analytics_consent_v1';
   const EVENT_NAME = 'arsas:consent';
   const dntEnabled = navigator.doNotTrack === '1' || window.doNotTrack === '1';
+  const privacyPage = document.body.dataset.privacyPage === 'true';
   const banner = document.querySelector('[data-consent-banner]');
   const status = document.querySelector('[data-consent-status]');
   const analyticsConfig = document.getElementById('arsas-analytics');
@@ -48,12 +49,12 @@
     document.documentElement.dataset.analyticsConsent = preference;
     setStatus(preference);
     window.dispatchEvent(new CustomEvent(EVENT_NAME, {
-      detail: { analytics: preference, source, doNotTrack: dntEnabled, available: analyticsAvailable }
+      detail: { analytics: preference, source, doNotTrack: dntEnabled, available: analyticsAvailable, privacyPage }
     }));
   };
 
   const loadAnalytics = () => {
-    if (analyticsLoaded || dntEnabled || !analyticsAvailable) return;
+    if (privacyPage || analyticsLoaded || dntEnabled || !analyticsAvailable) return;
     analyticsLoaded = true;
     window.gtag('consent', 'update', {
       analytics_storage: 'granted',
@@ -98,7 +99,7 @@
     hideBanner();
     dispatch(effective, 'user-choice');
     if (effective === 'granted') loadAnalytics();
-    else if (analyticsLoaded || previous === 'granted') window.location.reload();
+    else if (!privacyPage && (analyticsLoaded || previous === 'granted')) window.location.reload();
   };
 
   acceptButtons.forEach(button => button.addEventListener('click', () => save('granted')));
@@ -120,6 +121,7 @@
   window.ARSASConsent = Object.freeze({
     storageKey: STORAGE_KEY,
     available: analyticsAvailable,
+    privacyPage,
     doNotTrack: dntEnabled,
     get: readPreference,
     manage: () => showBanner(true),
