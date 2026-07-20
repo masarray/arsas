@@ -34,9 +34,9 @@ internal static class FaultRecordUxBehavior
 
     private static void OnListBoxItemLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not ListBoxItem item || item.DataContext is not Iec61850MonitorDevice device)
+        if (sender is not ListBoxItem item || item.DataContext is not Iec61850MonitorDevice)
             return;
-        if (Window.GetWindow(item) is not MainWindow mainWindow)
+        if (Window.GetWindow(item) is not MainWindow)
             return;
         if (Registrations.TryGetValue(item, out _))
             return;
@@ -55,19 +55,26 @@ internal static class FaultRecordUxBehavior
                     .OfType<Button>()
                     .Any(button => (button.ToolTip?.ToString() ?? string.Empty)
                         .Contains(PrimaryRcbToolTipMarker, StringComparison.OrdinalIgnoreCase)));
-            if (actionPanel?.Parent is not Grid cardGrid)
-                return;
 
-            // RCB is a protocol-engineering tool, not a lifecycle control. Remove the
-            // icon-only duplicate and keep the primary row as Play / Stop / Edit / Save.
+            // The UniformGrid lives inside the lifecycle-action Grid. The IED card content is
+            // one level higher. Adding the capability row to the nested action Grid causes both
+            // rows to overlap and hides Play / Stop / Edit / Save.
+            if (actionPanel?.Parent is not Grid primaryActionGrid ||
+                primaryActionGrid.Parent is not Grid cardGrid)
+            {
+                return;
+            }
+
             var legacyRcbButton = actionPanel.Children
                 .OfType<Button>()
                 .FirstOrDefault(button => (button.ToolTip?.ToString() ?? string.Empty)
                     .Contains(PrimaryRcbToolTipMarker, StringComparison.OrdinalIgnoreCase));
             if (legacyRcbButton != null)
                 actionPanel.Children.Remove(legacyRcbButton);
+
             actionPanel.Columns = 4;
-            cardGrid.MinHeight = Math.Max(cardGrid.MinHeight, 100);
+            primaryActionGrid.RowDefinitions.Clear();
+            cardGrid.MinHeight = Math.Max(cardGrid.MinHeight, 108);
 
             var existing = cardGrid.Children
                 .OfType<Grid>()
@@ -93,10 +100,11 @@ internal static class FaultRecordUxBehavior
                 Tag = CapabilityPanelMarker,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 5, 0, 0)
+                Margin = new Thickness(0, 7, 0, 1)
             };
             for (var column = 0; column < 4; column++)
                 capabilityPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
             AddCapabilityButton(capabilityPanel, gooseButton, 0);
             AddCapabilityButton(capabilityPanel, smvButton, 1);
             AddCapabilityButton(capabilityPanel, fileButton, 2);
@@ -144,8 +152,6 @@ internal static class FaultRecordUxBehavior
             return;
         }
 
-        // Discovery and connection state can be published from worker threads. WPF controls
-        // have thread affinity, so every capability-state update must be marshalled to the card UI.
         item.Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(RefreshOnUiThread));
     }
 
@@ -153,20 +159,26 @@ internal static class FaultRecordUxBehavior
     {
         var button = new Button
         {
-            Height = 25,
+            Width = double.NaN,
+            Height = 26,
             MinHeight = 0,
-            MinWidth = 0,
-            Padding = new Thickness(2, 0, 2, 0),
+            MinWidth = 44,
+            Padding = new Thickness(5, 0, 5, 0),
             Margin = new Thickness(2, 0, 2, 0),
             Focusable = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            FontSize = 9.4,
+            FontSize = 9.6,
             FontWeight = FontWeights.SemiBold,
             Content = capability,
             Tag = capability
         };
-        if (Application.Current.TryFindResource("SoftButton") is Style style)
+
+        // IedIconButton uses a restrained rounded-rectangle template (CornerRadius 9).
+        // Stretching it across a star-sized column produces a readable pill instead of the
+        // tiny ellipse caused by the large SoftButton template and narrow content width.
+        if (Application.Current.TryFindResource("IedIconButton") is Style style)
             button.Style = style;
         button.Click += click;
         return button;
