@@ -1,4 +1,4 @@
-name: Apply ARSAS release publication correction
+name: Stage ARSAS release publication correction
 
 on:
   pull_request:
@@ -6,17 +6,13 @@ on:
       - ".github/workflows/diagnose-release-temp.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
-    if: github.actor != 'github-actions[bot]'
+  stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
       - name: Correct release existence probe and retrigger publication
         shell: python
         run: |
@@ -37,12 +33,9 @@ jobs:
               raise SystemExit(f"Unexpected release version: {manifest.get('version')}")
           manifest['publicationRequest'] = 6
           manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-
-          Path('.github/workflows/diagnose-release-temp.yml').unlink()
-      - name: Commit release workflow correction
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Fix GitHub Release existence probe for ARSAS 1.6.18"
-          git push origin HEAD:${GITHUB_HEAD_REF}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corrected-release-publication-files
+          path: |
+            .github/workflows/release-windows.yml
+            .release/windows.json
