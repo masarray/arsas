@@ -3,5 +3,5 @@
   "channel": "stable",
   "platform": "windows-x64",
   "primaryAsset": "ARSAS-Windows-x64-Setup.exe",
-  "publicationRequest": 4
+  "publicationRequest": 5
 }
