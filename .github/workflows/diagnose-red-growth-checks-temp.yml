@@ -1,106 +1,44 @@
-name: Apply deterministic website evidence fix
+name: Diagnose deterministic evidence patch
 
 on:
-  push:
-    branches:
-      - fix/ci-growth-measurement
+  pull_request:
+    paths:
+      - ".github/workflows/diagnose-red-growth-checks-temp.yml"
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 jobs:
-  apply:
-    if: github.actor != 'github-actions[bot]'
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/ci-growth-measurement
-          fetch-depth: 0
-
-      - name: Remove mutable release-evidence dependency from website quality gates
-        shell: python
-        run: |
-          from pathlib import Path
-
-          quality_old = '''      - name: Prepare stable release evidence
+      - name: Capture latest patch workflow failure
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            cp landing/latest.json /tmp/arsas-published.json
-          else
-            gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > /tmp/arsas-published.json
-          fi
-'''
-          insights_old = '''      - name: Prepare stable release evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > /tmp/arsas-published.json
-'''
-          replacement = '''      - name: Prepare deterministic stable release evidence
-        shell: bash
-        run: cp landing/latest.json /tmp/arsas-published.json
-'''
-
-          for filename in ('.github/workflows/search-growth.yml', '.github/workflows/site-measurement.yml'):
-              path = Path(filename)
-              text = path.read_text(encoding='utf-8')
-              if text.count(quality_old) != 1:
-                  raise SystemExit(f'{filename}: expected one mutable quality evidence block, found {text.count(quality_old)}')
-              if text.count(insights_old) != 1:
-                  raise SystemExit(f'{filename}: expected one mutable insights evidence block, found {text.count(insights_old)}')
-              text = text.replace(quality_old, replacement).replace(insights_old, replacement)
-              path.write_text(text, encoding='utf-8')
-
-          Path('.github/workflows/diagnose-red-growth-checks-temp.yml').unlink()
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          mkdir diagnostics
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/317381483/runs?branch=fix%2Fci-growth-measurement&event=push&per_page=10" > diagnostics/runs.json
+          run_id=$(python - <<'PY'
+          import json
+          data = json.load(open('diagnostics/runs.json', encoding='utf-8'))
+          failed = [r for r in data.get('workflow_runs', []) if r.get('conclusion') == 'failure']
+          if not failed:
+              raise SystemExit('No failed patch run found')
+          print(failed[0]['id'])
+          PY
+          )
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > diagnostics/jobs.json
+          for job_id in $(python - <<'PY'
+          import json
+          data = json.load(open('diagnostics/jobs.json', encoding='utf-8'))
+          print(' '.join(str(j['id']) for j in data.get('jobs', []) if j.get('conclusion') == 'failure'))
+          PY
+          ); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" > "diagnostics/job-${job_id}.log"
+          done
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: "3.12"
-
-      - name: Validate search-growth quality path offline
-        run: |
-          set -euo pipefail
-          python -m pip install --disable-pip-version-check --quiet requests
-          cp landing/latest.json /tmp/arsas-published.json
-          python scripts/build-product-site.py --output _site_growth --release-evidence /tmp/arsas-published.json
-          python scripts/apply-search-authority.py _site_growth
-          python scripts/generate-privacy-pages.py --output _site_growth --release-evidence /tmp/arsas-published.json --measurement-id ""
-          python scripts/inject-site-measurement.py _site_growth --measurement-id ""
-          python scripts/validate-search-authority.py _site_growth
-          python scripts/check-site-health.py --site _site_growth --output _growth/health
-          python scripts/check-measurement-readiness.py --output _growth/readiness --strict
-          python scripts/build-search-growth-report.py --site _site_growth --output _growth/queue
-
-      - name: Validate site-measurement quality path offline
-        run: |
-          set -euo pipefail
-          cp landing/latest.json /tmp/arsas-published.json
-          python scripts/build-product-site.py --output _site_measurement --release-evidence /tmp/arsas-published.json
-          python scripts/generate-privacy-pages.py --output _site_measurement --release-evidence /tmp/arsas-published.json --measurement-id ""
-          python scripts/inject-site-measurement.py _site_measurement --measurement-id ""
-          python scripts/stamp-site-build.py _site_measurement \
-            --source-commit "$(git rev-parse HEAD)" \
-            --source-ref "refs/heads/fix/ci-growth-measurement" \
-            --commit-timestamp "$(git show -s --format=%cI HEAD)" \
-            --workflow-run-id "$GITHUB_RUN_ID" \
-            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"
-          python scripts/validate-site-measurement.py _site_measurement --measurement-id ""
-          python scripts/check-site-health.py --site _site_measurement --output _measurement
-          python scripts/check-measurement-readiness.py --output _measurement/readiness --strict
-          GOOGLE_SERVICE_ACCOUNT_JSON="" GOOGLE_APPLICATION_CREDENTIALS="" GA4_PROPERTY_ID="" GSC_SITE_URL="https://masarray.github.io/arsas/" PAGESPEED_URLS="" GITHUB_STEP_SUMMARY="" \
-            python scripts/build-site-measurement-report.py --site _site_measurement --output _measurement/offline --days 7
-          python scripts/validate-measurement-report.py --report _measurement/offline/measurement.json --readiness _measurement/readiness/readiness.json
-
-      - name: Commit validated workflow correction
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Fix deterministic website quality evidence"
-          git push origin HEAD:fix/ci-growth-measurement
+          name: deterministic-evidence-patch-diagnostics
+          path: diagnostics
