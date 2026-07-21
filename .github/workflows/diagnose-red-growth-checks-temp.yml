@@ -1,0 +1,51 @@
+name: Diagnose failing growth checks
+
+on:
+  push:
+    branches:
+      - fix/ci-growth-measurement
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect latest failed push runs and logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          for workflow_id in 317000709 316621036; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}" > "diagnostics/workflow-${workflow_id}.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?branch=main&event=push&per_page=10" > "diagnostics/runs-${workflow_id}.json"
+            run_id=$(python - "$workflow_id" <<'PY'
+          import json, sys
+          wid = sys.argv[1]
+          data = json.load(open(f'diagnostics/runs-{wid}.json', encoding='utf-8'))
+          failed = [r for r in data.get('workflow_runs', []) if r.get('conclusion') == 'failure']
+          if not failed:
+              raise SystemExit(f'No failed main push run found for workflow {wid}')
+          print(failed[0]['id'])
+          PY
+            )
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "diagnostics/jobs-${workflow_id}.json"
+            failed_job_ids=$(python - "$workflow_id" <<'PY'
+          import json, sys
+          wid = sys.argv[1]
+          data = json.load(open(f'diagnostics/jobs-{wid}.json', encoding='utf-8'))
+          print(' '.join(str(j['id']) for j in data.get('jobs', []) if j.get('conclusion') == 'failure'))
+          PY
+            )
+            for job_id in $failed_job_ids; do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" > "diagnostics/job-${job_id}.log"
+            done
+          done
+          find diagnostics -maxdepth 1 -type f -print
+      - uses: actions/upload-artifact@v4
+        with:
+          name: failing-growth-check-diagnostics
+          path: diagnostics
