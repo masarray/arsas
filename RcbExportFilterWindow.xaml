@@ -1,150 +1,113 @@
 <Window x:Class="ArIED61850Tester.RcbExportFilterWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RCB Export Filter — Legacy SAS" Height="720" Width="1040" MinHeight="680" MinWidth="960"
+        Title="RCB Export Filter — Legacy SAS"
+        Height="650" Width="1020" MinHeight="590" MinWidth="900"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
         Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded">
     <Window.Resources>
         <SolidColorBrush x:Key="RcbInk" Color="#20304A"/>
-        <SolidColorBrush x:Key="RcbMuted" Color="#66758B"/>
-        <SolidColorBrush x:Key="RcbLine" Color="#D8E2F0"/>
-
+        <SolidColorBrush x:Key="RcbMuted" Color="#68788E"/>
         <Style x:Key="RcbTableHeader" TargetType="DataGridColumnHeader">
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="11,0"/>
             <Setter Property="Background" Value="#EDF3FA"/>
             <Setter Property="Foreground" Value="#52647D"/>
-            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontSize" Value="11.3"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="BorderBrush" Value="#D7E2F0"/>
             <Setter Property="BorderThickness" Value="0,0,1,1"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
-
         <Style x:Key="RcbDataGridCell" TargetType="DataGridCell">
-            <Setter Property="Padding" Value="12,9"/>
-            <Setter Property="BorderBrush" Value="#E4EAF3"/>
+            <Setter Property="Padding" Value="11,7"/>
+            <Setter Property="BorderBrush" Value="#E1E8F1"/>
             <Setter Property="BorderThickness" Value="0,0,1,1"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Foreground" Value="{StaticResource RcbInk}"/>
-            <Setter Property="FontSize" Value="12.2"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#EAF2FF"/>
+                    <Setter Property="Background" Value="#E7F0FD"/>
                     <Setter Property="Foreground" Value="{StaticResource RcbInk}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
-
         <Style x:Key="RcbDataGridRow" TargetType="DataGridRow">
-            <Setter Property="MinHeight" Value="58"/>
+            <Setter Property="MinHeight" Value="54"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
                 <Trigger Property="AlternationIndex" Value="1"><Setter Property="Background" Value="#FAFCFF"/></Trigger>
-                <DataTrigger Binding="{Binding IsSelectable}" Value="False"><Setter Property="Opacity" Value="0.72"/></DataTrigger>
-                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F1F6FE"/></Trigger>
-                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#EAF2FF"/></Trigger>
+                <DataTrigger Binding="{Binding IsSelectable}" Value="False"><Setter Property="Opacity" Value="0.68"/></DataTrigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F0F5FC"/></Trigger>
+                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#E2ECFA"/></Trigger>
             </Style.Triggers>
         </Style>
-
         <Style x:Key="RcbCheckBox" TargetType="CheckBox">
-            <Setter Property="Width" Value="20"/>
-            <Setter Property="Height" Value="20"/>
+            <Setter Property="Width" Value="19"/>
+            <Setter Property="Height" Value="19"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="18">
+    <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="12"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="12"/>
+            <RowDefinition Height="10"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="12"/>
+            <RowDefinition Height="10"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="14"/>
+            <RowDefinition Height="10"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#D4E0EF" BorderThickness="1"
-                CornerRadius="22" Padding="20,17" Effect="{StaticResource CardShadow}">
+        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#D6E1EF" BorderThickness="1"
+                CornerRadius="14" Padding="14,10" Effect="{StaticResource CardShadow}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="22"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Border Width="52" Height="52" CornerRadius="17" Margin="0,0,15,0">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#DBEAFE" Offset="0"/>
-                            <GradientStop Color="#E0E7FF" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Grid Width="27" Height="27" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Path Data="M7,5 H21 M7,12 H21 M7,19 H21" Stroke="#315DBF" StrokeThickness="2"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                        <Path Data="M1.5,5 L2.8,6.3 L5.2,3.7 M1.5,12 L2.8,13.3 L5.2,10.7 M1.5,19 L2.8,20.3 L5.2,17.7"
-                              Stroke="#315DBF" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                    </Grid>
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="RCB Export Filter" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
+                    <Border Background="#FFF7E8" BorderBrush="#E8D8B7" BorderThickness="1" CornerRadius="9"
+                            Padding="7,2" Margin="9,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="LEGACY SAS · RETAIN 1" FontSize="9.2" FontWeight="Bold" Foreground="#835A17"/>
+                    </Border>
+                    <Border Background="#EEF4FF" BorderBrush="#CBDCF8" BorderThickness="1" CornerRadius="9"
+                            Padding="7,2" Margin="7,0,0,0" VerticalAlignment="Center" Visibility="{Binding MockBadgeVisibility}">
+                        <TextBlock Text="UX MOCK" FontSize="9.1" FontWeight="Bold" Foreground="#315DBF"/>
+                    </Border>
+                </StackPanel>
+                <Border Grid.Column="1" Width="1" Background="#E2E8F1" Margin="7,0"/>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding IedName}" FontSize="12.7" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
+                    <TextBlock Text="{Binding Endpoint}" Margin="0,2,0,0" FontSize="10.7" Foreground="{StaticResource RcbMuted}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="#16A34A" Margin="0,0,7,0"/>
+                    <TextBlock Text="{Binding AvailabilityCheckedText}" FontSize="11.8" Foreground="{StaticResource RcbInk}"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button Grid.Column="6" x:Name="CheckAvailabilityButton" Style="{StaticResource SoftButton}"
+                        Padding="13,7" Click="CheckAvailability_Click" ToolTip="Read-only availability check">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="RCB Export Filter" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
-                        <Border Background="#EEF4FF" BorderBrush="#CBDCF8" BorderThickness="1" CornerRadius="10"
-                                Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center"
-                                Visibility="{Binding MockBadgeVisibility}">
-                            <TextBlock Text="UX MOCK" FontSize="9.8" FontWeight="Bold" Foreground="#315DBF"/>
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Text="Keep exactly one report control block for deterministic import into legacy SAS"
-                               Margin="0,4,0,0" FontSize="12.6" Foreground="{StaticResource RcbMuted}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Text="LEGACY SAS MODE" FontSize="10.4" FontWeight="Bold" Foreground="#8A5B0A" HorizontalAlignment="Right"/>
-                    <TextBlock Text="Exactly 1 RCB will be retained" Margin="0,4,0,0" FontSize="12.2"
-                               FontWeight="SemiBold" Foreground="#7A4D00" HorizontalAlignment="Right"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Border Grid.Row="2" Background="#F9FBFE" BorderBrush="#D7E2F0" BorderThickness="1"
-                CornerRadius="16" Padding="14,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.1*"/>
-                    <ColumnDefinition Width="1.1*"/>
-                    <ColumnDefinition Width="1.5*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="IED" FontSize="10.3" FontWeight="SemiBold" Foreground="#7A889C"/>
-                    <TextBlock Text="{Binding IedName}" Margin="0,3,0,0" FontSize="13.2" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="ENDPOINT" FontSize="10.3" FontWeight="SemiBold" Foreground="#7A889C"/>
-                    <TextBlock Text="{Binding Endpoint}" Margin="0,3,0,0" FontSize="13.2" Foreground="{StaticResource RcbInk}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="AVAILABILITY" FontSize="10.3" FontWeight="SemiBold" Foreground="#7A889C"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Ellipse Width="7" Height="7" Fill="#16A34A" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock Text="{Binding AvailabilityCheckedText}" FontSize="12.6" Foreground="{StaticResource RcbInk}"/>
-                    </StackPanel>
-                </StackPanel>
-                <Button Grid.Column="3" x:Name="CheckAvailabilityButton" Style="{StaticResource SoftButton}"
-                        Padding="13,8" Click="CheckAvailability_Click">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="M18,8 A7,7 0 1 0 19,13 M18,3 V8 H13" Width="16" Height="16"
-                              Stretch="Uniform" Stroke="#315DBF" StrokeThickness="1.8" Fill="Transparent"
+                        <Path Data="M18,8 A7,7 0 1 0 19,13 M18,3 V8 H13" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="#315DBF" StrokeThickness="1.8" Fill="Transparent"
                               StrokeStartLineCap="Round" StrokeEndLineCap="Round" Margin="0,0,7,0"/>
                         <TextBlock x:Name="CheckAvailabilityText" Text="Check Availability"/>
                     </StackPanel>
@@ -152,51 +115,54 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#D4E0EF" BorderThickness="1" CornerRadius="18" ClipToBounds="True">
+        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D4E0EF" BorderThickness="1" CornerRadius="0" ClipToBounds="True">
             <DataGrid x:Name="RcbGrid" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                       AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
-                      CanUserSortColumns="False" HeadersVisibility="Column" GridLinesVisibility="None"
+                      CanUserSortColumns="False" HeadersVisibility="Column" GridLinesVisibility="All"
+                      HorizontalGridLinesBrush="#E1E8F1" VerticalGridLinesBrush="#E1E8F1"
                       RowHeaderWidth="0" AlternationCount="2" SelectionMode="Single" SelectionUnit="FullRow"
                       Background="Transparent" BorderThickness="0" ColumnHeaderStyle="{StaticResource RcbTableHeader}"
                       CellStyle="{StaticResource RcbDataGridCell}" RowStyle="{StaticResource RcbDataGridRow}"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="SELECT" Width="74">
+                    <DataGridTemplateColumn Header="SELECT" Width="70">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <CheckBox Style="{StaticResource RcbCheckBox}" IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                <CheckBox Style="{StaticResource RcbCheckBox}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           IsEnabled="{Binding IsSelectable}" Checked="RcbCheckBox_Checked" Unchecked="RcbCheckBox_Unchecked"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="REPORT CONTROL BLOCK" Width="2.1*">
+                    <DataGridTemplateColumn Header="REPORT CONTROL BLOCK" Width="2.15*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
-                                    <TextBlock Text="{Binding Reference}" Margin="0,3,0,0" FontSize="10.5" Foreground="#7A889C"
+                                    <TextBlock Text="{Binding Reference}" Margin="0,2,0,0" FontSize="10.4" Foreground="#7A889C"
                                                TextTrimming="CharacterEllipsis" ToolTip="{Binding Reference}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="TYPE" Width="1.05*" Binding="{Binding Type}"/>
+                    <DataGridTextColumn Header="TYPE" Width="1.02*" Binding="{Binding Type}"/>
                     <DataGridTemplateColumn Header="DATASET" Width="2.1*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding DataSetName}" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
-                                    <TextBlock Text="{Binding DataSetDetail}" Margin="0,3,0,0" FontSize="10.5" Foreground="#7A889C"/>
+                                    <TextBlock Text="{Binding DataSetDetail}" Margin="0,2,0,0" FontSize="10.4" Foreground="#7A889C"
+                                               TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="MEMBERS" Width="100" Binding="{Binding MemberCountText}"/>
-                    <DataGridTemplateColumn Header="STATUS" Width="1.25*">
+                    <DataGridTextColumn Header="MEMBERS" Width="98" Binding="{Binding MemberCountText}"/>
+                    <DataGridTemplateColumn Header="STATUS" Width="1.2*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" ToolTip="{Binding Reason}">
-                                    <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe UI Emoji" FontSize="15" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding Reason}">
+                                    <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe UI Emoji" FontSize="14" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding StatusText}" Margin="7,0,0,0" FontWeight="SemiBold"
                                                Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/>
                                 </StackPanel>
@@ -207,41 +173,39 @@
             </DataGrid>
         </Border>
 
-        <Grid Grid.Row="6">
+        <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="9"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="18"/>
+                <ColumnDefinition Width="14"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Button Style="{StaticResource SoftButton}" Padding="12,8" Click="ClearAll_Click"><TextBlock Text="Clear All"/></Button>
-            <Button Grid.Column="2" Style="{StaticResource SoftButton}" Padding="12,8" Click="SelectAvailable_Click"><TextBlock Text="Select First Available"/></Button>
-            <Border Grid.Column="4" Background="#EEF4FF" BorderBrush="#D3E1F8" BorderThickness="1" CornerRadius="14" Padding="14,10">
+            <Button Style="{StaticResource SoftButton}" Padding="12,7" Click="ClearAll_Click"><TextBlock Text="Clear All"/></Button>
+            <Button Grid.Column="2" Style="{StaticResource SoftButton}" Padding="12,7" Click="SelectAvailable_Click">
+                <TextBlock Text="Select First Available"/>
+            </Button>
+            <Border Grid.Column="4" Background="#F4F7FC" BorderBrush="#D8E2F0" BorderThickness="1" CornerRadius="11" Padding="13,8">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="EXPORT PREVIEW" FontSize="10.2" FontWeight="Bold" Foreground="#617696"/>
-                        <TextBlock Text="{Binding SelectionSummary}" Margin="0,4,0,0" FontSize="12.6" FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                        <TextBlock Text="{Binding RemovalSummary}" FontSize="11.8" FontWeight="SemiBold" Foreground="#315DBF" HorizontalAlignment="Right"/>
-                        <TextBlock Text="Original file remains unchanged" Margin="0,4,0,0" FontSize="10.5" Foreground="#6A7B91" HorizontalAlignment="Right"/>
-                    </StackPanel>
+                    <TextBlock Text="{Binding SelectionSummary}" FontSize="12.2" FontWeight="SemiBold"
+                               Foreground="{StaticResource RcbInk}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Column="1" Text="{Binding RemovalSummary}" Margin="14,0,0,0" FontSize="11.5"
+                               FontWeight="SemiBold" Foreground="#315DBF" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
         </Grid>
 
-        <Grid Grid.Row="8">
+        <Grid Grid.Row="6">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="{Binding SafetyText}" FontSize="11.2" Foreground="#6A7B91"/>
-                <TextBlock x:Name="MockStatusText" Text="Select one available RCB, then continue to SCL edition selection."
-                           Margin="0,3,0,0" FontSize="11.2" Foreground="#315DBF"/>
-            </StackPanel>
+            <TextBlock x:Name="MockStatusText" Text="Select one available RCB. Availability checks are read-only."
+                       FontSize="11.2" Foreground="{StaticResource RcbMuted}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding SafetyText}"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{StaticResource SoftButton}" IsCancel="True" MinWidth="104" Margin="0,0,10,0"><TextBlock Text="Cancel"/></Button>
-                <Button x:Name="ExportButton" Style="{StaticResource PrimaryButton}" MinWidth="156" Click="Export_Click" IsDefault="True">
+                <Button Style="{StaticResource SoftButton}" IsCancel="True" MinWidth="100" Margin="0,0,10,0">
+                    <TextBlock Text="Cancel"/>
+                </Button>
+                <Button x:Name="ExportButton" Style="{StaticResource PrimaryButton}" MinWidth="158" Click="Export_Click" IsDefault="True">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="M5,3 H15 L19,7 V21 H5 Z M15,3 V8 H19 M9,13 H15 M9,17 H15" Width="16" Height="16"
                               Stretch="Uniform" Stroke="White" StrokeThickness="1.6" Fill="Transparent"
