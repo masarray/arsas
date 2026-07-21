@@ -213,7 +213,7 @@ jobs:
             (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
           )
 
-          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          $null = cmd /c "gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY >NUL 2>NUL"
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) { throw "Failed to update GitHub Release assets." }
