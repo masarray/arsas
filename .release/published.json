@@ -1,12 +1,9 @@
 {
-  "schemaVersion": 1,
-  "product": "ARSAS",
   "version": "1.6.18",
   "tag": "v1.6.18",
   "channel": "stable",
   "publishedAtUtc": "2026-07-21T10:38:27Z",
   "sourceCommit": "63ffee62d073486a67ad37921a7c544661203735",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.18",
   "installer": {
     "name": "ARSAS-Windows-x64-Setup.exe",
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
@@ -21,11 +18,7 @@
   },
   "checksums": {
     "name": "ARSAS-Windows-x64-SHA256SUMS.txt",
-    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
-  },
-  "codeSigning": {
-    "status": "unsigned",
-    "platform": "Authenticode",
-    "detail": "The current public Windows binaries are not Authenticode code-signed. Windows SmartScreen may show an unrecognized-publisher warning; verify SHA-256 before use."
+    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt",
+    "sizeBytes": 193
   }
 }

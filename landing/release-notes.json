@@ -1,34 +1,36 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.17",
-  "title": "Verified updates and safer release delivery",
-  "titleId": "Update terverifikasi dan distribusi release yang lebih aman",
-  "summary": "ARSAS 1.6.17 adds a verified stable-update workflow, clearer user-controlled update handling, and reliability fixes around IED-card protocol actions and fault-record access.",
-  "summaryId": "ARSAS 1.6.17 menambahkan workflow update stabil yang terverifikasi, kontrol update yang tetap berada di tangan user, serta perbaikan reliability pada action protokol di IED card dan akses fault record.",
+  "version": "1.6.18",
+  "title": "Reliable fault-record transfer and exact RCB export",
+  "titleId": "Transfer fault record yang andal dan export RCB yang presisi",
+  "summary": "ARSAS 1.6.18 strengthens field workflows for IEC 61850 fault-record download, physical IED identity, and selected-RCB CID export while keeping the user interface compact and evidence-driven.",
+  "summaryId": "ARSAS 1.6.18 memperkuat workflow lapangan untuk download fault record IEC 61850, identitas fisik IED, dan export CID selected-RCB dengan UI yang tetap compact serta berbasis evidence.",
   "highlights": [
-    "Verified in-app update checks use the official ARSAS manifest and accept only the official stable installer URL.",
-    "Downloaded installers are checked against the published byte size and SHA-256 before Windows is allowed to open them.",
-    "The update prompt shows download progress, supports a 24-hour defer action, and keeps installation under user control.",
-    "Release publication uses the exact installer and portable artifacts that passed CI hash verification and installer smoke testing."
+    "Fault-record transfer now supports adaptive remote paths, large segmented COTP responses, automatic file scanning, overwrite-safe redownloads, and detailed failure diagnostics.",
+    "Physical IED identity is resolved independently from complete MMS Logical Device domain names, preventing incorrect IEDName export.",
+    "Selected-RCB CID export preserves the exact live MMS RCB name and prevents invalid duplicate instance suffixes such as A_BRCB_120101.",
+    "The RCB export and fault-record windows use cleaner compact layouts with clearer availability, downloaded-state, and selection feedback."
   ],
   "highlightsId": [
-    "Pemeriksaan update di dalam aplikasi menggunakan manifest resmi ARSAS dan hanya menerima URL installer stable yang resmi.",
-    "Installer yang diunduh diperiksa terhadap ukuran byte dan SHA-256 yang dipublikasikan sebelum diizinkan dibuka oleh Windows.",
-    "Prompt update menampilkan progress download, menyediakan penundaan 24 jam, dan tetap menyerahkan keputusan instalasi kepada user.",
-    "Publikasi release menggunakan artifact installer dan portable yang sama persis dengan artifact yang lulus verifikasi hash CI dan installer smoke test."
+    "Transfer fault record kini mendukung adaptive remote path, respons COTP segmented berukuran besar, scan file otomatis, redownload dengan overwrite aman, dan diagnostic kegagalan yang rinci.",
+    "Identitas fisik IED diselesaikan terpisah dari nama domain MMS Logical Device yang lengkap sehingga export IEDName tidak lagi salah.",
+    "Export CID selected-RCB mempertahankan nama RCB MMS live secara presisi dan mencegah suffix instance ganda yang tidak valid seperti A_BRCB_120101.",
+    "Window RCB export dan fault record menggunakan layout compact yang lebih bersih dengan feedback availability, status downloaded, dan selection yang lebih jelas."
   ],
   "improvements": [
-    "Protocol capability actions were moved to a dedicated IED-card row so lifecycle controls remain visible.",
-    "Capability-state refreshes are marshalled safely to the WPF UI thread when discovery state changes in the background.",
-    "Installer, portable ZIP and a combined SHA-256 file are published together through the stable release channel.",
-    "The public updater manifest is refreshed only after verified publication evidence has been recorded."
+    "COMTRADE companion files and vendor package-style records can be discovered and downloaded through the same guarded file-service workflow.",
+    "File transfer diagnostics capture the failing MMS stage, invoke ID, FRSM, session state, and request/response evidence.",
+    "Downloaded fault records remain selectable for intentional overwrite instead of being permanently disabled.",
+    "Exact live RCB-name regressions are protected by engine tests and application release gates.",
+    "Installer, portable ZIP, and combined SHA-256 checksums are published together after build and silent install/uninstall smoke tests."
   ],
   "improvementsId": [
-    "Action capability protokol dipindahkan ke row khusus pada IED card agar lifecycle control tetap terlihat.",
-    "Refresh status capability dipindahkan secara aman ke WPF UI thread ketika status discovery berubah dari background worker.",
-    "Installer, portable ZIP dan file SHA-256 gabungan dipublikasikan bersama melalui stable release channel.",
-    "Manifest updater publik hanya diperbarui setelah evidence publikasi terverifikasi selesai direkam."
+    "File pendamping COMTRADE dan record berbentuk vendor package dapat ditemukan serta diunduh melalui workflow file service yang sama dan tetap guarded.",
+    "Diagnostic transfer file merekam tahap MMS yang gagal, invoke ID, FRSM, status session, serta evidence request/response.",
+    "Fault record yang sudah terdownload tetap dapat dipilih untuk overwrite yang disengaja dan tidak dinonaktifkan permanen.",
+    "Regression nama RCB live yang presisi dilindungi oleh test engine dan release gate aplikasi.",
+    "Installer, portable ZIP, dan checksum SHA-256 gabungan dipublikasikan bersama setelah build serta silent install/uninstall smoke test."
   ],
   "knownLimitations": [
     "Windows x64 is the only packaged desktop platform in the current stable release.",
@@ -57,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.17 stable live-value workspace with IED, value, quality and timestamp evidence",
-    "altId": "Workspace live value ARSAS 1.6.17 stable dengan evidence IED, value, quality dan timestamp",
-    "caption": "Representative ARSAS 1.6.17 stable workspace. Device identity, value, quality, timestamp and acquisition context remain visible together.",
-    "captionId": "Representasi workspace stable ARSAS 1.6.17. Identitas device, value, quality, timestamp dan konteks acquisition tetap terlihat bersama."
+    "alt": "ARSAS 1.6.18 stable live-value workspace with IED, value, quality and timestamp evidence",
+    "altId": "Workspace live value ARSAS 1.6.18 stable dengan evidence IED, value, quality dan timestamp",
+    "caption": "Representative ARSAS 1.6.18 stable workspace. Device identity, value, quality, timestamp and acquisition context remain visible together.",
+    "captionId": "Representasi workspace stable ARSAS 1.6.18. Identitas device, value, quality, timestamp dan konteks acquisition tetap terlihat bersama."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.17"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.18"
 }
