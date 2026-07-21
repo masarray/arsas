@@ -1,0 +1,60 @@
+name: Apply release publication record correction
+
+on:
+  push:
+    branches:
+      - fix/release-1.6.18-publication-record
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/release-1.6.18-publication-record
+          fetch-depth: 0
+      - name: Patch metadata probe and retrigger release
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+
+          path = Path('.github/workflows/release-windows.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '''          $existingSha = $null
+          $existing = gh api $apiPath 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            $existingSha = ($existing | ConvertFrom-Json).sha
+          }
+'''
+          new = '''          $existingSha = $null
+          $existingPath = Join-Path $env:RUNNER_TEMP "arsas-published-release.json"
+          $null = cmd /c "gh api $apiPath > `"$existingPath`" 2>NUL"
+          if ($LASTEXITCODE -eq 0 -and (Test-Path $existingPath -PathType Leaf)) {
+            $existing = Get-Content $existingPath -Raw
+            if ($existing) { $existingSha = ($existing | ConvertFrom-Json).sha }
+          }
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one publication metadata probe, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          manifest_path = Path('.release/windows.json')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          if manifest.get('version') != '1.6.18':
+              raise SystemExit(f"Unexpected version {manifest.get('version')}")
+          manifest['publicationRequest'] = 7
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+          Path('.github/workflows/apply-release-publication-record-fix-temp.yml').unlink()
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix verified release publication metadata probe"
+          git push origin HEAD:fix/release-1.6.18-publication-record
