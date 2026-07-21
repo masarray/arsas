@@ -1,4 +1,4 @@
-name: Diagnose ARSAS release workflow
+name: Apply ARSAS release publication correction
 
 on:
   pull_request:
@@ -6,37 +6,43 @@ on:
       - ".github/workflows/diagnose-release-temp.yml"
 
 permissions:
-  actions: read
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Capture recent release workflow runs and failure
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/release-windows.yml/runs?per_page=10" > release-runs.json
-          python - <<'PY'
-          import json
-          data = json.load(open('release-runs.json', encoding='utf-8'))
-          rows = []
-          for run in data.get('workflow_runs', []):
-              rows.append({k: run.get(k) for k in ('id','name','event','status','conclusion','head_branch','head_sha','run_number','created_at','updated_at','html_url')})
-          open('release-runs-summary.json','w',encoding='utf-8').write(json.dumps(rows, indent=2))
-          print(json.dumps(rows, indent=2))
-          failed = next((r for r in rows if r.get('conclusion') == 'failure'), None)
-          if failed:
-              open('latest-failed-run-id.txt','w',encoding='utf-8').write(str(failed['id']))
-          PY
-          run_id=$(cat latest-failed-run-id.txt)
-          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > release-failed.log
-          tail -n 160 release-failed.log > release-failed-tail.log
-          cat release-failed-tail.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          name: release-workflow-diagnostics
-          path: |
-            release-runs-summary.json
-            release-failed-tail.log
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Correct release existence probe and retrigger publication
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+
+          workflow = Path('.github/workflows/release-windows.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null\n'
+          new = '          $null = cmd /c "gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY >NUL 2>NUL"\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one release probe, found {text.count(old)}')
+          workflow.write_text(text.replace(old, new), encoding='utf-8')
+
+          manifest_path = Path('.release/windows.json')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          if manifest.get('version') != '1.6.18':
+              raise SystemExit(f"Unexpected release version: {manifest.get('version')}")
+          manifest['publicationRequest'] = 6
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+          Path('.github/workflows/diagnose-release-temp.yml').unlink()
+      - name: Commit release workflow correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix GitHub Release existence probe for ARSAS 1.6.18"
+          git push origin HEAD:${GITHUB_HEAD_REF}
