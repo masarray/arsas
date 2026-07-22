@@ -18,6 +18,10 @@ SITE_PATHS = (
     "scripts/validate-product-build.py",
     "scripts/apply-search-authority.py",
     "scripts/validate-search-authority.py",
+    "scripts/build-responsive-media.py",
+    "scripts/validate-responsive-media.py",
+    "scripts/validate-adoption-proof.py",
+    "scripts/verify-adoption-deployment.py",
     "scripts/submit-indexnow.py",
     "scripts/inject-site-measurement.py",
     "scripts/validate-site-measurement.py",
@@ -73,7 +77,7 @@ def main() -> int:
         raise SystemExit(f"HEAD {head} does not change the deployable website; latest website source is {source}")
 
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "resolvedAtUtc": datetime.now(timezone.utc).isoformat(),
         "headCommit": head,
         "siteSourceCommit": source,
@@ -91,10 +95,7 @@ def main() -> int:
     write_output("site_source_commit", source)
     write_output("site_source_timestamp", timestamp)
     write_output("head_is_site_source", str(head_is_source).lower())
-    print(
-        "ARSAS site source resolved: "
-        f"head={head}, siteSource={source}, headIsSiteSource={head_is_source}."
-    )
+    print(f"ARSAS site source resolved: head={head}, siteSource={source}, headIsSiteSource={head_is_source}.")
     return 0
 
 
