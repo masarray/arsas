@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a deterministic SPDX 2.3 JSON SBOM for an extracted ARSAS Windows package."""
+"""Generate an SPDX 2.3 JSON SBOM for an extracted ARSAS Windows package."""
 
 from __future__ import annotations
 
@@ -11,12 +11,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
+def file_hashes(path: Path) -> tuple[str, str]:
+    sha1 = hashlib.sha1()
+    sha256 = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+            sha1.update(chunk)
+            sha256.update(chunk)
+    return sha1.hexdigest(), sha256.hexdigest()
+
+
+def normalize_created(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("created timestamp must include a timezone")
+    return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def spdx_id(relative: str) -> str:
@@ -30,6 +42,7 @@ def main() -> int:
     parser.add_argument("--package-dir", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--created", default="", help="ISO-8601 source timestamp used for reproducible SBOM metadata")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -41,29 +54,54 @@ def main() -> int:
         raise SystemExit("Version is not semantic")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", args.source_commit):
         raise SystemExit("Source commit must be a full Git SHA")
+    try:
+        created = normalize_created(args.created)
+    except ValueError as exc:
+        raise SystemExit(f"Invalid created timestamp: {exc}") from exc
 
     files = [path for path in sorted(package_dir.rglob("*")) if path.is_file()]
     if not files:
         raise SystemExit("Package directory contains no files")
+
     file_entries = []
-    verification_input = hashlib.sha1()
-    relationships = [{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package-ARSAS"}]
+    sha1_values: list[str] = []
+    relationships = [
+        {
+            "spdxElementId": "SPDXRef-DOCUMENT",
+            "relationshipType": "DESCRIBES",
+            "relatedSpdxElement": "SPDXRef-Package-ARSAS",
+        }
+    ]
     for path in files:
         relative = path.relative_to(package_dir).as_posix()
-        digest = sha256(path)
-        verification_input.update(bytes.fromhex(digest))
+        sha1_digest, sha256_digest = file_hashes(path)
+        sha1_values.append(sha1_digest)
         identifier = spdx_id(relative)
-        file_entries.append({
-            "SPDXID": identifier,
-            "fileName": "./" + relative,
-            "checksums": [{"algorithm": "SHA256", "checksumValue": digest}],
-            "licenseConcluded": "NOASSERTION",
-            "licenseInfoInFiles": ["NOASSERTION"],
-            "copyrightText": "NOASSERTION",
-        })
-        relationships.append({"spdxElementId": "SPDXRef-Package-ARSAS", "relationshipType": "CONTAINS", "relatedSpdxElement": identifier})
+        file_entries.append(
+            {
+                "SPDXID": identifier,
+                "fileName": "./" + relative,
+                "checksums": [
+                    {"algorithm": "SHA1", "checksumValue": sha1_digest},
+                    {"algorithm": "SHA256", "checksumValue": sha256_digest},
+                ],
+                "licenseConcluded": "NOASSERTION",
+                "licenseInfoInFiles": ["NOASSERTION"],
+                "copyrightText": "NOASSERTION",
+            }
+        )
+        relationships.append(
+            {
+                "spdxElementId": "SPDXRef-Package-ARSAS",
+                "relationshipType": "CONTAINS",
+                "relatedSpdxElement": identifier,
+            }
+        )
 
-    namespace_seed = hashlib.sha256((args.version + args.source_commit + verification_input.hexdigest()).encode("utf-8")).hexdigest()
+    verification_code = hashlib.sha1("".join(sorted(sha1_values)).encode("ascii")).hexdigest()
+    namespace_seed = hashlib.sha256(
+        (args.version + args.source_commit.lower() + verification_code).encode("utf-8")
+    ).hexdigest()
     document = {
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
@@ -71,27 +109,25 @@ def main() -> int:
         "name": f"ARSAS-{args.version}-windows-x64",
         "documentNamespace": f"https://github.com/masarray/arsas/sbom/{args.version}/{namespace_seed}",
         "creationInfo": {
-            "created": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "created": created,
             "creators": ["Tool: ARSAS generate-release-sbom.py", "Person: Ari Sulistiono"],
-            "licenseListVersion": "3.25",
         },
         "documentDescribes": ["SPDXRef-Package-ARSAS"],
-        "packages": [{
-            "name": "ARSAS",
-            "SPDXID": "SPDXRef-Package-ARSAS",
-            "versionInfo": args.version,
-            "downloadLocation": f"https://github.com/masarray/arsas/releases/tag/v{args.version}",
-            "filesAnalyzed": True,
-            "packageVerificationCode": {"packageVerificationCodeValue": verification_input.hexdigest()},
-            "licenseConcluded": "GPL-3.0-or-later",
-            "licenseDeclared": "GPL-3.0-or-later",
-            "copyrightText": "Copyright (C) 2026 Ari Sulistiono",
-            "externalRefs": [{
-                "referenceCategory": "PERSISTENT-ID",
-                "referenceType": "gitoid",
-                "referenceLocator": f"git:{args.source_commit.lower()}",
-            }],
-        }],
+        "packages": [
+            {
+                "name": "ARSAS",
+                "SPDXID": "SPDXRef-Package-ARSAS",
+                "versionInfo": args.version,
+                "downloadLocation": f"https://github.com/masarray/arsas/releases/tag/v{args.version}",
+                "homepage": "https://masarray.github.io/arsas/",
+                "sourceInfo": f"Built from Git commit {args.source_commit.lower()} in masarray/arsas.",
+                "filesAnalyzed": True,
+                "packageVerificationCode": {"packageVerificationCodeValue": verification_code},
+                "licenseConcluded": "GPL-3.0-or-later",
+                "licenseDeclared": "GPL-3.0-or-later",
+                "copyrightText": "Copyright (C) 2026 Ari Sulistiono",
+            }
+        ],
         "files": file_entries,
         "relationships": relationships,
     }
