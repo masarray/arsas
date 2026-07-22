@@ -1,14 +1,14 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Security vulnerability
-    url: https://github.com/masarray/arsas/security/advisories/new
-    about: Report exploitable vulnerabilities privately. Do not publish credentials, private endpoints, customer SCL, captures, relay settings, or disturbance records.
+  - name: ARSAS Quick Start
+    url: https://masarray.github.io/arsas/quick-start.html
+    about: Verify the package, network path and first read-only live value before reporting a defect.
+  - name: ARSAS FAQ
+    url: https://masarray.github.io/arsas/faq.html
+    about: Review setup, Npcap, SmartScreen, compatibility, safety and privacy answers.
   - name: Support and sanitization guidance
     url: https://github.com/masarray/arsas/blob/main/SUPPORT.md
-    about: Review troubleshooting information and required data sanitization before opening an issue.
-  - name: Product roadmap
-    url: https://github.com/masarray/arsas/blob/main/ROADMAP.md
-    about: Review current capability maturity and planned IEC 61850 milestones.
-  - name: Product website
-    url: https://masarray.github.io/arsas/
-    about: Explore ARSAS capabilities, architecture, Smart Control, and the full IEC 61850 product direction.
+    about: Remove credentials, private endpoints, confidential SCL, captures, settings and disturbance records before sharing evidence.
+  - name: Security vulnerability
+    url: https://github.com/masarray/arsas/security/advisories/new
+    about: Report security-sensitive findings privately. Do not open a public issue with credentials or exploit details.

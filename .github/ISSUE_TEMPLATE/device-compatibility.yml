@@ -1,0 +1,67 @@
+name: Device compatibility evidence
+description: Report a bounded IEC 61850 service result for one device and ARSAS version.
+title: "[Compatibility] "
+labels: ["compatibility", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report service-level evidence, not a universal vendor conclusion. Remove credentials, private endpoints, customer names, confidential SCL, captures and disturbance records.
+  - type: input
+    id: arsas-version
+    attributes:
+      label: ARSAS version
+      placeholder: 1.6.18
+    validations:
+      required: true
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2 x64
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device vendor, model and firmware
+      description: Use anonymized identifiers when disclosure is not permitted.
+    validations:
+      required: true
+  - type: dropdown
+    id: service
+    attributes:
+      label: IEC 61850 service under test
+      options: [MMS association, Live model discovery, Reporting BRCB or URCB, FileDirectory or File transfer, GOOSE, SCL export, Direct or SBO control, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Observed result
+      options: [Verified repeatedly, Conditional success, Observed once, Failed with known evidence, Not tested]
+    validations:
+      required: true
+  - type: textarea
+    id: conditions
+    attributes:
+      label: Conditions and reproducible steps
+      description: Include network boundary, permissions, object or service path and exact sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Paste exact ARSAS text or attach a sanitized screenshot. Do not include secrets or confidential project data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Evidence confirmation
+      options:
+        - label: I removed credentials, private endpoints and confidential project or device data.
+          required: true
+        - label: I understand this report is service-specific and is not IEC 61850 conformance certification.
+          required: true

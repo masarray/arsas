@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARSAS IEC 61850 Compatibility Evidence — Service-Level Matrix</title>
+  <meta name="description" content="Review bounded ARSAS compatibility evidence by IEC 61850 service, date, condition and public engineering record without universal vendor or conformance claims." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}compatibility.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <link rel="stylesheet" href="adoption.css" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="ARSAS IEC 61850 Compatibility Evidence" />
+  <meta property="og:description" content="Service-level field evidence with explicit conditions and no universal vendor claim." />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}compatibility.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-diagnostics.webp" />
+  <meta property="og:image:width" content="1507" />
+  <meta property="og:image:height" content="893" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 diagnostics used as compatibility evidence" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ARSAS Compatibility Evidence" />
+  <meta name="twitter:description" content="Service-level IEC 61850 evidence with explicit boundaries." />
+  <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-diagnostics.webp" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"ARSAS IEC 61850 Compatibility Evidence","url":"{{CANONICAL_ROOT}}compatibility.html","inLanguage":"en","isPartOf":{"@id":"{{CANONICAL_ROOT}}#website"},"about":{"@id":"{{CANONICAL_ROOT}}#software"},"author":{"@type":"Person","name":"{{AUTHOR_NAME}}"}}</script>
+</head>
+<body data-page="capabilities">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Compatibility evidence</div><span class="eyebrow">Status · conditions · evidence date · public record</span><h1>Compatibility is a <span class="gradient-text">service-level evidence claim</span>—not a vendor logo.</h1><p>ARSAS publishes only bounded evidence that can be tied to a protocol behavior, application version, condition and public engineering record. There are currently no publicly named vendor/model entries.</p><div class="hero-actions"><a class="btn btn-primary" href="quick-start.html">Start with Quick Start</a><a class="btn" href="https://github.com/masarray/arsas/issues/new?template=device-compatibility.yml" target="_blank" rel="noopener">Submit compatibility evidence</a><a class="btn btn-quiet" href="bukti-kompatibilitas.html" lang="id" hreflang="id">Bahasa Indonesia</a></div></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head"><span class="kicker">Status vocabulary</span><h2>Read the status together with its conditions.</h2></div><div class="status-legend"><span class="status-pill" data-status="verified">Verified</span><span class="status-pill" data-status="conditional">Conditional</span><span class="status-pill" data-status="observed">Observed</span><span class="status-pill">Not tested</span><span class="status-pill" data-status="known-issue">Failed with known issue</span></div><p class="boundary-callout">“Verified” means repeated evidence exists for the declared service scope. It is not IEC 61850 conformance certification and does not approve every firmware, Logical Device or project configuration.</p></div></section>
+
+    <section class="section"><div class="container evidence-grid">
+      <article class="evidence-profile" id="field-profile-a-file-service" data-evidence-profile="field-profile-a-file-service"><span class="kicker">Evidence date · 2026-07</span><h2>Anonymized field profile A — MMS file-service transport</h2><p>Vendor, model, installation and firmware are not published. The public evidence concerns protocol behavior, not product endorsement.</p><table class="evidence-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody><tr><td>MMS association</td><td><span class="status-pill" data-status="observed">Observed</span></td></tr><tr><td>FileDirectory</td><td><span class="status-pill" data-status="verified">Verified</span></td></tr><tr><td>File transfer</td><td><span class="status-pill" data-status="conditional">Conditional</span></td></tr><tr><td>Live model, reporting, GOOSE, control</td><td><span class="status-pill">Not tested</span></td></tr></tbody></table><h3>Conditions</h3><ul><li>Nested FileDirectory entries and rooted file paths were observed.</li><li>FileOpen could return a signed Integer32 FRSM, including negative values.</li><li>Large FileRead responses required segmented COTP reassembly.</li><li>Transfer success does not prove record completeness or COMTRADE scaling.</li></ul><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/36" target="_blank" rel="noopener">Directory evidence</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/38" target="_blank" rel="noopener">Signed FRSM</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/42" target="_blank" rel="noopener">Segmented COTP</a></div></article>
+
+      <article class="evidence-profile" id="field-profile-b-rcb-export" data-evidence-profile="field-profile-b-rcb-export"><span class="kicker">Evidence date · 2026-07</span><h2>Anonymized field profile B — RCB and SCL export evidence</h2><p>Vendor, model, installation and firmware are not published. Evidence remains read-only until an approved export action is requested.</p><table class="evidence-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody><tr><td>MMS association and live model</td><td><span class="status-pill" data-status="observed">Observed</span></td></tr><tr><td>Reporting evidence</td><td><span class="status-pill" data-status="conditional">Conditional</span></td></tr><tr><td>Selected-RCB export</td><td><span class="status-pill" data-status="verified">Verified</span></td></tr><tr><td>Files, GOOSE, control</td><td><span class="status-pill">Not tested</span></td></tr></tbody></table><h3>Conditions</h3><ul><li>Live RCB names, TriggerOptions, OptionalFields, BufTm and IntgPd were preserved.</li><li>Selected-RCB export retained the exact live MMS RCB identity.</li><li>Exported SCL remains an engineering baseline requiring independent validation.</li><li>No runtime RCB reservation or write is implied by this profile.</li></ul><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/36" target="_blank" rel="noopener">RCB option evidence</a><a class="btn" href="https://github.com/masarray/arsas/pull/79" target="_blank" rel="noopener">Application integration</a><a class="btn" href="https://github.com/masarray/arsas/pull/101" target="_blank" rel="noopener">Exact export release</a></div></article>
+    </div></section>
+
+    <section class="section section-tight"><div class="container split-panel"><article class="panel"><span class="kicker">Machine-readable source</span><h2>Evidence profiles are governed in JSON.</h2><p>The public <code>device-evidence.json</code> registry contains the same profile IDs, service statuses, conditions and public links shown here. CI rejects unsupported status values, missing links or a named-device claim without explicit evidence metadata.</p><div class="section-actions"><a class="btn" href="device-evidence.json">Open evidence JSON</a></div></article><article class="panel"><span class="kicker">Contribute a new profile</span><h2>Report the service behavior—not only the brand.</h2><p>Provide the ARSAS version, operating system, service under test, sanitized diagnostics, firmware when disclosure is allowed and a reproducible result. Confidential identifiers and credentials must be removed.</p><div class="section-actions"><a class="btn btn-primary" href="https://github.com/masarray/arsas/issues/new?template=device-compatibility.yml" target="_blank" rel="noopener">Open compatibility form</a><a class="btn" href="technical-review.html">Claim governance</a></div></article></div></section>
+
+    {{> download-cta}}
+  </main>
+  {{> footer}}
+</body>
+</html>

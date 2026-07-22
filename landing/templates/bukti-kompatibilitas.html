@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evidence Kompatibilitas ARSAS IEC 61850 — Matrix per Service</title>
+  <meta name="description" content="Tinjau evidence kompatibilitas ARSAS per service IEC 61850, tanggal, kondisi dan engineering record publik tanpa klaim universal vendor atau conformity." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}bukti-kompatibilitas.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <link rel="stylesheet" href="adoption.css" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="Evidence Kompatibilitas ARSAS IEC 61850" />
+  <meta property="og:description" content="Evidence field per service dengan kondisi eksplisit dan tanpa klaim universal vendor." />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}bukti-kompatibilitas.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-diagnostics.webp" />
+  <meta property="og:image:width" content="1507" />
+  <meta property="og:image:height" content="893" />
+  <meta property="og:image:alt" content="Diagnostic IEC 61850 ARSAS sebagai compatibility evidence" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Evidence Kompatibilitas ARSAS" />
+  <meta name="twitter:description" content="Evidence IEC 61850 per service dengan batas yang jelas." />
+  <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-diagnostics.webp" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Evidence Kompatibilitas ARSAS IEC 61850","url":"{{CANONICAL_ROOT}}bukti-kompatibilitas.html","inLanguage":"id","isPartOf":{"@id":"{{CANONICAL_ROOT}}#website"},"about":{"@id":"{{CANONICAL_ROOT}}#software"},"author":{"@type":"Person","name":"{{AUTHOR_NAME}}"}}</script>
+</head>
+<body data-page="capabilities">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="id.html">Beranda</a> / Evidence kompatibilitas</div><span class="eyebrow">Status · kondisi · tanggal evidence · public record</span><h1>Compatibility adalah <span class="gradient-text">klaim evidence per service</span>—bukan sekadar logo vendor.</h1><p>ARSAS hanya mempublikasikan evidence yang dapat dikaitkan dengan behavior protokol, versi aplikasi, kondisi dan engineering record publik. Saat ini belum ada entry vendor/model yang dipublikasikan dengan nama.</p><div class="hero-actions"><a class="btn btn-primary" href="panduan-mulai-arsas.html">Mulai dari Panduan Mulai</a><a class="btn" href="https://github.com/masarray/arsas/issues/new?template=device-compatibility.yml" target="_blank" rel="noopener">Kirim evidence kompatibilitas</a><a class="btn btn-quiet" href="compatibility.html" lang="en" hreflang="en">English</a></div></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head"><span class="kicker">Status vocabulary</span><h2>Baca status bersama kondisi pengujiannya.</h2></div><div class="status-legend"><span class="status-pill" data-status="verified">Verified</span><span class="status-pill" data-status="conditional">Conditional</span><span class="status-pill" data-status="observed">Observed</span><span class="status-pill">Not tested</span><span class="status-pill" data-status="known-issue">Failed with known issue</span></div><p class="boundary-callout">“Verified” berarti ada repeated evidence untuk scope service yang dinyatakan. Status ini bukan sertifikasi conformity IEC 61850 dan tidak mengesahkan seluruh firmware, Logical Device atau konfigurasi proyek.</p></div></section>
+
+    <section class="section"><div class="container evidence-grid">
+      <article class="evidence-profile" id="field-profile-a-file-service" data-evidence-profile="field-profile-a-file-service"><span class="kicker">Tanggal evidence · 2026-07</span><h2>Profile field anonim A — transport MMS file service</h2><p>Vendor, model, instalasi dan firmware tidak dipublikasikan. Evidence publik membahas behavior protokol, bukan endorsement produk.</p><table class="evidence-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody><tr><td>MMS association</td><td><span class="status-pill" data-status="observed">Observed</span></td></tr><tr><td>FileDirectory</td><td><span class="status-pill" data-status="verified">Verified</span></td></tr><tr><td>File transfer</td><td><span class="status-pill" data-status="conditional">Conditional</span></td></tr><tr><td>Live model, reporting, GOOSE, control</td><td><span class="status-pill">Not tested</span></td></tr></tbody></table><h3>Kondisi</h3><ul><li>Nested FileDirectory entry dan rooted file path teramati.</li><li>FileOpen dapat mengembalikan signed Integer32 FRSM termasuk nilai negatif.</li><li>Respons FileRead besar memerlukan segmented COTP reassembly.</li><li>Transfer berhasil tidak membuktikan record lengkap atau scaling COMTRADE.</li></ul><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/36" target="_blank" rel="noopener">Evidence directory</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/38" target="_blank" rel="noopener">Signed FRSM</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/42" target="_blank" rel="noopener">Segmented COTP</a></div></article>
+
+      <article class="evidence-profile" id="field-profile-b-rcb-export" data-evidence-profile="field-profile-b-rcb-export"><span class="kicker">Tanggal evidence · 2026-07</span><h2>Profile field anonim B — evidence RCB dan export SCL</h2><p>Vendor, model, instalasi dan firmware tidak dipublikasikan. Evidence tetap read-only sampai action export yang disetujui dilakukan.</p><table class="evidence-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody><tr><td>MMS association dan live model</td><td><span class="status-pill" data-status="observed">Observed</span></td></tr><tr><td>Evidence reporting</td><td><span class="status-pill" data-status="conditional">Conditional</span></td></tr><tr><td>Selected-RCB export</td><td><span class="status-pill" data-status="verified">Verified</span></td></tr><tr><td>File, GOOSE, control</td><td><span class="status-pill">Not tested</span></td></tr></tbody></table><h3>Kondisi</h3><ul><li>Nama RCB live, TriggerOptions, OptionalFields, BufTm dan IntgPd dipertahankan.</li><li>Export selected-RCB mempertahankan exact identity MMS RCB live.</li><li>SCL hasil export tetap baseline engineering yang membutuhkan independent validation.</li><li>Profile ini tidak menyiratkan runtime RCB reservation atau write.</li></ul><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/36" target="_blank" rel="noopener">Evidence option RCB</a><a class="btn" href="https://github.com/masarray/arsas/pull/79" target="_blank" rel="noopener">Integrasi aplikasi</a><a class="btn" href="https://github.com/masarray/arsas/pull/101" target="_blank" rel="noopener">Release exact export</a></div></article>
+    </div></section>
+
+    <section class="section section-tight"><div class="container split-panel"><article class="panel"><span class="kicker">Machine-readable source</span><h2>Profile evidence di-govern melalui JSON.</h2><p>Registry publik <code>device-evidence.json</code> memuat profile ID, status service, kondisi dan public link yang sama dengan halaman ini. CI menolak status tidak dikenal, link hilang atau named-device claim tanpa metadata evidence.</p><div class="section-actions"><a class="btn" href="device-evidence.json">Buka evidence JSON</a></div></article><article class="panel"><span class="kicker">Kontribusi profile baru</span><h2>Laporkan behavior service, bukan hanya merek.</h2><p>Sertakan versi ARSAS, operating system, service yang diuji, diagnostic sanitized, firmware bila boleh dibuka dan hasil yang reproducible. Credential serta identifier rahasia harus dihapus.</p><div class="section-actions"><a class="btn btn-primary" href="https://github.com/masarray/arsas/issues/new?template=device-compatibility.yml" target="_blank" rel="noopener">Buka form kompatibilitas</a><a class="btn" href="technical-review.html">Claim governance</a></div></article></div></section>
+
+    {{> download-cta-id}}
+  </main>
+  {{> footer}}
+</body>
+</html>

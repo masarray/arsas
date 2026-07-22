@@ -10,6 +10,10 @@ on:
       - "scripts/validate-product-build.py"
       - "scripts/apply-search-authority.py"
       - "scripts/validate-search-authority.py"
+      - "scripts/build-responsive-media.py"
+      - "scripts/validate-responsive-media.py"
+      - "scripts/validate-adoption-proof.py"
+      - "scripts/verify-adoption-deployment.py"
       - "scripts/submit-indexnow.py"
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
@@ -18,7 +22,9 @@ on:
       - "scripts/stamp-site-build.py"
       - "scripts/verify-pages-deployment.py"
       - "scripts/resolve-site-source-commit.py"
+      - ".github/ISSUE_TEMPLATE/**"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/release-supply-chain.yml"
   pull_request:
     branches: [ main ]
     paths:
@@ -28,6 +34,10 @@ on:
       - "scripts/validate-product-build.py"
       - "scripts/apply-search-authority.py"
       - "scripts/validate-search-authority.py"
+      - "scripts/build-responsive-media.py"
+      - "scripts/validate-responsive-media.py"
+      - "scripts/validate-adoption-proof.py"
+      - "scripts/verify-adoption-deployment.py"
       - "scripts/submit-indexnow.py"
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
@@ -36,7 +46,9 @@ on:
       - "scripts/stamp-site-build.py"
       - "scripts/verify-pages-deployment.py"
       - "scripts/resolve-site-source-commit.py"
+      - ".github/ISSUE_TEMPLATE/**"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/release-supply-chain.yml"
   workflow_dispatch:
 
 permissions:
@@ -65,6 +77,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install responsive media dependency
+        run: python -m pip install --disable-pip-version-check --quiet pillow
+
       - name: Resolve deployable website source
         id: site_source
         run: python scripts/resolve-site-source-commit.py --output _validation/site-source.json
@@ -84,7 +99,6 @@ jobs:
           import json
           import re
           from pathlib import Path
-
           evidence = json.loads(Path('/tmp/arsas-published.json').read_text())
           notes = json.loads(Path('landing/release-notes.json').read_text())
           if evidence.get('product') not in (None, 'ARSAS'):
@@ -103,13 +117,14 @@ jobs:
                   raise SystemExit(f'{name} size is invalid')
           PY
 
-      - name: Validate product source, templates and SEO contract
+      - name: Validate product source, SEO, adoption and field-proof contracts
         id: source_validation
         continue-on-error: true
         shell: bash
         run: |
           mkdir -p _validation
           python scripts/validate-product-source.py > _validation/source.log 2>&1
+          python scripts/validate-adoption-proof.py >> _validation/source.log 2>&1
 
       - name: Upload source validation report
         if: always()
@@ -139,6 +154,9 @@ jobs:
           GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
         run: python scripts/generate-privacy-pages.py --output _site --release-evidence /tmp/arsas-published.json --measurement-id "$GA4_MEASUREMENT_ID"
 
+      - name: Generate responsive screenshot variants
+        run: python scripts/build-responsive-media.py _site
+
       - name: Configure optional client measurement
         env:
           GA4_MEASUREMENT_ID: ${{ vars.GA4_MEASUREMENT_ID }}
@@ -162,6 +180,12 @@ jobs:
 
       - name: Validate contextual authority and guide discovery
         run: python scripts/validate-search-authority.py _site
+
+      - name: Validate adoption and field-proof output
+        run: python scripts/validate-adoption-proof.py --site _site
+
+      - name: Validate responsive screenshot output
+        run: python scripts/validate-responsive-media.py _site
 
       - name: Check internal links and fragments
         run: python scripts/check-site-health.py --site _site --output _validation/site-health
@@ -260,6 +284,9 @@ jobs:
             --stable-version "$stable_version" \
             --measurement-enabled "$measurement_enabled" \
             --output _validation/production-attestation.md
+
+      - name: Verify public adoption, evidence and responsive media surfaces
+        run: python scripts/verify-adoption-deployment.py --base-url "$CANONICAL_ROOT" --source-commit "${{ steps.site_source.outputs.site_source_commit }}"
 
       - name: Upload production attestation
         if: always()

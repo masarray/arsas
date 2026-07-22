@@ -27,6 +27,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   ARIEC61850_REF: main
@@ -51,6 +53,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Resolve release version
         id: release
@@ -186,6 +193,43 @@ jobs:
             if (-not (Test-Path $path -PathType Leaf)) { throw "Public release asset was not staged: $path" }
           }
 
+      - name: Generate SPDX 2.3 package SBOM
+        shell: powershell
+        run: |
+          python .\ArIED61850Tester\scripts\generate-release-sbom.py `
+            --package-dir "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64" `
+            --version $env:RELEASE_VERSION `
+            --source-commit $env:GITHUB_SHA `
+            --output "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-Windows-x64-SBOM.spdx.json"
+
+      - name: Validate release checksums and SBOM
+        shell: powershell
+        run: |
+          $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
+          $checksums = Get-Content (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
+          foreach ($line in $checksums) {
+            if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { throw "Invalid checksum line: $line" }
+            $expected = $Matches[1]
+            $path = Join-Path $dist $Matches[2]
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "Checksum mismatch for $path" }
+          }
+          $sbom = Get-Content (Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json") -Raw | ConvertFrom-Json
+          if ($sbom.spdxVersion -ne "SPDX-2.3" -or $sbom.packages[0].name -ne "ARSAS" -or $sbom.files.Count -lt 20) {
+            throw "Generated SPDX SBOM is incomplete."
+          }
+
+      - name: Attest installer artifact digest
+        uses: actions/attest@v4
+        with:
+          subject-path: ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe
+
+      - name: Attest portable package with SPDX SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.zip
+          sbom-path: ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
+
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -198,6 +242,7 @@ jobs:
             ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.zip
             ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe
             ArIED61850Tester/dist/ARSAS-Windows-x64-SHA256SUMS.txt
+            ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
 
       - name: Create or update GitHub Release
         if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
@@ -211,6 +256,7 @@ jobs:
             (Join-Path $dist "ARSAS-Windows-x64-Setup.exe")
             (Join-Path $dist "ARSAS-Windows-x64-Portable.zip")
             (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
+            (Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json")
           )
 
           $null = cmd /c "gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY >NUL 2>NUL"
@@ -248,6 +294,7 @@ jobs:
           $installer = Join-Path $dist "ARSAS-Windows-x64-Setup.exe"
           $portable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
           $checksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
+          $sbom = Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json"
 
           $record = [ordered]@{
             version = $env:RELEASE_VERSION
@@ -272,9 +319,17 @@ jobs:
               url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
               sizeBytes = (Get-Item $checksums).Length
             }
+            supplyChain = [ordered]@{
+              sbomName = "ARSAS-Windows-x64-SBOM.spdx.json"
+              sbomUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-SBOM.spdx.json"
+              sbomSha256 = (Get-FileHash $sbom -Algorithm SHA256).Hash.ToLowerInvariant()
+              sbomSizeBytes = (Get-Item $sbom).Length
+              attestationRepository = "https://github.com/$env:GITHUB_REPOSITORY/attestations"
+              attestationWorkflow = "release-windows.yml"
+            }
           }
 
-          $json = $record | ConvertTo-Json -Depth 5
+          $json = $record | ConvertTo-Json -Depth 6
           $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json + "`n"))
           $apiPath = "repos/$env:GITHUB_REPOSITORY/contents/.release/published.json"
           $existingSha = $null

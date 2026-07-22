@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "product": "ARSAS",
+  "updatedAt": "2026-07-22",
+  "namedDeviceCount": 0,
+  "statusVocabulary": {
+    "verified": "Repeated evidence exists for the declared scope and version. This is not IEC 61850 conformance certification.",
+    "conditional": "The workflow succeeded only under the stated conditions, permissions, paths or server behavior.",
+    "observed": "A real protocol behavior was captured and used to improve the implementation. Broad compatibility is not claimed.",
+    "not-tested": "No public evidence is available for this service or profile.",
+    "known-issue": "A reproducible limitation is documented and remains bounded by linked evidence."
+  },
+  "profiles": [
+    {
+      "id": "field-profile-a-file-service",
+      "publicLabel": "Anonymized field profile A — MMS file-service transport",
+      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "evidenceDate": "2026-07",
+      "services": {
+        "mmsAssociation": "observed",
+        "liveModel": "not-tested",
+        "reporting": "not-tested",
+        "fileDirectory": "verified",
+        "fileTransfer": "conditional",
+        "goose": "not-tested",
+        "control": "not-tested"
+      },
+      "conditions": [
+        "The server returned nested FileDirectory entries and rooted file paths.",
+        "FileOpen could return a signed Integer32 FRSM identifier, including negative values.",
+        "Large FileRead responses required segmented COTP reassembly.",
+        "Record completeness and COMTRADE scaling remain independent engineering checks."
+      ],
+      "evidenceLinks": [
+        "https://github.com/masarray/ARIEC61850/pull/36",
+        "https://github.com/masarray/ARIEC61850/pull/38",
+        "https://github.com/masarray/ARIEC61850/pull/40",
+        "https://github.com/masarray/ARIEC61850/pull/42",
+        "https://github.com/masarray/arsas/pull/79",
+        "https://github.com/masarray/arsas/pull/84",
+        "https://github.com/masarray/arsas/pull/89"
+      ]
+    },
+    {
+      "id": "field-profile-b-rcb-export",
+      "publicLabel": "Anonymized field profile B — RCB and SCL export evidence",
+      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "evidenceDate": "2026-07",
+      "services": {
+        "mmsAssociation": "observed",
+        "liveModel": "observed",
+        "reporting": "conditional",
+        "fileDirectory": "not-tested",
+        "fileTransfer": "not-tested",
+        "goose": "not-tested",
+        "control": "not-tested",
+        "selectedRcbExport": "verified"
+      },
+      "conditions": [
+        "Live RCB names, TriggerOptions, OptionalFields, BufTm and IntgPd were preserved as read-only evidence.",
+        "Selected-RCB export retained the exact live MMS RCB identity and avoided duplicate instance suffixes.",
+        "Exported SCL remains an engineering baseline and requires independent schema, project and vendor validation.",
+        "No runtime RCB reservation or write is implied by this evidence profile."
+      ],
+      "evidenceLinks": [
+        "https://github.com/masarray/ARIEC61850/pull/36",
+        "https://github.com/masarray/arsas/pull/79",
+        "https://github.com/masarray/arsas/pull/101"
+      ]
+    }
+  ]
+}

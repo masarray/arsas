@@ -1,0 +1,164 @@
+name: Backfill ARSAS release supply chain
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag, for example v1.6.19
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-supply-chain-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    name: Verify assets, publish SPDX SBOM and attest digests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release identity
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Resolve exact tagged source commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="$(git rev-parse HEAD)"
+          if [[ ! "$source_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid tagged source commit: $source_commit" >&2
+            exit 1
+          fi
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact public release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _supply
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir _supply \
+            --pattern 'ARSAS-Windows-x64-Setup.exe' \
+            --pattern 'ARSAS-Windows-x64-Portable.zip' \
+            --pattern 'ARSAS-Windows-x64-SHA256SUMS.txt'
+          test -s _supply/ARSAS-Windows-x64-Setup.exe
+          test -s _supply/ARSAS-Windows-x64-Portable.zip
+          test -s _supply/ARSAS-Windows-x64-SHA256SUMS.txt
+
+      - name: Verify release checksums before attestation
+        working-directory: _supply
+        shell: bash
+        run: sha256sum --check ARSAS-Windows-x64-SHA256SUMS.txt
+
+      - name: Extract portable package for component inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _supply/package
+          unzip -q _supply/ARSAS-Windows-x64-Portable.zip -d _supply/package
+
+      - name: Generate SPDX 2.3 package SBOM
+        shell: bash
+        run: |
+          python scripts/generate-release-sbom.py \
+            --package-dir _supply/package \
+            --version '${{ steps.release.outputs.version }}' \
+            --source-commit '${{ steps.source.outputs.source_commit }}' \
+            --output _supply/ARSAS-Windows-x64-SBOM.spdx.json
+
+      - name: Validate SBOM identity and package files
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('_supply/ARSAS-Windows-x64-SBOM.spdx.json')
+          value = json.loads(path.read_text())
+          if value.get('spdxVersion') != 'SPDX-2.3' or value.get('dataLicense') != 'CC0-1.0':
+              raise SystemExit('Invalid SPDX identity')
+          packages = value.get('packages', [])
+          if len(packages) != 1 or packages[0].get('name') != 'ARSAS':
+              raise SystemExit('Invalid ARSAS package identity')
+          if len(value.get('files', [])) < 20:
+              raise SystemExit('SBOM contains too few package files')
+          PY
+
+      - name: Publish SPDX SBOM on the tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" _supply/ARSAS-Windows-x64-SBOM.spdx.json --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Attest installer artifact digest
+        uses: actions/attest@v4
+        with:
+          subject-path: _supply/ARSAS-Windows-x64-Setup.exe
+
+      - name: Attest portable package with SPDX SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: _supply/ARSAS-Windows-x64-Portable.zip
+          sbom-path: _supply/ARSAS-Windows-x64-SBOM.spdx.json
+
+      - name: Record private supply-chain evidence
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.source_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          installer_sha="$(sha256sum _supply/ARSAS-Windows-x64-Setup.exe | cut -d' ' -f1)"
+          portable_sha="$(sha256sum _supply/ARSAS-Windows-x64-Portable.zip | cut -d' ' -f1)"
+          printf '%s\n' \
+            '# ARSAS release supply-chain evidence' \
+            '' \
+            "- Tag: $RELEASE_TAG" \
+            "- Tagged source commit: $SOURCE_COMMIT" \
+            "- Installer SHA-256: $installer_sha" \
+            "- Portable SHA-256: $portable_sha" \
+            '- SBOM: ARSAS-Windows-x64-SBOM.spdx.json' \
+            '- Attestation type: GitHub artifact digest and SBOM attestation after checksum-verified publication.' \
+            '' \
+            'This post-publication evidence does not retroactively describe another tag, does not claim a reproducible build, and is not IEC 61850 conformance certification.' \
+            > _supply/evidence.md
+          cat _supply/evidence.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload supply-chain evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-supply-chain-${{ steps.release.outputs.version }}
+          path: |
+            _supply/ARSAS-Windows-x64-SHA256SUMS.txt
+            _supply/ARSAS-Windows-x64-SBOM.spdx.json
+            _supply/evidence.md
+          if-no-files-found: warn
+          retention-days: 90

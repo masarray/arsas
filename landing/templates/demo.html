@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARSAS Guided Demo — IEC 61850 Workflow with Real Screenshots</title>
+  <meta name="description" content="Walk through ARSAS from first launch and MMS discovery to live values, diagnostics, GOOSE, fault-record transfer and selected-RCB SCL export using real product screenshots." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}demo.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <link rel="stylesheet" href="adoption.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="ARSAS Guided IEC 61850 Demo" />
+  <meta property="og:description" content="Seven real-product steps from endpoint to attributable engineering evidence." />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}demo.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-live-values.webp" />
+  <meta property="og:image:width" content="1507" />
+  <meta property="og:image:height" content="893" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 live-value workspace" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ARSAS Guided Demo" />
+  <meta name="twitter:description" content="A real-screenshot product walkthrough for IEC 61850 engineers." />
+  <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/screenshots/arsas-live-values.webp" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"ARSAS guided IEC 61850 product demo","description":"A seven-step walkthrough using real ARSAS screenshots.","inLanguage":"en","author":{"@type":"Person","name":"{{AUTHOR_NAME}}"},"image":"{{CANONICAL_ROOT}}assets/screenshots/arsas-live-values.webp","mainEntityOfPage":"{{CANONICAL_ROOT}}demo.html"}</script>
+</head>
+<body data-page="overview">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Guided demo</div><span class="eyebrow">Real screenshots · no marketing mockup · evidence-first</span><h1>See the ARSAS workflow <span class="gradient-text">before downloading.</span></h1><p>This is a guided product storyboard, not a simulated relay session or time-to-value claim. Every image comes from the current application evidence set.</p><div class="hero-actions"><a class="btn btn-primary" href="quick-start.html">Open Quick Start</a><a class="btn" href="download.html">Download Center</a><a class="btn btn-quiet" href="demo-arsas.html" lang="id" hreflang="id">Bahasa Indonesia</a></div></div></section>
+
+    <section class="section"><div class="container demo-shell" data-guided-demo><div class="demo-controls" role="tablist" aria-label="ARSAS demo steps"><button class="demo-step-button" type="button" role="tab" data-demo-step>1. Start workspace</button><button class="demo-step-button" type="button" role="tab" data-demo-step>2. Independent IED sessions</button><button class="demo-step-button" type="button" role="tab" data-demo-step>3. Live-value evidence</button><button class="demo-step-button" type="button" role="tab" data-demo-step>4. Attributable diagnostics</button><button class="demo-step-button" type="button" role="tab" data-demo-step>5. GOOSE supervision</button><button class="demo-step-button" type="button" role="tab" data-demo-step>6. Event and record context</button><button class="demo-step-button" type="button" role="tab" data-demo-step>7. Selected-RCB SCL export</button></div><div class="demo-stage">
+      <article class="demo-panel" role="tabpanel" data-demo-panel><figure><img src="assets/screenshots/arsas-first-launch.webp" width="1507" height="893" alt="ARSAS clean first-launch workspace" decoding="async" fetchpriority="high" /><figcaption class="demo-panel-copy"><h2>Start from an approved endpoint.</h2><p>Add an IED address or open SCL. The first objective is read-only identity and model evidence, not configuration change.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-multi-ied.webp" width="1507" height="893" alt="ARSAS independent multi-IED sessions" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Keep each IED attributable.</h2><p>Associations, live models, monitoring state and diagnostics remain separated by device instead of being merged into an ambiguous session.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-live-values.webp" width="1507" height="893" alt="ARSAS live values with source quality and timestamp" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Inspect value, quality, timestamp and source together.</h2><p>A selected value becomes useful evidence only when its object identity and acquisition context remain visible.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-diagnostics.webp" width="1507" height="893" alt="ARSAS IEC 61850 communication diagnostics" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Preserve negative and fallback evidence.</h2><p>Association, service, reporting and device-behavior diagnostics remain visible when an RCB is occupied, a write is rejected or polling is used.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-goose.webp" width="1507" height="893" alt="ARSAS GOOSE analyzer with sequence and payload evidence" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Supervise GOOSE as a stream.</h2><p>APPID, VLAN, stNum, sqNum, TAL, retransmission and ordered payload need to be interpreted together.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-event-log.webp" width="1507" height="893" alt="ARSAS event log and sequence evidence" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Retain event and transfer context.</h2><p>Sequence evidence and fault-record workflow diagnostics can be carried into a test record without claiming that the retrieved record is complete or correctly scaled.</p></figcaption></figure></article>
+      <article class="demo-panel" role="tabpanel" data-demo-panel hidden><figure><img src="assets/screenshots/arsas-rcb-scl-export.webp" width="1878" height="1002" alt="ARSAS selected-RCB SCL export workflow" loading="lazy" decoding="async" /><figcaption class="demo-panel-copy"><h2>Export a bounded SCL baseline.</h2><p>Choose one live RCB evidence path and preserve its exact identity. The output remains an engineering baseline requiring schema, project and vendor review.</p></figcaption></figure></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container split-panel"><article class="panel"><span class="kicker">What the demo proves</span><h2>The product exposes evidence-oriented workflows.</h2><p>The screenshots prove that these interfaces exist in the current product evidence set. They do not prove interoperability with an untested device or guarantee a result on an operational network.</p></article><article class="panel"><span class="kicker">Continue safely</span><h2>Use Quick Start before field testing.</h2><p>Verify the package, confirm network authorization, obtain one read-only value and review diagnostics before attempting reporting recovery, file transfer, GOOSE capture or control.</p><div class="section-actions"><a class="btn btn-primary" href="quick-start.html">Quick Start</a><a class="btn" href="compatibility.html">Compatibility evidence</a></div></article></div></section>
+
+    {{> download-cta}}
+  </main>
+  {{> footer}}
+  <script src="demo.js" defer></script>
+</body>
+</html>
