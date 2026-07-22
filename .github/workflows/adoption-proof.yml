@@ -1,0 +1,119 @@
+name: Validate adoption and field proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - "scripts/build-product-site.py"
+      - "scripts/apply-search-authority.py"
+      - "scripts/build-responsive-media.py"
+      - "scripts/validate-responsive-media.py"
+      - "scripts/validate-adoption-proof.py"
+      - "scripts/generate-release-sbom.py"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/adoption-proof.yml"
+      - ".github/workflows/release-supply-chain.yml"
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - "scripts/build-product-site.py"
+      - "scripts/apply-search-authority.py"
+      - "scripts/build-responsive-media.py"
+      - "scripts/validate-responsive-media.py"
+      - "scripts/validate-adoption-proof.py"
+      - "scripts/generate-release-sbom.py"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/adoption-proof.yml"
+      - ".github/workflows/release-supply-chain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adoption-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate onboarding, evidence, media and issue intake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install responsive media dependency
+        run: python -m pip install --disable-pip-version-check --quiet pillow
+
+      - name: Validate source adoption and supply-chain contracts
+        run: python scripts/validate-adoption-proof.py
+
+      - name: Build deterministic product website
+        run: python scripts/build-product-site.py --output _site --release-evidence landing/latest.json
+
+      - name: Apply contextual search authority graph
+        run: python scripts/apply-search-authority.py _site
+
+      - name: Generate bilingual privacy pages
+        run: python scripts/generate-privacy-pages.py --output _site --release-evidence landing/latest.json --measurement-id ""
+
+      - name: Generate responsive screenshot variants
+        run: python scripts/build-responsive-media.py _site
+
+      - name: Configure disabled consent-gated measurement
+        run: python scripts/inject-site-measurement.py _site --measurement-id ""
+
+      - name: Validate rendered adoption and field proof
+        run: python scripts/validate-adoption-proof.py --site _site
+
+      - name: Validate responsive media
+        run: python scripts/validate-responsive-media.py _site
+
+      - name: Validate contextual authority
+        run: python scripts/validate-search-authority.py _site
+
+      - name: Validate measurement and privacy boundaries
+        run: python scripts/validate-site-measurement.py _site --measurement-id ""
+
+      - name: Check internal links and fragments
+        run: python scripts/check-site-health.py --site _site --output _adoption/health
+
+      - name: Validate rendered product website
+        run: python scripts/validate-product-build.py _site
+
+      - name: Exercise SPDX generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _adoption/sbom-input
+          printf 'ARSAS P3 SBOM fixture\n' > _adoption/sbom-input/fixture.txt
+          python scripts/generate-release-sbom.py \
+            --package-dir _adoption/sbom-input \
+            --version 1.6.18 \
+            --source-commit 63ffee62d073486a67ad37921a7c544661203735 \
+            --output _adoption/fixture.spdx.json
+          python - <<'PY'
+          import json
+          value = json.load(open('_adoption/fixture.spdx.json'))
+          assert value['spdxVersion'] == 'SPDX-2.3'
+          assert value['packages'][0]['name'] == 'ARSAS'
+          assert len(value['files']) == 1
+          PY
+
+      - name: Upload P3 quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adoption-field-proof-quality
+          path: _adoption/
+          if-no-files-found: warn
+          retention-days: 30
