@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  ARIEC61850_REF: main
+  ARIEC61850_REF: agent/sv-core-unification
+  ARIEC61850_COMMIT: fcc05de1f4b11560195e2589aa032e1d4c4b95f7
 
 jobs:
   build-windows:
@@ -24,7 +25,7 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
-      - name: Verify premium UX, GOOSE and SAS invariants
+      - name: Verify premium UX, GOOSE, SMV and SAS invariants
         shell: powershell
         run: |
           $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
@@ -40,6 +41,9 @@ jobs:
           $gooseUi = Get-Content .\ArIED61850Tester\MainWindow.GooseSubscriber.cs -Raw
           $gooseRuntime = Get-Content .\ArIED61850Tester\Services\GooseSubscriberRuntime.cs -Raw
           $gooseModels = Get-Content .\ArIED61850Tester\Models\GooseSubscriberModels.cs -Raw
+          $smvUi = Get-Content .\ArIED61850Tester\SmvViewerWindow.xaml -Raw
+          $smvCode = Get-Content .\ArIED61850Tester\SmvViewerWindow.xaml.cs -Raw
+          $smvRuntime = Get-Content .\ArIED61850Tester\Services\SmvSnapshotCaptureService.cs -Raw
 
           if ($save -notmatch 'x:Name="EditionIndicator"' -or
               $save -notmatch 'Content="Edition 2"' -or
@@ -111,6 +115,20 @@ jobs:
             throw "SCL/discovery-aware GOOSE Subscriber runtime, canonical leaf order, or semantic metadata binding regressed."
           }
 
+          if ($smvUi -notmatch 'Content="Capture 2 cycles"' -or
+              $smvUi -notmatch 'x:Name="WaveformCanvas"' -or
+              $smvUi -notmatch 'Static waveform proof' -or
+              $smvCode -notmatch 'SmvSnapshotCaptureService' -or
+              $smvCode -notmatch 'smpCnt' -or
+              $smvCode -notmatch 'Raw lanes remain semantically unresolved' -or
+              $smvRuntime -notmatch 'SampledValuesFrameParser.TryParseEthernetFrame' -or
+              $smvRuntime -notmatch 'SvGenericAsduInspector' -or
+              $smvRuntime -notmatch 'SvSampleCounterTracker' -or
+              $smvRuntime -notmatch 'SvTimebaseResolver' -or
+              $smvRuntime -notmatch 'ether proto 0x88ba') {
+            throw "Bounded two-cycle SMV snapshot capture, raw waveform, timebase, or continuity evidence regressed."
+          }
+
           if ($sasPolicy -notmatch 'public static bool IsVisible' -or
               $sasPolicy -notmatch 'IsOperationalProtectionLeaf' -or
               $sasPolicy -notmatch 'IsFundamentalMeasurement' -or
@@ -153,6 +171,8 @@ jobs:
             ArIED61850Tester/MainWindow.CommandPanelUx.cs
             ArIED61850Tester/MainWindow.ControlDiagnostics.cs
             ArIED61850Tester/MainWindow.GooseSubscriber.cs
+            ArIED61850Tester/SmvViewerWindow.xaml
+            ArIED61850Tester/SmvViewerWindow.xaml.cs
             ArIED61850Tester/SaveSclWindow.xaml
             ArIED61850Tester/SaveSclWindow.xaml.cs
             ArIED61850Tester/GridUxBehavior.cs
@@ -161,9 +181,14 @@ jobs:
             ArIED61850Tester/docs
             ArIED61850Tester/landing
 
-      - name: Checkout ARIEC61850 engine
+      - name: Checkout pinned ARIEC61850 SV engine
         shell: powershell
-        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
+        run: |
+          git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
 
       - name: Verify required ARIEC61850 APIs
         shell: powershell
@@ -179,6 +204,10 @@ jobs:
           $gooseParser = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseFrameParser.cs"
           $gooseDecoded = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseDecodedValue.cs"
           $processBusMonitor = ".\ARIEC61850\src\AR.Iec61850\Monitoring\ProcessBusStreamMonitor.cs"
+          $svParser = ".\ARIEC61850\src\AR.Iec61850\SampledValues\SampledValuesFrameParser.cs"
+          $svInspector = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Analysis\SvGenericAsduInspector.cs"
+          $svCounter = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Measurements\SvSampleCounterTracker.cs"
+          $svTimebase = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Measurements\SvTimebaseResolver.cs"
           $npcapSource = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\NpcapProcessBusFrameSource.cs"
           $npcapProject = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 
@@ -209,14 +238,22 @@ jobs:
           if (!(Test-Path $gooseParser) -or
               !(Test-Path $gooseDecoded) -or
               !(Test-Path $processBusMonitor) -or
+              !(Test-Path $svParser) -or
+              !(Test-Path $svInspector) -or
+              !(Test-Path $svCounter) -or
+              !(Test-Path $svTimebase) -or
               !(Test-Path $npcapSource) -or
               !(Test-Path $npcapProject) -or
               !(Select-String -Path $gooseParser -Pattern "TryParseEthernetFrame" -Quiet) -or
               !(Select-String -Path $gooseDecoded -Pattern "SignalReference" -Quiet) -or
               !(Select-String -Path $processBusMonitor -Pattern "GooseValues" -Quiet) -or
               !(Select-String -Path $processBusMonitor -Pattern "TimeAllowedToLiveMilliseconds" -Quiet) -or
+              !(Select-String -Path $svParser -Pattern "TryParseEthernetFrame" -Quiet) -or
+              !(Select-String -Path $svInspector -Pattern "SvGenericPayloadInspector" -Quiet) -or
+              !(Select-String -Path $svCounter -Pattern "SvSampleCounterTransitionKind" -Quiet) -or
+              !(Select-String -Path $svTimebase -Pattern "TrustedNominalFrequencyHz" -Quiet) -or
               !(Select-String -Path $npcapSource -Pattern "CaptureAsync" -Quiet)) {
-            throw "Required ARIEC61850 live GOOSE subscribe, ordered decode, supervision, or Npcap APIs were not found."
+            throw "Required ARIEC61850 live process-bus, SV parser/inspection/timebase/counter, or Npcap APIs were not found."
           }
 
       - name: Setup .NET 8
