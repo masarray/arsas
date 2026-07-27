@@ -5,9 +5,9 @@
 
 ### Open-source IEC 61850 testing and engineering workstation for Windows
 
-**MMS · Reporting · Multi-IED Monitoring · GOOSE · File Transfer · SCL · Control · Diagnostics · Sampled Values**
+**MMS · Reporting · Multi-IED Monitoring · IP-to-SCL Generation · GOOSE · File Transfer · SCL · Control · Diagnostics · Sampled Values**
 
-ARSAS turns an approved IED endpoint or SCL file into live IEC 61850 engineering evidence: discovered models, selected values, report activity, sequence of events, GOOSE streams, fault records, SCL export context, guarded control outcomes, and attributable diagnostics.
+ARSAS turns an approved IED IP address or SCL file into live IEC 61850 engineering evidence. It can discover the complete typed MMS model from an IED, generate schema-aware Edition 2 IID or Edition 1 ICD output, prepare selected-RCB CID files, monitor values and reports, supervise GOOSE, retrieve fault records, validate guarded control, and preserve attributable diagnostics.
 
 [![Build](https://github.com/masarray/arsas/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/arsas/actions/workflows/build.yml)
 [![Pages](https://github.com/masarray/arsas/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/arsas/)
@@ -30,7 +30,7 @@ ARSAS turns an approved IED endpoint or SCL file into live IEC 61850 engineering
     <img src="Assets/screenshot/arsas%20(1).webp" alt="ARSAS IEC 61850 engineering workstation first-launch workspace" width="100%" />
   </a>
   <br />
-  <sub>Start from an IED address, an SCL file, a saved project, or the built-in communication demonstration workspace.</sub>
+  <sub>Start from an IED IP address, an SCL file, a saved project, or the built-in communication demonstration workspace.</sub>
 </div>
 
 ## Current stable release
@@ -48,41 +48,81 @@ The current public binaries are **not Authenticode code-signed**. Windows SmartS
 
 The installer build includes a stable-channel update workflow. ARSAS reads the public release manifest, validates the expected package identity, size, and SHA-256 value, and only then opens the downloaded installer.
 
-## What changed in v1.6.18
+## What the current stable release includes
 
-The README previously described an earlier development foundation. The current stable release adds important field-oriented behavior:
+The current stable release contains the field-oriented workflows that were missing from the earlier README:
 
+- **IED discovery to SCL generation** — a successful full MMS discovery stores the complete typed live model for that IED and can generate schema-aware **Edition 2 IID** or **Edition 1 ICD** output directly from the discovered IP endpoint.
+- **Generic single-IED SCL conversion** — an opened multi-IED or vendor-oriented SCL source can be converted through the engine-owned interoperability service into a bounded single-IED Edition 2 IID while retaining structured findings.
+- **Export evidence** — SCL generation writes the SCL output together with companion JSON evidence and a Markdown engineering summary; warnings and interoperability findings are also surfaced in Diagnostics.
+- **Selected-RCB CID export** — read-only availability checking, exact live RCB-name preservation, verified DataSet members and live RCB configuration evidence, with Edition 1 or Edition 2 CID profiles for controlled SAS or gateway integration.
 - **More reliable MMS fault-record retrieval** with adaptive remote-path handling, large segmented response support, signed FRSM compatibility, bounded reconnect behavior, automatic scanning, redownload/overwrite handling, and directly copyable transfer diagnostics.
 - **Partial and vendor-specific record support** so available files can be downloaded even when a complete COMTRADE companion set is not exposed by the IED.
-- **Selected-RCB CID export** with read-only availability checking, exact live RCB-name preservation, live configuration evidence, and IEC 61850 Edition 1 or Edition 2 output profiles.
 - **IED identity correction** that separates the physical IED identity from complete MMS Logical Device domain names instead of collapsing or rewriting valid model domains.
 - **Cleaner field UX** for fault-record states, retry feedback, local duplicate detection, compact RCB selection, progress, warnings, and successful export evidence.
 - **Verified Windows publication** with installer and portable packages, silent installer smoke tests, SHA-256 checksums, a stable updater manifest, and reviewed release metadata.
 
 Development after the v1.6.18 package has also expanded the public adoption layer with bilingual Quick Start and FAQ routes, a guided screenshot-based demo, bounded compatibility evidence, local troubleshooting filters, structured issue forms, responsive media, and supply-chain evidence contracts for future release outputs.
 
-> The current v1.6.18 release has verified assets and checksums, but it does not make a retroactive code-signing, SBOM, provenance, vendor-wide compatibility, or IEC 61850 conformance claim.
+> The generated SCL is vendor-neutral, typed, and schema-aware, and it is specifically intended to reduce common multi-vendor import failures. It is not a universal compatibility guarantee: every generated IID, ICD, or CID must still be reviewed and imported in the target SAS, gateway, or engineering tool under the approved FAT/SAT procedure.
+
+## IP address to SCL
+
+ARSAS supports a direct engineering path that is often missing when integrating IEDs from different vendors:
+
+```text
+IED IP address
+      ↓
+MMS association and complete live-model discovery
+      ↓
+Typed LD / LN / DO / DA / DataSet / RCB model
+      ↓
+Vendor-neutral schema-aware normalization
+      ↓
+Edition 2 IID or Edition 1 ICD
+      ↓
+Optional selected-RCB Edition 1/2 CID
+      ↓
+Target SAS / gateway import and validation
+```
+
+This workflow is designed to address frequent multi-vendor integration problems such as:
+
+- a vendor CID or ICD that is rejected by another SAS engineering tool;
+- incorrect physical IED identity inferred from a Logical Device domain;
+- valid MMS domain names being shortened or rewritten;
+- duplicated indexed RCB suffixes such as an exact live name receiving an extra `01`;
+- incomplete DataSet or FCDA membership in broad discovery data;
+- lost `TrgOps`, `OptFlds`, `BufTm`, `IntgPd`, `RptID`, or `ConfRev` values;
+- Edition 1 versus Edition 2 schema expectations;
+- a large source SCL that must be reduced to one bounded IED or one selected RCB.
+
+ARSAS does not simply copy a vendor file. For IP-discovered devices, it generates SCL from the complete typed live MMS discovery model. For opened SCL, it uses engine-owned typed conversion and export services. The complete model is retained separately from the filtered operator signal list, so UI simplification does not remove engineering objects needed by SCL export.
+
+A successful complete discovery snapshot remains available after disconnect. A project restored only from a signal cache is intentionally **not** treated as a complete model; ARSAS requires a new full discovery before IP-to-SCL generation.
 
 ## Why ARSAS
 
-IEC 61850 FAT, SAT, commissioning, and troubleshooting often lose time to disconnected tools, repeated model preparation, manual DataSet and RCB inspection, uncertain report coverage, and weak evidence when a service fails.
+IEC 61850 FAT, SAT, commissioning, and troubleshooting often lose time to disconnected tools, repeated model preparation, manual DataSet and RCB inspection, vendor-specific SCL differences, failed CID imports, uncertain report coverage, and weak evidence when a service fails.
 
 ARSAS is built as one focused workflow:
 
 ```text
 IED endpoint / SCL file / saved project
                  ↓
-Discover or restore the IEC 61850 model
+Discover or restore the complete IEC 61850 model
                  ↓
-Select values and control-ready objects
+Select operational values and control-ready objects
                  ↓
 Use reports first, with visible bounded fallback
                  ↓
 Correlate MMS values, SOE, GOOSE, files and diagnostics
                  ↓
-Retrieve fault records or export selected-RCB SCL context
+Generate IID/ICD from live discovery or normalize opened SCL
                  ↓
-Validate guarded control and preserve engineering evidence
+Optionally export one verified RCB as CID
+                 ↓
+Validate target-system import, guarded control and evidence
 ```
 
 The reusable protocol engine is maintained separately in [ARIEC61850](https://github.com/masarray/ARIEC61850). ARSAS owns the Windows application, workflow orchestration, visualization, project experience, and engineer-facing evidence.
@@ -129,14 +169,16 @@ ARSAS uses explicit maturity labels so implemented behavior is not confused with
 
 | IEC 61850 area | Status | Current scope |
 |---|---|---|
-| **MMS client and model discovery** | Available | Association, identity, Logical Devices, Logical Nodes, Data Objects, Data Attributes, values, quality, timestamps, DataSets, RCBs, type information, and communication diagnostics. |
+| **MMS client and model discovery** | Available | Association, physical IED identity, complete Logical Device/Logical Node/Data Object/Data Attribute hierarchy, values, quality, timestamps, DataSets, RCBs, type information, and communication diagnostics. |
+| **Live discovery to SCL generation** | Available | Generate a schema-aware single-IED Edition 2 IID or Edition 1 ICD from the last successful complete typed MMS discovery model for an IP-connected IED. The snapshot remains available after disconnect. |
+| **SCL workspace and generic conversion** | Available | SCD/CID/ICD/IID/SSD import, endpoint extraction, configured/live context, engine-owned generic single-IED Edition 2 conversion, schema-aware Edition 1 export, structured findings, and source-file preservation. |
+| **Selected-RCB CID export** | Available | Read-only RCB availability audit, exact runtime RCB-name preservation, verified live DataSet members and RCB options, and one-RCB Edition 1/2 CID output for controlled SAS or gateway integration. |
 | **Reporting and live monitoring** | Available | Existing BRCB/URCB inspection, report-first acquisition, exact coverage evaluation, bounded gap recovery where permitted, visible polling fallback, persisted selections, multi-IED monitoring, and SOE. |
 | **GOOSE subscriber** | Available | Read-only Npcap capture, stream supervision, APPID/VLAN/MAC metadata, `stNum`/`sqNum`, TAL, retransmissions, ordered `allData`, timeline evidence, and SCL/live-model binding. |
 | **IEC 61850 file transfer** | Available | Bounded MMS directory browsing and download, partial or grouped record handling, COMTRADE-related retrieval, progress, retry/reconnect boundaries, local duplicate detection, and detailed transfer evidence. Interoperability coverage continues to expand. |
-| **SCL workspace and selected-RCB export** | Available | SCD/CID/ICD/IID/SSD import, endpoint extraction, configured/live context, read-only RCB availability audit, and selected-RCB Edition 1/2 CID export. |
 | **Smart Control** | Available | Live `ctlModel` discovery, typed Direct and Select-Before-Operate sequences, Test/interlock/synchrocheck context, command termination, application-error evidence, and mapped process feedback. |
 | **Sampled Values / SMV** | Engineering preview | Per-IED entry points and viewer workflow; deeper decoding, SCL binding, quality supervision, timing validation, and performance work remain active. |
-| **Full visual SCL authoring** | Planned | Create and edit IED, communication, DataSet, report, GOOSE, Sampled Values, validation, diff, and reusable project output. |
+| **Full visual SCL authoring** | Planned | Create and edit IED, communication, DataSet, report, GOOSE, Sampled Values, validation, diff, and reusable project output. This is different from the already available IP-to-SCL generation and bounded conversion workflows. |
 | **Unified test-plan and evidence workspace** | Planned | Reusable FAT/SAT/commissioning steps, linked acceptance criteria, time-correlated evidence, review, and sanitized export packages. |
 
 See [ROADMAP.md](ROADMAP.md) for status definitions, milestones, definitions of done, and explicit non-goals.
@@ -179,6 +221,17 @@ Get-FileHash .\ARSAS-Windows-x64-Portable.zip -Algorithm SHA256
 6. Start monitoring and verify value, quality, timestamp, source, and diagnostics.
 7. Expand to reporting, GOOSE, file transfer, SCL export, or control only after the read-only path is understood.
 
+### Generate SCL from an IED IP address
+
+1. Add the IED by IP address and complete a successful full live discovery or **Re-scan**.
+2. Confirm that the IED card represents the intended physical device and that the Diagnostics view has no unresolved blocking discovery error.
+3. Choose **Save SCL** on that IED card.
+4. Select **Edition 2** to generate an `.iid`, or **Edition 1** to generate an `.icd`.
+5. Review the generated SCL, companion JSON evidence, Markdown summary, and any export warnings.
+6. Import the output into the target SAS or gateway engineering tool and validate identity, communication, DataSets, RCBs, references, and schema handling before project use.
+
+For a legacy or bounded integration, open **RCB**, run the read-only availability audit, select exactly one usable RCB, and generate the Edition 1 or Edition 2 CID baseline.
+
 See the bilingual [Quick Start](https://masarray.github.io/arsas/quick-start.html) and [FAQ](https://masarray.github.io/arsas/faq.html) for setup, Npcap, SmartScreen, compatibility, safety, privacy, and troubleshooting guidance.
 
 ### Explore without a live IED
@@ -192,10 +245,32 @@ The demonstration workspace is intended for UI exploration, screenshots, trainin
 ### Live MMS engineering
 
 - Maintain an independent association and lifecycle for every IED.
-- Discover the model hierarchy, values, quality, timestamps, DataSets, RCBs, control blocks, and type descriptors.
+- Discover the complete model hierarchy, values, quality, timestamps, DataSets, RCBs, control blocks, and type descriptors.
 - Search and virtualize large signal models without flattening away IED ownership.
+- Keep the complete typed model attached to the device even when the operator view filters out non-operational engineering attributes.
 - Keep configured SCL context beside observed live behavior.
 - Copy bounded, sanitized connection and protocol diagnostics for support.
+
+### IP-to-SCL generation and multi-vendor integration
+
+- Generate SCL from the last successful complete typed MMS discovery of an IP-connected IED rather than relying on a vendor-supplied CID alone.
+- Preserve physical IED identity separately from complete MMS Logical Device domain names.
+- Generate Edition 2 IID or Edition 1 ICD through ARIEC61850 schema-aware export profiles.
+- Retain typed LD, LN, DO, DA, DataSet, RCB, type, endpoint, and identity context needed by the available export profile.
+- Write structured JSON evidence and a readable Markdown summary beside the generated SCL.
+- Normalize an opened SCL into a bounded generic single-IED Edition 2 document without modifying the source file.
+- Surface schema and interoperability findings instead of silently discarding conflicting or incomplete information.
+- Reduce common multi-vendor import failures caused by schema edition, identity/reference, indexed RCB naming, DataSet membership, or vendor-file structure differences.
+- Require validation in the destination SAS or gateway because no exporter can guarantee every proprietary import rule.
+
+### Selected-RCB CID export
+
+- Audit live RCB availability without reserving, enabling, disabling, or modifying the RCB.
+- Retain the latest read-only DataSet directory and live configuration evidence for the export operation.
+- Select exactly one intended RCB and preserve its exact runtime name, DataSet members, trigger options, optional fields, buffer time, integrity period, report ID, and configuration revision where available.
+- Prevent duplicate runtime indexing such as adding an extra `01` to an already concrete live RCB name.
+- Export an IEC 61850 Edition 1 or Edition 2 CID baseline for controlled SAS or gateway integration.
+- Keep the original opened SCL and the original live discovery snapshot unchanged.
 
 ### Smart Reporting
 
@@ -221,15 +296,6 @@ The demonstration workspace is intended for UI exploration, screenshots, trainin
 - Use dedicated session lifecycle checks, signed FRSM compatibility, segmented response handling, progress, cancellation, and safe temporary files.
 - Detect local completed or incomplete records and support deliberate redownload or overwrite.
 - Copy exact sanitized failure evidence, including stage, session state, request/response context, and remote paths.
-
-### SCL context and selected-RCB CID export
-
-- Open common SCL file types and extract available endpoints.
-- Retain configured intent beside live model evidence.
-- Audit live RCB availability without reserving, enabling, or modifying the RCB.
-- Select one intended RCB and preserve its exact runtime name, DataSet members, trigger options, optional fields, buffer time, integrity period, report ID, and configuration revision where available.
-- Export an IEC 61850 Edition 1 or Edition 2 CID baseline for controlled SAS or gateway integration.
-- Keep full visual SCL project authoring explicitly on the roadmap.
 
 ### Guarded control with evidence
 
@@ -257,7 +323,7 @@ The demonstration workspace is intended for UI exploration, screenshots, trainin
                      Approved IEDs          Approved capture network
 ```
 
-Protocol parsing, transport behavior, typed service contracts, and reusable validation belong in ARIEC61850. ARSAS consumes those contracts and owns engineer-facing workflow, state, visualization, project persistence, diagnostics, and evidence presentation.
+Protocol parsing, transport behavior, typed service contracts, schema profiles, SCL conversion/export, and reusable validation belong in ARIEC61850. ARSAS consumes those contracts and owns engineer-facing workflow, state, visualization, project persistence, diagnostics, and evidence presentation.
 
 Detailed design notes are maintained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [ENGINE_COMPATIBILITY.md](ENGINE_COMPATIBILITY.md).
 
@@ -337,7 +403,7 @@ ARSAS is an engineering tool. It is not:
 - functional-safety certification;
 - cybersecurity approval for an operational station network;
 - automatic switching authority or proof of safe isolation;
-- a guarantee of universal interoperability;
+- a guarantee of universal interoperability or acceptance by every proprietary SCL importer;
 - a substitute for an approved FAT, SAT, commissioning, or operating procedure.
 
 ## Contributing
@@ -358,5 +424,5 @@ Names, logos, icons, and official-release branding are not granted by the softwa
 
 <div align="center">
   <strong>ARSAS</strong><br />
-  From an approved endpoint or SCL file to trustworthy IEC 61850 evidence—in one Windows engineering workspace.
+  From an approved IED IP address to a typed live model and integration-ready SCL—in one Windows engineering workspace.
 </div>
