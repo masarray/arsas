@@ -43,6 +43,32 @@ public sealed class IoTestTransitionEvaluatorTests
     }
 
     [Fact]
+    public void BadQualityInitialBaseline_WaitsForGoodBaseline()
+    {
+        var point = CreatePoint();
+
+        var rejected = _evaluator.StartAttempt(point, Observation(false, 1, quality: "Invalid"));
+        var recovered = _evaluator.Observe(point, Observation(false, 2, quality: "Good"));
+
+        Assert.Equal(IoTestPointState.WaitingForBaseline, rejected.State);
+        Assert.Contains("baseline not accepted", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(IoTestPointState.ArmedForOn, recovered.State);
+    }
+
+    [Fact]
+    public void QuestionableOffBaseline_DoesNotArmUntilGoodQualityArrives()
+    {
+        var point = CreatePoint();
+        _evaluator.StartAttempt(point, Observation(true, 1));
+
+        var questionable = _evaluator.Observe(point, Observation(false, 2, quality: "Questionable"));
+        var good = _evaluator.Observe(point, Observation(false, 3, quality: "Good"));
+
+        Assert.Equal(IoTestPointState.WaitingForBaseline, questionable.State);
+        Assert.Equal(IoTestPointState.ArmedForOn, good.State);
+    }
+
+    [Fact]
     public void DuplicateValues_DoNotCreateEvidence()
     {
         var point = CreatePoint();
