@@ -79,7 +79,11 @@ public sealed record SmvSnapshotResult
     public IReadOnlyList<SmvSnapshotChannel> Channels { get; init; } = Array.Empty<SmvSnapshotChannel>();
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 
-    public bool HasCounterAnomaly => GapTransitions > 0 || DuplicateTransitions > 0 || OutOfOrderTransitions > 0;
+    public bool HasCounterAnomaly =>
+        GapTransitions > 0 ||
+        DuplicateTransitions > 0 ||
+        OutOfOrderTransitions > 0 ||
+        RestartTransitions > 0;
     public bool IsComplete => CapturedSamples >= TargetSamples;
     public bool IsCleanProof => IsComplete && !HasCounterAnomaly;
     public TimeSpan CaptureDuration => CompletedAt - StartedAt;

@@ -1,36 +1,41 @@
 # Changelog
 
-Notable public changes to ArIED 61850 are recorded here. The project uses application version numbers in `ArIED61850Tester.csproj`; release tags and packages should reference the exact ARIEC61850 engine revision used for that build.
+Notable public changes to ARSAS are recorded here. Application releases must identify the exact ARIEC61850 engine commit used for build, tests, packaging, and release evidence.
 
-## Unreleased
+## 1.6.19 — Development
 
-### Added
+### Fixed
 
-- Product website for GitHub Pages with overview, feature, Smart Control, and architecture pages.
-- Search-engine metadata, canonical URLs, structured software data, sitemap, robots file, web manifest, social-preview artwork, and responsive navigation.
-- Automated landing-page validation for titles, descriptions, canonical URLs, internal links, JSON, XML, SVG, and image alternative text.
-- Documentation hub, security policy, support guide, community conduct policy, UI validation checklist, and structured issue templates.
-
-### Changed
-
-- Rebuilt the public README around the product workflow, engineering capabilities, application/engine boundary, quick start, validation boundary, and support path.
-- Standardized public product metadata on `Ari Sulistiono / masarray` and version `1.6.6`.
-- Updated CI to build against the reviewed ARIEC61850 `main` integration baseline.
-- Renamed the external-IP audit document as an evidence-based provenance review.
-- Expanded source-clean verification to website, SVG, web manifest, and public wording files.
-
-## 1.6.6 — Current development version
+- Sampled Values publisher restarts are treated as counter-continuity anomalies and can no longer be presented as a clean two-cycle proof.
+- The selected SV stream is locked while capture is active, and a completed snapshot is discarded if its immutable stream identity no longer matches the operator selection.
+- SV continuity evidence now reports restart, gap, missing-sample, duplicate, and out-of-order counts explicitly.
+- CI no longer depends on the temporary `agent/sv-core-unification` engine branch. It resolves and checks out the immutable merged engine commit from `engines/ARIEC61850.lock.json`.
 
 ### Added
 
-- Engine-owned SCL workspace integration requirement for opening common SCL file types and preparing configured-versus-live model workflows.
-- CI compatibility checks for Smart Control and SCL workspace contracts.
-- Portable Windows x64 packaging at version 1.6.6.
+- `ARSAS.Tests`, the first application-layer regression-test project.
+- Regression coverage for clean and incomplete SV windows, gap/duplicate/out-of-order/restart handling, continuity evidence, and immutable stream-selection identity.
+- Canonical `Directory.Build.props` version metadata aligned with the project, `VERSION`, packaging, and CI.
+- Test-result artifacts in the Windows build workflow.
 
 ### Changed
 
-- Open SCL now depends on the reusable ARIEC61850 workspace service rather than a separate long-term application-owned protocol parser.
-- Product metadata describes SCL-assisted project setup, live MMS discovery, independent multi-IED monitoring, reporting diagnostics, events, and guarded control.
+- Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
+- Development version advanced to `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
+
+## 1.6.18
+
+### Added
+
+- Reliable fault-record transfer across adaptive remote paths and segmented MMS responses.
+- Physical IED identity handling independent from complete MMS Logical Device domain names.
+- Selected-RCB Edition 1 and Edition 2 CID export with exact live RCB names.
+- Passive two-cycle Sampled Values snapshot preview on `main` after the original 1.6.18 release.
+
+### Changed
+
+- Compact evidence-driven fault-record and RCB export workflows.
+- Product positioning standardized on ARSAS as an IEC 61850 engineering workstation.
 
 ## 1.6.5
 
@@ -41,7 +46,6 @@ Notable public changes to ArIED 61850 are recorded here. The project uses applic
 - Per-signal Test, interlock, and synchrocheck flags.
 - Two-step confirmation for Open and Close dispatch.
 - Command evidence for control model, service result, CommandTermination, application error, timing, and process feedback.
-- Signal-selection grid sorting, keyboard filtering, visible-row bulk selection, and virtualized large-model behavior.
 
 ### Changed
 
@@ -49,17 +53,6 @@ Notable public changes to ArIED 61850 are recorded here. The project uses applic
 - Cached control-object sessions per live IED association.
 - Improved semantic Open/Closed handling when command and feedback wire representations differ.
 
-## 1.6.4
-
-### Added
-
-- Copy Diagnostic report with application/engine version, adapter, endpoint, TCP reachability, association, discovery, and communication-journal context.
-
-### Fixed
-
-- Window shutdown cleanup re-entry that could cause a WPF closing-state exception.
-- Connection documentation distinguishing TCP refusal and timeout from later IEC 61850 association stages.
-
 ## Historical licensing boundary
 
-Revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain available under their original terms on branch `archive/apache-2.0-final`. Current `main` and current community release packages are GPL-3.0-or-later only. See [docs/LICENSING.md](docs/LICENSING.md).
+Revisions through `0df1007d9538b978edba67218136bc5c4f8019ad` remain available under their original terms on branch `archive/apache-2.0-final`. Current `main` and current community release packages are GPL-3.0-or-later only. See `docs/LICENSING.md`.

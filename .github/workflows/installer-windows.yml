@@ -11,6 +11,9 @@ on:
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "ArIED61850Tester.csproj"
+      - "Directory.Build.props"
+      - "VERSION"
+      - "engines/ARIEC61850.lock.json"
   pull_request:
     paths:
       - "installer/**"
@@ -20,13 +23,13 @@ on:
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "ArIED61850Tester.csproj"
+      - "Directory.Build.props"
+      - "VERSION"
+      - "engines/ARIEC61850.lock.json"
   workflow_dispatch:
 
 permissions:
   contents: read
-
-env:
-  ARIEC61850_REF: main
 
 jobs:
   installer:
@@ -39,24 +42,56 @@ jobs:
         with:
           path: ArIED61850Tester
 
-      - name: Checkout ARIEC61850 engine
+      - name: Resolve application version and immutable engine lock
         shell: powershell
-        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
+        run: |
+          [xml]$versionProps = Get-Content ".\ArIED61850Tester\Directory.Build.props" -Raw
+          [xml]$project = Get-Content ".\ArIED61850Tester\ArIED61850Tester.csproj" -Raw
+          $version = [string]$versionProps.Project.PropertyGroup.Version
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          $versionFile = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$' -or
+              $projectVersion -ne $version -or
+              $versionFile -ne $version) {
+            throw "ARSAS version metadata is inconsistent: props=$version project=$projectVersion VERSION=$versionFile"
+          }
+
+          $lock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $lock.ref -ne 'main' -or
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Read application version
+      - name: Restore, build and test application solution
         shell: powershell
         run: |
-          [xml]$project = Get-Content ".\ArIED61850Tester\ArIED61850Tester.csproj"
-          $version = [string]$project.Project.PropertyGroup.Version
-          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
-            throw "Project version is not valid semantic versioning: $version"
-          }
-          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+          if ($LASTEXITCODE -ne 0) { throw "Solution restore failed." }
+          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Solution build failed." }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Application regression tests failed." }
 
       - name: Publish installer source
         shell: powershell

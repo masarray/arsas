@@ -48,7 +48,7 @@
                     <RowDefinition Height="8"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="8"/>
-                    <RowDefinition Height="118"/>
+                    <RowDefinition Height="132"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0">
@@ -117,7 +117,10 @@
                                    Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
                     </Grid>
 
-                    <DataGrid Grid.Row="2" ItemsSource="{Binding Streams}" SelectedItem="{Binding SelectedStream, Mode=TwoWay}"
+                    <DataGrid x:Name="StreamGrid" Grid.Row="2"
+                              ItemsSource="{Binding Streams}" SelectedItem="{Binding SelectedStream, Mode=TwoWay}"
+                              IsEnabled="{Binding IsEnabled, ElementName=CaptureButton}"
+                              SelectionChanged="P0StreamGrid_SelectionChanged"
                               AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                               CanUserDeleteRows="False" CanUserResizeRows="False" CanUserReorderColumns="False"
                               HeadersVisibility="Column" GridLinesVisibility="Horizontal"
@@ -179,6 +182,8 @@
                                        Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
                             <TextBlock Text="{Binding SnapshotEvidenceText}" Margin="0,4,0,0" FontSize="10.4"
                                        Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding SnapshotContinuityEvidenceText}" Margin="0,3,0,0" FontSize="10.4"
+                                       Foreground="#8A4B08" TextWrapping="Wrap"/>
                             <TextBlock Text="{Binding SnapshotBoundaryText}" Margin="0,4,0,0" FontSize="10.1"
                                        Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                         </StackPanel>

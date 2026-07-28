@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.6.18",
+    [string]$Version = "",
     [string]$Runtime = "win-x64",
     [bool]$SingleFile = $false,
     [bool]$SelfContained = $true,
@@ -10,6 +10,16 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root "ArIED61850Tester.csproj"
+$versionPropsPath = Join-Path $root "Directory.Build.props"
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    if (-not (Test-Path $versionPropsPath)) {
+        throw "Canonical version metadata was not found: $versionPropsPath"
+    }
+
+    [xml]$versionProps = Get-Content $versionPropsPath -Raw
+    $Version = [string]$versionProps.Project.PropertyGroup.Version
+}
 
 if ([string]::IsNullOrWhiteSpace($EngineProject)) {
     $EngineProject = Join-Path (Split-Path -Parent $root) "ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
@@ -33,7 +43,7 @@ if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreC
     $normalizedVersion = $normalizedVersion.Substring(1)
 }
 if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-.][0-9A-Za-z.-]+)?$') {
-    throw "Invalid version '$Version'. Use a value such as 1.6.18 or v1.6.18."
+    throw "Invalid version '$Version'. Use a value such as 1.6.19 or v1.6.19."
 }
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 

@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 1.6.16"
+        description: "Release version, for example 1.6.19"
         required: true
-        default: "1.6.16"
+        default: "1.6.19"
         type: string
       publish_release:
         description: "Create or update a GitHub Release"
@@ -30,12 +30,9 @@ permissions:
   id-token: write
   attestations: write
 
-env:
-  ARIEC61850_REF: main
-
 jobs:
   windows-release:
-    name: Build ARSAS portable ZIP and installer
+    name: Build, test and release ARSAS Windows packages
     runs-on: windows-latest
 
     steps:
@@ -45,25 +42,14 @@ jobs:
           path: ArIED61850Tester
           fetch-depth: 0
 
-      - name: Checkout ARIEC61850 engine
-        shell: powershell
-        run: git clone --quiet --depth 1 --branch $env:ARIEC61850_REF https://github.com/masarray/ARIEC61850.git ARIEC61850
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Resolve release version
+      - name: Resolve release identity and immutable engine lock
         id: release
         shell: powershell
         run: |
-          if ($env:GITHUB_REF_TYPE -eq "tag") {
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $rawVersion = "${{ inputs.version }}"
+          }
+          elseif ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME
           }
           elseif ($env:GITHUB_REF -eq "refs/heads/main") {
@@ -75,7 +61,7 @@ jobs:
             $rawVersion = [string]$manifest.version
           }
           else {
-            $rawVersion = "${{ inputs.version }}"
+            throw "Release version source could not be resolved for event $env:GITHUB_EVENT_NAME and ref $env:GITHUB_REF."
           }
 
           $version = $rawVersion.Trim()
@@ -83,23 +69,81 @@ jobs:
             $version = $version.Substring(1)
           }
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
-            throw "Invalid release version '$rawVersion'. Use semantic versioning such as 1.6.16 or 1.7.0-rc.1."
+            throw "Invalid release version '$rawVersion'. Use semantic versioning such as 1.6.19 or 1.7.0-rc.1."
           }
 
-          [xml]$project = Get-Content ".\ArIED61850Tester\ArIED61850Tester.csproj"
+          [xml]$versionProps = Get-Content ".\ArIED61850Tester\Directory.Build.props" -Raw
+          [xml]$project = Get-Content ".\ArIED61850Tester\ArIED61850Tester.csproj" -Raw
+          $canonicalVersion = [string]$versionProps.Project.PropertyGroup.Version
           $projectVersion = [string]$project.Project.PropertyGroup.Version
-          if ($projectVersion -ne $version) {
-            throw "Release manifest version $version does not match project version $projectVersion."
+          $versionFile = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
+          if ($canonicalVersion -ne $version -or
+              $projectVersion -ne $version -or
+              $versionFile -ne $version) {
+            throw "Release version $version does not match canonical ARSAS metadata: props=$canonicalVersion project=$projectVersion VERSION=$versionFile."
+          }
+
+          $lock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $lock.ref -ne 'main' -or
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
           }
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Verify source and licensing boundaries
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
+
+      - name: Restore, build and test exact release source
+        shell: powershell
+        run: |
+          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+          if ($LASTEXITCODE -ne 0) { throw "Release solution restore failed." }
+          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Release solution build failed." }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
+            -c Release `
+            --no-build `
+            --no-restore `
+            --logger "trx;LogFileName=arsas-release-tests.trx" `
+            --results-directory .\ArIED61850Tester\TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Release application regression tests failed." }
+
+      - name: Upload release test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-${{ steps.release.outputs.version }}-release-tests
+          path: ArIED61850Tester/TestResults/*.trx
+          if-no-files-found: error
 
       - name: Publish portable Windows package
         shell: powershell
@@ -202,7 +246,23 @@ jobs:
             --source-commit $env:GITHUB_SHA `
             --output "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-Windows-x64-SBOM.spdx.json"
 
-      - name: Validate release checksums and SBOM
+      - name: Write app and engine provenance evidence
+        shell: powershell
+        run: |
+          $evidence = [ordered]@{
+            schemaVersion = 1
+            product = "ARSAS"
+            version = $env:RELEASE_VERSION
+            applicationCommit = $env:GITHUB_SHA
+            engineRepository = $env:ARIEC61850_REPOSITORY
+            engineCommit = $env:ARIEC61850_COMMIT
+            workflow = "release-windows.yml"
+          }
+          $evidence | ConvertTo-Json -Depth 4 | Set-Content `
+            -Path ".\ArIED61850Tester\dist\ARSAS-Windows-x64-PROVENANCE.json" `
+            -Encoding utf8
+
+      - name: Validate release checksums, SBOM and provenance
         shell: powershell
         run: |
           $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
@@ -217,6 +277,11 @@ jobs:
           $sbom = Get-Content (Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json") -Raw | ConvertFrom-Json
           if ($sbom.spdxVersion -ne "SPDX-2.3" -or $sbom.packages[0].name -ne "ARSAS" -or $sbom.files.Count -lt 20) {
             throw "Generated SPDX SBOM is incomplete."
+          }
+          $provenance = Get-Content (Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json") -Raw | ConvertFrom-Json
+          if ($provenance.applicationCommit -ne $env:GITHUB_SHA -or
+              $provenance.engineCommit -ne $env:ARIEC61850_COMMIT) {
+            throw "Release provenance does not match the tested app and engine revisions."
           }
 
       - name: Attest installer artifact digest
@@ -243,6 +308,7 @@ jobs:
             ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe
             ArIED61850Tester/dist/ARSAS-Windows-x64-SHA256SUMS.txt
             ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
+            ArIED61850Tester/dist/ARSAS-Windows-x64-PROVENANCE.json
 
       - name: Create or update GitHub Release
         if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
@@ -257,6 +323,7 @@ jobs:
             (Join-Path $dist "ARSAS-Windows-x64-Portable.zip")
             (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
             (Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json")
+            (Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json")
           )
 
           $null = cmd /c "gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY >NUL 2>NUL"
@@ -295,6 +362,7 @@ jobs:
           $portable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
           $checksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
           $sbom = Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json"
+          $provenance = Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json"
 
           $record = [ordered]@{
             version = $env:RELEASE_VERSION
@@ -302,6 +370,10 @@ jobs:
             channel = "stable"
             publishedAtUtc = [DateTime]::UtcNow.ToString("o")
             sourceCommit = $env:GITHUB_SHA
+            engine = [ordered]@{
+              repository = $env:ARIEC61850_REPOSITORY
+              commit = $env:ARIEC61850_COMMIT
+            }
             installer = [ordered]@{
               name = "ARSAS-Windows-x64-Setup.exe"
               url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
@@ -324,12 +396,15 @@ jobs:
               sbomUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-SBOM.spdx.json"
               sbomSha256 = (Get-FileHash $sbom -Algorithm SHA256).Hash.ToLowerInvariant()
               sbomSizeBytes = (Get-Item $sbom).Length
+              provenanceName = "ARSAS-Windows-x64-PROVENANCE.json"
+              provenanceUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-PROVENANCE.json"
+              provenanceSha256 = (Get-FileHash $provenance -Algorithm SHA256).Hash.ToLowerInvariant()
               attestationRepository = "https://github.com/$env:GITHUB_REPOSITORY/attestations"
               attestationWorkflow = "release-windows.yml"
             }
           }
 
-          $json = $record | ConvertTo-Json -Depth 6
+          $json = $record | ConvertTo-Json -Depth 8
           $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json + "`n"))
           $apiPath = "repos/$env:GITHUB_REPOSITORY/contents/.release/published.json"
           $existingSha = $null
