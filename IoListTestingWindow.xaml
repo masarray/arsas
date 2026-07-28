@@ -3,8 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ARSAS - IO List Testing"
         Height="900" Width="1500" MinHeight="760" MinWidth="1180"
-        WindowStartupLocation="CenterOwner"
-        WindowState="Maximized"
+        WindowStartupLocation="CenterOwner" WindowState="Maximized"
         Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico">
@@ -26,7 +25,7 @@
                 <StackPanel>
                     <TextBlock Text="IO LIST TESTING" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
                     <TextBlock Text="{Binding Project.ProjectName}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                    <TextBlock Text="Dedicated FAT workspace · imported IEDs and IO-list signals only"
+                    <TextBlock Text="Dedicated FAT workspace · imported IEDs and IO-list SDI signals only"
                                Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -49,12 +48,10 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="4,2,4,10">
                         <TextBlock Text="IED TEST PLAN" Style="{StaticResource MicroLabel}"/>
-                        <TextBlock Text="Select one imported IED" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                        <TextBlock Text="Only IEDs imported from the workbook" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <ListBox ItemsSource="{Binding Project.Ieds}"
-                             SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
-                             BorderThickness="0" Background="Transparent"
-                             HorizontalContentAlignment="Stretch"
+                    <ListBox ItemsSource="{Binding Project.Ieds}" SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
+                             BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
@@ -93,12 +90,14 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Text="{Binding IedName}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                     <TextBlock Grid.Row="1" Text="{Binding IpAddress}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
-                                    <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="11.3" Foreground="{StaticResource Muted}">
+                                    <TextBlock Grid.Row="2" Text="{Binding IedRole}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="3" Margin="0,6,0,0" FontSize="11.3" Foreground="{StaticResource Muted}">
+                                        <Run Text="{Binding BoundCount}"/><Run Text=" bound · "/>
                                         <Run Text="{Binding PassedCount}"/><Run Text=" passed · "/>
-                                        <Run Text="{Binding ReviewCount}"/><Run Text=" review · "/>
                                         <Run Text="{Binding PendingCount}"/><Run Text=" pending"/>
                                     </TextBlock>
                                 </Grid>
@@ -121,12 +120,12 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="{Binding SelectedIed.IedName, TargetNullValue='Select an IED'}" Style="{StaticResource SectionTitle}"/>
-                            <TextBlock Text="{Binding SelectedIed.IedRole}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding SelectedIed.IedName}" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <Border Grid.Column="1" Background="#F7FAFF" BorderBrush="{StaticResource BorderSubtle}"
                                 BorderThickness="1" CornerRadius="13" Padding="11,6">
-                            <TextBlock Text="Only imported SDI signals are shown" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="Imported SDI scope · read-only preview" Style="{StaticResource Caption}"/>
                         </Border>
                     </Grid>
 
@@ -137,14 +136,16 @@
                               AlternatingRowBackground="#F8FAFD" HorizontalGridLinesBrush="{StaticResource BorderSubtle}"
                               SelectionMode="Single" SelectionUnit="FullRow">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="Test" Binding="{Binding TestEnabled}" Width="54"/>
-                            <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" Width="2.2*"/>
-                            <DataGridTextColumn Header="IEC reference" Binding="{Binding ObjectReference}" Width="2.5*"/>
-                            <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}" Width="58"/>
-                            <DataGridTextColumn Header="ON evidence" Binding="{Binding Runtime.OnEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="180"/>
-                            <DataGridTextColumn Header="OFF evidence" Binding="{Binding Runtime.OffEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="180"/>
+                            <DataGridCheckBoxColumn Header="Test" Binding="{Binding TestEnabled}" Width="52"/>
+                            <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" Width="2.1*"/>
+                            <DataGridTextColumn Header="IEC reference" Binding="{Binding ObjectReference}" Width="2.4*"/>
+                            <DataGridTextColumn Header="Live binding" Binding="{Binding LiveBindingText}" Width="112"/>
+                            <DataGridTextColumn Header="Current" Binding="{Binding Runtime.CurrentValue}" Width="100"/>
+                            <DataGridTextColumn Header="Quality" Binding="{Binding Runtime.CurrentQuality}" Width="96"/>
+                            <DataGridTextColumn Header="Source" Binding="{Binding Runtime.CurrentSource}" Width="104"/>
+                            <DataGridTextColumn Header="ON evidence" Binding="{Binding Runtime.OnEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="178"/>
+                            <DataGridTextColumn Header="OFF evidence" Binding="{Binding Runtime.OffEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="178"/>
                             <DataGridTextColumn Header="Result" Binding="{Binding Runtime.State}" Width="100"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding Runtime.StatusReason}" Width="2*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -158,9 +159,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="The runtime, Excel importer, and evidence journal are connected in the next implementation tranche."
-                           Style="{StaticResource Caption}"/>
-                <TextBlock Grid.Column="1" Text="Read-only FAT foundation" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Success}"/>
+                <TextBlock Text="{Binding WorkspaceStatus}" Style="{StaticResource Caption}"/>
+                <TextBlock Grid.Column="1" Text="Imported FAT workspace" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Success}"/>
             </Grid>
         </Border>
     </Grid>
