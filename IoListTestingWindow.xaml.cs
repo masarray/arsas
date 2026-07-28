@@ -19,14 +19,6 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     public IoListTestingWindow(
         IoTestProject project,
         IoTestSessionController session,
-        IoTestWorkspacePersistence persistence)
-        : this(project, session, persistence as IoTestWorkspacePersistence?)
-    {
-    }
-
-    private IoListTestingWindow(
-        IoTestProject project,
-        IoTestSessionController session,
         IoTestWorkspacePersistence? persistence)
     {
         Project = project ?? throw new ArgumentNullException(nameof(project));
