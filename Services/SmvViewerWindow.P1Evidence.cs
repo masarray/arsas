@@ -10,6 +10,8 @@ namespace ArIED61850Tester;
 public partial class SmvViewerWindow
 {
     private bool _isEvidenceExportBusy;
+    private string _p1CaptureAdapterDisplayText = "Unrecorded adapter";
+    private double _p1CaptureNominalFrequencyHz = 50.0;
     private string _evidenceExportStatusText =
         "Capture a snapshot to enable the portable engineering evidence bundle.";
 
@@ -37,6 +39,13 @@ public partial class SmvViewerWindow
         }
     }
 
+
+    private void CaptureP1EvidenceSelection()
+    {
+        _p1CaptureAdapterDisplayText = SelectedAdapter?.DisplayText ?? "Unrecorded adapter";
+        _p1CaptureNominalFrequencyHz = ReadSelectedFrequency();
+    }
+
     private async void ExportEvidence_Click(object sender, RoutedEventArgs e)
     {
         var snapshot = _snapshot;
@@ -51,19 +60,18 @@ public partial class SmvViewerWindow
             return;
         }
 
-        var stream = SelectedStream;
         var context = new SmvSnapshotEvidenceContext
         {
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             DeviceName = DeviceName,
             EndpointText = EndpointText,
-            AdapterDisplayText = SelectedAdapter?.DisplayText ?? "Unrecorded adapter",
-            ControlReference = stream?.ControlReference ?? string.Empty,
-            SelectedStreamId = stream?.StreamId ?? snapshot.StreamId,
-            SelectedDataSetReference = stream?.DataSetReference ?? snapshot.DataSetReference,
-            SelectedAppId = stream?.AppId ?? $"0x{snapshot.AppId:X4}",
-            SelectedDestinationMac = stream?.DestinationMac ?? snapshot.DestinationMac,
-            ExplicitNominalFrequencyHz = ReadSelectedFrequency(),
+            AdapterDisplayText = _p1CaptureAdapterDisplayText,
+            ControlReference = _p0CaptureSelection?.ControlReference ?? string.Empty,
+            SelectedStreamId = _p0CaptureSelection?.StreamId ?? snapshot.StreamId,
+            SelectedDataSetReference = _p0CaptureSelection?.DataSetReference ?? snapshot.DataSetReference,
+            SelectedAppId = _p0CaptureSelection?.AppId ?? $"0x{snapshot.AppId:X4}",
+            SelectedDestinationMac = _p0CaptureSelection?.DestinationMac ?? snapshot.DestinationMac,
+            ExplicitNominalFrequencyHz = _p1CaptureNominalFrequencyHz,
             Provenance = SmvSnapshotEvidenceProvenance.LoadCurrent()
         };
 
