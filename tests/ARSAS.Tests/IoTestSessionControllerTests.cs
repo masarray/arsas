@@ -46,6 +46,41 @@ public sealed class IoTestSessionControllerTests
     }
 
     [Fact]
+    public void Resume_RebindsReplacementLivePointAfterMonitorRestart()
+    {
+        var fixture = CreateFixture();
+        using var controller = fixture.Controller;
+        controller.Start(fixture.Ied);
+        controller.Pause();
+
+        fixture.Device.Points.Clear();
+        var replacement = new Iec61850MonitorPoint
+        {
+            DeviceId = fixture.Device.DeviceId,
+            DeviceName = fixture.Device.Name,
+            IpAddress = fixture.Device.IpAddress,
+            SignalName = fixture.Point.SignalName,
+            IecReference = fixture.Point.ObjectReference,
+            FunctionalConstraint = "ST",
+            Value = "False",
+            Quality = "Good",
+            DeviceTimestamp = "2026-07-28T08:01:00.000Z",
+            SourceMode = "BRCB",
+            Sequence = 10,
+            Status = "Live"
+        };
+        fixture.Device.Points.Add(replacement);
+
+        var resumed = controller.Resume();
+        controller.Enqueue(Event(fixture, replacement, "False", "True", 11));
+        controller.Enqueue(Event(fixture, replacement, "True", "False", 12));
+
+        Assert.True(resumed.Succeeded, resumed.Message);
+        Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
+        Assert.Equal(IoTestSessionState.Completed, controller.State);
+    }
+
+    [Fact]
     public void DeviceDisconnect_InterruptsRunningSession()
     {
         var fixture = CreateFixture();
@@ -149,18 +184,26 @@ public sealed class IoTestSessionControllerTests
             action => action(),
             root);
 
-    private static Iec61850EventEntry Event(Fixture fixture, string oldValue, string newValue, long sequence) => new()
+    private static Iec61850EventEntry Event(Fixture fixture, string oldValue, string newValue, long sequence)
+        => Event(fixture, fixture.LivePoint, oldValue, newValue, sequence);
+
+    private static Iec61850EventEntry Event(
+        Fixture fixture,
+        Iec61850MonitorPoint livePoint,
+        string oldValue,
+        string newValue,
+        long sequence) => new()
     {
         Sequence = sequence,
         DeviceId = fixture.Device.DeviceId,
-        PointKey = fixture.LivePoint.PointKey,
+        PointKey = livePoint.PointKey,
         DeviceTimestamp = new DateTimeOffset(2026, 7, 28, 8, 0, 0, TimeSpan.Zero)
             .AddMilliseconds(sequence * 100)
             .ToString("O"),
         DeviceName = fixture.Device.Name,
         IpAddress = fixture.Device.IpAddress,
         SignalName = fixture.Point.SignalName,
-        IecReference = fixture.LivePoint.IecReference,
+        IecReference = livePoint.IecReference,
         OldValue = oldValue,
         NewValue = newValue,
         Quality = "Good",
