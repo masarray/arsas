@@ -106,11 +106,36 @@ public sealed class IoTestPersistenceTests
     }
 
     [Fact]
-    public async Task ArsasProject_RoundTripsProgressAndNativePdfReport()
+    public async Task ExcelResultExport_WritesEvidenceIntoCopyWithoutChangingSource()
+    {
+        var root = TempDirectory();
+        var source = Path.Combine(root, "source.xlsx");
+        CreateResultWorkbook(source);
+        var sourceHash = Hash(source);
+        var project = Project(sourceHash);
+        CompletePass(project.Ieds[0].TestPoints[0]);
+        var output = Path.Combine(root, "result.xlsx");
+
+        await IoFatExcelResultExportService.ExportAsync(source, output, project);
+
+        Assert.Equal(sourceHash, Hash(source));
+        Assert.True(File.Exists(output));
+        using var archive = ZipFile.OpenRead(output);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        var xml = await reader.ReadToEndAsync();
+        Assert.Contains("PASS", xml, StringComparison.Ordinal);
+        Assert.Contains("2026-07-28 10:00:00.200 +00:00", xml, StringComparison.Ordinal);
+        Assert.Contains("Good", xml, StringComparison.Ordinal);
+        Assert.Contains("BRCB", xml, StringComparison.Ordinal);
+        Assert.Contains("Observed OFF transition", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ArsasProject_RoundTripsProgressAndNativeReports()
     {
         var root = TempDirectory();
         var workbook = Path.Combine(root, "source.xlsx");
-        await File.WriteAllBytesAsync(workbook, new byte[] { 10, 20, 30, 40, 50 });
+        CreateResultWorkbook(workbook);
         var hash = Hash(workbook);
         var project = Project(hash);
         CompletePass(project.Ieds[0].TestPoints[0]);
@@ -133,19 +158,33 @@ public sealed class IoTestPersistenceTests
             Assert.Equal(package, exported);
         }
 
+        await IoFatProjectPackageService.ValidateAsync(package);
         using (var archive = ZipFile.OpenRead(package))
         {
             Assert.NotNull(archive.GetEntry("manifest.json"));
             Assert.NotNull(archive.GetEntry("project.snapshot.json"));
             var pdfEntry = archive.GetEntry("report/IO-FAT-Report.pdf");
             Assert.NotNull(pdfEntry);
-            await using var pdfStream = pdfEntry!.Open();
-            using var memory = new MemoryStream();
-            await pdfStream.CopyToAsync(memory);
-            var report = Encoding.ASCII.GetString(memory.ToArray());
-            Assert.StartsWith("%PDF-1.4", report, StringComparison.Ordinal);
-            Assert.Contains("CB closed", report, StringComparison.Ordinal);
-            Assert.Contains("PASSED", report, StringComparison.Ordinal);
+            await using (var pdfStream = pdfEntry!.Open())
+            {
+                using var memory = new MemoryStream();
+                await pdfStream.CopyToAsync(memory);
+                var report = Encoding.ASCII.GetString(memory.ToArray());
+                Assert.StartsWith("%PDF-1.4", report, StringComparison.Ordinal);
+                Assert.Contains("CB closed", report, StringComparison.Ordinal);
+                Assert.Contains("PASSED", report, StringComparison.Ordinal);
+            }
+
+            var excelEntry = archive.GetEntry("report/IO-FAT-Results.xlsx");
+            Assert.NotNull(excelEntry);
+            await using var excelStream = excelEntry!.Open();
+            using var excelMemory = new MemoryStream();
+            await excelStream.CopyToAsync(excelMemory);
+            using var resultArchive = new ZipArchive(new MemoryStream(excelMemory.ToArray()), ZipArchiveMode.Read);
+            using var sheetReader = new StreamReader(resultArchive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+            var resultXml = await sheetReader.ReadToEndAsync();
+            Assert.Contains("PASS", resultXml, StringComparison.Ordinal);
+            Assert.Contains("BRCB", resultXml, StringComparison.Ordinal);
         }
 
         var imported = await IoTestWorkspaceBootstrapService.OpenPackageAsync(
@@ -169,7 +208,7 @@ public sealed class IoTestPersistenceTests
     {
         var root = TempDirectory();
         var workbook = Path.Combine(root, "source.xlsx");
-        await File.WriteAllBytesAsync(workbook, new byte[] { 11, 22, 33, 44 });
+        CreateResultWorkbook(workbook);
         var project = Project(Hash(workbook));
         CompletePass(project.Ieds[0].TestPoints[0]);
         var evidenceRoot = Path.Combine(root, "evidence");
@@ -205,7 +244,7 @@ public sealed class IoTestPersistenceTests
     {
         var root = TempDirectory();
         var workbook = Path.Combine(root, "source.xlsx");
-        await File.WriteAllBytesAsync(workbook, new byte[] { 3, 1, 4, 1, 5 });
+        CreateResultWorkbook(workbook);
         var project = Project(Hash(workbook));
         var session = Session(project, Path.Combine(root, "evidence"));
         var opened = await IoTestWorkspacePersistence.OpenWorkbookAsync(
@@ -234,6 +273,38 @@ public sealed class IoTestPersistenceTests
                 Path.Combine(root, "projects-import"),
                 Path.Combine(root, "evidence-import"),
                 Session));
+    }
+
+    [Fact]
+    public async Task ArsasProject_RejectsTamperedNativeReport()
+    {
+        var root = TempDirectory();
+        var workbook = Path.Combine(root, "source.xlsx");
+        CreateResultWorkbook(workbook);
+        var project = Project(Hash(workbook));
+        var session = Session(project, Path.Combine(root, "evidence"));
+        var opened = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+            project,
+            session,
+            workbook,
+            Path.Combine(root, "projects"),
+            Path.Combine(root, "evidence"));
+        var package = Path.Combine(root, "handover.arsas");
+        using (session)
+        using (opened.Workspace)
+            await IoFatProjectPackageService.ExportAsync(opened.Workspace, session, package);
+
+        using (var archive = ZipFile.Open(package, ZipArchiveMode.Update))
+        {
+            var entry = archive.GetEntry("report/IO-FAT-Report.pdf")!;
+            entry.Delete();
+            var replacement = archive.CreateEntry("report/IO-FAT-Report.pdf");
+            await using var writer = new StreamWriter(replacement.Open());
+            await writer.WriteAsync("tampered report");
+        }
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            IoFatProjectPackageService.ValidateAsync(package));
     }
 
     private static void CompletePass(IoTestPointPlan point)
@@ -300,6 +371,81 @@ public sealed class IoTestPersistenceTests
                 }
             }
         };
+    }
+
+    private static void CreateResultWorkbook(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
+        WriteEntry(archive, "[Content_Types].xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            </Types>
+            """);
+        WriteEntry(archive, "_rels/.rels", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+            </Relationships>
+            """);
+        WriteEntry(archive, "xl/workbook.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheets><sheet name="ARSAS_SIGNAL_IMPORT" sheetId="1" r:id="rId1"/></sheets>
+            </workbook>
+            """);
+        WriteEntry(archive, "xl/_rels/workbook.xml.rels", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+            </Relationships>
+            """);
+
+        var headers = new[]
+        {
+            "TestPointId", "ONObservedValue", "ONIEDTimestamp", "ONARSASTimestamp", "ONQuality",
+            "ONAcquisitionSource", "ONResult", "OFFObservedValue", "OFFIEDTimestamp", "OFFARSASTimestamp",
+            "OFFQuality", "OFFAcquisitionSource", "OFFResult", "OverallResult", "TestNotes"
+        };
+        var headerCells = string.Concat(headers.Select((header, index) => InlineCell(ColumnName(index) + "1", header)));
+        var sheet = $"""
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1:O2"/>
+              <sheetData>
+                <row r="1">{headerCells}</row>
+                <row r="2">{InlineCell("A2", "TP-001")}</row>
+              </sheetData>
+            </worksheet>
+            """;
+        WriteEntry(archive, "xl/worksheets/sheet1.xml", sheet);
+    }
+
+    private static string InlineCell(string reference, string value)
+        => $"<c r=\"{reference}\" t=\"inlineStr\"><is><t>{value}</t></is></c>";
+
+    private static string ColumnName(int zeroBasedIndex)
+    {
+        var value = zeroBasedIndex + 1;
+        var result = string.Empty;
+        while (value > 0)
+        {
+            value--;
+            result = (char)('A' + value % 26) + result;
+            value /= 26;
+        }
+        return result;
+    }
+
+    private static void WriteEntry(ZipArchive archive, string path, string content)
+    {
+        var entry = archive.CreateEntry(path);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
+        writer.Write(content.Trim());
     }
 
     private static IoTestSessionController Session(IoTestProject project, string evidenceRoot)
