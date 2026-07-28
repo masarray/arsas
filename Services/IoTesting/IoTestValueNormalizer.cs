@@ -15,13 +15,6 @@ public static class IoTestValueNormalizer
         if (bool.TryParse(text, out var boolean))
             return boolean;
 
-        if (text.Contains("[10]", StringComparison.Ordinal))
-            return true;
-        if (text.Contains("[01]", StringComparison.Ordinal))
-            return false;
-        if (text.Contains("[00]", StringComparison.Ordinal) || text.Contains("[11]", StringComparison.Ordinal))
-            return null;
-
         if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
         {
             if (number == point.ExpectedOnRaw)
@@ -30,10 +23,21 @@ public static class IoTestValueNormalizer
                 return false;
         }
 
+        // Imported semantics are authoritative. For example, a position test point may
+        // intentionally define Open [01] as its asserted/ON state.
         if (MatchesLabel(text, point.ExpectedOnText))
             return true;
         if (MatchesLabel(text, point.ExpectedOffText))
             return false;
+
+        // Fall back to the conventional IEC 61850 double-point rendering only when the
+        // imported state labels do not describe the observed text.
+        if (text.Contains("[10]", StringComparison.Ordinal))
+            return true;
+        if (text.Contains("[01]", StringComparison.Ordinal))
+            return false;
+        if (text.Contains("[00]", StringComparison.Ordinal) || text.Contains("[11]", StringComparison.Ordinal))
+            return null;
 
         if (text is "on" or "active" or "asserted" or "operated" or "trip" or "tripped")
             return true;
