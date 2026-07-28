@@ -1,0 +1,78 @@
+name: Validate SV evidence bundles
+
+on:
+  pull_request:
+    paths:
+      - "SmvViewerWindow.xaml"
+      - "Services/SmvViewerWindow.P1Evidence.cs"
+      - "Services/SmvSnapshotEvidenceExporter.cs"
+      - "Services/SmvSnapshotCaptureService.cs"
+      - "tests/ARSAS.Tests/**"
+      - "engines/ARIEC61850.lock.json"
+      - ".github/workflows/validate-sv-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-evidence:
+    name: Build and test deterministic SV evidence
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout ARSAS application
+        uses: actions/checkout@v4
+        with:
+          path: ARSAS
+
+      - name: Resolve immutable ARIEC61850 engine lock
+        shell: powershell
+        run: |
+          $lock = Get-Content ".\ARSAS\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore focused test project
+        run: dotnet restore .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj
+
+      - name: Build focused test project
+        shell: powershell
+        run: |
+          $log = ".\ARSAS\sv-evidence-build.log"
+          dotnet build .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-restore 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "`n=== Focused compiler errors ===" -ForegroundColor Red
+            Select-String -Path $log -Pattern ': error ' | ForEach-Object { Write-Host $_.Line -ForegroundColor Red }
+            exit $LASTEXITCODE
+          }
+
+      - name: Run SV evidence regression tests
+        run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~SmvSnapshotEvidenceExporterTests" --logger "trx;LogFileName=sv-evidence-tests.trx" --results-directory .\ARSAS\TestResults
+
+      - name: Upload focused evidence test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-sv-evidence-test-results
+          path: ARSAS/TestResults/*.trx
+          if-no-files-found: error
