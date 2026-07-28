@@ -20,9 +20,18 @@ public sealed class IoTestValueNormalizerTests
     [Theory]
     [InlineData("Closed [10]", true)]
     [InlineData("Open [01]", false)]
-    public void Normalize_MapsDoublePointRenderedStates(string raw, bool expected)
+    public void Normalize_MapsConventionalDoublePointRenderedStates(string raw, bool expected)
     {
         var point = Point("Closed", "Open");
+        Assert.Equal(expected, IoTestValueNormalizer.Normalize(point, raw));
+    }
+
+    [Theory]
+    [InlineData("Open [01]", true)]
+    [InlineData("Closed [10]", false)]
+    public void Normalize_ImportedDoublePointLabelsOverrideConventionalFallback(string raw, bool expected)
+    {
+        var point = Point("Open", "Closed");
         Assert.Equal(expected, IoTestValueNormalizer.Normalize(point, raw));
     }
 
