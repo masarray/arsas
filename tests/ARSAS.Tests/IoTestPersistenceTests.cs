@@ -17,15 +17,14 @@ public sealed class IoTestPersistenceTests
         var project = Project(hash);
         CompletePass(project.Ieds[0].TestPoints[0]);
         var session = Session(project, Path.Combine(root, "evidence"));
-        using (var stored = await IoTestWorkspacePersistence.OpenWorkbookAsync(
-                   project,
-                   session,
-                   workbook,
-                   Path.Combine(root, "projects"),
-                   Path.Combine(root, "evidence")))
-        {
+        var stored = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+            project,
+            session,
+            workbook,
+            Path.Combine(root, "projects"),
+            Path.Combine(root, "evidence"));
+        using (stored.Workspace)
             stored.Workspace.SaveNow();
-        }
         session.Dispose();
 
         var freshImport = Project(hash);
@@ -43,6 +42,7 @@ public sealed class IoTestPersistenceTests
             Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
             Assert.NotNull(point.Runtime.OnEvidence);
             Assert.NotNull(point.Runtime.OffEvidence);
+            Assert.False(point.TestEnabled);
             Assert.True(File.Exists(restored.Workspace.SnapshotPath));
         }
     }
@@ -57,15 +57,14 @@ public sealed class IoTestPersistenceTests
         var project = Project(hash);
         CaptureOnOnly(project.Ieds[0].TestPoints[0]);
         var session = Session(project, Path.Combine(root, "evidence"));
-        using (var stored = await IoTestWorkspacePersistence.OpenWorkbookAsync(
-                   project,
-                   session,
-                   workbook,
-                   Path.Combine(root, "projects"),
-                   Path.Combine(root, "evidence")))
-        {
+        var stored = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+            project,
+            session,
+            workbook,
+            Path.Combine(root, "projects"),
+            Path.Combine(root, "evidence"));
+        using (stored.Workspace)
             stored.Workspace.SaveNow();
-        }
         session.Dispose();
 
         var restored = await IoTestWorkspaceBootstrapService.OpenWorkbookAsync(
@@ -81,6 +80,7 @@ public sealed class IoTestPersistenceTests
             Assert.Equal(IoTestPointState.Review, point.Runtime.State);
             Assert.NotNull(point.Runtime.OnEvidence);
             Assert.Null(point.Runtime.OffEvidence);
+            Assert.False(point.TestEnabled);
             Assert.Contains("continuity", point.Runtime.StatusReason, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -129,7 +129,9 @@ public sealed class IoTestPersistenceTests
         using (imported.Session)
         using (imported.Workspace)
         {
-            Assert.Equal(IoTestPointState.Passed, imported.Project.Ieds[0].TestPoints[0].Runtime.State);
+            var point = imported.Project.Ieds[0].TestPoints[0];
+            Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
+            Assert.False(point.TestEnabled);
             Assert.True(File.Exists(imported.Workspace.SourceWorkbookPath));
             Assert.True(File.Exists(imported.Workspace.SnapshotPath));
         }
