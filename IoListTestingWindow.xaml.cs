@@ -107,28 +107,20 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void ExportHandover_Click(object sender, RoutedEventArgs e)
+    private async void ExportExcel_Click(object sender, RoutedEventArgs e)
     {
         if (Storage == null)
             return;
-        if (Session.IsSessionActive)
-        {
-            MessageBox.Show(
-                this,
-                "Stop the active IED session before exporting. This seals and verifies the evidence journal before it is transferred to another laptop.",
-                "Stop session before export",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+        if (!EnsureSessionSealedForExport("Excel evidence workbook"))
             return;
-        }
 
         var dialog = new SaveFileDialog
         {
-            Title = "Export portable ARSAS IO FAT handover",
-            Filter = $"ARSAS IO FAT handover (*{IoTestWorkspacePersistence.PackageExtension})|*{IoTestWorkspacePersistence.PackageExtension}",
-            FileName = $"{SafeFileName(Project.ProjectId)}_{DateTime.Now:yyyyMMdd_HHmm}{IoTestWorkspacePersistence.PackageExtension}",
+            Title = "Export ARSAS IO FAT result workbook",
+            Filter = "Excel workbook (*.xlsx)|*.xlsx",
+            FileName = $"{SafeFileName(Project.ProjectId)}_IO-FAT-Results_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
             AddExtension = true,
-            DefaultExt = IoTestWorkspacePersistence.PackageExtension,
+            DefaultExt = ".xlsx",
             OverwritePrompt = true
         };
         if (dialog.ShowDialog(this) != true)
@@ -137,22 +129,122 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         try
         {
             IsEnabled = false;
-            await Storage.ExportPackageAsync(dialog.FileName);
+            Storage.SaveNow();
+            await IoFatExcelResultExportService.ExportAsync(
+                Storage.SourceWorkbookPath,
+                dialog.FileName,
+                Project);
             MessageBox.Show(
                 this,
-                $"Portable FAT handover created successfully.\n\n{Storage.LastExportPath}\n\nThe package can be opened in ARSAS on another laptop. It also contains report/IO-FAT-Report.html for browser Print to PDF.",
-                "FAT handover exported",
+                $"FAT result workbook created successfully.\n\n{dialog.FileName}\n\nThe approved source workbook was not modified.",
+                "Excel evidence exported",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
-            MessageBox.Show(this, ex.Message, "FAT handover export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, ex.Message, "Excel evidence export failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             IsEnabled = true;
         }
+    }
+
+    private void ExportPdf_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureSessionSealedForExport("PDF evidence report"))
+            return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export native ARSAS IO FAT PDF report",
+            Filter = "PDF evidence report (*.pdf)|*.pdf",
+            FileName = $"{SafeFileName(Project.ProjectId)}_IO-FAT_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
+            AddExtension = true,
+            DefaultExt = ".pdf",
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            IsEnabled = false;
+            Storage?.SaveNow();
+            IoFatPdfReportService.Save(dialog.FileName, Project);
+            MessageBox.Show(
+                this,
+                $"Native PDF evidence report created successfully.\n\n{dialog.FileName}",
+                "PDF report exported",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            MessageBox.Show(this, ex.Message, "PDF report export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
+    }
+
+    private async void ExportHandover_Click(object sender, RoutedEventArgs e)
+    {
+        if (Storage == null)
+            return;
+        if (!EnsureSessionSealedForExport("ARSAS project"))
+            return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export portable ARSAS IO FAT project",
+            Filter = $"ARSAS project (*{IoFatProjectPackageService.PackageExtension})|*{IoFatProjectPackageService.PackageExtension}",
+            FileName = $"{SafeFileName(Project.ProjectId)}_{DateTime.Now:yyyyMMdd_HHmm}{IoFatProjectPackageService.PackageExtension}",
+            AddExtension = true,
+            DefaultExt = IoFatProjectPackageService.PackageExtension,
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            IsEnabled = false;
+            var exportedPath = await IoFatProjectPackageService.ExportAsync(
+                Storage,
+                Session,
+                dialog.FileName);
+            MessageBox.Show(
+                this,
+                $"Portable ARSAS project created successfully.\n\n{exportedPath}\n\nOpen this .arsas file on another laptop to continue the remaining FAT scope. The package also contains the native PDF report and the completed Excel result workbook.",
+                "ARSAS project exported",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            MessageBox.Show(this, ex.Message, "ARSAS project export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
+    }
+
+    private bool EnsureSessionSealedForExport(string outputName)
+    {
+        if (!Session.IsSessionActive)
+            return true;
+
+        MessageBox.Show(
+            this,
+            $"Stop the active IED session before exporting the {outputName}. This seals and verifies the current evidence journal first.",
+            "Stop session before export",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+        return false;
     }
 
     private void ReturnToEngineering_Click(object sender, RoutedEventArgs e)

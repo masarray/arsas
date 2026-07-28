@@ -95,6 +95,8 @@ public static class IoTestWorkspaceBootstrapService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sessionFactory);
+        await IoFatProjectPackageService.ValidateAsync(packagePath, cancellationToken).ConfigureAwait(false);
+
         IoTestSessionController? createdSession = null;
         var opened = await IoTestWorkspacePersistence.ImportPackageAsync(
             packagePath,

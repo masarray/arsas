@@ -148,7 +148,7 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Import the ARSAS Excel template for a new project, or open a portable handover package to continue saved progress from another laptop.",
+            Text = "Import the ARSAS Excel template for a new project, or open a portable .arsas project to continue saved progress from another laptop.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13.4,
             Foreground = TryFindResource("Muted") as Brush,
@@ -162,7 +162,7 @@ public partial class MainWindow
             Brushes.White,
             new Thickness(0, 0, 0, 8)));
         content.Children.Add(CreateLauncherButton(
-            "Open FAT Handover Package",
+            "Open ARSAS Project",
             "LucideFolderOpen",
             "SoftButton",
             OpenIoListPackage_Click,
@@ -170,7 +170,7 @@ public partial class MainWindow
             new Thickness(0, 0, 0, 10)));
         content.Children.Add(new TextBlock
         {
-            Text = "Autosave · portable continuation · verified evidence · printable browser report",
+            Text = "Autosave · portable continuation · verified evidence · native PDF report",
             Style = TryFindResource("Caption") as Style,
             TextWrapping = TextWrapping.Wrap
         });
@@ -291,15 +291,15 @@ public partial class MainWindow
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Open ARSAS IO FAT handover package",
-            Filter = $"ARSAS IO FAT handover (*{IoTestWorkspacePersistence.PackageExtension})|*{IoTestWorkspacePersistence.PackageExtension}|All files (*.*)|*.*",
+            Title = "Open ARSAS IO FAT project",
+            Filter = IoFatProjectPackageService.OpenDialogFilter,
             CheckFileExists = true,
             Multiselect = false
         };
         if (dialog.ShowDialog(this) != true)
             return;
 
-        SetStatus($"Opening FAT handover package {Path.GetFileName(dialog.FileName)}…");
+        SetStatus($"Opening ARSAS IO FAT project {Path.GetFileName(dialog.FileName)}…");
         try
         {
             var launch = await IoTestWorkspaceBootstrapService.OpenPackageAsync(
@@ -312,11 +312,11 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            SetStatus("FAT handover import cancelled.");
+            SetStatus("ARSAS IO FAT project import cancelled.");
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            ShowIoTestingFailure(ex, "FAT handover import failed");
+            ShowIoTestingFailure(ex, "ARSAS IO FAT project import failed");
         }
     }
 
