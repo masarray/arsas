@@ -126,6 +126,32 @@ public sealed class IoTestImportValidator
                 point));
         }
 
+        if (!string.Equals(point.IpAddress, ied.IpAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add(Error(
+                "TEST_POINT_IP_MISMATCH",
+                $"Test point '{point.TestPointId}' uses IP '{point.IpAddress}' but its IED plan uses '{ied.IpAddress}'.",
+                point));
+        }
+
+        if (!string.Equals(point.DataType, "SDI", StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add(Error(
+                "TEST_POINT_TYPE_UNSUPPORTED",
+                $"The first IO Testing release accepts DataType=SDI; received '{point.DataType}'.",
+                point));
+        }
+
+        if (point.ExpectedOnRaw == point.ExpectedOffRaw ||
+            point.ExpectedOnRaw is not (0 or 1) ||
+            point.ExpectedOffRaw is not (0 or 1))
+        {
+            findings.Add(Error(
+                "TEST_POINT_EXPECTED_STATE_INVALID",
+                $"Expected ON/OFF raw states for '{point.TestPointId}' must be distinct binary values 0 and 1.",
+                point));
+        }
+
         if (string.IsNullOrWhiteSpace(point.SignalName))
             findings.Add(Error("SIGNAL_NAME_REQUIRED", "SignalName is required.", point));
 
