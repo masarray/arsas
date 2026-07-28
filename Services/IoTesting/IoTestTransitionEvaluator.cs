@@ -17,6 +17,7 @@ public sealed class IoTestTransitionEvaluator
 
         var runtime = point.Runtime;
         runtime.ResetAttempt();
+        runtime.ApplyObservation(baseline);
         runtime.ConnectionGeneration = baseline.ConnectionGeneration;
         runtime.LastSequence = baseline.Sequence;
         runtime.LastObservedState = baseline.NormalizedState;
@@ -46,17 +47,27 @@ public sealed class IoTestTransitionEvaluator
 
         var runtime = point.Runtime;
         if (!point.TestEnabled)
+        {
+            runtime.ApplyObservation(observation);
             return Result(runtime, changed: false, evidence: null, "Signal is disabled");
+        }
 
         if (runtime.State == IoTestPointState.NotStarted)
+        {
+            runtime.ApplyObservation(observation);
             return Result(runtime, changed: false, evidence: null, "Test attempt has not been started");
+        }
 
         if (runtime.ConnectionGeneration != observation.ConnectionGeneration)
+        {
+            runtime.ApplyObservation(observation);
             return HandleConnectionGenerationChange(runtime, observation);
+        }
 
         if (observation.Sequence <= runtime.LastSequence)
             return Result(runtime, changed: false, evidence: null, "Duplicate or out-of-order observation ignored");
 
+        runtime.ApplyObservation(observation);
         var previous = runtime.LastObservedState;
         runtime.LastSequence = observation.Sequence;
         runtime.LastObservedState = observation.NormalizedState;
