@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
-using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
 
@@ -19,7 +18,6 @@ public partial class App : Application
         base.OnStartup(e);
         GridUxBehavior.Install();
         FaultRecordUxBehavior.Install();
-        IoTestingEntryBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
 
