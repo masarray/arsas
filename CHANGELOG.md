@@ -14,14 +14,23 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 ### Added
 
 - `ARSAS.Tests`, the first application-layer regression-test project.
-- Regression coverage for clean and incomplete SV windows, gap/duplicate/out-of-order/restart handling, continuity evidence, and immutable stream-selection identity.
+- Regression coverage for clean and incomplete SV windows, gap/duplicate/out-of-order/restart handling, continuity evidence, immutable stream-selection identity, and deterministic evidence export.
 - Canonical `Directory.Build.props` version metadata aligned with the project, `VERSION`, packaging, and CI.
 - Test-result artifacts in the Windows build workflow.
+- Portable Sampled Values engineering evidence bundles containing:
+  - structured `manifest.json` capture identity and verdict;
+  - separate application/engine `provenance.json`;
+  - invariant-culture raw `samples.csv`;
+  - rendered `waveform.png`;
+  - explicit `diagnostics.txt` and evidence boundary;
+  - deterministic `SHA256SUMS.txt` integrity records.
+- Runtime publication of the immutable `ARIEC61850.lock.json` provenance used by exported evidence.
 
 ### Changed
 
 - Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
-- Development version advanced to `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
+- The SV viewer can export a reviewed evidence package after a bounded snapshot without claiming current, voltage, engineering units, calibration, formal conformance, or universal interoperability.
+- Development version remains `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
 
 ## 1.6.18
 
