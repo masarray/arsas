@@ -7,12 +7,12 @@ ARSAS is being developed toward a complete, engineer-facing IEC 61850 workstatio
 The target is one application that can support the practical IEC 61850 lifecycle from engineering input to live evidence:
 
 ```text
-SCL project or IED endpoint
-            ↓
+SCL project, IO List, or IED endpoint
+               ↓
 Configured and live model understanding
-            ↓
+               ↓
 MMS values, reports, GOOSE, Sampled Values, files, and control
-            ↓
+               ↓
 Validation, diagnostics, evidence, and reusable project output
 ```
 
@@ -37,6 +37,7 @@ ARSAS is the application and workflow layer. Protocol implementation belongs in 
 - Guarded Direct and Select-Before-Operate control workflows.
 - SCL import, endpoint extraction, configured/live context, and export services.
 - Project persistence, signal selection, cached model context, and diagnostic evidence.
+- Dedicated SDI IO List FAT workspace with strict Excel import, one-IED sessions, OFF → ON → OFF evidence, quality-aware results, reconnect protection, durable evidence journals, Excel result copies, native PDF reports, and portable `.arsas` continuation projects.
 
 ### Engineering preview
 
@@ -91,14 +92,33 @@ ARSAS is the application and workflow layer. Protocol implementation belongs in 
 
 **Goal:** connect protocol features into repeatable FAT, SAT, and commissioning workflows.
 
-- Test plans linked to IEDs, signals, control objects, and expected outcomes.
-- Reusable monitoring, GOOSE, SMV, file-transfer, and control test steps.
-- Time-correlated report, SOE, GOOSE, SMV, command, and transfer evidence.
-- Pass/fail criteria with engineer review and explicit exceptions.
-- Sanitized PDF/HTML/CSV evidence packages.
-- Project snapshots for repeatable regression and customer demonstration.
+### Phase 1 — Available on current mainline
 
-**Definition of done:** the same project can be used to prepare, execute, review, and export evidence for a controlled IEC 61850 test campaign.
+- Import an approved ARSAS Excel IO List for SDI / digital indications.
+- Keep imported project, IED, `TestPointId`, expected state, and IEC 61850 object-reference identity explicit.
+- Run one active IED test session while observing all enabled imported points for that IED.
+- Require a trustworthy OFF baseline before accepting a new OFF → ON transition.
+- Require the matching ON → OFF transition before PASS.
+- Preserve IED timestamp, independent ARSAS capture timestamp, quality, acquisition source, event ordering, and reconnect generation.
+- Autosave project progress and append hash-chained evidence journals.
+- Export a result workbook without modifying the approved source workbook.
+- Generate a dependency-free native PDF report.
+- Move the project between laptops as a verified `.arsas` package while retaining legacy `.arsas-iofat` readability.
+
+See [IO List FAT Evidence Testing](docs/IO_LIST_FAT_EVIDENCE.md).
+
+### Remaining planned scope
+
+- Analog indication tolerance and scaling campaigns.
+- Output-command and feedback test plans with explicit authority gates.
+- Reusable GOOSE, Sampled Values, file-transfer, control, and time-synchronization test steps.
+- Cross-service time correlation between reports, SOE, GOOSE, SMV, commands, and transfers.
+- Engineer review, exception management, witness approval, and formal sign-off fields.
+- Multi-user approval and digital-signature models.
+- Sanitized campaign-level export packages beyond the current IO FAT project format.
+- Project templates for repeatable regression and customer demonstrations.
+
+**Definition of done for the complete milestone:** the same project can be used to prepare, execute, review, approve, and export evidence for a controlled multi-service IEC 61850 test campaign.
 
 ## Milestone 5 — Interoperability and maintainability
 
@@ -121,10 +141,11 @@ ARSAS does not claim to provide:
 - universal interoperability with every implementation;
 - cybersecurity approval for connection to an operational station network;
 - functional-safety certification;
-- unrestricted use of confidential SCL files, packet captures, credentials, or customer data.
+- automatic witness approval or legally binding digital signatures;
+- unrestricted use of confidential SCL files, IO Lists, packet captures, credentials, or customer data.
 
 ## Contribution priorities
 
 Contributions are especially valuable when they include reproducible tests, protocol fixtures with clear provenance, bounded failure behavior, diagnostic evidence, and documentation of the operational assumptions.
 
-Do not include proprietary source code, confidential customer files, employer material, relay settings, credentials, or packet captures that you are not authorized to publish.
+Do not include proprietary source code, confidential customer files, employer material, relay settings, credentials, IO Lists, or packet captures that you are not authorized to publish.

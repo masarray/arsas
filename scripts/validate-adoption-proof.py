@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate ARSAS P3 onboarding, FAQ, compatibility, demo, issue intake and supply-chain contracts."""
+"""Validate ARSAS onboarding, evidence, localization, issue intake and supply-chain contracts."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ LANDING = ROOT / "landing"
 TEMPLATES = LANDING / "templates"
 PAIR_MAP = {
     "quick-start.html": "panduan-mulai-arsas.html",
+    "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "faq.html": "faq-arsas.html",
     "compatibility.html": "bukti-kompatibilitas.html",
     "demo.html": "demo-arsas.html",
@@ -41,17 +42,17 @@ def main() -> int:
     config = json.loads(read(LANDING / "site.json", errors) or "{}")
     pages = config.get("pages", []) if isinstance(config, dict) else []
     entries = {str(item.get("path", "")): item for item in pages if isinstance(item, dict)}
-    if len(pages) != 54:
-        errors.append(f"landing/site.json must contain 54 pages, found {len(pages)}")
+    if len(pages) != 56:
+        errors.append(f"landing/site.json must contain 56 pages, found {len(pages)}")
     localized = [item for item in pages if isinstance(item, dict) and item.get("contentType") == "localized"]
-    if len(localized) != 17:
-        errors.append(f"landing/site.json must contain 17 Indonesian pages, found {len(localized)}")
+    if len(localized) != 18:
+        errors.append(f"landing/site.json must contain 18 Indonesian pages, found {len(localized)}")
     for english, indonesian in PAIR_MAP.items():
         expected = {"en": english, "id": indonesian, "x-default": english}
         for path, language in ((english, "en"), (indonesian, "id")):
             entry = entries.get(path)
             if not isinstance(entry, dict) or entry.get("language") != language or entry.get("alternates") != expected:
-                errors.append(f"invalid P3 localization contract for {path}")
+                errors.append(f"invalid adoption localization contract for {path}")
 
     quick = read(TEMPLATES / "quick-start.html", errors)
     quick_id = read(TEMPLATES / "panduan-mulai-arsas.html", errors)
@@ -61,6 +62,19 @@ def main() -> int:
                 errors.append(f"{label}: missing onboarding contract {value}")
         if text.count('class="quick-step"') != 7:
             errors.append(f"{label}: expected seven quick-start steps")
+        if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
+            errors.append(f"{label}: missing IO List FAT continuation path")
+
+    for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
+        text = read(TEMPLATES / name, errors)
+        lower = text.lower()
+        for value in ("TestPointId", "OFF → ON", "ON → OFF", ".arsas", "Excel", "PDF", "quality", "timestamp", "acquisition source"):
+            if value.lower() not in lower:
+                errors.append(f"{name}: missing IO FAT contract {value}")
+        if "mainline" not in lower or "stable" not in lower:
+            errors.append(f"{name}: missing mainline versus stable release boundary")
+        if "browser" not in lower or "third-party" not in lower:
+            errors.append(f"{name}: missing native PDF dependency boundary")
 
     faq = read(TEMPLATES / "faq.html", errors)
     faq_id = read(TEMPLATES / "faq-arsas.html", errors)
@@ -124,6 +138,8 @@ def main() -> int:
                 errors.append(f"{name}: missing guide-filter contract {value}")
         if text.count("data-guide-card") != 11:
             errors.append(f"{name}: expected eleven filterable guide cards")
+        if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
+            errors.append(f"{name}: missing IO FAT guidance path")
 
     for name in ("demo.html", "demo-arsas.html"):
         text = read(TEMPLATES / name, errors)
@@ -170,18 +186,18 @@ def main() -> int:
         site = Path(args.site).resolve()
         for path in (*PAIR_MAP.keys(), *PAIR_MAP.values(), "device-evidence.json"):
             if not (site / path).is_file():
-                errors.append(f"built site missing P3 output {path}")
+                errors.append(f"built site missing adoption output {path}")
         build_info = json.loads(read(site / "build-info.json", errors) or "{}")
-        if len(build_info.get("pages", [])) != 54:
-            errors.append("built site build-info.json must contain 54 pages")
+        if len(build_info.get("pages", [])) != 56:
+            errors.append("built site build-info.json must contain 56 pages")
 
     errors = list(dict.fromkeys(errors))
     if errors:
         print("ARSAS adoption and field-proof validation failed:", file=sys.stderr)
         for error in errors:
-            print(f"- {error}", file=sys.stderr)
+            print(f"- {error}")
         return 1
-    print("ARSAS adoption and field-proof validation passed: 54 pages, 17 localized pages, onboarding, FAQ, evidence, demo, issue intake, responsive media and future supply-chain attestations.")
+    print("ARSAS adoption and field-proof validation passed: 56 pages, 18 localized pages, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
     return 0
 
 

@@ -13,7 +13,17 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ### Added
 
+- Dedicated **FAT / IO List Testing** entry point beside general IEC 61850 testing.
+- Strict ARSAS Excel import for SDI test plans with project, IED, `TestPointId`, object-reference, and expected-state validation.
+- One-IED-at-a-time FAT sessions that monitor all enabled imported signals for that IED.
+- Ordered OFF → ON → OFF evidence evaluation with reconnect baseline protection, quality-aware verdicts, IED timestamps, ARSAS timestamps, acquisition source, and monotonic event ordering.
+- Append-only hash-chain evidence journals, autosaved local project snapshots, and safe cross-laptop continuation.
+- **Export Excel** result copies that update matching `TestPointId` rows without modifying the approved source workbook in place.
+- Dependency-free native PDF 1.4 IO FAT reports ported from the project-owned ARIEC60870 PDF primitive design.
+- Portable `.arsas` IO FAT projects containing the source workbook, project snapshot, verified evidence journals, Excel results, native PDF report, manifest hashes, and handover notes.
+- Backward-compatible import of legacy `.arsas-iofat` filenames.
 - `ARSAS.Tests`, the first application-layer regression-test project.
+- Regression coverage for IO List import, live binding, transition ordering, reconnect handling, evidence integrity, Excel export, native PDF output, `.arsas` round-trip, legacy import, tamper rejection, and UI contracts.
 - Regression coverage for clean and incomplete SV windows, gap/duplicate/out-of-order/restart handling, continuity evidence, immutable stream-selection identity, and deterministic evidence export.
 - Canonical `Directory.Build.props` version metadata aligned with the project, `VERSION`, packaging, and CI.
 - Test-result artifacts in the Windows build workflow.
@@ -28,6 +38,9 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ### Changed
 
+- New IO FAT portable exports use the shorter `.arsas` extension; `.arsas-iofat` remains readable for compatibility.
+- Browser Print-to-PDF is no longer the primary IO FAT report workflow. ARSAS writes the PDF directly with its built-in native engine.
+- The first unified test/evidence milestone is now available for imported SDI IO List campaigns; broader reusable campaigns across GOOSE, Sampled Values, files, controls, approvals, and multi-user review remain roadmap work.
 - Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
 - The SV viewer can export a reviewed evidence package after a bounded snapshot without claiming current, voltage, engineering units, calibration, formal conformance, or universal interoperability.
 - Development version remains `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.

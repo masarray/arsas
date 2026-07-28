@@ -18,7 +18,7 @@ APP_ICON = ROOT / "Assets" / "app-icon.png"
 INCLUDE = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
-EXPECTED_NAV = {"overview", "capabilities", "solutions", "guides", "architecture", "about", "download"}
+EXPECTED_NAV = {"overview", "capabilities", "io-fat", "solutions", "guides", "architecture", "about", "download"}
 GUIDES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html", "empty-dataset.html",
     "port-102-connection-failed.html", "comtrade-download.html", "goose-sequence.html",
@@ -31,6 +31,7 @@ PAIRS = {
     "guides.html": "panduan.html", "mms-client.html": "mms-client-iec61850.html",
     "smart-reporting.html": "smart-reporting-iec61850.html", "goose-analyzer.html": "analyzer-goose-iec61850.html",
     "file-transfer.html": "transfer-file-comtrade-iec61850.html", "scl-workspace.html": "workspace-scl-iec61850.html",
+    "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "fat-testing.html": "pengujian-fat-iec61850.html", "sat-testing.html": "pengujian-sat-iec61850.html",
     "commissioning.html": "commissioning-iec61850.html", "multi-vendor-integration.html": "integrasi-multi-vendor-iec61850.html",
 }
@@ -149,9 +150,9 @@ def main() -> int:
         if path in entries or template in templates: errors.append(f"duplicate page or template {path or template}")
         entries[path] = item
         templates.add(template)
-    if len(pages) != 54: errors.append(f"expected 54 registered pages, found {len(pages)}")
+    if len(pages) != 56: errors.append(f"expected 56 registered pages, found {len(pages)}")
     if sum(item.get("contentType") == "guide" for item in entries.values()) != 11: errors.append("expected 11 troubleshooting guides")
-    if sum(item.get("contentType") == "localized" for item in entries.values()) != 17: errors.append("expected 17 Indonesian pages")
+    if sum(item.get("contentType") == "localized" for item in entries.values()) != 18: errors.append("expected 18 Indonesian pages")
     if entries.get("404.html", {}).get("index", True) is not False: errors.append("404.html must be excluded from sitemap")
     for english, indonesian in PAIRS.items():
         expected = {"en": english, "id": indonesian, "x-default": english}
@@ -196,7 +197,7 @@ def main() -> int:
     footer = (PARTIALS / "footer.html").read_text(encoding="utf-8")
     for nav in EXPECTED_NAV:
         if f'data-nav-page="{nav}"' not in header: errors.append(f"header missing navigation {nav}")
-    for value in ("quick-start.html", "faq.html", "compatibility.html", "demo.html", "privacy.html", "{{AUTHOR_LINKEDIN}}"):
+    for value in ("quick-start.html", "io-list-fat-evidence.html", "faq.html", "compatibility.html", "demo.html", "privacy.html", "{{AUTHOR_LINKEDIN}}"):
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
@@ -216,7 +217,7 @@ def main() -> int:
         for error in errors: print(f"- {error}", file=sys.stderr)
         return 1
     width, height = png_size(APP_ICON)
-    print(f"ARSAS product-source validation passed: 54 templates, 11 guides, 17 Indonesian pages, 17 hreflang pairs, stable release trust and {width}x{height} app icon.")
+    print(f"ARSAS product-source validation passed: 56 pages, 18 localized pages, 11 guides, shared navigation, release trust and {width}x{height} icon.")
     return 0
 
 
