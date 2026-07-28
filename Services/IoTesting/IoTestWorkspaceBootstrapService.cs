@@ -102,6 +102,8 @@ public static class IoTestWorkspaceBootstrapService
             localProjectsRoot,
             evidenceRoot,
             cancellationToken).ConfigureAwait(false);
+        ExcludeCompletedFromNextSession(opened.Project);
+        opened.Workspace.SaveNow();
         return new IoTestWorkspaceLaunchResult(
             opened.Project,
             createdSession ?? throw new InvalidOperationException("The IO FAT package did not create a session controller."),
@@ -157,11 +159,13 @@ public static class IoTestWorkspaceBootstrapService
             {
                 point.Runtime.State = savedState;
                 point.Runtime.StatusReason = OptionalString(runtime, "statusReason", "Restored completed result");
+                point.TestEnabled = false;
             }
             else if (point.Runtime.OnEvidence != null && point.Runtime.OffEvidence == null)
             {
                 point.Runtime.State = IoTestPointState.Review;
                 point.Runtime.StatusReason = "Progress was restored after the live session ended; OFF continuity after saved ON evidence cannot be proven.";
+                point.TestEnabled = false;
             }
             else
             {
@@ -170,6 +174,15 @@ public static class IoTestWorkspaceBootstrapService
             }
         }
         project.InitializeRuntimeNotifications();
+    }
+
+    private static void ExcludeCompletedFromNextSession(IoTestProject project)
+    {
+        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
+        {
+            if (point.Runtime.IsComplete)
+                point.TestEnabled = false;
+        }
     }
 
     private static IoTestTransitionEvidence? OptionalEvidence(JsonElement runtime, string property)
