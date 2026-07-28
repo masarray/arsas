@@ -46,7 +46,10 @@ jobs:
         id: release
         shell: powershell
         run: |
-          if ($env:GITHUB_REF_TYPE -eq "tag") {
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $rawVersion = "${{ inputs.version }}"
+          }
+          elseif ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME
           }
           elseif ($env:GITHUB_REF -eq "refs/heads/main") {
@@ -58,7 +61,7 @@ jobs:
             $rawVersion = [string]$manifest.version
           }
           else {
-            $rawVersion = "${{ inputs.version }}"
+            throw "Release version source could not be resolved for event $env:GITHUB_EVENT_NAME and ref $env:GITHUB_REF."
           }
 
           $version = $rawVersion.Trim()
