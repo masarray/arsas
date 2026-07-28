@@ -53,10 +53,8 @@ public sealed record SmvSnapshotEvidenceProvenance
                     EngineRepository = ReadString(rootElement, "repository"),
                     EngineRef = ReadString(rootElement, "ref"),
                     EngineCommit = ReadString(rootElement, "commit"),
-                    EnginePullRequest = rootElement.TryGetProperty("pairedPullRequest", out var pullRequest) &&
-                                        pullRequest.TryGetInt32(out var pullRequestNumber)
-                        ? pullRequestNumber
-                        : null
+                    EnginePullRequest = ReadInt32(rootElement, "sourcePullRequest") ??
+                                        ReadInt32(rootElement, "pairedPullRequest")
                 };
             }
             catch (JsonException)
@@ -72,6 +70,11 @@ public sealed record SmvSnapshotEvidenceProvenance
         => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
+
+    private static int? ReadInt32(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var value) && value.TryGetInt32(out var number)
+            ? number
+            : null;
 }
 
 public sealed record SmvSnapshotEvidenceContext
@@ -228,6 +231,12 @@ public static class SmvSnapshotEvidenceExporter
                 snapshot.DeclaredSampleRate,
                 snapshot.DeclaredSampleMode
             },
+            captureInterval = new
+            {
+                startedAtUtc = snapshot.StartedAt.ToUniversalTime(),
+                completedAtUtc = snapshot.CompletedAt.ToUniversalTime(),
+                durationMilliseconds = snapshot.CaptureDuration.TotalMilliseconds
+            },
             timebase = new
             {
                 snapshot.NominalFrequencyHz,
@@ -235,7 +244,6 @@ public static class SmvSnapshotEvidenceExporter
                 snapshot.CycleCount,
                 snapshot.TargetSamples,
                 snapshot.CapturedSamples,
-                captureDurationMilliseconds = snapshot.CaptureDuration.TotalMilliseconds,
                 reason = snapshot.TimebaseReason
             },
             transport = new
@@ -336,7 +344,9 @@ public static class SmvSnapshotEvidenceExporter
            ====================================
 
            Schema: {SchemaVersion}
-           Generated UTC: {context.GeneratedAtUtc.ToUniversalTime():O}
+           Capture started UTC: {snapshot.StartedAt.ToUniversalTime():O}
+           Capture completed UTC: {snapshot.CompletedAt.ToUniversalTime():O}
+           Bundle generated UTC: {context.GeneratedAtUtc.ToUniversalTime():O}
            Verdict: {(snapshot.IsCleanProof ? "PASS" : "REVIEW")}
 
            This package records one bounded IEC 61850-9-2 observation window.
@@ -390,8 +400,7 @@ public static class SmvSnapshotEvidenceExporter
             .Trim()
             .Select(character => invalid.Contains(character) || char.IsControl(character) ? '-' : character)
             .ToArray());
-        while (sanitized.Contains("--", StringComparison.Ordinal))
-            sanitized = sanitized.Replace("--", "-", StringComparison.Ordinal);
+        while (sanitized.Contains("--", StringComparison.Ordinal))n            sanitized = sanitized.Replace("--", "-", StringComparison.Ordinal);
         sanitized = sanitized.Trim(' ', '.', '-');
         if (sanitized.Length > maximumLength)
             sanitized = sanitized[..maximumLength].TrimEnd(' ', '.', '-');
