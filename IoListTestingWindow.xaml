@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterOwner" WindowState="Maximized"
         Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
-        Icon="Assets/app-icon.ico">
+        Icon="Assets/app-icon.ico" Closing="Window_Closing">
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -51,6 +51,7 @@
                         <TextBlock Text="Only IEDs imported from the workbook" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Project.Ieds}" SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
+                             IsEnabled="{Binding Session.CanSelectIed}"
                              BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
@@ -122,30 +123,49 @@
                         <StackPanel>
                             <TextBlock Text="{Binding SelectedIed.IedName}" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding Session.ActiveIedText}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Background="#F7FAFF" BorderBrush="{StaticResource BorderSubtle}"
-                                BorderThickness="1" CornerRadius="13" Padding="11,6">
-                            <TextBlock Text="Imported SDI scope · read-only preview" Style="{StaticResource Caption}"/>
-                        </Border>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{StaticResource SoftBlue}" CornerRadius="13" Padding="11,6" Margin="0,0,8,0">
+                                <TextBlock Text="{Binding Session.StateText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
+                            </Border>
+                            <Button Content="Start IED Session" Style="{StaticResource PrimaryButton}" Padding="12,7"
+                                    IsEnabled="{Binding Session.CanStart}" Click="StartSession_Click" Margin="0,0,6,0"/>
+                            <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="11,7"
+                                    IsEnabled="{Binding Session.CanPause}" Click="PauseSession_Click" Margin="0,0,6,0"/>
+                            <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="11,7"
+                                    IsEnabled="{Binding Session.CanResume}" Click="ResumeSession_Click" Margin="0,0,6,0"/>
+                            <Button Content="Stop" Style="{StaticResource SoftButton}" Padding="11,7"
+                                    IsEnabled="{Binding Session.CanStop}" Click="StopSession_Click"/>
+                        </StackPanel>
                     </Grid>
 
                     <DataGrid Grid.Row="2" ItemsSource="{Binding SelectedIed.TestPoints}"
                               AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                              IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                              IsReadOnly="False"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                               BorderThickness="0" Background="Transparent" RowBackground="White"
                               AlternatingRowBackground="#F8FAFD" HorizontalGridLinesBrush="{StaticResource BorderSubtle}"
                               SelectionMode="Single" SelectionUnit="FullRow">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="Test" Binding="{Binding TestEnabled}" Width="52"/>
-                            <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" Width="2.1*"/>
-                            <DataGridTextColumn Header="IEC reference" Binding="{Binding ObjectReference}" Width="2.4*"/>
-                            <DataGridTextColumn Header="Live binding" Binding="{Binding LiveBindingText}" Width="112"/>
-                            <DataGridTextColumn Header="Current" Binding="{Binding Runtime.CurrentValue}" Width="100"/>
-                            <DataGridTextColumn Header="Quality" Binding="{Binding Runtime.CurrentQuality}" Width="96"/>
-                            <DataGridTextColumn Header="Source" Binding="{Binding Runtime.CurrentSource}" Width="104"/>
-                            <DataGridTextColumn Header="ON evidence" Binding="{Binding Runtime.OnEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="178"/>
-                            <DataGridTextColumn Header="OFF evidence" Binding="{Binding Runtime.OffEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" Width="178"/>
-                            <DataGridTextColumn Header="Result" Binding="{Binding Runtime.State}" Width="100"/>
+                            <DataGridTemplateColumn Header="Test" Width="52">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding DataContext.Session.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Signal name" Binding="{Binding SignalName}" IsReadOnly="True" Width="2.1*"/>
+                            <DataGridTextColumn Header="IEC reference" Binding="{Binding ObjectReference}" IsReadOnly="True" Width="2.4*"/>
+                            <DataGridTextColumn Header="Live binding" Binding="{Binding LiveBindingText}" IsReadOnly="True" Width="112"/>
+                            <DataGridTextColumn Header="Current" Binding="{Binding Runtime.CurrentValue}" IsReadOnly="True" Width="100"/>
+                            <DataGridTextColumn Header="Quality" Binding="{Binding Runtime.CurrentQuality}" IsReadOnly="True" Width="96"/>
+                            <DataGridTextColumn Header="Source" Binding="{Binding Runtime.CurrentSource}" IsReadOnly="True" Width="104"/>
+                            <DataGridTextColumn Header="ON evidence" Binding="{Binding Runtime.OnEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" IsReadOnly="True" Width="178"/>
+                            <DataGridTextColumn Header="OFF evidence" Binding="{Binding Runtime.OffEvidence.CapturedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}" IsReadOnly="True" Width="178"/>
+                            <DataGridTextColumn Header="Result" Binding="{Binding Runtime.State}" IsReadOnly="True" Width="100"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -159,8 +179,18 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding WorkspaceStatus}" Style="{StaticResource Caption}"/>
-                <TextBlock Grid.Column="1" Text="Imported FAT workspace" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Success}"/>
+                <StackPanel>
+                    <TextBlock Text="{Binding Session.StatusText}" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="{Binding Session.JournalIntegrityText}" Style="{StaticResource MicroLabel}" Margin="0,3,0,0"/>
+                    <TextBlock Text="{Binding Session.JournalPath}" Style="{StaticResource Caption}" Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Session.JournalPath}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding Session.ProgressText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Ink}" HorizontalAlignment="Right"/>
+                    <TextBlock Style="{StaticResource Caption}" HorizontalAlignment="Right" Margin="0,3,0,0">
+                        <Run Text="Evidence records "/><Run Text="{Binding Session.EvidenceRecordCount}"/>
+                    </TextBlock>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

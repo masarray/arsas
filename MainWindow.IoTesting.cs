@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 using Microsoft.Win32;
@@ -13,6 +15,8 @@ public partial class MainWindow
     private readonly IoListExcelImportService _ioListExcelImportService = new();
     private readonly IoTestLiveBindingService _ioTestLiveBindingService = new();
     private Button? _ioListTestingLauncher;
+    private IoTestSessionController? _activeIoTestSessionController;
+    private long _ioTestObservationSequence;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -112,7 +116,19 @@ public partial class MainWindow
                 $"IO List ready: {import.Project.Ieds.Count} IED, {import.Project.SignalCount} SDI, " +
                 $"{binding.SignalBoundCount} matched to the loaded workspace, {warnings} warning(s).");
 
-            var window = new IoListTestingWindow(import.Project) { Owner = this };
+            var journalRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ARSAS",
+                "IO Testing Evidence");
+            using var controller = new IoTestSessionController(
+                import.Project,
+                ResolveIoTestDevice,
+                action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
+                journalRoot);
+            var window = new IoListTestingWindow(import.Project, controller) { Owner = this };
+            _activeIoTestSessionController = controller;
+            Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
+            _runtime.PointUpdated += Runtime_IoTestPointUpdated;
             Hide();
             try
             {
@@ -120,6 +136,8 @@ public partial class MainWindow
             }
             finally
             {
+                _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
+                _activeIoTestSessionController = null;
                 Show();
                 if (WindowState == System.Windows.WindowState.Minimized)
                     WindowState = System.Windows.WindowState.Normal;
@@ -137,5 +155,37 @@ public partial class MainWindow
             SetStatus("IO List import failed. Diagnostics is marked with !.");
             MessageBox.Show(this, ex.Message, "IO List import failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void Runtime_IoTestPointUpdated(Iec61850PointSnapshot snapshot)
+    {
+        var point = snapshot.Point;
+        _activeIoTestSessionController?.Enqueue(new Iec61850EventEntry
+        {
+            Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
+            DeviceId = point.DeviceId,
+            PointKey = point.PointKey,
+            DeviceTimestamp = snapshot.DeviceTimestamp,
+            DeviceName = point.DeviceName,
+            IpAddress = point.IpAddress,
+            SignalName = point.SignalName,
+            IecReference = point.IecReference,
+            OldValue = snapshot.PreviousValue,
+            NewValue = snapshot.Value,
+            Quality = snapshot.Quality,
+            SourceMode = snapshot.SourceMode,
+            Reason = snapshot.Reason
+        });
+    }
+
+    private Iec61850MonitorDevice? ResolveIoTestDevice(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+        return Devices.FirstOrDefault(device =>
+            device.DeviceId.Equals(key, StringComparison.OrdinalIgnoreCase) ||
+            device.Name.Equals(key, StringComparison.OrdinalIgnoreCase) ||
+            device.SclIedName.Equals(key, StringComparison.OrdinalIgnoreCase) ||
+            device.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
     }
 }
