@@ -81,7 +81,7 @@ public sealed class IoTestLiveBindingServiceTests
 
         Assert.Equal(0, summary.DeviceBoundCount);
         Assert.Equal(IoTestLiveBindingState.DeviceNotLoaded, project.Ieds[0].TestPoints[0].LiveBindingState);
-        Assert.Contains("not loaded", project.Ieds[0].TestPoints[0].LiveBindingReason.ToLowerInvariant());
+        Assert.Contains("load or connect", project.Ieds[0].TestPoints[0].LiveBindingReason.ToLowerInvariant());
     }
 
     private static IoTestProject Project(string reference)
