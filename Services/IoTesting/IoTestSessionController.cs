@@ -113,9 +113,19 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!device.IsConnected || !device.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ied.IedName} must be connected and monitoring before FAT evidence can start.");
 
+        var expectedPoints = ied.TestPoints
+            .Where(point => point.TestEnabled && point.ImportReady)
+            .ToList();
+        if (expectedPoints.Count == 0)
+            return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
+
         var bindings = BuildSessionBindings(ied, device);
-        if (bindings.Count == 0)
-            return IoTestSessionActionResult.Failure("No enabled IO-list signal has a live monitor point for this IED.");
+        if (bindings.Count != expectedPoints.Count)
+        {
+            var missing = expectedPoints.Count - bindings.Count;
+            return IoTestSessionActionResult.Failure(
+                $"{missing} of {expectedPoints.Count} enabled IO-list signal(s) do not have one unique live monitor point. Resolve their binding or disable them before starting FAT.");
+        }
 
         CleanupSessionResources(disposeJournal: true);
         SessionId = Guid.NewGuid();
@@ -249,7 +259,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
 
     public void Enqueue(Iec61850EventEntry entry)
     {
-        if (entry == null || _disposed)
+        if (entry == null || _disposed || State != IoTestSessionState.Running)
             return;
 
         var activeDevice = _activeDevice;
