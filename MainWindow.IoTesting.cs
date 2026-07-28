@@ -38,7 +38,7 @@ public partial class MainWindow
         var emptyState = workspace?.Children
             .OfType<Border>()
             .FirstOrDefault(border =>
-                BindingOperations.GetBinding(border, VisibilityProperty)?.Path?.Path == nameof(EmptyExplorerVisibility));
+                BindingOperations.GetBinding(border, UIElement.VisibilityProperty)?.Path?.Path == nameof(EmptyExplorerVisibility));
         if (emptyState?.Child is not Grid heroGrid)
             return;
 
@@ -208,7 +208,7 @@ public partial class MainWindow
         {
             Style = TryFindResource(styleResource) as Style,
             Content = buttonContent,
-            Padding = new Thickness(12, 8),
+            Padding = new Thickness(12, 8, 12, 8),
             Margin = margin,
             VerticalAlignment = VerticalAlignment.Center
         };
