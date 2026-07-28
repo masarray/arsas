@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
@@ -14,61 +15,209 @@ public partial class MainWindow
 {
     private readonly IoListExcelImportService _ioListExcelImportService = new();
     private readonly IoTestLiveBindingService _ioTestLiveBindingService = new();
-    private Button? _ioListTestingLauncher;
+    private FrameworkElement? _ioListTestingLauncherCard;
     private IoTestSessionController? _activeIoTestSessionController;
     private long _ioTestObservationSequence;
 
     protected override void OnInitialized(EventArgs e)
     {
         base.OnInitialized(e);
-        Dispatcher.BeginInvoke(new Action(InstallIoListTestingLauncher));
+        Dispatcher.BeginInvoke(new Action(InstallFirstRunTestingChoices), DispatcherPriority.Loaded);
     }
 
-    private void InstallIoListTestingLauncher()
+    private void InstallFirstRunTestingChoices()
     {
-        if (_ioListTestingLauncher != null || Content is not Grid root)
+        if (_ioListTestingLauncherCard != null || MainTabs.Items.Count == 0)
+            return;
+        if (MainTabs.Items[0] is not TabItem explorerTab || explorerTab.Content is not Grid explorerGrid)
             return;
 
-        var header = root.Children
+        var workspace = explorerGrid.Children
             .OfType<Grid>()
-            .FirstOrDefault(child => Grid.GetRow(child) == 0);
-        var actionPanel = header?.Children
-            .OfType<WrapPanel>()
-            .FirstOrDefault(panel => Grid.GetColumn(panel) == 2);
-        if (actionPanel == null)
+            .FirstOrDefault(child => Grid.GetColumn(child) == 2);
+        var emptyState = workspace?.Children
+            .OfType<Border>()
+            .FirstOrDefault(border =>
+                BindingOperations.GetBinding(border, UIElement.VisibilityProperty)?.Path?.Path == nameof(EmptyExplorerVisibility));
+        if (emptyState?.Child is not Grid heroGrid)
             return;
 
-        var button = new Button
+        var generalTestingCard = heroGrid.Children.OfType<Border>().SingleOrDefault();
+        if (generalTestingCard?.Child is not StackPanel generalContent)
+            return;
+
+        heroGrid.Children.Remove(generalTestingCard);
+        ConfigureGeneralTestingCard(generalTestingCard, generalContent);
+
+        var ioListCard = CreateIoListTestingCard();
+        var chooser = new WrapPanel
         {
-            Style = TryFindResource("PrimaryButton") as Style,
-            Padding = new Thickness(12, 7, 12, 7),
-            Margin = new Thickness(0, 0, 8, 0),
-            ToolTip = "Import an ARSAS IO List workbook and enter the dedicated FAT workspace"
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(28),
+            MaxWidth = 1000
         };
-        var content = new StackPanel { Orientation = Orientation.Horizontal };
-        var icon = new System.Windows.Shapes.Path
+        chooser.Children.Add(generalTestingCard);
+        chooser.Children.Add(ioListCard);
+        heroGrid.Children.Add(chooser);
+        _ioListTestingLauncherCard = ioListCard;
+    }
+
+    private void ConfigureGeneralTestingCard(Border card, StackPanel content)
+    {
+        card.Width = 510;
+        card.MaxWidth = 510;
+        card.Margin = new Thickness(0, 0, 12, 0);
+        card.HorizontalAlignment = HorizontalAlignment.Stretch;
+        card.VerticalAlignment = VerticalAlignment.Stretch;
+        card.BorderBrush = BrushFromHex("#DCE6F5");
+        card.BorderThickness = new Thickness(1);
+
+        var title = content.Children.OfType<TextBlock>().FirstOrDefault();
+        var description = content.Children.OfType<TextBlock>().Skip(1).FirstOrDefault();
+        var actions = content.Children.OfType<WrapPanel>().FirstOrDefault();
+        if (title == null || description == null || actions == null)
+            return;
+
+        content.Children.Insert(0, new TextBlock
         {
-            Data = TryFindResource("LucideFileInput") as Geometry,
-            Style = TryFindResource("LucideIcon") as Style,
-            Stroke = Brushes.White
+            Text = "GENERAL IEC 61850 TESTING",
+            Style = TryFindResource("MicroLabel") as Style,
+            Foreground = TryFindResource("Accent") as Brush,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        title.Text = "Add an IED for general testing";
+        description.Text = "Connect a relay by IP for model discovery, signal selection, live monitoring, event analysis, and the complete IEC 61850 engineering workflow.";
+
+        actions.Children.Clear();
+        actions.Children.Add(CreateLauncherButton(
+            "Add IED",
+            "LucidePlus",
+            "PrimaryButton",
+            AddRelay_Click,
+            Brushes.White,
+            new Thickness(0, 0, 10, 0)));
+        actions.Children.Add(CreateLauncherButton(
+            "Open Project",
+            "LucideFolderOpen",
+            "SoftButton",
+            OpenProject_Click,
+            null,
+            new Thickness(0, 0, 10, 0)));
+        actions.Children.Add(new TextBlock
+        {
+            Text = "Manual discovery and general-purpose testing",
+            Style = TryFindResource("Caption") as Style,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+    }
+
+    private Border CreateIoListTestingCard()
+    {
+        var card = new Border
+        {
+            Width = 430,
+            MaxWidth = 430,
+            Background = BrushFromHex("#F8FAFC"),
+            Opacity = 0.94,
+            CornerRadius = new CornerRadius(22),
+            Padding = new Thickness(22),
+            BorderBrush = BrushFromHex("#BFD2F1"),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
         };
-        content.Children.Add(new Viewbox
+
+        var content = new StackPanel();
+        content.Children.Add(new TextBlock
         {
-            Width = 14,
-            Height = 14,
-            Margin = new Thickness(0, 0, 6, 0),
-            Child = icon
+            Text = "FAT / IO LIST TESTING",
+            Style = TryFindResource("MicroLabel") as Style,
+            Foreground = TryFindResource("Accent") as Brush,
+            Margin = new Thickness(0, 0, 0, 6)
         });
         content.Children.Add(new TextBlock
         {
-            Text = "IO List Testing",
+            Text = "Run FAT from an approved IO List",
+            FontSize = 24,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TryFindResource("Ink") as Brush,
+            TextWrapping = TextWrapping.Wrap
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "Import the ARSAS Excel template, choose an IED, and capture ordered ON and OFF timestamps automatically in a dedicated evidence workspace.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13.4,
+            Foreground = TryFindResource("Muted") as Brush,
+            Margin = new Thickness(0, 10, 0, 18)
+        });
+        content.Children.Add(CreateLauncherButton(
+            "Open IO List Workbook",
+            "LucideFileInput",
+            "PrimaryButton",
+            OpenIoListTesting_Click,
+            Brushes.White,
+            new Thickness(0, 0, 0, 10)));
+        content.Children.Add(new TextBlock
+        {
+            Text = "IED-scoped signals · read-only IEC 61850 observation · automatic FAT evidence",
+            Style = TryFindResource("Caption") as Style,
+            TextWrapping = TextWrapping.Wrap
+        });
+        card.Child = content;
+        return card;
+    }
+
+    private Button CreateLauncherButton(
+        string text,
+        string iconResource,
+        string styleResource,
+        RoutedEventHandler handler,
+        Brush? iconStroke,
+        Thickness margin)
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = TryFindResource(iconResource) as Geometry,
+            Style = TryFindResource("LucideIcon") as Style
+        };
+        if (iconStroke != null)
+            icon.Stroke = iconStroke;
+
+        var buttonContent = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        buttonContent.Children.Add(new Viewbox
+        {
+            Width = 15,
+            Height = 15,
+            Margin = new Thickness(0, 0, 7, 0),
+            Child = icon
+        });
+        buttonContent.Children.Add(new TextBlock
+        {
+            Text = text,
             FontWeight = FontWeights.SemiBold
         });
-        button.Content = content;
-        button.Click += OpenIoListTesting_Click;
-        actionPanel.Children.Insert(0, button);
-        _ioListTestingLauncher = button;
+
+        var button = new Button
+        {
+            Style = TryFindResource(styleResource) as Style,
+            Content = buttonContent,
+            Padding = new Thickness(12, 8, 12, 8),
+            Margin = margin,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        button.Click += handler;
+        return button;
     }
+
+    private static Brush BrushFromHex(string value)
+        => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
 
     private async void OpenIoListTesting_Click(object sender, RoutedEventArgs e)
     {
