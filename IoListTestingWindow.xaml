@@ -34,7 +34,9 @@
                     </Border>
                     <Button Content="Save Progress" Style="{StaticResource SoftButton}" Padding="11,7"
                             Click="SaveProgress_Click" Margin="0,0,6,0"/>
-                    <Button Content="Export Handover" Style="{StaticResource PrimaryButton}" Padding="11,7"
+                    <Button Content="Export PDF" Style="{StaticResource SoftButton}" Padding="11,7"
+                            Click="ExportPdf_Click" Margin="0,0,6,0"/>
+                    <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="11,7"
                             Click="ExportHandover_Click" Margin="0,0,6,0"/>
                     <Button Content="Return to Engineering" Style="{StaticResource SoftButton}" Click="ReturnToEngineering_Click"/>
                 </StackPanel>
