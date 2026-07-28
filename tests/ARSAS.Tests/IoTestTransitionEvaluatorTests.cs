@@ -39,7 +39,7 @@ public sealed class IoTestTransitionEvaluatorTests
 
         Assert.Equal(IoTestPointState.ArmedForOn, baselineOff.State);
         Assert.Equal(IoTestPointState.OnCaptured, on.State);
-        Assert.Equal(3, point.Runtime.OnEvidence?.Sequence);
+        Assert.Equal(3L, point.Runtime.OnEvidence?.Sequence);
     }
 
     [Fact]
