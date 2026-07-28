@@ -37,7 +37,10 @@ public sealed class SmvEvidenceBundleExporterTests
             Assert.Matches("^[0-9a-f]{64}$", result.BundleSha256);
 
             using var archive = ZipFile.OpenRead(outputPath);
-            var names = archive.Entries.Select(entry => entry.FullName).OrderBy(name => name).ToArray();
+            var names = archive.Entries
+                .Select(entry => entry.FullName)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
             Assert.Equal(
                 ["SHA256SUMS.txt", "diagnostics.txt", "manifest.json", "samples.csv", "waveform.png"],
                 names);
