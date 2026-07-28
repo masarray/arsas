@@ -400,7 +400,8 @@ public static class SmvSnapshotEvidenceExporter
             .Trim()
             .Select(character => invalid.Contains(character) || char.IsControl(character) ? '-' : character)
             .ToArray());
-        while (sanitized.Contains("--", StringComparison.Ordinal))n            sanitized = sanitized.Replace("--", "-", StringComparison.Ordinal);
+        while (sanitized.Contains("--", StringComparison.Ordinal))
+            sanitized = sanitized.Replace("--", "-", StringComparison.Ordinal);
         sanitized = sanitized.Trim(' ', '.', '-');
         if (sanitized.Length > maximumLength)
             sanitized = sanitized[..maximumLength].TrimEnd(' ', '.', '-');
