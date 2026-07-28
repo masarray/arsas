@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -86,7 +87,26 @@ public sealed class IoTestPersistenceTests
     }
 
     [Fact]
-    public async Task PortablePackage_RoundTripsProgressAndPrintableReport()
+    public void NativePdfReport_GeneratesRealPagedIoFatEvidence()
+    {
+        var project = Project(new string('a', 64));
+        CompletePass(project.Ieds[0].TestPoints[0]);
+        var bytes = IoFatPdfReportService.Generate(
+            project,
+            new DateTimeOffset(2026, 7, 28, 17, 30, 0, TimeSpan.FromHours(7)));
+        var text = Encoding.ASCII.GetString(bytes);
+
+        Assert.StartsWith("%PDF-1.4", text, StringComparison.Ordinal);
+        Assert.Contains("IEC 61850 FAT Evidence Report", text, StringComparison.Ordinal);
+        Assert.Contains("CB closed", text, StringComparison.Ordinal);
+        Assert.Contains("AA1C1F03R4ADD/GGIO6.CBClsd.stVal", text, StringComparison.Ordinal);
+        Assert.Contains("xref", text, StringComparison.Ordinal);
+        Assert.EndsWith("%%EOF\n", text, StringComparison.Ordinal);
+        Assert.True(bytes.Length > 2_000);
+    }
+
+    [Fact]
+    public async Task ArsasProject_RoundTripsProgressAndNativePdfReport()
     {
         var root = TempDirectory();
         var workbook = Path.Combine(root, "source.xlsx");
@@ -102,23 +122,30 @@ public sealed class IoTestPersistenceTests
             workbook,
             Path.Combine(root, "projects-a"),
             evidenceRoot);
-        var package = Path.Combine(root, "handover.arsas-iofat");
+        var package = Path.Combine(root, "handover.arsas");
         using (session)
         using (opened.Workspace)
         {
-            await opened.Workspace.ExportPackageAsync(package);
+            var exported = await IoFatProjectPackageService.ExportAsync(
+                opened.Workspace,
+                session,
+                package);
+            Assert.Equal(package, exported);
         }
 
         using (var archive = ZipFile.OpenRead(package))
         {
             Assert.NotNull(archive.GetEntry("manifest.json"));
             Assert.NotNull(archive.GetEntry("project.snapshot.json"));
-            Assert.NotNull(archive.GetEntry("report/IO-FAT-Report.html"));
-            using var reader = new StreamReader(archive.GetEntry("report/IO-FAT-Report.html")!.Open());
-            var report = await reader.ReadToEndAsync();
-            Assert.Contains("ARSAS IO List FAT Evidence Report", report, StringComparison.Ordinal);
+            var pdfEntry = archive.GetEntry("report/IO-FAT-Report.pdf");
+            Assert.NotNull(pdfEntry);
+            await using var pdfStream = pdfEntry!.Open();
+            using var memory = new MemoryStream();
+            await pdfStream.CopyToAsync(memory);
+            var report = Encoding.ASCII.GetString(memory.ToArray());
+            Assert.StartsWith("%PDF-1.4", report, StringComparison.Ordinal);
             Assert.Contains("CB closed", report, StringComparison.Ordinal);
-            Assert.Contains("Passed", report, StringComparison.Ordinal);
+            Assert.Contains("PASSED", report, StringComparison.Ordinal);
         }
 
         var imported = await IoTestWorkspaceBootstrapService.OpenPackageAsync(
@@ -138,7 +165,43 @@ public sealed class IoTestPersistenceTests
     }
 
     [Fact]
-    public async Task PortablePackage_RejectsTamperedSnapshot()
+    public async Task ArsasProject_LegacyExtensionRemainsReadable()
+    {
+        var root = TempDirectory();
+        var workbook = Path.Combine(root, "source.xlsx");
+        await File.WriteAllBytesAsync(workbook, new byte[] { 11, 22, 33, 44 });
+        var project = Project(Hash(workbook));
+        CompletePass(project.Ieds[0].TestPoints[0]);
+        var evidenceRoot = Path.Combine(root, "evidence");
+        var session = Session(project, evidenceRoot);
+        var opened = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+            project,
+            session,
+            workbook,
+            Path.Combine(root, "projects"),
+            evidenceRoot);
+        var modern = Path.Combine(root, "handover.arsas");
+        using (session)
+        using (opened.Workspace)
+            await IoFatProjectPackageService.ExportAsync(opened.Workspace, session, modern);
+
+        var legacy = Path.Combine(root, "handover.arsas-iofat");
+        File.Copy(modern, legacy);
+        Assert.True(IoFatProjectPackageService.IsSupportedPackagePath(modern));
+        Assert.True(IoFatProjectPackageService.IsSupportedPackagePath(legacy));
+
+        var imported = await IoTestWorkspaceBootstrapService.OpenPackageAsync(
+            legacy,
+            Path.Combine(root, "projects-import"),
+            Path.Combine(root, "evidence-import"),
+            Session);
+        using (imported.Session)
+        using (imported.Workspace)
+            Assert.Equal(IoTestPointState.Passed, imported.Project.Ieds[0].TestPoints[0].Runtime.State);
+    }
+
+    [Fact]
+    public async Task ArsasProject_RejectsTamperedSnapshot()
     {
         var root = TempDirectory();
         var workbook = Path.Combine(root, "source.xlsx");
@@ -151,10 +214,10 @@ public sealed class IoTestPersistenceTests
             workbook,
             Path.Combine(root, "projects"),
             Path.Combine(root, "evidence"));
-        var package = Path.Combine(root, "handover.arsas-iofat");
+        var package = Path.Combine(root, "handover.arsas");
         using (session)
         using (opened.Workspace)
-            await opened.Workspace.ExportPackageAsync(package);
+            await IoFatProjectPackageService.ExportAsync(opened.Workspace, session, package);
 
         using (var archive = ZipFile.Open(package, ZipArchiveMode.Update))
         {
