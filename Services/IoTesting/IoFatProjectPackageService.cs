@@ -9,6 +9,8 @@ public static class IoFatProjectPackageService
 {
     public const string PackageExtension = ".arsas";
     public const string LegacyPackageExtension = ".arsas-iofat";
+    private const long MaximumPackageBytes = 500L * 1024 * 1024;
+    private const int MaximumEntries = 10_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -25,6 +27,52 @@ public static class IoFatProjectPackageService
         => !string.IsNullOrWhiteSpace(path) &&
            (path.EndsWith(PackageExtension, StringComparison.OrdinalIgnoreCase) ||
             path.EndsWith(LegacyPackageExtension, StringComparison.OrdinalIgnoreCase));
+
+    public static async Task ValidateAsync(
+        string packagePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+        var info = new FileInfo(packagePath);
+        if (!info.Exists)
+            throw new FileNotFoundException("The ARSAS project was not found.", packagePath);
+        if (info.Length > MaximumPackageBytes)
+            throw new InvalidDataException("The ARSAS project exceeds the 500 MB safety limit.");
+
+        using var archive = ZipFile.OpenRead(packagePath);
+        if (archive.Entries.Count > MaximumEntries)
+            throw new InvalidDataException("The ARSAS project contains too many entries.");
+
+        var manifestEntry = RequiredEntry(archive, "manifest.json");
+        var manifestBytes = await ReadEntryAsync(
+            manifestEntry,
+            5 * 1024 * 1024,
+            cancellationToken).ConfigureAwait(false);
+        using var manifest = JsonDocument.Parse(manifestBytes);
+        var root = manifest.RootElement;
+
+        if (root.TryGetProperty("packageKind", out var kind) && kind.ValueKind == JsonValueKind.String &&
+            !string.Equals(kind.GetString(), "io-fat", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"This .arsas project has package kind '{kind.GetString()}' and cannot be opened in the IO List Testing workspace.");
+        }
+
+        await VerifyOptionalManifestEntryAsync(
+            archive,
+            root,
+            "reportEntry",
+            "reportSha256",
+            "native PDF report",
+            cancellationToken).ConfigureAwait(false);
+        await VerifyOptionalManifestEntryAsync(
+            archive,
+            root,
+            "resultWorkbookEntry",
+            "resultWorkbookSha256",
+            "Excel result workbook",
+            cancellationToken).ConfigureAwait(false);
+    }
 
     public static async Task<string> ExportAsync(
         IoTestWorkspacePersistence workspace,
@@ -73,7 +121,31 @@ public static class IoFatProjectPackageService
         cancellationToken.ThrowIfCancellationRequested();
         var generatedAt = DateTimeOffset.Now;
         var pdfBytes = IoFatPdfReportService.Generate(workspace.Project, generatedAt);
-        var reportEntry = "report/IO-FAT-Report.pdf";
+        var resultWorkbookTemporary = Path.Combine(
+            Path.GetTempPath(),
+            "ARSAS",
+            "IO FAT Export",
+            Guid.NewGuid().ToString("N") + ".xlsx");
+        byte[] resultWorkbookBytes;
+        try
+        {
+            await IoFatExcelResultExportService.ExportAsync(
+                workspace.SourceWorkbookPath,
+                resultWorkbookTemporary,
+                workspace.Project,
+                cancellationToken).ConfigureAwait(false);
+            resultWorkbookBytes = await File.ReadAllBytesAsync(
+                resultWorkbookTemporary,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (File.Exists(resultWorkbookTemporary))
+                File.Delete(resultWorkbookTemporary);
+        }
+
+        const string reportEntry = "report/IO-FAT-Report.pdf";
+        const string resultWorkbookEntry = "report/IO-FAT-Results.xlsx";
         var manifest = new PackageManifest(
             IoTestWorkspacePersistence.PackageVersion,
             "io-fat",
@@ -87,6 +159,8 @@ public static class IoFatProjectPackageService
             workspace.Project.SourceWorkbookSha256,
             reportEntry,
             HashBytes(pdfBytes),
+            resultWorkbookEntry,
+            HashBytes(resultWorkbookBytes),
             evidenceFiles);
 
         var fullDestination = NormalizeDestination(destinationPath);
@@ -104,6 +178,7 @@ public static class IoFatProjectPackageService
                 await WriteEntryAsync(archive, manifest.SnapshotEntry, snapshotBytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.SourceWorkbookEntry, sourceBytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.ReportEntry, pdfBytes, cancellationToken).ConfigureAwait(false);
+                await WriteEntryAsync(archive, manifest.ResultWorkbookEntry, resultWorkbookBytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(
                     archive,
                     "README.txt",
@@ -133,6 +208,29 @@ public static class IoFatProjectPackageService
         }
     }
 
+    private static async Task VerifyOptionalManifestEntryAsync(
+        ZipArchive archive,
+        JsonElement manifest,
+        string entryProperty,
+        string hashProperty,
+        string label,
+        CancellationToken cancellationToken)
+    {
+        if (!manifest.TryGetProperty(entryProperty, out var entryValue) || entryValue.ValueKind != JsonValueKind.String ||
+            !manifest.TryGetProperty(hashProperty, out var hashValue) || hashValue.ValueKind != JsonValueKind.String)
+        {
+            return; // Legacy package: existing importer verifies snapshot, workbook and journals.
+        }
+
+        var entryName = entryValue.GetString();
+        var expectedHash = hashValue.GetString();
+        if (string.IsNullOrWhiteSpace(entryName) || string.IsNullOrWhiteSpace(expectedHash))
+            throw new InvalidDataException($"The ARSAS project {label} manifest is incomplete.");
+        var entry = RequiredEntry(archive, entryName);
+        var bytes = await ReadEntryAsync(entry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+        VerifyHash(bytes, expectedHash, label);
+    }
+
     private static string NormalizeDestination(string destinationPath)
     {
         var fullPath = Path.GetFullPath(destinationPath);
@@ -141,6 +239,29 @@ public static class IoFatProjectPackageService
         if (fullPath.EndsWith(LegacyPackageExtension, StringComparison.OrdinalIgnoreCase))
             return fullPath[..^LegacyPackageExtension.Length] + PackageExtension;
         return fullPath + PackageExtension;
+    }
+
+    private static ZipArchiveEntry RequiredEntry(ZipArchive archive, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(name))
+            throw new InvalidDataException("The ARSAS project contains an unsafe entry path.");
+        return archive.GetEntry(name.Replace('\\', '/'))
+            ?? throw new InvalidDataException($"The ARSAS project entry '{name}' is missing.");
+    }
+
+    private static async Task<byte[]> ReadEntryAsync(
+        ZipArchiveEntry entry,
+        long maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        if (entry.Length > maximumBytes)
+            throw new InvalidDataException($"ARSAS project entry '{entry.FullName}' exceeds its safety limit.");
+        await using var source = entry.Open();
+        using var memory = new MemoryStream((int)Math.Min(entry.Length, int.MaxValue));
+        await source.CopyToAsync(memory, cancellationToken).ConfigureAwait(false);
+        if (memory.Length > maximumBytes)
+            throw new InvalidDataException($"ARSAS project entry '{entry.FullName}' exceeds its safety limit.");
+        return memory.ToArray();
     }
 
     private static async Task WriteEntryAsync(
@@ -166,7 +287,7 @@ public static class IoFatProjectPackageService
     {
         var actual = HashBytes(bytes);
         if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"The {label} SHA-256 does not match the project identity.");
+            throw new InvalidDataException($"The {label} SHA-256 does not match the project manifest.");
     }
 
     private static string HashBytes(byte[] bytes)
@@ -180,8 +301,9 @@ public static class IoFatProjectPackageService
         "Project file extension: .arsas\r\n" +
         "To continue testing: open this file from FAT / IO List Testing > Open ARSAS Project.\r\n" +
         "To review or print evidence: extract report/IO-FAT-Report.pdf.\r\n" +
+        "To review results in Excel: extract report/IO-FAT-Results.xlsx.\r\n" +
         "The PDF is generated directly by the built-in native ARSAS PDF engine ported from ARIEC60870.\r\n" +
-        "The package also contains the source workbook, project snapshot, and verified evidence journals.\r\n";
+        "The package also contains the approved source workbook, project snapshot, and verified evidence journals.\r\n";
 
     private sealed record PackageManifest(
         string PackageVersion,
@@ -196,6 +318,8 @@ public static class IoFatProjectPackageService
         string SourceWorkbookSha256,
         string ReportEntry,
         string ReportSha256,
+        string ResultWorkbookEntry,
+        string ResultWorkbookSha256,
         List<PackageEvidence> EvidenceFiles);
 
     private sealed record PackageEvidence(
