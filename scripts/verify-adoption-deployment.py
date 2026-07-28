@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that public Pages exposes P3 adoption and field-proof surfaces."""
+"""Verify that public Pages exposes adoption, evidence and IO FAT surfaces."""
 
 from __future__ import annotations
 
@@ -29,11 +29,13 @@ def main() -> int:
     base = args.base_url.rstrip("/") + "/"
     nonce = urlencode({"adoption": args.source_commit})
     checks = {
-        "quick-start.html": ("quick-step-number", "data-responsive-media=\"webp\"", "panduan-mulai-arsas.html"),
+        "quick-start.html": ("quick-step-number", "data-responsive-media=\"webp\"", "panduan-mulai-arsas.html", "io-list-fat-evidence.html"),
+        "io-list-fat-evidence.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Native PDF report", "bukti-fat-iolist-iec61850.html"),
+        "bukti-fat-iolist-iec61850.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Report PDF native", "io-list-fat-evidence.html"),
         "faq.html": ('"@type":"FAQPage"', "faq-item", "faq-arsas.html"),
         "compatibility.html": ("field-profile-a-file-service", "field-profile-b-rcb-export", "device-evidence.json"),
         "demo.html": ("data-guided-demo", "data-demo-step", "demo.js", "data-responsive-media=\"webp\""),
-        "guides.html": ("data-guide-filter", "data-guide-card", "guide-filter.js"),
+        "guides.html": ("data-guide-filter", "data-guide-card", "guide-filter.js", "io-list-fat-evidence.html"),
     }
     errors: list[str] = []
     for path, required in checks.items():
@@ -60,7 +62,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("Public ARSAS adoption attestation passed: Quick Start, FAQ, compatibility, demo, filters and responsive media are live.")
+    print("Public ARSAS adoption attestation passed: Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
     return 0
 
 
