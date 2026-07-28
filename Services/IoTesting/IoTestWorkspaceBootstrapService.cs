@@ -153,8 +153,7 @@ public static class IoTestWorkspaceBootstrapService
             point.Runtime.CurrentQuality = "Unknown";
             point.Runtime.CurrentSource = "Restored · live baseline required";
 
-            var savedStateText = OptionalString(runtime, "state", IoTestPointState.NotStarted.ToString());
-            _ = Enum.TryParse<IoTestPointState>(savedStateText, ignoreCase: true, out var savedState);
+            var savedState = OptionalState(runtime, "state", IoTestPointState.NotStarted);
             if (savedState is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
             {
                 point.Runtime.State = savedState;
@@ -190,6 +189,26 @@ public static class IoTestWorkspaceBootstrapService
         if (!runtime.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null)
             return null;
         return element.Deserialize<IoTestTransitionEvidence>(JsonOptions);
+    }
+
+    private static IoTestPointState OptionalState(
+        JsonElement parent,
+        string property,
+        IoTestPointState fallback)
+    {
+        if (!parent.TryGetProperty(property, out var value))
+            return fallback;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) &&
+            Enum.IsDefined(typeof(IoTestPointState), number))
+        {
+            return (IoTestPointState)number;
+        }
+        if (value.ValueKind == JsonValueKind.String &&
+            Enum.TryParse<IoTestPointState>(value.GetString(), ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+        return fallback;
     }
 
     private static JsonElement RequiredObject(JsonElement parent, string property)
