@@ -40,7 +40,7 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_ExposesAutosavePdfAndArsasProjectActions()
+    public void IoTestingWindow_ExposesAutosaveExcelPdfAndArsasProjectActions()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -52,6 +52,7 @@ public sealed class IoTestingUiContractTests
             .ToList();
 
         Assert.Contains("Save Progress", buttonContents);
+        Assert.Contains("Export Excel", buttonContents);
         Assert.Contains("Export PDF", buttonContents);
         Assert.Contains("Export .arsas", buttonContents);
         Assert.Contains(
@@ -60,13 +61,16 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoFatPackageService_UsesShortExtensionAndKeepsLegacyReaderFilter()
+    public void IoFatPackageService_UsesShortExtensionAndBundlesNativeReports()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatProjectPackageService.cs"));
 
         Assert.Contains("PackageExtension = \".arsas\"", source, StringComparison.Ordinal);
         Assert.Contains("LegacyPackageExtension = \".arsas-iofat\"", source, StringComparison.Ordinal);
         Assert.Contains("report/IO-FAT-Report.pdf", source, StringComparison.Ordinal);
+        Assert.Contains("report/IO-FAT-Results.xlsx", source, StringComparison.Ordinal);
+        Assert.Contains("reportSha256", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("resultWorkbookSha256", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("IO-FAT-Report.html", source, StringComparison.Ordinal);
     }
 
