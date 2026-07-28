@@ -345,6 +345,18 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
                 if (!AppendOrFault(PointEvent(eventType, point, observation, evaluation.Evidence, evaluation.Reason, snapshot.Reason, snapshot.PreviousValue)))
                     return;
             }
+            else if (evaluation.StateChanged)
+            {
+                if (!AppendOrFault(PointEvent(
+                        "baseline_state",
+                        point,
+                        observation,
+                        null,
+                        evaluation.Reason,
+                        snapshot.Reason,
+                        snapshot.PreviousValue)))
+                    return;
+            }
             else if (normalized == null)
             {
                 if (!AppendOrFault(PointEvent(
