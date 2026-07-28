@@ -40,6 +40,7 @@
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\app-icon-256.png" />
     <Resource Include="Assets\gateway-hero.png" />
+    <EmbeddedResource Include="engines\ARIEC61850.lock.json" LogicalName="ARSAS.ARIEC61850.lock.json" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
