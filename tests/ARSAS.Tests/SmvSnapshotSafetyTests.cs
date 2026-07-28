@@ -68,7 +68,7 @@ public sealed class SmvSnapshotSafetyTests
 
         Assert.True(identity.Matches(
             "ied1ld0/lln0.msvcb01",
-            "MU01",
+            "mu01",
             "ied1ld0/lln0.dataset01",
             "4000",
             "01:0c:cd:04:00:01"));
