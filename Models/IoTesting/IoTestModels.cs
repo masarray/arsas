@@ -1,3 +1,7 @@
+using ArIED61850Tester.Models;
+
+using System.ComponentModel;
+
 namespace ArIED61850Tester.Models.IoTesting;
 
 public enum IoTestPointState
@@ -26,6 +30,16 @@ public enum IoEvidenceVerdict
     Rejected
 }
 
+public enum IoTestLiveBindingState
+{
+    NotEvaluated,
+    DeviceNotLoaded,
+    SignalNotFound,
+    BoundExact,
+    BoundNormalized,
+    LivePointReady
+}
+
 public sealed record IoTestObservation(
     bool? NormalizedState,
     string RawValue,
@@ -51,18 +65,49 @@ public sealed record IoTestTransitionEvidence(
     IoEvidenceVerdict Verdict,
     string VerdictReason);
 
-public sealed class IoTestPointRuntime
+public sealed class IoTestPointRuntime : ObservableObject
 {
-    public IoTestPointState State { get; internal set; } = IoTestPointState.NotStarted;
-    public bool? LastObservedState { get; internal set; }
-    public long LastSequence { get; internal set; } = -1;
-    public long ConnectionGeneration { get; internal set; } = -1;
-    public IoTestTransitionEvidence? OnEvidence { get; internal set; }
-    public IoTestTransitionEvidence? OffEvidence { get; internal set; }
-    public string StatusReason { get; internal set; } = "Not started";
-    public int Attempt { get; internal set; }
+    private IoTestPointState _state = IoTestPointState.NotStarted;
+    private bool? _lastObservedState;
+    private long _lastSequence = -1;
+    private long _connectionGeneration = -1;
+    private IoTestTransitionEvidence? _onEvidence;
+    private IoTestTransitionEvidence? _offEvidence;
+    private string _statusReason = "Not started";
+    private int _attempt;
+    private string _currentValue = "-";
+    private string _currentQuality = "Unknown";
+    private string _currentSource = "Not connected";
+
+    public IoTestPointState State
+    {
+        get => _state;
+        internal set
+        {
+            if (Set(ref _state, value))
+                Raise(nameof(IsComplete));
+        }
+    }
+
+    public bool? LastObservedState { get => _lastObservedState; internal set => Set(ref _lastObservedState, value); }
+    public long LastSequence { get => _lastSequence; internal set => Set(ref _lastSequence, value); }
+    public long ConnectionGeneration { get => _connectionGeneration; internal set => Set(ref _connectionGeneration, value); }
+    public IoTestTransitionEvidence? OnEvidence { get => _onEvidence; internal set => Set(ref _onEvidence, value); }
+    public IoTestTransitionEvidence? OffEvidence { get => _offEvidence; internal set => Set(ref _offEvidence, value); }
+    public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
+    public int Attempt { get => _attempt; internal set => Set(ref _attempt, value); }
+    public string CurrentValue { get => _currentValue; internal set => Set(ref _currentValue, string.IsNullOrWhiteSpace(value) ? "-" : value); }
+    public string CurrentQuality { get => _currentQuality; internal set => Set(ref _currentQuality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string CurrentSource { get => _currentSource; internal set => Set(ref _currentSource, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
 
     public bool IsComplete => State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed;
+
+    internal void ApplyObservation(IoTestObservation observation)
+    {
+        CurrentValue = observation.RawValue;
+        CurrentQuality = observation.Quality;
+        CurrentSource = observation.AcquisitionSource;
+    }
 
     internal void ResetAttempt()
     {
@@ -77,8 +122,14 @@ public sealed class IoTestPointRuntime
     }
 }
 
-public sealed class IoTestPointPlan
+public sealed class IoTestPointPlan : ObservableObject
 {
+    private bool _testEnabled = true;
+    private IoTestLiveBindingState _liveBindingState = IoTestLiveBindingState.NotEvaluated;
+    private string _liveBindingReason = "Live binding has not been evaluated";
+    private string _liveDeviceId = string.Empty;
+    private string _liveSignalReference = string.Empty;
+
     public required string TestPointId { get; init; }
     public required string IedName { get; init; }
     public required string IpAddress { get; init; }
@@ -87,27 +138,126 @@ public sealed class IoTestPointPlan
     public required string FunctionalConstraint { get; init; }
     public required string ExpectedOnText { get; init; }
     public required string ExpectedOffText { get; init; }
+    public int ExpectedOnRaw { get; init; } = 1;
+    public int ExpectedOffRaw { get; init; }
+    public string DataType { get; init; } = "SDI";
+    public string SignalAddress { get; init; } = string.Empty;
+    public string DataSetName { get; init; } = string.Empty;
+    public string LogicalDevice { get; init; } = string.Empty;
+    public string LogicalNode { get; init; } = string.Empty;
+    public string DataObject { get; init; } = string.Empty;
+    public string DataAttribute { get; init; } = string.Empty;
     public string SourceSheet { get; init; } = string.Empty;
     public int SourceRow { get; init; }
-    public bool TestEnabled { get; set; } = true;
+    public bool TestEnabled { get => _testEnabled; set => Set(ref _testEnabled, value); }
     public bool ImportReady { get; init; } = true;
     public string BindingStatus { get; init; } = string.Empty;
+    public string BindingEvidence { get; init; } = string.Empty;
     public IoTestPointRuntime Runtime { get; } = new();
+
+    public IoTestLiveBindingState LiveBindingState
+    {
+        get => _liveBindingState;
+        private set
+        {
+            if (Set(ref _liveBindingState, value))
+            {
+                Raise(nameof(IsLiveBound));
+                Raise(nameof(LiveBindingText));
+            }
+        }
+    }
+
+    public string LiveBindingReason { get => _liveBindingReason; private set => Set(ref _liveBindingReason, value ?? string.Empty); }
+    public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
+    public string LiveSignalReference { get => _liveSignalReference; private set => Set(ref _liveSignalReference, value ?? string.Empty); }
+    public bool IsLiveBound => LiveBindingState is IoTestLiveBindingState.BoundExact or IoTestLiveBindingState.BoundNormalized or IoTestLiveBindingState.LivePointReady;
+    public string LiveBindingText => LiveBindingState switch
+    {
+        IoTestLiveBindingState.LivePointReady => "Live",
+        IoTestLiveBindingState.BoundExact => "Model bound",
+        IoTestLiveBindingState.BoundNormalized => "Model bound*",
+        IoTestLiveBindingState.DeviceNotLoaded => "IED not loaded",
+        IoTestLiveBindingState.SignalNotFound => "Signal missing",
+        _ => "Not checked"
+    };
+
+    public void ApplyLiveBinding(
+        IoTestLiveBindingState state,
+        string reason,
+        string? deviceId = null,
+        string? signalReference = null)
+    {
+        LiveDeviceId = deviceId ?? string.Empty;
+        LiveSignalReference = signalReference ?? string.Empty;
+        LiveBindingReason = reason;
+        LiveBindingState = state;
+    }
 }
 
-public sealed class IoTestIedPlan
+public sealed class IoTestIedPlan : ObservableObject
 {
+    private string _liveDeviceId = string.Empty;
+    private string _liveStatusText = "Not evaluated";
+    private bool _notificationsInitialized;
+
     public required string IedName { get; init; }
     public required string IpAddress { get; init; }
     public string IedRole { get; init; } = string.Empty;
     public string Location { get; init; } = string.Empty;
     public string VoltageLevel { get; init; } = string.Empty;
+    public string Switchgear { get; init; } = string.Empty;
     public List<IoTestPointPlan> TestPoints { get; init; } = new();
 
+    public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
+    public string LiveStatusText { get => _liveStatusText; private set => Set(ref _liveStatusText, value ?? string.Empty); }
     public int EnabledCount => TestPoints.Count(point => point.TestEnabled);
     public int PassedCount => TestPoints.Count(point => point.Runtime.State == IoTestPointState.Passed);
     public int ReviewCount => TestPoints.Count(point => point.Runtime.State == IoTestPointState.Review);
-    public int PendingCount => EnabledCount - PassedCount - ReviewCount;
+    public int BoundCount => TestPoints.Count(point => point.IsLiveBound);
+    public int PendingCount => Math.Max(0, EnabledCount - PassedCount - ReviewCount);
+
+    public void ApplyLiveDeviceBinding(string? deviceId, string status)
+    {
+        LiveDeviceId = deviceId ?? string.Empty;
+        LiveStatusText = status;
+        RaiseProgressProperties();
+    }
+
+    public void InitializeRuntimeNotifications()
+    {
+        if (_notificationsInitialized)
+            return;
+        _notificationsInitialized = true;
+
+        foreach (var point in TestPoints)
+        {
+            point.PropertyChanged += Point_PropertyChanged;
+            point.Runtime.PropertyChanged += PointRuntime_PropertyChanged;
+        }
+        RaiseProgressProperties();
+    }
+
+    private void Point_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IoTestPointPlan.TestEnabled) or nameof(IoTestPointPlan.LiveBindingState))
+            RaiseProgressProperties();
+    }
+
+    private void PointRuntime_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IoTestPointRuntime.State) or nameof(IoTestPointRuntime.OnEvidence) or nameof(IoTestPointRuntime.OffEvidence))
+            RaiseProgressProperties();
+    }
+
+    private void RaiseProgressProperties()
+    {
+        Raise(nameof(EnabledCount));
+        Raise(nameof(PassedCount));
+        Raise(nameof(ReviewCount));
+        Raise(nameof(BoundCount));
+        Raise(nameof(PendingCount));
+    }
 }
 
 public sealed class IoTestProject
@@ -122,4 +272,11 @@ public sealed class IoTestProject
 
     public int SignalCount => Ieds.Sum(ied => ied.TestPoints.Count);
     public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.ImportReady));
+    public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsLiveBound));
+
+    public void InitializeRuntimeNotifications()
+    {
+        foreach (var ied in Ieds)
+            ied.InitializeRuntimeNotifications();
+    }
 }
