@@ -1,0 +1,96 @@
+name: Validate IO List Testing
+
+on:
+  pull_request:
+    paths:
+      - "MainWindow.IoTesting.cs"
+      - "IoListTestingWindow.xaml"
+      - "IoListTestingWindow.xaml.cs"
+      - "Models/IoTesting/**"
+      - "Services/IoTesting/**"
+      - "tests/ARSAS.Tests/IoTest*"
+      - "tests/ARSAS.Tests/IoList*"
+      - "engines/ARIEC61850.lock.json"
+      - ".github/workflows/validate-io-testing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-io-testing:
+    name: Build and test IO List Testing
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout ARSAS application
+        uses: actions/checkout@v4
+        with:
+          path: ARSAS
+
+      - name: Resolve immutable ARIEC61850 engine lock
+        shell: powershell
+        run: |
+          $lock = Get-Content ".\ARSAS\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore focused test project
+        run: dotnet restore .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj
+
+      - name: Build focused IO testing project
+        shell: powershell
+        run: |
+          $log = ".\ARSAS\io-testing-build.log"
+          dotnet build .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-restore *> $log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) {
+            Write-Host "=== IO Testing compiler errors ===" -ForegroundColor Red
+            $errors = @(Select-String -Path $log -Pattern ': error ')
+            if ($errors.Count -eq 0) {
+              Get-Content $log -Tail 100 | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+            }
+            else {
+              $errors | ForEach-Object { Write-Host $_.Line -ForegroundColor Red }
+            }
+            exit $buildExitCode
+          }
+          Get-Content $log -Tail 12
+
+      - name: Upload IO testing compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-io-testing-compiler-log
+          path: ARSAS/io-testing-build.log
+          if-no-files-found: error
+
+      - name: Run IO testing regression tests
+        run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~IoTest|FullyQualifiedName~IoList" --logger "trx;LogFileName=io-testing-tests.trx" --results-directory .\ARSAS\TestResults
+
+      - name: Upload IO testing test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-io-testing-test-results
+          path: ARSAS/TestResults/*.trx
+          if-no-files-found: ignore
