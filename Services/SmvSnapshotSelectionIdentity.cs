@@ -21,7 +21,7 @@ public sealed record SmvSnapshotSelectionIdentity(
         string? destinationMac)
         => new(
             NormalizeReference(controlReference),
-            NormalizeText(streamId),
+            NormalizeIdentity(streamId),
             NormalizeReference(dataSetReference),
             NormalizeAppId(appId),
             NormalizeMac(destinationMac));
@@ -36,6 +36,9 @@ public sealed record SmvSnapshotSelectionIdentity(
 
     private static string NormalizeReference(string? value)
         => NormalizeText(value).Replace('$', '.').ToUpperInvariant();
+
+    private static string NormalizeIdentity(string? value)
+        => NormalizeText(value).ToUpperInvariant();
 
     private static string NormalizeText(string? value)
     {
