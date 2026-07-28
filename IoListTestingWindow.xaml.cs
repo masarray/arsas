@@ -51,7 +51,16 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void StartSession_Click(object sender, RoutedEventArgs e)
-        => ShowActionResult(Session.Start(SelectedIed), "FAT session could not start");
+    {
+        var preflight = IoTestSessionPreflight.Validate(SelectedIed);
+        if (!preflight.Succeeded)
+        {
+            ShowActionResult(preflight, "FAT session scope is not ready");
+            return;
+        }
+
+        ShowActionResult(Session.Start(SelectedIed), "FAT session could not start");
+    }
 
     private void PauseSession_Click(object sender, RoutedEventArgs e)
         => ShowActionResult(Session.Pause(), "FAT session could not pause");
