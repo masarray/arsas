@@ -5,7 +5,7 @@ using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
-public sealed class SmvSnapshotEvidenceExporterReviewTests
+public sealed class SmvSnapshotEvidenceExporterTestsReview
 {
     [Fact]
     public async Task Manifest_SeparatesCaptureIntervalFromBundleGenerationTime()
