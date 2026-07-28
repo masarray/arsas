@@ -193,18 +193,32 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!_activeDevice.IsConnected || !_activeDevice.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} is not connected and monitoring yet.");
 
+        var refreshedBindings = BuildSessionBindings(ActiveIed, _activeDevice)
+            .Where(binding => _sessionPointIds.Contains(binding.Point.TestPointId))
+            .ToList();
+        if (refreshedBindings.Count != _sessionPointIds.Count)
+            return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} does not yet have all {_sessionPointIds.Count} session points live after reconnect.");
+
+        _activePointIndex.Clear();
+        _activeLivePoints.Clear();
+        foreach (var binding in refreshedBindings)
+        {
+            AddPointIndex(_activeDevice.DeviceId, binding.LivePoint.IecReference, binding.Point);
+            if (!string.IsNullOrWhiteSpace(binding.Point.LiveSignalReference))
+                AddPointIndex(_activeDevice.DeviceId, binding.Point.LiveSignalReference, binding.Point);
+            _activeLivePoints[binding.Point.TestPointId] = binding.LivePoint;
+        }
+
         _connectionGeneration++;
         while (_pendingSnapshots.TryDequeue(out _)) { }
-        if (!AppendOrFault(SessionEvent("session_resumed", "Session resumed; current values are treated as a new baseline image.")))
+        if (!AppendOrFault(SessionEvent("session_resumed", "Session resumed after rebinding current live points; current values are treated as a new baseline image.")))
             return IoTestSessionActionResult.Failure(StatusText);
 
-        foreach (var point in ActiveIed.TestPoints.Where(point => _sessionPointIds.Contains(point.TestPointId)))
+        foreach (var binding in refreshedBindings)
         {
-            if (!_activeLivePoints.TryGetValue(point.TestPointId, out var livePoint))
-                continue;
-            var observation = CreateObservation(point, livePoint, _connectionGeneration, DateTimeOffset.UtcNow);
-            var evaluation = _evaluator.Observe(point, observation);
-            if (!AppendOrFault(PointEvent("resume_baseline", point, observation, evaluation.Evidence, evaluation.Reason)))
+            var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
+            var evaluation = _evaluator.Observe(binding.Point, observation);
+            if (!AppendOrFault(PointEvent("resume_baseline", binding.Point, observation, evaluation.Evidence, evaluation.Reason)))
                 return IoTestSessionActionResult.Failure(StatusText);
         }
 
