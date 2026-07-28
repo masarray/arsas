@@ -126,6 +126,7 @@ public partial class MainWindow
                 journalRoot);
             var window = new IoListTestingWindow(import.Project, controller) { Owner = this };
             _activeIoTestSessionController = controller;
+            _runtime.PointUpdated += Runtime_IoTestPointUpdated;
             _runtime.EventRaised += Runtime_IoTestEventRaised;
             Hide();
             try
@@ -134,6 +135,7 @@ public partial class MainWindow
             }
             finally
             {
+                _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
                 _runtime.EventRaised -= Runtime_IoTestEventRaised;
                 _activeIoTestSessionController = null;
                 Show();
@@ -153,6 +155,27 @@ public partial class MainWindow
             SetStatus("IO List import failed. Diagnostics is marked with !.");
             MessageBox.Show(this, ex.Message, "IO List import failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void Runtime_IoTestPointUpdated(Iec61850PointSnapshot snapshot)
+    {
+        var point = snapshot.Point;
+        _activeIoTestSessionController?.Enqueue(new Iec61850EventEntry
+        {
+            Sequence = snapshot.Sequence,
+            DeviceId = point.DeviceId,
+            PointKey = point.PointKey,
+            DeviceTimestamp = snapshot.DeviceTimestamp,
+            DeviceName = point.DeviceName,
+            IpAddress = point.IpAddress,
+            SignalName = point.SignalName,
+            IecReference = point.IecReference,
+            OldValue = snapshot.PreviousValue,
+            NewValue = snapshot.Value,
+            Quality = snapshot.Quality,
+            SourceMode = snapshot.SourceMode,
+            Reason = snapshot.Reason
+        });
     }
 
     private void Runtime_IoTestEventRaised(Iec61850EventEntry entry)
