@@ -10,8 +10,8 @@ public sealed class SmvSnapshotSafetyTests
         var result = CreateResult(capturedSamples: 160, targetSamples: 160);
 
         Assert.True(result.IsComplete);
-        Assert.False(result.HasCounterAnomaly);
-        Assert.True(result.IsCleanProof);
+        Assert.False(SmvSnapshotSafetyAssessment.HasCounterAnomaly(result));
+        Assert.True(SmvSnapshotSafetyAssessment.IsCleanProof(result));
     }
 
     [Theory]
@@ -33,8 +33,18 @@ public sealed class SmvSnapshotSafetyTests
             outOfOrder: outOfOrder,
             restarts: restarts);
 
-        Assert.True(result.HasCounterAnomaly);
-        Assert.False(result.IsCleanProof);
+        Assert.True(SmvSnapshotSafetyAssessment.HasCounterAnomaly(result));
+        Assert.False(SmvSnapshotSafetyAssessment.IsCleanProof(result));
+    }
+
+    [Fact]
+    public void Restart_IsNamedInContinuityEvidence()
+    {
+        var result = CreateResult(capturedSamples: 160, targetSamples: 160, restarts: 1);
+
+        var evidence = SmvSnapshotSafetyAssessment.BuildContinuityEvidence(result);
+
+        Assert.Contains("restart 1", evidence, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,7 +53,7 @@ public sealed class SmvSnapshotSafetyTests
         var result = CreateResult(capturedSamples: 159, targetSamples: 160);
 
         Assert.False(result.IsComplete);
-        Assert.False(result.IsCleanProof);
+        Assert.False(SmvSnapshotSafetyAssessment.IsCleanProof(result));
     }
 
     [Fact]
