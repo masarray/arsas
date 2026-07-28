@@ -127,7 +127,7 @@ public sealed class IoTestPersistenceTests
         Assert.Contains("2026-07-28 10:00:00.200 +00:00", xml, StringComparison.Ordinal);
         Assert.Contains("Good", xml, StringComparison.Ordinal);
         Assert.Contains("BRCB", xml, StringComparison.Ordinal);
-        Assert.Contains("Observed OFF transition", xml, StringComparison.Ordinal);
+        Assert.Contains("PASS: ON and OFF transitions captured in order", xml, StringComparison.Ordinal);
     }
 
     [Fact]
