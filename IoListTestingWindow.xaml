@@ -121,7 +121,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="{Binding SelectedIed.IedName, TargetNullValue=Select an IED}" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="{Binding SelectedIed.IedName, TargetNullValue='Select an IED'}" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{Binding SelectedIed.IedRole}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <Border Grid.Column="1" Background="#F7FAFF" BorderBrush="{StaticResource BorderSubtle}"
