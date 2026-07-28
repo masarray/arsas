@@ -93,6 +93,7 @@ public partial class SmvViewerWindow
         var clean = SmvSnapshotSafetyAssessment.IsCleanProof(result);
         var proof = clean ? "PASS" : "REVIEW";
         SnapshotBadgeText = $"{proof} · {result.CycleCount} cycles";
+        SnapshotSummaryText = SmvSnapshotSafetyAssessment.ApplyVerdictToSummary(result, SnapshotSummaryText);
         SnapshotContinuityEvidenceText = SmvSnapshotSafetyAssessment.BuildContinuityEvidence(result) + ".";
         Raise(nameof(SnapshotContinuityEvidenceText));
 
