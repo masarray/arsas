@@ -32,6 +32,10 @@
                     <Border Background="{StaticResource SoftBlue}" CornerRadius="14" Padding="12,7" Margin="0,0,8,0">
                         <TextBlock Text="{Binding ProjectSummary}" FontSize="12" Foreground="{StaticResource Ink}"/>
                     </Border>
+                    <Button Content="Save Progress" Style="{StaticResource SoftButton}" Padding="11,7"
+                            Click="SaveProgress_Click" Margin="0,0,6,0"/>
+                    <Button Content="Export Handover" Style="{StaticResource PrimaryButton}" Padding="11,7"
+                            Click="ExportHandover_Click" Margin="0,0,6,0"/>
                     <Button Content="Return to Engineering" Style="{StaticResource SoftButton}" Click="ReturnToEngineering_Click"/>
                 </StackPanel>
             </Grid>
@@ -176,20 +180,30 @@
                 BorderThickness="1" CornerRadius="14" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1.35*"/>
+                    <ColumnDefinition Width="14"/>
+                    <ColumnDefinition Width="1.1*"/>
+                    <ColumnDefinition Width="14"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel>
+                <StackPanel Grid.Column="0">
                     <TextBlock Text="{Binding Session.StatusText}" Style="{StaticResource Caption}"/>
                     <TextBlock Text="{Binding Session.JournalIntegrityText}" Style="{StaticResource MicroLabel}" Margin="0,3,0,0"/>
                     <TextBlock Text="{Binding Session.JournalPath}" Style="{StaticResource Caption}" Margin="0,2,0,0"
                                TextTrimming="CharacterEllipsis" ToolTip="{Binding Session.JournalPath}"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="{Binding Storage.StatusText}" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="{Binding Storage.LastSavedText}" Style="{StaticResource MicroLabel}" Margin="0,3,0,0"/>
+                    <TextBlock Text="{Binding Storage.SnapshotPath}" Style="{StaticResource Caption}" Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Storage.SnapshotPath}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="4" HorizontalAlignment="Right">
                     <TextBlock Text="{Binding Session.ProgressText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Ink}" HorizontalAlignment="Right"/>
                     <TextBlock Style="{StaticResource Caption}" HorizontalAlignment="Right" Margin="0,3,0,0">
                         <Run Text="Evidence records "/><Run Text="{Binding Session.EvidenceRecordCount, Mode=OneWay}"/>
                     </TextBlock>
+                    <TextBlock Text="Autosave enabled" Style="{StaticResource Caption}" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                 </StackPanel>
             </Grid>
         </Border>

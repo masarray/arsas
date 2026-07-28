@@ -31,8 +31,29 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("GENERAL IEC 61850 TESTING", source, StringComparison.Ordinal);
         Assert.Contains("FAT / IO LIST TESTING", source, StringComparison.Ordinal);
         Assert.Contains("Open IO List Workbook", source, StringComparison.Ordinal);
+        Assert.Contains("Open FAT Handover Package", source, StringComparison.Ordinal);
+        Assert.Contains("IoTestWorkspaceBootstrapService", source, StringComparison.Ordinal);
         Assert.DoesNotContain("actionPanel.Children.Insert", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InstallIoListTestingLauncher", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoTestingWindow_ExposesAutosaveAndPortableHandoverActions()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var buttonContents = document
+            .Descendants(presentation + "Button")
+            .Select(button => (string?)button.Attribute("Content"))
+            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .Cast<string>()
+            .ToList();
+
+        Assert.Contains("Save Progress", buttonContents);
+        Assert.Contains("Export Handover", buttonContents);
+        Assert.Contains(
+            document.Descendants(presentation + "TextBlock"),
+            text => ((string?)text.Attribute("Text"))?.Contains("Autosave enabled", StringComparison.Ordinal) == true);
     }
 
     private static string FindRepoFile(string relativePath)

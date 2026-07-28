@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -139,7 +140,7 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Run FAT from an approved IO List",
+            Text = "Run or continue FAT from an IO List",
             FontSize = 24,
             FontWeight = FontWeights.SemiBold,
             Foreground = TryFindResource("Ink") as Brush,
@@ -147,7 +148,7 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Import the ARSAS Excel template, choose an IED, and capture ordered ON and OFF timestamps automatically in a dedicated evidence workspace.",
+            Text = "Import the ARSAS Excel template for a new project, or open a portable handover package to continue saved progress from another laptop.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13.4,
             Foreground = TryFindResource("Muted") as Brush,
@@ -159,10 +160,17 @@ public partial class MainWindow
             "PrimaryButton",
             OpenIoListTesting_Click,
             Brushes.White,
+            new Thickness(0, 0, 0, 8)));
+        content.Children.Add(CreateLauncherButton(
+            "Open FAT Handover Package",
+            "LucideFolderOpen",
+            "SoftButton",
+            OpenIoListPackage_Click,
+            null,
             new Thickness(0, 0, 0, 10)));
         content.Children.Add(new TextBlock
         {
-            Text = "IED-scoped signals · read-only IEC 61850 observation · automatic FAT evidence",
+            Text = "Autosave · portable continuation · verified evidence · printable browser report",
             Style = TryFindResource("Caption") as Style,
             TextWrapping = TextWrapping.Wrap
         });
@@ -210,7 +218,8 @@ public partial class MainWindow
             Content = buttonContent,
             Padding = new Thickness(12, 8, 12, 8),
             Margin = margin,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         button.Click += handler;
         return button;
@@ -258,52 +267,123 @@ public partial class MainWindow
                 return;
             }
 
-            var binding = _ioTestLiveBindingService.Bind(import.Project, Devices);
-            var warnings = import.AllFindings.Count(finding =>
-                finding.Severity == IoTestImportFindingSeverity.Warning);
-            SetStatus(
-                $"IO List ready: {import.Project.Ieds.Count} IED, {import.Project.SignalCount} SDI, " +
-                $"{binding.SignalBoundCount} matched to the loaded workspace, {warnings} warning(s).");
-
-            var journalRoot = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ARSAS",
-                "IO Testing Evidence");
-            using var controller = new IoTestSessionController(
+            var launch = await IoTestWorkspaceBootstrapService.OpenWorkbookAsync(
                 import.Project,
-                ResolveIoTestDevice,
-                action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
-                journalRoot);
-            var window = new IoListTestingWindow(import.Project, controller) { Owner = this };
-            _activeIoTestSessionController = controller;
-            Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
-            _runtime.PointUpdated += Runtime_IoTestPointUpdated;
-            Hide();
-            try
-            {
-                window.ShowDialog();
-            }
-            finally
-            {
-                _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
-                _activeIoTestSessionController = null;
-                Show();
-                if (WindowState == System.Windows.WindowState.Minimized)
-                    WindowState = System.Windows.WindowState.Normal;
-                Activate();
-            }
+                dialog.FileName,
+                IoTestingProjectsRoot(),
+                IoTestingEvidenceRoot(),
+                CreateIoTestSession,
+                _applicationCancellation.Token);
+            var importWarnings = import.AllFindings.Count(finding => finding.Severity == IoTestImportFindingSeverity.Warning);
+            await ShowIoTestingWorkspaceAsync(launch, importWarnings);
         }
         catch (OperationCanceledException)
         {
             SetStatus("IO List import cancelled.");
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            AddLog("ERROR", "IO Testing", ex.Message);
-            MarkDiagnosticAlert();
-            SetStatus("IO List import failed. Diagnostics is marked with !.");
-            MessageBox.Show(this, ex.Message, "IO List import failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowIoTestingFailure(ex, "IO List import failed");
         }
+    }
+
+    private async void OpenIoListPackage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open ARSAS IO FAT handover package",
+            Filter = $"ARSAS IO FAT handover (*{IoTestWorkspacePersistence.PackageExtension})|*{IoTestWorkspacePersistence.PackageExtension}|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        SetStatus($"Opening FAT handover package {Path.GetFileName(dialog.FileName)}…");
+        try
+        {
+            var launch = await IoTestWorkspaceBootstrapService.OpenPackageAsync(
+                dialog.FileName,
+                IoTestingProjectsRoot(),
+                IoTestingEvidenceRoot(),
+                CreateIoTestSession,
+                _applicationCancellation.Token);
+            await ShowIoTestingWorkspaceAsync(launch, 0);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("FAT handover import cancelled.");
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            ShowIoTestingFailure(ex, "FAT handover import failed");
+        }
+    }
+
+    private Task ShowIoTestingWorkspaceAsync(IoTestWorkspaceLaunchResult launch, int importWarningCount)
+    {
+        var binding = _ioTestLiveBindingService.Bind(launch.Project, Devices);
+        var restoredText = launch.RestoredProgress ? "saved progress restored" : "new project";
+        SetStatus(
+            $"IO List ready: {launch.Project.Ieds.Count} IED, {launch.Project.SignalCount} SDI, " +
+            $"{binding.SignalBoundCount} live-bound, {restoredText}, {importWarningCount + launch.Warnings.Count} warning(s).");
+
+        if (launch.Warnings.Count > 0)
+        {
+            MessageBox.Show(
+                this,
+                string.Join(Environment.NewLine, launch.Warnings.Take(12).Select(warning => $"• {warning}")),
+                "IO FAT workspace warnings",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        using var controller = launch.Session;
+        using var persistence = launch.Workspace;
+        var window = new IoListTestingWindow(launch.Project, controller, persistence) { Owner = this };
+        _activeIoTestSessionController = controller;
+        Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
+        _runtime.PointUpdated += Runtime_IoTestPointUpdated;
+        Hide();
+        try
+        {
+            window.ShowDialog();
+        }
+        finally
+        {
+            _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
+            _activeIoTestSessionController = null;
+            Show();
+            if (WindowState == System.Windows.WindowState.Minimized)
+                WindowState = System.Windows.WindowState.Normal;
+            Activate();
+        }
+        return Task.CompletedTask;
+    }
+
+    private IoTestSessionController CreateIoTestSession(IoTestProject project, string evidenceRoot)
+        => new(
+            project,
+            ResolveIoTestDevice,
+            action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
+            evidenceRoot);
+
+    private static string IoTestingProjectsRoot() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ARSAS",
+        "IO Testing Projects");
+
+    private static string IoTestingEvidenceRoot() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ARSAS",
+        "IO Testing Evidence");
+
+    private void ShowIoTestingFailure(Exception ex, string title)
+    {
+        AddLog("ERROR", "IO Testing", ex.Message);
+        MarkDiagnosticAlert();
+        SetStatus($"{title}. Diagnostics is marked with !.");
+        MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void Runtime_IoTestPointUpdated(Iec61850PointSnapshot snapshot)
