@@ -28,18 +28,20 @@
                     <TextBlock Text="Dedicated FAT workspace · imported IEDs and IO-list SDI signals only"
                                Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <Border Background="{StaticResource SoftBlue}" CornerRadius="14" Padding="12,7" Margin="0,0,8,0">
                         <TextBlock Text="{Binding ProjectSummary}" FontSize="12" Foreground="{StaticResource Ink}"/>
                     </Border>
                     <Button Content="Save Progress" Style="{StaticResource SoftButton}" Padding="11,7"
                             Click="SaveProgress_Click" Margin="0,0,6,0"/>
+                    <Button Content="Export Excel" Style="{StaticResource SoftButton}" Padding="11,7"
+                            Click="ExportExcel_Click" Margin="0,0,6,0"/>
                     <Button Content="Export PDF" Style="{StaticResource SoftButton}" Padding="11,7"
                             Click="ExportPdf_Click" Margin="0,0,6,0"/>
                     <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="11,7"
                             Click="ExportHandover_Click" Margin="0,0,6,0"/>
                     <Button Content="Return to Engineering" Style="{StaticResource SoftButton}" Click="ReturnToEngineering_Click"/>
-                </StackPanel>
+                </WrapPanel>
             </Grid>
         </Border>
 
