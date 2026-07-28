@@ -17,10 +17,13 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 - Regression coverage for clean and incomplete SV windows, gap/duplicate/out-of-order/restart handling, continuity evidence, and immutable stream-selection identity.
 - Canonical `Directory.Build.props` version metadata aligned with the project, `VERSION`, packaging, and CI.
 - Test-result artifacts in the Windows build workflow.
+- A single auditable SV Evidence Bundle export containing the rendered waveform PNG, raw-sample CSV, structured manifest JSON, parser/continuity diagnostics, per-entry SHA-256 integrity file, and application/engine provenance.
+- Regression coverage that opens the generated ZIP and validates its required evidence files, verdict, provenance, raw samples, diagnostics, and checksum listing.
 
 ### Changed
 
 - Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
+- The SMV Snapshot Viewer enables evidence export only after a snapshot is accepted and keeps the export disabled during active capture.
 - Development version advanced to `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
 
 ## 1.6.18
