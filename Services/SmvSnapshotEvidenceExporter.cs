@@ -364,7 +364,7 @@ public static class SmvSnapshotEvidenceExporter
     {
         var builder = new StringBuilder();
         foreach (var file in files.OrderBy(item => item.Key, StringComparer.Ordinal))
-            builder.Append(Convert.ToHexStringLower(SHA256.HashData(file.Value)))
+            builder.Append(Convert.ToHexString(SHA256.HashData(file.Value)).ToLowerInvariant())
                 .Append("  ")
                 .AppendLine(file.Key);
         return builder.ToString();
@@ -413,6 +413,6 @@ public static class SmvSnapshotEvidenceExporter
                 break;
             hash.AppendData(buffer, 0, read);
         }
-        return Convert.ToHexStringLower(hash.GetHashAndReset());
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 }
