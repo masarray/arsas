@@ -208,13 +208,35 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="{Binding StatusText}" FontSize="11.5" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
                     <TextBlock Text="{Binding SelectedStreamDetail}" Margin="0,3,0,0" FontSize="10.8"
                                Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding EvidenceExportStatusText}" Margin="0,3,0,0" FontSize="10.4"
+                               Foreground="#245EA8" TextWrapping="Wrap"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="Close" Width="82" Margin="12,0,0,0"
+                <Button x:Name="ExportEvidenceButton" Grid.Column="1" Content="Export evidence"
+                        Width="128" Margin="12,0,0,0" Click="ExportEvidence_Click">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SoftButton}">
+                            <Setter Property="IsEnabled" Value="True"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SnapshotChannels.Count}" Value="0">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEnabled, ElementName=CancelButton}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEvidenceExportBusy}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Grid.Column="2" Content="Close" Width="82" Margin="8,0,0,0"
                         Style="{StaticResource SoftButton}" Click="Close_Click"/>
             </Grid>
         </Border>
