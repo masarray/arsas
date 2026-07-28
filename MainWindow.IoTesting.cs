@@ -127,7 +127,7 @@ public partial class MainWindow
                 journalRoot);
             var window = new IoListTestingWindow(import.Project, controller) { Owner = this };
             _activeIoTestSessionController = controller;
-            Interlocked.Exchange(ref _ioTestObservationSequence, 0);
+            Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
             _runtime.PointUpdated += Runtime_IoTestPointUpdated;
             Hide();
             try
