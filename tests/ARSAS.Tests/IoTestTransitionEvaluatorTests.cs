@@ -69,6 +69,35 @@ public sealed class IoTestTransitionEvaluatorTests
     }
 
     [Fact]
+    public void SteadyStateQualityLossBeforeOn_RequiresNewBaseline()
+    {
+        var point = CreatePoint();
+        _evaluator.StartAttempt(point, Observation(false, 1));
+
+        var degraded = _evaluator.Observe(point, Observation(false, 2, quality: "Invalid"));
+        var recovered = _evaluator.Observe(point, Observation(false, 3, quality: "Good"));
+
+        Assert.Equal(IoTestPointState.WaitingForBaseline, degraded.State);
+        Assert.Contains("quality degraded before ON", degraded.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(IoTestPointState.ArmedForOn, recovered.State);
+    }
+
+    [Fact]
+    public void SteadyStateQualityLossAfterOn_ForcesReview()
+    {
+        var point = CreatePoint();
+        _evaluator.StartAttempt(point, Observation(false, 1));
+        _evaluator.Observe(point, Observation(true, 2));
+
+        var degraded = _evaluator.Observe(point, Observation(true, 3, quality: "Questionable"));
+
+        Assert.Equal(IoTestPointState.Review, degraded.State);
+        Assert.Contains("OFF continuity cannot be proven", degraded.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(point.Runtime.OnEvidence);
+        Assert.Null(point.Runtime.OffEvidence);
+    }
+
+    [Fact]
     public void DuplicateValues_DoNotCreateEvidence()
     {
         var point = CreatePoint();
@@ -118,16 +147,31 @@ public sealed class IoTestTransitionEvaluatorTests
     }
 
     [Fact]
-    public void InvalidQuality_DoesNotAdvanceTheStateMachine()
+    public void InvalidOnQuality_RejectsTransitionAndRequiresNewBaseline()
     {
         var point = CreatePoint();
         _evaluator.StartAttempt(point, Observation(false, 1));
 
         var invalidOn = _evaluator.Observe(point, Observation(true, 2, quality: "Invalid"));
 
-        Assert.Equal(IoTestPointState.ArmedForOn, invalidOn.State);
+        Assert.Equal(IoTestPointState.WaitingForBaseline, invalidOn.State);
+        Assert.True(invalidOn.StateChanged);
         Assert.Equal(IoEvidenceVerdict.Rejected, invalidOn.Evidence?.Verdict);
         Assert.Null(point.Runtime.OnEvidence);
+    }
+
+    [Fact]
+    public void InvalidOffQuality_ForcesReview()
+    {
+        var point = CreatePoint();
+        _evaluator.StartAttempt(point, Observation(false, 1));
+        _evaluator.Observe(point, Observation(true, 2));
+
+        var invalidOff = _evaluator.Observe(point, Observation(false, 3, quality: "Invalid"));
+
+        Assert.Equal(IoTestPointState.Review, invalidOff.State);
+        Assert.Equal(IoEvidenceVerdict.Rejected, invalidOff.Evidence?.Verdict);
+        Assert.Null(point.Runtime.OffEvidence);
     }
 
     [Fact]
