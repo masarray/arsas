@@ -36,6 +36,9 @@ public sealed class IoTestTransitionEvaluator
             return Result(runtime, changed: true, evidence: null);
         }
 
+        if (!AcceptBaselineQuality(runtime, baseline, "Initial baseline"))
+            return Result(runtime, changed: true, evidence: null);
+
         ApplyBaseline(runtime, baseline.NormalizedState);
         return Result(runtime, changed: true, evidence: null);
     }
@@ -105,6 +108,9 @@ public sealed class IoTestTransitionEvaluator
 
         runtime.State = IoTestPointState.WaitingForBaseline;
         runtime.StatusReason = "Connection changed; first image is baseline only";
+        if (!AcceptBaselineQuality(runtime, observation, "Reconnect baseline"))
+            return Result(runtime, changed: true, evidence: null);
+
         ApplyBaseline(runtime, observation.NormalizedState);
         return Result(runtime, changed: true, evidence: null);
     }
@@ -113,6 +119,9 @@ public sealed class IoTestTransitionEvaluator
         IoTestPointRuntime runtime,
         IoTestObservation observation)
     {
+        if (!AcceptBaselineQuality(runtime, observation, "Baseline"))
+            return Result(runtime, changed: true, evidence: null);
+
         ApplyBaseline(runtime, observation.NormalizedState);
         return Result(runtime, changed: true, evidence: null);
     }
@@ -121,6 +130,9 @@ public sealed class IoTestTransitionEvaluator
         IoTestPointRuntime runtime,
         IoTestObservation observation)
     {
+        if (!AcceptBaselineQuality(runtime, observation, "OFF baseline"))
+            return Result(runtime, changed: true, evidence: null);
+
         if (observation.NormalizedState != false)
             return Result(runtime, changed: false, evidence: null, "Waiting for OFF baseline before arming ON evidence");
 
@@ -177,6 +189,20 @@ public sealed class IoTestTransitionEvaluator
             ? "PASS: ON and OFF transitions captured in order"
             : "ON and OFF evidence captured, but one or both transitions require review";
         return Result(runtime, changed: true, evidence);
+    }
+
+    private static bool AcceptBaselineQuality(
+        IoTestPointRuntime runtime,
+        IoTestObservation observation,
+        string label)
+    {
+        var (verdict, reason) = EvaluateQuality(observation.Quality);
+        if (verdict == IoEvidenceVerdict.Accepted)
+            return true;
+
+        runtime.State = IoTestPointState.WaitingForBaseline;
+        runtime.StatusReason = $"{label} not accepted: {reason}; waiting for good-quality baseline";
+        return false;
     }
 
     private static void ApplyBaseline(IoTestPointRuntime runtime, bool? state)
