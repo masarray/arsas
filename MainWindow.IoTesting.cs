@@ -16,6 +16,7 @@ public partial class MainWindow
     private readonly IoTestLiveBindingService _ioTestLiveBindingService = new();
     private Button? _ioListTestingLauncher;
     private IoTestSessionController? _activeIoTestSessionController;
+    private long _ioTestObservationSequence;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -126,8 +127,8 @@ public partial class MainWindow
                 journalRoot);
             var window = new IoListTestingWindow(import.Project, controller) { Owner = this };
             _activeIoTestSessionController = controller;
+            Interlocked.Exchange(ref _ioTestObservationSequence, 0);
             _runtime.PointUpdated += Runtime_IoTestPointUpdated;
-            _runtime.EventRaised += Runtime_IoTestEventRaised;
             Hide();
             try
             {
@@ -136,7 +137,6 @@ public partial class MainWindow
             finally
             {
                 _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
-                _runtime.EventRaised -= Runtime_IoTestEventRaised;
                 _activeIoTestSessionController = null;
                 Show();
                 if (WindowState == System.Windows.WindowState.Minimized)
@@ -162,7 +162,7 @@ public partial class MainWindow
         var point = snapshot.Point;
         _activeIoTestSessionController?.Enqueue(new Iec61850EventEntry
         {
-            Sequence = snapshot.Sequence,
+            Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
             DeviceId = point.DeviceId,
             PointKey = point.PointKey,
             DeviceTimestamp = snapshot.DeviceTimestamp,
@@ -177,9 +177,6 @@ public partial class MainWindow
             Reason = snapshot.Reason
         });
     }
-
-    private void Runtime_IoTestEventRaised(Iec61850EventEntry entry)
-        => _activeIoTestSessionController?.Enqueue(entry);
 
     private Iec61850MonitorDevice? ResolveIoTestDevice(string key)
     {
