@@ -48,6 +48,30 @@ public sealed class SmvSnapshotSafetyTests
     }
 
     [Fact]
+    public void Restart_RewritesLegacyPassSummaryToReview()
+    {
+        var result = CreateResult(capturedSamples: 160, targetSamples: 160, restarts: 1);
+
+        var summary = SmvSnapshotSafetyAssessment.ApplyVerdictToSummary(
+            result,
+            "PASS — 160/160 samples decoded");
+
+        Assert.Equal("REVIEW — 160/160 samples decoded", summary);
+    }
+
+    [Fact]
+    public void CleanWindow_KeepsPassSummary()
+    {
+        var result = CreateResult(capturedSamples: 160, targetSamples: 160);
+
+        var summary = SmvSnapshotSafetyAssessment.ApplyVerdictToSummary(
+            result,
+            "PASS — 160/160 samples decoded");
+
+        Assert.Equal("PASS — 160/160 samples decoded", summary);
+    }
+
+    [Fact]
     public void IncompleteWindow_CannotPass()
     {
         var result = CreateResult(capturedSamples: 159, targetSamples: 160);
