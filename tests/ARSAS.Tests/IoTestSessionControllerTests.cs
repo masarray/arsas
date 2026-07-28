@@ -27,6 +27,24 @@ public sealed class IoTestSessionControllerTests
     }
 
     [Fact]
+    public void InitiallyOn_RecordsOffBaselineBeforeNewOnOffPass()
+    {
+        var fixture = CreateFixture();
+        fixture.LivePoint.Value = "True";
+        using var controller = fixture.Controller;
+
+        controller.Start(fixture.Ied);
+        controller.Enqueue(Event(fixture, "True", "False", 1));
+        controller.Enqueue(Event(fixture, "False", "True", 2));
+        controller.Enqueue(Event(fixture, "True", "False", 3));
+
+        Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
+        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        var journal = File.ReadAllText(controller.JournalPath);
+        Assert.Contains("\"eventType\":\"baseline_state\"", journal, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ResumeAfterOnEvidence_ForcesReviewBecausePausedEdgesCouldBeMissed()
     {
         var fixture = CreateFixture();
