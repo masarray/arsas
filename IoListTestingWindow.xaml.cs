@@ -107,6 +107,50 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private async void ExportExcel_Click(object sender, RoutedEventArgs e)
+    {
+        if (Storage == null)
+            return;
+        if (!EnsureSessionSealedForExport("Excel evidence workbook"))
+            return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export ARSAS IO FAT result workbook",
+            Filter = "Excel workbook (*.xlsx)|*.xlsx",
+            FileName = $"{SafeFileName(Project.ProjectId)}_IO-FAT-Results_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
+            AddExtension = true,
+            DefaultExt = ".xlsx",
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            IsEnabled = false;
+            Storage.SaveNow();
+            await IoFatExcelResultExportService.ExportAsync(
+                Storage.SourceWorkbookPath,
+                dialog.FileName,
+                Project);
+            MessageBox.Show(
+                this,
+                $"FAT result workbook created successfully.\n\n{dialog.FileName}\n\nThe approved source workbook was not modified.",
+                "Excel evidence exported",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            MessageBox.Show(this, ex.Message, "Excel evidence export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
+    }
+
     private void ExportPdf_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureSessionSealedForExport("PDF evidence report"))
@@ -174,7 +218,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
                 dialog.FileName);
             MessageBox.Show(
                 this,
-                $"Portable ARSAS project created successfully.\n\n{exportedPath}\n\nOpen this .arsas file on another laptop to continue the remaining FAT scope. The package also contains report/IO-FAT-Report.pdf for direct review and printing.",
+                $"Portable ARSAS project created successfully.\n\n{exportedPath}\n\nOpen this .arsas file on another laptop to continue the remaining FAT scope. The package also contains the native PDF report and the completed Excel result workbook.",
                 "ARSAS project exported",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
