@@ -21,6 +21,19 @@ public static class SmvSnapshotSafetyAssessment
         return result.IsComplete && !HasCounterAnomaly(result);
     }
 
+    public static string ApplyVerdictToSummary(SmvSnapshotResult result, string? currentSummary)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var verdict = IsCleanProof(result) ? "PASS" : "REVIEW";
+        var summary = currentSummary?.Trim() ?? string.Empty;
+        var separatorIndex = summary.IndexOf(" — ", StringComparison.Ordinal);
+        return separatorIndex >= 0
+            ? verdict + summary[separatorIndex..]
+            : string.IsNullOrWhiteSpace(summary)
+                ? verdict
+                : $"{verdict} — {summary}";
+    }
+
     public static string BuildContinuityEvidence(SmvSnapshotResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
