@@ -20,6 +20,7 @@ public partial class SmvViewerWindow
         base.OnInitialized(e);
         CaptureButton.AddHandler(Button.ClickEvent, new RoutedEventHandler(P0CaptureButton_Click), handledEventsToo: true);
         SnapshotChannels.CollectionChanged += P0SnapshotChannels_CollectionChanged;
+        InitializeP1EvidenceBundle();
     }
 
     private void P0CaptureButton_Click(object sender, RoutedEventArgs e)
