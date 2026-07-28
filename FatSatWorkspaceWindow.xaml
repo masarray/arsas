@@ -1,0 +1,224 @@
+<Window x:Class="ArIED61850Tester.FatSatWorkspaceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ARSAS FAT/SAT Test &amp; Evidence Workspace"
+        Width="1380" Height="880" MinWidth="1120" MinHeight="720"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource AppBackgroundGradient}"
+        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        Icon="Assets/app-icon.ico">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}" Padding="14,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="FAT/SAT Test &amp; Evidence Workspace" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                    <TextBlock Text="Execute bounded IEC 61850 test cases, record actual outcomes, attach immutable evidence, and export one auditable package."
+                               Margin="0,3,0,0" FontSize="11.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Border Grid.Column="1" Padding="10,5" CornerRadius="12" Background="#EAF2FF" BorderBrush="#BDD2F4" BorderThickness="1" VerticalAlignment="Center">
+                    <TextBlock Text="Schema v1 · evidence-backed" Foreground="#245EA8" FontSize="11" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Project" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.ProjectName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Site" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.SiteName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="Bay / system" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.BayOrSystem, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="6">
+                        <TextBlock Text="IED identity" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.IedIdentity, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="2*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Operator" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.OperatorName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Witness" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.WitnessName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="Scope / acceptance boundary" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Document.Scope, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" MinHeight="30"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.3*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="1.2*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
+                            <TextBlock Text="Test plan" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="{Binding SummaryText}" Margin="10,0,0,0" Foreground="{StaticResource Muted}" FontSize="11"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="Add" Width="66" Margin="0,0,6,0" Style="{StaticResource SoftButton}" Click="AddTest_Click"/>
+                            <Button Content="Remove" Width="72" Style="{StaticResource SoftButton}" Click="RemoveTest_Click"/>
+                        </StackPanel>
+                    </Grid>
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0"
+                              SelectionMode="Single" CellEditEnding="TestGrid_CellEditEnding">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Sequence, UpdateSourceTrigger=PropertyChanged}" Width="55"/>
+                            <DataGridTextColumn Header="Area" Binding="{Binding Area, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                            <DataGridTextColumn Header="Test case" Binding="{Binding Title, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
+                            <DataGridTextColumn Header="Expected result" Binding="{Binding ExpectedResult, UpdateSourceTrigger=PropertyChanged}" Width="2.2*"/>
+                            <DataGridTemplateColumn Header="Result" Width="112">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding DataContext.ResultOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding Result, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  MinHeight="27"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Actual result" Binding="{Binding ActualResult, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
+                            <DataGridTextColumn Header="Evidence" Binding="{Binding EvidenceCount}" Width="72" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="11">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel DataContext="{Binding SelectedRow}">
+                        <TextBlock Text="Selected test case" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding Title}" Margin="0,5,0,8" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="Procedure" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding Procedure, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" MinHeight="72" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+
+                        <TextBlock Text="Operator note" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding OperatorNote, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" MinHeight="58" TextWrapping="Wrap" AcceptsReturn="True"/>
+
+                        <TextBlock Text="Exception / deviation" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                        <TextBox Text="{Binding ExceptionOrDeviation, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" MinHeight="58" TextWrapping="Wrap" AcceptsReturn="True"/>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Executed by" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Muted}"/>
+                                <TextBox Text="{Binding ExecutedBy, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="Stamp execution UTC" VerticalAlignment="Bottom" Height="30" Style="{StaticResource SoftButton}" Click="StampExecution_Click"/>
+                        </Grid>
+
+                        <Grid Margin="0,2,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Attached evidence" Style="{StaticResource SectionTitle}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Content="Attach" Width="70" Margin="0,0,6,0" Style="{StaticResource SoftButton}" Click="AttachEvidence_Click"/>
+                                <Button Content="Remove" Width="72" Style="{StaticResource SoftButton}" Click="RemoveEvidence_Click"/>
+                            </StackPanel>
+                        </Grid>
+                        <ListBox ItemsSource="{Binding Evidence}" SelectedItem="{Binding SelectedEvidence, Mode=TwoWay}" MinHeight="120" BorderBrush="#D6E0ED" BorderThickness="1">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="4">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Sha256}" Margin="0,2,0,0" FontSize="9.5" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="6" Style="{StaticResource Card}" Padding="11,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding StatusText}" FontSize="11.5" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding CurrentPathText}" Margin="0,3,0,0" FontSize="10.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="New" Width="72" Margin="0,0,6,0" Style="{StaticResource SoftButton}" Click="New_Click"/>
+                    <Button Content="Open" Width="72" Margin="0,0,6,0" Style="{StaticResource SoftButton}" Click="Open_Click"/>
+                    <Button Content="Save" Width="72" Margin="0,0,6,0" Style="{StaticResource SoftButton}" Click="Save_Click"/>
+                    <Button Content="Export audit package" Width="150" Margin="0,0,6,0" Style="{StaticResource PrimaryButton}" Click="Export_Click"/>
+                    <Button Content="Close" Width="72" Style="{StaticResource SoftButton}" Click="Close_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
