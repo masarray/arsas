@@ -19,11 +19,16 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 - Test-result artifacts in the Windows build workflow.
 - A single auditable SV Evidence Bundle export containing the rendered waveform PNG, raw-sample CSV, structured manifest JSON, parser/continuity diagnostics, per-entry SHA-256 integrity file, and application/engine provenance.
 - Regression coverage that opens the generated ZIP and validates its required evidence files, verdict, provenance, raw samples, diagnostics, and checksum listing.
+- A schema-versioned FAT/SAT Test & Evidence Workspace with editable IEC 61850 test cases, expected and actual outcomes, operator/witness context, deviations, execution timestamps, and evidence attachments.
+- A default bounded IEC 61850 FAT/SAT plan covering identity, MMS discovery, reporting/recovery, GOOSE, Sampled Values, guarded control, file transfer, SCL comparison, and closeout.
+- Atomic `*.arsas-fat.json` save/open and portable audit-package export containing `workspace.json`, `report.md`, immutable evidence files, SHA-256 checksums, and package provenance.
+- Regression coverage for workspace round-trip, schema rejection, complete audit-package contents, source-path redaction, and rejection of evidence changed after attachment.
 
 ### Changed
 
 - Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
 - The SMV Snapshot Viewer enables evidence export only after a snapshot is accepted and keeps the export disabled during active capture.
+- ARSAS exposes the FAT/SAT workspace from the main header without coupling it to monitoring runtime state.
 - Development version advanced to `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
 
 ## 1.6.18
