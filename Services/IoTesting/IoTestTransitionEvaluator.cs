@@ -81,6 +81,10 @@ public sealed class IoTestTransitionEvaluator
             return Result(runtime, changed: false, evidence: null);
         }
 
+        var (qualityVerdict, qualityReason) = EvaluateQuality(observation.Quality);
+        if (previous == observation.NormalizedState && qualityVerdict != IoEvidenceVerdict.Accepted)
+            return HandleSteadyStateQualityLoss(runtime, qualityReason);
+
         return runtime.State switch
         {
             IoTestPointState.WaitingForBaseline => HandleBaseline(runtime, observation),
@@ -152,8 +156,9 @@ public sealed class IoTestTransitionEvaluator
         var evidence = CreateEvidence(IoEvidenceTransition.On, previous, observation);
         if (evidence.Verdict == IoEvidenceVerdict.Rejected)
         {
-            runtime.StatusReason = $"ON transition rejected: {evidence.VerdictReason}";
-            return Result(runtime, changed: false, evidence);
+            runtime.State = IoTestPointState.WaitingForBaseline;
+            runtime.StatusReason = $"ON transition rejected: {evidence.VerdictReason}; waiting for a new good-quality baseline";
+            return Result(runtime, changed: true, evidence);
         }
 
         runtime.OnEvidence = evidence;
@@ -175,8 +180,9 @@ public sealed class IoTestTransitionEvaluator
         var evidence = CreateEvidence(IoEvidenceTransition.Off, previous, observation);
         if (evidence.Verdict == IoEvidenceVerdict.Rejected)
         {
-            runtime.StatusReason = $"OFF transition rejected: {evidence.VerdictReason}";
-            return Result(runtime, changed: false, evidence);
+            runtime.State = IoTestPointState.Review;
+            runtime.StatusReason = $"OFF transition rejected: {evidence.VerdictReason}; OFF continuity cannot be proven";
+            return Result(runtime, changed: true, evidence);
         }
 
         runtime.OffEvidence = evidence;
@@ -189,6 +195,22 @@ public sealed class IoTestTransitionEvaluator
             ? "PASS: ON and OFF transitions captured in order"
             : "ON and OFF evidence captured, but one or both transitions require review";
         return Result(runtime, changed: true, evidence);
+    }
+
+    private static IoTestEvaluationResult HandleSteadyStateQualityLoss(
+        IoTestPointRuntime runtime,
+        string qualityReason)
+    {
+        if (runtime.OnEvidence != null && runtime.OffEvidence == null)
+        {
+            runtime.State = IoTestPointState.Review;
+            runtime.StatusReason = $"Quality degraded after ON evidence: {qualityReason}; OFF continuity cannot be proven";
+            return Result(runtime, changed: true, evidence: null);
+        }
+
+        runtime.State = IoTestPointState.WaitingForBaseline;
+        runtime.StatusReason = $"Quality degraded before ON evidence: {qualityReason}; waiting for a new good-quality baseline";
+        return Result(runtime, changed: true, evidence: null);
     }
 
     private static bool AcceptBaselineQuality(
