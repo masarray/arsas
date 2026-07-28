@@ -33,6 +33,8 @@ public partial class SmvViewerWindow
                 stream.DataSetReference,
                 stream.AppId,
                 stream.DestinationMac);
+
+        CaptureP1EvidenceSelection();
     }
 
     private void P0StreamGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
