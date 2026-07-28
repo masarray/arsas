@@ -23,7 +23,12 @@ public sealed record IoTestImportValidationResult(
     int SignalCount,
     int ReadySignalCount)
 {
-    public bool IsValid => Findings.All(finding => finding.Severity != IoTestImportFindingSeverity.Error);
+    public IReadOnlyList<IoTestImportFinding> Errors => Findings.Where(finding => finding.Severity == IoTestImportFindingSeverity.Error).ToList();
+    public IReadOnlyList<IoTestImportFinding> Warnings => Findings.Where(finding => finding.Severity == IoTestImportFindingSeverity.Warning).ToList();
+    public int ErrorCount => Errors.Count;
+    public int WarningCount => Warnings.Count;
+    public bool IsValid => ErrorCount == 0;
+    public bool CanImport => IsValid;
 }
 
 public sealed class IoTestImportValidator
