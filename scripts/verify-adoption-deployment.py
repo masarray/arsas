@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that public Pages exposes adoption, evidence and IO FAT surfaces."""
+"""Verify that public Pages exposes learning, adoption, evidence and IO FAT surfaces."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 
 def fetch(url: str) -> tuple[int, str]:
-    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.0", "Cache-Control": "no-cache"})
+    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.1", "Cache-Control": "no-cache"})
     try:
         with urlopen(request, timeout=25) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
@@ -29,6 +29,12 @@ def main() -> int:
     base = args.base_url.rstrip("/") + "/"
     nonce = urlencode({"adoption": args.source_commit})
     checks = {
+        "learning-center.html": ("Learn IEC 61850", "What is IEC 61850", "Connect your first IED", "pusat-belajar-iec61850.html"),
+        "pusat-belajar-iec61850.html": ("Belajar IEC 61850", "Apa itu IEC 61850", "Hubungkan IED pertama", "learning-center.html"),
+        "what-is-iec61850.html": ("30-second takeaway", "Logical Node", "Reporting", "GOOSE", "FAQPage", "apa-itu-iec61850.html"),
+        "apa-itu-iec61850.html": ("Takeaway 30 detik", "Logical Node", "Reporting", "GOOSE", "FAQPage", "what-is-iec61850.html"),
+        "connect-ied-ip-arsas.html": ("TCP port 102", "Add IED", "MMS association", "HowTo", "cara-hubungkan-ied-ip-arsas.html"),
+        "cara-hubungkan-ied-ip-arsas.html": ("TCP port 102", "Add IED", "association MMS", "HowTo", "connect-ied-ip-arsas.html"),
         "quick-start.html": ("quick-step-number", "data-responsive-media=\"webp\"", "panduan-mulai-arsas.html", "io-list-fat-evidence.html"),
         "io-list-fat-evidence.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Native PDF report", "bukti-fat-iolist-iec61850.html"),
         "bukti-fat-iolist-iec61850.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Report PDF native", "io-list-fat-evidence.html"),
@@ -62,7 +68,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("Public ARSAS adoption attestation passed: Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
+    print("Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, ARSAS tutorials, Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
     return 0
 
 
