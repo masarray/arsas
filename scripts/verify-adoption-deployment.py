@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that public Pages exposes learning, adoption, evidence and IO FAT surfaces."""
+"""Verify that public Pages exposes learning, capability tutorials, evidence and IO FAT surfaces."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 
 def fetch(url: str) -> tuple[int, str]:
-    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.1", "Cache-Control": "no-cache"})
+    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.2", "Cache-Control": "no-cache"})
     try:
         with urlopen(request, timeout=25) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
@@ -35,6 +35,10 @@ def main() -> int:
         "apa-itu-iec61850.html": ("Takeaway 30 detik", "Logical Node", "Reporting", "GOOSE", "FAQPage", "what-is-iec61850.html"),
         "connect-ied-ip-arsas.html": ("TCP port 102", "Add IED", "MMS association", "HowTo", "cara-hubungkan-ied-ip-arsas.html"),
         "cara-hubungkan-ied-ip-arsas.html": ("TCP port 102", "Add IED", "association MMS", "HowTo", "connect-ied-ip-arsas.html"),
+        "mms-client.html": ("30-second takeaway", "Add IED", "Functional Constraint", "Success criteria", "If it fails", "HowTo", "FAQPage", "mms-client-iec61850.html"),
+        "mms-client-iec61850.html": ("Takeaway 30 detik", "Add IED", "Functional Constraint", "Success criteria", "Bila gagal", "HowTo", "FAQPage", "mms-client.html"),
+        "smart-reporting.html": ("30-second takeaway", "DataSet", "BRCB", "URCB", "Success criteria", "If Reporting is silent", "HowTo", "FAQPage", "smart-reporting-iec61850.html"),
+        "smart-reporting-iec61850.html": ("Takeaway 30 detik", "DataSet", "BRCB", "URCB", "Success criteria", "Bila Reporting silent", "HowTo", "FAQPage", "smart-reporting.html"),
         "quick-start.html": ("quick-step-number", "data-responsive-media=\"webp\"", "panduan-mulai-arsas.html", "io-list-fat-evidence.html"),
         "io-list-fat-evidence.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Native PDF report", "bukti-fat-iolist-iec61850.html"),
         "bukti-fat-iolist-iec61850.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Report PDF native", "io-list-fat-evidence.html"),
@@ -68,7 +72,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, ARSAS tutorials, Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
+    print("Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, bilingual MMS and Reporting tutorials, Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
     return 0
 
 
