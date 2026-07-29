@@ -57,7 +57,8 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("Export .arsas", buttonContents);
         Assert.Contains("Engineering", buttonContents);
         Assert.DoesNotContain("Autosave enabled", document.ToString(), StringComparison.Ordinal);
-        Assert.Equal("{Binding Storage.SnapshotPath}",
+        Assert.Equal(
+            "{Binding Storage.SnapshotPath}",
             document.Descendants(presentation + "TextBlock")
                 .Select(text => (string?)text.Attribute("ToolTip"))
                 .First(value => value == "{Binding Storage.SnapshotPath}"));
@@ -71,12 +72,17 @@ public sealed class IoTestingUiContractTests
         var startButton = document
             .Descendants(presentation + "Button")
             .Single(button => ((string?)button.Attribute("Click")) == "StartSession_Click");
+        var text = document.ToString();
 
         Assert.Equal("{Binding StartWorkflowText}", (string?)startButton.Attribute("Content"));
         Assert.Equal("{Binding CanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
-        Assert.Contains("report-first acquisition", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("HeaderSpinnerRotate", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("CardSpinnerRotate", document.ToString(), StringComparison.Ordinal);
+        Assert.Contains("report-first acquisition", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("HeaderSpinnerRotate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CardSpinnerRotate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CardSpinner", text, StringComparison.Ordinal);
+        Assert.Contains(
+            document.Descendants(presentation + "ProgressBar"),
+            progress => (string?)progress.Attribute("IsIndeterminate") == "True");
 
         var windowSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
         Assert.Contains("Connect & Start IED", windowSource, StringComparison.Ordinal);
@@ -124,6 +130,30 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
+    public void IoTestingWindow_UsesFlatOperationalColumnsAndFinalResultOnly()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var live = FindColumn(document, presentation, "LIVE");
+        var acquisition = FindColumn(document, presentation, "ACQUISITION");
+        var status = FindColumn(document, presentation, "STATUS");
+        var result = FindColumn(document, presentation, "RESULT");
+
+        Assert.Empty(live.Descendants(presentation + "Border"));
+        Assert.Empty(acquisition.Descendants(presentation + "Border"));
+        Assert.Empty(result.Descendants(presentation + "Border"));
+
+        Assert.Contains("Runtime.StateText", status.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Runtime.StateText", result.ToString(), StringComparison.Ordinal);
+        Assert.Contains("✔ PASS", result.ToString(), StringComparison.Ordinal);
+        Assert.Contains("✖ FAILED", result.ToString(), StringComparison.Ordinal);
+        Assert.Contains("⚠ REVIEW", result.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Ready for ON", result.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerRadius", result.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoFatPackageService_UsesShortExtensionAndBundlesNativeReports()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatProjectPackageService.cs"));
@@ -136,6 +166,11 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("resultWorkbookSha256", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("IO-FAT-Report.html", source, StringComparison.Ordinal);
     }
+
+    private static XElement FindColumn(XDocument document, XNamespace presentation, string header)
+        => document
+            .Descendants(presentation + "DataGridTemplateColumn")
+            .Single(column => string.Equals((string?)column.Attribute("Header"), header, StringComparison.Ordinal));
 
     private static string FindRepoFile(string relativePath)
     {
