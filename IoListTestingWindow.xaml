@@ -25,7 +25,7 @@
                 <StackPanel>
                     <TextBlock Text="IO LIST TESTING" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
                     <TextBlock Text="{Binding Project.ProjectName}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                    <TextBlock Text="Dedicated FAT workspace · imported IEDs and IO-list SDI signals only"
+                    <TextBlock Text="Workbook-driven connect · configured-report-first monitoring · read-only OFF → ON → OFF evidence"
                                Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                 </StackPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
@@ -59,7 +59,7 @@
                         <TextBlock Text="Only IEDs imported from the workbook" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Project.Ieds}" SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
-                             IsEnabled="{Binding Session.CanSelectIed}"
+                             IsEnabled="{Binding CanSelectIed}"
                              BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
@@ -132,13 +132,15 @@
                             <TextBlock Text="{Binding SelectedIed.IedName}" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                             <TextBlock Text="{Binding Session.ActiveIedText}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding PreparationStatusText}" Style="{StaticResource Caption}"
+                                       Foreground="{StaticResource Accent}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Border Background="{StaticResource SoftBlue}" CornerRadius="13" Padding="11,6" Margin="0,0,8,0">
                                 <TextBlock Text="{Binding Session.StateText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
                             </Border>
-                            <Button Content="Start IED Session" Style="{StaticResource PrimaryButton}" Padding="12,7"
-                                    IsEnabled="{Binding Session.CanStart}" Click="StartSession_Click" Margin="0,0,6,0"/>
+                            <Button Content="{Binding StartWorkflowText}" Style="{StaticResource PrimaryButton}" Padding="12,7"
+                                    IsEnabled="{Binding CanStartWorkflow}" Click="StartSession_Click" Margin="0,0,6,0"/>
                             <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="11,7"
                                     IsEnabled="{Binding Session.CanPause}" Click="PauseSession_Click" Margin="0,0,6,0"/>
                             <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="11,7"
@@ -160,7 +162,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  IsEnabled="{Binding DataContext.Session.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                  IsEnabled="{Binding DataContext.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
