@@ -27,6 +27,13 @@ public partial class MainWindow
         if (requestedPoints.Count == 0)
             return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
 
+        void ReportProgress(string message)
+        {
+            ied.SetPreparationState(true, message);
+            progress?.Report(message);
+        }
+
+        ied.SetPreparationState(true, $"Connecting {ied.IedName} · {ied.IpAddress}:102");
         var device = ResolveIoTestDevice(ied.LiveDeviceId)
                      ?? ResolveIoTestDevice(ied.IpAddress)
                      ?? ResolveIoTestDevice(ied.IedName);
@@ -49,12 +56,16 @@ public partial class MainWindow
         }
 
         if (device.IsBusy)
+        {
+            ied.SetPreparationState(false, "IED is busy in another connection workflow");
             return IoTestSessionActionResult.Failure($"{ied.IedName} is already busy with another connection or discovery workflow.");
+        }
 
         if (!device.IpAddress.Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase))
         {
             if (device.IsConnected || device.IsMonitoring)
             {
+                ied.SetPreparationState(false, "Endpoint mismatch");
                 return IoTestSessionActionResult.Failure(
                     $"The loaded {ied.IedName} workspace is connected to {device.IpAddress}, but the IO list requires {ied.IpAddress}. Stop that engineering session or correct the workbook endpoint before FAT.");
             }
@@ -77,7 +88,7 @@ public partial class MainWindow
 
         try
         {
-            progress?.Report($"Connecting {ied.IedName} · {ied.IpAddress}:102");
+            ReportProgress($"Connecting {ied.IedName} · {ied.IpAddress}:102");
             var usedSavedModel = false;
             if (!device.IsConnected)
             {
@@ -95,7 +106,7 @@ public partial class MainWindow
             }
             else if (device.Signals.Count == 0)
             {
-                progress?.Report($"{ied.IedName} connected · discovering live model");
+                ReportProgress($"{ied.IedName} connected · discovering live model");
                 await StopDeviceConnectionAsync(device);
                 if (!await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false))
                 {
@@ -104,11 +115,11 @@ public partial class MainWindow
                 }
             }
 
-            progress?.Report($"Matching {requestedPoints.Count} workbook signal(s)");
+            ReportProgress($"Matching {requestedPoints.Count} workbook signal(s)");
             var selection = _ioTestSignalSelectionService.Resolve(ied, device);
             if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery)
             {
-                progress?.Report("Refreshing live model once · saved model missed workbook points");
+                ReportProgress("Refreshing live model once · saved model missed workbook points");
                 if (device.IsMonitoring)
                     await StopDeviceMonitorAsync(device);
                 if (device.IsConnected)
@@ -149,13 +160,13 @@ public partial class MainWindow
 
             if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive))
             {
-                progress?.Report("Refreshing acquisition for the workbook scope");
+                ReportProgress("Refreshing acquisition for the workbook scope");
                 await StopDeviceMonitorAsync(device);
             }
 
             if (!device.IsMonitoring)
             {
-                progress?.Report("Arming configured RCB · dynamic URCB fallback if coverage is missing");
+                ReportProgress("Arming configured RCB · dynamic URCB fallback if coverage is missing");
                 if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
@@ -163,6 +174,8 @@ public partial class MainWindow
                         $"{ied.IedName} connected, but ARSAS could not start live acquisition for the imported FAT scope.");
                 }
             }
+
+            await WaitForIoFatAcquisitionAsync(device, ReportProgress);
 
             var binding = _ioTestLiveBindingService.Bind(project, Devices);
             var liveCount = requestedPoints.Count(point =>
@@ -185,7 +198,7 @@ public partial class MainWindow
                 "INFO",
                 "IO Testing",
                 $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. Project live-bound={binding.LivePointCount}; model={modelText}.");
-            progress?.Report(message);
+            ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
         catch (OperationCanceledException)
@@ -203,8 +216,31 @@ public partial class MainWindow
         }
         finally
         {
+            ied.SetPreparationState(false, ied.LiveStatusText);
             if (createdFromWorkbook)
                 RaiseWorkspaceCounts();
         }
+    }
+
+    private static async Task WaitForIoFatAcquisitionAsync(
+        Iec61850MonitorDevice device,
+        Action<string> reportProgress)
+    {
+        if (!device.IsMonitoring)
+            return;
+
+        for (var attempt = 0; attempt < 35; attempt++)
+        {
+            var mode = device.AcquisitionMode ?? string.Empty;
+            if (!mode.Contains("arming", StringComparison.OrdinalIgnoreCase) &&
+                !mode.Contains("live start", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (attempt == 0)
+                reportProgress("Validating RCB/DataSet coverage · MMS remains verification only");
+            await Task.Delay(100);
+        }
+
+        reportProgress($"Acquisition still settling · {device.AcquisitionMode}");
     }
 }
