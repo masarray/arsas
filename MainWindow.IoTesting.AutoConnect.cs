@@ -9,9 +9,9 @@ public partial class MainWindow
     private readonly IoTestSignalSelectionService _ioTestSignalSelectionService = new();
 
     /// <summary>
-    /// Prepares one imported IO-list IED for a read-only FAT session. The workbook
+    /// Prepares one imported IO-list IED for a monitoring-only FAT session. The workbook
     /// supplies the endpoint and exact signal scope, so the operator does not need to
-    /// duplicate the Add IED and signal-selection workflow in the engineering window.
+    /// duplicate Add IED and signal-selection work in the engineering window.
     /// </summary>
     internal async Task<IoTestSessionActionResult> PrepareIoTestIedForFatAsync(
         IoTestProject project,
@@ -40,9 +40,9 @@ public partial class MainWindow
                 IdentitySource = "IO List workbook",
                 IpAddress = ied.IpAddress,
                 Port = 102,
-                AllowDynamicDataSetWrites = false,
+                AllowDynamicDataSetWrites = true,
                 Status = "IO FAT ready to connect",
-                Detail = "Connect & Start will discover the live model and monitor only the imported FAT scope."
+                Detail = "Connect & Start will discover the live model and arm report-first acquisition for the imported FAT scope."
             };
             Devices.Add(device);
             RaiseWorkspaceCounts();
@@ -68,14 +68,16 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(device.SclIedName))
             device.SclIedName = ied.IedName;
 
-        // Dedicated IO FAT remains read-only toward IED configuration. Existing
-        // configured reports are preferred; uncovered points use visible bounded
-        // polling instead of creating a dynamic DataSet or writing an RCB.
-        device.AllowDynamicDataSetWrites = false;
+        // Monitoring-only toward the process: no control commands are executed. Use
+        // configured RCB/DataSet coverage first, then an association-scoped temporary
+        // dynamic DataSet/URCB when exact coverage is missing, with bounded MMS
+        // verification/fallback last. Temporary report resources are released when the
+        // native monitoring session stops.
+        device.AllowDynamicDataSetWrites = true;
 
         try
         {
-            progress?.Report($"Connecting to {ied.IedName} at {ied.IpAddress}:102…");
+            progress?.Report($"Connecting {ied.IedName} · {ied.IpAddress}:102");
             var usedSavedModel = false;
             if (!device.IsConnected)
             {
@@ -88,12 +90,12 @@ public partial class MainWindow
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
                     return IoTestSessionActionResult.Failure(
-                        $"ARSAS could not connect to {ied.IedName} at {ied.IpAddress}:102. Open Diagnostics for the exact MMS association or discovery error.");
+                        $"ARSAS could not connect to {ied.IedName} at {ied.IpAddress}:102. Open Diagnostics for the MMS association or discovery error.");
                 }
             }
             else if (device.Signals.Count == 0)
             {
-                progress?.Report($"{ied.IedName} is connected but has no discovered model. Running full live discovery…");
+                progress?.Report($"{ied.IedName} connected · discovering live model");
                 await StopDeviceConnectionAsync(device);
                 if (!await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false))
                 {
@@ -102,11 +104,11 @@ public partial class MainWindow
                 }
             }
 
-            progress?.Report($"Matching {requestedPoints.Count} imported signal(s) to the discovered IED model…");
+            progress?.Report($"Matching {requestedPoints.Count} workbook signal(s)");
             var selection = _ioTestSignalSelectionService.Resolve(ied, device);
             if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery)
             {
-                progress?.Report("The saved/loaded model does not contain every imported signal. Refreshing the live model once…");
+                progress?.Report("Refreshing live model once · saved model missed workbook points");
                 if (device.IsMonitoring)
                     await StopDeviceMonitorAsync(device);
                 if (device.IsConnected)
@@ -147,19 +149,18 @@ public partial class MainWindow
 
             if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive))
             {
-                progress?.Report("Refreshing monitoring so every imported signal is included…");
+                progress?.Report("Refreshing acquisition for the workbook scope");
                 await StopDeviceMonitorAsync(device);
             }
 
             if (!device.IsMonitoring)
             {
-                progress?.Report(
-                    "Starting configured-report-first monitoring. Uncovered signals will use visible bounded polling fallback…");
+                progress?.Report("Arming configured RCB · dynamic URCB fallback if coverage is missing");
                 if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
                     return IoTestSessionActionResult.Failure(
-                        $"{ied.IedName} connected, but ARSAS could not start live monitoring for the imported FAT scope.");
+                        $"{ied.IedName} connected, but ARSAS could not start live acquisition for the imported FAT scope.");
                 }
             }
 
@@ -178,13 +179,12 @@ public partial class MainWindow
 
             SaveSignalSelectionMemory(device);
             var modelText = usedSavedModel ? "saved model" : "live model";
-            var message =
-                $"{ied.IedName} is connected from the {modelText}; {liveCount}/{requestedPoints.Count} imported signal(s) are live. {device.AcquisitionMode}";
+            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {device.AcquisitionMode}";
             SetStatus(message);
             AddLog(
                 "INFO",
                 "IO Testing",
-                $"{message} Dynamic DataSet/RCB writes are disabled for the dedicated FAT workflow. Project live-bound={binding.LivePointCount}.");
+                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. Project live-bound={binding.LivePointCount}; model={modelText}.");
             progress?.Report(message);
             return IoTestSessionActionResult.Success(message);
         }
