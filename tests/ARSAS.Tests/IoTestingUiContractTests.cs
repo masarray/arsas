@@ -75,8 +75,12 @@ public sealed class IoTestingUiContractTests
         Assert.Equal("{Binding StartWorkflowText}", (string?)startButton.Attribute("Content"));
         Assert.Equal("{Binding CanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
         Assert.Contains("report-first acquisition", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("HeaderSpinnerRotate", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("CardSpinnerRotate", document.ToString(), StringComparison.Ordinal);
+        Assert.Contains(
+            document.Descendants(presentation + "ProgressBar"),
+            progress => (string?)progress.Attribute("IsIndeterminate") == "True" &&
+                        (string?)progress.Attribute("Height") == "3");
+        Assert.DoesNotContain("HeaderSpinnerRotate", document.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CardSpinnerRotate", document.ToString(), StringComparison.Ordinal);
 
         var windowSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
         Assert.Contains("Connect & Start IED", windowSource, StringComparison.Ordinal);
@@ -103,11 +107,12 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_UsesRelayTimestampEvidenceAndPremiumGridDensity()
+    public void IoTestingWindow_UsesRelayTimestampEvidenceAndFlatStatusColumns()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var text = document.ToString();
+        var dataGrid = document.Descendants(presentation + "DataGrid").Single();
 
         Assert.Contains("Runtime.OnRelayTimestampText", text, StringComparison.Ordinal);
         Assert.Contains("Runtime.OffRelayTimestampText", text, StringComparison.Ordinal);
@@ -116,9 +121,13 @@ public sealed class IoTestingUiContractTests
         Assert.Contains(
             document.Descendants(presentation + "Setter"),
             setter => (string?)setter.Attribute("Property") == "MinHeight" &&
-                      (string?)setter.Attribute("Value") == "48");
+                      (string?)setter.Attribute("Value") == "50");
         Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
         Assert.Contains("CardStateText", text, StringComparison.Ordinal);
+        Assert.Contains("✔ PASS", text, StringComparison.Ordinal);
+        Assert.Contains("✖ FAILED", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResultBadge", text, StringComparison.Ordinal);
+        Assert.Empty(dataGrid.Descendants(presentation + "Border"));
         Assert.DoesNotContain("Runtime.OnEvidence.CapturedAt", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OffEvidence.CapturedAt", text, StringComparison.Ordinal);
     }
