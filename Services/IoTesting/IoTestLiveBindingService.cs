@@ -31,7 +31,7 @@ public sealed class IoTestLiveBindingService
             var device = FindDevice(iedPlan, deviceList);
             if (device == null)
             {
-                iedPlan.ApplyLiveDeviceBinding(null, "IED is present in the IO list but is not loaded in the engineering workspace");
+                iedPlan.ApplyLiveDeviceBinding(null, "Not connected");
                 foreach (var point in iedPlan.TestPoints)
                 {
                     point.ApplyLiveBinding(
@@ -45,10 +45,12 @@ public sealed class IoTestLiveBindingService
             iedPlan.ApplyLiveDeviceBinding(
                 device.DeviceId,
                 device.IsMonitoring
-                    ? $"Monitoring · {device.Name} · {device.EndpointText}"
+                    ? $"Monitoring · {device.AcquisitionMode}"
                     : device.IsConnected
-                        ? $"Connected · {device.Name} · {device.EndpointText}"
-                        : $"Loaded · {device.Name} · {device.EndpointText}");
+                        ? "Connected · preparing live acquisition"
+                        : "Workspace model ready",
+                device.IsConnected,
+                device.IsMonitoring);
 
             foreach (var point in iedPlan.TestPoints)
             {
@@ -64,6 +66,9 @@ public sealed class IoTestLiveBindingService
                         point.Runtime.CurrentValue = binding.LivePoint.Value;
                         point.Runtime.CurrentQuality = binding.LivePoint.Quality;
                         point.Runtime.CurrentSource = binding.LivePoint.SourceMode;
+                        point.Runtime.CurrentIedTimestamp = string.IsNullOrWhiteSpace(binding.LivePoint.DeviceTimestamp) || binding.LivePoint.DeviceTimestamp == "-"
+                            ? "—"
+                            : binding.LivePoint.DeviceTimestamp;
                     }
                 }
                 else if (binding.State == IoTestLiveBindingState.SignalNotFound)
