@@ -106,13 +106,17 @@ public sealed class IoTestingUiContractTests
     public void IoTestingWindow_UsesRelayTimestampEvidenceAndPremiumGridDensity()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var text = document.ToString();
 
         Assert.Contains("Runtime.OnRelayTimestampText", text, StringComparison.Ordinal);
         Assert.Contains("Runtime.OffRelayTimestampText", text, StringComparison.Ordinal);
         Assert.Contains("ON · RELAY TIME", text, StringComparison.Ordinal);
         Assert.Contains("OFF · RELAY TIME", text, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"48\"", text, StringComparison.Ordinal);
+        Assert.Contains(
+            document.Descendants(presentation + "Setter"),
+            setter => (string?)setter.Attribute("Property") == "MinHeight" &&
+                      (string?)setter.Attribute("Value") == "48");
         Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
         Assert.Contains("CardStateText", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OnEvidence.CapturedAt", text, StringComparison.Ordinal);
