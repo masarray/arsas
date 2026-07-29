@@ -18,6 +18,8 @@ PAIR_MAP = {
     "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
     "mms-client.html": "mms-client-iec61850.html",
     "smart-reporting.html": "smart-reporting-iec61850.html",
+    "goose-analyzer.html": "analyzer-goose-iec61850.html",
+    "scl-workspace.html": "workspace-scl-iec61850.html",
     "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "faq.html": "faq-arsas.html",
     "compatibility.html": "bukti-kompatibilitas.html",
@@ -36,6 +38,13 @@ def read(path: Path, errors: list[str]) -> str:
     except OSError as exc:
         errors.append(f"{path.relative_to(ROOT)}: {exc}")
         return ""
+
+
+def require_values(text: str, label: str, values: tuple[str, ...], errors: list[str], contract: str) -> None:
+    lower = text.lower()
+    for value in values:
+        if value.lower() not in lower:
+            errors.append(f"{label}: missing {contract} {value}")
 
 
 def main() -> int:
@@ -59,16 +68,23 @@ def main() -> int:
             if not isinstance(entry, dict) or entry.get("language") != language or entry.get("alternates") != expected:
                 errors.append(f"invalid adoption localization contract for {path}")
 
-    quick = read(TEMPLATES / "quick-start.html", errors)
-    quick_id = read(TEMPLATES / "panduan-mulai-arsas.html", errors)
-    for text, label in ((quick, "quick-start.html"), (quick_id, "panduan-mulai-arsas.html")):
-        for value in ("quick-step-number", "TCP port 102", "Npcap", "MMS", "live", "quality", "timestamp", "reporting", "polling", "diagnostic", "control"):
-            if value.lower() not in text.lower():
-                errors.append(f"{label}: missing onboarding contract {value}")
+    quick_pairs = (
+        ("quick-start.html", "io-list-fat-evidence.html"),
+        ("panduan-mulai-arsas.html", "bukti-fat-iolist-iec61850.html"),
+    )
+    for name, continuation in quick_pairs:
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("quick-step-number", "TCP port 102", "Npcap", "MMS", "live", "quality", "timestamp", "reporting", "polling", "diagnostic", "control"),
+            errors,
+            "onboarding contract",
+        )
         if text.count('class="quick-step"') != 7:
-            errors.append(f"{label}: expected seven quick-start steps")
-        if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
-            errors.append(f"{label}: missing IO List FAT continuation path")
+            errors.append(f"{name}: expected seven quick-start steps")
+        if continuation not in text:
+            errors.append(f"{name}: missing IO List FAT continuation path")
 
     learning_contracts = {
         "learning-center.html": ("Learn IEC 61850", "What is IEC 61850", "Connect your first IED", "troubleshooting", "CollectionPage"),
@@ -78,12 +94,11 @@ def main() -> int:
         "connect-ied-ip-arsas.html": ("TCP port 102", "Add IED", "MMS association", "quality", "timestamp", "HowTo"),
         "cara-hubungkan-ied-ip-arsas.html": ("TCP port 102", "Add IED", "association MMS", "quality", "timestamp", "HowTo"),
     }
+    learning_hubs = {"learning-center.html", "pusat-belajar-iec61850.html"}
     for name, required_values in learning_contracts.items():
         text = read(TEMPLATES / name, errors)
-        for value in required_values:
-            if value.lower() not in text.lower():
-                errors.append(f"{name}: missing learning contract {value}")
-        if "learning-center.html" not in text and "pusat-belajar-iec61850.html" not in text and name not in {"learning-center.html", "pusat-belajar-iec61850.html"}:
+        require_values(text, name, required_values, errors, "learning contract")
+        if name not in learning_hubs and "learning-center.html" not in text and "pusat-belajar-iec61850.html" not in text:
             errors.append(f"{name}: missing Learning Center continuation path")
 
     capability_tutorials = {
@@ -103,39 +118,54 @@ def main() -> int:
             "Takeaway 30 detik", "DataSet", "BRCB", "URCB", "General Interrogation",
             "Success criteria", "Bila Reporting silent", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
         ),
+        "goose-analyzer.html": (
+            "30-second takeaway", "stNum", "sqNum", "Time Allowed to Live",
+            "Success criteria", "If the result is wrong", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "analyzer-goose-iec61850.html": (
+            "Takeaway 30 detik", "stNum", "sqNum", "Time Allowed to Live",
+            "Success criteria", "Bila hasil salah", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+        "scl-workspace.html": (
+            "30-second takeaway", "ICD", "CID", "SCD", "IID",
+            "Success criteria", "If the file is rejected", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "workspace-scl-iec61850.html": (
+            "Takeaway 30 detik", "ICD", "CID", "SCD", "IID",
+            "Success criteria", "Bila file ditolak", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
     }
     for name, required_values in capability_tutorials.items():
         text = read(TEMPLATES / name, errors)
-        for value in required_values:
-            if value.lower() not in text.lower():
-                errors.append(f"{name}: missing capability tutorial contract {value}")
+        require_values(text, name, required_values, errors, "capability tutorial contract")
         if text.count('<details class="faq-item">') != 3:
             errors.append(f"{name}: expected three visible capability FAQ items")
-        expected_step_class = 'class="reporting-step"' if name.startswith("smart-reporting") else 'class="step"'
-        if text.count(expected_step_class) != 6:
+        step_class = 'class="reporting-step"' if name.startswith("smart-reporting") else 'class="step"'
+        if text.count(step_class) != 6:
             errors.append(f"{name}: expected six capability tutorial steps")
 
     for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
         text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("TestPointId", "OFF → ON", "ON → OFF", ".arsas", "Excel", "PDF", "quality", "timestamp", "acquisition source"),
+            errors,
+            "IO FAT contract",
+        )
         lower = text.lower()
-        for value in ("TestPointId", "OFF → ON", "ON → OFF", ".arsas", "Excel", "PDF", "quality", "timestamp", "acquisition source"):
-            if value.lower() not in lower:
-                errors.append(f"{name}: missing IO FAT contract {value}")
         if "mainline" not in lower or "stable" not in lower:
             errors.append(f"{name}: missing mainline versus stable release boundary")
         if "browser" not in lower or "third-party" not in lower:
             errors.append(f"{name}: missing native PDF dependency boundary")
 
-    faq = read(TEMPLATES / "faq.html", errors)
-    faq_id = read(TEMPLATES / "faq-arsas.html", errors)
-    for text, label in ((faq, "faq.html"), (faq_id, "faq-arsas.html")):
+    for name in ("faq.html", "faq-arsas.html"):
+        text = read(TEMPLATES / name, errors)
         if '"@type":"FAQPage"' not in text.replace(" ", ""):
-            errors.append(f"{label}: missing visible FAQPage structured data")
+            errors.append(f"{name}: missing visible FAQPage structured data")
         if text.count('<details class="faq-item">') != 12:
-            errors.append(f"{label}: expected twelve visible FAQ items")
-        for value in ("SmartScreen", "Npcap", "SBO", "analytics", "Portable"):
-            if value.lower() not in text.lower():
-                errors.append(f"{label}: missing FAQ topic {value}")
+            errors.append(f"{name}: expected twelve visible FAQ items")
+        require_values(text, name, ("SmartScreen", "Npcap", "SBO", "analytics", "Portable"), errors, "FAQ topic")
 
     evidence_path = LANDING / "device-evidence.json"
     try:
@@ -168,24 +198,27 @@ def main() -> int:
         if not isinstance(profile.get("conditions"), list) or len(profile["conditions"]) < 3:
             errors.append(f"{profile_id}: evidence conditions are incomplete")
 
-    compatibility = read(TEMPLATES / "compatibility.html", errors)
-    compatibility_id = read(TEMPLATES / "bukti-kompatibilitas.html", errors)
-    for text, label in ((compatibility, "compatibility.html"), (compatibility_id, "bukti-kompatibilitas.html")):
+    for name in ("compatibility.html", "bukti-kompatibilitas.html"):
+        text = read(TEMPLATES / name, errors)
         for profile_id in profile_ids:
             if f'data-evidence-profile="{profile_id}"' not in text:
-                errors.append(f"{label}: missing evidence profile {profile_id}")
+                errors.append(f"{name}: missing evidence profile {profile_id}")
         for status in ("verified", "conditional", "observed"):
             if f'data-status="{status}"' not in text:
-                errors.append(f"{label}: missing status {status}")
+                errors.append(f"{name}: missing status {status}")
         lower = text.lower()
         if "device-evidence.json" not in text or not any(term in lower for term in ("conformance", "conformity")):
-            errors.append(f"{label}: missing machine-readable or conformance boundary")
+            errors.append(f"{name}: missing machine-readable or conformance boundary")
 
     for name in ("guides.html", "panduan.html"):
         text = read(TEMPLATES / name, errors)
-        for value in ("data-guide-filter", "data-guide-search", "data-guide-category", "data-guide-card", "guide-filter.js"):
-            if value not in text:
-                errors.append(f"{name}: missing guide-filter contract {value}")
+        require_values(
+            text,
+            name,
+            ("data-guide-filter", "data-guide-search", "data-guide-category", "data-guide-card", "guide-filter.js"),
+            errors,
+            "guide-filter contract",
+        )
         if text.count("data-guide-card") != 11:
             errors.append(f"{name}: expected eleven filterable guide cards")
         if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
@@ -207,22 +240,20 @@ def main() -> int:
         errors.append("missing structured issue forms: " + ", ".join(sorted(missing_forms)))
     for name in ISSUE_FORMS - {"config.yml"}:
         text = read(issue_dir / name, errors)
-        for value in ("name:", "description:", "body:", "validations:"):
-            if value not in text:
-                errors.append(f"{name}: incomplete issue-form contract {value}")
+        require_values(text, name, ("name:", "description:", "body:", "validations:"), errors, "issue-form contract")
     combined_forms = "\n".join(read(issue_dir / name, errors) for name in ISSUE_FORMS)
-    for value in ("ARSAS version", "Windows", "sanitized", "credentials", "confidential"):
-        if value.lower() not in combined_forms.lower():
-            errors.append(f"issue forms missing intake boundary {value}")
+    require_values(combined_forms, "issue forms", ("ARSAS version", "Windows", "sanitized", "credentials", "confidential"), errors, "intake boundary")
 
     supply_workflow = read(ROOT / ".github" / "workflows" / "release-supply-chain.yml", errors)
-    for value in ("actions/attest@v4", "attestations: write", "id-token: write", "sha256sum --check", "generate-release-sbom.py", "ARSAS-Windows-x64-SBOM.spdx.json"):
-        if value not in supply_workflow:
-            errors.append(f"release supply-chain workflow missing contract {value}")
+    require_values(
+        supply_workflow,
+        "release-supply-chain.yml",
+        ("actions/attest@v4", "attestations: write", "id-token: write", "sha256sum --check", "generate-release-sbom.py", "ARSAS-Windows-x64-SBOM.spdx.json"),
+        errors,
+        "supply-chain workflow contract",
+    )
     sbom_generator = read(ROOT / "scripts" / "generate-release-sbom.py", errors)
-    for value in ("SPDX-2.3", "packageVerificationCode", "SHA256", "GPL-3.0-or-later"):
-        if value not in sbom_generator:
-            errors.append(f"SBOM generator missing contract {value}")
+    require_values(sbom_generator, "generate-release-sbom.py", ("SPDX-2.3", "packageVerificationCode", "SHA256", "GPL-3.0-or-later"), errors, "SBOM contract")
 
     for name in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         text = read(TEMPLATES / name, errors)
@@ -247,7 +278,11 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, beginner learning, bilingual MMS and Reporting tutorials, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
+    print(
+        "ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, "
+        "beginner learning, bilingual MMS, Reporting, GOOSE and SCL tutorials, IO FAT evidence, "
+        "onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts."
+    )
     return 0
 
 
