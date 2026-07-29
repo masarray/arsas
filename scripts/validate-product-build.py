@@ -16,7 +16,7 @@ CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
 PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
 CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
-EXPECTED_NAV = {"overview", "capabilities", "io-fat", "solutions", "guides", "architecture", "about", "download"}
+EXPECTED_NAV = {"overview", "learn", "capabilities", "io-fat", "solutions", "guides", "about", "download"}
 GUIDES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html", "empty-dataset.html",
     "port-102-connection-failed.html", "comtrade-download.html", "goose-sequence.html",
@@ -24,8 +24,9 @@ GUIDES = {
 }
 PAIRS = {
     "index.html": "id.html", "download.html": "unduh.html", "release-notes.html": "catatan-rilis.html",
-    "quick-start.html": "panduan-mulai-arsas.html", "faq.html": "faq-arsas.html",
-    "compatibility.html": "bukti-kompatibilitas.html", "demo.html": "demo-arsas.html",
+    "quick-start.html": "panduan-mulai-arsas.html", "learning-center.html": "pusat-belajar-iec61850.html",
+    "what-is-iec61850.html": "apa-itu-iec61850.html", "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
+    "faq.html": "faq-arsas.html", "compatibility.html": "bukti-kompatibilitas.html", "demo.html": "demo-arsas.html",
     "guides.html": "panduan.html", "mms-client.html": "mms-client-iec61850.html",
     "smart-reporting.html": "smart-reporting-iec61850.html", "goose-analyzer.html": "analyzer-goose-iec61850.html",
     "file-transfer.html": "transfer-file-comtrade-iec61850.html", "scl-workspace.html": "workspace-scl-iec61850.html",
@@ -101,7 +102,7 @@ def main() -> int:
 
     entries = registry.get("pages", []) if isinstance(registry, dict) else []
     expected_pages = [str(item.get("path") or "index.html") for item in entries if isinstance(item, dict)]
-    if len(expected_pages) != 56 or len(expected_pages) != len(set(expected_pages)): errors.append("site registry must contain 56 unique pages")
+    if len(expected_pages) != 62 or len(expected_pages) != len(set(expected_pages)): errors.append("site registry must contain 62 unique pages")
     if info.get("schemaVersion") != 3 or info.get("pages") != expected_pages: errors.append("build-info page registry does not match site.json")
     if info.get("languages") != ["en", "id"]: errors.append("build-info languages must be en and id")
     if info.get("repository") != "https://github.com/masarray/arsas": errors.append("build-info repository is invalid")
@@ -152,7 +153,7 @@ def main() -> int:
         expected_indexable = [name for name in expected_pages if entry_map[name].get("index", True) is not False]
         expected_locations = [page_url(name) for name in expected_indexable]
         if locations != expected_locations: errors.append("sitemap URLs do not match indexable registry order")
-        if len(locations) != 55: errors.append(f"sitemap must contain 55 URLs, found {len(locations)}")
+        if len(locations) != 61: errors.append(f"sitemap must contain 61 URLs, found {len(locations)}")
         if page_url("404.html") in locations: errors.append("404 page must not be in sitemap")
     except (OSError, ET.ParseError) as exc:
         errors.append(f"sitemap.xml: {exc}")
@@ -173,7 +174,7 @@ def main() -> int:
     combined = "\n".join((site / name).read_text(encoding="utf-8") for name in expected_pages if (site / name).is_file())
     for value in ('href="http://', 'src="http://', "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot", '<meta name="keywords"'):
         if value in combined: errors.append(f"forbidden public value remains: {value}")
-    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Ari Sulistiono", "GPL-3.0-or-later", "io-list-fat-evidence.html", ".arsas"):
+    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Ari Sulistiono", "GPL-3.0-or-later", "learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "io-list-fat-evidence.html", ".arsas"):
         if value not in combined: errors.append(f"public site missing trust value {value}")
 
     errors = list(dict.fromkeys(errors))
@@ -181,7 +182,7 @@ def main() -> int:
         print("ARSAS rendered validation failed:", file=sys.stderr)
         for error in errors: print(f"- {error}", file=sys.stderr)
         return 1
-    print("ARSAS rendered validation passed: 56 pages, 55 sitemap URLs, 18 localized pages, release trust, links and media.")
+    print("ARSAS rendered validation passed: 62 pages, 61 sitemap URLs, 21 localized pages, learning paths, release trust, links and media.")
     return 0
 
 
