@@ -61,6 +61,41 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
+    public void IoTestingWindow_ConnectsAndPreparesWorkbookIedBeforeEvidenceStart()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var startButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => ((string?)button.Attribute("Click")) == "StartSession_Click");
+
+        Assert.Equal("{Binding StartWorkflowText}", (string?)startButton.Attribute("Content"));
+        Assert.Equal("{Binding CanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
+        Assert.Contains("configured-report-first", document.ToString(), StringComparison.Ordinal);
+
+        var windowSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
+        Assert.Contains("Connect & Start IED", windowSource, StringComparison.Ordinal);
+        Assert.Contains("PrepareIoTestIedForFatAsync", windowSource, StringComparison.Ordinal);
+        Assert.Contains("IsPreparingIed", windowSource, StringComparison.Ordinal);
+        Assert.Contains("CanSelectIed", windowSource, StringComparison.Ordinal);
+        Assert.Contains("CanEditPlan", windowSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoFatAutomaticPreparation_IsReadOnlyAndUsesReportFirstMonitoring()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
+
+        Assert.Contains("AllowDynamicDataSetWrites = false", source, StringComparison.Ordinal);
+        Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
+        Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
+        Assert.Contains("configured-report-first", source, StringComparison.Ordinal);
+        Assert.Contains("polling fallback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ExecuteControlAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("InspectControlAsync", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoFatPackageService_UsesShortExtensionAndBundlesNativeReports()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatProjectPackageService.cs"));
