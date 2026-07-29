@@ -10,8 +10,8 @@ namespace ArIED61850Tester;
 public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 {
     private IoTestIedPlan? _selectedIed;
-    private bool _isPreparingIed;
-    private string _preparationStatusText = "Workbook-driven connection is ready.";
+    private IoTestIedPlan? _preparingIed;
+    private string _preparationStatusText = string.Empty;
 
     public IoListTestingWindow()
         : this(CreateEmptyProject(), CreateEmptyController(), null)
@@ -51,55 +51,49 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public bool IsPreparingIed
-    {
-        get => _isPreparingIed;
-        private set
-        {
-            if (_isPreparingIed == value)
-                return;
-            _isPreparingIed = value;
-            Raise();
-            Raise(nameof(CanStartWorkflow));
-            Raise(nameof(CanSelectIed));
-            Raise(nameof(CanEditPlan));
-            Raise(nameof(StartWorkflowText));
-        }
-    }
+    public bool IsPreparingIed => _preparingIed != null;
 
     public string PreparationStatusText
     {
         get => _preparationStatusText;
         private set
         {
-            var normalized = string.IsNullOrWhiteSpace(value)
-                ? "Workbook-driven connection is ready."
-                : value.Trim();
+            var normalized = value?.Trim() ?? string.Empty;
             if (_preparationStatusText == normalized)
                 return;
             _preparationStatusText = normalized;
             Raise();
+            Raise(nameof(FooterStatusText));
         }
     }
+
+    public Visibility PreparationVisibility => IsPreparingIed ? Visibility.Visible : Visibility.Collapsed;
+    public string PreparationIedText => _preparingIed == null ? string.Empty : $"Preparing {_preparingIed.IedName}";
 
     public bool CanStartWorkflow =>
         SelectedIed != null && !IsPreparingIed && Session.CanStart;
 
-    public bool CanSelectIed =>
-        !IsPreparingIed && Session.CanSelectIed;
+    // Explorer navigation stays available while one IED is connecting or another FAT
+    // session is running. This is inspection-only; the active evidence scope remains
+    // pinned to Session.ActiveIed.
+    public bool CanSelectIed => true;
 
     public bool CanEditPlan =>
         !IsPreparingIed && Session.CanEditPlan;
 
     public string StartWorkflowText =>
-        IsPreparingIed ? "Connecting IED…" : "Connect & Start IED";
+        IsPreparingIed ? $"Connecting {_preparingIed!.IedName}…" : "Connect & Start IED";
 
     public string ProjectSummary =>
-        $"{Project.Ieds.Count} IED · {Project.SignalCount} SDI · {Project.ReadySignalCount} ready · {Project.LiveBoundSignalCount} live-bound";
+        $"{Project.Ieds.Count} IED · {Project.SignalCount} points · {Project.LiveBoundSignalCount} live";
 
     public string SelectedIedSummary => SelectedIed == null
         ? "Select an imported IED"
-        : $"{SelectedIed.IpAddress} · {SelectedIed.BoundCount}/{SelectedIed.TestPoints.Count} bound · {SelectedIed.LiveStatusText}";
+        : $"{SelectedIed.IpAddress} · {SelectedIed.EnabledCount} test points · {SelectedIed.LiveStatusText}";
+
+    public string FooterStatusText => IsPreparingIed
+        ? PreparationStatusText
+        : Session.StatusText;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -116,40 +110,36 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        IsPreparingIed = true;
-        PreparationStatusText = $"Preparing {selectedIed!.IedName} from workbook endpoint {selectedIed.IpAddress}:102…";
+        SetPreparingIed(selectedIed!, $"Connecting {selectedIed!.IedName} · {selectedIed.IpAddress}:102");
         try
         {
             if (Owner is MainWindow engineeringWindow)
             {
                 var progress = new Progress<string>(message =>
                 {
+                    selectedIed.SetPreparationState(true, message);
                     PreparationStatusText = message;
-                    Raise(nameof(ProjectSummary));
-                    Raise(nameof(SelectedIedSummary));
+                    RaiseStatusProperties();
                 });
                 var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(
                     Project,
                     selectedIed,
                     progress);
-                Raise(nameof(ProjectSummary));
-                Raise(nameof(SelectedIedSummary));
+                RaiseStatusProperties();
                 if (!preparation.Succeeded)
                 {
                     PreparationStatusText = preparation.Message;
-                    ShowActionResult(preparation, "IED connection and monitoring could not start");
+                    ShowActionResult(preparation, "IED acquisition could not start");
                     return;
                 }
             }
 
             var result = Session.Start(selectedIed);
             ShowActionResult(result, "FAT evidence session could not start");
-            Raise(nameof(ProjectSummary));
-            Raise(nameof(SelectedIedSummary));
+            RaiseStatusProperties();
             if (result.Succeeded)
             {
-                PreparationStatusText =
-                    $"{selectedIed.IedName} is connected and monitoring. Evidence capture is waiting for OFF → ON → OFF.";
+                PreparationStatusText = $"{selectedIed.IedName} live · waiting for OFF → ON → OFF";
                 Storage?.ScheduleSave();
             }
             else
@@ -169,7 +159,8 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
         finally
         {
-            IsPreparingIed = false;
+            selectedIed.SetPreparationState(false, selectedIed.LiveStatusText);
+            SetPreparingIed(null, string.Empty);
         }
     }
 
@@ -358,7 +349,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         {
             MessageBox.Show(
                 this,
-                "ARSAS is still connecting, discovering, or preparing live monitoring for the selected IED. Wait for this operation to finish before returning to Engineering.",
+                $"ARSAS is still preparing {_preparingIed!.IedName}. You can inspect other IEDs while it runs, but wait for acquisition setup to finish before closing this workspace.",
                 "IED preparation in progress",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -409,12 +400,30 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     }
 
     private void Session_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        => RaiseStatusProperties();
+
+    private void SetPreparingIed(IoTestIedPlan? ied, string status)
+    {
+        _preparingIed = ied;
+        PreparationStatusText = status;
+        Raise(nameof(IsPreparingIed));
+        Raise(nameof(PreparationVisibility));
+        Raise(nameof(PreparationIedText));
+        Raise(nameof(CanStartWorkflow));
+        Raise(nameof(CanSelectIed));
+        Raise(nameof(CanEditPlan));
+        Raise(nameof(StartWorkflowText));
+        Raise(nameof(FooterStatusText));
+    }
+
+    private void RaiseStatusProperties()
     {
         Raise(nameof(CanStartWorkflow));
         Raise(nameof(CanSelectIed));
         Raise(nameof(CanEditPlan));
         Raise(nameof(ProjectSummary));
         Raise(nameof(SelectedIedSummary));
+        Raise(nameof(FooterStatusText));
     }
 
     private void ShowActionResult(IoTestSessionActionResult result, string title)
