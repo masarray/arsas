@@ -98,22 +98,50 @@ public sealed class IoTestPointRuntime : ObservableObject
     public bool? LastObservedState { get => _lastObservedState; internal set => Set(ref _lastObservedState, value); }
     public long LastSequence { get => _lastSequence; internal set => Set(ref _lastSequence, value); }
     public long ConnectionGeneration { get => _connectionGeneration; internal set => Set(ref _connectionGeneration, value); }
-    public IoTestTransitionEvidence? OnEvidence { get => _onEvidence; internal set => Set(ref _onEvidence, value); }
-    public IoTestTransitionEvidence? OffEvidence { get => _offEvidence; internal set => Set(ref _offEvidence, value); }
+    public IoTestTransitionEvidence? OnEvidence
+    {
+        get => _onEvidence;
+        internal set
+        {
+            if (!Set(ref _onEvidence, value))
+                return;
+            Raise(nameof(OnRelayTimestampText));
+            Raise(nameof(OnEvidenceToolTip));
+        }
+    }
+
+    public IoTestTransitionEvidence? OffEvidence
+    {
+        get => _offEvidence;
+        internal set
+        {
+            if (!Set(ref _offEvidence, value))
+                return;
+            Raise(nameof(OffRelayTimestampText));
+            Raise(nameof(OffEvidenceToolTip));
+        }
+    }
     public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
     public int Attempt { get => _attempt; internal set => Set(ref _attempt, value); }
     public string CurrentValue { get => _currentValue; internal set => Set(ref _currentValue, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string CurrentQuality { get => _currentQuality; internal set => Set(ref _currentQuality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string CurrentSource { get => _currentSource; internal set => Set(ref _currentSource, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
-    public string CurrentIedTimestamp { get => _currentIedTimestamp; internal set => Set(ref _currentIedTimestamp, string.IsNullOrWhiteSpace(value) ? "—" : value); }
+
+    [JsonIgnore]
+    public string CurrentIedTimestamp
+    {
+        get => _currentIedTimestamp;
+        internal set => Set(ref _currentIedTimestamp, string.IsNullOrWhiteSpace(value) ? "—" : value);
+    }
 
     public bool IsComplete => State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed;
 
+    [JsonIgnore]
     public string StateText => State switch
     {
         IoTestPointState.NotStarted => "Not started",
         IoTestPointState.WaitingForBaseline => "Waiting baseline",
-        IoTestPointState.WaitingForOffBaseline => "Waiting OFF baseline",
+        IoTestPointState.WaitingForOffBaseline => "Waiting OFF",
         IoTestPointState.ArmedForOn => "Ready for ON",
         IoTestPointState.OnCaptured => "ON captured",
         IoTestPointState.Passed => "PASS",
@@ -122,12 +150,37 @@ public sealed class IoTestPointRuntime : ObservableObject
         _ => State.ToString()
     };
 
+    [JsonIgnore]
+    public string OnRelayTimestampText => FormatRelayTimestamp(OnEvidence?.IedTimestamp);
+
+    [JsonIgnore]
+    public string OffRelayTimestampText => FormatRelayTimestamp(OffEvidence?.IedTimestamp);
+
+    [JsonIgnore]
+    public string OnEvidenceToolTip => BuildEvidenceToolTip(OnEvidence, "ON");
+
+    [JsonIgnore]
+    public string OffEvidenceToolTip => BuildEvidenceToolTip(OffEvidence, "OFF");
+
     internal void ApplyObservation(IoTestObservation observation)
     {
         CurrentValue = observation.RawValue;
         CurrentQuality = observation.Quality;
         CurrentSource = observation.AcquisitionSource;
         CurrentIedTimestamp = observation.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture) ?? "—";
+    }
+
+    private static string FormatRelayTimestamp(DateTimeOffset? value)
+        => value?.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) ?? "—";
+
+    private static string BuildEvidenceToolTip(IoTestTransitionEvidence? evidence, string label)
+    {
+        if (evidence == null)
+            return $"{label} transition has not been captured.";
+
+        var relay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
+        var captured = evidence.CapturedAt.ToString("O", CultureInfo.InvariantCulture);
+        return $"Relay timestamp: {relay}\nARSAS capture: {captured}\nQuality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n{evidence.Verdict}: {evidence.VerdictReason}";
     }
 
     internal void ResetAttempt()
