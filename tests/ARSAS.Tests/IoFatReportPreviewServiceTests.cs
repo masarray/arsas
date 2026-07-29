@@ -1,3 +1,4 @@
+using System.Text;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -5,37 +6,6 @@ namespace ARSAS.Tests;
 
 public sealed class IoFatReportPreviewServiceTests
 {
-    [Fact]
-    public void BuildHtml_IsScopedToSelectedIed_AndMarksLiveSessionDraft()
-    {
-        var selected = BuildIed("IED_A", "192.168.1.10", "TP-A");
-        var other = BuildIed("IED_B", "192.168.1.11", "TP-B");
-        var project = BuildProject(selected, other);
-
-        var html = IoFatReportPreviewService.BuildHtml(
-            project,
-            selected,
-            draft: true,
-            new DateTimeOffset(2026, 7, 29, 7, 0, 0, TimeSpan.Zero));
-
-        Assert.Contains("IED_A evidence report", html, StringComparison.Ordinal);
-        Assert.Contains("TP-A", html, StringComparison.Ordinal);
-        Assert.Contains("DRAFT / LIVE", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("IED_B", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("TP-B", html, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuildHtml_EncodesImportedText()
-    {
-        var ied = BuildIed("IED<&>", "192.168.1.20", "Signal <unsafe>");
-        var html = IoFatReportPreviewService.BuildHtml(BuildProject(ied), ied, draft: false);
-
-        Assert.Contains("IED&lt;&amp;&gt;", html, StringComparison.Ordinal);
-        Assert.Contains("Signal &lt;unsafe&gt;", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("Signal <unsafe>", html, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void CreateIedScopedProject_PreservesIdentityAndOnlySelectedIed()
     {
@@ -52,15 +22,79 @@ public sealed class IoFatReportPreviewServiceTests
     }
 
     [Fact]
-    public void PreviewWorkspace_PortsAriecBrowserPattern_AndKeepsProgressOnIedCard()
+    public void NativePerIedPdf_IsScopedToSelectedIed()
+    {
+        var selected = BuildIed("IED_A", "192.168.1.10", "TP-A");
+        var other = BuildIed("IED_B", "192.168.1.11", "TP-B");
+        var scoped = IoFatReportPreviewService.CreateIedScopedProject(BuildProject(selected, other), selected);
+
+        var bytes = IoFatPdfReportService.Generate(
+            scoped,
+            new DateTimeOffset(2026, 7, 29, 7, 0, 0, TimeSpan.Zero));
+        var text = Encoding.ASCII.GetString(bytes);
+
+        Assert.StartsWith("%PDF-1.4", text, StringComparison.Ordinal);
+        Assert.Contains("IED_A", text, StringComparison.Ordinal);
+        Assert.Contains("TP-A", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("IED_B", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("TP-B", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PreviewWorkspace_UsesAriecNativeDocumentViewerPattern()
+    {
+        var previewSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.PrintPreview.cs"));
+        var builderSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportPreviewDocumentBuilder.cs"));
+        var layoutSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportLayoutEngine.cs"));
+        var pdfSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatPdfReportService.cs"));
+        var htmlServiceSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportPreviewService.cs"));
+
+        Assert.Contains("DocumentViewer", previewSource, StringComparison.Ordinal);
+        Assert.Contains("FixedDocument", builderSource, StringComparison.Ordinal);
+        Assert.Contains("FitToWidth", previewSource, StringComparison.Ordinal);
+        Assert.Contains("ApplicationCommands.Print", previewSource, StringComparison.Ordinal);
+        Assert.Contains("NavigationCommands.PreviousPage", previewSource, StringComparison.Ordinal);
+        Assert.Contains("PageCount", previewSource, StringComparison.Ordinal);
+        Assert.Contains("Native preview", previewSource, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportLayoutEngine.Build", builderSource, StringComparison.Ordinal);
+        Assert.Contains("BuildLayout", pdfSource, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportLayoutPlan", layoutSource, StringComparison.Ordinal);
+        Assert.Contains("DRAFT / LIVE", layoutSource, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("WebBrowser", previewSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavigateToString", previewSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildHtml", previewSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildHtml", htmlServiceSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SignalGrid_CentersOperationalColumnsAndUsesRequestedEvidenceColors()
+    {
+        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.PrintPreview.cs"));
+        var converters = File.ReadAllText(FindRepoFile("IoListTestingWindow.GridConverters.cs"));
+
+        Assert.Contains("InstallSignalGridPolish", source, StringComparison.Ordinal);
+        Assert.Contains("HorizontalContentAlignmentProperty, HorizontalAlignment.Center", source, StringComparison.Ordinal);
+        Assert.Contains("TextBlock.TextAlignmentProperty, TextAlignment.Center", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyColumn(grid, \"LIVE\"", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyColumn(grid, \"VALUE\"", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyColumn(grid, \"QUALITY\"", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyColumn(grid, \"STATUS\"", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyColumn(grid, \"RESULT\"", source, StringComparison.Ordinal);
+        Assert.Contains("Runtime.OnEvidence", source, StringComparison.Ordinal);
+        Assert.Contains("Runtime.OffEvidence", source, StringComparison.Ordinal);
+
+        Assert.Contains("TrueBrush = Brush(229, 72, 77)", converters, StringComparison.Ordinal);
+        Assert.Contains("FalseBrush = Brush(22, 166, 106)", converters, StringComparison.Ordinal);
+        Assert.Contains("SuccessBrush = Brush(22, 132, 90)", converters, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PreviewKeepsProgressOnIedCardOnly()
     {
         var previewSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.PrintPreview.cs"));
         var xaml = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
 
-        Assert.Contains("WebBrowser", previewSource, StringComparison.Ordinal);
-        Assert.Contains("NavigateToString", previewSource, StringComparison.Ordinal);
-        Assert.Contains("Print Preview", previewSource, StringComparison.Ordinal);
-        Assert.Contains("CreateIedScopedProject", previewSource, StringComparison.Ordinal);
         Assert.Contains("RemoveMainPreparationSurface", previewSource, StringComparison.Ordinal);
         Assert.Contains("workspaceGrid.Children.Remove(preparationSurface)", previewSource, StringComparison.Ordinal);
         Assert.Contains("ClearStalePreparationFlags", previewSource, StringComparison.Ordinal);
@@ -121,8 +155,6 @@ public sealed class IoFatReportPreviewServiceTests
                 return candidate;
             directory = directory.Parent;
         }
-
-        throw new FileNotFoundException(
-            $"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
+        throw new FileNotFoundException($"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
     }
 }
