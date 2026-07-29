@@ -18,7 +18,7 @@ APP_ICON = ROOT / "Assets" / "app-icon.png"
 INCLUDE = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
-EXPECTED_NAV = {"overview", "capabilities", "io-fat", "solutions", "guides", "architecture", "about", "download"}
+EXPECTED_NAV = {"overview", "learn", "capabilities", "io-fat", "solutions", "guides", "about", "download"}
 GUIDES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html", "empty-dataset.html",
     "port-102-connection-failed.html", "comtrade-download.html", "goose-sequence.html",
@@ -26,8 +26,9 @@ GUIDES = {
 }
 PAIRS = {
     "": "id.html", "download.html": "unduh.html", "release-notes.html": "catatan-rilis.html",
-    "quick-start.html": "panduan-mulai-arsas.html", "faq.html": "faq-arsas.html",
-    "compatibility.html": "bukti-kompatibilitas.html", "demo.html": "demo-arsas.html",
+    "quick-start.html": "panduan-mulai-arsas.html", "learning-center.html": "pusat-belajar-iec61850.html",
+    "what-is-iec61850.html": "apa-itu-iec61850.html", "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
+    "faq.html": "faq-arsas.html", "compatibility.html": "bukti-kompatibilitas.html", "demo.html": "demo-arsas.html",
     "guides.html": "panduan.html", "mms-client.html": "mms-client-iec61850.html",
     "smart-reporting.html": "smart-reporting-iec61850.html", "goose-analyzer.html": "analyzer-goose-iec61850.html",
     "file-transfer.html": "transfer-file-comtrade-iec61850.html", "scl-workspace.html": "workspace-scl-iec61850.html",
@@ -150,9 +151,9 @@ def main() -> int:
         if path in entries or template in templates: errors.append(f"duplicate page or template {path or template}")
         entries[path] = item
         templates.add(template)
-    if len(pages) != 56: errors.append(f"expected 56 registered pages, found {len(pages)}")
+    if len(pages) != 62: errors.append(f"expected 62 registered pages, found {len(pages)}")
     if sum(item.get("contentType") == "guide" for item in entries.values()) != 11: errors.append("expected 11 troubleshooting guides")
-    if sum(item.get("contentType") == "localized" for item in entries.values()) != 18: errors.append("expected 18 Indonesian pages")
+    if sum(item.get("contentType") == "localized" for item in entries.values()) != 21: errors.append("expected 21 Indonesian pages")
     if entries.get("404.html", {}).get("index", True) is not False: errors.append("404.html must be excluded from sitemap")
     for english, indonesian in PAIRS.items():
         expected = {"en": english, "id": indonesian, "x-default": english}
@@ -197,7 +198,7 @@ def main() -> int:
     footer = (PARTIALS / "footer.html").read_text(encoding="utf-8")
     for nav in EXPECTED_NAV:
         if f'data-nav-page="{nav}"' not in header: errors.append(f"header missing navigation {nav}")
-    for value in ("quick-start.html", "io-list-fat-evidence.html", "faq.html", "compatibility.html", "demo.html", "privacy.html", "{{AUTHOR_LINKEDIN}}"):
+    for value in ("learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "quick-start.html", "io-list-fat-evidence.html", "compatibility.html", "privacy.html", "{{AUTHOR_LINKEDIN}}"):
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
@@ -217,7 +218,7 @@ def main() -> int:
         for error in errors: print(f"- {error}", file=sys.stderr)
         return 1
     width, height = png_size(APP_ICON)
-    print(f"ARSAS product-source validation passed: 56 pages, 18 localized pages, 11 guides, shared navigation, release trust and {width}x{height} icon.")
+    print(f"ARSAS product-source validation passed: 62 pages, 21 localized pages, 11 guides, learning navigation, release trust and {width}x{height} icon.")
     return 0
 
 
