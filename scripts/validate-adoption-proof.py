@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate ARSAS onboarding, evidence, localization, issue intake and supply-chain contracts."""
+"""Validate ARSAS onboarding, learning, capability tutorials, evidence and supply-chain contracts."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ PAIR_MAP = {
     "learning-center.html": "pusat-belajar-iec61850.html",
     "what-is-iec61850.html": "apa-itu-iec61850.html",
     "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
+    "mms-client.html": "mms-client-iec61850.html",
+    "smart-reporting.html": "smart-reporting-iec61850.html",
     "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "faq.html": "faq-arsas.html",
     "compatibility.html": "bukti-kompatibilitas.html",
@@ -83,6 +85,35 @@ def main() -> int:
                 errors.append(f"{name}: missing learning contract {value}")
         if "learning-center.html" not in text and "pusat-belajar-iec61850.html" not in text and name not in {"learning-center.html", "pusat-belajar-iec61850.html"}:
             errors.append(f"{name}: missing Learning Center continuation path")
+
+    capability_tutorials = {
+        "mms-client.html": (
+            "30-second takeaway", "When to use the MMS Client", "Add IED", "Functional Constraint",
+            "Success criteria", "If it fails", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "mms-client-iec61850.html": (
+            "Takeaway 30 detik", "Kapan memakai MMS Client", "Add IED", "Functional Constraint",
+            "Success criteria", "Bila gagal", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+        "smart-reporting.html": (
+            "30-second takeaway", "DataSet", "BRCB", "URCB", "General Interrogation",
+            "Success criteria", "If Reporting is silent", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "smart-reporting-iec61850.html": (
+            "Takeaway 30 detik", "DataSet", "BRCB", "URCB", "General Interrogation",
+            "Success criteria", "Bila Reporting silent", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+    }
+    for name, required_values in capability_tutorials.items():
+        text = read(TEMPLATES / name, errors)
+        for value in required_values:
+            if value.lower() not in text.lower():
+                errors.append(f"{name}: missing capability tutorial contract {value}")
+        if text.count('<details class="faq-item">') != 3:
+            errors.append(f"{name}: expected three visible capability FAQ items")
+        expected_step_class = 'class="reporting-step"' if name.startswith("smart-reporting") else 'class="step"'
+        if text.count(expected_step_class) != 6:
+            errors.append(f"{name}: expected six capability tutorial steps")
 
     for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
         text = read(TEMPLATES / name, errors)
@@ -216,7 +247,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, beginner learning, ARSAS tutorials, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
+    print("ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, beginner learning, bilingual MMS and Reporting tutorials, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
     return 0
 
 
