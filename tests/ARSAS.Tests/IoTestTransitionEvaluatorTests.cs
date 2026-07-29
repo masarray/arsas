@@ -26,6 +26,20 @@ public sealed class IoTestTransitionEvaluatorTests
     }
 
     [Fact]
+    public void MissingRelayTimestamp_ProducesReviewInsteadOfPass()
+    {
+        var point = CreatePoint();
+        _evaluator.StartAttempt(point, Observation(false, 1));
+
+        var on = _evaluator.Observe(point, ObservationWithoutRelayTimestamp(true, 2));
+        var off = _evaluator.Observe(point, Observation(false, 3));
+
+        Assert.Equal(IoEvidenceVerdict.Review, on.Evidence?.Verdict);
+        Assert.Contains("Relay timestamp", on.Evidence?.VerdictReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(IoTestPointState.Review, off.State);
+    }
+
+    [Fact]
     public void InitiallyOn_DoesNotCreateOnEvidenceUntilNewCycle()
     {
         var point = CreatePoint();
@@ -219,6 +233,25 @@ public sealed class IoTestTransitionEvaluatorTests
             captured.AddMilliseconds(-5),
             quality,
             "BRCB",
+            sequence,
+            generation);
+    }
+
+    private static IoTestObservation ObservationWithoutRelayTimestamp(
+        bool state,
+        long sequence,
+        long generation = 1,
+        string quality = "Good")
+    {
+        var captured = new DateTimeOffset(2026, 7, 28, 8, 0, 0, TimeSpan.Zero)
+            .AddMilliseconds(sequence * 100);
+        return new IoTestObservation(
+            state,
+            state ? "true" : "false",
+            captured,
+            null,
+            quality,
+            "MMS polling",
             sequence,
             generation);
     }

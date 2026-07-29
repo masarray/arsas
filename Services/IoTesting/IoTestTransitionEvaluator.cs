@@ -248,7 +248,7 @@ public sealed class IoTestTransitionEvaluator
         bool? previous,
         IoTestObservation observation)
     {
-        var (verdict, reason) = EvaluateQuality(observation.Quality);
+        var (verdict, reason) = EvaluateEvidenceObservation(observation);
         return new IoTestTransitionEvidence(
             Guid.NewGuid(),
             transition,
@@ -263,6 +263,17 @@ public sealed class IoTestTransitionEvaluator
             observation.ConnectionGeneration,
             verdict,
             reason);
+    }
+
+    private static (IoEvidenceVerdict Verdict, string Reason) EvaluateEvidenceObservation(IoTestObservation observation)
+    {
+        var (qualityVerdict, qualityReason) = EvaluateQuality(observation.Quality);
+        if (observation.IedTimestamp != null || qualityVerdict == IoEvidenceVerdict.Rejected)
+            return (qualityVerdict, qualityReason);
+
+        return qualityVerdict == IoEvidenceVerdict.Accepted
+            ? (IoEvidenceVerdict.Review, "Relay timestamp was not supplied for this transition")
+            : (IoEvidenceVerdict.Review, $"{qualityReason}; relay timestamp was not supplied");
     }
 
     internal static (IoEvidenceVerdict Verdict, string Reason) EvaluateQuality(string? quality)
