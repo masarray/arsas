@@ -79,10 +79,11 @@ public partial class MainWindow
             var usedSavedModel = false;
             if (!device.IsConnected)
             {
-                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                var canUseSavedModel = device.HasDiscoveryCache && device.Signals.Count > 0;
+                var connected = canUseSavedModel
                     ? await ConnectUsingSavedModelAsync(device, selectDevice: false)
                     : await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false);
-                usedSavedModel = connected && device.HasDiscoveryCache && device.Signals.Count > 0;
+                usedSavedModel = connected && canUseSavedModel;
                 if (!connected)
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
