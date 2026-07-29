@@ -103,7 +103,8 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("configured RCB", source, StringComparison.Ordinal);
         Assert.Contains("dynamic DataSet/URCB", source, StringComparison.Ordinal);
         Assert.Contains("bounded MMS verification/fallback", source, StringComparison.Ordinal);
-        Assert.Contains("WaitForIoFatAcquisitionAsync", source, StringComparison.Ordinal);
+        Assert.Contains("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
+        Assert.Contains("rebuilding the report plan once", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteControlAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InspectControlAsync", source, StringComparison.Ordinal);
     }
