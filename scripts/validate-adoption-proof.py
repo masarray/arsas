@@ -13,6 +13,9 @@ LANDING = ROOT / "landing"
 TEMPLATES = LANDING / "templates"
 PAIR_MAP = {
     "quick-start.html": "panduan-mulai-arsas.html",
+    "learning-center.html": "pusat-belajar-iec61850.html",
+    "what-is-iec61850.html": "apa-itu-iec61850.html",
+    "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
     "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "faq.html": "faq-arsas.html",
     "compatibility.html": "bukti-kompatibilitas.html",
@@ -42,11 +45,11 @@ def main() -> int:
     config = json.loads(read(LANDING / "site.json", errors) or "{}")
     pages = config.get("pages", []) if isinstance(config, dict) else []
     entries = {str(item.get("path", "")): item for item in pages if isinstance(item, dict)}
-    if len(pages) != 56:
-        errors.append(f"landing/site.json must contain 56 pages, found {len(pages)}")
+    if len(pages) != 62:
+        errors.append(f"landing/site.json must contain 62 pages, found {len(pages)}")
     localized = [item for item in pages if isinstance(item, dict) and item.get("contentType") == "localized"]
-    if len(localized) != 18:
-        errors.append(f"landing/site.json must contain 18 Indonesian pages, found {len(localized)}")
+    if len(localized) != 21:
+        errors.append(f"landing/site.json must contain 21 Indonesian pages, found {len(localized)}")
     for english, indonesian in PAIR_MAP.items():
         expected = {"en": english, "id": indonesian, "x-default": english}
         for path, language in ((english, "en"), (indonesian, "id")):
@@ -64,6 +67,22 @@ def main() -> int:
             errors.append(f"{label}: expected seven quick-start steps")
         if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
             errors.append(f"{label}: missing IO List FAT continuation path")
+
+    learning_contracts = {
+        "learning-center.html": ("Learn IEC 61850", "What is IEC 61850", "Connect your first IED", "troubleshooting", "CollectionPage"),
+        "pusat-belajar-iec61850.html": ("Belajar IEC 61850", "Apa itu IEC 61850", "Hubungkan IED pertama", "troubleshooting", "CollectionPage"),
+        "what-is-iec61850.html": ("30-second takeaway", "Logical Node", "MMS", "Reporting", "GOOSE", "SCL", "FAQPage"),
+        "apa-itu-iec61850.html": ("Takeaway 30 detik", "Logical Node", "MMS", "Reporting", "GOOSE", "SCL", "FAQPage"),
+        "connect-ied-ip-arsas.html": ("TCP port 102", "Add IED", "MMS association", "quality", "timestamp", "HowTo"),
+        "cara-hubungkan-ied-ip-arsas.html": ("TCP port 102", "Add IED", "association MMS", "quality", "timestamp", "HowTo"),
+    }
+    for name, required_values in learning_contracts.items():
+        text = read(TEMPLATES / name, errors)
+        for value in required_values:
+            if value.lower() not in text.lower():
+                errors.append(f"{name}: missing learning contract {value}")
+        if "learning-center.html" not in text and "pusat-belajar-iec61850.html" not in text and name not in {"learning-center.html", "pusat-belajar-iec61850.html"}:
+            errors.append(f"{name}: missing Learning Center continuation path")
 
     for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
         text = read(TEMPLATES / name, errors)
@@ -188,8 +207,8 @@ def main() -> int:
             if not (site / path).is_file():
                 errors.append(f"built site missing adoption output {path}")
         build_info = json.loads(read(site / "build-info.json", errors) or "{}")
-        if len(build_info.get("pages", [])) != 56:
-            errors.append("built site build-info.json must contain 56 pages")
+        if len(build_info.get("pages", [])) != 62:
+            errors.append("built site build-info.json must contain 62 pages")
 
     errors = list(dict.fromkeys(errors))
     if errors:
@@ -197,7 +216,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("ARSAS adoption and field-proof validation passed: 56 pages, 18 localized pages, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
+    print("ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, beginner learning, ARSAS tutorials, IO FAT evidence, onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts.")
     return 0
 
 
