@@ -15,6 +15,16 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GRAPH = ROOT / "landing" / "search-authority.json"
 GUIDE_ROLES = {"guide"}
 DISCOVERY_ROLES = {"capability", "solution"}
+ALLOWED_ROLES = {"capability", "solution", "guide", "hub", "authority", "learning", "tutorial"}
+INDONESIAN_PAGES = {
+    "id.html", "unduh.html", "catatan-rilis.html", "panduan-mulai-arsas.html",
+    "pusat-belajar-iec61850.html", "apa-itu-iec61850.html", "cara-hubungkan-ied-ip-arsas.html",
+    "faq-arsas.html", "bukti-kompatibilitas.html", "demo-arsas.html", "panduan.html",
+    "mms-client-iec61850.html", "smart-reporting-iec61850.html", "analyzer-goose-iec61850.html",
+    "transfer-file-comtrade-iec61850.html", "workspace-scl-iec61850.html",
+    "bukti-fat-iolist-iec61850.html", "pengujian-fat-iec61850.html", "pengujian-sat-iec61850.html",
+    "commissioning-iec61850.html", "integrasi-multi-vendor-iec61850.html",
+}
 
 
 def load_object(path: Path, label: str) -> dict[str, Any]:
@@ -88,7 +98,7 @@ def validate_graph(graph: dict[str, Any], entries: dict[str, dict[str, Any]]) ->
         if cluster not in clusters:
             raise SystemExit(f"Search authority node {path} uses unknown cluster {cluster}")
         role = text(node.get("role"), f"nodes.{path}.role")
-        if role not in {"capability", "solution", "guide", "hub", "authority"}:
+        if role not in ALLOWED_ROLES:
             raise SystemExit(f"Search authority node {path} has invalid role {role}")
         localized(node, "label", "en")
         localized(node, "label", "id")
@@ -103,8 +113,8 @@ def validate_graph(graph: dict[str, Any], entries: dict[str, dict[str, Any]]) ->
     for source, raw_targets in pages.items():
         if source not in normalized_nodes:
             raise SystemExit(f"Search authority source has no node metadata: {source}")
-        if not isinstance(raw_targets, list) or not 2 <= len(raw_targets) <= 4:
-            raise SystemExit(f"Search authority source {source} must have two to four related pages")
+        if not isinstance(raw_targets, list) or not 2 <= len(raw_targets) <= 5:
+            raise SystemExit(f"Search authority source {source} must have two to five related pages")
         targets = [text(item, f"pages.{source}") for item in raw_targets]
         if len(targets) != len(set(targets)):
             raise SystemExit(f"Search authority source {source} contains duplicate targets")
@@ -150,22 +160,26 @@ def section(source: str, language: str, nodes: dict[str, dict[str, Any]], pages:
     source_node = nodes[source]
     cluster = str(source_node["cluster"])
     is_id = language == "id"
-    kicker = "Jalur evidence terkait" if is_id else "Related evidence paths"
-    heading = "Lanjutkan ke gejala atau workflow yang paling dekat." if is_id else "Continue with the closest failure mode or workflow."
-    intro = (
-        "Link berikut dipilih dari cluster engineering yang sama agar diagnosis berpindah dari gejala ke evidence yang relevan."
-        if is_id else
-        "These links stay inside the same engineering evidence cluster, moving from the current workflow to the most relevant failure mode."
-    )
+    if cluster == "learning":
+        kicker = "Jalur belajar terkait" if is_id else "Continue learning"
+        heading = "Lanjutkan dari konsep menuju langkah praktis." if is_id else "Move from the concept to the next practical step."
+        intro = (
+            "Materi berikut dipilih agar Anda dapat memperdalam konsep, mencoba workflow ARSAS, atau menuju troubleshooting yang relevan."
+            if is_id else
+            "These pages help you deepen the concept, try the matching ARSAS workflow, or move to the relevant troubleshooting path."
+        )
+    else:
+        kicker = "Jalur evidence terkait" if is_id else "Related evidence paths"
+        heading = "Lanjutkan ke gejala atau workflow yang paling dekat." if is_id else "Continue with the closest failure mode or workflow."
+        intro = (
+            "Link berikut dipilih dari cluster engineering yang sama agar diagnosis berpindah dari gejala ke evidence yang relevan."
+            if is_id else
+            "These links stay inside the same engineering evidence cluster, moving from the current workflow to the most relevant failure mode."
+        )
     cards: list[str] = []
     for target in pages[source]:
         target_node = nodes[target]
-        target_language = "id" if target.endswith(".html") and target in {
-            "mms-client-iec61850.html", "smart-reporting-iec61850.html", "analyzer-goose-iec61850.html",
-            "transfer-file-comtrade-iec61850.html", "workspace-scl-iec61850.html",
-            "pengujian-fat-iec61850.html", "pengujian-sat-iec61850.html",
-            "commissioning-iec61850.html", "integrasi-multi-vendor-iec61850.html",
-        } else "en"
+        target_language = "id" if target in INDONESIAN_PAGES else "en"
         label = localized(target_node, "label", language)
         summary = localized(target_node, "summary", language)
         role = str(target_node["role"])
@@ -173,12 +187,17 @@ def section(source: str, language: str, nodes: dict[str, dict[str, Any]], pages:
             "guide": "Panduan troubleshooting" if is_id else "Troubleshooting guide",
             "capability": "Capability produk" if is_id else "Product capability",
             "solution": "Workflow solusi" if is_id else "Solution workflow",
-        }.get(role, "Evidence path")
+            "learning": "Materi belajar" if is_id else "Learning article",
+            "tutorial": "Tutorial software" if is_id else "Software tutorial",
+            "hub": "Pusat belajar" if is_id else "Learning hub",
+            "authority": "Referensi engineering" if is_id else "Engineering reference",
+        }.get(role, "Jalur terkait" if is_id else "Related path")
         attrs = target_attributes(language, target_language)
+        link_label = "Buka materi" if cluster == "learning" and is_id else "Open lesson" if cluster == "learning" else "Buka jalur evidence" if is_id else "Open evidence path"
         cards.append(
             f'<article class="card related-resource-card"><span class="kicker">{escape(role_label)}</span>'
             f'<h3>{escape(label)}</h3><p>{escape(summary)}</p>'
-            f'<a class="text-link" href="{escape(target)}"{attrs}>{"Buka jalur evidence" if is_id else "Open evidence path"} →</a></article>'
+            f'<a class="text-link" href="{escape(target)}"{attrs}>{escape(link_label)} →</a></article>'
         )
     return (
         f'<section class="section section-tight related-resources" data-search-authority="{escape(cluster)}" '
