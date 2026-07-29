@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 
 def fetch(url: str) -> tuple[int, str]:
-    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.2", "Cache-Control": "no-cache"})
+    request = Request(url, headers={"User-Agent": "ARSAS-Adoption-Attestation/1.3", "Cache-Control": "no-cache"})
     try:
         with urlopen(request, timeout=25) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
@@ -39,6 +39,10 @@ def main() -> int:
         "mms-client-iec61850.html": ("Takeaway 30 detik", "Add IED", "Functional Constraint", "Success criteria", "Bila gagal", "HowTo", "FAQPage", "mms-client.html"),
         "smart-reporting.html": ("30-second takeaway", "DataSet", "BRCB", "URCB", "Success criteria", "If Reporting is silent", "HowTo", "FAQPage", "smart-reporting-iec61850.html"),
         "smart-reporting-iec61850.html": ("Takeaway 30 detik", "DataSet", "BRCB", "URCB", "Success criteria", "Bila Reporting silent", "HowTo", "FAQPage", "smart-reporting.html"),
+        "goose-analyzer.html": ("30-second takeaway", "stNum", "sqNum", "Time Allowed to Live", "Success criteria", "If the result is wrong", "HowTo", "FAQPage", "analyzer-goose-iec61850.html"),
+        "analyzer-goose-iec61850.html": ("Takeaway 30 detik", "stNum", "sqNum", "Time Allowed to Live", "Success criteria", "Bila hasil salah", "HowTo", "FAQPage", "goose-analyzer.html"),
+        "scl-workspace.html": ("30-second takeaway", "ICD", "CID", "SCD", "IID", "Success criteria", "If the file is rejected", "HowTo", "FAQPage", "workspace-scl-iec61850.html"),
+        "workspace-scl-iec61850.html": ("Takeaway 30 detik", "ICD", "CID", "SCD", "IID", "Success criteria", "Bila file ditolak", "HowTo", "FAQPage", "scl-workspace.html"),
         "quick-start.html": ("quick-step-number", "data-responsive-media=\"webp\"", "panduan-mulai-arsas.html", "io-list-fat-evidence.html"),
         "io-list-fat-evidence.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Native PDF report", "bukti-fat-iolist-iec61850.html"),
         "bukti-fat-iolist-iec61850.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "Report PDF native", "io-list-fat-evidence.html"),
@@ -72,7 +76,11 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, bilingual MMS and Reporting tutorials, Quick Start, IO FAT evidence, FAQ, compatibility, demo, filters and responsive media are live.")
+    print(
+        "Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, "
+        "bilingual MMS, Reporting, GOOSE and SCL tutorials, Quick Start, IO FAT evidence, FAQ, "
+        "compatibility, demo, filters and responsive media are live."
+    )
     return 0
 
 
