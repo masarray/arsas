@@ -16,7 +16,7 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style TargetType="DataGridCell">
-            <Setter Property="Padding" Value="9,7"/>
+            <Setter Property="Padding" Value="10,8"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#E8EDF5"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -24,8 +24,8 @@
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         </Style>
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Padding" Value="9,0"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="10,0"/>
             <Setter Property="Background" Value="#F4F7FB"/>
             <Setter Property="Foreground" Value="#617087"/>
             <Setter Property="FontSize" Value="10.5"/>
@@ -35,12 +35,12 @@
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
         <Style TargetType="DataGridRow">
-            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="MinHeight" Value="50"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F5F8FD"/></Trigger>
-                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#EEF4FF"/></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F7F9FC"/></Trigger>
+                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#F2F6FC"/></Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
@@ -89,32 +89,20 @@
                             <DataTemplate>
                                 <Grid MinHeight="66">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                    <Grid Width="52" Height="52" VerticalAlignment="Center">
-                                        <Viewbox Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <Path x:Name="RelayIcon" Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z" Fill="#D94B55" Stretch="Uniform"/>
-                                        </Viewbox>
-                                        <Grid x:Name="CardSpinner" Width="27" Height="27" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,0.5">
-                                            <Grid.RenderTransform><RotateTransform x:Name="CardSpinnerRotate"/></Grid.RenderTransform>
-                                            <Canvas Width="24" Height="24">
-                                                <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                                <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.6" Opacity="0.78"><Path.RenderTransform><RotateTransform Angle="90" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.6" Opacity="0.50"><Path.RenderTransform><RotateTransform Angle="180" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.6" Opacity="0.25"><Path.RenderTransform><RotateTransform Angle="270" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                            </Canvas>
-                                            <Grid.Triggers><EventTrigger RoutedEvent="FrameworkElement.Loaded"><BeginStoryboard><Storyboard RepeatBehavior="Forever"><DoubleAnimation Storyboard.TargetName="CardSpinnerRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.8"/></Storyboard></BeginStoryboard></EventTrigger></Grid.Triggers>
-                                        </Grid>
-                                    </Grid>
+                                    <Viewbox Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Path x:Name="RelayIcon" Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z" Fill="#D94B55" Stretch="Uniform"/>
+                                    </Viewbox>
                                     <Grid Grid.Column="1" Margin="3,0,0,0">
                                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding IedName}" FontSize="12.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/><Border x:Name="StateBadge" Grid.Column="1" Background="#FFF1F2" BorderBrush="#F0B7BC" BorderThickness="1" CornerRadius="9" Padding="6,2"><TextBlock x:Name="StateText" Text="{Binding CardStateText}" FontSize="8.5" FontWeight="Bold" Foreground="#C53A45"/></Border></Grid>
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding IedName}" FontSize="12.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="StateText" Grid.Column="1" Text="{Binding CardStateText}" FontSize="8.5" FontWeight="Bold" Foreground="#C53A45" VerticalAlignment="Center"/></Grid>
                                         <TextBlock Grid.Row="1" Text="{Binding IpAddress}" Style="{StaticResource Caption}" Margin="0,3,0,0"/>
                                         <TextBlock Grid.Row="2" Margin="0,7,0,0" FontSize="10.5" Foreground="{StaticResource Muted}"><Run Text="{Binding BoundCount, Mode=OneWay}"/><Run Text=" live  ·  "/><Run Text="{Binding PassedCount, Mode=OneWay}"/><Run Text=" pass  ·  "/><Run Text="{Binding PendingCount, Mode=OneWay}"/><Run Text=" pending"/></TextBlock>
                                     </Grid>
                                 </Grid>
                                 <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsLiveConnected}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#D49A26"/><Setter TargetName="StateBadge" Property="Background" Value="#FFF8E8"/><Setter TargetName="StateBadge" Property="BorderBrush" Value="#E9C46A"/><Setter TargetName="StateText" Property="Foreground" Value="#A56D00"/></DataTrigger>
-                                    <DataTrigger Binding="{Binding IsLiveMonitoring}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#18A66A"/><Setter TargetName="StateBadge" Property="Background" Value="#EAF8F1"/><Setter TargetName="StateBadge" Property="BorderBrush" Value="#8FD1B1"/><Setter TargetName="StateText" Property="Foreground" Value="#16845A"/></DataTrigger>
-                                    <DataTrigger Binding="{Binding IsPreparing}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#4F7FEA"/><Setter TargetName="CardSpinner" Property="Visibility" Value="Visible"/><Setter TargetName="StateBadge" Property="Background" Value="#EDF3FF"/><Setter TargetName="StateBadge" Property="BorderBrush" Value="#9CB8F5"/><Setter TargetName="StateText" Property="Foreground" Value="#315DBF"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsLiveConnected}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#D49A26"/><Setter TargetName="StateText" Property="Foreground" Value="#A56D00"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsLiveMonitoring}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#18A66A"/><Setter TargetName="StateText" Property="Foreground" Value="#16845A"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsPreparing}" Value="True"><Setter TargetName="RelayIcon" Property="Fill" Value="#4F7FEA"/><Setter TargetName="StateText" Property="Foreground" Value="#315DBF"/></DataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -129,41 +117,42 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding SelectedIed.IedName}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/><TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,4,0,0"/></StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#EEF3FC" CornerRadius="13" Padding="10,6" Margin="0,0,8,0"><TextBlock Text="{Binding Session.StateText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/></Border>
+                            <TextBlock Text="{Binding Session.StateText}" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                             <Button Content="{Binding StartWorkflowText}" Style="{StaticResource PrimaryButton}" Padding="13,8" IsEnabled="{Binding CanStartWorkflow}" Click="StartSession_Click" Margin="0,0,6,0"/>
                             <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="11,8" IsEnabled="{Binding Session.CanPause}" Click="PauseSession_Click" Margin="0,0,6,0"/>
                             <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="11,8" IsEnabled="{Binding Session.CanResume}" Click="ResumeSession_Click" Margin="0,0,6,0"/>
                             <Button Content="Stop" Style="{StaticResource SoftButton}" Padding="11,8" IsEnabled="{Binding Session.CanStop}" Click="StopSession_Click"/>
                         </StackPanel>
                     </Grid>
-                    <Border Grid.Row="1" Visibility="{Binding PreparationVisibility}" Background="#F3F7FF" BorderBrush="#B9CCF4" BorderThickness="1" CornerRadius="13" Padding="12,9" Margin="0,11,0,0">
-                        <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid Width="25" Height="25" RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center">
-                                <Grid.RenderTransform><RotateTransform x:Name="HeaderSpinnerRotate"/></Grid.RenderTransform>
-                                <Canvas Width="24" Height="24">
-                                    <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.7" Opacity="0.75"><Path.RenderTransform><RotateTransform Angle="90" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                    <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.7" Opacity="0.46"><Path.RenderTransform><RotateTransform Angle="180" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                    <Path Data="M12,1.5 L12,5" Stroke="#4F7FEA" StrokeThickness="2.7" Opacity="0.22"><Path.RenderTransform><RotateTransform Angle="270" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                </Canvas>
-                                <Grid.Triggers><EventTrigger RoutedEvent="FrameworkElement.Loaded"><BeginStoryboard><Storyboard RepeatBehavior="Forever"><DoubleAnimation Storyboard.TargetName="HeaderSpinnerRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.8"/></Storyboard></BeginStoryboard></EventTrigger></Grid.Triggers>
-                            </Grid>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="{Binding PreparationIedText}" FontSize="11.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/><TextBlock Text="{Binding PreparationStatusText}" FontSize="10.8" Foreground="#526783" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
-                        </Grid>
-                    </Border>
+                    <Grid Grid.Row="1" Visibility="{Binding PreparationVisibility}" Margin="0,11,0,0">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="5"/></Grid.RowDefinitions>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding PreparationIedText}" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,0,10,0"/><TextBlock Grid.Column="1" Text="{Binding PreparationStatusText}" FontSize="10.8" Foreground="#526783" TextTrimming="CharacterEllipsis"/></Grid>
+                        <ProgressBar Grid.Row="1" Height="3" Margin="0,7,0,0" IsIndeterminate="True" Foreground="{StaticResource Accent}" Background="#E8EEF8" BorderThickness="0"/>
+                    </Grid>
                     <DataGrid Grid.Row="3" ItemsSource="{Binding SelectedIed.TestPoints}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" IsReadOnly="False" HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="1" BorderBrush="#E1E7F0" Background="White" RowBackground="White" AlternatingRowBackground="White" HorizontalGridLinesBrush="#E8EDF5" SelectionMode="Single" SelectionUnit="FullRow" RowHeaderWidth="0" EnableRowVirtualization="True" EnableColumnVirtualization="True">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="TEST" Width="52"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding DataContext.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}" HorizontalAlignment="Center" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="SIGNAL" Width="2.0*" MinWidth="205"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SignalName}" Style="{StaticResource FatGridText}" FontWeight="SemiBold" ToolTip="{Binding SignalName}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="IEC REFERENCE" Width="2.35*" MinWidth="260"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding ObjectReference}" Style="{StaticResource FatGridText}" FontFamily="Cascadia Mono, Consolas" FontSize="11.2" Foreground="#52627A" ToolTip="{Binding ObjectReference}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="LIVE" Width="82"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Background="#F2F5FA" CornerRadius="9" Padding="7,3" HorizontalAlignment="Left" ToolTip="{Binding LiveBindingReason}"><TextBlock Text="{Binding LiveBindingText}" FontSize="10.3" FontWeight="SemiBold" Foreground="#5C6C82"/></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="LIVE" Width="78"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding LiveBindingText}" FontSize="10.8" FontWeight="SemiBold" Foreground="#5C6C82" VerticalAlignment="Center" ToolTip="{Binding LiveBindingReason}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="VALUE" Width="88"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Runtime.CurrentValue}" Style="{StaticResource FatGridText}" FontWeight="SemiBold"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="QUALITY" Width="92"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Runtime.CurrentQuality}" Style="{StaticResource FatGridText}" FontSize="11.2" ToolTip="{Binding Runtime.CurrentQuality}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="ACQUISITION" Width="135"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Background="#F1F5FB" CornerRadius="9" Padding="7,3" HorizontalAlignment="Left" ToolTip="{Binding Runtime.CurrentSource}"><TextBlock Text="{Binding Runtime.CurrentSource}" FontSize="10.4" FontWeight="SemiBold" Foreground="#405B7D" TextTrimming="CharacterEllipsis" MaxWidth="120"/></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ACQUISITION" Width="150"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Runtime.CurrentSource}" FontSize="10.8" FontWeight="SemiBold" Foreground="#405B7D" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Runtime.CurrentSource}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="ON · RELAY TIME" Width="164"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Runtime.OnRelayTimestampText}" Style="{StaticResource FatGridText}" FontFamily="Cascadia Mono, Consolas" FontSize="10.8" ToolTip="{Binding Runtime.OnEvidenceToolTip}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="OFF · RELAY TIME" Width="164"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Runtime.OffRelayTimestampText}" Style="{StaticResource FatGridText}" FontFamily="Cascadia Mono, Consolas" FontSize="10.8" ToolTip="{Binding Runtime.OffEvidenceToolTip}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="RESULT" Width="112"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border x:Name="ResultBadge" Background="#F1F4F8" BorderBrush="#D6DEE9" BorderThickness="1" CornerRadius="10" Padding="8,4" HorizontalAlignment="Left" ToolTip="{Binding Runtime.StatusReason}"><TextBlock x:Name="ResultText" Text="{Binding Runtime.StateText}" FontSize="10.4" FontWeight="Bold" Foreground="#607089"/></Border><DataTemplate.Triggers><DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Passed}"><Setter TargetName="ResultBadge" Property="Background" Value="#EAF8F1"/><Setter TargetName="ResultBadge" Property="BorderBrush" Value="#94D4B5"/><Setter TargetName="ResultText" Property="Foreground" Value="#16845A"/></DataTrigger><DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Review}"><Setter TargetName="ResultBadge" Property="Background" Value="#FFF8E8"/><Setter TargetName="ResultBadge" Property="BorderBrush" Value="#E8C670"/><Setter TargetName="ResultText" Property="Foreground" Value="#9A6500"/></DataTrigger><DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Failed}"><Setter TargetName="ResultBadge" Property="Background" Value="#FFF0F1"/><Setter TargetName="ResultBadge" Property="BorderBrush" Value="#EEAAB0"/><Setter TargetName="ResultText" Property="Foreground" Value="#C53A45"/></DataTrigger><DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.ArmedForOn}"><Setter TargetName="ResultBadge" Property="Background" Value="#EDF3FF"/><Setter TargetName="ResultBadge" Property="BorderBrush" Value="#A9C0F2"/><Setter TargetName="ResultText" Property="Foreground" Value="#315DBF"/></DataTrigger></DataTemplate.Triggers></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="RESULT" Width="118">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock x:Name="ResultText" Text="{Binding Runtime.StateText}" FontSize="10.8" FontWeight="SemiBold" Foreground="#607089" VerticalAlignment="Center" ToolTip="{Binding Runtime.StatusReason}"/>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Passed}"><Setter TargetName="ResultText" Property="Text" Value="✔ PASS"/><Setter TargetName="ResultText" Property="Foreground" Value="#16845A"/><Setter TargetName="ResultText" Property="FontWeight" Value="Bold"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Review}"><Setter TargetName="ResultText" Property="Text" Value="REVIEW"/><Setter TargetName="ResultText" Property="Foreground" Value="#9A6500"/><Setter TargetName="ResultText" Property="FontWeight" Value="Bold"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.Failed}"><Setter TargetName="ResultText" Property="Text" Value="✖ FAILED"/><Setter TargetName="ResultText" Property="Foreground" Value="#C53A45"/><Setter TargetName="ResultText" Property="FontWeight" Value="Bold"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Runtime.State}" Value="{x:Static io:IoTestPointState.ArmedForOn}"><Setter TargetName="ResultText" Property="Foreground" Value="#315DBF"/></DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
