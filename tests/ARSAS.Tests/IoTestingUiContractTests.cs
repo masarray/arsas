@@ -40,7 +40,7 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_ExposesAutosaveExcelPdfAndArsasProjectActions()
+    public void IoTestingWindow_ExposesCalmExportActionsWithoutPathNoise()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -51,17 +51,20 @@ public sealed class IoTestingUiContractTests
             .Cast<string>()
             .ToList();
 
-        Assert.Contains("Save Progress", buttonContents);
-        Assert.Contains("Export Excel", buttonContents);
-        Assert.Contains("Export PDF", buttonContents);
+        Assert.Contains("Save", buttonContents);
+        Assert.Contains("Excel", buttonContents);
+        Assert.Contains("PDF", buttonContents);
         Assert.Contains("Export .arsas", buttonContents);
-        Assert.Contains(
-            document.Descendants(presentation + "TextBlock"),
-            text => ((string?)text.Attribute("Text"))?.Contains("Autosave enabled", StringComparison.Ordinal) == true);
+        Assert.Contains("Engineering", buttonContents);
+        Assert.DoesNotContain("Autosave enabled", document.ToString(), StringComparison.Ordinal);
+        Assert.Equal("{Binding Storage.SnapshotPath}",
+            document.Descendants(presentation + "TextBlock")
+                .Select(text => (string?)text.Attribute("ToolTip"))
+                .First(value => value == "{Binding Storage.SnapshotPath}"));
     }
 
     [Fact]
-    public void IoTestingWindow_ConnectsAndPreparesWorkbookIedBeforeEvidenceStart()
+    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigation()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -71,28 +74,49 @@ public sealed class IoTestingUiContractTests
 
         Assert.Equal("{Binding StartWorkflowText}", (string?)startButton.Attribute("Content"));
         Assert.Equal("{Binding CanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
-        Assert.Contains("configured-report-first", document.ToString(), StringComparison.Ordinal);
+        Assert.Contains("report-first acquisition", document.ToString(), StringComparison.Ordinal);
+        Assert.Contains("HeaderSpinnerRotate", document.ToString(), StringComparison.Ordinal);
+        Assert.Contains("CardSpinnerRotate", document.ToString(), StringComparison.Ordinal);
 
         var windowSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
         Assert.Contains("Connect & Start IED", windowSource, StringComparison.Ordinal);
         Assert.Contains("PrepareIoTestIedForFatAsync", windowSource, StringComparison.Ordinal);
-        Assert.Contains("IsPreparingIed", windowSource, StringComparison.Ordinal);
-        Assert.Contains("CanSelectIed", windowSource, StringComparison.Ordinal);
-        Assert.Contains("CanEditPlan", windowSource, StringComparison.Ordinal);
+        Assert.Contains("public bool CanSelectIed => true", windowSource, StringComparison.Ordinal);
+        Assert.Contains("var selectedIed = SelectedIed", windowSource, StringComparison.Ordinal);
+        Assert.Contains("Session.Start(selectedIed)", windowSource, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void IoFatAutomaticPreparation_IsReadOnlyAndUsesReportFirstMonitoring()
+    public void IoFatAutomaticPreparation_UsesSmartReportingWithoutProcessControls()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
-        Assert.Contains("AllowDynamicDataSetWrites = false", source, StringComparison.Ordinal);
+        Assert.Contains("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
         Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
         Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("configured-report-first", source, StringComparison.Ordinal);
-        Assert.Contains("polling fallback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("configured RCB", source, StringComparison.Ordinal);
+        Assert.Contains("dynamic DataSet/URCB", source, StringComparison.Ordinal);
+        Assert.Contains("bounded MMS verification/fallback", source, StringComparison.Ordinal);
+        Assert.Contains("WaitForIoFatAcquisitionAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteControlAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InspectControlAsync", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoTestingWindow_UsesRelayTimestampEvidenceAndPremiumGridDensity()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        var text = document.ToString();
+
+        Assert.Contains("Runtime.OnRelayTimestampText", text, StringComparison.Ordinal);
+        Assert.Contains("Runtime.OffRelayTimestampText", text, StringComparison.Ordinal);
+        Assert.Contains("ON · RELAY TIME", text, StringComparison.Ordinal);
+        Assert.Contains("OFF · RELAY TIME", text, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"48\"", text, StringComparison.Ordinal);
+        Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
+        Assert.Contains("CardStateText", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Runtime.OnEvidence.CapturedAt", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Runtime.OffEvidence.CapturedAt", text, StringComparison.Ordinal);
     }
 
     [Fact]
