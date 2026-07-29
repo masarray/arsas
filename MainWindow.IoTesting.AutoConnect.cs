@@ -88,15 +88,29 @@ public partial class MainWindow
 
         try
         {
-            ReportProgress($"Connecting {ied.IedName} · {ied.IpAddress}:102");
             var usedSavedModel = false;
             if (!device.IsConnected)
             {
                 var canUseSavedModel = device.HasDiscoveryCache && device.Signals.Count > 0;
-                var connected = canUseSavedModel
-                    ? await ConnectUsingSavedModelAsync(device, selectDevice: false)
-                    : await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false);
-                usedSavedModel = connected && canUseSavedModel;
+                var connected = false;
+                if (canUseSavedModel)
+                {
+                    ReportProgress($"Fast reconnect {ied.IedName} · saved endpoint and discovery model");
+                    connected = await ConnectUsingSavedModelAsync(device, selectDevice: false);
+                    usedSavedModel = connected;
+                    if (!connected)
+                    {
+                        ReportProgress("Saved-model reconnect failed · running one full live discovery");
+                        connected = await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false);
+                        usedSavedModel = false;
+                    }
+                }
+                else
+                {
+                    ReportProgress($"Connecting {ied.IedName} · {ied.IpAddress}:102");
+                    connected = await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false);
+                }
+
                 if (!connected)
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
@@ -113,6 +127,10 @@ public partial class MainWindow
                     _ioTestLiveBindingService.Bind(project, Devices);
                     return IoTestSessionActionResult.Failure($"Full live-model discovery failed for {ied.IedName}.");
                 }
+            }
+            else
+            {
+                ReportProgress($"{ied.IedName} association ready · reusing the loaded model");
             }
 
             ReportProgress($"Matching {requestedPoints.Count} workbook signal(s)");
@@ -160,13 +178,13 @@ public partial class MainWindow
 
             if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive))
             {
-                ReportProgress("Refreshing acquisition for the workbook scope");
+                ReportProgress("Refreshing report acquisition for the workbook scope");
                 await StopDeviceMonitorAsync(device);
             }
 
             if (!device.IsMonitoring)
             {
-                ReportProgress("Arming configured RCB · dynamic URCB fallback if coverage is missing");
+                ReportProgress("Arming static RCB first · dynamic DataSet/URCB for uncovered points");
                 if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
                 {
                     _ioTestLiveBindingService.Bind(project, Devices);
@@ -175,7 +193,12 @@ public partial class MainWindow
                 }
             }
 
-            await WaitForIoFatAcquisitionAsync(device, ReportProgress);
+            var acquisition = await SettleIoFatReportPriorityAsync(
+                project,
+                requestedPoints,
+                device,
+                ReportProgress,
+                allowSingleRestart: true);
 
             var binding = _ioTestLiveBindingService.Bind(project, Devices);
             var liveCount = requestedPoints.Count(point =>
@@ -192,12 +215,15 @@ public partial class MainWindow
 
             SaveSignalSelectionMemory(device);
             var modelText = usedSavedModel ? "saved model" : "live model";
-            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {device.AcquisitionMode}";
+            var acquisitionText = acquisition.PollingCount == 0
+                ? $"report-backed {acquisition.ReportCount}/{requestedPoints.Count}"
+                : $"report-backed {acquisition.ReportCount}/{requestedPoints.Count} · MMS fallback {acquisition.PollingCount}";
+            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}";
             SetStatus(message);
             AddLog(
-                "INFO",
+                acquisition.PollingCount == 0 ? "INFO" : "WARN",
                 "IO Testing",
-                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. Project live-bound={binding.LivePointCount}; model={modelText}.");
+                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. Project live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
@@ -222,25 +248,120 @@ public partial class MainWindow
         }
     }
 
-    private static async Task WaitForIoFatAcquisitionAsync(
+    private async Task<IoFatAcquisitionSummary> SettleIoFatReportPriorityAsync(
+        IoTestProject project,
+        IReadOnlyCollection<IoTestPointPlan> requestedPoints,
         Iec61850MonitorDevice device,
-        Action<string> reportProgress)
+        Action<string> reportProgress,
+        bool allowSingleRestart)
     {
-        if (!device.IsMonitoring)
-            return;
+        var first = await ObserveIoFatAcquisitionAsync(
+            project,
+            requestedPoints,
+            device,
+            reportProgress,
+            TimeSpan.FromSeconds(8));
 
-        for (var attempt = 0; attempt < 35; attempt++)
+        if (!allowSingleRestart ||
+            first.PollingCount == 0 ||
+            !device.AllowDynamicDataSetWrites ||
+            !device.IsMonitoring)
         {
-            var mode = device.AcquisitionMode ?? string.Empty;
-            if (!mode.Contains("arming", StringComparison.OrdinalIgnoreCase) &&
-                !mode.Contains("live start", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            if (attempt == 0)
-                reportProgress("Validating RCB/DataSet coverage · MMS remains verification only");
-            await Task.Delay(100);
+            return first;
         }
 
-        reportProgress($"Acquisition still settling · {device.AcquisitionMode}");
+        reportProgress($"{first.PollingCount} point(s) still on MMS fallback · rebuilding the report plan once");
+        await StopDeviceMonitorAsync(device);
+        await Task.Delay(180);
+        if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
+            return first;
+
+        return await ObserveIoFatAcquisitionAsync(
+            project,
+            requestedPoints,
+            device,
+            reportProgress,
+            TimeSpan.FromSeconds(10));
     }
+
+    private async Task<IoFatAcquisitionSummary> ObserveIoFatAcquisitionAsync(
+        IoTestProject project,
+        IReadOnlyCollection<IoTestPointPlan> requestedPoints,
+        Iec61850MonitorDevice device,
+        Action<string> reportProgress,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var last = ReadIoFatAcquisitionSummary(requestedPoints, device);
+        var announced = false;
+
+        while (DateTime.UtcNow < deadline && device.IsMonitoring)
+        {
+            await Task.Delay(120);
+            _ioTestLiveBindingService.Bind(project, Devices);
+            last = ReadIoFatAcquisitionSummary(requestedPoints, device);
+
+            if (!announced)
+            {
+                reportProgress("Validating static/dynamic report coverage · MMS is fallback only");
+                announced = true;
+            }
+
+            var plannerSettled = !ContainsPlannerStage(device.AcquisitionMode);
+            if (last.LiveCount == requestedPoints.Count &&
+                plannerSettled &&
+                last.UnknownCount == 0 &&
+                (last.PollingCount == 0 || DateTime.UtcNow >= deadline - TimeSpan.FromSeconds(2)))
+            {
+                break;
+            }
+        }
+
+        return last;
+    }
+
+    private static IoFatAcquisitionSummary ReadIoFatAcquisitionSummary(
+        IEnumerable<IoTestPointPlan> requestedPoints,
+        Iec61850MonitorDevice device)
+    {
+        var live = 0;
+        var report = 0;
+        var polling = 0;
+        var unknown = 0;
+
+        foreach (var point in requestedPoints)
+        {
+            if (point.LiveBindingState == IoTestLiveBindingState.LivePointReady)
+                live++;
+
+            var source = point.Runtime.CurrentSource ?? string.Empty;
+            if (IsReportSource(source))
+                report++;
+            else if (source.Contains("poll", StringComparison.OrdinalIgnoreCase) ||
+                     source.Contains("MMS", StringComparison.OrdinalIgnoreCase))
+                polling++;
+            else
+                unknown++;
+        }
+
+        return new IoFatAcquisitionSummary(live, report, polling, unknown, device.AcquisitionMode ?? string.Empty);
+    }
+
+    private static bool IsReportSource(string source)
+        => source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
+           source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
+           source.Contains("report", StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsPlannerStage(string? mode)
+        => (mode ?? string.Empty).Contains("arming", StringComparison.OrdinalIgnoreCase) ||
+           (mode ?? string.Empty).Contains("live start", StringComparison.OrdinalIgnoreCase) ||
+           (mode ?? string.Empty).Contains("preparing", StringComparison.OrdinalIgnoreCase) ||
+           (mode ?? string.Empty).Contains("settling", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record IoFatAcquisitionSummary(
+        int LiveCount,
+        int ReportCount,
+        int PollingCount,
+        int UnknownCount,
+        string Mode);
 }
