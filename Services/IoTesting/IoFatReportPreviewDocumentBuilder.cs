@@ -27,7 +27,8 @@ internal static class IoFatReportPreviewDocumentBuilder
         DateTimeOffset? generatedAt = null)
     {
         ArgumentNullException.ThrowIfNull(project);
-        var layout = IoFatReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        // Replaces the legacy IoFatReportLayoutEngine.Build route with the document-controlled event-log layout.
+        var layout = IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
         return Render(layout);
     }
 
@@ -133,9 +134,6 @@ internal static class IoFatReportPreviewDocumentBuilder
         block.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Ideal);
         block.SetValue(TextOptions.TextRenderingModeProperty, TextRenderingMode.ClearType);
 
-        // Downscale only when the actual Windows font metrics are wider than the
-        // shared PDF-point estimate. This keeps PASS and timestamps complete while
-        // preserving the intended size whenever they already fit.
         var textPresenter = new Viewbox
         {
             Child = block,
