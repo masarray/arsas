@@ -65,17 +65,17 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigation()
+    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndProtectsCompletedEvidence()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var startButton = document
             .Descendants(presentation + "Button")
-            .Single(button => ((string?)button.Attribute("Click")) == "StartSession_Click");
+            .Single(button => ((string?)button.Attribute("Click")) == "StartSelectedIedSafely_Click");
         var text = document.ToString();
 
-        Assert.Equal("{Binding StartWorkflowText}", (string?)startButton.Attribute("Content"));
-        Assert.Equal("{Binding CanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
+        Assert.Equal("{Binding SelectedStartWorkflowText}", (string?)startButton.Attribute("Content"));
+        Assert.Equal("{Binding SelectedCanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
         Assert.Contains("report-first acquisition", text, StringComparison.Ordinal);
         Assert.DoesNotContain("HeaderSpinnerRotate", text, StringComparison.Ordinal);
         Assert.DoesNotContain("CardSpinnerRotate", text, StringComparison.Ordinal);
@@ -85,11 +85,43 @@ public sealed class IoTestingUiContractTests
             progress => (string?)progress.Attribute("IsIndeterminate") == "True");
 
         var windowSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
-        Assert.Contains("Connect & Start IED", windowSource, StringComparison.Ordinal);
-        Assert.Contains("PrepareIoTestIedForFatAsync", windowSource, StringComparison.Ordinal);
         Assert.Contains("public bool CanSelectIed => true", windowSource, StringComparison.Ordinal);
-        Assert.Contains("var selectedIed = SelectedIed", windowSource, StringComparison.Ordinal);
-        Assert.Contains("Session.Start(selectedIed)", windowSource, StringComparison.Ordinal);
+
+        var contextSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
+        Assert.Contains("PrepareIoTestIedForFatAsync", contextSource, StringComparison.Ordinal);
+        Assert.Contains("var selectedIed = SelectedIed", contextSource, StringComparison.Ordinal);
+        Assert.Contains("point.Runtime.IsComplete", contextSource, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
+        Assert.Contains("Session.Start(selectedIed)", contextSource, StringComparison.Ordinal);
+        Assert.Contains("Retest completed evidence?", contextSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoTestingWindow_UsesSelectedIedContextAndWorkspacePreviewToggle()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var text = document.ToString();
+
+        var previewToggle = document
+            .Descendants(presentation + "Button")
+            .Single(button => (string?)button.Attribute(x + "Name") == "WorkspacePreviewToggle");
+        Assert.Equal("TogglePrintPreview_Click", (string?)previewToggle.Attribute("Click"));
+        Assert.Equal("Print Preview", (string?)previewToggle.Attribute("Content"));
+
+        Assert.DoesNotContain("{Binding Session.StateText}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedCanPause}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedCanResume}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedCanStop}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedFooterStatusText}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedProgressText}", text, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedEvidenceCount, Mode=OneWay}", text, StringComparison.Ordinal);
+
+        var contextSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
+        Assert.Contains("ReferenceEquals(Session.ActiveIed, SelectedIed)", contextSource, StringComparison.Ordinal);
+        Assert.Contains("AdoptWorkspacePreviewToggle", contextSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,8 +158,31 @@ public sealed class IoTestingUiContractTests
                       (string?)setter.Attribute("Value") == "48");
         Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
         Assert.Contains("CardStateText", text, StringComparison.Ordinal);
+        Assert.Contains("✔ PASS", text, StringComparison.Ordinal);
+        Assert.Contains("AllPassedVisibilityConverter", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OnEvidence.CapturedAt", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OffEvidence.CapturedAt", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoTestingWindow_UsesBalancedInitialGridWidthsAndCenteredRelayHeaders()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var signal = FindColumn(document, presentation, "SIGNAL");
+        var reference = FindColumn(document, presentation, "IEC REFERENCE");
+        var acquisition = FindColumn(document, presentation, "ACQUISITION");
+        var onTime = FindColumn(document, presentation, "ON · RELAY TIME");
+        var offTime = FindColumn(document, presentation, "OFF · RELAY TIME");
+
+        Assert.Equal("1.55*", (string?)signal.Attribute("Width"));
+        Assert.Equal("1.85*", (string?)reference.Attribute("Width"));
+        Assert.Equal("136", (string?)acquisition.Attribute("Width"));
+        Assert.Equal("168", (string?)onTime.Attribute("Width"));
+        Assert.Equal("168", (string?)offTime.Attribute("Width"));
+        Assert.Equal("{StaticResource CenteredFatGridHeader}", (string?)onTime.Attribute("HeaderStyle"));
+        Assert.Equal("{StaticResource CenteredFatGridHeader}", (string?)offTime.Attribute("HeaderStyle"));
     }
 
     [Fact]
