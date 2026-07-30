@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Text;
+using System.Windows;
+using ArIED61850Tester;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -38,6 +41,42 @@ public sealed class IoFatReportPreviewServiceTests
         Assert.Contains("TP-A", text, StringComparison.Ordinal);
         Assert.DoesNotContain("IED_B", text, StringComparison.Ordinal);
         Assert.DoesNotContain("TP-B", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("GGIO1.Ind1.stVal", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AllPassedBadge_AllowsCompletedRowsThatAreCurrentlyUnchecked()
+    {
+        var converter = new IoFatAllPassedVisibilityConverter();
+
+        var allPassed = converter.Convert(
+            new object[] { 5, 6 },
+            typeof(Visibility),
+            null!,
+            CultureInfo.InvariantCulture);
+        var stillPending = converter.Convert(
+            new object[] { 5, 4 },
+            typeof(Visibility),
+            null!,
+            CultureInfo.InvariantCulture);
+
+        Assert.Equal(Visibility.Visible, allPassed);
+        Assert.Equal(Visibility.Collapsed, stillPending);
+    }
+
+    [Fact]
+    public void NativeReportLayout_UsesCustomerFriendlyColumnsAndPlainLanguage()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportLayoutEngine.cs"));
+
+        Assert.Contains("PASS means both changes were recorded correctly", source, StringComparison.Ordinal);
+        Assert.Contains("How to read: PASS confirms", source, StringComparison.Ordinal);
+        Assert.Contains("\"Signal\", \"Test sequence\", \"ON relay time\", \"OFF relay time\", \"Result\"", source, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled || point.Runtime.IsComplete", source, StringComparison.Ordinal);
+        Assert.Contains("ALL SIGNALS PASSED", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IEC 61850 reference\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Workbook SHA-256:", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("EvidenceText(", source, StringComparison.Ordinal);
     }
 
     [Fact]
