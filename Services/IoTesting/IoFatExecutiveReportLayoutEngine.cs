@@ -25,6 +25,8 @@ internal static class IoFatExecutiveReportLayoutEngine
     private static readonly IoFatReportColor Navy = Color("0F172A");
     private static readonly IoFatReportColor Blue = Color("2563EB");
     private static readonly IoFatReportColor SoftBlue = Color("EFF6FF");
+    private static readonly IoFatReportColor DocumentFill = Color("F8FAFC");
+    private static readonly IoFatReportColor DocumentBorder = Color("CBD5E1");
     private static readonly IoFatReportColor Border = Color("D9E4F0");
     private static readonly IoFatReportColor SoftLine = Color("EDF2F7");
     private static readonly IoFatReportColor Muted = Color("64748B");
@@ -33,9 +35,7 @@ internal static class IoFatExecutiveReportLayoutEngine
     private static readonly IoFatReportColor Pass = Color("15803D");
     private static readonly IoFatReportColor Attention = Color("B45309");
     private static readonly IoFatReportColor Fail = Color("B91C1C");
-    private static readonly IoFatReportColor SoftPass = Color("F0FDF4");
     private static readonly IoFatReportColor SoftAttention = Color("FFFBEB");
-    private static readonly IoFatReportColor SoftFail = Color("FEF2F2");
 
     public static IoFatReportLayoutPlan Build(IoTestProject project, DateTimeOffset created, bool draft = false)
     {
@@ -105,29 +105,29 @@ internal static class IoFatExecutiveReportLayoutEngine
                 control.CompanyProjectDocumentNumber,
                 _project.ProjectId);
             var revision = FirstNonEmpty(control.Revision, "-");
-            var issueStatus = FirstNonEmpty(control.IssueStatus, _draft ? "DRAFT / LIVE" : "AS TESTED");
+            // A generated evidence attachment is an as-tested record. Source-workbook
+            // review flags remain in project diagnostics but are not customer issue status.
+            var issueStatus = _draft ? "PREVIEW" : "AS TESTED";
             var supplier = FirstNonEmpty(control.SupplierName, "Supplier not stated");
             var poTitle = FirstNonEmpty(control.PurchaseOrderTitle, control.DocumentTitle);
 
             page.Line(Margin, HeaderBottom, PageWidth - Margin, HeaderBottom, Border, 0.8d);
             page.Text(Margin, 566d, 480d, Clean(projectName), IoFatReportFontKind.Bold, 7.2d, Muted);
-            page.Text(Margin, 542d, 500d, "IEC 61850 FAT Evidence Report", IoFatReportFontKind.Bold, 20.2d, Navy);
-            page.Text(Margin, 522d, 500d, "Signal-state verification with IED timestamps and event-log traceability.", IoFatReportFontKind.Regular, 8.1d, Muted);
-            page.Text(Margin, 505d, 520d, BuildSupplierLine(supplier, poTitle), IoFatReportFontKind.Regular, 6.6d, Muted);
+            page.Text(Margin, 544d, 500d, "IEC 61850 FAT Evidence Report", IoFatReportFontKind.Bold, 16.8d, Navy);
+            page.Text(Margin, 524d, 500d, "Signal-state verification with IED timestamps and event-log traceability.", IoFatReportFontKind.Regular, 8.0d, Muted);
+            page.Text(Margin, 507d, 520d, BuildSupplierLine(supplier, poTitle), IoFatReportFontKind.Regular, 6.6d, Muted);
 
             const double cardWidth = 222d;
-            const double cardHeight = 67d;
+            const double cardHeight = 64d;
             var cardX = PageWidth - Margin - cardWidth;
-            const double cardTop = 569d;
-            var reviewIssue = issueStatus.Contains("REVIEW", StringComparison.OrdinalIgnoreCase) || _draft;
-            var statusColor = reviewIssue ? Attention : Blue;
-            var statusBackground = reviewIssue ? SoftAttention : SoftBlue;
+            const double cardTop = 568d;
 
-            page.RoundRect(cardX, cardTop, cardWidth, cardHeight, 6d, statusBackground, statusColor, 0.8d);
+            // Document control is neutral metadata, not an alarm/status card.
+            page.RoundRect(cardX, cardTop, cardWidth, cardHeight, 4d, DocumentFill, DocumentBorder, 0.7d);
             page.Text(cardX + 11d, cardTop - 14d, cardWidth - 22d, "DOCUMENT CONTROL", IoFatReportFontKind.Bold, 5.9d, Muted);
             page.Text(cardX + 11d, cardTop - 30d, cardWidth - 22d, Clean(documentNumber), IoFatReportFontKind.Bold, 8.2d, Navy);
-            page.Text(cardX + 11d, cardTop - 45d, cardWidth - 22d, $"REV {Clean(revision)}  |  {Clean(issueStatus)}", IoFatReportFontKind.Bold, 6.7d, statusColor);
-            page.Text(cardX + 11d, cardTop - 58d, cardWidth - 22d, _draft ? "PREVIEW - NOT FOR ISSUE" : "CUSTOMER FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
+            page.Text(cardX + 11d, cardTop - 45d, cardWidth - 22d, $"REV {Clean(revision)}  |  {issueStatus}", IoFatReportFontKind.Bold, 6.7d, Navy);
+            page.Text(cardX + 11d, cardTop - 57d, cardWidth - 22d, _draft ? "NOT FOR ISSUE" : "CUSTOMER FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
 
             page.Line(Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
             page.Text(Margin, 24d, 540d,
@@ -139,7 +139,7 @@ internal static class IoFatExecutiveReportLayoutEngine
         private void DrawIedSection(IoTestIedPlan ied)
         {
             var points = ReportPoints(ied);
-            Ensure(82d);
+            Ensure(76d);
             DrawIedHeader(ied, points, continued: false);
             DrawTableHeader();
 
@@ -179,19 +179,14 @@ internal static class IoFatExecutiveReportLayoutEngine
             var pending = Math.Max(0, points.Count - passed - review - failed);
             var status = $"{passed} OF {points.Count} SIGNALS PASSED";
             var statusColor = failed > 0 ? Fail : review > 0 || pending > 0 ? Attention : Pass;
-            var statusBackground = failed > 0 ? SoftFail : review > 0 || pending > 0 ? SoftAttention : SoftPass;
-            const double height = 50d;
+            const double height = 43d;
 
-            _page.RoundRect(Margin, _cursorY, ContentWidth, height, 6d, White, Border, 0.7d);
-            _page.Rect(Margin, _cursorY, 4d, height, statusColor, statusColor, 0d);
-            _page.Text(Margin + 14d, _cursorY - 18d, 390d, Clean(title), IoFatReportFontKind.Bold, 10.7d, Navy);
-            _page.Text(Margin + 14d, _cursorY - 35d, 500d, BuildDeviceMeta(ied), IoFatReportFontKind.Regular, 6.9d, Muted);
-
-            const double badgeWidth = 188d;
-            var badgeX = PageWidth - Margin - badgeWidth - 10d;
-            _page.RoundRect(badgeX, _cursorY - 9d, badgeWidth, 30d, 5d, statusBackground, statusColor, 0.7d);
-            _page.Text(badgeX + 10d, _cursorY - 21d, badgeWidth - 20d, "DEVICE RESULT", IoFatReportFontKind.Bold, 5.6d, Muted);
-            _page.Text(badgeX + 10d, _cursorY - 35d, badgeWidth - 20d, status, IoFatReportFontKind.Bold, 8.1d, statusColor);
+            // A report section should read like a controlled document, not an application card.
+            _page.Rect(Margin, _cursorY, 4d, height - 3d, statusColor, statusColor, 0d);
+            _page.Text(Margin + 14d, _cursorY - 15d, 390d, Clean(title), IoFatReportFontKind.Bold, 10.5d, Navy);
+            _page.Text(Margin + 14d, _cursorY - 32d, 500d, BuildDeviceMeta(ied), IoFatReportFontKind.Regular, 6.9d, Muted);
+            _page.Text(PageWidth - Margin - 190d, _cursorY - 32d, 180d, status, IoFatReportFontKind.Bold, 7.1d, statusColor);
+            _page.Line(Margin + 4d, _cursorY - height, PageWidth - Margin, _cursorY - height, Border, 0.65d);
             _cursorY -= height + 7d;
         }
 
@@ -365,12 +360,18 @@ internal static class IoFatExecutiveReportLayoutEngine
 
     private static string ExpectedStateText(IoTestPointPlan point)
     {
-        var trueLabel = NormalizeExpectedLabel(point.ExpectedOnText, "ON", "True");
-        var falseLabel = NormalizeExpectedLabel(point.ExpectedOffText, "OFF", "False");
-        return $"{trueLabel} (True)\n{falseLabel} (False)";
+        var trueLabel = NormalizeExpectedLabel(point.ExpectedOnText, "ON");
+        var falseLabel = NormalizeExpectedLabel(point.ExpectedOffText, "OFF");
+        return $"{ExpectedLine(trueLabel, true)}\n{ExpectedLine(falseLabel, false)}";
     }
 
-    private static string NormalizeExpectedLabel(string? value, string prefix, string booleanText)
+    private static string ExpectedLine(string label, bool value)
+    {
+        var booleanText = value ? "True" : "False";
+        return string.IsNullOrWhiteSpace(label) ? booleanText.ToUpperInvariant() : $"{label} ({booleanText})";
+    }
+
+    private static string NormalizeExpectedLabel(string? value, string prefix)
     {
         var clean = Clean(value);
         foreach (var suffix in new[] { " (1)", " (0)", " (True)", " (False)" })
@@ -382,6 +383,12 @@ internal static class IoFatExecutiveReportLayoutEngine
             }
         }
 
+        if (clean.Equals("TBA", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("NA", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("N/A", StringComparison.OrdinalIgnoreCase) ||
+            clean == "-")
+            return string.Empty;
+
         if (clean.Equals("1", StringComparison.OrdinalIgnoreCase) || clean.Equals("true", StringComparison.OrdinalIgnoreCase))
             return "ON";
         if (clean.Equals("0", StringComparison.OrdinalIgnoreCase) || clean.Equals("false", StringComparison.OrdinalIgnoreCase))
@@ -390,7 +397,7 @@ internal static class IoFatExecutiveReportLayoutEngine
         var repeatedPrefix = prefix + " ";
         if (clean.StartsWith(repeatedPrefix, StringComparison.OrdinalIgnoreCase))
             clean = clean[repeatedPrefix.Length..].Trim();
-        return string.IsNullOrWhiteSpace(clean) || clean == "-" ? booleanText : clean;
+        return clean;
     }
 
     private static string RelayTime(IoTestTransitionEvidence? evidence)
