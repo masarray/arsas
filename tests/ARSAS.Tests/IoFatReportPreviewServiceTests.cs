@@ -78,6 +78,7 @@ public sealed class IoFatReportPreviewServiceTests
         Assert.Contains("yyyy-MM-dd\\nHH:mm:ss.fff", source, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled || point.Runtime.IsComplete", source, StringComparison.Ordinal);
         Assert.Contains("ALL SIGNALS PASSED", source, StringComparison.Ordinal);
+        Assert.Contains("Wraps text without inserting ellipsis", source, StringComparison.Ordinal);
 
         Assert.DoesNotContain("DrawCustomerSummary", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Project Evidence Summary", source, StringComparison.Ordinal);
@@ -87,6 +88,8 @@ public sealed class IoFatReportPreviewServiceTests
         Assert.DoesNotContain("evidence.Quality", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AcquisitionSource", source, StringComparison.Ordinal);
         Assert.DoesNotContain("EvidenceText(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("var truncated", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(" + \"...\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -207,6 +210,7 @@ public sealed class IoFatReportPreviewServiceTests
                 return candidate;
             directory = directory.Parent;
         }
+
         throw new FileNotFoundException($"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
     }
 }
