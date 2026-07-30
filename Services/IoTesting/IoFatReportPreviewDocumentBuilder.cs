@@ -123,21 +123,33 @@ internal static class IoFatReportPreviewDocumentBuilder
             FontSize = fontSize,
             FontWeight = command.Font == IoFatReportFontKind.Bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = ToBrush(command.Color),
-            // Report text is already wrapped and bounded by IoFatReportLayoutEngine.
-            // CharacterEllipsis made complete evidence look truncated (for example
-            // timestamps and PASS became "..."), which is unacceptable in evidence.
+            // The layout engine has already split every cell into explicit lines.
+            // Evidence must never be replaced with dots in the preview.
             TextTrimming = TextTrimming.None,
             TextWrapping = TextWrapping.NoWrap,
-            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            LineHeight = Math.Max(fontSize + 1.5d, fontSize * 1.18d),
             ClipToBounds = false,
             SnapsToDevicePixels = true
         };
         block.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Ideal);
         block.SetValue(TextOptions.TextRenderingModeProperty, TextRenderingMode.ClearType);
+
+        // Downscale only when the actual Windows font metrics are wider than the
+        // shared PDF-point estimate. This keeps PASS and timestamps complete while
+        // preserving the intended size whenever they already fit.
+        var textPresenter = new Viewbox
+        {
+            Child = block,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.DownOnly,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            ClipToBounds = false,
+            SnapsToDevicePixels = true
+        };
+
         Add(
             page,
-            block,
+            textPresenter,
             command.X * DipPerPdfPoint,
             top,
             Math.Max(4d, command.Width * DipPerPdfPoint),
