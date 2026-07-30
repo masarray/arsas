@@ -221,6 +221,17 @@ public sealed class IoTestPointPlan : ObservableObject
     public string LogicalNode { get; init; } = string.Empty;
     public string DataObject { get; init; } = string.Empty;
     public string DataAttribute { get; init; } = string.Empty;
+    public string Cdc { get; init; } = string.Empty;
+    public string SourceIecReference { get; init; } = string.Empty;
+    public string ReportDisplayReference { get; init; } = string.Empty;
+    public string EventLogSearchReference { get; init; } = string.Empty;
+    public string EvidenceExpected { get; init; } = string.Empty;
+    public string MappingQuality { get; init; } = string.Empty;
+    public string ReviewStatus { get; init; } = string.Empty;
+    public string ReviewReason { get; init; } = string.Empty;
+    public string EventLogMatch { get; init; } = string.Empty;
+    public string EvidenceReference { get; init; } = string.Empty;
+    public string ReviewerComment { get; init; } = string.Empty;
     public string SourceSheet { get; init; } = string.Empty;
     public int SourceRow { get; init; }
     public bool TestEnabled { get => _testEnabled; set => Set(ref _testEnabled, value); }
@@ -228,6 +239,21 @@ public sealed class IoTestPointPlan : ObservableObject
     public string BindingStatus { get; init; } = string.Empty;
     public string BindingEvidence { get; init; } = string.Empty;
     public IoTestPointRuntime Runtime { get; } = new();
+
+    [JsonIgnore]
+    public string ReportIecReference
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(EventLogSearchReference))
+                return EventLogSearchReference.Trim();
+            if (!string.IsNullOrWhiteSpace(SourceIecReference))
+                return SourceIecReference.Trim();
+            if (!string.IsNullOrWhiteSpace(ReportDisplayReference))
+                return ReportDisplayReference.Trim();
+            return ObjectReference;
+        }
+    }
 
     public IoTestLiveBindingState LiveBindingState
     {
@@ -401,6 +427,19 @@ public sealed class IoTestIedPlan : ObservableObject
     }
 }
 
+public sealed class IoFatDocumentControl
+{
+    public string ClientProject { get; init; } = string.Empty;
+    public string SupplierName { get; init; } = string.Empty;
+    public string PurchaseOrderTitle { get; init; } = string.Empty;
+    public string PurchaserDocumentNumber { get; init; } = string.Empty;
+    public string CompanyProjectDocumentNumber { get; init; } = string.Empty;
+    public string DocumentTitle { get; init; } = string.Empty;
+    public string Revision { get; init; } = string.Empty;
+    public string IssueStatus { get; init; } = string.Empty;
+    public string SourceDocumentName { get; init; } = string.Empty;
+}
+
 public sealed class IoTestProject
 {
     public required string ProjectId { get; init; }
@@ -409,6 +448,7 @@ public sealed class IoTestProject
     public string SourceWorkbookName { get; init; } = string.Empty;
     public string SourceWorkbookSha256 { get; init; } = string.Empty;
     public DateTimeOffset ImportedAt { get; init; } = DateTimeOffset.UtcNow;
+    public IoFatDocumentControl DocumentControl { get; init; } = new();
     public List<IoTestIedPlan> Ieds { get; init; } = new();
 
     public int SignalCount => Ieds.Sum(ied => ied.TestPoints.Count);
