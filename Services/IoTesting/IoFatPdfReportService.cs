@@ -24,7 +24,7 @@ public static class IoFatPdfReportService
         bool draft = false)
     {
         ArgumentNullException.ThrowIfNull(project);
-        return IoFatReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        return IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
     }
 
     public static void Save(string fileName, IoTestProject project, DateTimeOffset? generatedAt = null)
