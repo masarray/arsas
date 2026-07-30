@@ -191,7 +191,7 @@
                                                         BorderBrush="#F0B7BC" BorderThickness="1" CornerRadius="9" Padding="7,2">
                                                     <Border.Visibility>
                                                         <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}" ConverterParameter="Inverse">
-                                                            <Binding Path="EnabledCount"/>
+                                                            <Binding Path="TestPoints.Count"/>
                                                             <Binding Path="PassedCount"/>
                                                         </MultiBinding>
                                                     </Border.Visibility>
@@ -202,7 +202,7 @@
                                                         BorderThickness="1" CornerRadius="9" Padding="7,2">
                                                     <Border.Visibility>
                                                         <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}">
-                                                            <Binding Path="EnabledCount"/>
+                                                            <Binding Path="TestPoints.Count"/>
                                                             <Binding Path="PassedCount"/>
                                                         </MultiBinding>
                                                     </Border.Visibility>
