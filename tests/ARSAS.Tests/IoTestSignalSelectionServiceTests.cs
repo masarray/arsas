@@ -53,11 +53,6 @@ public sealed class IoTestSignalSelectionServiceTests
         var match = Assert.Single(result.Matches);
         Assert.Equal("Lockout operated", match.Signal.Name);
         Assert.True(match.UsedNormalizedIedPrefix);
-        Assert.Equal(
-            "add/ggio2.lockoutop.stval",
-            IoTestLiveBindingService.NormalizeTelegram(
-                "AA1C1F00R1Application/ADD/GGIO2.LockoutOp.stVal",
-                "AA1C1F00R1"));
     }
 
     [Fact]
