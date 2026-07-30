@@ -66,17 +66,26 @@ public sealed class IoFatReportPreviewServiceTests
     }
 
     [Fact]
-    public void NativeReportLayout_UsesCustomerFriendlyColumnsAndPlainLanguage()
+    public void NativeReportLayout_IsCleanLeanAndTimestampFocused()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportLayoutEngine.cs"));
 
-        Assert.Contains("PASS means both changes were recorded correctly", source, StringComparison.Ordinal);
-        Assert.Contains("How to read: PASS confirms", source, StringComparison.Ordinal);
-        Assert.Contains("\"Signal\", \"Test sequence\", \"ON relay time\", \"OFF relay time\", \"Result\"", source, StringComparison.Ordinal);
+        Assert.Contains("Signal state verification with relay timestamps", source, StringComparison.Ordinal);
+        Assert.Contains("\"Signal\", \"Expected state\", \"ON / TRUE evidence\", \"OFF / FALSE evidence\", \"Result\"", source, StringComparison.Ordinal);
+        Assert.Contains("ExpectedStateText(point)", source, StringComparison.Ordinal);
+        Assert.Contains("{trueLabel} (True)", source, StringComparison.Ordinal);
+        Assert.Contains("{falseLabel} (False)", source, StringComparison.Ordinal);
+        Assert.Contains("yyyy-MM-dd\\nHH:mm:ss.fff", source, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled || point.Runtime.IsComplete", source, StringComparison.Ordinal);
         Assert.Contains("ALL SIGNALS PASSED", source, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("DrawCustomerSummary", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Project Evidence Summary", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Test Summary", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Reason\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"IEC 61850 reference\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Workbook SHA-256:", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("evidence.Quality", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AcquisitionSource", source, StringComparison.Ordinal);
         Assert.DoesNotContain("EvidenceText(", source, StringComparison.Ordinal);
     }
 
@@ -179,8 +188,8 @@ public sealed class IoFatReportPreviewServiceTests
                 SignalName = signalName,
                 ObjectReference = $"{name}LD/GGIO1.Ind1.stVal",
                 FunctionalConstraint = "ST",
-                ExpectedOnText = "true",
-                ExpectedOffText = "false"
+                ExpectedOnText = "ON Operated",
+                ExpectedOffText = "OFF Normal"
             }
         }
     };
