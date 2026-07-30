@@ -106,10 +106,13 @@ public sealed class IoFatReportPreviewServiceTests
         Assert.Contains("PageCount", previewSource, StringComparison.Ordinal);
         Assert.Contains("Native preview", previewSource, StringComparison.Ordinal);
         Assert.Contains("IoFatReportLayoutEngine.Build", builderSource, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming = TextTrimming.None", builderSource, StringComparison.Ordinal);
+        Assert.Contains("ClipToBounds = false", builderSource, StringComparison.Ordinal);
         Assert.Contains("BuildLayout", pdfSource, StringComparison.Ordinal);
         Assert.Contains("IoFatReportLayoutPlan", layoutSource, StringComparison.Ordinal);
         Assert.Contains("DRAFT / LIVE", layoutSource, StringComparison.Ordinal);
 
+        Assert.DoesNotContain("TextTrimming.CharacterEllipsis", builderSource, StringComparison.Ordinal);
         Assert.DoesNotContain("WebBrowser", previewSource, StringComparison.Ordinal);
         Assert.DoesNotContain("NavigateToString", previewSource, StringComparison.Ordinal);
         Assert.DoesNotContain("BuildHtml", previewSource, StringComparison.Ordinal);
