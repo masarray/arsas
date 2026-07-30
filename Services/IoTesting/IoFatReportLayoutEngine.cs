@@ -152,7 +152,7 @@ internal static class IoFatReportLayoutEngine
             var counts = Counts(_project);
             var signals = _project.Ieds.Sum(ied => ReportPoints(ied).Count);
             var attentionCount = counts.Review + counts.Failed;
-            const double height = 100d;
+            const double height = 112d;
             Ensure(height + 12d);
 
             _page.RoundRect(Margin, _cursorY, ContentWidth, height, 6d, SoftSlate, Border, 0.8d);
@@ -165,7 +165,7 @@ internal static class IoFatReportLayoutEngine
             _page.Text(Margin + 14d, _cursorY - 53d, ContentWidth - 28d, sourceText, IoFatReportFontKind.Regular, 7d, Muted);
             _page.Text(Margin + 14d, _cursorY - 68d, ContentWidth - 28d, "How to read: PASS confirms the signal changed OFF to ON and returned to OFF in the correct order.", IoFatReportFontKind.Regular, 7d, Muted);
 
-            const double metricTop = 91d;
+            const double metricTop = 81d;
             const double gap = 8d;
             var metricWidth = (ContentWidth - 28d - (gap * 3d)) / 4d;
             var x = Margin + 14d;
