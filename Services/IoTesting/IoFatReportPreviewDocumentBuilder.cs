@@ -123,10 +123,14 @@ internal static class IoFatReportPreviewDocumentBuilder
             FontSize = fontSize,
             FontWeight = command.Font == IoFatReportFontKind.Bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = ToBrush(command.Color),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            // Report text is already wrapped and bounded by IoFatReportLayoutEngine.
+            // CharacterEllipsis made complete evidence look truncated (for example
+            // timestamps and PASS became "..."), which is unacceptable in evidence.
+            TextTrimming = TextTrimming.None,
             TextWrapping = TextWrapping.NoWrap,
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
             LineHeight = Math.Max(fontSize + 1.5d, fontSize * 1.18d),
+            ClipToBounds = false,
             SnapsToDevicePixels = true
         };
         block.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Ideal);
@@ -137,7 +141,7 @@ internal static class IoFatReportPreviewDocumentBuilder
             command.X * DipPerPdfPoint,
             top,
             Math.Max(4d, command.Width * DipPerPdfPoint),
-            Math.Max(fontSize + 3d, fontSize * 1.25d));
+            Math.Max(fontSize + 6d, fontSize * 1.65d));
     }
 
     private static void Add(FixedPage page, UIElement element, double x, double y, double width, double height)
