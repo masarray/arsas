@@ -20,8 +20,9 @@ public sealed record IoTestSignalSelectionResult(
 
 /// <summary>
 /// Resolves the enabled IO-list scope against one discovered IED model without
-/// guessing. Exact object references are preferred. A normalized IED-name prefix
-/// is accepted only when it produces one unique non-control signal.
+/// guessing. Exact source/event-log references are preferred. A normalized
+/// IED-name or Application wrapper is accepted only when it produces one unique
+/// non-control signal.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
@@ -42,12 +43,15 @@ public sealed class IoTestSignalSelectionService
 
         foreach (var point in requested)
         {
+            var exactReferences = IoTestLiveBindingService.ImportedReferences(point)
+                .Select(IoTestLiveBindingService.NormalizeReference)
+                .Where(value => value.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var candidates = device.Signals
                 .Where(signal => IsEligible(signal, point))
-                .Where(signal => IoTestLiveBindingService.NormalizeReference(signal.ObjectReference)
-                    .Equals(
-                        IoTestLiveBindingService.NormalizeReference(point.ObjectReference),
-                        StringComparison.OrdinalIgnoreCase))
+                .Where(signal => exactReferences.Contains(
+                    IoTestLiveBindingService.NormalizeReference(signal.ObjectReference)))
                 .ToList();
             var usedNormalizedPrefix = false;
 
@@ -112,23 +116,29 @@ public sealed class IoTestSignalSelectionService
         IoTestIedPlan ied,
         Iec61850MonitorDevice device)
     {
-        var expected = IoTestLiveBindingService.NormalizeTelegram(point.ObjectReference, ied.IedName);
+        var expected = IoTestLiveBindingService.ImportedReferences(point)
+            .Select(reference => IoTestLiveBindingService.NormalizeTelegram(reference, ied.IedName))
+            .Where(value => value.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (expected.Count == 0)
+            return false;
+
         var observed = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, device.Name);
-        if (observed.Equals(expected, StringComparison.OrdinalIgnoreCase))
+        if (expected.Contains(observed))
             return true;
 
         if (string.IsNullOrWhiteSpace(device.SclIedName))
             return false;
 
         observed = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, device.SclIedName);
-        return observed.Equals(expected, StringComparison.OrdinalIgnoreCase);
+        return expected.Contains(observed);
     }
 
     private static string Describe(IReadOnlyCollection<IoTestPointPlan> points)
     {
         var values = points
             .Take(4)
-            .Select(point => $"{point.TestPointId} ({point.ObjectReference})")
+            .Select(point => $"{point.TestPointId} ({point.ReportIecReference})")
             .ToList();
         if (points.Count > values.Count)
             values.Add($"…and {points.Count - values.Count} more");
