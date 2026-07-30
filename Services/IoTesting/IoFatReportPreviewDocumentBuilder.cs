@@ -18,7 +18,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 internal static class IoFatReportPreviewDocumentBuilder
 {
     private const double DipPerPdfPoint = 96d / 72d;
-    private static readonly FontFamily ReportFont = new("Arial, Segoe UI");
+    private static readonly FontFamily ReportFont = new("Inter, Segoe UI, Aptos, Arial");
     private static readonly FontFamily MonoFont = new("Consolas, Cascadia Mono");
 
     public static FixedDocument Build(
@@ -134,6 +134,9 @@ internal static class IoFatReportPreviewDocumentBuilder
         block.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Ideal);
         block.SetValue(TextOptions.TextRenderingModeProperty, TextRenderingMode.ClearType);
 
+        // Downscale only when the actual Windows font metrics are wider than the
+        // shared PDF-point estimate. This keeps PASS and timestamps complete while
+        // preserving the intended size whenever they already fit.
         var textPresenter = new Viewbox
         {
             Child = block,
