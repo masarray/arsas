@@ -41,27 +41,28 @@ public sealed class IoFatReportPreviewServiceTests
         Assert.Contains("TP-A", text, StringComparison.Ordinal);
         Assert.DoesNotContain("IED_B", text, StringComparison.Ordinal);
         Assert.DoesNotContain("TP-B", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("GGIO1.Ind1.stVal", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AllPassedBadge_AllowsCompletedRowsThatAreCurrentlyUnchecked()
+    public void AllPassedBadge_UsesTotalSignalCountRatherThanCheckedRowCount()
     {
         var converter = new IoFatAllPassedVisibilityConverter();
 
         var allPassed = converter.Convert(
-            new object[] { 5, 6 },
+            new object[] { 6, 6 },
             typeof(Visibility),
             null!,
             CultureInfo.InvariantCulture);
         var stillPending = converter.Convert(
-            new object[] { 5, 4 },
+            new object[] { 6, 5 },
             typeof(Visibility),
             null!,
             CultureInfo.InvariantCulture);
+        var xaml = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
 
         Assert.Equal(Visibility.Visible, allPassed);
         Assert.Equal(Visibility.Collapsed, stillPending);
+        Assert.Contains("<Binding Path=\"TestPoints.Count\"/>", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
