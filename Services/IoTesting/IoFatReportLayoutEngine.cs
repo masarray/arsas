@@ -52,7 +52,6 @@ internal static class IoFatReportLayoutEngine
     private static readonly IoFatReportColor BrandNavy = Color("0F172A");
     private static readonly IoFatReportColor BrandBlue = Color("2563EB");
     private static readonly IoFatReportColor SoftBlue = Color("EFF6FF");
-    private static readonly IoFatReportColor SoftSlate = Color("F8FAFC");
     private static readonly IoFatReportColor Border = Color("DDE7F3");
     private static readonly IoFatReportColor SoftLine = Color("EEF2F7");
     private static readonly IoFatReportColor Muted = Color("64748B");
@@ -90,7 +89,6 @@ internal static class IoFatReportLayoutEngine
         public IoFatReportLayoutPlan Render()
         {
             NewPage();
-            DrawCustomerSummary();
             foreach (var ied in _project.Ieds)
                 DrawIedSection(ied);
             if (_project.Ieds.Count == 0)
@@ -130,8 +128,8 @@ internal static class IoFatReportLayoutEngine
 
             page.Line(Margin, HeaderBottom, PageWidth - Margin, HeaderBottom, Border, 0.8d);
             page.Text(Margin, 562d, 390d, "ARSAS | IEC 61850 FAT", IoFatReportFontKind.Bold, 7.4d, Muted);
-            page.Text(Margin, 540d, 510d, "IEC 61850 FAT Test Report", IoFatReportFontKind.Bold, 20.6d, BrandNavy);
-            page.Text(Margin, 520d, 590d, "Each signal was checked OFF > ON > OFF. PASS means both changes were recorded correctly.", IoFatReportFontKind.Regular, 8.1d, Muted);
+            page.Text(Margin, 540d, 510d, "IEC 61850 FAT Evidence Report", IoFatReportFontKind.Bold, 20.6d, BrandNavy);
+            page.Text(Margin, 520d, 590d, "Signal state verification with relay timestamps.", IoFatReportFontKind.Regular, 8.1d, Muted);
 
             const double cardWidth = 150d;
             const double cardHeight = 58d;
@@ -143,53 +141,14 @@ internal static class IoFatReportLayoutEngine
             page.Text(cardX + 11d, cardTop - 50d, cardWidth - 22d, Truncate(scope, 30), IoFatReportFontKind.Regular, 6.1d, Muted);
 
             page.Line(Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
-            page.Text(Margin, 24d, 620d, $"Generated {_created:yyyy-MM-dd HH:mm:ss zzz}  |  Project {Clean(_project.ProjectId)}  |  Detailed evidence is stored in the ARSAS project.", IoFatReportFontKind.Regular, 6.3d, Muted);
+            page.Text(Margin, 24d, 620d, $"Generated {_created:yyyy-MM-dd HH:mm:ss zzz}  |  Project {Clean(_project.ProjectId)}", IoFatReportFontKind.Regular, 6.3d, Muted);
             page.Text(PageWidth - Margin - 72d, 24d, 72d, $"Page {pageNumber} / {totalPages}", IoFatReportFontKind.Regular, 6.3d, Muted);
-        }
-
-        private void DrawCustomerSummary()
-        {
-            var counts = Counts(_project);
-            var signals = _project.Ieds.Sum(ied => ReportPoints(ied).Count);
-            var attentionCount = counts.Review + counts.Failed;
-            const double height = 112d;
-            Ensure(height + 12d);
-
-            _page.RoundRect(Margin, _cursorY, ContentWidth, height, 6d, SoftSlate, Border, 0.8d);
-            _page.Text(Margin + 14d, _cursorY - 19d, ContentWidth - 28d, "Test Summary", IoFatReportFontKind.Bold, 11.5d, BrandNavy);
-            _page.Text(Margin + 14d, _cursorY - 37d, ContentWidth - 28d, $"{Clean(_project.ProjectName)}  |  {Clean(_project.ProjectId)}", IoFatReportFontKind.Bold, 8.5d, Ink);
-
-            var sourceText = string.IsNullOrWhiteSpace(_project.SourceWorkbookName)
-                ? $"{_project.Ieds.Count} device(s) included in this report."
-                : $"Source: {Clean(_project.SourceWorkbookName)}  |  {_project.Ieds.Count} device(s) included.";
-            _page.Text(Margin + 14d, _cursorY - 53d, ContentWidth - 28d, sourceText, IoFatReportFontKind.Regular, 7d, Muted);
-            _page.Text(Margin + 14d, _cursorY - 68d, ContentWidth - 28d, "How to read: PASS confirms the signal changed OFF to ON and returned to OFF in the correct order.", IoFatReportFontKind.Regular, 7d, Muted);
-
-            const double metricTop = 81d;
-            const double gap = 8d;
-            var metricWidth = (ContentWidth - 28d - (gap * 3d)) / 4d;
-            var x = Margin + 14d;
-            DrawMetric(x, _cursorY - metricTop, metricWidth, "SIGNALS TESTED", signals.ToString(CultureInfo.InvariantCulture), BrandBlue, SoftBlue);
-            x += metricWidth + gap;
-            DrawMetric(x, _cursorY - metricTop, metricWidth, "PASSED", counts.Passed.ToString(CultureInfo.InvariantCulture), Pass, SoftPass);
-            x += metricWidth + gap;
-            DrawMetric(x, _cursorY - metricTop, metricWidth, "NEEDS REVIEW", attentionCount.ToString(CultureInfo.InvariantCulture), attentionCount > 0 ? Attention : Muted, attentionCount > 0 ? SoftAttention : White);
-            x += metricWidth + gap;
-            DrawMetric(x, _cursorY - metricTop, metricWidth, "NOT COMPLETED", counts.Pending.ToString(CultureInfo.InvariantCulture), counts.Pending > 0 ? Attention : Muted, counts.Pending > 0 ? SoftAttention : White);
-            _cursorY -= height + 12d;
-        }
-
-        private void DrawMetric(double x, double top, double width, string label, string value, IoFatReportColor color, IoFatReportColor background)
-        {
-            _page.RoundRect(x, top, width, 30d, 4d, background, Border, 0.55d);
-            _page.Text(x + 8d, top - 11d, width - 16d, label, IoFatReportFontKind.Bold, 5.7d, Muted);
-            _page.Text(x + 8d, top - 24d, width - 16d, value, IoFatReportFontKind.Bold, 10d, color);
         }
 
         private void DrawIedSection(IoTestIedPlan ied)
         {
             var points = ReportPoints(ied);
-            Ensure(88d);
+            Ensure(80d);
             DrawIedHeader(ied, points, continued: false);
             DrawTableHeader();
 
@@ -211,16 +170,12 @@ internal static class IoFatReportLayoutEngine
             if (points.Count == 0)
             {
                 Ensure(34d);
-                _page.RoundRect(Margin, _cursorY, ContentWidth, 28d, 4d, SoftSlate, Border, 0.6d);
-                _page.Text(Margin + 10d, _cursorY - 18d, ContentWidth - 20d, "No signal is currently selected or completed for this device.", IoFatReportFontKind.Regular, 7.2d, Muted);
+                _page.RoundRect(Margin, _cursorY, ContentWidth, 28d, 4d, SoftAttention, Border, 0.6d);
+                _page.Text(Margin + 10d, _cursorY - 18d, ContentWidth - 20d, "No signal is currently selected or completed for this device.", IoFatReportFontKind.Regular, 7.2d, Attention);
                 _cursorY -= 38d;
             }
-            else
-            {
-                DrawOutcomeNote(points);
-            }
 
-            _cursorY -= 11d;
+            _cursorY -= 12d;
         }
 
         private void DrawIedHeader(IoTestIedPlan ied, IReadOnlyList<IoTestPointPlan> points, bool continued)
@@ -253,13 +208,13 @@ internal static class IoFatReportLayoutEngine
         {
             Ensure(24d);
             var widths = ColumnWidths();
-            var headers = new[] { "#", "Signal", "Test sequence", "ON relay time", "OFF relay time", "Result" };
+            var headers = new[] { "#", "Signal", "Expected state", "ON / TRUE evidence", "OFF / FALSE evidence", "Result" };
             var x = Margin;
             const double height = 22d;
             for (var index = 0; index < headers.Length; index++)
             {
                 _page.Rect(x, _cursorY, widths[index], height, SoftBlue, Border, 0.45d);
-                _page.Text(x + 5d, _cursorY - 14.5d, widths[index] - 10d, headers[index], IoFatReportFontKind.Bold, 6.25d, BrandBlue);
+                _page.Text(x + 5d, _cursorY - 14.5d, widths[index] - 10d, headers[index], IoFatReportFontKind.Bold, 6.15d, BrandBlue);
                 x += widths[index];
             }
             _cursorY -= height;
@@ -292,10 +247,10 @@ internal static class IoFatReportLayoutEngine
             {
                 new ReportCell(rowNumber.ToString(CultureInfo.InvariantCulture), IoFatReportFontKind.Mono, 6d, Ink, 1),
                 new ReportCell(point.SignalName, IoFatReportFontKind.Bold, 6.7d, Ink, 3),
-                new ReportCell("OFF > ON > OFF\nRecorded in order", IoFatReportFontKind.Regular, 6.3d, Ink, 2),
-                new ReportCell(RelayTime(point.Runtime.OnEvidence), IoFatReportFontKind.Mono, 6.15d, point.Runtime.OnEvidence == null ? Muted : Pass, 2),
-                new ReportCell(RelayTime(point.Runtime.OffEvidence), IoFatReportFontKind.Mono, 6.15d, point.Runtime.OffEvidence == null ? Muted : Pass, 2),
-                new ReportCell(ResultText(point.Runtime.State), IoFatReportFontKind.Bold, 6.45d, stateColor, 2)
+                new ReportCell(ExpectedStateText(point), IoFatReportFontKind.Regular, 6.35d, Ink, 2),
+                new ReportCell(RelayTime(point.Runtime.OnEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OnEvidence == null ? Muted : Pass, 2),
+                new ReportCell(RelayTime(point.Runtime.OffEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OffEvidence == null ? Muted : Pass, 2),
+                new ReportCell(ResultText(point.Runtime.State), IoFatReportFontKind.Bold, 6.6d, stateColor, 1)
             };
         }
 
@@ -305,25 +260,10 @@ internal static class IoFatReportLayoutEngine
             var maximum = 1;
             for (var index = 0; index < cells.Count; index++)
                 maximum = Math.Max(maximum, WrapText(cells[index].Text, widths[index] - 10d, cells[index].FontSize, cells[index].MaxLines).Count);
-            return Math.Max(30d, 10d + (maximum * 8.2d));
+            return Math.Max(29d, 10d + (maximum * 8.2d));
         }
 
-        private static double[] ColumnWidths() => new[] { 24d, 242d, 112d, 130d, 130d, 144d };
-
-        private void DrawOutcomeNote(IReadOnlyList<IoTestPointPlan> points)
-        {
-            Ensure(37d);
-            var passed = points.Count(point => point.Runtime.State == IoTestPointState.Passed);
-            var allPassed = passed == points.Count;
-            var fill = allPassed ? SoftPass : SoftAttention;
-            var color = allPassed ? Pass : Attention;
-            var text = allPassed
-                ? "All listed signals completed the OFF > ON > OFF test successfully."
-                : "Some signals are incomplete or need review. Technical details remain available in the ARSAS project and Excel export.";
-            _page.RoundRect(Margin, _cursorY - 7d, ContentWidth, 27d, 5d, fill, color, 0.6d);
-            _page.Text(Margin + 11d, _cursorY - 24d, ContentWidth - 22d, text, IoFatReportFontKind.Bold, 7.1d, color);
-            _cursorY -= 36d;
-        }
+        private static double[] ColumnWidths() => new[] { 24d, 230d, 150d, 145d, 145d, 88d };
 
         private void DrawEmptyProjectNotice()
         {
@@ -405,18 +345,40 @@ internal static class IoFatReportLayoutEngine
 
     private static string ResultText(IoTestPointState state) => state switch
     {
-        IoTestPointState.Passed => "PASS\nVerified",
-        IoTestPointState.Review => "REVIEW\nPlease check",
-        IoTestPointState.Failed => "FAILED\nDid not pass",
-        _ => "PENDING\nNot completed"
+        IoTestPointState.Passed => "PASS",
+        IoTestPointState.Review => "REVIEW",
+        IoTestPointState.Failed => "FAILED",
+        _ => "PENDING"
     };
+
+    private static string ExpectedStateText(IoTestPointPlan point)
+    {
+        var trueLabel = NormalizeExpectedLabel(point.ExpectedOnText, "ON", "True");
+        var falseLabel = NormalizeExpectedLabel(point.ExpectedOffText, "OFF", "False");
+        return $"{trueLabel} (True)\n{falseLabel} (False)";
+    }
+
+    private static string NormalizeExpectedLabel(string? value, string prefix, string booleanText)
+    {
+        var clean = Clean(value);
+        if (clean.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("true", StringComparison.OrdinalIgnoreCase))
+            return "ON";
+        if (clean.Equals("0", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("false", StringComparison.OrdinalIgnoreCase))
+            return "OFF";
+
+        var repeatedPrefix = prefix + " ";
+        if (clean.StartsWith(repeatedPrefix, StringComparison.OrdinalIgnoreCase))
+            clean = clean[repeatedPrefix.Length..].Trim();
+
+        return string.IsNullOrWhiteSpace(clean) || clean == "-" ? booleanText : clean;
+    }
 
     private static string RelayTime(IoTestTransitionEvidence? evidence)
     {
-        if (evidence == null)
-            return "Not captured";
-        if (evidence.IedTimestamp == null)
-            return "Captured\nRelay time unavailable";
+        if (evidence?.IedTimestamp == null)
+            return "-";
         return evidence.IedTimestamp.Value.ToString("yyyy-MM-dd\nHH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 
