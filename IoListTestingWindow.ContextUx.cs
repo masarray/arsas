@@ -312,9 +312,9 @@ public sealed class IoFatAllPassedVisibilityConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
     {
-        var enabled = values.Length > 0 && values[0] is int enabledCount ? enabledCount : 0;
+        var selectedCount = values.Length > 0 && values[0] is int count ? count : 0;
         var passed = values.Length > 1 && values[1] is int passedCount ? passedCount : 0;
-        var allPassed = enabled > 0 && passed == enabled;
+        var allPassed = selectedCount > 0 && passed >= selectedCount;
         if (string.Equals(parameter?.ToString(), "Inverse", StringComparison.OrdinalIgnoreCase))
             allPassed = !allPassed;
         return allPassed ? Visibility.Visible : Visibility.Collapsed;
