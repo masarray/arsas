@@ -21,6 +21,7 @@ internal readonly record struct IoFatReportColor(byte R, byte G, byte B)
         var value = hex.StartsWith("#", StringComparison.Ordinal) ? hex[1..] : hex;
         if (value.Length != 6)
             throw new ArgumentException("Report color must be a six-digit RGB hex value.", nameof(hex));
+
         return new IoFatReportColor(
             Convert.ToByte(value[..2], 16),
             Convert.ToByte(value.Substring(2, 2), 16),
@@ -43,6 +44,7 @@ internal static class IoFatReportLayoutEngine
 {
     public const double PageWidth = 842d;
     public const double PageHeight = 595d;
+
     private const double Margin = 30d;
     private const double HeaderBottom = 502d;
     private const double ContentTop = 486d;
@@ -89,8 +91,10 @@ internal static class IoFatReportLayoutEngine
         public IoFatReportLayoutPlan Render()
         {
             NewPage();
+
             foreach (var ied in _project.Ieds)
                 DrawIedSection(ied);
+
             if (_project.Ieds.Count == 0)
                 DrawEmptyProjectNotice();
 
@@ -102,7 +106,9 @@ internal static class IoFatReportLayoutEngine
                 _project.ProjectId,
                 _created,
                 _draft,
-                _pages.Select((page, index) => new IoFatReportPagePlan(index + 1, PageWidth, PageHeight, page.Commands.ToArray())).ToArray());
+                _pages.Select((page, index) =>
+                    new IoFatReportPagePlan(index + 1, PageWidth, PageHeight, page.Commands.ToArray()))
+                    .ToArray());
         }
 
         private void NewPage()
@@ -135,10 +141,11 @@ internal static class IoFatReportLayoutEngine
             const double cardHeight = 58d;
             var cardX = PageWidth - Margin - cardWidth;
             const double cardTop = 566d;
+
             page.RoundRect(cardX, cardTop, cardWidth, cardHeight, 6d, toneBackground, toneColor, 0.9d);
             page.Text(cardX + 11d, cardTop - 15d, cardWidth - 22d, _draft ? "PREVIEW" : "OVERALL RESULT", IoFatReportFontKind.Bold, 6.4d, Muted);
             page.Text(cardX + 11d, cardTop - 36d, cardWidth - 22d, tone, IoFatReportFontKind.Bold, 16.4d, toneColor);
-            page.Text(cardX + 11d, cardTop - 50d, cardWidth - 22d, Truncate(scope, 30), IoFatReportFontKind.Regular, 6.1d, Muted);
+            page.Text(cardX + 11d, cardTop - 50d, cardWidth - 22d, FitHeaderText(scope, 30), IoFatReportFontKind.Regular, 6.1d, Muted);
 
             page.Line(Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
             page.Text(Margin, 24d, 620d, $"Generated {_created:yyyy-MM-dd HH:mm:ss zzz}  |  Project {Clean(_project.ProjectId)}", IoFatReportFontKind.Regular, 6.3d, Muted);
@@ -158,12 +165,14 @@ internal static class IoFatReportLayoutEngine
                 rowNumber++;
                 var cells = BuildCells(point, rowNumber);
                 var rowHeight = EstimateRowHeight(cells);
+
                 if (_cursorY - rowHeight < ContentBottom)
                 {
                     NewPage();
                     DrawIedHeader(ied, points, continued: true);
                     DrawTableHeader();
                 }
+
                 DrawRow(cells, rowHeight);
             }
 
@@ -211,12 +220,14 @@ internal static class IoFatReportLayoutEngine
             var headers = new[] { "#", "Signal", "Expected state", "ON / TRUE evidence", "OFF / FALSE evidence", "Result" };
             var x = Margin;
             const double height = 22d;
+
             for (var index = 0; index < headers.Length; index++)
             {
                 _page.Rect(x, _cursorY, widths[index], height, SoftBlue, Border, 0.45d);
                 _page.Text(x + 5d, _cursorY - 14.5d, widths[index] - 10d, headers[index], IoFatReportFontKind.Bold, 6.15d, BrandBlue);
                 x += widths[index];
             }
+
             _cursorY -= height;
         }
 
@@ -224,19 +235,23 @@ internal static class IoFatReportLayoutEngine
         {
             var widths = ColumnWidths();
             var x = Margin;
+
             for (var index = 0; index < cells.Count; index++)
             {
                 var cell = cells[index];
                 _page.Rect(x, _cursorY, widths[index], rowHeight, White, SoftLine, 0.35d);
-                var lines = WrapText(cell.Text, widths[index] - 10d, cell.FontSize, cell.MaxLines);
+
+                var lines = WrapText(cell.Text, widths[index] - 10d, cell.FontSize);
                 var y = _cursorY - 10d;
                 foreach (var line in lines)
                 {
                     _page.Text(x + 5d, y, widths[index] - 10d, line, cell.Font, cell.FontSize, cell.Color);
                     y -= cell.FontSize + 1.7d;
                 }
+
                 x += widths[index];
             }
+
             _cursorY -= rowHeight;
         }
 
@@ -245,12 +260,12 @@ internal static class IoFatReportLayoutEngine
             var stateColor = ResolvePointColor(point.Runtime.State);
             return new[]
             {
-                new ReportCell(rowNumber.ToString(CultureInfo.InvariantCulture), IoFatReportFontKind.Mono, 6d, Ink, 1),
-                new ReportCell(point.SignalName, IoFatReportFontKind.Bold, 6.7d, Ink, 3),
-                new ReportCell(ExpectedStateText(point), IoFatReportFontKind.Regular, 6.35d, Ink, 2),
-                new ReportCell(RelayTime(point.Runtime.OnEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OnEvidence == null ? Muted : Pass, 2),
-                new ReportCell(RelayTime(point.Runtime.OffEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OffEvidence == null ? Muted : Pass, 2),
-                new ReportCell(ResultText(point.Runtime.State), IoFatReportFontKind.Bold, 6.6d, stateColor, 1)
+                new ReportCell(rowNumber.ToString(CultureInfo.InvariantCulture), IoFatReportFontKind.Mono, 6d, Ink),
+                new ReportCell(point.SignalName, IoFatReportFontKind.Bold, 6.7d, Ink),
+                new ReportCell(ExpectedStateText(point), IoFatReportFontKind.Regular, 6.35d, Ink),
+                new ReportCell(RelayTime(point.Runtime.OnEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OnEvidence == null ? Muted : Pass),
+                new ReportCell(RelayTime(point.Runtime.OffEvidence), IoFatReportFontKind.Mono, 6.2d, point.Runtime.OffEvidence == null ? Muted : Pass),
+                new ReportCell(ResultText(point.Runtime.State), IoFatReportFontKind.Bold, 6.6d, stateColor)
             };
         }
 
@@ -258,8 +273,10 @@ internal static class IoFatReportLayoutEngine
         {
             var widths = ColumnWidths();
             var maximum = 1;
+
             for (var index = 0; index < cells.Count; index++)
-                maximum = Math.Max(maximum, WrapText(cells[index].Text, widths[index] - 10d, cells[index].FontSize, cells[index].MaxLines).Count);
+                maximum = Math.Max(maximum, WrapText(cells[index].Text, widths[index] - 10d, cells[index].FontSize).Count);
+
             return Math.Max(29d, 10d + (maximum * 8.2d));
         }
 
@@ -274,7 +291,7 @@ internal static class IoFatReportLayoutEngine
         }
     }
 
-    private sealed record ReportCell(string Text, IoFatReportFontKind Font, double FontSize, IoFatReportColor Color, int MaxLines);
+    private sealed record ReportCell(string Text, IoFatReportFontKind Font, double FontSize, IoFatReportColor Color);
 
     private sealed class PageBuilder
     {
@@ -361,9 +378,20 @@ internal static class IoFatReportLayoutEngine
     private static string NormalizeExpectedLabel(string? value, string prefix, string booleanText)
     {
         var clean = Clean(value);
+
+        foreach (var suffix in new[] { " (1)", " (0)", " (True)", " (False)" })
+        {
+            if (clean.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                clean = clean[..^suffix.Length].Trim();
+                break;
+            }
+        }
+
         if (clean.Equals("1", StringComparison.OrdinalIgnoreCase) ||
             clean.Equals("true", StringComparison.OrdinalIgnoreCase))
             return "ON";
+
         if (clean.Equals("0", StringComparison.OrdinalIgnoreCase) ||
             clean.Equals("false", StringComparison.OrdinalIgnoreCase))
             return "OFF";
@@ -379,6 +407,7 @@ internal static class IoFatReportLayoutEngine
     {
         if (evidence?.IedTimestamp == null)
             return "-";
+
         return evidence.IedTimestamp.Value.ToString("yyyy-MM-dd\nHH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 
@@ -393,75 +422,85 @@ internal static class IoFatReportLayoutEngine
         return values.Count == 0 ? "Device details not supplied" : string.Join("  |  ", values);
     }
 
-    private static IReadOnlyList<string> WrapText(string? value, double width, double fontSize, int maxLines)
+    /// <summary>
+    /// Wraps text without inserting ellipsis. Evidence rows must never imply that
+    /// a timestamp, expected state, or result is incomplete when it is actually present.
+    /// </summary>
+    private static IReadOnlyList<string> WrapText(string? value, double width, double fontSize)
     {
-        var input = (value ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-        if (string.IsNullOrWhiteSpace(input)) return new[] { "-" };
+        var input = (value ?? string.Empty)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n');
+
+        if (string.IsNullOrWhiteSpace(input))
+            return new[] { "-" };
+
         var charsPerLine = Math.Max(7, (int)Math.Floor(width / Math.Max(2.4d, fontSize * 0.49d)));
         var lines = new List<string>();
-        var truncated = false;
+
         foreach (var paragraphValue in input.Split('\n'))
         {
             var paragraph = SanitizeReportText(paragraphValue);
-            if (paragraph.Length == 0) paragraph = "-";
+            if (paragraph.Length == 0)
+            {
+                lines.Add("-");
+                continue;
+            }
+
             var words = paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var current = new StringBuilder();
+
             foreach (var originalWord in words)
             {
                 var word = originalWord;
+
                 while (word.Length > charsPerLine)
                 {
                     if (current.Length > 0)
                     {
                         lines.Add(current.ToString());
                         current.Clear();
-                        if (lines.Count >= maxLines)
-                        {
-                            truncated = true;
-                            break;
-                        }
                     }
+
                     lines.Add(word[..charsPerLine]);
                     word = word[charsPerLine..];
-                    if (lines.Count >= maxLines)
-                    {
-                        truncated = word.Length > 0;
-                        break;
-                    }
                 }
-                if (lines.Count >= maxLines) break;
-                if (current.Length == 0) current.Append(word);
-                else if (current.Length + 1 + word.Length <= charsPerLine) current.Append(' ').Append(word);
+
+                if (word.Length == 0)
+                    continue;
+
+                if (current.Length == 0)
+                {
+                    current.Append(word);
+                }
+                else if (current.Length + 1 + word.Length <= charsPerLine)
+                {
+                    current.Append(' ').Append(word);
+                }
                 else
                 {
                     lines.Add(current.ToString());
                     current.Clear().Append(word);
-                    if (lines.Count >= maxLines)
-                    {
-                        truncated = true;
-                        break;
-                    }
                 }
             }
-            if (lines.Count >= maxLines) break;
-            if (current.Length > 0) lines.Add(current.ToString());
-            if (lines.Count >= maxLines)
-            {
-                truncated = true;
-                break;
-            }
+
+            if (current.Length > 0)
+                lines.Add(current.ToString());
         }
-        if (lines.Count == 0) lines.Add("-");
-        if (lines.Count > maxLines) lines = lines.Take(maxLines).ToList();
-        if (truncated && lines[^1].Length > 3)
-            lines[^1] = lines[^1][..Math.Max(0, lines[^1].Length - 3)] + "...";
-        return lines;
+
+        return lines.Count == 0 ? new[] { "-" } : lines;
     }
 
     internal static string SanitizeReportText(string? value)
     {
-        var normalized = (value ?? string.Empty).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
-        if (string.IsNullOrWhiteSpace(normalized)) return "-";
+        var normalized = (value ?? string.Empty)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(normalized))
+            return "-";
+
         var builder = new StringBuilder(normalized.Length);
         foreach (var character in normalized)
         {
@@ -476,19 +515,24 @@ internal static class IoFatReportLayoutEngine
                 _ => ' '
             });
         }
+
         return builder.ToString().Trim();
     }
 
     private static string Clean(string? value)
     {
-        var normalized = (value ?? string.Empty).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
+        var normalized = (value ?? string.Empty)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+
         return string.IsNullOrWhiteSpace(normalized) ? "-" : normalized;
     }
 
-    private static string Truncate(string? value, int maximum)
+    private static string FitHeaderText(string? value, int maximum)
     {
         var clean = Clean(value);
-        return clean.Length <= maximum || maximum <= 3 ? clean : clean[..(maximum - 3)] + "...";
+        return clean.Length <= maximum || maximum <= 1 ? clean : clean[..maximum];
     }
 
     private static IoFatReportColor Color(string hex) => IoFatReportColor.FromHex(hex);
