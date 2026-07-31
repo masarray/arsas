@@ -11,6 +11,7 @@ public partial class IoListTestingWindow
 {
     private const string FatWorkspaceModeTag = "ARSAS_FAT_WORKSPACE_MODE";
     private static readonly bool FatWorkspaceModeRegistered = RegisterFatWorkspaceMode();
+    private bool _fatWorkspaceModeInstalled;
 
     private static bool RegisterFatWorkspaceMode()
     {
@@ -29,15 +30,34 @@ public partial class IoListTestingWindow
 
     private void InstallFatWorkspaceModeSwitch()
     {
-        var engineeringButton = VisualDescendants<Button>(this)
+        if (_fatWorkspaceModeInstalled)
+        {
+            if (Owner is MainWindow existingOwner)
+                existingOwner.RegisterLoadedIoFatWindow(this);
+            return;
+        }
+
+        var originalEngineeringButton = VisualDescendants<Button>(this)
             .FirstOrDefault(button => string.Equals(button.Content?.ToString(), "Engineering", StringComparison.Ordinal));
-        if (engineeringButton?.Parent is not WrapPanel actions ||
-            actions.Children.OfType<FrameworkElement>().Any(child => Equals(child.Tag, FatWorkspaceModeTag)))
+        if (originalEngineeringButton?.Parent is not WrapPanel actions)
             return;
 
-        engineeringButton.Content = "Engineering Workspace";
-        engineeringButton.ToolTip = "Save this FAT workspace and return to the main Engineering workspace";
-        engineeringButton.Margin = new Thickness(0);
+        var originalIndex = actions.Children.IndexOf(originalEngineeringButton);
+        var engineeringButton = new Button
+        {
+            Content = "Engineering Workspace",
+            Style = originalEngineeringButton.Style,
+            Padding = originalEngineeringButton.Padding,
+            Margin = new Thickness(0),
+            FontSize = originalEngineeringButton.FontSize,
+            FontWeight = originalEngineeringButton.FontWeight,
+            ToolTip = "Return to Engineering without unloading this FAT project",
+            VerticalAlignment = originalEngineeringButton.VerticalAlignment,
+            HorizontalAlignment = originalEngineeringButton.HorizontalAlignment
+        };
+        engineeringButton.Click += EngineeringWorkspaceMode_Click;
+
+        actions.Children.Remove(originalEngineeringButton);
 
         var selectedMode = new Border
         {
@@ -49,7 +69,7 @@ public partial class IoListTestingWindow
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
-                Text = "IO LIST FAT",
+                Text = "IO LIST FAT · LOADED",
                 Foreground = Brushes.White,
                 FontSize = 10.5,
                 FontWeight = FontWeights.Bold,
@@ -57,8 +77,32 @@ public partial class IoListTestingWindow
             }
         };
 
-        var index = actions.Children.IndexOf(engineeringButton);
-        actions.Children.Insert(Math.Max(0, index), selectedMode);
+        actions.Children.Insert(Math.Max(0, originalIndex), selectedMode);
+        actions.Children.Insert(Math.Max(0, originalIndex + 1), engineeringButton);
+        Closed += FatWorkspace_Closed;
+        _fatWorkspaceModeInstalled = true;
+
+        if (Owner is MainWindow owner)
+            owner.RegisterLoadedIoFatWindow(this);
+    }
+
+    private void EngineeringWorkspaceMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (Owner is MainWindow owner)
+        {
+            owner.ShowEngineeringWorkspaceFromFat(this);
+            return;
+        }
+
+        Storage?.ScheduleSave();
+        Hide();
+    }
+
+    private void FatWorkspace_Closed(object? sender, EventArgs e)
+    {
+        Closed -= FatWorkspace_Closed;
+        if (Owner is MainWindow owner)
+            owner.RegisterLoadedIoFatWindow(this);
     }
 
     private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
