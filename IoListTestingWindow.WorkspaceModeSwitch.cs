@@ -44,7 +44,7 @@ public partial class IoListTestingWindow
             Tag = FatWorkspaceModeTag,
             Background = TryFindResource("Accent") as Brush ?? FatWorkspaceBrush("#2563EB"),
             CornerRadius = new CornerRadius(13),
-            Padding = new Thickness(11, 7),
+            Padding = new Thickness(11, 7, 11, 7),
             Margin = new Thickness(0, 0, 6, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
