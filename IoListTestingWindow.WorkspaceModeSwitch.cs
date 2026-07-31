@@ -79,7 +79,6 @@ public partial class IoListTestingWindow
 
         actions.Children.Insert(Math.Max(0, originalIndex), selectedMode);
         actions.Children.Insert(Math.Max(0, originalIndex + 1), engineeringButton);
-        Closed += FatWorkspace_Closed;
         _fatWorkspaceModeInstalled = true;
 
         if (Owner is MainWindow owner)
@@ -96,13 +95,6 @@ public partial class IoListTestingWindow
 
         Storage?.ScheduleSave();
         Hide();
-    }
-
-    private void FatWorkspace_Closed(object? sender, EventArgs e)
-    {
-        Closed -= FatWorkspace_Closed;
-        if (Owner is MainWindow owner)
-            owner.RegisterLoadedIoFatWindow(this);
     }
 
     private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
