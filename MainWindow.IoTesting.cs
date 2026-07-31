@@ -230,6 +230,12 @@ public partial class MainWindow
 
     private async void OpenIoListTesting_Click(object sender, RoutedEventArgs e)
     {
+        if (_loadedIoFatWindow is { IsLoaded: true })
+        {
+            QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click(sender, e));
+            return;
+        }
+
         var dialog = new OpenFileDialog
         {
             Title = "Import ARSAS IO List FAT workbook",
@@ -289,6 +295,12 @@ public partial class MainWindow
 
     private async void OpenIoListPackage_Click(object sender, RoutedEventArgs e)
     {
+        if (_loadedIoFatWindow is { IsLoaded: true })
+        {
+            QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click(sender, e));
+            return;
+        }
+
         var dialog = new OpenFileDialog
         {
             Title = "Open ARSAS IO FAT project",
@@ -338,26 +350,35 @@ public partial class MainWindow
                 MessageBoxImage.Information);
         }
 
-        using var controller = launch.Session;
-        using var persistence = launch.Workspace;
+        var controller = launch.Session;
+        var persistence = launch.Workspace;
         var window = new IoListTestingWindow(launch.Project, controller, persistence) { Owner = this };
+        RegisterLoadedIoFatWindow(window);
         _activeIoTestSessionController = controller;
         Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
         _runtime.PointUpdated += Runtime_IoTestPointUpdated;
-        Hide();
-        try
+
+        void WindowClosed(object? sender, EventArgs args)
         {
-            window.ShowDialog();
-        }
-        finally
-        {
+            window.Closed -= WindowClosed;
             _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
-            _activeIoTestSessionController = null;
+            if (ReferenceEquals(_activeIoTestSessionController, controller))
+                _activeIoTestSessionController = null;
+            controller.Dispose();
+            persistence.Dispose();
+
+            if (!IsLoaded)
+                return;
+            IsEnabled = true;
             Show();
-            if (WindowState == System.Windows.WindowState.Minimized)
-                WindowState = System.Windows.WindowState.Normal;
+            if (WindowState == WindowState.Minimized)
+                WindowState = WindowState.Normal;
             Activate();
         }
+
+        window.Closed += WindowClosed;
+        Hide();
+        window.Show();
         return Task.CompletedTask;
     }
 
