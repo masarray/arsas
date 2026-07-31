@@ -47,7 +47,7 @@ public partial class MainWindow
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(16),
             Padding = new Thickness(4),
-            Margin = new Thickness(10, 0),
+            Margin = new Thickness(10, 0, 10, 0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             ToolTip = "Switch between Engineering and IO List FAT workspaces"
@@ -59,7 +59,7 @@ public partial class MainWindow
         {
             Background = TryFindResource("Accent") as Brush ?? WorkspaceBrush("#2563EB"),
             CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(12, 7),
+            Padding = new Thickness(12, 7, 12, 7),
             Child = new TextBlock
             {
                 Text = "ENGINEERING",
@@ -74,7 +74,7 @@ public partial class MainWindow
         {
             Content = "IO LIST FAT",
             Style = TryFindResource("SoftButton") as Style,
-            Padding = new Thickness(12, 7),
+            Padding = new Thickness(12, 7, 12, 7),
             Margin = new Thickness(4, 0, 0, 0),
             FontSize = 10.5,
             FontWeight = FontWeights.Bold,
