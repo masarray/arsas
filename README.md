@@ -34,6 +34,8 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 </div>
 
 > **Current stable release: ARSAS v1.6.19.** The stable Windows package now includes the release-grade IO List FAT workflow, persistent Engineering/FAT workspace switching, executive evidence reporting, one-click GOOSE entry, and bounded one-click SMV snapshot workflow described below.
+>
+> **Verified publication:** source commit [`990d1d1`](https://github.com/masarray/arsas/commit/990d1d1618704f1b8f4ee39a1d156780077734a7) · installer 51.6 MiB · portable ZIP 70.0 MiB · [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) · public binaries currently unsigned with Authenticode.
 
 ## What changed in v1.6.19
 
