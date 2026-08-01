@@ -1,52 +1,58 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.18",
-  "title": "Reliable fault-record transfer and exact RCB export",
-  "titleId": "Transfer fault record yang andal dan export RCB yang presisi",
-  "summary": "ARSAS 1.6.18 strengthens field workflows for IEC 61850 fault-record download, physical IED identity, and selected-RCB CID export while keeping the user interface compact and evidence-driven.",
-  "summaryId": "ARSAS 1.6.18 memperkuat workflow lapangan untuk download fault record IEC 61850, identitas fisik IED, dan export CID selected-RCB dengan UI yang tetap compact serta berbasis evidence.",
+  "version": "1.6.19",
+  "title": "Release-grade IO FAT, fast workspace switching, and one-click process-bus capture",
+  "titleId": "IO FAT siap rilis, perpindahan workspace cepat, dan capture process bus sekali klik",
+  "summary": "ARSAS 1.6.19 delivers a release-grade IEC 61850 IO List FAT workflow with Rev.3 event-log traceability, executive evidence reporting, persistent Engineering/FAT workspace switching, and one-click receive-only GOOSE and bounded SMV entry from each IED card.",
+  "summaryId": "ARSAS 1.6.19 menghadirkan workflow FAT IO List IEC 61850 yang siap rilis dengan traceability event log Rev.3, report evidence eksekutif, perpindahan workspace Engineering/FAT yang tetap loaded, serta akses GOOSE receive-only dan SMV bounded sekali klik dari setiap IED card.",
   "highlights": [
-    "Fault-record transfer now supports adaptive remote paths, large segmented COTP responses, automatic file scanning, overwrite-safe redownloads, and detailed failure diagnostics.",
-    "Physical IED identity is resolved independently from complete MMS Logical Device domain names, preventing incorrect IEDName export.",
-    "Selected-RCB CID export preserves the exact live MMS RCB name and prevents invalid duplicate instance suffixes such as A_BRCB_120101.",
-    "The RCB export and fault-record windows use cleaner compact layouts with clearer availability, downloaded-state, and selection feedback."
+    "Rev.3 FAT_Points_Import and Document_Control workbooks preserve the exact IEC 61850 event-log search reference, source state semantics, report display reference, document metadata and review reason without inventing missing telegrams.",
+    "The native executive FAT PDF now presents AS TESTED document control, document number and revision, exact IEC 61850 reference, expected state, ON/OFF relay timestamps, result summary, test basis and sign-off areas.",
+    "A loaded IO List FAT project remains in memory while the user moves to Engineering and back; another workbook or .arsas project is loaded only through an explicit replacement action.",
+    "GOOSE can be opened directly from the selected IED card, with routed Windows NIC to Npcap resolution and automatic receive-only capture when one adapter is proven.",
+    "SMV can be opened directly from an IED card, select the first discovered stream, capture a bounded two-cycle snapshot and render raw values plus waveform evidence."
   ],
   "highlightsId": [
-    "Transfer fault record kini mendukung adaptive remote path, respons COTP segmented berukuran besar, scan file otomatis, redownload dengan overwrite aman, dan diagnostic kegagalan yang rinci.",
-    "Identitas fisik IED diselesaikan terpisah dari nama domain MMS Logical Device yang lengkap sehingga export IEDName tidak lagi salah.",
-    "Export CID selected-RCB mempertahankan nama RCB MMS live secara presisi dan mencegah suffix instance ganda yang tidak valid seperti A_BRCB_120101.",
-    "Window RCB export dan fault record menggunakan layout compact yang lebih bersih dengan feedback availability, status downloaded, dan selection yang lebih jelas."
+    "Workbook Rev.3 FAT_Points_Import dan Document_Control mempertahankan exact IEC 61850 event-log search reference, source state semantics, report display reference, metadata dokumen dan review reason tanpa membuat telegram yang hilang.",
+    "PDF FAT eksekutif native kini menampilkan document control AS TESTED, document number dan revision, exact IEC 61850 reference, expected state, timestamp relay ON/OFF, result summary, test basis dan area sign-off.",
+    "Project IO List FAT yang sudah loaded tetap berada di memori saat user pindah ke Engineering lalu kembali; workbook atau project .arsas lain hanya dibuka melalui tindakan replacement yang eksplisit.",
+    "GOOSE dapat dibuka langsung dari IED card terpilih, dengan pemetaan routed Windows NIC ke Npcap dan capture receive-only otomatis saat satu adapter terbukti.",
+    "SMV dapat dibuka langsung dari IED card, memilih stream pertama hasil discovery, capture snapshot bounded dua siklus, lalu menampilkan raw value dan waveform evidence."
   ],
   "improvements": [
-    "COMTRADE companion files and vendor package-style records can be discovered and downloaded through the same guarded file-service workflow.",
-    "File transfer diagnostics capture the failing MMS stage, invoke ID, FRSM, session state, and request/response evidence.",
-    "Downloaded fault records remain selectable for intentional overwrite instead of being permanently disabled.",
-    "Exact live RCB-name regressions are protected by engine tests and application release gates.",
-    "Installer, portable ZIP, and combined SHA-256 checksums are published together after build and silent install/uninstall smoke tests."
+    "IO FAT preparation cards use smoothed determinate progress derived from real connection, discovery, binding and acquisition readiness instead of an infinite animation.",
+    "Known Application display wrappers are normalized during live signal matching while exact source and event-log references remain preserved for reporting and diagnostics.",
+    "Completed evidence rows are excluded before preflight, live preparation and session start, allowing pending rows to continue without erasing or re-requesting completed evidence.",
+    "Window lifecycle guards prevent Engineering from being shown again during application shutdown while retaining instant hide/show behavior during normal workspace switching.",
+    "The FAT report uses a calmer document-style hierarchy, neutral document control, inline device results, smaller title typography and a modern font fallback stack.",
+    "Release gates cover the full application build, IO FAT regression suite, deterministic SV evidence tests, portable packaging, installer smoke tests, checksums, SPDX SBOM and provenance."
   ],
   "improvementsId": [
-    "File pendamping COMTRADE dan record berbentuk vendor package dapat ditemukan serta diunduh melalui workflow file service yang sama dan tetap guarded.",
-    "Diagnostic transfer file merekam tahap MMS yang gagal, invoke ID, FRSM, status session, serta evidence request/response.",
-    "Fault record yang sudah terdownload tetap dapat dipilih untuk overwrite yang disengaja dan tidak dinonaktifkan permanen.",
-    "Regression nama RCB live yang presisi dilindungi oleh test engine dan release gate aplikasi.",
-    "Installer, portable ZIP, dan checksum SHA-256 gabungan dipublikasikan bersama setelah build serta silent install/uninstall smoke test."
+    "Card preparation IO FAT memakai smoothed determinate progress dari koneksi, discovery, binding dan acquisition readiness yang nyata, bukan infinite animation.",
+    "Wrapper display Application yang dikenal dinormalisasi saat live signal matching, sedangkan exact source dan event-log reference tetap dipertahankan untuk report dan diagnostic.",
+    "Row evidence completed dikecualikan sebelum preflight, live preparation dan session start sehingga row pending dapat dilanjutkan tanpa menghapus atau meminta ulang evidence completed.",
+    "Lifecycle guard window mencegah Engineering ditampilkan kembali saat aplikasi shutdown tetapi tetap mempertahankan hide/show instan pada perpindahan workspace normal.",
+    "Report FAT memakai hierarchy document-style yang lebih tenang, document control netral, device result inline, title lebih kecil dan modern font fallback stack.",
+    "Release gate mencakup full application build, regression IO FAT, deterministic SV evidence test, portable packaging, installer smoke test, checksum, SPDX SBOM dan provenance."
   ],
   "knownLimitations": [
     "Windows x64 is the only packaged desktop platform in the current stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
-    "Raw-Ethernet GOOSE and Sampled Values workflows require Npcap, an approved adapter and suitable capture permissions.",
-    "Relay file-service directories and COMTRADE companion sets vary by vendor; a successful transfer does not prove record completeness or scaling correctness.",
-    "Active control and report-configuration writes still require approved procedures, plant authority and independent verification.",
-    "ARSAS is an engineering evidence tool and does not provide IEC 61850 conformance certification or replace calibrated protection testing."
+    "Raw-Ethernet GOOSE and Sampled Values workflows require Npcap, an approved capture adapter, suitable permissions and visibility of the relevant multicast traffic.",
+    "The MMS route to an IED may not identify a separate process-bus NIC; ARSAS keeps manual adapter selection as the safe fallback when automatic mapping is not unique.",
+    "Automatic IO List transition testing currently focuses on approved SDI points; SAI analog tolerance and authorized SDO command campaigns are not silently treated as equivalent tests.",
+    "Raw SMV lanes are not calibrated current or voltage measurements until trusted SCL mapping, scaling, synchronization and independent verification are available.",
+    "ARSAS is an engineering evidence tool and does not provide IEC 61850 conformance certification or replace calibrated protection testing and approved FAT procedures."
   ],
   "knownLimitationsId": [
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release saat ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
-    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan Npcap, adapter yang disetujui dan permission capture yang sesuai.",
-    "Struktur directory file service relay dan pasangan file COMTRADE berbeda antar-vendor; transfer berhasil tidak membuktikan record lengkap atau scaling sudah benar.",
-    "Active control dan write pada konfigurasi reporting tetap memerlukan procedure yang disetujui, plant authority dan independent verification.",
-    "ARSAS adalah tool engineering evidence dan tidak memberikan sertifikasi conformity IEC 61850 atau menggantikan calibrated protection testing."
+    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan Npcap, capture adapter yang disetujui, permission yang sesuai dan visibility traffic multicast terkait.",
+    "Route MMS menuju IED belum tentu menunjukkan process-bus NIC yang terpisah; ARSAS mempertahankan pemilihan adapter manual sebagai fallback aman ketika automatic mapping tidak unik.",
+    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance SAI dan authorized SDO command campaign tidak diam-diam dianggap sebagai test yang setara.",
+    "Raw lane SMV bukan calibrated current atau voltage measurement sampai trusted SCL mapping, scaling, synchronization dan independent verification tersedia.",
+    "ARSAS adalah tool engineering evidence dan tidak memberikan sertifikasi conformance IEC 61850 atau menggantikan calibrated protection testing serta procedure FAT yang disetujui."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -59,11 +65,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.18 stable live-value workspace with IED, value, quality and timestamp evidence",
-    "altId": "Workspace live value ARSAS 1.6.18 stable dengan evidence IED, value, quality dan timestamp",
-    "caption": "Representative ARSAS 1.6.18 stable workspace. Device identity, value, quality, timestamp and acquisition context remain visible together.",
-    "captionId": "Representasi workspace stable ARSAS 1.6.18. Identitas device, value, quality, timestamp dan konteks acquisition tetap terlihat bersama."
+    "alt": "Representative ARSAS 1.6.19 Engineering workspace with attributable IED values, quality and timestamps",
+    "altId": "Representasi Engineering workspace ARSAS 1.6.19 dengan value IED, quality dan timestamp yang attributable",
+    "caption": "Representative Engineering workspace for ARSAS 1.6.19. The release also adds the separate loaded IO List FAT workspace and direct GOOSE/SMV entry from IED context.",
+    "captionId": "Representasi Engineering workspace ARSAS 1.6.19. Release ini juga menambahkan workspace IO List FAT terpisah yang tetap loaded serta akses GOOSE/SMV langsung dari konteks IED."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.18"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.19"
 }
