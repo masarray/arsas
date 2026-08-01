@@ -65,7 +65,6 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          SOURCE_COMMIT: ${{ env.SOURCE_COMMIT }}
         shell: python
         run: |
           import json
@@ -162,13 +161,13 @@ jobs:
           cp _release-sync/published.json .release/published.json
           if git diff --quiet -- landing/latest.json .release/published.json; then
             echo "Main release records are already synchronized."
-            exit 0
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add landing/latest.json .release/published.json
+            git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release evidence"
+            git push origin HEAD:main
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add landing/latest.json .release/published.json
-          git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release evidence"
-          git push origin HEAD:main
 
       - name: Update independent release-evidence branch
         env:
