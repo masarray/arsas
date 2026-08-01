@@ -1,0 +1,202 @@
+name: Synchronize release documentation evidence
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".release/windows.json"
+      - ".github/workflows/sync-release-documentation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-release-documentation
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    name: Synchronize stable release evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve canonical stable version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid VERSION value: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Read exact GitHub Release metadata and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _release-sync
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > _release-sync/release.json
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir _release-sync \
+            --pattern 'ARSAS-Windows-x64-SHA256SUMS.txt' \
+            --clobber
+          git fetch --tags --force
+          source_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+          if [[ ! "$source_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve tagged source commit for $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "SOURCE_COMMIT=$source_commit" >> "$GITHUB_ENV"
+
+      - name: Build normalized public release evidence
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          SOURCE_COMMIT: ${{ env.SOURCE_COMMIT }}
+        shell: python
+        run: |
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path("_release-sync")
+          release = json.loads((root / "release.json").read_text(encoding="utf-8"))
+          if release.get("draft") or release.get("prerelease"):
+              raise SystemExit("Only a published stable release may feed public documentation")
+          if release.get("tag_name") != os.environ["RELEASE_TAG"]:
+              raise SystemExit("Release tag does not match VERSION")
+
+          assets = {item.get("name"): item for item in release.get("assets", [])}
+          required = {
+              "installer": "ARSAS-Windows-x64-Setup.exe",
+              "portable": "ARSAS-Windows-x64-Portable.zip",
+              "checksums": "ARSAS-Windows-x64-SHA256SUMS.txt",
+          }
+          for name in required.values():
+              if name not in assets:
+                  raise SystemExit(f"Required release asset is missing: {name}")
+
+          checksum_path = root / required["checksums"]
+          hashes = {}
+          for line in checksum_path.read_text(encoding="ascii").splitlines():
+              match = re.fullmatch(r"([0-9a-fA-F]{64})\s+\*?(.+)", line.strip())
+              if match:
+                  hashes[match.group(2).strip()] = match.group(1).lower()
+          for name in (required["installer"], required["portable"]):
+              if name not in hashes:
+                  raise SystemExit(f"SHA-256 is missing for {name}")
+              if int(assets[name].get("size", 0)) < 1_000_000:
+                  raise SystemExit(f"Release asset size is invalid for {name}")
+
+          stable_root = "https://github.com/masarray/arsas/releases/latest/download"
+          evidence = {
+              "schemaVersion": 1,
+              "product": "ARSAS",
+              "version": os.environ["RELEASE_VERSION"],
+              "tag": os.environ["RELEASE_TAG"],
+              "channel": "stable",
+              "publishedAtUtc": release["published_at"],
+              "sourceCommit": os.environ["SOURCE_COMMIT"],
+              "releaseUrl": release["html_url"],
+              "installer": {
+                  "name": required["installer"],
+                  "url": f"{stable_root}/{required['installer']}",
+                  "sha256": hashes[required["installer"]],
+                  "sizeBytes": int(assets[required["installer"]]["size"]),
+              },
+              "portable": {
+                  "name": required["portable"],
+                  "url": f"{stable_root}/{required['portable']}",
+                  "sha256": hashes[required["portable"]],
+                  "sizeBytes": int(assets[required["portable"]]["size"]),
+              },
+              "checksums": {
+                  "name": required["checksums"],
+                  "url": f"{stable_root}/{required['checksums']}",
+                  "sizeBytes": int(assets[required["checksums"]]["size"]),
+              },
+              "codeSigning": {
+                  "status": "unsigned",
+                  "platform": "Authenticode",
+                  "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users.",
+              },
+          }
+          rendered = json.dumps(evidence, indent=2) + "\n"
+          (root / "published.json").write_text(rendered, encoding="utf-8")
+
+      - name: Validate normalized evidence
+        shell: python
+        run: |
+          import json
+          import re
+          from pathlib import Path
+          evidence = json.loads(Path("_release-sync/published.json").read_text())
+          if evidence.get("schemaVersion") != 1 or evidence.get("product") != "ARSAS" or evidence.get("channel") != "stable":
+              raise SystemExit("Normalized release identity is invalid")
+          if not re.fullmatch(r"[0-9a-f]{40}", evidence.get("sourceCommit", "")):
+              raise SystemExit("Tagged source commit is invalid")
+          for key in ("installer", "portable"):
+              item = evidence[key]
+              if not re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")) or int(item.get("sizeBytes", 0)) < 1_000_000:
+                  raise SystemExit(f"Invalid {key} evidence")
+
+      - name: Update main release records
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp _release-sync/published.json landing/latest.json
+          cp _release-sync/published.json .release/published.json
+          if git diff --quiet -- landing/latest.json .release/published.json; then
+            echo "Main release records are already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add landing/latest.json .release/published.json
+          git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release evidence"
+          git push origin HEAD:main
+
+      - name: Update independent release-evidence branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          content="$(base64 -w 0 _release-sync/published.json)"
+          api_path="repos/$GITHUB_REPOSITORY/contents/published.json"
+          existing_sha="$(gh api "$api_path?ref=release-evidence" --jq .sha)"
+          body="$(python - "$content" "$existing_sha" <<'PY'
+          import json, sys
+          print(json.dumps({
+              "message": "docs: synchronize stable ARSAS release evidence",
+              "content": sys.argv[1],
+              "sha": sys.argv[2],
+              "branch": "release-evidence",
+          }))
+          PY
+          )"
+          printf '%s' "$body" | gh api --method PUT "$api_path" --input - >/dev/null
+
+      - name: Summarize synchronized release
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          value = json.loads(Path("_release-sync/published.json").read_text())
+          print(f"ARSAS {value['version']} release documentation evidence synchronized")
+          print(f"Installer: {value['installer']['sizeBytes']} bytes · {value['installer']['sha256']}")
+          print(f"Portable: {value['portable']['sizeBytes']} bytes · {value['portable']['sha256']}")
