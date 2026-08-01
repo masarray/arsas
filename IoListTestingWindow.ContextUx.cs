@@ -151,14 +151,14 @@ public partial class IoListTestingWindow
             return;
 
         var selectedIed = SelectedIed;
-        var preflight = IoTestSessionPreflight.Validate(selectedIed);
-        if (!preflight.Succeeded)
+        if (selectedIed == null)
         {
-            ShowActionResult(preflight, "FAT session scope is not ready");
+            var missingSelection = IoTestSessionPreflight.Validate(null);
+            ShowActionResult(missingSelection, "FAT session scope is not ready");
             return;
         }
 
-        var enabledReady = selectedIed!.TestPoints
+        var enabledReady = selectedIed.TestPoints
             .Where(point => point.TestEnabled && point.ImportReady)
             .ToList();
         var completedPoints = enabledReady
@@ -188,9 +188,27 @@ public partial class IoListTestingWindow
             explicitRetest = true;
         }
 
-        SetPreparingIed(selectedIed, $"Connecting {selectedIed.IedName} · {selectedIed.IpAddress}:102");
+        var protectedPoints = explicitRetest
+            ? Array.Empty<IoTestPointPlan>()
+            : completedPoints.ToArray();
+
+        // Completed evidence is outside the continuation scope from the first preflight
+        // through live-model preparation and Session.Start. This prevents a completed row
+        // that has since disappeared from the relay model from blocking otherwise-valid
+        // pending rows. The original TestEnabled flags are restored in the outer finally.
+        foreach (var point in protectedPoints)
+            point.TestEnabled = false;
+
         try
         {
+            var preflight = IoTestSessionPreflight.Validate(selectedIed);
+            if (!preflight.Succeeded)
+            {
+                ShowActionResult(preflight, "FAT session scope is not ready");
+                return;
+            }
+
+            SetPreparingIed(selectedIed, $"Connecting {selectedIed.IedName} · {selectedIed.IpAddress}:102");
             if (Owner is MainWindow engineeringWindow)
             {
                 var progress = new Progress<string>(message =>
@@ -214,23 +232,7 @@ public partial class IoListTestingWindow
                 }
             }
 
-            var protectedPoints = explicitRetest
-                ? Array.Empty<IoTestPointPlan>()
-                : completedPoints.ToArray();
-            IoTestSessionActionResult result;
-            try
-            {
-                foreach (var point in protectedPoints)
-                    point.TestEnabled = false;
-
-                result = Session.Start(selectedIed);
-            }
-            finally
-            {
-                foreach (var point in protectedPoints)
-                    point.TestEnabled = true;
-            }
-
+            var result = Session.Start(selectedIed);
             ShowActionResult(result, "FAT evidence session could not start");
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
@@ -258,6 +260,9 @@ public partial class IoListTestingWindow
         }
         finally
         {
+            foreach (var point in protectedPoints)
+                point.TestEnabled = true;
+
             selectedIed.SetPreparationState(false, selectedIed.LiveStatusText);
             SetPreparingIed(null, string.Empty);
             RaiseSelectedIedContextProperties();
