@@ -89,7 +89,7 @@ public sealed class IoTestLiveBindingService
 
     private static PointBinding BindPoint(IoTestPointPlan point, Iec61850MonitorDevice device)
     {
-        if (!point.ImportReady || string.IsNullOrWhiteSpace(point.ObjectReference))
+        if (!point.ImportReady || ImportedReferences(point).Count == 0)
         {
             return new PointBinding(
                 IoTestLiveBindingState.SignalNotFound,
@@ -98,64 +98,141 @@ public sealed class IoTestLiveBindingService
                 null);
         }
 
-        var expected = NormalizeReference(point.ObjectReference);
-        var exactLivePoint = device.Points.FirstOrDefault(item =>
-            NormalizeReference(item.IecReference).Equals(expected, StringComparison.OrdinalIgnoreCase));
-        if (exactLivePoint != null)
+        var expectedReferences = ImportedReferences(point)
+            .Select(NormalizeReference)
+            .Where(value => value.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var exactLivePoints = device.Points
+            .Where(item => expectedReferences.Contains(NormalizeReference(item.IecReference)))
+            .ToList();
+        if (exactLivePoints.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Exact imported object reference is already active in the live monitor.",
-                exactLivePoint.IecReference,
-                exactLivePoint);
+                "Exact imported IEC 61850 reference is already active in the live monitor.",
+                exactLivePoints[0].IecReference,
+                exactLivePoints[0]);
         }
 
-        var exactSignal = device.Signals.FirstOrDefault(item =>
-            !item.IsControlSignal &&
-            NormalizeReference(item.ObjectReference).Equals(expected, StringComparison.OrdinalIgnoreCase));
-        if (exactSignal != null)
+        var exactSignals = device.Signals
+            .Where(item => !item.IsControlSignal &&
+                           expectedReferences.Contains(NormalizeReference(item.ObjectReference)))
+            .ToList();
+        if (exactSignals.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundExact,
-                "Exact imported object reference is present in the discovered IED model.",
-                exactSignal.ObjectReference,
+                "Exact imported IEC 61850 reference is present in the discovered IED model.",
+                exactSignals[0].ObjectReference,
                 null);
         }
 
-        var expectedTelegram = NormalizeTelegram(point.ObjectReference, point.IedName);
+        var expectedTelegrams = ImportedReferences(point)
+            .Select(reference => NormalizeTelegram(reference, point.IedName))
+            .Where(value => value.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var livePointCandidates = device.Points
-            .Where(item => NormalizeTelegram(item.IecReference, device.Name)
-                .Equals(expectedTelegram, StringComparison.OrdinalIgnoreCase))
+            .Where(item => MatchesAnyTelegram(item.IecReference, device, expectedTelegrams))
             .ToList();
         if (livePointCandidates.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched after normalizing the IED-name prefix.",
+                "Live point matched uniquely after normalizing the IED/Application wrapper.",
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
 
         var signalCandidates = device.Signals
             .Where(item => !item.IsControlSignal &&
-                NormalizeTelegram(item.ObjectReference, device.Name)
-                    .Equals(expectedTelegram, StringComparison.OrdinalIgnoreCase))
+                           MatchesAnyTelegram(item.ObjectReference, device, expectedTelegrams))
             .ToList();
         if (signalCandidates.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched after normalizing the IED-name prefix.",
+                "Discovered signal matched uniquely after normalizing the IED/Application wrapper.",
                 signalCandidates[0].ObjectReference,
                 null);
         }
 
-        var reason = signalCandidates.Count > 1 || livePointCandidates.Count > 1
+        var reason = exactLivePoints.Count > 1 || exactSignals.Count > 1 ||
+                     signalCandidates.Count > 1 || livePointCandidates.Count > 1
             ? "More than one live candidate matched the imported telegram; automatic binding was withheld."
             : device.Signals.Count == 0
                 ? "The IED is loaded but its signal model has not been discovered yet."
-                : "The imported object reference was not found in the loaded IED model.";
+                : "None of the imported IEC 61850/event-log references was found in the loaded IED model.";
         return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null);
+    }
+
+    internal static IReadOnlyList<string> ImportedReferences(IoTestPointPlan point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        var references = new List<string>();
+
+        void Add(string? value)
+        {
+            var clean = RemoveFunctionalConstraintSuffix(value);
+            if (clean.Length > 0 && !references.Contains(clean, StringComparer.OrdinalIgnoreCase))
+                references.Add(clean);
+        }
+
+        Add(point.ObjectReference);
+        Add(point.EventLogSearchReference);
+        Add(point.SourceIecReference);
+        Add(point.ReportDisplayReference);
+
+        var eventReference = !string.IsNullOrWhiteSpace(point.EventLogSearchReference)
+            ? point.EventLogSearchReference.Trim()
+            : point.SourceIecReference?.Trim() ?? string.Empty;
+        if (eventReference.Length > 0)
+        {
+            var bindable = eventReference;
+            if (!string.IsNullOrWhiteSpace(point.DataAttribute) &&
+                !bindable.EndsWith("." + point.DataAttribute.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                bindable += "." + point.DataAttribute.Trim();
+            }
+
+            if (!bindable.Contains('/') && !string.IsNullOrWhiteSpace(point.LogicalDevice))
+                bindable = point.LogicalDevice.Trim() + "/" + bindable.TrimStart('/');
+
+            Add(bindable);
+            if (!string.IsNullOrWhiteSpace(point.IedName) &&
+                bindable.Contains('/') &&
+                !bindable.StartsWith(point.IedName, StringComparison.OrdinalIgnoreCase))
+            {
+                Add(point.IedName.Trim() + bindable);
+            }
+        }
+
+        return references;
+    }
+
+    private static string RemoveFunctionalConstraintSuffix(string? reference)
+    {
+        var value = (reference ?? string.Empty).Trim();
+        var marker = value.LastIndexOf(" [", StringComparison.Ordinal);
+        if (marker > 0 && value.EndsWith(']'))
+            value = value[..marker].TrimEnd();
+        return value;
+    }
+
+    private static bool MatchesAnyTelegram(
+        string? observedReference,
+        Iec61850MonitorDevice device,
+        IReadOnlySet<string> expectedTelegrams)
+    {
+        if (expectedTelegrams.Count == 0)
+            return false;
+
+        if (expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.Name)))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(device.SclIedName) &&
+               expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.SclIedName));
     }
 
     private static Iec61850MonitorDevice? FindDevice(
@@ -191,16 +268,26 @@ public sealed class IoTestLiveBindingService
 
     internal static string NormalizeTelegram(string? reference, string? iedName)
     {
-        var normalized = NormalizeReference(reference);
+        var normalized = NormalizeReference(RemoveFunctionalConstraintSuffix(reference));
         var slash = normalized.IndexOf('/');
         var name = (iedName ?? string.Empty).Trim().ToLowerInvariant();
         if (slash <= 0 || string.IsNullOrWhiteSpace(name))
             return normalized;
 
         var domain = normalized[..slash];
-        if (domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) && domain.Length > name.Length)
-            return domain[name.Length..] + normalized[slash..];
-        return normalized;
+        if (!domain.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+            return normalized;
+
+        var domainSuffix = domain[name.Length..];
+        var path = normalized[(slash + 1)..].TrimStart('/');
+
+        // Rev.3 report traceability may use IEDNameApplication/LD/LN.DO.DA,
+        // while the discovered MMS model uses IEDNameLD/LN.DO.DA. Both identify
+        // the same telegram; "Application" is a display wrapper, not an LD name.
+        if (domainSuffix.Equals("application", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        return domainSuffix.Length == 0 ? path : domainSuffix + "/" + path;
     }
 
     private sealed record PointBinding(

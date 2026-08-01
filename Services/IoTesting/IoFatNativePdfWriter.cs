@@ -47,9 +47,17 @@ internal static class IoFatNativePdfWriter
             pageIds.Add(pageId);
         }
 
-        var title = $"{project.ProjectName} - ARSAS IO FAT Evidence Report";
+        var primaryReference = project.Ieds
+            .SelectMany(ied => ied.TestPoints)
+            .Select(point => point.ObjectReference)
+            .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference))
+            ?? project.ProjectId;
+        var title = $"{project.ProjectName} - IEC 61850 FAT Evidence Report";
+        var subject = $"Customer-readable FAT summary. Detailed evidence is retained in the ARSAS project and Excel export. Primary IEC 61850 reference: {primaryReference}";
         var infoId = AddObject(
             $"<< /Title ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(title))}) " +
+            $"/Subject ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(subject))}) " +
+            "/Keywords (IEC 61850 FAT OFF ON OFF ARSAS) " +
             "/Author (ARSAS) " +
             "/Creator (ARSAS Native PDF and FixedDocument Engine, adapted from ARIEC60870) " +
             "/Producer (ARSAS Native PDF Engine) " +

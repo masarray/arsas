@@ -26,6 +26,7 @@ public static class IoFatReportPreviewService
             SourceWorkbookName = project.SourceWorkbookName,
             SourceWorkbookSha256 = project.SourceWorkbookSha256,
             ImportedAt = project.ImportedAt,
+            DocumentControl = project.DocumentControl,
             Ieds = new List<IoTestIedPlan> { ied }
         };
     }

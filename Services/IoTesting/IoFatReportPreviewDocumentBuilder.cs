@@ -18,7 +18,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 internal static class IoFatReportPreviewDocumentBuilder
 {
     private const double DipPerPdfPoint = 96d / 72d;
-    private static readonly FontFamily ReportFont = new("Arial, Segoe UI");
+    private static readonly FontFamily ReportFont = new("Inter, Segoe UI, Aptos, Arial");
     private static readonly FontFamily MonoFont = new("Consolas, Cascadia Mono");
 
     public static FixedDocument Build(
@@ -27,7 +27,8 @@ internal static class IoFatReportPreviewDocumentBuilder
         DateTimeOffset? generatedAt = null)
     {
         ArgumentNullException.ThrowIfNull(project);
-        var layout = IoFatReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        // Replaces the legacy IoFatReportLayoutEngine.Build route with the document-controlled event-log layout.
+        var layout = IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
         return Render(layout);
     }
 
@@ -123,21 +124,37 @@ internal static class IoFatReportPreviewDocumentBuilder
             FontSize = fontSize,
             FontWeight = command.Font == IoFatReportFontKind.Bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = ToBrush(command.Color),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            // The layout engine has already split every cell into explicit lines.
+            // Evidence must never be replaced with dots in the preview.
+            TextTrimming = TextTrimming.None,
             TextWrapping = TextWrapping.NoWrap,
-            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            LineHeight = Math.Max(fontSize + 1.5d, fontSize * 1.18d),
+            ClipToBounds = false,
             SnapsToDevicePixels = true
         };
         block.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Ideal);
         block.SetValue(TextOptions.TextRenderingModeProperty, TextRenderingMode.ClearType);
+
+        // Downscale only when the actual Windows font metrics are wider than the
+        // shared PDF-point estimate. This keeps PASS and timestamps complete while
+        // preserving the intended size whenever they already fit.
+        var textPresenter = new Viewbox
+        {
+            Child = block,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.DownOnly,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            ClipToBounds = false,
+            SnapsToDevicePixels = true
+        };
+
         Add(
             page,
-            block,
+            textPresenter,
             command.X * DipPerPdfPoint,
             top,
             Math.Max(4d, command.Width * DipPerPdfPoint),
-            Math.Max(fontSize + 3d, fontSize * 1.25d));
+            Math.Max(fontSize + 6d, fontSize * 1.65d));
     }
 
     private static void Add(FixedPage page, UIElement element, double x, double y, double width, double height)

@@ -38,6 +38,43 @@ public sealed class IoTestSignalSelectionServiceTests
     }
 
     [Fact]
+    public void Rev3ApplicationDisplayWrapper_MatchesDiscoveredMmsReference()
+    {
+        var ied = Ied(Point(
+            "UCC-IEC-0769",
+            "AA1C1F00R1Application/ADD/GGIO2.LockoutOp.stVal"));
+        var device = Device(Signal(
+            "Lockout operated",
+            "AA1C1F00R1ADD/GGIO2.LockoutOp.stVal"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.True(result.Succeeded);
+        var match = Assert.Single(result.Matches);
+        Assert.Equal("Lockout operated", match.Signal.Name);
+        Assert.True(match.UsedNormalizedIedPrefix);
+    }
+
+    [Fact]
+    public void ExactEventLogReference_IsUsedWhenDisplayReferenceDiffers()
+    {
+        var ied = Ied(Point(
+            "UCC-IEC-0773",
+            "AA1C1F00R1Application/CB1/XCBR1.TripOpnCmd.stVal",
+            eventLogReference: "CB1/XCBR1.TripOpnCmd",
+            sourceIecReference: "CB1/XCBR1.TripOpnCmd",
+            dataAttribute: "stVal"));
+        var device = Device(Signal(
+            "Protection operated",
+            "AA1C1F00R1CB1/XCBR1.TripOpnCmd.stVal"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.True(result.Succeeded);
+        Assert.Single(result.Matches);
+    }
+
+    [Fact]
     public void MissingSignal_RequestsOneFreshDiscoveryRetry()
     {
         var ied = Ied(Point("TP-001", "AA1C1F00R1ADD/GGIO2.Missing.stVal"));
@@ -102,7 +139,14 @@ public sealed class IoTestSignalSelectionServiceTests
         TestPoints = points.ToList()
     };
 
-    private static IoTestPointPlan Point(string id, string reference, string functionalConstraint = "ST") => new()
+    private static IoTestPointPlan Point(
+        string id,
+        string reference,
+        string functionalConstraint = "ST",
+        string eventLogReference = "",
+        string sourceIecReference = "",
+        string dataAttribute = "",
+        string logicalDevice = "") => new()
     {
         TestPointId = id,
         IedName = "AA1C1F00R1",
@@ -110,6 +154,10 @@ public sealed class IoTestSignalSelectionServiceTests
         SignalName = id,
         ObjectReference = reference,
         FunctionalConstraint = functionalConstraint,
+        EventLogSearchReference = eventLogReference,
+        SourceIecReference = sourceIecReference,
+        DataAttribute = dataAttribute,
+        LogicalDevice = logicalDevice,
         ExpectedOnText = "Active",
         ExpectedOffText = "InActive",
         ImportReady = true,
