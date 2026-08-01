@@ -5,7 +5,8 @@ public sealed class IoFatContinuationScopeRegressionTests
     [Fact]
     public void CompletedRows_AreExcludedBeforePreflightPreparationAndSessionStart()
     {
-        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
+        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var disableIndex = source.IndexOf(
             "foreach (var point in protectedPoints)\n            point.TestEnabled = false;",
