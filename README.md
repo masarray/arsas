@@ -7,7 +7,7 @@
 
 **Discover · Monitor · Test IO Lists · Diagnose · Generate SCL · Export Evidence**
 
-ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, commissioning, troubleshooting, and multi-vendor integration. Start from an approved IED IP address, an existing SCL file, or an ARSAS IO List workbook; discover what the device actually exposes; and preserve the result as attributable engineering evidence.
+ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, commissioning, troubleshooting, and multi-vendor integration. Start from an approved IED endpoint, an SCL file, or an IO List workbook; inspect what the device actually exposes; and preserve the result as attributable engineering evidence.
 
 [![Build](https://github.com/masarray/arsas/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/arsas/actions/workflows/build.yml)
 [![Pages](https://github.com/masarray/arsas/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/arsas/)
@@ -21,7 +21,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 [**Quick Start**](https://masarray.github.io/arsas/quick-start.html) ·
 [**IO List FAT Evidence**](https://masarray.github.io/arsas/io-list-fat-evidence.html) ·
 [**Product website**](https://masarray.github.io/arsas/) ·
-[**Compatibility evidence**](https://masarray.github.io/arsas/compatibility.html) ·
+[**Release notes**](https://masarray.github.io/arsas/release-notes.html) ·
 [**Roadmap**](ROADMAP.md)
 </div>
 
@@ -33,307 +33,172 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Start from an IED IP address, an SCL file, a saved project, an approved IO List workbook, or the built-in communication workspace.</sub>
 </div>
 
-> **Development and stable-release boundary:** the current `main` line is version **1.6.19** and includes the IO List FAT evidence workflow described below. The latest published stable Windows release remains **1.6.18** until a separately validated and tagged release is produced. Check the release notes before assuming the downloaded stable package contains a mainline feature.
+> **Current stable release: ARSAS v1.6.19.** The stable Windows package now includes the release-grade IO List FAT workflow, persistent Engineering/FAT workspace switching, executive evidence reporting, one-click GOOSE entry, and bounded one-click SMV snapshot workflow described below.
+
+## What changed in v1.6.19
+
+- **Rev.3 IO List import** preserves the exact IEC 61850/event-log reference, source state semantics, document control, report display reference, evidence fields, and review reasons without inventing missing telegrams.
+- **Executive FAT evidence report** adds document number, revision, `AS TESTED` issue state, exact event-log reference, expected state, ON/OFF relay timestamps, result summary, test basis, and sign-off areas.
+- **Fast workspace switching** keeps a loaded IO List FAT project in memory. Moving between Engineering and IO List FAT uses hide/show; the user only selects another workbook or `.arsas` project when intentionally replacing the loaded project.
+- **One-click GOOSE workflow** opens the GOOSE Subscriber from an IED card, resolves the routed Ethernet adapter when unique, and starts receive-only capture.
+- **One-click SMV workflow** opens the Sampled Values workspace, selects the first discovered stream, starts a bounded two-cycle capture on the routed adapter, and renders values plus raw waveform evidence.
+- **Real preparation progress** follows actual connection, discovery, binding, and acquisition readiness with smoothed determinate progress instead of an infinite animation.
+- **Evidence continuity and lifecycle hardening** protect completed FAT rows during continuation, preserve loaded workspace state, and avoid window-show races during application shutdown.
 
 ## Why ARSAS stands out
 
 | Engineering problem | ARSAS response |
 |---|---|
-| The vendor CID or ICD is missing, outdated, or rejected by another engineering tool. | Perform complete live MMS discovery from the IED IP address and generate a schema-aware **Edition 2 IID** or **Edition 1 ICD** with companion evidence. |
-| Reporting setup consumes the test window before useful values appear. | Read selected values immediately, prefer verified BRCB/URCB coverage, recover specific gaps where permitted, and retain visible bounded polling when reporting cannot be trusted. |
-| A multi-IED test loses device ownership and diagnostic context. | Keep an independent association, model, monitoring state, events, controls, files, and diagnostics for every IED while providing a unified project view. |
-| A FAT team must prove every IO List indication and then rebuild the evidence manually in Excel and PDF. | Import the approved ARSAS workbook, test one IED at a time, require ordered **OFF → ON → OFF** evidence, and export an Excel result copy, native PDF report, and resumable `.arsas` project. |
-| Integration failures are reduced to vague messages such as “CID rejected” or “download failed.” | Preserve identity, references, DataSet membership, RCB options, protocol stages, negative responses, timing, and copyable diagnostic evidence. |
+| Vendor CID or ICD is missing, outdated, or rejected. | Perform complete live MMS discovery and generate a schema-aware **Edition 2 IID** or **Edition 1 ICD** with companion evidence. |
+| Reporting setup consumes the test window before values appear. | Read an immediate MMS image, prefer verified BRCB/URCB coverage, recover bounded gaps where permitted, and keep fallback acquisition visible. |
+| A multi-IED test loses device ownership and diagnostics. | Maintain an independent association, model, monitoring state, events, files, control context, and diagnostics for every IED. |
+| A FAT team must rebuild IO List evidence manually. | Import the approved workbook, bind exact IEC 61850 references, record ordered **OFF → ON → OFF** evidence, and export Excel, native PDF, or a resumable `.arsas` project. |
+| GOOSE or SMV analysis requires repeated navigation and adapter selection. | Enter directly from the selected IED card, resolve the routed NIC when it is unique, and start passive capture with a safe manual fallback. |
+| Integration failures become vague messages. | Preserve identity, references, DataSet membership, RCB options, protocol stage, negative response, timing, and copyable diagnostic evidence. |
 
-ARSAS is designed to shorten the path from **“the IED is reachable”** to **“the engineer has usable, attributable evidence.”** It does not hide unsupported behavior or turn an uncertain result into a false success.
+ARSAS shortens the path from **“the IED is reachable”** to **“the engineer has usable, attributable evidence.”** It does not turn an unsupported or ambiguous result into a false success.
 
-## Two first-run paths
+## Two connected workspaces
 
-### General IEC 61850 testing
+### Engineering Workspace
 
-Add an approved IED by IP address for complete live discovery, signal selection, Smart Reporting, multi-IED monitoring, GOOSE, file transfer, SCL workflows, diagnostics, SOE, and guarded control.
+Use an approved IED IP address or SCL source for complete live discovery, signal selection, reporting, multi-IED monitoring, SOE, GOOSE, SMV, file transfer, SCL workflows, diagnostics, and guarded control.
 
-### FAT / IO List testing
+### IO List FAT Workspace
 
-Import an approved ARSAS Excel workbook or open a portable `.arsas` project. The dedicated workspace shows only the imported IEDs and SDI signals, binds them to live-discovered IEC 61850 references, and records ordered transition evidence.
+Import an approved Excel workbook or open a portable `.arsas` project. The workspace keeps only the imported scope, binds the points to live-discovered IEC 61850 references, records ordered transition evidence, and produces customer-facing evidence output.
 
-The IO List path is read-only toward the IED. It does not create DataSets, modify RCB configuration, or issue controls.
+Once loaded, the FAT workspace remains in memory while the user visits Engineering. Returning to IO List FAT does not reopen Excel or `.arsas`; loading another file is an explicit replacement action.
+
+The automatic IO List test path is read-only toward the IED. It does not issue controls. External simulation, injection, or plant operation still requires an approved procedure and safe test boundary.
 
 ## IO List FAT evidence workflow
 
 ```text
-Approved ARSAS IO List workbook
-              ↓
-Strict schema and identity validation
-              ↓
-Imported IED and SDI test points
-              ↓
-Live IEC 61850 object-reference binding
-              ↓
+Approved IO List workbook / portable .arsas project
+                        ↓
+Strict schema, identity and document-control validation
+                        ↓
+Exact IEC 61850 and event-log reference binding
+                        ↓
 Trustworthy OFF baseline
-              ↓
-OFF → ON evidence
-              ↓
-ON → OFF evidence
-              ↓
+                        ↓
+OFF → ON evidence → ON → OFF evidence
+                        ↓
 PASS / REVIEW / FAIL / PENDING
-              ↓
-Excel result · Native PDF · Portable .arsas project
+                        ↓
+Excel result · Native executive PDF · Portable .arsas project
 ```
 
-A point passes only when a new ON transition and the corresponding OFF transition are captured in order. An initial ON image is never accepted as ON evidence. The first image after reconnect is a baseline only. Quality, acquisition source, IED timestamp, independent ARSAS timestamp, monotonic observation sequence, and connection generation remain attached to the evidence.
+A point passes only when a new ON transition and its corresponding OFF transition are captured in order. An initial ON image is not accepted as ON evidence. Quality, acquisition source, IED timestamp, ARSAS timestamp, observation sequence, and connection generation remain attached to the evidence.
 
-### IO FAT outputs
+### Rev.3 workbook behavior
 
-- **Export Excel** — copies the approved workbook and updates matching `TestPointId` rows; the source file is never modified in place.
-- **Export PDF** — writes an A4 landscape PDF directly with the built-in dependency-free native PDF 1.4 engine ported from ARIEC60870 primitives.
-- **Export `.arsas`** — packages the source workbook, project snapshot, sealed hash-chain journals, Excel result, PDF report, manifest hashes, and handover notes for another workstation.
-- **Legacy compatibility** — existing `.arsas-iofat` filenames remain readable, while new projects use `.arsas`.
+- Exact `Event Log Search Reference` remains the primary log-correlation field.
+- `Report Display Reference` is used for customer-facing traceability and never replaces the live/event-log identity.
+- Source state text is preserved without automatic inversion.
+- Missing IED, IP, FC, data attribute, or IEC reference remains blocked instead of being guessed.
+- Duplicate keys and command points remain visible as review scope.
+- Automatic binary-transition FAT currently focuses on approved SDI points; analog and active-command workflows are not silently treated as equivalent tests.
 
-See [IO List FAT Evidence Testing](docs/IO_LIST_FAT_EVIDENCE.md) for the workbook contract, state machine, persistence model, package layout, integrity checks, and engineering boundaries.
+### Evidence outputs
 
-## Built for real project work
+- **Excel result** — copies the approved workbook and updates matching test rows; the source workbook is never modified in place.
+- **Native PDF** — creates an A4 landscape `AS TESTED` attachment with document control, exact IEC 61850 reference, expected state, relay timestamps, result, test basis, and sign-off blocks.
+- **Portable `.arsas`** — packages the workbook, project snapshot, evidence journals, exports, hashes, and handover notes for continuation on another workstation.
 
-- **FAT:** import an approved SDI IO List, capture ordered state evidence, inspect models, selected signals, reports, GOOSE, controls, file services, and integration output before shipment.
-- **SAT:** reconfirm installed endpoints, report behavior, station-bus traffic, and configured-versus-live differences.
-- **Commissioning:** correlate live values, sequence of events, communication quality, fault records, and command completion.
-- **Multi-vendor integration:** reconstruct or normalize bounded SCL output when vendor files, schema editions, identities, DataSets, or RCB names do not align cleanly.
-- **Troubleshooting:** keep exact failures attached to the originating IED instead of rebuilding context across disconnected tools.
+See [IO List FAT Evidence Testing](docs/IO_LIST_FAT_EVIDENCE.md) for the workbook contract, state machine, persistence model, package layout, and engineering boundaries.
 
-## IP address to interoperable SCL
+## Fast process-bus workflow
 
-A successful full discovery can become a reusable engineering baseline:
+### GOOSE from an IED card
 
 ```text
-Approved IED IP address
-          ↓
-IEC 61850 MMS association
-          ↓
-Complete typed live discovery
-LD · LN · DO · DA · DataSet · RCB · types · identity
-          ↓
-Schema-aware normalization and validation
-          ↓
-Edition 2 IID or Edition 1 ICD
-          ↓
-Optional selected-RCB Edition 1/2 CID
-          ↓
-Target SAS or gateway import and FAT/SAT validation
+Select IED card → GOOSE → routed NIC → passive capture → stream evidence
 ```
 
-### What ARSAS preserves
+ARSAS resolves the Windows route to the selected IED, maps it to Npcap, and starts receive-only GOOSE capture when one adapter is proven. If adapter selection is ambiguous, ARSAS opens the workspace and asks the user to choose manually rather than guessing.
 
-- the physical IED identity separately from complete MMS Logical Device domains;
-- typed model hierarchy and available type information;
-- DataSet membership and member order;
-- exact concrete runtime RCB names;
-- available `TrgOps`, `OptFlds`, `BufTm`, `IntgPd`, `RptID`, and `ConfRev` evidence;
-- endpoint and source context;
-- structured JSON evidence, Markdown summary, and export findings.
-
-### What this helps prevent
-
-- a Logical Device name being mistaken for the physical IED identity;
-- valid MMS domains being shortened or rewritten;
-- an exact indexed RCB name receiving a duplicate `01` suffix;
-- incomplete FCDA membership being exported as if it were complete;
-- Edition 1 and Edition 2 expectations being mixed silently;
-- large vendor or project SCL files being passed downstream when only one bounded IED or one reporting path is required.
-
-For an opened SCL source, ARSAS can also create a bounded generic single-IED Edition 2 output through the engine-owned interoperability converter while preserving the original file and surfacing structured findings.
-
-> The output is vendor-neutral, typed, and schema-aware, and is intended to reduce common multi-vendor import failures. It is not a universal acceptance guarantee. Every IID, ICD, or CID must still be reviewed and validated in the receiving SAS, gateway, or engineering tool.
-
-## Smart Reporting: useful values without a report dead end
+### SMV from an IED card
 
 ```text
-Selected signals
-      ↓
-Immediate MMS image
-      ↓
-Validate configured BRCB / URCB coverage
-      ↓
-Recover exact uncovered gaps where supported and permitted
-      ↓
-Keep rejected, occupied, empty, or unverified points visible in bounded polling
+Select IED card → SMV → routed NIC → first discovered stream
+                → bounded two-cycle snapshot → values and waveform
 ```
 
-ARSAS records how every displayed value was acquired. The engineer can distinguish report delivery from polling, inspect DataSet coverage, preserve report reasons and timestamps, and see when a dynamic write or existing RCB cannot be used.
-
-## Product tour
-
-Every image below is captured from the working Windows application rather than a marketing mockup.
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="Assets/screenshot/arsas%20(2).webp"><img src="Assets/screenshot/arsas%20(2).webp" alt="ARSAS connected simultaneously to multiple IEC 61850 IEDs" width="100%" /></a>
-      <br /><strong>Independent multi-IED sessions</strong><br />Each device keeps its own association, discovered model, monitoring state, selected signals, files, controls, events, and diagnostics.
-    </td>
-    <td width="50%" valign="top">
-      <a href="Assets/screenshot/arsas%20(3).webp"><img src="Assets/screenshot/arsas%20(3).webp" alt="ARSAS unified IEC 61850 live value viewer" width="100%" /></a>
-      <br /><strong>Unified live-value workspace</strong><br />Search selected values while retaining device ownership, quality, timestamp, acquisition source, report reason, and recent-change evidence.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="Assets/screenshot/arsas%20(4).webp"><img src="Assets/screenshot/arsas%20(4).webp" alt="ARSAS IEC 61850 sequence of events workspace" width="100%" /></a>
-      <br /><strong>Sequence of events</strong><br />Correlate state transitions, report activity, command feedback, and process timestamps without losing the originating IED.
-    </td>
-    <td width="50%" valign="top">
-      <a href="Assets/screenshot/arsas%20(5).webp"><img src="Assets/screenshot/arsas%20(5).webp" alt="ARSAS detailed IEC 61850 GOOSE analysis workspace" width="100%" /></a>
-      <br /><strong>GOOSE supervision</strong><br />Inspect APPID, VLAN, MAC, <code>goCBRef</code>, DataSet, <code>stNum</code>, <code>sqNum</code>, TAL, retransmissions, ordered payload leaves, and model binding.
-    </td>
-  </tr>
-</table>
-
-<div align="center">
-  <a href="Assets/screenshot/arsas%20(6).webp">
-    <img src="Assets/screenshot/arsas%20(6).webp" alt="ARSAS IEC 61850 communication and frame diagnostics workspace" width="100%" />
-  </a>
-  <br />
-  <strong>Attributable communication diagnostics</strong><br />
-  <sub>Separate routing, TCP/102, association, discovery, reporting, file-service, GOOSE, timing, sequence, control, and device-behavior problems.</sub>
-</div>
+The workflow preserves the existing stream-identity and continuity guards. `smpCnt` gaps, duplicates, out-of-order transitions, publisher restart, missing stream identity, or incomplete capture remain visible as review conditions. Raw lanes are not claimed as calibrated current or voltage until trusted SCL mapping and scaling are available.
 
 ## Capability status
 
-ARSAS uses explicit maturity labels so available behavior is not confused with roadmap direction.
-
-| IEC 61850 area | Status | Current scope |
+| IEC 61850 area | Status | Current stable scope |
 |---|---|---|
-| **MMS client and model discovery** | Available | Association, physical identity, complete LD/LN/DO/DA hierarchy, values, quality, timestamps, DataSets, RCBs, type information, and communication diagnostics. |
-| **IO List FAT evidence** | Available on current mainline | Strict SDI Excel import, one-IED sessions, OFF → ON → OFF evidence, quality/reconnect handling, autosave, hash-chain journal, Excel result, native PDF report, and portable `.arsas` continuation. |
-| **Live discovery to SCL generation** | Available | Generate a single-IED Edition 2 IID or Edition 1 ICD from the last successful complete typed discovery of an IP-connected IED. |
-| **SCL workspace and generic conversion** | Available | SCD/CID/ICD/IID/SSD import, endpoint extraction, configured/live context, generic single-IED Edition 2 conversion, schema-aware Edition 1 export, findings, and source preservation. |
-| **Selected-RCB CID export** | Available | Read-only availability audit, exact live RCB name, verified DataSet members and live options, and one-RCB Edition 1/2 CID output. |
-| **Reporting and live monitoring** | Available | BRCB/URCB inspection, immediate reads, exact coverage evaluation, bounded recovery where permitted, visible polling fallback, multi-IED monitoring, and SOE. |
-| **GOOSE subscriber** | Available | Read-only Npcap capture, APPID/VLAN/MAC metadata, sequence and TAL supervision, ordered `allData`, timeline evidence, and SCL/live-model binding. |
-| **IEC 61850 file transfer** | Available | Bounded MMS browsing and download, partial or grouped record handling, COMTRADE-related retrieval, reconnect boundaries, duplicate detection, and detailed transfer evidence. |
-| **Smart Control** | Available | Live `ctlModel` discovery, typed Direct and SBO sequences, Test/interlock/synchrocheck context, CommandTermination, application errors, timing, and mapped feedback. |
-| **Project persistence** | Available | Save selected signals and project context; retain complete discovery snapshots and resumable IO FAT `.arsas` projects while refusing to treat a signal-only cache as a complete export model. |
-| **Sampled Values / SMV** | Engineering preview | Per-IED entry points and bounded evidence workflow; deeper decoding, binding, scaling, synchronization, and sustained-performance validation remain active work. |
-| **Full visual SCL authoring** | Planned | Create and edit complete project structures, communication, DataSets, control blocks, validation, diff, and reusable project output. |
-| **Unified multi-service test campaigns** | Planned | Reusable analog, GOOSE, SMV, file, control, time-sync, exception, witness, approval, and campaign-level evidence workflows beyond the current SDI IO FAT phase. |
+| **MMS client and model discovery** | Available | Association, physical identity, complete LD/LN/DO/DA hierarchy, values, quality, timestamps, DataSets, RCBs, types, and diagnostics. |
+| **IO List FAT evidence** | Available | Rev.3 import, exact event-log reference, one-IED sessions, OFF → ON → OFF evidence, reconnect handling, autosave, native executive PDF, Excel result, and portable `.arsas`. |
+| **Workspace continuity** | Available | Loaded Engineering/FAT mode switching without repetitive file dialogs; explicit replacement for another workbook or project. |
+| **Live discovery to SCL** | Available | Single-IED Edition 2 IID or Edition 1 ICD from the last complete typed discovery. |
+| **Selected-RCB CID export** | Available | Read-only availability audit, exact live RCB name, verified DataSet members/options, and bounded Edition 1/2 CID output. |
+| **Reporting and live monitoring** | Available | BRCB/URCB inspection, immediate reads, exact coverage, bounded recovery, visible polling fallback, multi-IED monitoring, and SOE. |
+| **GOOSE subscriber** | Available | Read-only Npcap capture, one-click IED context, APPID/VLAN/MAC, sequence, TAL, ordered payload, timeline, and model binding. |
+| **Sampled Values / SMV** | Engineering preview | One-click IED context and bounded two-cycle raw waveform evidence; calibrated scaling, complete semantic mapping, synchronization proof, and sustained-performance validation remain bounded work. |
+| **IEC 61850 file transfer** | Available | MMS browsing/download, segmented responses, grouped records, reconnect boundaries, duplicate handling, and detailed diagnostics. |
+| **Smart Control** | Available / guarded | Live `ctlModel`, Direct and SBO sequences, Test/interlock/synchrocheck context, CommandTermination, timing, and mapped feedback. |
+| **Full visual SCL authoring** | Planned | Complete visual project editing, communication, DataSets, control blocks, diff, and reusable project output. |
 
-See [ROADMAP.md](ROADMAP.md) for milestones, definitions of done, and explicit non-goals.
+See [ROADMAP.md](ROADMAP.md) for definitions of done and explicit non-goals.
 
-## Current stable Windows release
-
-The latest verified public release is **ARSAS v1.6.18**, published on **21 July 2026**.
+## Download stable Windows packages
 
 | Package | Intended use |
 |---|---|
-| [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) | Recommended for normal use, Start Menu integration, uninstall support, and the verified update workflow. |
+| [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) | Recommended for normal use, Start Menu integration, uninstall support, and verified update workflow. |
 | [Portable ZIP](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip) | Extract and run without installation on a controlled engineering workstation. |
-| [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) | Verify the exact package before use. |
-| [Release details](https://github.com/masarray/arsas/releases/tag/v1.6.18) | Version scope, assets, publication evidence, and release notes. |
+| [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) | Verify the exact installer and portable package. |
+| [ARSAS v1.6.19 release](https://github.com/masarray/arsas/releases/tag/v1.6.19) | Release scope, assets, generated notes, SBOM, and provenance. |
 
-The installer checks the stable public manifest, validates the expected asset identity, size, and SHA-256, and only then opens the downloaded installer. Current public binaries are **not Authenticode-signed**, so Windows SmartScreen may show an unrecognized-publisher warning.
+The public Windows binaries are currently **not Authenticode-signed**, so Windows SmartScreen may show an unrecognized-publisher warning. Verify the published SHA-256 value before use.
 
-## Start using ARSAS
-
-### System requirements
+## System requirements
 
 - Windows 10 or Windows 11, x64.
-- An isolated laboratory network or an approved FAT, SAT, or commissioning boundary.
+- An isolated laboratory network or approved FAT, SAT, or commissioning boundary.
 - Ethernet access to the intended IED for MMS services, normally TCP port 102.
-- [Npcap](https://npcap.com/) only for raw-Ethernet GOOSE or Sampled Values capture.
-- Suitable authorization, switching authority, procedures, and independent verification before any active control or configuration workflow.
+- [Npcap](https://npcap.com/) for raw-Ethernet GOOSE or Sampled Values capture.
+- Suitable authorization, procedures, switching authority, and independent verification before active control or configuration work.
 
-Visual Studio and an ARIEC61850 source checkout are **not required** for normal use of the packaged release.
+Visual Studio and an ARIEC61850 source checkout are **not required** for packaged use.
 
-### First read-only session
+## Quick start
 
-1. Download the installer or portable ZIP and verify its SHA-256.
+### First read-only Engineering session
+
+1. Install ARSAS or extract the portable ZIP and verify SHA-256.
 2. Confirm the approved network path and TCP port 102.
 3. Choose **Add IED by IP address**.
-4. Complete live MMS discovery.
-5. Select a small known set of read-only signals.
-6. Verify device ownership, value, quality, timestamp, and acquisition source.
-7. Expand to reporting, GOOSE, file transfer, SCL generation, or control only after the read path is understood.
+4. Complete live discovery.
+5. Select a small known set of read-only points.
+6. Verify IED ownership, value, quality, timestamp, and acquisition source.
+7. Enter GOOSE, SMV, files, SCL, or control only after the read path is understood.
 
-### Start an IO List FAT project
+### First IO List FAT session
 
-1. Choose **FAT / IO List Testing** on the first-launch workspace.
-2. Open an approved ARSAS IO List `.xlsx` workbook, or open an existing `.arsas` project.
-3. Review import findings and live binding status.
-4. Select one imported IED and confirm it is connected and discovered.
-5. Start the IED session and obtain a trustworthy OFF baseline.
-6. Operate the external test source so the indication changes OFF → ON → OFF.
-7. Stop the session before exporting.
-8. Export Excel, native PDF, or the complete `.arsas` continuation project.
+1. Open **IO List FAT** and import the approved workbook or `.arsas` project.
+2. Review blocked, duplicate, command, and unsupported rows.
+3. Select one imported IED and start connection/preparation.
+4. Obtain a trustworthy OFF baseline.
+5. Operate the approved external test source OFF → ON → OFF.
+6. Review live evidence and event-log correlation.
+7. Stop/seal the session and export Excel, native PDF, or `.arsas`.
+8. Move to Engineering and back to FAT without reopening the loaded project.
 
-### Generate SCL from the IED
-
-1. Complete a successful full discovery or **Re-scan**.
-2. Confirm the physical IED identity and review blocking discovery diagnostics.
-3. Choose **Save SCL** on the IED card.
-4. Select **Edition 2** for `.iid` or **Edition 1** for `.icd`.
-5. Review the SCL, JSON evidence, Markdown summary, and warnings.
-6. Import and validate the result in the target SAS or gateway.
-
-For a bounded legacy integration, open **RCB**, run the read-only availability audit, select exactly one usable RCB, and generate an Edition 1 or Edition 2 CID baseline.
-
-### Explore without a live IED
-
-Press **Ctrl+Shift+D** while no real IED session or GOOSE capture is active. The built-in communication workspace helps users explore the UI and workflow. It is generated presentation data—not a relay simulator, compatibility result, performance benchmark, or conformance proof.
-
-See the bilingual [Quick Start](https://masarray.github.io/arsas/quick-start.html), [IO List FAT Evidence guide](https://masarray.github.io/arsas/io-list-fat-evidence.html), [Guided Demo](https://masarray.github.io/arsas/demo.html), [FAQ](https://masarray.github.io/arsas/faq.html), and [Troubleshooting Guides](https://masarray.github.io/arsas/guides.html).
-
-## Core engineering workflows
-
-### IO List FAT evidence
-
-- Import only approved SDI test points with explicit project, IED, object-reference, and expected-state identity.
-- Bind imported points to the intended live IED without writing configuration.
-- Reject initial ON as test evidence and require a new OFF baseline.
-- Preserve ordered ON and OFF transition evidence with quality, source, IED time, ARSAS time, event sequence, and reconnect generation.
-- Autosave progress and verify append-only evidence journals.
-- Export an immutable-source Excel result copy, native PDF report, or portable `.arsas` project.
-
-### Live MMS engineering
-
-- Maintain independent device sessions and lifecycle state.
-- Discover the complete typed hierarchy and available services.
-- Search large models without flattening away device ownership.
-- Keep the complete model attached even when the operator view hides non-operational attributes.
-- Compare configured SCL intent with current live evidence.
-
-### Selected-RCB integration export
-
-- Audit availability without enabling, disabling, or reserving an RCB.
-- Retain verified live DataSet members and configuration evidence.
-- Preserve exact runtime RCB names and prevent duplicate indexing.
-- Export a bounded Edition 1/2 CID while keeping original sources unchanged.
-
-### GOOSE supervision
-
-- Capture receive-only Ethernet frames through the ARIEC61850 Npcap transport.
-- Inspect identity, addressing, sequence, retransmission, TAL, flags, and ordered payload.
-- Bind streams to SCL or live discovery where evidence permits.
-- Surface mismatches rather than silently truncating data.
-
-### Fault-record retrieval
-
-- Browse the selected IED MMS file service with bounded operations.
-- Download complete, partial, extensionless, or single-file records actually exposed by the device.
-- Support signed FRSM handles, segmented responses, reconnect checks, progress, cancellation, and safe temporary files.
-- Detect local record state and provide copyable transfer diagnostics.
-
-### Guarded control
-
-- Discover the live `ctlModel` and exact control descriptors.
-- Execute supported Direct or Select-Before-Operate sequences.
-- Preserve origin, `ctlNum`, timestamp, Test, interlock, and synchrocheck context.
-- Surface CommandTermination, application errors, timing, and mapped process feedback.
+See the bilingual [Quick Start](https://masarray.github.io/arsas/quick-start.html), [IO List FAT guide](https://masarray.github.io/arsas/io-list-fat-evidence.html), [Guided Demo](https://masarray.github.io/arsas/demo.html), [FAQ](https://masarray.github.io/arsas/faq.html), and [Troubleshooting Guides](https://masarray.github.io/arsas/guides.html).
 
 ## Architecture
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                                   ARSAS                                    │
-│ Explorer · IO FAT · Monitor · SOE · GOOSE · SMV · Files · SCL · Control │
+│ Engineering Workspace ⇄ Loaded IO List FAT Workspace                     │
+│ Explorer · Monitor · SOE · GOOSE · SMV · Files · SCL · Control          │
 │ Project state · Excel/PDF evidence · .arsas packaging · diagnostics      │
 └────────────────────────────────────┬───────────────────────────────────────┘
                                      │ typed application services
@@ -346,32 +211,20 @@ See the bilingual [Quick Start](https://masarray.github.io/arsas/quick-start.htm
                        Approved IEDs          Approved capture network
 ```
 
-Protocol parsing, transport behavior, typed contracts, schema profiles, SCL conversion/export, and reusable validation belong in [ARIEC61850](https://github.com/masarray/ARIEC61850). ARSAS owns the Windows workflow, project state, visualization, diagnostics, IO List test coordination, Excel/PDF evidence output, and engineer-facing packaging.
-
-The native IO FAT PDF primitive design is ported from the project-owned [ARIEC60870](https://github.com/masarray/ARIEC60870) engine. The IEC 61850 report layout and IO FAT state model are implemented in ARSAS.
+Protocol parsing, transport behavior, typed contracts, schema profiles, SCL conversion/export, and reusable validation belong in [ARIEC61850](https://github.com/masarray/ARIEC61850). ARSAS owns the Windows workflow, project state, visualization, diagnostics, IO List test coordination, Excel/PDF evidence, and engineer-facing packaging.
 
 Detailed notes: [Architecture](docs/ARCHITECTURE.md) · [IO List FAT Evidence](docs/IO_LIST_FAT_EVIDENCE.md) · [Engine compatibility](ENGINE_COMPATIBILITY.md)
 
 ## Build from source
 
-### Developer requirements
-
-- Windows 10 or Windows 11.
-- .NET 8 SDK.
-- Visual Studio 2022 with **.NET desktop development**, or the .NET CLI.
-- A compatible [ARIEC61850](https://github.com/masarray/ARIEC61850) source checkout.
-- Npcap when building or testing raw-Ethernet workflows.
+Requirements: Windows 10/11, .NET 8 SDK, Visual Studio 2022 or the .NET CLI, a compatible ARIEC61850 source checkout, and Npcap for process-bus testing.
 
 Recommended layout:
 
 ```text
 D:\Git\
 ├─ ARIEC61850\
-│  └─ src\
-│     ├─ AR.Iec61850\AR.Iec61850.csproj
-│     └─ AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj
 └─ arsas\
-   └─ ArIED61850Tester.csproj
 ```
 
 ```powershell
@@ -382,58 +235,32 @@ dotnet restore .\ArIED61850Tester.csproj
 dotnet build .\ArIED61850Tester.csproj -c Release
 ```
 
-For a non-sibling engine checkout, pass `ArIec61850Project` and `ArIec61850NpcapProject` explicitly.
-
-## Documentation and support
-
-| Resource | Purpose |
-|---|---|
-| [Product website](https://masarray.github.io/arsas/) | Product overview, workflows, evidence, Indonesian navigation, and downloads. |
-| [Quick Start](https://masarray.github.io/arsas/quick-start.html) | Verified package to first live value and IP-to-SCL continuation. |
-| [IO List FAT Evidence](https://masarray.github.io/arsas/io-list-fat-evidence.html) | Workbook import, OFF → ON → OFF evidence, Excel/PDF output, `.arsas` continuation, and integrity boundaries. |
-| [Compatibility evidence](https://masarray.github.io/arsas/compatibility.html) | Service-level evidence with version, date, conditions, and bounded conclusions. |
-| [Guides](https://masarray.github.io/arsas/guides.html) | Symptom-led troubleshooting for port 102, reporting, RCBs, files, GOOSE, SCL, control, and IO FAT evidence. |
-| [Download Center](https://masarray.github.io/arsas/download.html) | Installer/portable comparison, hashes, requirements, and stable release scope. |
-| [Documentation hub](docs/README.md) | Engineering, validation, legal, contribution, and operational documents. |
-| [Support guide](SUPPORT.md) | Required troubleshooting evidence and sanitization. |
-| [Security policy](SECURITY.md) | Responsible private vulnerability reporting. |
-
-A successful service observation or IO transition is not a universal vendor conclusion, a protection-function proof, or an IEC 61850 conformance certificate.
-
 ## Safety, privacy, and evidence boundaries
 
 IEC 61850 control, report configuration, temporary DataSet creation, file access, and other active operations can affect IED resources or equipment state. Use them only inside an approved boundary with suitable isolation, authority, procedures, and independent verification.
 
-The IO List FAT workspace is read-only toward the IED, but the external process simulation or injection used to change the indication still requires an approved procedure, safe plant state, and qualified personnel.
-
-GOOSE and Sampled Values capture is receive-only in ARSAS, but station traffic still requires an approved adapter, network boundary, and data-handling policy.
+GOOSE and Sampled Values capture is receive-only in ARSAS, but station/process-bus traffic still requires an approved adapter, network boundary, and data-handling policy.
 
 Do not publish credentials, private endpoints, customer identity, confidential IO Lists, SCL, relay settings, packet captures, disturbance records, or `.arsas` evidence projects. Sanitize evidence before opening a public issue.
 
-ARSAS is not:
+ARSAS is not an IEC 61850 conformance certificate, functional-safety certification, cybersecurity approval, calibrated injection system, automatic switching authority, or substitute for an approved FAT/SAT/commissioning procedure.
 
-- an IEC 61850 conformance certificate;
-- functional-safety certification;
-- cybersecurity approval for an operational network;
-- automatic switching authority or proof of safe isolation;
-- a guarantee of acceptance by every proprietary SCL importer;
-- a calibrated protection or process injection system;
-- an automatic witness approval, legal signature, or acceptance record;
-- a substitute for an approved FAT, SAT, commissioning, or operating procedure.
+## Documentation and support
 
-## Contributing
+- [Product website](https://masarray.github.io/arsas/)
+- [Quick Start](https://masarray.github.io/arsas/quick-start.html)
+- [IO List FAT Evidence](https://masarray.github.io/arsas/io-list-fat-evidence.html)
+- [Compatibility evidence](https://masarray.github.io/arsas/compatibility.html)
+- [Guides](https://masarray.github.io/arsas/guides.html)
+- [Documentation hub](docs/README.md)
+- [Support guide](SUPPORT.md)
+- [Security policy](SECURITY.md)
 
-Focused, reproducible, independently authored contributions are welcome. Strong contributions include exact sanitized diagnostics, bounded reproduction steps, fixtures with clear provenance, expected behavior, validation evidence, and a clear application-versus-engine boundary.
+## Contributing and license
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [NOTICE.md](NOTICE.md).
+Focused, reproducible, independently authored contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [NOTICE.md](NOTICE.md).
 
-## License
-
-The community edition is licensed under **GNU GPL v3.0 or later**. See [LICENSE](LICENSE).
-
-A separately negotiated commercial license is available for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, priority support, training, and project-specific development. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
-
-Names, logos, icons, and official-release branding are not granted by the software license. See [TRADEMARK.md](TRADEMARK.md) and [NOTICE.md](NOTICE.md).
+The community edition is licensed under **GNU GPL v3.0 or later**. See [LICENSE](LICENSE). A separate commercial license is available for proprietary integration, OEM/white-label distribution, warranty, maintenance, priority support, training, and project-specific development; see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 ---
 
