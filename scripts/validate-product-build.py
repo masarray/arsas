@@ -163,6 +163,11 @@ def main() -> int:
         for key, value in expected_social_meta.items():
             if audit.meta.get(key) != value: errors.append(f"{home}: invalid {key}")
         if not audit.meta.get("twitter:image:alt"): errors.append(f"{home}: missing twitter:image:alt")
+        substation_images = [image for image in audit.images if image.get("src") == "assets/arsas-substation-context.webp"]
+        if len(substation_images) != 1:
+            errors.append(f"{home}: expected one substation context image")
+        elif substation_images[0].get("loading") != "lazy" or substation_images[0].get("fetchpriority") != "low":
+            errors.append(f"{home}: substation context image must be low-priority lazy media")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
@@ -180,7 +185,7 @@ def main() -> int:
         errors.append(f"sitemap.xml: {exc}")
 
     for required in (
-        "assets/app-icon.png", "assets/social-card.png", "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
+        "assets/app-icon.png", "assets/social-card.png", "assets/arsas-substation-context.webp", "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
         "assets/screenshots/arsas-multi-ied.webp", "assets/screenshots/arsas-live-values.webp",
         "assets/screenshots/arsas-event-log.webp", "assets/screenshots/arsas-goose.webp",
         "assets/screenshots/arsas-diagnostics.webp", "assets/screenshots/arsas-rcb-scl-export.webp",

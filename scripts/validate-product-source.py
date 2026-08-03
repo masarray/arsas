@@ -196,6 +196,11 @@ def main() -> int:
             for key, value in expected_social_meta.items():
                 if audit.meta.get(key) != value: errors.append(f"{label}: invalid {key}")
             if not audit.meta.get("twitter:image:alt"): errors.append(f"{label}: missing twitter:image:alt")
+            substation_images = [image for image in audit.images if image.get("src") == "assets/arsas-substation-context.webp"]
+            if len(substation_images) != 1:
+                errors.append(f"{label}: expected one substation context image")
+            elif substation_images[0].get("loading") != "lazy" or substation_images[0].get("fetchpriority") != "low":
+                errors.append(f"{label}: substation context image must be low-priority lazy media")
         for image in audit.images:
             src = image.get("src") or ""
             if image.get("alt") is None or not image.get("width") or not image.get("height"): errors.append(f"{label}: incomplete image metadata {src}")

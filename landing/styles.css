@@ -274,6 +274,69 @@ h1 {
 .dot { width: .56rem; height: .56rem; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px rgba(52,211,153,.1); }
 .dot.blue { background: var(--blue); box-shadow: 0 0 0 5px rgba(56,189,248,.1); }
 
+.substation-band {
+  padding: .8rem 0 2rem;
+}
+.substation-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 430px;
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, .2);
+  border-radius: var(--radius);
+  background: #061225;
+  box-shadow: 0 28px 80px rgba(0, 8, 24, .34);
+}
+.substation-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(3, 11, 24, .98) 0%, rgba(3, 11, 24, .9) 38%, rgba(3, 11, 24, .34) 68%, rgba(3, 11, 24, .08) 100%);
+}
+.substation-scene > img,
+.substation-scene > picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.substation-scene > img,
+.substation-scene > picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.substation-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 590px;
+  padding: clamp(2rem, 6vw, 4.8rem);
+}
+.substation-copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 3.4vw, 2.85rem);
+  font-weight: 720;
+  letter-spacing: -.035em;
+}
+.substation-copy p {
+  max-width: 560px;
+  margin: 1rem 0 0;
+  color: #c4d3e6;
+  font-size: 1.02rem;
+}
+.substation-copy .btn {
+  margin-top: 1.5rem;
+  background: rgba(7, 23, 45, .74);
+  border-color: rgba(186, 230, 253, .28);
+  backdrop-filter: blur(10px);
+}
+
 .metrics {
   padding: 1.2rem 0 0;
 }
@@ -505,6 +568,19 @@ pre { margin: 0; padding: 1.2rem; overflow: auto; color: #d7e7fa; font: .86rem/1
   .feature-grid { grid-template-columns: 1fr; }
   .hero-window { transform: none; }
   .floating-chip { display: none; }
+  .substation-scene {
+    min-height: 500px;
+    align-items: end;
+  }
+  .substation-scene::after {
+    background: linear-gradient(180deg, rgba(3, 11, 24, .08) 0%, rgba(3, 11, 24, .52) 40%, rgba(3, 11, 24, .97) 75%, rgba(3, 11, 24, .99) 100%);
+  }
+  .substation-scene > img,
+  .substation-scene > picture img { object-position: 68% center; }
+  .substation-copy {
+    max-width: none;
+    padding: 2rem 1.5rem;
+  }
   .footer-grid { grid-template-columns: 1fr; }
   .footer-brand { grid-column: auto; }
   .footer-bottom { flex-direction: column; }
