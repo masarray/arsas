@@ -26,11 +26,11 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 </div>
 
 <div align="center">
-  <a href="Assets/screenshot/arsas%20(1).webp">
-    <img src="Assets/screenshot/arsas%20(1).webp" alt="ARSAS IEC 61850 engineering workstation first-launch workspace" width="100%" />
+  <a href="Assets/screenshot/arsas-overview-v1.6.19.webp">
+    <img src="Assets/screenshot/arsas-overview-v1.6.19.webp" alt="ARSAS v1.6.19 IEC 61850 Engineering and IO List FAT workspaces" width="100%" />
   </a>
   <br />
-  <sub>Start from an IED IP address, an SCL file, a saved project, an approved IO List workbook, or the built-in communication workspace.</sub>
+  <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
 </div>
 
 > **Current stable release: ARSAS v1.6.19.** The stable Windows package now includes the release-grade IO List FAT workflow, persistent Engineering/FAT workspace switching, executive evidence reporting, one-click GOOSE entry, and bounded one-click SMV snapshot workflow described below.

@@ -1,13 +1,22 @@
 {
-  "name": "ARSAS — IEC 61850 Engineering Workstation",
+  "name": "ARSAS IEC 61850 Engineering Workstation",
   "short_name": "ARSAS",
-  "description": "IEC 61850 engineering for Smart Reporting, MMS, GOOSE, fault-record file transfer, Sampled Values, SCL, diagnostics and guarded control.",
+  "description": "Open-source Windows IEC 61850 software for live MMS discovery, IO List FAT evidence, Reporting, GOOSE, SCL and diagnostics.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#07111f",
   "theme_color": "#07111f",
   "categories": ["developer", "utilities", "productivity", "education"],
+  "screenshots": [
+    {
+      "src": "assets/screenshots/arsas-overview-v1.6.19.webp",
+      "sizes": "1800x974",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "ARSAS Engineering and IO List FAT workspaces"
+    }
+  ],
   "icons": [
     {
       "src": "assets/favicon.svg",

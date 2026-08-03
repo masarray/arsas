@@ -46,6 +46,7 @@ class Audit(HTMLParser):
         self.h1 = 0
         self.description = ""
         self.body_page = ""
+        self.meta: dict[str, str] = {}
         self.refs: list[str] = []
         self.images: list[dict[str, str | None]] = []
         self.alternates: dict[str, str] = {}
@@ -57,7 +58,11 @@ class Audit(HTMLParser):
         if tag == "title": self.in_title = True
         if tag == "h1": self.h1 += 1
         if tag == "body": self.body_page = values.get("data-page") or ""
-        if tag == "meta" and (values.get("name") or "").lower() == "description": self.description = values.get("content") or ""
+        if tag == "meta":
+            key = (values.get("name") or values.get("property") or "").lower()
+            value = values.get("content") or ""
+            if key: self.meta[key] = value
+            if key == "description": self.description = value
         if tag == "a" and values.get("data-nav-page"): self.nav.add(values.get("data-nav-page") or "")
         if tag == "link" and values.get("rel") == "alternate" and values.get("hreflang"): self.alternates[values.get("hreflang") or ""] = values.get("href") or ""
         for key in ("href", "src"):
@@ -142,6 +147,22 @@ def main() -> int:
         for page in (english, indonesian):
             audit = rendered.get(page)
             if audit and audit.alternates != expected: errors.append(f"{page}: reciprocal hreflang set is invalid")
+    for home, expected_locale, expected_alternate in (("index.html", "en_US", "id_ID"), ("id.html", "id_ID", "en_US")):
+        audit = rendered.get(home)
+        if not audit: continue
+        social_url = CANONICAL_ROOT + "assets/social-card.png"
+        expected_social_meta = {
+            "og:locale": expected_locale,
+            "og:locale:alternate": expected_alternate,
+            "og:image": social_url,
+            "og:image:secure_url": social_url,
+            "og:image:type": "image/png",
+            "twitter:card": "summary_large_image",
+            "twitter:image": social_url,
+        }
+        for key, value in expected_social_meta.items():
+            if audit.meta.get(key) != value: errors.append(f"{home}: invalid {key}")
+        if not audit.meta.get("twitter:image:alt"): errors.append(f"{home}: missing twitter:image:alt")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
@@ -159,7 +180,7 @@ def main() -> int:
         errors.append(f"sitemap.xml: {exc}")
 
     for required in (
-        "assets/app-icon.png", "assets/social-card.png", "assets/screenshots/arsas-first-launch.webp",
+        "assets/app-icon.png", "assets/social-card.png", "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
         "assets/screenshots/arsas-multi-ied.webp", "assets/screenshots/arsas-live-values.webp",
         "assets/screenshots/arsas-event-log.webp", "assets/screenshots/arsas-goose.webp",
         "assets/screenshots/arsas-diagnostics.webp", "assets/screenshots/arsas-rcb-scl-export.webp",
@@ -170,6 +191,9 @@ def main() -> int:
         width, height = png_size(site / "assets/app-icon.png")
         if width != height or width < 256: errors.append("rendered app icon is invalid")
     except (OSError, ValueError) as exc: errors.append(f"app icon: {exc}")
+    try:
+        if png_size(site / "assets/social-card.png") != (1200, 630): errors.append("rendered social card must be 1200x630")
+    except (OSError, ValueError) as exc: errors.append(f"social card: {exc}")
 
     combined = "\n".join((site / name).read_text(encoding="utf-8") for name in expected_pages if (site / name).is_file())
     for value in ('href="http://', 'src="http://', "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot", '<meta name="keywords"'):

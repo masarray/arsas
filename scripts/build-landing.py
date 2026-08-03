@@ -182,6 +182,7 @@ def build(source: Path, output: Path) -> None:
         "assets/screenshots/arsas-goose.webp",
         "assets/screenshots/arsas-diagnostics.webp",
         "assets/screenshots/arsas-rcb-scl-export.webp",
+        "assets/screenshots/arsas-overview-v1.6.19.webp",
         "index.html",
         "download.html",
         "about.html",

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IEC 61850 Software for Learning, FAT and Troubleshooting | ARSAS</title>
-  <meta name="description" content="Learn IEC 61850, connect an IED by IP, see live values, troubleshoot Reporting and GOOSE, run IO List FAT, and export Excel, PDF or portable .arsas evidence." />
+  <title>ARSAS IEC 61850 Test Software | FAT, MMS, GOOSE and SCL</title>
+  <meta name="description" content="Open-source Windows IEC 61850 test software for live MMS discovery, IO List FAT evidence, Reporting, GOOSE analysis, SCL workflows and diagnostics." />
   <meta name="author" content="{{AUTHOR_NAME}}" />
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
   <meta name="theme-color" content="#07111f" />
@@ -13,7 +13,7 @@
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
   <link rel="apple-touch-icon" href="assets/app-icon.png" />
-  <link rel="preload" as="image" href="assets/screenshots/arsas-first-launch.webp" fetchpriority="high" />
+  <link rel="preload" as="image" href="assets/screenshots/arsas-overview-v1.6.19.webp" fetchpriority="high" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="screenshots.css" />
   <link rel="stylesheet" href="smart-reporting.css" />
@@ -21,23 +21,28 @@
   <link rel="stylesheet" href="adoption.css" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ARSAS" />
-  <meta property="og:title" content="ARSAS — Learn, Test and Troubleshoot IEC 61850" />
-  <meta property="og:description" content="Connect an IED, understand its data, solve communication problems and produce traceable FAT evidence in one open-source Windows application." />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="id_ID" />
+  <meta property="og:title" content="ARSAS IEC 61850 Test Software | From Live Model to Evidence" />
+  <meta property="og:description" content="Open-source Windows software for live MMS discovery, IO List FAT, Reporting, GOOSE, SCL and traceable engineering evidence." />
   <meta property="og:url" content="{{CANONICAL_ROOT}}" />
   <meta property="og:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <meta property="og:image:secure_url" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="ARSAS IEC 61850 learning and engineering workstation" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 engineering workstation from live model to traceable evidence" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="ARSAS — Learn and Use IEC 61850" />
-  <meta name="twitter:description" content="Plain-language learning, practical software tutorials, IO List FAT and field troubleshooting for IEC 61850." />
+  <meta name="twitter:title" content="ARSAS IEC 61850 Test Software" />
+  <meta name="twitter:description" content="Live MMS discovery, IO List FAT, Reporting, GOOSE, SCL and traceable evidence in one open-source Windows workstation." />
   <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <meta name="twitter:image:alt" content="ARSAS IEC 61850 engineering workstation from live model to traceable evidence" />
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"{{CANONICAL_ROOT}}#website","url":"{{CANONICAL_ROOT}}","name":"ARSAS","description":"IEC 61850 learning, software tutorials, IO List FAT evidence, commissioning and troubleshooting."},{"@type":"SoftwareApplication","@id":"{{CANONICAL_ROOT}}#software","name":"ARSAS","alternateName":"ARSAS IEC 61850 Engineering Workstation","applicationCategory":"DeveloperApplication","applicationSubCategory":"Substation automation engineering software","operatingSystem":"Windows 10, Windows 11","softwareVersion":"{{ARSAS_VERSION}}","description":"Open-source Windows IEC 61850 workstation for live discovery, software-guided learning, IO List FAT evidence, reporting, GOOSE, SCL, file transfer, diagnostics and guarded control.","url":"{{CANONICAL_ROOT}}","downloadUrl":"{{INSTALLER_URL}}","codeRepository":"{{REPOSITORY_URL}}","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","programmingLanguage":["C#","XAML"],"runtimePlatform":".NET 8","author":{"@id":"{{CANONICAL_ROOT}}about.html#ari-sulistiono"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","category":"Open-source community edition"},"featureList":["Plain-language IEC 61850 Learning Center","Step-by-step ARSAS software tutorials","Complete live IEC 61850 MMS model discovery from an IED IP address","Strict SDI IO List import and one-IED FAT sessions","Ordered OFF to ON to OFF evidence with quality and timestamps","Excel result copy, native PDF report and portable .arsas project","BRCB and URCB reporting with visible fallback","GOOSE subscription and diagnostics","SCL comparison and generation","IEC 61850 file transfer and COMTRADE retrieval","Guarded Direct and Select-Before-Operate control"]},{"@type":"Person","@id":"{{CANONICAL_ROOT}}about.html#ari-sulistiono","name":"{{AUTHOR_NAME}}","url":"{{CANONICAL_ROOT}}about.html","sameAs":["{{AUTHOR_LINKEDIN}}","{{AUTHOR_GITHUB}}"]}]}</script>
 </head>
 <body data-page="overview">
   {{> header}}
   <main id="main">
-    <section class="hero"><div class="container hero-grid"><div><span class="eyebrow">Free and open source · Windows · learn before you change anything</span><h1>Connect the relay. See every signal. <span class="gradient-text">Prove what changed.</span></h1><p class="hero-copy">ARSAS helps you understand IEC 61850, connect an approved IED, inspect live values, solve Reporting or GOOSE problems, and turn an IO List into reviewable FAT evidence—without jumping between unrelated tools.</p><div class="hero-actions"><a class="btn btn-primary" href="download.html">Download ARSAS</a><a class="btn" href="learning-center.html">Learn IEC 61850</a><a class="btn btn-quiet" href="connect-ied-ip-arsas.html">Connect your first IED</a></div><div class="hero-proof" aria-label="Product highlights"><span>Plain-language learning</span><span>No account or license key</span><span>Excel · native PDF · .arsas</span></div></div><div class="hero-visual" aria-label="ARSAS application preview"><div class="hero-window"><img src="assets/screenshots/arsas-first-launch.webp" width="1507" height="893" alt="ARSAS first-launch workspace with general IEC 61850 and IO List FAT paths" decoding="async" fetchpriority="high" /></div><div class="floating-chip one"><span class="dot"></span> Learn → connect → verify</div><div class="floating-chip two"><span class="dot blue"></span> IO List → ON / OFF evidence</div></div></div></section>
+    <section class="hero"><div class="container hero-grid"><div><span class="eyebrow">Free and open source · Windows · learn before you change anything</span><h1>IEC 61850 evidence. <span class="gradient-text">You can trust it.</span></h1><p class="hero-copy">Discover live IED models, troubleshoot Reporting and GOOSE, and produce reviewable FAT evidence in one Windows workstation.</p><div class="hero-actions"><a class="btn btn-primary" href="download.html">Download ARSAS</a><a class="btn" href="learning-center.html">Learn IEC 61850</a><a class="btn btn-quiet" href="connect-ied-ip-arsas.html">Connect your first IED</a></div><div class="hero-proof" aria-label="Product highlights"><span>Plain-language learning</span><span>No account or license key</span><span>Excel · native PDF · .arsas</span></div></div><div class="hero-visual" aria-label="ARSAS application preview"><div class="hero-window"><img src="assets/screenshots/arsas-overview-v1.6.19.webp" width="1800" height="974" alt="ARSAS v1.6.19 Engineering and IO List FAT workspace overview" decoding="async" fetchpriority="high" /></div><div class="floating-chip one">Learn → connect → verify</div><div class="floating-chip two">IO List → ON / OFF evidence</div></div></div></section>
 
     <section class="section section-tight"><div class="container"><div class="section-head center"><span class="kicker">Start from your need</span><h2>You do not need to know every IEC 61850 term first.</h2><p>Choose the question that brought you here. Each path gives you a useful takeaway, a practical workflow and the engineering detail behind it.</p></div><div class="feature-grid"><article class="card"><span class="kicker">I am new</span><h3>What is IEC 61850?</h3><p>Understand IEDs, Logical Nodes, MMS, Reporting, GOOSE and SCL with familiar substation examples.</p><div class="section-actions"><a class="btn btn-primary" href="what-is-iec61850.html">Read the beginner guide</a></div></article><article class="card"><span class="kicker">I have the software</span><h3>How do I use ARSAS?</h3><p>Connect an IED by IP, discover the live model and read one point together with quality and timestamp.</p><div class="section-actions"><a class="btn" href="connect-ied-ip-arsas.html">Follow the first tutorial</a></div></article><article class="card"><span class="kicker">I have a project</span><h3>How do I produce FAT evidence?</h3><p>Run imported SDI points in order, preserve ON and OFF evidence, and export Excel, PDF or a portable project.</p><div class="section-actions"><a class="btn" href="io-list-fat-evidence.html">Explore IO List FAT</a></div></article><article class="card"><span class="kicker">I have a problem</span><h3>Why is IEC 61850 not working?</h3><p>Start from the symptom: port 102, silent reports, occupied RCB, GOOSE sequence, missing COMTRADE or rejected SCL.</p><div class="section-actions"><a class="btn" href="guides.html">Find a troubleshooting guide</a></div></article></div></div></section>
 

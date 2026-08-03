@@ -30,6 +30,7 @@ EXPECTED_MEDIA = (
     "assets/screenshots/arsas-event-log.webp",
     "assets/screenshots/arsas-goose.webp",
     "assets/screenshots/arsas-diagnostics.webp",
+    "assets/screenshots/arsas-overview-v1.6.19.webp",
 )
 
 DIRECT_INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"

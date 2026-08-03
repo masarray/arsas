@@ -171,20 +171,11 @@ button, input, textarea, select { font: inherit; }
   letter-spacing: .07em;
   text-transform: uppercase;
 }
-.eyebrow::before {
-  content: "";
-  width: .48rem;
-  height: .48rem;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 0 5px rgba(52,211,153,.12);
-}
-
 h1, h2, h3 { margin: 0; line-height: 1.12; text-wrap: balance; }
 h1 {
   margin-top: 1.2rem;
   max-width: 820px;
-  font-size: clamp(3rem, 7vw, 5.7rem);
+  font-size: clamp(3rem, 4.8vw, 4rem);
   letter-spacing: -.065em;
 }
 .gradient-text {
@@ -510,7 +501,7 @@ pre { margin: 0; padding: 1.2rem; overflow: auto; color: #d7e7fa; font: .86rem/1
   }
   .nav-links.open { display: grid; }
   .nav-links a { width: 100%; }
-  h1 { font-size: clamp(2.75rem, 14vw, 4.6rem); }
+  h1 { font-size: clamp(2.6rem, 12vw, 3.8rem); }
   .feature-grid { grid-template-columns: 1fr; }
   .hero-window { transform: none; }
   .floating-chip { display: none; }

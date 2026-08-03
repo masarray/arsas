@@ -441,7 +441,7 @@ def build(output: Path, release_evidence_path: Path) -> None:
         "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
         "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",
         "assets/screenshots/arsas-goose.webp", "assets/screenshots/arsas-diagnostics.webp",
-        "assets/screenshots/arsas-rcb-scl-export.webp",
+        "assets/screenshots/arsas-rcb-scl-export.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
     }
     missing = sorted(item for item in required if not (output / item).exists())
     if missing:

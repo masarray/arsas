@@ -180,6 +180,22 @@ def main() -> int:
         if audit.lang != language: errors.append(f"{label}: html lang must be {language}")
         for key in ("og:title", "og:description", "og:url", "og:image", "og:image:width", "og:image:height"):
             if not audit.meta.get(key): errors.append(f"{label}: missing {key}")
+        if path in {"", "id.html"}:
+            expected_locale = "en_US" if path == "" else "id_ID"
+            expected_alternate = "id_ID" if path == "" else "en_US"
+            expected_social = "{{CANONICAL_ROOT}}assets/social-card.png"
+            expected_social_meta = {
+                "og:locale": expected_locale,
+                "og:locale:alternate": expected_alternate,
+                "og:image": expected_social,
+                "og:image:secure_url": expected_social,
+                "og:image:type": "image/png",
+                "twitter:card": "summary_large_image",
+                "twitter:image": expected_social,
+            }
+            for key, value in expected_social_meta.items():
+                if audit.meta.get(key) != value: errors.append(f"{label}: invalid {key}")
+            if not audit.meta.get("twitter:image:alt"): errors.append(f"{label}: missing twitter:image:alt")
         for image in audit.images:
             src = image.get("src") or ""
             if image.get("alt") is None or not image.get("width") or not image.get("height"): errors.append(f"{label}: incomplete image metadata {src}")
@@ -202,7 +218,7 @@ def main() -> int:
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
-    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt"):
+    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-overview-v1.6.19.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
     if not APP_ICON.is_file(): errors.append("missing Assets/app-icon.png")
     else:
