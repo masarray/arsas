@@ -106,6 +106,23 @@
             <GradientStop Color="#75141D" Offset="1"/>
         </LinearGradientBrush>
 
+        <!-- Reusable protection-relay fascia for IED cards. The artwork follows
+             the square panel-mount form, LCD, LED banks and cyan navigation keys
+             of a feeder relay while the state rail remains data-driven. -->
+        <ControlTemplate x:Key="IedRelayFrontPanelTemplate" TargetType="{x:Type Control}">
+            <Grid Width="50" Height="50" SnapsToDevicePixels="True">
+                <Border CornerRadius="2.4" ClipToBounds="True" Background="#F5F7FA">
+                    <Image x:Name="RelayFasciaArtwork"
+                           Source="Assets/ied-protection-relay-fascia.png"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+                <Border x:Name="RelayStateRail" Height="2.2" Margin="5,0,5,2.8"
+                        VerticalAlignment="Bottom" Background="{TemplateBinding Foreground}"
+                        CornerRadius="1.1" Opacity="0.82"/>
+            </Grid>
+        </ControlTemplate>
+
         <!-- Lucide-compatible 24 px outline geometries used by every visible application action. -->
         <Geometry x:Key="LucidePlay">M8,5 L19,12 L8,19 Z</Geometry>
         <Geometry x:Key="LucideSquare">M6,6 H18 V18 H6 Z</Geometry>

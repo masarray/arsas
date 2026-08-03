@@ -40,6 +40,7 @@
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\app-icon-256.png" />
     <Resource Include="Assets\gateway-hero.png" />
+    <Resource Include="Assets\ied-protection-relay-fascia.png" />
     <None Include="README.md" Pack="true" PackagePath="\" />
     <None Update="engines\ARIEC61850.lock.json"
           CopyToOutputDirectory="PreserveNewest"

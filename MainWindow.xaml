@@ -229,26 +229,24 @@
                                                     <ColumnDefinition Width="56"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <!-- Compact relay / BCU icon; the full SVG and glow stay inside the card. -->
+                                                <!-- Compact feeder-protection relay fascia; state remains readable without covering the LCD. -->
                                       <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="60" Height="60" Margin="-2,0,-2,0"
                                             VerticalAlignment="Center" ClipToBounds="False" Panel.ZIndex="2">
-                                          <Viewbox Width="44" Height="44" Stretch="Uniform"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   RenderTransformOrigin="0.5,0.5">
-                                              <Viewbox.RenderTransform>
-                                                  <ScaleTransform ScaleX="1.36" ScaleY="1.36"/>
-                                              </Viewbox.RenderTransform>
-                                              <Path x:Name="RelayDeviceIcon" Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z" Fill="#EF4444" Stretch="Uniform">
-                                                  <Path.Effect><DropShadowEffect BlurRadius="7" ShadowDepth="0" Opacity="0.38" Color="#EF4444"/></Path.Effect>
-                                              </Path>
+                                          <Viewbox Width="54" Height="54" Stretch="Uniform"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                                              <Control x:Name="RelayDeviceIcon" Width="50" Height="50"
+                                                       Foreground="#EF4444"
+                                                       Template="{StaticResource IedRelayFrontPanelTemplate}">
+                                                  <Control.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0.22" Color="#26313B"/></Control.Effect>
+                                              </Control>
                                           </Viewbox>
                                           <Border x:Name="MonitorStateBadge"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0"
+                                                  HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="7,0,0,7"
                                                   Background="#F5FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
-                                                  CornerRadius="9" Padding="6,2" Panel.ZIndex="5">
+                                                  CornerRadius="2.8" Padding="3.5,0.7" Panel.ZIndex="5">
                                               <StackPanel Orientation="Horizontal">
-                                                  <Ellipse x:Name="MonitorStateDot" Width="5" Height="5" Fill="#E5484D" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                  <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="8.4" FontWeight="Bold" Foreground="#C92A32"/>
+                                                  <Ellipse x:Name="MonitorStateDot" Width="3.8" Height="3.8" Fill="#E5484D" Margin="0,0,2.5,0" VerticalAlignment="Center"/>
+                                                  <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="6.8" FontWeight="SemiBold" Foreground="#C92A32"/>
                                               </StackPanel>
                                           </Border>
                                       </Grid>
@@ -351,8 +349,7 @@
                                         </Grid>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
-                                                <Setter TargetName="RelayDeviceIcon" Property="Fill" Value="#16A34A"/>
-                                                <Setter TargetName="RelayDeviceIcon" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.40" Color="#16A34A"/></Setter.Value></Setter>
+                                                <Setter TargetName="RelayDeviceIcon" Property="Foreground" Value="#16A34A"/>
                                                 <Setter TargetName="MonitorStateBadge" Property="Background" Value="#E5F7ED"/>
                                                 <Setter TargetName="MonitorStateBadge" Property="BorderBrush" Value="#8CCDA8"/>
                                                 <Setter TargetName="MonitorStateDot" Property="Fill" Value="{StaticResource Success}"/>

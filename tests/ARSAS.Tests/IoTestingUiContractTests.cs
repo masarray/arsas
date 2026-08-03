@@ -165,6 +165,38 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
+    public void IedCards_UseReusableNumericalRelayFrontPanelInsteadOfCalculatorKeypad()
+    {
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var resources = XDocument.Load(FindRepoFile("App.xaml"));
+        var template = resources
+            .Descendants(presentation + "ControlTemplate")
+            .Single(node => (string?)node.Attribute(x + "Key") == "IedRelayFrontPanelTemplate");
+        var namedParts = template
+            .Descendants()
+            .Select(node => (string?)node.Attribute(x + "Name"))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("RelayFasciaArtwork", namedParts);
+        Assert.Contains("RelayStateRail", namedParts);
+        Assert.Contains("Assets/ied-protection-relay-fascia.png", template.ToString(), StringComparison.Ordinal);
+        Assert.True(File.Exists(FindRepoFile("Assets/ied-protection-relay-fascia.png")));
+
+        var project = File.ReadAllText(FindRepoFile("ArIED61850Tester.csproj"));
+        Assert.Contains("Assets\\ied-protection-relay-fascia.png", project, StringComparison.Ordinal);
+
+        var explorer = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
+        var ioTesting = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
+        Assert.Contains("IedRelayFrontPanelTemplate", explorer, StringComparison.Ordinal);
+        Assert.Contains("IedRelayFrontPanelTemplate", ioTesting, StringComparison.Ordinal);
+        Assert.DoesNotContain("M 2 0 L 2 20", explorer, StringComparison.Ordinal);
+        Assert.DoesNotContain("M 2 0 L 2 20", ioTesting, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoTestingWindow_UsesBalancedInitialGridWidthsAndCenteredRelayHeaders()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
