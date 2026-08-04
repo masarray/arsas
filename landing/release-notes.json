@@ -1,73 +1,75 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.20",
-  "title": "True portable single EXE and consistent protection-relay UI",
-  "titleId": "Portable single EXE nyata dan UI protection relay yang konsisten",
-  "summary": "ARSAS 1.6.20 publishes the Windows portable package as one self-contained EXE, keeps the validated installer path, strengthens runtime and supply-chain checks, and aligns the IED relay fascia across Engineering and IO List FAT.",
-  "summaryId": "ARSAS 1.6.20 mempublikasikan paket portable Windows sebagai satu EXE self-contained, mempertahankan jalur installer yang tervalidasi, memperkuat pemeriksaan runtime dan supply chain, serta menyelaraskan fascia relay IED pada Engineering dan IO List FAT.",
+  "version": "1.6.19",
+  "title": "Release-grade IO FAT, fast workspace switching, and one-click process-bus capture",
+  "titleId": "IO FAT siap rilis, perpindahan workspace cepat, dan capture process bus sekali klik",
+  "summary": "ARSAS 1.6.19 delivers a release-grade IEC 61850 IO List FAT workflow with Rev.3 event-log traceability, executive evidence reporting, persistent Engineering/FAT workspace switching, and one-click receive-only GOOSE and bounded SMV entry from each IED card.",
+  "summaryId": "ARSAS 1.6.19 menghadirkan workflow FAT IO List IEC 61850 yang siap rilis dengan traceability event log Rev.3, report evidence eksekutif, perpindahan workspace Engineering/FAT yang tetap loaded, serta akses GOOSE receive-only dan SMV bounded sekali klik dari setiap IED card.",
   "highlights": [
-    "The public portable asset is now one ARSAS-Windows-x64-Portable.exe and does not require an installed .NET runtime or application-requested elevation.",
-    "CI enforces exactly one distributed portable file and smoke-tests engine provenance, ARIEC61850, managed Npcap dependencies and user temporary-directory access.",
-    "The Windows installer remains based on the separately validated multi-file self-contained publish and passes silent current-user install and uninstall testing.",
-    "IED Explorer and IO List FAT now share the protection-relay fascia, with LIVE/STOP below the artwork and no misleading icon-level glow.",
-    "Release assets include SHA-256 checksums, SPDX SBOM, provenance metadata and GitHub artifact attestations."
+    "Rev.3 FAT_Points_Import and Document_Control workbooks preserve the exact IEC 61850 event-log search reference, source state semantics, report display reference, document metadata and review reason without inventing missing telegrams.",
+    "The native executive FAT PDF now presents AS TESTED document control, document number and revision, exact IEC 61850 reference, expected state, ON/OFF relay timestamps, result summary, test basis and sign-off areas.",
+    "A loaded IO List FAT project remains in memory while the user moves to Engineering and back; another workbook or .arsas project is loaded only through an explicit replacement action.",
+    "GOOSE can be opened directly from the selected IED card, with routed Windows NIC to Npcap resolution and automatic receive-only capture when one adapter is proven.",
+    "SMV can be opened directly from an IED card, select the first discovered stream, capture a bounded two-cycle snapshot and render raw values plus waveform evidence."
   ],
   "highlightsId": [
-    "Asset portable publik kini berupa satu ARSAS-Windows-x64-Portable.exe dan tidak memerlukan .NET terpasang atau elevation yang diminta aplikasi.",
-    "CI memastikan hanya ada satu file portable yang didistribusikan serta menguji provenance engine, ARIEC61850, dependency Npcap managed dan akses temporary directory user.",
-    "Installer Windows tetap menggunakan publish self-contained multi-file yang divalidasi terpisah dan lulus silent install serta uninstall pada scope current user.",
-    "IED Explorer dan IO List FAT kini memakai fascia protection relay yang sama, dengan LIVE/STOP di bawah artwork dan tanpa glow status yang menyesatkan.",
-    "Asset release mencakup checksum SHA-256, SPDX SBOM, metadata provenance dan GitHub artifact attestation."
+    "Workbook Rev.3 FAT_Points_Import dan Document_Control mempertahankan exact IEC 61850 event-log search reference, source state semantics, report display reference, metadata dokumen dan review reason tanpa membuat telegram yang hilang.",
+    "PDF FAT eksekutif native kini menampilkan document control AS TESTED, document number dan revision, exact IEC 61850 reference, expected state, timestamp relay ON/OFF, result summary, test basis dan area sign-off.",
+    "Project IO List FAT yang sudah loaded tetap berada di memori saat user pindah ke Engineering lalu kembali; workbook atau project .arsas lain hanya dibuka melalui tindakan replacement yang eksplisit.",
+    "GOOSE dapat dibuka langsung dari IED card terpilih, dengan pemetaan routed Windows NIC ke Npcap dan capture receive-only otomatis saat satu adapter terbukti.",
+    "SMV dapat dibuka langsung dari IED card, memilih stream pertama hasil discovery, capture snapshot bounded dua siklus, lalu menampilkan raw value dan waveform evidence."
   ],
   "improvements": [
-    "Portable publication keeps WPF and packet-capture compatibility by disabling trimming and bundling native/content payloads for extraction to the current user's .NET bundle cache.",
-    "The application manifest uses asInvoker so ARSAS itself does not request UAC elevation.",
-    "Release checksum, download, documentation and attestation paths identify the portable EXE instead of the legacy ZIP.",
-    "UI regression contracts cover the shared relay image, status placement and removal of the former calculator-style icon.",
-    "Release metadata is synchronized across the application, changelog, citation, Download Center and bilingual release notes."
+    "IO FAT preparation cards use smoothed determinate progress derived from real connection, discovery, binding and acquisition readiness instead of an infinite animation.",
+    "Known Application display wrappers are normalized during live signal matching while exact source and event-log references remain preserved for reporting and diagnostics.",
+    "Completed evidence rows are excluded before preflight, live preparation and session start, allowing pending rows to continue without erasing or re-requesting completed evidence.",
+    "Window lifecycle guards prevent Engineering from being shown again during application shutdown while retaining instant hide/show behavior during normal workspace switching.",
+    "The FAT report uses a calmer document-style hierarchy, neutral document control, inline device results, smaller title typography and a modern font fallback stack.",
+    "Release gates cover the full application build, IO FAT regression suite, deterministic SV evidence tests, portable packaging, installer smoke tests, checksums, SPDX SBOM and provenance."
   ],
   "improvementsId": [
-    "Publikasi portable mempertahankan kompatibilitas WPF dan packet capture dengan mematikan trimming serta membundel payload native/content untuk diekstrak ke .NET bundle cache milik user.",
-    "Manifest aplikasi memakai asInvoker sehingga ARSAS sendiri tidak meminta elevation UAC.",
-    "Jalur checksum, download, dokumentasi dan attestation release mengidentifikasi portable EXE, bukan ZIP legacy.",
-    "Contract regression UI mencakup gambar relay bersama, penempatan status dan penghapusan icon lama bergaya kalkulator.",
-    "Metadata release diselaraskan pada aplikasi, changelog, citation, Download Center dan catatan rilis bilingual."
+    "Card preparation IO FAT memakai smoothed determinate progress dari koneksi, discovery, binding dan acquisition readiness yang nyata, bukan infinite animation.",
+    "Wrapper display Application yang dikenal dinormalisasi saat live signal matching, sedangkan exact source dan event-log reference tetap dipertahankan untuk report dan diagnostic.",
+    "Row evidence completed dikecualikan sebelum preflight, live preparation dan session start sehingga row pending dapat dilanjutkan tanpa menghapus atau meminta ulang evidence completed.",
+    "Lifecycle guard window mencegah Engineering ditampilkan kembali saat aplikasi shutdown tetapi tetap mempertahankan hide/show instan pada perpindahan workspace normal.",
+    "Report FAT memakai hierarchy document-style yang lebih tenang, document control netral, device result inline, title lebih kecil dan modern font fallback stack.",
+    "Release gate mencakup full application build, regression IO FAT, deterministic SV evidence test, portable packaging, installer smoke test, checksum, SPDX SBOM dan provenance."
   ],
   "knownLimitations": [
     "Windows x64 is the only packaged desktop platform in the current stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
-    "A portable executable cannot bypass AppLocker, Windows Defender Application Control, antivirus, download-zone or corporate execution policy.",
-    "The .NET single-file host extracts bundled runtime payloads to the current user's bundle cache on first launch; the user profile and temporary directory must be writable.",
-    "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic.",
-    "Automatic IO List transition testing currently focuses on approved SDI points; analog tolerance and authorized command campaigns remain separate bounded work.",
-    "Raw SMV lanes are not calibrated current or voltage measurements until trusted SCL mapping, scaling, synchronization and independent verification are available."
+    "Raw-Ethernet GOOSE and Sampled Values workflows require Npcap, an approved capture adapter, suitable permissions and visibility of the relevant multicast traffic.",
+    "The MMS route to an IED may not identify a separate process-bus NIC; ARSAS keeps manual adapter selection as the safe fallback when automatic mapping is not unique.",
+    "Automatic IO List transition testing currently focuses on approved SDI points; SAI analog tolerance and authorized SDO command campaigns are not silently treated as equivalent tests.",
+    "Raw SMV lanes are not calibrated current or voltage measurements until trusted SCL mapping, scaling, synchronization and independent verification are available.",
+    "ARSAS is an engineering evidence tool and does not provide IEC 61850 conformance certification or replace calibrated protection testing and approved FAT procedures."
   ],
   "knownLimitationsId": [
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release saat ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
-    "Executable portable tidak dapat melewati AppLocker, Windows Defender Application Control, antivirus, download-zone atau corporate execution policy.",
-    "Host single-file .NET mengekstrak payload runtime ke bundle cache user pada first launch; profil user dan temporary directory harus writable.",
-    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait.",
-    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance dan authorized command campaign tetap merupakan pekerjaan terkontrol yang terpisah.",
-    "Raw lane SMV bukan calibrated current atau voltage measurement sampai trusted SCL mapping, scaling, synchronization dan independent verification tersedia."
+    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan Npcap, capture adapter yang disetujui, permission yang sesuai dan visibility traffic multicast terkait.",
+    "Route MMS menuju IED belum tentu menunjukkan process-bus NIC yang terpisah; ARSAS mempertahankan pemilihan adapter manual sebagai fallback aman ketika automatic mapping tidak unik.",
+    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance SAI dan authorized SDO command campaign tidak diam-diam dianggap sebagai test yang setara.",
+    "Raw lane SMV bukan calibrated current atau voltage measurement sampai trusted SCL mapping, scaling, synchronization dan independent verification tersedia.",
+    "ARSAS adalah tool engineering evidence dan tidak memberikan sertifikasi conformance IEC 61850 atau menggantikan calibrated protection testing serta procedure FAT yang disetujui."
   ],
   "codeSigning": {
     "status": "unsigned",
     "label": "Not Authenticode-signed",
     "labelId": "Belum ditandatangani dengan Authenticode",
-    "detail": "The current public Windows installer and portable EXE do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users.",
-    "detailId": "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
+    "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users.",
+    "detailId": "Installer Windows dan binary portable publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
   },
   "screenshot": {
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.20 Engineering workspace with attributable IED values, quality and timestamps",
-    "altId": "Representasi Engineering workspace ARSAS 1.6.20 dengan value IED, quality dan timestamp yang attributable",
-    "caption": "Representative Engineering workspace for ARSAS 1.6.20. This release changes Windows packaging and relay-fascia consistency without expanding unsupported protocol claims.",
-    "captionId": "Representasi Engineering workspace ARSAS 1.6.20. Release ini mengubah packaging Windows dan konsistensi fascia relay tanpa memperluas klaim protocol yang belum didukung."
+    "alt": "Representative ARSAS 1.6.19 Engineering workspace with attributable IED values, quality and timestamps",
+    "altId": "Representasi Engineering workspace ARSAS 1.6.19 dengan value IED, quality dan timestamp yang attributable",
+    "caption": "Representative Engineering workspace for ARSAS 1.6.19. The release also adds the separate loaded IO List FAT workspace and direct GOOSE/SMV entry from IED context.",
+    "captionId": "Representasi Engineering workspace ARSAS 1.6.19. Release ini juga menambahkan workspace IO List FAT terpisah yang tetap loaded serta akses GOOSE/SMV langsung dari konteks IED."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.20"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.19"
 }
