@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/agent-real-portable-patch.yml"
       - ".github/workflows/agent-real-portable-pr-trigger.yml"
+      - "scripts/agent_real_portable_patch.py"
 
 permissions:
   contents: write
@@ -20,31 +21,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Execute embedded patch
-        shell: bash
-        run: |
-          python - <<'PYRUN'
-          from pathlib import Path
-
-          helper = Path('.github/workflows/agent-real-portable-patch.yml').read_text(encoding='utf-8')
-          start_marker = "          python - <<'PY'\n"
-          end_marker = "\n          PY\n"
-          start = helper.index(start_marker) + len(start_marker)
-          end = helper.index(end_marker, start)
-          embedded = helper[start:end]
-          script = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in embedded.splitlines()
-          )
-          script = script.replace(r'PackagePath="\\\\"', r'PackagePath="\\"')
-          exec(compile(script, 'embedded-portable-patch.py', 'exec'))
-          PYRUN
+      - name: Apply real portable source patch
+        run: python scripts/agent_real_portable_patch.py
 
       - name: Commit patched source
         shell: bash
         run: |
           rm .github/workflows/agent-real-portable-patch.yml
           rm .github/workflows/agent-real-portable-pr-trigger.yml
+          rm scripts/agent_real_portable_patch.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
