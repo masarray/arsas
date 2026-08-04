@@ -450,5 +450,10 @@ jobs:
           if ($existingSha) { $body.sha = $existingSha }
 
           $request = $body | ConvertTo-Json -Compress
-          $request | gh api --method PUT $apiPath --input - *> $null
+          $requestPath = Join-Path $env:RUNNER_TEMP "arsas-published-release-request.json"
+          [System.IO.File]::WriteAllText(
+            $requestPath,
+            $request,
+            [System.Text.UTF8Encoding]::new($false))
+          gh api --method PUT $apiPath --input $requestPath *> $null
           if ($LASTEXITCODE -ne 0) { throw "Failed to record verified release publication." }
