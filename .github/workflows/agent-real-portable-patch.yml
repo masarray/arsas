@@ -1,0 +1,498 @@
+name: Apply real portable single EXE patch
+
+on:
+  push:
+    branches: [ agent/real-portable-single-exe ]
+    paths:
+      - ".github/workflows/agent-real-portable-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/real-portable-single-exe
+          fetch-depth: 0
+
+      - name: Patch portable packaging and release workflows
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file = root / path
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected patch anchor not found in {path}: {old[:120]!r}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          publish_script = r'''param(
+              [string]$Version = "",
+              [string]$Runtime = "win-x64",
+              [bool]$SingleFile = $true,
+              [bool]$SelfContained = $true,
+              [string]$EngineProject = "",
+              [string]$NpcapProject = ""
+          )
+
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $root = Split-Path -Parent $PSScriptRoot
+          $project = Join-Path $root "ArIED61850Tester.csproj"
+          $versionPropsPath = Join-Path $root "Directory.Build.props"
+
+          if ([string]::IsNullOrWhiteSpace($Version)) {
+              if (-not (Test-Path $versionPropsPath)) {
+                  throw "Canonical version metadata was not found: $versionPropsPath"
+              }
+
+              [xml]$versionProps = Get-Content $versionPropsPath -Raw
+              $Version = [string]$versionProps.Project.PropertyGroup.Version
+          }
+
+          if ([string]::IsNullOrWhiteSpace($EngineProject)) {
+              $EngineProject = Join-Path (Split-Path -Parent $root) "ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($NpcapProject)) {
+              $engineDirectory = Split-Path -Parent $EngineProject
+              $engineSourceRoot = Split-Path -Parent $engineDirectory
+              $NpcapProject = Join-Path $engineSourceRoot "AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+          }
+
+          if (-not (Test-Path $EngineProject)) {
+              throw "ARIEC61850 engine project was not found: $EngineProject. Put the ARSAS source folder beside the ARIEC61850 repository or pass -EngineProject with the full path."
+          }
+          if (-not (Test-Path $NpcapProject)) {
+              throw "ARIEC61850 Npcap transport project was not found: $NpcapProject. Pass -NpcapProject with the full path to AR.Iec61850.Transports.Npcap.csproj."
+          }
+          if ($SingleFile -and -not $SelfContained) {
+              throw "The public portable build must be self-contained so it can run without an installed .NET runtime."
+          }
+
+          $normalizedVersion = $Version.Trim()
+          if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
+              $normalizedVersion = $normalizedVersion.Substring(1)
+          }
+          if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-.][0-9A-Za-z.-]+)?$') {
+              throw "Invalid version '$Version'. Use a value such as 1.6.19 or v1.6.19."
+          }
+          $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
+
+          $outputRoot = Join-Path $root "dist"
+          $folderPublishDir = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime"
+          $singlePublishDir = Join-Path $outputRoot ".single-file-$normalizedVersion-$Runtime"
+          $folderZipPath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.zip"
+          $singleExePath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.exe"
+          $publishDir = if ($SingleFile) { $singlePublishDir } else { $folderPublishDir }
+
+          foreach ($path in @($publishDir, $folderZipPath, $singleExePath)) {
+              if (Test-Path $path) { Remove-Item $path -Recurse -Force }
+          }
+          New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
+
+          Write-Host "==> Restoring ARSAS"
+          dotnet restore $project `
+              -p:ArIec61850Project="$EngineProject" `
+              -p:ArIec61850NpcapProject="$NpcapProject"
+          if ($LASTEXITCODE -ne 0) {
+              throw "dotnet restore failed with exit code $LASTEXITCODE."
+          }
+
+          Write-Host "==> Publishing $normalizedVersion for $Runtime (single-file: $SingleFile, self-contained: $SelfContained)"
+          $publishArguments = @(
+              "publish", $project,
+              "-c", "Release",
+              "-r", $Runtime,
+              "--self-contained", $SelfContained.ToString().ToLowerInvariant(),
+              "-p:PublishSingleFile=$SingleFile",
+              "-p:PublishTrimmed=false",
+              "-p:UseAppHost=true",
+              "-p:DebugType=None",
+              "-p:DebugSymbols=false",
+              "-p:Version=$normalizedVersion",
+              "-p:AssemblyVersion=$numericVersion",
+              "-p:FileVersion=$numericVersion",
+              "-p:InformationalVersion=$normalizedVersion",
+              "-p:ArIec61850Project=$EngineProject",
+              "-p:ArIec61850NpcapProject=$NpcapProject",
+              "-o", $publishDir
+          )
+
+          if ($SingleFile) {
+              # WPF and packet-capture dependencies use reflection, content files and native loading.
+              # Keep trimming disabled and let the .NET bundle extract its runtime payload into the
+              # current user's writable bundle cache. Distribution still consists of exactly one EXE.
+              $publishArguments += "-p:IncludeNativeLibrariesForSelfExtract=true"
+              $publishArguments += "-p:IncludeAllContentForSelfExtract=true"
+              $publishArguments += "-p:EnableCompressionInSingleFile=true"
+          }
+
+          & dotnet @publishArguments
+          if ($LASTEXITCODE -ne 0) {
+              throw "dotnet publish failed with exit code $LASTEXITCODE."
+          }
+
+          $exe = Join-Path $publishDir "ARSAS.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) {
+              throw "Published executable was not found: $exe"
+          }
+
+          if ($SingleFile) {
+              $publishedFiles = @(Get-ChildItem $publishDir -Recurse -File)
+              if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].FullName -ne (Get-Item $exe).FullName) {
+                  $names = ($publishedFiles | ForEach-Object { $_.FullName }) -join ", "
+                  throw "Portable publish is not a real single-file output. Observed: $names"
+              }
+
+              Move-Item $exe $singleExePath -Force
+              Remove-Item $singlePublishDir -Recurse -Force
+              if (-not (Test-Path $singleExePath -PathType Leaf)) {
+                  throw "Versioned portable single EXE was not produced: $singleExePath"
+              }
+
+              Write-Host "==> Real portable single EXE: $singleExePath"
+              Write-Output $singleExePath
+              exit 0
+          }
+
+          $requiredInstallerFiles = @(
+              "AR.Iec61850.Transports.Npcap.dll",
+              "SharpPcap.dll",
+              "PacketDotNet.dll",
+              "README.txt",
+              "LICENSE",
+              "COMMERCIAL-LICENSE.md",
+              "TRADEMARK.md",
+              "COPYRIGHT.md",
+              "THIRD_PARTY_NOTICES.md",
+              "NOTICE",
+              "LICENSING.md",
+              "engines\ARIEC61850.lock.json"
+          )
+          foreach ($runtimeFile in $requiredInstallerFiles) {
+              $runtimePath = Join-Path $publishDir $runtimeFile
+              if (-not (Test-Path $runtimePath -PathType Leaf)) {
+                  throw "Installer-source dependency was not published: $runtimePath"
+              }
+          }
+
+          Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $folderZipPath -CompressionLevel Optimal
+          Write-Host "==> Installer source executable: $exe"
+          Write-Host "==> Legacy folder ZIP for diagnostics: $folderZipPath"
+          Write-Output $publishDir
+          '''
+          (root / 'scripts/publish-windows-portable.ps1').write_text(publish_script, encoding='utf-8')
+
+          manifest = r'''<?xml version="1.0" encoding="utf-8"?>
+          <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+            <assemblyIdentity version="1.0.0.0" name="ARSAS.app" />
+            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+              <security>
+                <requestedPrivileges>
+                  <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+                </requestedPrivileges>
+              </security>
+            </trustInfo>
+            <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+              <application>
+                <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+              </application>
+            </compatibility>
+          </assembly>
+          '''
+          (root / 'app.manifest').write_text(manifest, encoding='utf-8')
+
+          replace_exact(
+              'ArIED61850Tester.csproj',
+              '    <ApplicationIcon>Assets\\app-icon.ico</ApplicationIcon>\n',
+              '    <ApplicationIcon>Assets\\app-icon.ico</ApplicationIcon>\n    <ApplicationManifest>app.manifest</ApplicationManifest>\n'
+          )
+          replace_exact(
+              'ArIED61850Tester.csproj',
+              '''    <None Include="README.md" Pack="true" PackagePath="\\" />
+    <None Update="engines\\ARIEC61850.lock.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />''',
+              '''    <None Update="README.md" Pack="true" PackagePath="\\"
+          CopyToPublishDirectory="PreserveNewest" TargetPath="README.txt" />
+    <None Update="LICENSE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COMMERCIAL-LICENSE.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="TRADEMARK.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COPYRIGHT.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="NOTICE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="docs\\LICENSING.md" CopyToPublishDirectory="PreserveNewest" TargetPath="LICENSING.md" />
+    <None Update="engines\\ARIEC61850.lock.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />'''
+          )
+
+          replace_exact(
+              'App.xaml.cs',
+              'using System.Diagnostics;\nusing System.Threading;\n',
+              'using System.Diagnostics;\nusing System.IO;\nusing System.Reflection;\nusing System.Threading;\n'
+          )
+          replace_exact(
+              'App.xaml.cs',
+              '''        base.OnStartup(e);
+        GridUxBehavior.Install();''',
+              '''        base.OnStartup(e);
+
+        if (Array.Exists(e.Args, argument =>
+                string.Equals(argument, "--portable-smoke-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            Shutdown(RunPortableSmokeTest());
+            return;
+        }
+
+        GridUxBehavior.Install();'''
+          )
+          replace_exact(
+              'App.xaml.cs',
+              '''    protected override void OnExit(ExitEventArgs e)
+    {''',
+              '''    private static int RunPortableSmokeTest()
+    {
+        try
+        {
+            var lockPath = Path.Combine(AppContext.BaseDirectory, "engines", "ARIEC61850.lock.json");
+            if (!File.Exists(lockPath))
+                return 21;
+
+            foreach (var assemblyName in new[]
+                     {
+                         "AR.Iec61850",
+                         "AR.Iec61850.Transports.Npcap",
+                         "SharpPcap",
+                         "PacketDotNet"
+                     })
+            {
+                _ = Assembly.Load(new AssemblyName(assemblyName));
+            }
+
+            var probePath = Path.Combine(Path.GetTempPath(), $"ARSAS-portable-{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(probePath, "portable-smoke-test");
+            File.Delete(probePath);
+            return 0;
+        }
+        catch
+        {
+            return 22;
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {'''
+          )
+
+          build = root / '.github/workflows/build.yml'
+          text = build.read_text(encoding='utf-8')
+          text = text.replace(
+              '          $publish = Get-Content .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 -Raw\n',
+              '          $publish = Get-Content .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 -Raw\n          $manifest = Get-Content .\\ArIED61850Tester\\app.manifest -Raw\n',
+              1
+          )
+          text = text.replace(
+              '''              $versionFile -ne $releaseVersion -or
+              $publish -notmatch 'Directory.Build.props') {''',
+              '''              $versionFile -ne $releaseVersion -or
+              $publish -notmatch 'Directory.Build.props' -or
+              $publish -notmatch 'PublishSingleFile' -or
+              $publish -notmatch 'IncludeNativeLibrariesForSelfExtract=true' -or
+              $publish -notmatch 'IncludeAllContentForSelfExtract=true' -or
+              $publish -notmatch 'PublishTrimmed=false' -or
+              $publish -notmatch 'portable.exe' -or
+              $manifest -notmatch 'requestedExecutionLevel level="asInvoker"') {''',
+              1
+          )
+          old_build_publish = '''      - name: Publish portable x64
+        shell: powershell
+        run: .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 -Version $env:ARSAS_VERSION -EngineProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850\\AR.Iec61850.csproj"
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-win-x64
+          path: ArIED61850Tester\\dist\\*.zip'''
+          new_build_publish = '''      - name: Publish real portable single EXE x64
+        shell: powershell
+        run: |
+          .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850\\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850.Transports.Npcap\\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke-test real portable single EXE
+        shell: powershell
+        run: |
+          $exe = ".\\ArIED61850Tester\\dist\\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-bundle-cache"
+          & $exe --portable-smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Portable single EXE smoke test failed with exit code $LASTEXITCODE." }
+
+      - name: Upload portable single EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-win-x64-portable-single-exe
+          path: ArIED61850Tester\\dist\\ARSAS-*-win-x64-portable.exe
+          if-no-files-found: error'''
+          if old_build_publish not in text:
+              raise SystemExit('Build workflow portable block not found')
+          build.write_text(text.replace(old_build_publish, new_build_publish, 1), encoding='utf-8')
+
+          release = root / '.github/workflows/release-windows.yml'
+          text = release.read_text(encoding='utf-8')
+          old_release_publish = '''      - name: Publish portable Windows package
+        shell: powershell
+        run: |
+          .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $false `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850\\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850.Transports.Npcap\\AR.Iec61850.Transports.Npcap.csproj"
+'''
+          new_release_publish = '''      - name: Publish installer source folder
+        shell: powershell
+        run: |
+          .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $false `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850\\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850.Transports.Npcap\\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Publish real portable single EXE
+        shell: powershell
+        run: |
+          .\\ArIED61850Tester\\scripts\\publish-windows-portable.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850\\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\\ARIEC61850\\src\\AR.Iec61850.Transports.Npcap\\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke-test real portable single EXE
+        shell: powershell
+        run: |
+          $exe = ".\\ArIED61850Tester\\dist\\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-release-bundle-cache"
+          & $exe --portable-smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Portable single EXE smoke test failed with exit code $LASTEXITCODE." }
+'''
+          if old_release_publish not in text:
+              raise SystemExit('Release workflow publish block not found')
+          text = text.replace(old_release_publish, new_release_publish, 1)
+          text = text.replace('ARSAS-$env:RELEASE_VERSION-win-x64-portable.zip', 'ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe')
+          text = text.replace('ARSAS-${{ steps.release.outputs.version }}-win-x64-portable.zip', 'ARSAS-${{ steps.release.outputs.version }}-win-x64-portable.exe')
+          text = text.replace('ARSAS-Windows-x64-Portable.zip', 'ARSAS-Windows-x64-Portable.exe')
+          release.write_text(text, encoding='utf-8')
+
+          checksum = root / 'scripts/create-windows-release-checksums.ps1'
+          checksum.write_text(
+              checksum.read_text(encoding='utf-8').replace(
+                  'ARSAS-$normalizedVersion-$Runtime-portable.zip',
+                  'ARSAS-$normalizedVersion-$Runtime-portable.exe'
+              ),
+              encoding='utf-8'
+          )
+
+          sync = root / '.github/workflows/sync-release-documentation.yml'
+          sync.write_text(
+              sync.read_text(encoding='utf-8').replace(
+                  'ARSAS-Windows-x64-Portable.zip',
+                  'ARSAS-Windows-x64-Portable.exe'
+              ),
+              encoding='utf-8'
+          )
+
+          validator = root / 'scripts/validate-product-source.py'
+          text = validator.read_text(encoding='utf-8')
+          old_validation = '''    for key, filename in (("installer", "ARSAS-Windows-x64-Setup.exe"), ("portable", "ARSAS-Windows-x64-Portable.zip")):
+        item = evidence.get(key)
+        if not isinstance(item, dict) or item.get("name") != filename or not re.fullmatch(r"[0-9a-fA-F]{64}", str(item.get("sha256", ""))):
+            errors.append(f"latest.json {key} evidence is invalid")'''
+          new_validation = '''    installer = evidence.get("installer")
+    if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
+        errors.append("latest.json installer evidence is invalid")
+    portable = evidence.get("portable")
+    portable_names = {"ARSAS-Windows-x64-Portable.zip", "ARSAS-Windows-x64-Portable.exe"}
+    if not isinstance(portable, dict) or portable.get("name") not in portable_names or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", ""))):
+        errors.append("latest.json portable evidence is invalid")'''
+          if old_validation not in text:
+              raise SystemExit('Product-source portable validation block not found')
+          validator.write_text(text.replace(old_validation, new_validation, 1), encoding='utf-8')
+
+          changelog = root / 'CHANGELOG.md'
+          text = changelog.read_text(encoding='utf-8')
+          anchor = '## 1.6.19 — 2026-08-01\n'
+          addition = '''### Added
+
+- The Windows portable pipeline now produces one self-contained `ARSAS-Windows-x64-Portable.exe` that starts without installing .NET or requesting elevation. Raw-Ethernet GOOSE and SMV still require an administrator-installed Npcap driver and applicable corporate execution policy.
+
+'''
+          if addition not in text:
+              if anchor not in text:
+                  raise SystemExit('Changelog release anchor not found')
+              text = text.replace(anchor, addition + anchor, 1)
+              changelog.write_text(text, encoding='utf-8')
+
+          portable_doc = '''# Windows portable single EXE
+
+ARSAS publishes a self-contained Windows x64 portable executable named `ARSAS-Windows-x64-Portable.exe`.
+
+## What portable means
+
+- One file is downloaded and copied to the workstation.
+- The .NET 8 runtime, WPF runtime, ARIEC61850 engine and managed packet-capture assemblies are bundled.
+- The application manifest requests `asInvoker`; ARSAS itself does not request elevation or install services.
+- The executable can start from a normal user-writable folder without an installed .NET runtime.
+
+The .NET single-file host extracts bundled native and content payloads into the current user's bundle cache on first launch. This is normal single-file behavior and does not install ARSAS system-wide.
+
+## Locked workstation boundary
+
+A portable executable cannot bypass Windows or company security policy. Execution can still be blocked by AppLocker, Windows Defender Application Control, SmartScreen, antivirus policy, download-zone policy, or a read-only user profile. ARSAS binaries are currently not Authenticode-signed, so users should verify the published SHA-256 and follow their organization's approval process.
+
+MMS engineering over TCP port 102 generally does not require administrator rights once the approved network path and firewall policy are available. GOOSE and Sampled Values use raw Ethernet capture and require Npcap to have been installed and approved by an administrator. The portable executable does not install Npcap and cannot bypass driver or capture-permission restrictions.
+
+## Release validation
+
+The Windows CI and release workflow enforce all of the following:
+
+1. `PublishSingleFile=true` and `SelfContained=true` for `win-x64`.
+2. Trimming remains disabled for WPF, reflection and packet-capture compatibility.
+3. Native libraries and required content are bundled for user-cache extraction.
+4. The publish directory contains exactly one file before the versioned EXE is staged.
+5. The EXE runs `--portable-smoke-test`, loads the engine and Npcap managed assemblies, locates immutable engine provenance, writes to the user temporary directory and exits successfully.
+6. Installer packaging remains based on the separately validated multi-file publish directory.
+'''
+          (root / 'docs/WINDOWS_PORTABLE_SINGLE_EXE.md').write_text(portable_doc, encoding='utf-8')
+          PY
+
+      - name: Commit patched source
+        shell: bash
+        run: |
+          rm .github/workflows/agent-real-portable-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "build: publish real portable Windows single EXE"
+          git push origin HEAD:agent/real-portable-single-exe
