@@ -2,7 +2,15 @@
 
 Notable public changes to ARSAS are recorded here. Application releases must identify the exact ARIEC61850 engine commit used for build, tests, packaging, and release evidence.
 
-## 1.6.19 — Development
+## Unreleased
+
+### Fixed
+
+- IED Explorer and IO List FAT now use the shared protection-relay fascia consistently, place LIVE/STOP below the relay artwork, and avoid an icon-level status glow.
+- UI contract coverage verifies the shared relay artwork, status-label placement, and absence of the former calculator-style icon.
+- Visual QA documentation now uses repository-auditable evidence instead of machine-local paths.
+
+## 1.6.19 — 2026-08-01
 
 ### Fixed
 
@@ -43,7 +51,6 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 - The first unified test/evidence milestone is now available for imported SDI IO List campaigns; broader reusable campaigns across GOOSE, Sampled Values, files, controls, approvals, and multi-user review remain roadmap work.
 - Windows CI restores and builds the complete solution, runs application regression tests, and only then publishes the portable package.
 - The SV viewer can export a reviewed evidence package after a bounded snapshot without claiming current, voltage, engineering units, calibration, formal conformance, or universal interoperability.
-- Development version remains `1.6.19`. The currently published stable release remains `1.6.18` until a separately validated and tagged release is produced.
 
 ## 1.6.18
 
