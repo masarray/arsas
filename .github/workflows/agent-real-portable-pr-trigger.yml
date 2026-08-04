@@ -36,6 +36,7 @@ jobs:
               line[10:] if line.startswith("          ") else line
               for line in embedded.splitlines()
           )
+          script = script.replace(r'PackagePath="\\\\"', r'PackagePath="\\"')
           exec(compile(script, 'embedded-portable-patch.py', 'exec'))
           PYRUN
 
