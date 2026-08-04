@@ -1,0 +1,35 @@
+name: Apply v1.6.20 website portable identity patch
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/patch-v1.6.20-site-portable.yml"
+      - "scripts/patch_v1_6_20_site_portable.py"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/sync-v1.6.20-public-release
+          fetch-depth: 0
+
+      - name: Patch builder and public download identity
+        run: python scripts/patch_v1_6_20_site_portable.py
+
+      - name: Commit patched source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/build-product-site.py landing/site.json
+          git diff --cached --check
+          git commit -m "fix: align website builder with portable single EXE"
+          git push origin HEAD:docs/sync-v1.6.20-public-release
