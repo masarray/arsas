@@ -12,7 +12,7 @@ on:
       version:
         description: "Release version, for example 1.6.19"
         required: true
-        default: "1.6.19"
+        default: "1.6.20"
         type: string
       publish_release:
         description: "Create or update a GitHub Release"

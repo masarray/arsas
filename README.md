@@ -17,7 +17,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0ea5e9)](#system-requirements)
 
 [**Download installer**](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) ·
-[**Portable ZIP**](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip) ·
+[**Portable single EXE**](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) ·
 [**Quick Start**](https://masarray.github.io/arsas/quick-start.html) ·
 [**IO List FAT Evidence**](https://masarray.github.io/arsas/io-list-fat-evidence.html) ·
 [**Product website**](https://masarray.github.io/arsas/) ·
@@ -33,9 +33,18 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
 </div>
 
-> **Current stable release: ARSAS v1.6.19.** The stable Windows package now includes the release-grade IO List FAT workflow, persistent Engineering/FAT workspace switching, executive evidence reporting, one-click GOOSE entry, and bounded one-click SMV snapshot workflow described below.
+> **Current stable release: ARSAS v1.6.20.** This release adds a true self-contained Windows portable single EXE, preserves the validated installer path, and includes the protection-relay fascia and status-placement QA improvements described below.
 >
-> **Verified publication:** source commit [`990d1d1`](https://github.com/masarray/arsas/commit/990d1d1618704f1b8f4ee39a1d156780077734a7) · installer 51.6 MiB · portable ZIP 70.0 MiB · [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) · public binaries currently unsigned with Authenticode.
+> **Verified release pipeline:** installer + `ARSAS-Windows-x64-Portable.exe` + SHA-256 checksums + SPDX SBOM + provenance and attestations. Public binaries remain unsigned with Authenticode, so SmartScreen warnings are possible.
+
+## What changed in v1.6.20
+
+- **Real portable single EXE** — copy and run one `ARSAS-Windows-x64-Portable.exe`; no installed .NET runtime and no application-requested UAC elevation are required.
+- **Portable runtime gate** — CI proves that the bundle contains exactly one distributed file, starts successfully, loads ARIEC61850 plus the managed Npcap stack, reads immutable engine provenance, and can use the current user's temporary directory.
+- **Installer preserved** — the normal installer is still built from the separately validated multi-file self-contained publish and passes silent current-user install/uninstall testing.
+- **Relay fascia consistency** — IED Explorer and IO List FAT share the industrial protection-relay artwork, with LIVE/STOP placed below it and no misleading icon glow.
+- **Release trust evidence** — the installer and portable EXE receive public SHA-256 values, SPDX SBOM, provenance metadata, and GitHub artifact attestations.
+- **Honest locked-PC boundary** — portable packaging does not bypass AppLocker, WDAC, SmartScreen, antivirus, or corporate policy; GOOSE and SMV still require an approved administrator-installed Npcap driver.
 
 ## What changed in v1.6.19
 
@@ -153,9 +162,9 @@ See [ROADMAP.md](ROADMAP.md) for definitions of done and explicit non-goals.
 | Package | Intended use |
 |---|---|
 | [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) | Recommended for normal use, Start Menu integration, uninstall support, and verified update workflow. |
-| [Portable ZIP](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip) | Extract and run without installation on a controlled engineering workstation. |
+| [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) | Run the self-contained single EXE without installing ARSAS or .NET on an approved workstation. |
 | [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) | Verify the exact installer and portable package. |
-| [ARSAS v1.6.19 release](https://github.com/masarray/arsas/releases/tag/v1.6.19) | Release scope, assets, generated notes, SBOM, and provenance. |
+| [ARSAS v1.6.20 release](https://github.com/masarray/arsas/releases/tag/v1.6.20) | Release scope, assets, generated notes, SBOM, and provenance. |
 
 The public Windows binaries are currently **not Authenticode-signed**, so Windows SmartScreen may show an unrecognized-publisher warning. Verify the published SHA-256 value before use.
 
@@ -173,7 +182,7 @@ Visual Studio and an ARIEC61850 source checkout are **not required** for package
 
 ### First read-only Engineering session
 
-1. Install ARSAS or extract the portable ZIP and verify SHA-256.
+1. Install ARSAS or run the portable single EXE, then verify SHA-256.
 2. Confirm the approved network path and TCP port 102.
 3. Choose **Add IED by IP address**.
 4. Complete live discovery.
