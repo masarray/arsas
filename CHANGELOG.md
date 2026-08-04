@@ -4,15 +4,24 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
-### Fixed
-
-- IED Explorer and IO List FAT now use the shared protection-relay fascia consistently, place LIVE/STOP below the relay artwork, and avoid an icon-level status glow.
-- UI contract coverage verifies the shared relay artwork, status-label placement, and absence of the former calculator-style icon.
-- Visual QA documentation now uses repository-auditable evidence instead of machine-local paths.
+## 1.6.20 — 2026-08-04
 
 ### Added
 
-- The Windows portable pipeline now produces one self-contained `ARSAS-Windows-x64-Portable.exe` that starts without installing .NET or requesting elevation. Raw-Ethernet GOOSE and SMV still require an administrator-installed Npcap driver and applicable corporate execution policy.
+- The Windows portable package is now one self-contained `ARSAS-Windows-x64-Portable.exe` that starts without an installed .NET runtime and without ARSAS requesting UAC elevation.
+- Release CI enforces a true one-file publish, loads the ARIEC61850 and managed Npcap dependencies from the bundle, verifies immutable engine provenance, and tests user temporary-directory access before publication.
+
+### Fixed
+
+- IED Explorer and IO List FAT use the shared protection-relay fascia consistently, place LIVE/STOP below the relay artwork, and avoid an icon-level status glow.
+- UI contract coverage verifies the shared relay artwork, status-label placement, and absence of the former calculator-style icon.
+- Visual QA documentation uses repository-auditable evidence instead of machine-local paths.
+
+### Changed
+
+- The installer continues to use the separately validated multi-file source, while the portable public asset is now a single EXE.
+- Release checksums, SPDX SBOM, provenance, attestation inputs, download documentation, and public package metadata now identify the portable EXE instead of the legacy ZIP.
+- The portable executable remains subject to AppLocker, WDAC, SmartScreen, antivirus, download-zone, and corporate execution policy. Raw-Ethernet GOOSE and SMV still require an administrator-installed and approved Npcap driver.
 
 ## 1.6.19 — 2026-08-01
 
