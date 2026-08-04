@@ -173,8 +173,17 @@ jobs:
           $exe = ".\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
           if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
           $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-release-bundle-cache"
-          & $exe --portable-smoke-test
-          if ($LASTEXITCODE -ne 0) { throw "Portable single EXE smoke test failed with exit code $LASTEXITCODE." }
+          $diagnostic = Join-Path ([System.IO.Path]::GetTempPath()) "ARSAS-portable-smoke-error.txt"
+          Remove-Item $diagnostic -Force -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe -ArgumentList @("--portable-smoke-test") -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Portable single EXE smoke test timed out."
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Host }
+            throw "Portable single EXE smoke test failed with exit code $($process.ExitCode)."
+          }
 
       - name: Install Inno Setup compiler
         shell: powershell

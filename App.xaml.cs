@@ -43,7 +43,10 @@ public partial class App : Application
         {
             var lockPath = Path.Combine(AppContext.BaseDirectory, "engines", "ARIEC61850.lock.json");
             if (!File.Exists(lockPath))
+            {
+                WritePortableSmokeDiagnostic($"Engine lock was not extracted. BaseDirectory={AppContext.BaseDirectory}; expected={lockPath}");
                 return 21;
+            }
 
             foreach (var assemblyName in new[]
                      {
@@ -61,9 +64,24 @@ public partial class App : Application
             File.Delete(probePath);
             return 0;
         }
+        catch (Exception ex)
+        {
+            WritePortableSmokeDiagnostic(ex.ToString());
+            return 22;
+        }
+    }
+
+    private static void WritePortableSmokeDiagnostic(string message)
+    {
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(Path.GetTempPath(), "ARSAS-portable-smoke-error.txt"),
+                message);
+        }
         catch
         {
-            return 22;
+            // Diagnostics must never replace the original smoke-test result.
         }
     }
 
