@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
-PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
+PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe"
 CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
 EXPECTED_NAV = {"overview", "learn", "capabilities", "io-fat", "solutions", "guides", "about", "download"}
 GUIDES = {

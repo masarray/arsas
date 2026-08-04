@@ -118,7 +118,7 @@ def read_release_data(path: Path) -> tuple[dict[str, object], dict[str, object]]
     require_text(evidence.get("sourceCommit"), "sourceCommit")
     for key, expected_name in (
         ("installer", "ARSAS-Windows-x64-Setup.exe"),
-        ("portable", "ARSAS-Windows-x64-Portable.zip"),
+        ("portable", "ARSAS-Windows-x64-Portable.exe"),
     ):
         package = evidence.get(key)
         if not isinstance(package, dict) or package.get("name") != expected_name:
