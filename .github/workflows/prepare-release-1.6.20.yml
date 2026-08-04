@@ -1,0 +1,51 @@
+name: Prepare ARSAS v1.6.20 release
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/prepare-release-1.6.20.yml"
+      - "scripts/prepare_release_1_6_20.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/v1.6.20
+          fetch-depth: 0
+
+      - name: Apply v1.6.20 release preparation
+        run: python scripts/prepare_release_1_6_20.py
+
+      - name: Commit release metadata and documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .release/windows.json \
+            .github/workflows/release-windows.yml \
+            Directory.Build.props \
+            ArIED61850Tester.csproj \
+            VERSION \
+            CHANGELOG.md \
+            CITATION.cff \
+            README.md \
+            landing/release-notes.json \
+            landing/partials/download-cta.html \
+            landing/partials/download-cta-id.html \
+            landing/templates/download.html \
+            landing/templates/unduh.html \
+            landing/templates/quick-start.html \
+            landing/templates/panduan-mulai-arsas.html
+          git diff --cached --check
+          git commit -m "release: prepare ARSAS v1.6.20"
+          git push origin HEAD:release/v1.6.20
