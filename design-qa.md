@@ -18,17 +18,23 @@
 
 ## Validation
 
-The patch branch is committed only after these Windows checks pass:
+Verified on GitHub Actions using Windows Server 2025 and .NET SDK 8.0.423:
 
 ```powershell
 dotnet build ArIED61850Tester.csproj -c Release
 dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj -c Release --filter "FullyQualifiedName~IoTestingUiContractTests"
 ```
 
-The focused UI contract suite contains 11 tests, including structural checks that both card surfaces use the shared fascia, keep status labels outside the artwork, and do not restore the old calculator path.
+Results:
+
+- Release build: passed with 0 errors. The 12 reported nullable-reference warnings pre-existed in unrelated connection-classifier and signal-viewer files.
+- Focused UI contracts: 11 passed, 0 failed, 0 skipped.
+- XAML parse checks: passed for `MainWindow.xaml` and `IoListTestingWindow.xaml`.
+
+The focused UI contract suite includes structural checks that both card surfaces use the shared fascia, keep status labels outside the artwork, remove the icon-level shadow, and do not restore the old calculator path.
 
 ## Visual QA status
 
 The source asset itself is repository-visible and auditable. A fresh full-window runtime screenshot remains recommended as P3 evidence for spacing at every Windows scaling factor; it is not represented by inaccessible machine-local paths in this document.
 
-Final result: code structure and UI contracts passed; runtime screenshot evidence remains a follow-up polish item.
+Final result: code structure, Release build, and 11/11 UI contracts passed; runtime screenshot evidence remains a follow-up polish item.
