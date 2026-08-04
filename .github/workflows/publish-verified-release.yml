@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - ".release/publish-verified.json"
-      - "landing/release-notes.json"
       - ".github/workflows/publish-verified-release.yml"
   push:
     branches: [ main ]
