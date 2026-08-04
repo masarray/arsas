@@ -1,0 +1,37 @@
+name: Remove legacy release workflow self-trigger
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/remove-legacy-workflow-self-trigger.yml"
+      - "scripts/remove_legacy_workflow_self_trigger.py"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/release-workflow-post-publication
+          fetch-depth: 0
+
+      - name: Remove legacy workflow self-trigger
+        run: python scripts/remove_legacy_workflow_self_trigger.py
+
+      - name: Commit cleaned workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/remove-legacy-workflow-self-trigger.yml
+          rm scripts/remove_legacy_workflow_self_trigger.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: remove legacy release workflow self-trigger"
+          git push origin HEAD:fix/release-workflow-post-publication
