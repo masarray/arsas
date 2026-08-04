@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -16,6 +18,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (Array.Exists(e.Args, argument =>
+                string.Equals(argument, "--portable-smoke-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            Shutdown(RunPortableSmokeTest());
+            return;
+        }
+
         GridUxBehavior.Install();
         FaultRecordUxBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -25,6 +35,54 @@ public partial class App : Application
         Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
             new Action(() => _ = AppUpdateCoordinator.RunLazyAsync(_updateCancellation.Token)));
+    }
+
+    private static int RunPortableSmokeTest()
+    {
+        try
+        {
+            var lockPath = Path.Combine(AppContext.BaseDirectory, "engines", "ARIEC61850.lock.json");
+            if (!File.Exists(lockPath))
+            {
+                WritePortableSmokeDiagnostic($"Engine lock was not extracted. BaseDirectory={AppContext.BaseDirectory}; expected={lockPath}");
+                return 21;
+            }
+
+            foreach (var assemblyName in new[]
+                     {
+                         "AR.Iec61850",
+                         "AR.Iec61850.Transports.Npcap",
+                         "SharpPcap",
+                         "PacketDotNet"
+                     })
+            {
+                _ = Assembly.Load(new AssemblyName(assemblyName));
+            }
+
+            var probePath = Path.Combine(Path.GetTempPath(), $"ARSAS-portable-{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(probePath, "portable-smoke-test");
+            File.Delete(probePath);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            WritePortableSmokeDiagnostic(ex.ToString());
+            return 22;
+        }
+    }
+
+    private static void WritePortableSmokeDiagnostic(string message)
+    {
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(Path.GetTempPath(), "ARSAS-portable-smoke-error.txt"),
+                message);
+        }
+        catch
+        {
+            // Diagnostics must never replace the original smoke-test result.
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

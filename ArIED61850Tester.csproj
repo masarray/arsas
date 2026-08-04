@@ -9,6 +9,7 @@
     <AssemblyName>ARSAS</AssemblyName>
     <RootNamespace>ArIED61850Tester</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Authors>Ari Sulistiono / masarray</Authors>
     <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
     <Product>ARSAS</Product>
@@ -41,7 +42,15 @@
     <Resource Include="Assets\app-icon-256.png" />
     <Resource Include="Assets\gateway-hero.png" />
     <Resource Include="Assets\ied-protection-relay-fascia.png" />
-    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Update="README.md" Pack="true" PackagePath="\"
+          CopyToPublishDirectory="PreserveNewest" TargetPath="README.txt" />
+    <None Update="LICENSE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COMMERCIAL-LICENSE.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="TRADEMARK.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COPYRIGHT.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="NOTICE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="docs\LICENSING.md" CopyToPublishDirectory="PreserveNewest" TargetPath="LICENSING.md" />
     <None Update="engines\ARIEC61850.lock.json"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />

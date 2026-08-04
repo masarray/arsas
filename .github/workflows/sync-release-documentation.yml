@@ -82,7 +82,7 @@ jobs:
           assets = {item.get("name"): item for item in release.get("assets", [])}
           required = {
               "installer": "ARSAS-Windows-x64-Setup.exe",
-              "portable": "ARSAS-Windows-x64-Portable.zip",
+              "portable": "ARSAS-Windows-x64-Portable.exe",
               "checksums": "ARSAS-Windows-x64-SHA256SUMS.txt",
           }
           for name in required.values():

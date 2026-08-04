@@ -23,16 +23,26 @@ if ([string]::IsNullOrWhiteSpace($DistDirectory)) {
 }
 $DistDirectory = [System.IO.Path]::GetFullPath($DistDirectory)
 
-$assets = @(
-    (Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-portable.zip")
-    (Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-setup.exe")
-)
+$installer = Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-setup.exe"
+$portable = Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-portable.exe"
+
+if (-not (Test-Path $installer -PathType Leaf)) {
+    throw "Release installer was not found: $installer"
+}
+
+# The standalone installer-validation workflow intentionally builds only the
+# installer. The full release workflow builds both assets before invoking this
+# script, so the portable EXE is included whenever it is present.
+$assets = [System.Collections.Generic.List[string]]::new()
+$assets.Add($installer)
+if (Test-Path $portable -PathType Leaf) {
+    $assets.Add($portable)
+}
+else {
+    Write-Host "==> Portable asset is not present in this installer-only validation run."
+}
 
 $lines = foreach ($asset in $assets) {
-    if (-not (Test-Path $asset -PathType Leaf)) {
-        throw "Release asset was not found: $asset"
-    }
-
     $hash = Get-FileHash -Path $asset -Algorithm SHA256
     "$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($asset))"
 }

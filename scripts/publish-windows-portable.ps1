@@ -1,13 +1,15 @@
 param(
     [string]$Version = "",
     [string]$Runtime = "win-x64",
-    [bool]$SingleFile = $false,
+    [bool]$SingleFile = $true,
     [bool]$SelfContained = $true,
     [string]$EngineProject = "",
     [string]$NpcapProject = ""
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root "ArIED61850Tester.csproj"
 $versionPropsPath = Join-Path $root "Directory.Build.props"
@@ -37,6 +39,9 @@ if (-not (Test-Path $EngineProject)) {
 if (-not (Test-Path $NpcapProject)) {
     throw "ARIEC61850 Npcap transport project was not found: $NpcapProject. Pass -NpcapProject with the full path to AR.Iec61850.Transports.Npcap.csproj."
 }
+if ($SingleFile -and -not $SelfContained) {
+    throw "The public portable build must be self-contained so it can run without an installed .NET runtime."
+}
 
 $normalizedVersion = $Version.Trim()
 if ($normalizedVersion.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -48,25 +53,34 @@ if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 
 $outputRoot = Join-Path $root "dist"
-$publishDir = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime"
-$zipPath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.zip"
+$folderPublishDir = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime"
+$singlePublishDir = Join-Path $outputRoot ".single-file-$normalizedVersion-$Runtime"
+$folderZipPath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.zip"
+$singleExePath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable.exe"
+$publishDir = if ($SingleFile) { $singlePublishDir } else { $folderPublishDir }
 
-if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+foreach ($path in @($publishDir, $folderZipPath, $singleExePath)) {
+    if (Test-Path $path) { Remove-Item $path -Recurse -Force }
+}
 New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 
 Write-Host "==> Restoring ARSAS"
 dotnet restore $project `
     -p:ArIec61850Project="$EngineProject" `
     -p:ArIec61850NpcapProject="$NpcapProject"
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet restore failed with exit code $LASTEXITCODE."
+}
 
-Write-Host "==> Publishing $normalizedVersion for $Runtime (single-file: $SingleFile)"
+Write-Host "==> Publishing $normalizedVersion for $Runtime (single-file: $SingleFile, self-contained: $SelfContained)"
 $publishArguments = @(
     "publish", $project,
     "-c", "Release",
     "-r", $Runtime,
     "--self-contained", $SelfContained.ToString().ToLowerInvariant(),
     "-p:PublishSingleFile=$SingleFile",
+    "-p:PublishTrimmed=false",
+    "-p:UseAppHost=true",
     "-p:DebugType=None",
     "-p:DebugSymbols=false",
     "-p:Version=$normalizedVersion",
@@ -79,9 +93,9 @@ $publishArguments = @(
 )
 
 if ($SingleFile) {
-    # Supported for controlled diagnostics only. The release portable package defaults to
-    # multi-file so SharpPcap and the ARIEC61850 Npcap transport remain normal loadable
-    # assemblies and startup does not pay the single-file extraction cost.
+    # WPF and packet-capture dependencies use reflection, content files and native loading.
+    # Keep trimming disabled and let the .NET bundle extract its runtime payload into the
+    # current user's writable bundle cache. Distribution still consists of exactly one EXE.
     $publishArguments += "-p:IncludeNativeLibrariesForSelfExtract=true"
     $publishArguments += "-p:IncludeAllContentForSelfExtract=true"
     $publishArguments += "-p:EnableCompressionInSingleFile=true"
@@ -93,45 +107,50 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $exe = Join-Path $publishDir "ARSAS.exe"
-if (-not (Test-Path $exe)) {
+if (-not (Test-Path $exe -PathType Leaf)) {
     throw "Published executable was not found: $exe"
 }
 
-if (-not $SingleFile) {
-    $requiredGooseFiles = @(
-        "AR.Iec61850.Transports.Npcap.dll",
-        "SharpPcap.dll",
-        "PacketDotNet.dll"
-    )
-    foreach ($runtimeFile in $requiredGooseFiles) {
-        $runtimePath = Join-Path $publishDir $runtimeFile
-        if (-not (Test-Path $runtimePath)) {
-            throw "GOOSE runtime dependency was not published: $runtimePath"
-        }
+if ($SingleFile) {
+    $publishedFiles = @(Get-ChildItem $publishDir -Recurse -File)
+    if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].FullName -ne (Get-Item $exe).FullName) {
+        $names = ($publishedFiles | ForEach-Object { $_.FullName }) -join ", "
+        throw "Portable publish is not a real single-file output. Observed: $names"
+    }
+
+    Move-Item $exe $singleExePath -Force
+    Remove-Item $singlePublishDir -Recurse -Force
+    if (-not (Test-Path $singleExePath -PathType Leaf)) {
+        throw "Versioned portable single EXE was not produced: $singleExePath"
+    }
+
+    Write-Host "==> Real portable single EXE: $singleExePath"
+    Write-Output $singleExePath
+    exit 0
+}
+
+$requiredInstallerFiles = @(
+    "AR.Iec61850.Transports.Npcap.dll",
+    "SharpPcap.dll",
+    "PacketDotNet.dll",
+    "README.txt",
+    "LICENSE",
+    "COMMERCIAL-LICENSE.md",
+    "TRADEMARK.md",
+    "COPYRIGHT.md",
+    "THIRD_PARTY_NOTICES.md",
+    "NOTICE",
+    "LICENSING.md",
+    "engines\ARIEC61850.lock.json"
+)
+foreach ($runtimeFile in $requiredInstallerFiles) {
+    $runtimePath = Join-Path $publishDir $runtimeFile
+    if (-not (Test-Path $runtimePath -PathType Leaf)) {
+        throw "Installer-source dependency was not published: $runtimePath"
     }
 }
 
-Copy-Item (Join-Path $root "README.md") (Join-Path $publishDir "README.txt") -Force
-
-# Current release packages carry one public software license: GPL-3.0-or-later.
-$legalFiles = @("LICENSE", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
-foreach ($legalFile in $legalFiles) {
-    $sourceLegalFile = Join-Path $root $legalFile
-    if (-not (Test-Path $sourceLegalFile)) {
-        throw "Required legal file was not found: $sourceLegalFile"
-    }
-
-    Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
-}
-
-$licensingGuide = Join-Path $root "docs\LICENSING.md"
-if (-not (Test-Path $licensingGuide)) {
-    throw "Required licensing guide was not found: $licensingGuide"
-}
-Copy-Item $licensingGuide (Join-Path $publishDir "LICENSING.md") -Force
-
-Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
-
-Write-Host "==> Portable executable: $exe"
-Write-Host "==> Portable ZIP: $zipPath"
-Write-Host "==> Keep the complete extracted folder together; GOOSE capture depends on the published SharpPcap and Npcap transport assemblies."
+Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $folderZipPath -CompressionLevel Optimal
+Write-Host "==> Installer source executable: $exe"
+Write-Host "==> Legacy folder ZIP for diagnostics: $folderZipPath"
+Write-Output $publishDir

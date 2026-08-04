@@ -10,6 +10,10 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 - UI contract coverage verifies the shared relay artwork, status-label placement, and absence of the former calculator-style icon.
 - Visual QA documentation now uses repository-auditable evidence instead of machine-local paths.
 
+### Added
+
+- The Windows portable pipeline now produces one self-contained `ARSAS-Windows-x64-Portable.exe` that starts without installing .NET or requesting elevation. Raw-Ethernet GOOSE and SMV still require an administrator-installed Npcap driver and applicable corporate execution policy.
+
 ## 1.6.19 — 2026-08-01
 
 ### Fixed
