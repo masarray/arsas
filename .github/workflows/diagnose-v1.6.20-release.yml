@@ -14,10 +14,10 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: List workflows for release commit
+      - name: List workflows for public synchronization commit
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: 0a92467a15fab5e5ddf108a057d4349bfbae7248
+          RELEASE_SHA: f3548b3c21cebd31689188248d66845eae051cb3
         shell: bash
         run: |
           set -euo pipefail
@@ -34,4 +34,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release view v1.6.20 --repo "$GITHUB_REPOSITORY" --json tagName,name,isDraft,isPrerelease,publishedAt,url,assets || true
+          gh release view v1.6.20 --repo "$GITHUB_REPOSITORY" --json tagName,name,isDraft,isPrerelease,publishedAt,url,assets
