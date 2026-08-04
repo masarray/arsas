@@ -145,7 +145,7 @@ jobs:
           path: ArIED61850Tester/TestResults/*.trx
           if-no-files-found: error
 
-      - name: Publish portable Windows package
+      - name: Publish installer source folder
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -155,6 +155,26 @@ jobs:
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Publish real portable single EXE
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke-test real portable single EXE
+        shell: powershell
+        run: |
+          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-release-bundle-cache"
+          & $exe --portable-smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Portable single EXE smoke test failed with exit code $LASTEXITCODE." }
 
       - name: Install Inno Setup compiler
         shell: powershell
@@ -220,9 +240,9 @@ jobs:
         run: |
           $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
           $versionedInstaller = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-setup.exe"
-          $versionedPortable = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-portable.zip"
+          $versionedPortable = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
           $publicInstaller = Join-Path $dist "ARSAS-Windows-x64-Setup.exe"
-          $publicPortable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
+          $publicPortable = Join-Path $dist "ARSAS-Windows-x64-Portable.exe"
           $publicChecksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
 
           Copy-Item $versionedInstaller $publicInstaller -Force
@@ -292,7 +312,7 @@ jobs:
       - name: Attest portable package with SPDX SBOM
         uses: actions/attest@v4
         with:
-          subject-path: ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.zip
+          subject-path: ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.exe
           sbom-path: ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
 
       - name: Upload Windows release artifacts
@@ -301,10 +321,10 @@ jobs:
           name: ARSAS-${{ steps.release.outputs.version }}-windows
           if-no-files-found: error
           path: |
-            ArIED61850Tester/dist/ARSAS-${{ steps.release.outputs.version }}-win-x64-portable.zip
+            ArIED61850Tester/dist/ARSAS-${{ steps.release.outputs.version }}-win-x64-portable.exe
             ArIED61850Tester/dist/ARSAS-${{ steps.release.outputs.version }}-win-x64-setup.exe
             ArIED61850Tester/dist/SHA256SUMS.txt
-            ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.zip
+            ArIED61850Tester/dist/ARSAS-Windows-x64-Portable.exe
             ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe
             ArIED61850Tester/dist/ARSAS-Windows-x64-SHA256SUMS.txt
             ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
@@ -320,7 +340,7 @@ jobs:
           $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
           $assets = @(
             (Join-Path $dist "ARSAS-Windows-x64-Setup.exe")
-            (Join-Path $dist "ARSAS-Windows-x64-Portable.zip")
+            (Join-Path $dist "ARSAS-Windows-x64-Portable.exe")
             (Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt")
             (Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json")
             (Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json")
@@ -359,7 +379,7 @@ jobs:
         run: |
           $dist = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist"
           $installer = Join-Path $dist "ARSAS-Windows-x64-Setup.exe"
-          $portable = Join-Path $dist "ARSAS-Windows-x64-Portable.zip"
+          $portable = Join-Path $dist "ARSAS-Windows-x64-Portable.exe"
           $checksums = Join-Path $dist "ARSAS-Windows-x64-SHA256SUMS.txt"
           $sbom = Join-Path $dist "ARSAS-Windows-x64-SBOM.spdx.json"
           $provenance = Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json"
@@ -381,8 +401,8 @@ jobs:
               sizeBytes = (Get-Item $installer).Length
             }
             portable = [ordered]@{
-              name = "ARSAS-Windows-x64-Portable.zip"
-              url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Portable.zip"
+              name = "ARSAS-Windows-x64-Portable.exe"
+              url = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Portable.exe"
               sha256 = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
               sizeBytes = (Get-Item $portable).Length
             }

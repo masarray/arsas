@@ -24,7 +24,7 @@ if ([string]::IsNullOrWhiteSpace($DistDirectory)) {
 $DistDirectory = [System.IO.Path]::GetFullPath($DistDirectory)
 
 $assets = @(
-    (Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-portable.zip")
+    (Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-portable.exe")
     (Join-Path $DistDirectory "ARSAS-$normalizedVersion-$Runtime-setup.exe")
 )
 

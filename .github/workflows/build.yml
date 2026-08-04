@@ -50,6 +50,7 @@ jobs:
           $versionProps = Get-Content .\ArIED61850Tester\Directory.Build.props -Raw
           $versionFile = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
           $publish = Get-Content .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Raw
+          $manifest = Get-Content .\ArIED61850Tester\app.manifest -Raw
           $sasPolicy = Get-Content .\ArIED61850Tester\Services\SasOperationalSignalPolicy.cs -Raw
           $sasUi = Get-Content .\ArIED61850Tester\SasOperationalUiPolicy.cs -Raw
           $sclMapper = Get-Content .\ArIED61850Tester\Services\SclWorkspaceSignalMapper.cs -Raw
@@ -190,7 +191,13 @@ jobs:
               $fileVersion -ne "$releaseVersion.0" -or
               $projectVersion -ne $releaseVersion -or
               $versionFile -ne $releaseVersion -or
-              $publish -notmatch 'Directory.Build.props') {
+              $publish -notmatch 'Directory.Build.props' -or
+              $publish -notmatch 'PublishSingleFile' -or
+              $publish -notmatch 'IncludeNativeLibrariesForSelfExtract=true' -or
+              $publish -notmatch 'IncludeAllContentForSelfExtract=true' -or
+              $publish -notmatch 'PublishTrimmed=false' -or
+              $publish -notmatch 'portable.exe' -or
+              $manifest -notmatch 'requestedExecutionLevel level="asInvoker"') {
             throw "Release metadata is not aligned to canonical version $releaseVersion."
           }
           "ARSAS_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -320,12 +327,29 @@ jobs:
           path: ArIED61850Tester\TestResults\*.trx
           if-no-files-found: error
 
-      - name: Publish portable x64
+      - name: Publish real portable single EXE x64
         shell: powershell
-        run: .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version $env:ARSAS_VERSION -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj"
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 
-      - name: Upload portable package
+      - name: Smoke-test real portable single EXE
+        shell: powershell
+        run: |
+          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-bundle-cache"
+          & $exe --portable-smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Portable single EXE smoke test failed with exit code $LASTEXITCODE." }
+
+      - name: Upload portable single EXE
         uses: actions/upload-artifact@v4
         with:
-          name: ARSAS-win-x64
-          path: ArIED61850Tester\dist\*.zip
+          name: ARSAS-win-x64-portable-single-exe
+          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          if-no-files-found: error

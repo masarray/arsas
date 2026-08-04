@@ -118,10 +118,13 @@ def validate_release(errors: list[str]) -> None:
         errors.append("latest.json stable identity is invalid")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version) or notes.get("version") != version:
         errors.append("release evidence and notes versions differ")
-    for key, filename in (("installer", "ARSAS-Windows-x64-Setup.exe"), ("portable", "ARSAS-Windows-x64-Portable.zip")):
-        item = evidence.get(key)
-        if not isinstance(item, dict) or item.get("name") != filename or not re.fullmatch(r"[0-9a-fA-F]{64}", str(item.get("sha256", ""))):
-            errors.append(f"latest.json {key} evidence is invalid")
+    installer = evidence.get("installer")
+    if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
+        errors.append("latest.json installer evidence is invalid")
+    portable = evidence.get("portable")
+    portable_names = {"ARSAS-Windows-x64-Portable.zip", "ARSAS-Windows-x64-Portable.exe"}
+    if not isinstance(portable, dict) or portable.get("name") not in portable_names or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", ""))):
+        errors.append("latest.json portable evidence is invalid")
     if not isinstance(evidence.get("checksums"), dict): errors.append("latest.json checksum evidence is missing")
     signing = evidence.get("codeSigning")
     note_signing = notes.get("codeSigning")
