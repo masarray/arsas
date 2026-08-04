@@ -25,14 +25,17 @@ jobs:
         run: |
           python - <<'PYRUN'
           from pathlib import Path
-          import textwrap
 
           helper = Path('.github/workflows/agent-real-portable-patch.yml').read_text(encoding='utf-8')
           start_marker = "          python - <<'PY'\n"
           end_marker = "\n          PY\n"
           start = helper.index(start_marker) + len(start_marker)
           end = helper.index(end_marker, start)
-          script = textwrap.dedent(helper[start:end])
+          embedded = helper[start:end]
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in embedded.splitlines()
+          )
           exec(compile(script, 'embedded-portable-patch.py', 'exec'))
           PYRUN
 
