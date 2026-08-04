@@ -1,0 +1,37 @@
+name: Diagnose v1.6.20 release status
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/diagnose-v1.6.20-release.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List workflows for release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: 0a92467a15fab5e5ddf108a057d4349bfbae7248
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --commit "$RELEASE_SHA" \
+            --limit 100 \
+            --json databaseId,workflowName,name,event,status,conclusion,headSha,url,createdAt,updatedAt \
+            --jq '.[] | [.databaseId,.workflowName,.event,.status,(.conclusion // ""),.headSha,.url] | @tsv'
+
+      - name: Inspect v1.6.20 release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view v1.6.20 --repo "$GITHUB_REPOSITORY" --json tagName,name,isDraft,isPrerelease,publishedAt,url,assets || true
