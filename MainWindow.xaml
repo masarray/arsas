@@ -229,27 +229,28 @@
                                                     <ColumnDefinition Width="56"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <!-- Compact feeder-protection relay fascia; state remains readable without covering the LCD. -->
-                                      <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="60" Height="60" Margin="-2,0,-2,0"
-                                            VerticalAlignment="Center" ClipToBounds="False" Panel.ZIndex="2">
-                                          <Viewbox Width="54" Height="54" Stretch="Uniform"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
-                                              <Control x:Name="RelayDeviceIcon" Width="50" Height="50"
-                                                       Foreground="#EF4444"
-                                                       Template="{StaticResource IedRelayFrontPanelTemplate}">
-                                                  <Control.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0.22" Color="#26313B"/></Control.Effect>
-                                              </Control>
-                                          </Viewbox>
-                                          <Border x:Name="MonitorStateBadge"
-                                                  HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="7,0,0,7"
-                                                  Background="#F5FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
-                                                  CornerRadius="2.8" Padding="3.5,0.7" Panel.ZIndex="5">
-                                              <StackPanel Orientation="Horizontal">
-                                                  <Ellipse x:Name="MonitorStateDot" Width="3.8" Height="3.8" Fill="#E5484D" Margin="0,0,2.5,0" VerticalAlignment="Center"/>
-                                                  <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="6.8" FontWeight="SemiBold" Foreground="#C92A32"/>
-                                              </StackPanel>
-                                          </Border>
-                                      </Grid>
+                                                <!-- Static protection-relay fascia with a dedicated status label below it. -->
+                                                <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Width="60"
+                                                            Margin="-2,0,-2,0" VerticalAlignment="Center"
+                                                            HorizontalAlignment="Center" Panel.ZIndex="2">
+                                                    <Viewbox Width="50" Height="50" Stretch="Uniform"
+                                                             HorizontalAlignment="Center">
+                                                        <Control x:Name="RelayDeviceIcon" Width="50" Height="50"
+                                                                 Foreground="#EF4444"
+                                                                 Template="{StaticResource IedRelayFrontPanelTemplate}"/>
+                                                    </Viewbox>
+                                                    <Border x:Name="MonitorStateBadge"
+                                                            HorizontalAlignment="Center" Margin="0,2,0,0"
+                                                            Background="#F5FFF0F1" BorderBrush="#F3A3A8" BorderThickness="1"
+                                                            CornerRadius="3" Padding="4,1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse x:Name="MonitorStateDot" Width="3.8" Height="3.8" Fill="#E5484D"
+                                                                     Margin="0,0,2.5,0" VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="MonitorStateText" Text="STOP" FontSize="6.8"
+                                                                       FontWeight="SemiBold" Foreground="#C92A32"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
 
 <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="4,0,12,0">
                                                     <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"

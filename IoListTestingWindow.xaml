@@ -166,10 +166,25 @@
                                         <ColumnDefinition Width="58"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Viewbox Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Control x:Name="RelayIcon" Width="50" Height="50" Foreground="#D94B55"
-                                                 Template="{StaticResource IedRelayFrontPanelTemplate}"/>
-                                    </Viewbox>
+                                    <StackPanel Grid.Column="0" Width="56"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Viewbox Width="46" Height="46" HorizontalAlignment="Center">
+                                            <Control x:Name="RelayIcon" Width="50" Height="50" Foreground="#D94B55"
+                                                     Template="{StaticResource IedRelayFrontPanelTemplate}"/>
+                                        </Viewbox>
+                                        <Border x:Name="StateBadge" HorizontalAlignment="Center" Margin="0,2,0,0"
+                                                Background="#FFF1F2" BorderBrush="#F0B7BC"
+                                                BorderThickness="1" CornerRadius="3" Padding="4,1">
+                                            <Border.Visibility>
+                                                <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}" ConverterParameter="Inverse">
+                                                    <Binding Path="TestPoints.Count"/>
+                                                    <Binding Path="PassedCount"/>
+                                                </MultiBinding>
+                                            </Border.Visibility>
+                                            <TextBlock x:Name="StateText" Text="{Binding CardStateText}"
+                                                       FontSize="7" FontWeight="SemiBold" Foreground="#C53A45"/>
+                                        </Border>
+                                    </StackPanel>
                                     <Grid Grid.Column="1" Margin="3,0,0,0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -185,29 +200,17 @@
                                             <TextBlock Text="{Binding IedName}" FontSize="12.8" FontWeight="SemiBold"
                                                        Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
                                                        Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                            <Grid Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                                <Border x:Name="StateBadge" Background="#FFF1F2"
-                                                        BorderBrush="#F0B7BC" BorderThickness="1" CornerRadius="9" Padding="7,2">
-                                                    <Border.Visibility>
-                                                        <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}" ConverterParameter="Inverse">
-                                                            <Binding Path="TestPoints.Count"/>
-                                                            <Binding Path="PassedCount"/>
-                                                        </MultiBinding>
-                                                    </Border.Visibility>
-                                                    <TextBlock x:Name="StateText" Text="{Binding CardStateText}"
-                                                               FontSize="8.5" FontWeight="Bold" Foreground="#C53A45"/>
-                                                </Border>
-                                                <Border Background="#EAF8F1" BorderBrush="#8FD1B1"
-                                                        BorderThickness="1" CornerRadius="9" Padding="7,2">
-                                                    <Border.Visibility>
-                                                        <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}">
-                                                            <Binding Path="TestPoints.Count"/>
-                                                            <Binding Path="PassedCount"/>
-                                                        </MultiBinding>
-                                                    </Border.Visibility>
-                                                    <TextBlock Text="✔ PASS" FontSize="8.5" FontWeight="Bold" Foreground="#16845A"/>
-                                                </Border>
-                                            </Grid>
+                                            <Border Grid.Column="1" Background="#EAF8F1" BorderBrush="#8FD1B1"
+                                                    BorderThickness="1" CornerRadius="9" Padding="7,2"
+                                                    Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <Border.Visibility>
+                                                    <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}">
+                                                        <Binding Path="TestPoints.Count"/>
+                                                        <Binding Path="PassedCount"/>
+                                                    </MultiBinding>
+                                                </Border.Visibility>
+                                                <TextBlock Text="✔ PASS" FontSize="8.5" FontWeight="Bold" Foreground="#16845A"/>
+                                            </Border>
                                         </Grid>
                                         <TextBlock Grid.Row="1" Text="{Binding IpAddress}" Style="{StaticResource Caption}"
                                                    Margin="0,3,0,0"/>

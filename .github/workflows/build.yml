@@ -101,7 +101,9 @@ jobs:
               $main -notmatch 'Header="Flags"' -or
               $main -notmatch 'Header="Diagnostics" Binding="\{Binding DiagnosticsSummary\}"' -or
               $main -notmatch '<ColumnDefinition Width="56"/>' -or
-              $main -notmatch '<Viewbox Width="44" Height="44" Stretch="Uniform"' -or
+              $main -notmatch '<Viewbox Width="50" Height="50" Stretch="Uniform"' -or
+              $main -notmatch 'x:Name="MonitorStateBadge"' -or
+              $main -match '<Control\.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0\.22" Color="#26313B"/></Control\.Effect>' -or
               $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
               $main -notmatch 'LucideX.*Stroke="\{StaticResource Danger\}"' -or
               $app -notmatch 'x:Key="CommandOpenGradient"' -or

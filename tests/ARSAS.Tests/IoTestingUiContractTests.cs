@@ -188,12 +188,34 @@ public sealed class IoTestingUiContractTests
         var project = File.ReadAllText(FindRepoFile("ArIED61850Tester.csproj"));
         Assert.Contains("Assets\\ied-protection-relay-fascia.png", project, StringComparison.Ordinal);
 
-        var explorer = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
-        var ioTesting = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
-        Assert.Contains("IedRelayFrontPanelTemplate", explorer, StringComparison.Ordinal);
-        Assert.Contains("IedRelayFrontPanelTemplate", ioTesting, StringComparison.Ordinal);
-        Assert.DoesNotContain("M 2 0 L 2 20", explorer, StringComparison.Ordinal);
-        Assert.DoesNotContain("M 2 0 L 2 20", ioTesting, StringComparison.Ordinal);
+        var explorer = XDocument.Load(FindRepoFile("MainWindow.xaml"));
+        var explorerIcon = explorer
+            .Descendants(presentation + "Control")
+            .Single(node => (string?)node.Attribute(x + "Name") == "RelayDeviceIcon");
+        var explorerBadge = explorer
+            .Descendants(presentation + "Border")
+            .Single(node => (string?)node.Attribute(x + "Name") == "MonitorStateBadge");
+        Assert.Empty(explorerIcon.Descendants(presentation + "DropShadowEffect"));
+        Assert.Equal("StackPanel", explorerBadge.Parent?.Name.LocalName);
+        Assert.Contains(
+            explorerBadge.Parent!.Descendants(presentation + "Control"),
+            node => (string?)node.Attribute(x + "Name") == "RelayDeviceIcon");
+
+        var ioTesting = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        var ioBadge = ioTesting
+            .Descendants(presentation + "Border")
+            .Single(node => (string?)node.Attribute(x + "Name") == "StateBadge");
+        Assert.Equal("StackPanel", ioBadge.Parent?.Name.LocalName);
+        Assert.Contains(
+            ioBadge.Parent!.Descendants(presentation + "Control"),
+            node => (string?)node.Attribute(x + "Name") == "RelayIcon");
+
+        var explorerText = explorer.ToString();
+        var ioTestingText = ioTesting.ToString();
+        Assert.Contains("IedRelayFrontPanelTemplate", explorerText, StringComparison.Ordinal);
+        Assert.Contains("IedRelayFrontPanelTemplate", ioTestingText, StringComparison.Ordinal);
+        Assert.DoesNotContain("M 2 0 L 2 20", explorerText, StringComparison.Ordinal);
+        Assert.DoesNotContain("M 2 0 L 2 20", ioTestingText, StringComparison.Ordinal);
     }
 
     [Fact]
