@@ -9,8 +9,8 @@ authors:
 repository-code: "https://github.com/masarray/arsas"
 url: "https://masarray.github.io/arsas/"
 license: GPL-3.0-or-later
-version: "1.6.16"
-date-released: "2026-07-18"
+version: "1.6.19"
+date-released: "2026-08-01"
 keywords:
   - IEC 61850
   - substation automation
