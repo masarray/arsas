@@ -1,0 +1,61 @@
+name: Validate and apply IED relay icon patch
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-test:
+    if: github.event.pull_request.head.ref == 'agent/ied-relay-icon-industrial-qa' && github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS head branch
+        uses: actions/checkout@v4
+        with:
+          path: arsas
+          ref: agent/ied-relay-icon-industrial-qa
+          fetch-depth: 0
+
+      - name: Checkout ARIEC61850 engine beside ARSAS
+        uses: actions/checkout@v4
+        with:
+          repository: masarray/ARIEC61850
+          path: ARIEC61850
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Apply focused patch
+        shell: pwsh
+        working-directory: arsas
+        run: python .github/scripts/apply_ied_relay_patch.py
+
+      - name: Build ARSAS Release
+        shell: pwsh
+        working-directory: arsas
+        run: dotnet build ArIED61850Tester.csproj -c Release
+
+      - name: Run 11 focused UI contracts
+        shell: pwsh
+        working-directory: arsas
+        run: dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj -c Release --filter "FullyQualifiedName~IoTestingUiContractTests"
+
+      - name: Commit validated source changes
+        shell: pwsh
+        working-directory: arsas
+        run: |
+          Remove-Item ".github/workflows/ied-relay-icon-self-patch.yml"
+          Remove-Item ".github/workflows/ied-relay-icon-pr-patch.yml"
+          Remove-Item ".github/scripts/apply_ied_relay_patch.py"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml IoListTestingWindow.xaml tests/ARSAS.Tests/IoTestingUiContractTests.cs design-qa.md .github
+          git commit -m "fix: place IED status below relay fascia"
+          git push origin HEAD:agent/ied-relay-icon-industrial-qa
