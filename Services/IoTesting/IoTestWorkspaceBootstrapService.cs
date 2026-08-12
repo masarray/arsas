@@ -130,8 +130,10 @@ public static class IoTestWorkspaceBootstrapService
             throw new InvalidDataException("The local snapshot belongs to a different workbook or schema.");
         }
 
-        var savedPoints = RequiredArray(savedProject, "ieds")
-            .EnumerateArray()
+        var savedIeds = RequiredArray(savedProject, "ieds").EnumerateArray().ToArray();
+        RestoreIedLevelEvidence(project, savedIeds);
+
+        var savedPoints = savedIeds
             .SelectMany(ied => RequiredArray(ied, "testPoints").EnumerateArray())
             .ToDictionary(point => RequiredString(point, "testPointId"), StringComparer.OrdinalIgnoreCase);
 
@@ -175,6 +177,29 @@ public static class IoTestWorkspaceBootstrapService
             }
         }
         project.InitializeRuntimeNotifications();
+    }
+
+    private static void RestoreIedLevelEvidence(IoTestProject project, IReadOnlyList<JsonElement> savedIeds)
+    {
+        foreach (var ied in project.Ieds)
+        {
+            var saved = savedIeds.FirstOrDefault(candidate =>
+                OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
+                OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
+            if (saved.ValueKind != JsonValueKind.Object)
+                continue;
+
+            // These fields are optional so snapshots written before COMTRADE FAT evidence
+            // was introduced remain fully readable.
+            ied.LatestComtradeFiles = OptionalString(saved, "latestComtradeFiles", string.Empty);
+            ied.LatestComtradeRemotePath = OptionalString(saved, "latestComtradeRemotePath", string.Empty);
+            ied.LatestComtradeCompleteness = OptionalString(saved, "latestComtradeCompleteness", string.Empty);
+            ied.LatestComtradeAcquisitionSource = OptionalString(saved, "latestComtradeAcquisitionSource", string.Empty);
+            ied.LatestComtradeModifiedAtUtc = OptionalDateTimeOffset(saved, "latestComtradeModifiedAtUtc");
+            ied.LatestComtradeCapturedAtUtc = OptionalDateTimeOffset(saved, "latestComtradeCapturedAtUtc");
+            ied.LatestComtradeFileCount = OptionalInt(saved, "latestComtradeFileCount", 0);
+            ied.LatestComtradeKnownSizeBytes = OptionalLong(saved, "latestComtradeKnownSizeBytes", 0L);
+        }
     }
 
     private static void ExcludeCompletedFromNextSession(IoTestProject project)
@@ -243,6 +268,18 @@ public static class IoTestWorkspaceBootstrapService
         => parent.TryGetProperty(property, out var value) && value.TryGetInt32(out var number)
             ? number
             : fallback;
+
+    private static long OptionalLong(JsonElement parent, string property, long fallback)
+        => parent.TryGetProperty(property, out var value) && value.TryGetInt64(out var number)
+            ? number
+            : fallback;
+
+    private static DateTimeOffset? OptionalDateTimeOffset(JsonElement parent, string property)
+        => parent.TryGetProperty(property, out var value) &&
+           value.ValueKind == JsonValueKind.String &&
+           value.TryGetDateTimeOffset(out var timestamp)
+            ? timestamp
+            : null;
 
     private static string ProjectDirectory(string root, IoTestProject project)
     {
