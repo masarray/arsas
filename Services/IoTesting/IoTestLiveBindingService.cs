@@ -225,9 +225,13 @@ public sealed class IoTestLiveBindingService
     }
 
     private static bool FunctionalConstraintMatches(string? expected, string? observed)
-        => string.IsNullOrWhiteSpace(expected) ||
-           string.IsNullOrWhiteSpace(observed) ||
-           expected.Trim().Equals(observed.Trim(), StringComparison.OrdinalIgnoreCase);
+    {
+        if (string.IsNullOrWhiteSpace(expected))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(observed) &&
+               expected.Trim().Equals(observed.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool MatchesAnyTelegram(
         string? observedReference,
