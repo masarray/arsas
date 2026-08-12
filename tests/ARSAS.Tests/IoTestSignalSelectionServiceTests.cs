@@ -75,6 +75,89 @@ public sealed class IoTestSignalSelectionServiceTests
     }
 
     [Fact]
+    public void Aa1C1F13R4_FunctionGroupFoldersMatchConcatenatedMmsLnPrefixes()
+    {
+        var ied = FieldIed(
+            FieldPoint("UCC-IEC-0698", "ADD/GGIO1.LocOpnCMDsta"),
+            FieldPoint("UCC-IEC-0699", "ADD/GGIO1.LocClsCMDsta"),
+            FieldPoint("UCC-IEC-0700", "ADD/GGIO1.SwLoc"),
+            FieldPoint("UCC-IEC-0701", "ADD/GGIO1.SwRem"));
+        var device = FieldDevice(
+            Signal("Local open command status", "AA1C1F13R4Application/ADDGGIO1.LocOpnCMDsta.stVal"),
+            Signal("Local close command status", "AA1C1F13R4Application/ADDGGIO1.LocClsCMDsta.stVal"),
+            Signal("Selector local", "AA1C1F13R4Application/ADDGGIO1.SwLoc.stVal"),
+            Signal("Selector remote", "AA1C1F13R4Application/ADDGGIO1.SwRem.stVal"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(4, result.Matches.Count);
+        Assert.All(result.Matches, match => Assert.True(match.UsedNormalizedIedPrefix));
+        Assert.Empty(result.MissingPoints);
+        Assert.Empty(result.AmbiguousPoints);
+    }
+
+    [Fact]
+    public void SiemensOperationalValuesFolderMatchesConcatenatedMmsLnPrefix()
+    {
+        var ied = new IoTestIedPlan
+        {
+            IedName = "AA1C1F13R4",
+            IpAddress = "192.168.81.17",
+            IedRole = "BCU - 6MD85",
+            TestPoints =
+            [
+                new IoTestPointPlan
+                {
+                    TestPointId = "UCC-IEC-0738",
+                    IedName = "AA1C1F13R4",
+                    IpAddress = "192.168.81.17",
+                    SignalName = "Line 1 Current",
+                    ObjectReference = "AA1C1F13R4Application/VI3p1_OperationalValues/RPRE_MMXU1.A.cVal.mag.f",
+                    SourceIecReference = "VI3p1_OperationalValues/RPRE_MMXU1.A",
+                    EventLogSearchReference = "VI3p1_OperationalValues/RPRE_MMXU1.A",
+                    DataAttribute = "cVal.mag.f",
+                    FunctionalConstraint = "MX",
+                    ImportReady = true,
+                    TestEnabled = true
+                }
+            ]
+        };
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "AA1C1F13R4",
+            SclIedName = "AA1C1F13R4",
+            IpAddress = "192.168.81.17",
+            Port = 102
+        };
+        device.Signals.Add(Signal(
+            "Line 1 Current",
+            "AA1C1F13R4Application/VI3p1_OperationalValuesRPRE_MMXU1.A.cVal.mag.f",
+            "MX"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.True(Assert.Single(result.Matches).UsedNormalizedIedPrefix);
+    }
+
+    [Fact]
+    public void HierarchyCollapseCollision_IsRejectedAsAmbiguous()
+    {
+        var ied = FieldIed(FieldPoint("UCC-IEC-0700", "ADD/GGIO1.SwLoc"));
+        var device = FieldDevice(
+            Signal("Expected form", "AA1C1F13R4Application/ADDGGIO1.SwLoc.stVal"),
+            Signal("Colliding hierarchy", "AA1C1F13R4Application/AD/DGGIO1.SwLoc.stVal"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.CanRetryWithFreshDiscovery);
+        Assert.Single(result.AmbiguousPoints);
+        Assert.Empty(result.MissingPoints);
+    }
+
+    [Fact]
     public void MissingSignal_RequestsOneFreshDiscoveryRetry()
     {
         var ied = Ied(Point("TP-001", "AA1C1F00R1ADD/GGIO2.Missing.stVal"));
@@ -129,6 +212,46 @@ public sealed class IoTestSignalSelectionServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Single(result.MissingPoints);
+    }
+
+    private static IoTestIedPlan FieldIed(params IoTestPointPlan[] points) => new()
+    {
+        IedName = "AA1C1F13R4",
+        IpAddress = "192.168.81.17",
+        IedRole = "BCU - 6MD85",
+        TestPoints = points.ToList()
+    };
+
+    private static IoTestPointPlan FieldPoint(string id, string eventReference) => new()
+    {
+        TestPointId = id,
+        IedName = "AA1C1F13R4",
+        IpAddress = "192.168.81.17",
+        SignalName = id,
+        ObjectReference = $"AA1C1F13R4Application/{eventReference}.stVal",
+        SourceIecReference = eventReference,
+        EventLogSearchReference = eventReference,
+        ReportDisplayReference = $"AA1C1F13R4Application/{eventReference}.stVal [ST]",
+        DataAttribute = "stVal",
+        LogicalDevice = "AA1C1F13R4Application",
+        FunctionalConstraint = "ST",
+        ExpectedOnText = "Active",
+        ExpectedOffText = "InActive",
+        ImportReady = true,
+        TestEnabled = true
+    };
+
+    private static Iec61850MonitorDevice FieldDevice(params SignalDefinition[] signals)
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "AA1C1F13R4",
+            SclIedName = "AA1C1F13R4",
+            IpAddress = "192.168.81.17",
+            Port = 102
+        };
+        device.Signals.AddRange(signals);
+        return device;
     }
 
     private static IoTestIedPlan Ied(params IoTestPointPlan[] points) => new()
