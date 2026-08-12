@@ -191,7 +191,7 @@ public static class IoFatSupplementalEvidenceService
         var hasPackage = extensions.Contains(".zip") || extensions.Contains(".cff");
         var completePair = hasCfg && hasData;
         var verdict = completePair ? "PASS" : hasPackage ? "DETECTED" : "REVIEW";
-        var bytes = files.Sum(path => SafeLength(path));
+        var bytes = files.Sum(SafeLength);
         var manifestHash = HashManifest(files);
         var displayName = string.IsNullOrWhiteSpace(recordName)
             ? Path.GetFileName(localDirectory)
@@ -235,7 +235,7 @@ public static class IoFatSupplementalEvidenceService
         }
 
         IoTestJournalEntry? latest = null;
-        foreach (var path in Directory.EnumerateFiles(storage.EvidenceProjectDirectory, "*.evidence.jsonl", SearchOption.TopDirectoryOnly))
+        foreach (var path in SafeEvidenceFiles(storage.EvidenceProjectDirectory))
         {
             foreach (var entry in ReadEntries(path))
             {
@@ -268,7 +268,7 @@ public static class IoFatSupplementalEvidenceService
             return 0;
 
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in Directory.EnumerateFiles(storage.EvidenceProjectDirectory, "*.evidence.jsonl", SearchOption.TopDirectoryOnly))
+        foreach (var path in SafeEvidenceFiles(storage.EvidenceProjectDirectory))
         {
             foreach (var entry in ReadEntries(path))
             {
@@ -304,8 +304,21 @@ public static class IoFatSupplementalEvidenceService
         journal.Append(entry);
     }
 
-    private static IEnumerable<IoTestJournalEntry> ReadEntries(string path)
+    private static IReadOnlyList<string> SafeEvidenceFiles(string directory)
     {
+        try
+        {
+            return Directory.EnumerateFiles(directory, "*.evidence.jsonl", SearchOption.TopDirectoryOnly).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static IReadOnlyList<IoTestJournalEntry> ReadEntries(string path)
+    {
+        var entries = new List<IoTestJournalEntry>();
         IoTestJournalVerificationResult verification;
         try
         {
@@ -313,38 +326,41 @@ public static class IoFatSupplementalEvidenceService
         }
         catch
         {
-            yield break;
+            return entries;
         }
 
         if (!verification.IsValid)
-            yield break;
+            return entries;
 
-        IEnumerable<string> lines;
+        string[] lines;
         try
         {
-            lines = File.ReadLines(path, Encoding.UTF8);
+            lines = File.ReadAllLines(path, Encoding.UTF8);
         }
         catch
         {
-            yield break;
+            return entries;
         }
 
         foreach (var line in lines)
         {
             if (string.IsNullOrWhiteSpace(line))
                 continue;
-            IoTestJournalEnvelope? envelope;
+
             try
             {
-                envelope = JsonSerializer.Deserialize<IoTestJournalEnvelope>(line, JsonOptions);
+                var envelope = JsonSerializer.Deserialize<IoTestJournalEnvelope>(line, JsonOptions);
+                if (envelope?.Entry != null)
+                    entries.Add(envelope.Entry);
             }
             catch (JsonException)
             {
-                continue;
+                // Verification already protects the chain. Ignore a line here only so a
+                // damaged supplemental display cannot crash the FAT workspace.
             }
-            if (envelope?.Entry != null)
-                yield return envelope.Entry;
         }
+
+        return entries;
     }
 
     private static IoTestJournalEntry BaseEntry(
@@ -453,19 +469,15 @@ public static class IoFatSupplementalEvidenceService
 
     private static string HashManifest(IEnumerable<string> files)
     {
-        using var sha = SHA256.Create();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var path in files.OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
         {
-            var nameBytes = Encoding.UTF8.GetBytes(Path.GetFileName(path).ToLowerInvariant());
-            sha.TransformBlock(nameBytes, 0, nameBytes.Length, null, 0);
+            hash.AppendData(Encoding.UTF8.GetBytes(Path.GetFileName(path).ToLowerInvariant()));
             using var stream = File.OpenRead(path);
-            var fileHash = SHA256.HashData(stream);
-            sha.TransformBlock(fileHash, 0, fileHash.Length, null, 0);
-            var lengthBytes = BitConverter.GetBytes(SafeLength(path));
-            sha.TransformBlock(lengthBytes, 0, lengthBytes.Length, null, 0);
+            hash.AppendData(SHA256.HashData(stream));
+            hash.AppendData(BitConverter.GetBytes(SafeLength(path)));
         }
-        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-        return Convert.ToHexString(sha.Hash ?? Array.Empty<byte>()).ToLowerInvariant();
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 
     private static long SafeLength(string path)
