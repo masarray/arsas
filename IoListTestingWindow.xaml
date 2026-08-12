@@ -380,7 +380,7 @@
                                         <TextBlock x:Name="LiveText" Text="{Binding LiveBindingText}"
                                                    Style="{StaticResource FatGridText}" FontSize="10.8"
                                                    FontWeight="SemiBold" Foreground="#65758B"
-                                                   ToolTip="{Binding LiveBindingReason}"/>
+                                                   ToolTip="{Binding LiveBindingDiagnostics}"/>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsLiveBound}" Value="True">
                                                 <Setter TargetName="LiveText" Property="Foreground" Value="#16845A"/>

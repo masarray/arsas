@@ -201,6 +201,7 @@ public sealed class IoTestPointPlan : ObservableObject
     private bool _testEnabled = true;
     private IoTestLiveBindingState _liveBindingState = IoTestLiveBindingState.NotEvaluated;
     private string _liveBindingReason = "Live binding has not been evaluated";
+    private string _liveBindingDiagnostics = string.Empty;
     private string _liveDeviceId = string.Empty;
     private string _liveSignalReference = string.Empty;
 
@@ -269,6 +270,8 @@ public sealed class IoTestPointPlan : ObservableObject
     }
 
     public string LiveBindingReason { get => _liveBindingReason; private set => Set(ref _liveBindingReason, value ?? string.Empty); }
+    /// <summary>Traceability shown when a workbook reference needs operator review.</summary>
+    public string LiveBindingDiagnostics { get => _liveBindingDiagnostics; private set => Set(ref _liveBindingDiagnostics, value ?? string.Empty); }
     public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
     public string LiveSignalReference { get => _liveSignalReference; private set => Set(ref _liveSignalReference, value ?? string.Empty); }
     public bool IsLiveBound => LiveBindingState is IoTestLiveBindingState.BoundExact or IoTestLiveBindingState.BoundNormalized or IoTestLiveBindingState.LivePointReady;
@@ -286,11 +289,13 @@ public sealed class IoTestPointPlan : ObservableObject
         IoTestLiveBindingState state,
         string reason,
         string? deviceId = null,
-        string? signalReference = null)
+        string? signalReference = null,
+        string? diagnostics = null)
     {
         LiveDeviceId = deviceId ?? string.Empty;
         LiveSignalReference = signalReference ?? string.Empty;
         LiveBindingReason = reason;
+        LiveBindingDiagnostics = string.IsNullOrWhiteSpace(diagnostics) ? LiveBindingReason : diagnostics;
         LiveBindingState = state;
     }
 }

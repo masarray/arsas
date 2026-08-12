@@ -153,6 +153,38 @@ public partial class MainWindow
                 selection = _ioTestSignalSelectionService.Resolve(ied, device);
             }
 
+            if (!selection.Succeeded &&
+                selection.AmbiguousPoints.Count == 0 &&
+                selection.Matches.Count > 0 &&
+                selection.MissingPoints.Count > 0)
+            {
+                // A missing read-only/status tag is a configuration finding, not a
+                // reason to block the rest of the FAT scope. The canonical resolver
+                // has already exhausted exact, wrapper, vendor-LD, and weak-reference
+                // forms. Keep the evidence trail, uncheck only proven-missing rows,
+                // and continue with the unique live matches.
+                var missingFindingCount = selection.MissingPoints.Count;
+                _ioTestLiveBindingService.Bind(project, Devices);
+                foreach (var missingPoint in selection.MissingPoints)
+                {
+                    missingPoint.TestEnabled = false;
+                    AddLog(
+                        "WARN",
+                        "IO Testing",
+                        $"FAT finding: {ied.IedName} {missingPoint.TestPointId} was not found in the discovered IED model and was disabled for this run. {missingPoint.LiveBindingDiagnostics}");
+                }
+
+                requestedPoints = requestedPoints
+                    .Where(point => point.TestEnabled && point.ImportReady)
+                    .ToList();
+                selection = new IoTestSignalSelectionResult(
+                    selection.Matches,
+                    Array.Empty<IoTestPointPlan>(),
+                    selection.AmbiguousPoints,
+                    $"Resolved {selection.Matches.Count} signal(s); {missingFindingCount} missing row(s) were disabled as FAT findings.");
+                ReportProgress($"{missingFindingCount} workbook row(s) are findings · continuing with {requestedPoints.Count} live signal(s)");
+            }
+
             if (!selection.Succeeded)
             {
                 _ioTestLiveBindingService.Bind(project, Devices);

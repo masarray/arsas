@@ -55,7 +55,7 @@ public sealed class IoTestLiveBindingService
             foreach (var point in iedPlan.TestPoints)
             {
                 var binding = BindPoint(point, device);
-                point.ApplyLiveBinding(binding.State, binding.Reason, device.DeviceId, binding.Reference);
+                point.ApplyLiveBinding(binding.State, binding.Reason, device.DeviceId, binding.Reference, binding.Diagnostics);
                 if (point.IsLiveBound)
                     signalBoundCount++;
                 if (binding.State == IoTestLiveBindingState.LivePointReady)
@@ -98,7 +98,8 @@ public sealed class IoTestLiveBindingService
                 null);
         }
 
-        var expectedReferences = ImportedReferences(point)
+        var importedReferences = ImportedReferences(point);
+        var expectedReferences = importedReferences
             .Select(NormalizeReference)
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -126,6 +127,33 @@ public sealed class IoTestLiveBindingService
                 "Exact imported IEC 61850 reference is present in the discovered IED model.",
                 exactSignals[0].ObjectReference,
                 null);
+        }
+
+        var canonicalLivePoints = device.Points
+            .Where(item => CanonicalMatches(importedReferences, point, item.IecReference, item.FunctionalConstraint, device))
+            .ToList();
+        if (canonicalLivePoints.Count == 1)
+        {
+            return new PointBinding(
+                IoTestLiveBindingState.LivePointReady,
+                "Live point matched by the canonical IEC 61850 hierarchy (IED → Application → LD → LN → DO → DA → FC).",
+                canonicalLivePoints[0].IecReference,
+                canonicalLivePoints[0],
+                string.Empty);
+        }
+
+        var canonicalSignals = device.Signals
+            .Where(item => !item.IsControlSignal &&
+                           CanonicalMatches(importedReferences, point, item.ObjectReference, item.FunctionalConstraint, device))
+            .ToList();
+        if (canonicalSignals.Count == 1)
+        {
+            return new PointBinding(
+                IoTestLiveBindingState.BoundNormalized,
+                "Discovered signal matched by the canonical IEC 61850 hierarchy (Application/vendor LD spelling tolerated).",
+                canonicalSignals[0].ObjectReference,
+                null,
+                string.Empty);
         }
 
         var expectedTelegrams = ImportedReferences(point)
@@ -159,12 +187,20 @@ public sealed class IoTestLiveBindingService
         }
 
         var reason = exactLivePoints.Count > 1 || exactSignals.Count > 1 ||
-                     signalCandidates.Count > 1 || livePointCandidates.Count > 1
+                     signalCandidates.Count > 1 || livePointCandidates.Count > 1 ||
+                     canonicalLivePoints.Count > 1 || canonicalSignals.Count > 1
             ? "More than one live candidate matched the imported telegram; automatic binding was withheld."
             : device.Signals.Count == 0
                 ? "The IED is loaded but its signal model has not been discovered yet."
                 : "None of the imported IEC 61850/event-log references was found in the loaded IED model.";
-        return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null);
+        var allLiveReferences = device.Points.Select(item => item.IecReference)
+            .Concat(device.Signals.Where(item => !item.IsControlSignal).Select(item => item.ObjectReference));
+        var diagnostics = CanonicalIecReference.Diagnostics(
+            importedReferences,
+            point.IedName,
+            point.FunctionalConstraint,
+            ClosestLiveReferences(importedReferences, allLiveReferences));
+        return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null, diagnostics);
     }
 
     internal static IReadOnlyList<string> ImportedReferences(IoTestPointPlan point)
@@ -209,6 +245,44 @@ public sealed class IoTestLiveBindingService
         }
 
         return references;
+    }
+
+    internal static bool CanonicalMatches(
+        IEnumerable<string> importedReferences,
+        IoTestPointPlan point,
+        string? observedReference,
+        string? observedFunctionalConstraint,
+        Iec61850MonitorDevice device)
+    {
+        if (string.IsNullOrWhiteSpace(observedReference))
+            return false;
+
+        return importedReferences.Any(imported => CanonicalIecReference.AreEquivalent(
+            imported,
+            point.IedName,
+            point.FunctionalConstraint,
+            observedReference,
+            device.Name,
+            observedFunctionalConstraint));
+    }
+
+    private static IReadOnlyList<string> ClosestLiveReferences(
+        IReadOnlyCollection<string> importedReferences,
+        IEnumerable<string> liveReferences)
+    {
+        var tokens = importedReferences
+            .SelectMany(value => value.Replace('$', '.').Split('.', '/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(value => value.Length >= 3)
+            .Select(value => value.ToLowerInvariant())
+            .Distinct()
+            .ToArray();
+        return liveReferences
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(value => tokens.Count(token => value.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            .ThenBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .Take(6)
+            .ToList();
     }
 
     private static string RemoveFunctionalConstraintSuffix(string? reference)
@@ -294,5 +368,6 @@ public sealed class IoTestLiveBindingService
         IoTestLiveBindingState State,
         string Reason,
         string Reference,
-        Iec61850MonitorPoint? LivePoint);
+        Iec61850MonitorPoint? LivePoint,
+        string Diagnostics = "");
 }

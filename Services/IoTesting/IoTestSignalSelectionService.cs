@@ -66,6 +66,21 @@ public sealed class IoTestSignalSelectionService
 
             if (candidates.Count == 0)
             {
+                var imported = IoTestLiveBindingService.ImportedReferences(point);
+                candidates = device.Signals
+                    .Where(signal => IsEligible(signal, point))
+                    .Where(signal => IoTestLiveBindingService.CanonicalMatches(
+                        imported,
+                        point,
+                        signal.ObjectReference,
+                        signal.FunctionalConstraint,
+                        device))
+                    .ToList();
+                usedNormalizedPrefix = true;
+            }
+
+            if (candidates.Count == 0)
+            {
                 missing.Add(point);
                 continue;
             }

@@ -84,7 +84,74 @@ public sealed class IoTestLiveBindingServiceTests
         Assert.Contains("load or connect", project.Ieds[0].TestPoints[0].LiveBindingReason.ToLowerInvariant());
     }
 
-    private static IoTestProject Project(string reference)
+    [Fact]
+    public void VendorApplicationDollarReference_PreservesLogicalDeviceBeforeLogicalNode()
+    {
+        Assert.True(CanonicalIecReference.TryParse(
+            "AA1C1F13R4Application/ADD$GGIO1$ST$LocOpnCMDsta$stVal",
+            "AA1C1F13R4",
+            null,
+            out var parsed));
+
+        Assert.Equal("AA1C1F13R4", parsed.Ied);
+        Assert.Equal("Application", parsed.ApplicationWrapper);
+        Assert.Equal("ADD", parsed.LogicalDevice);
+        Assert.Equal("GGIO1", parsed.LogicalNode);
+        Assert.Equal("LocOpnCMDsta", parsed.DataObject);
+        Assert.Equal("stVal", parsed.DataAttribute);
+        Assert.Equal("ST", parsed.FunctionalConstraint);
+    }
+
+    [Fact]
+    public void F13R4Rev4_ThirtyPointResolverBindsCanonicalLiveModel()
+    {
+        var imported = new[]
+        {
+            "ADD/GGIO1.LocOpnCMDsta.stVal", "ADD/GGIO1.LocClsCMDsta.stVal", "ADD/GGIO1.SwLoc.stVal",
+            "ADD/GGIO1.SwRem.stVal", "ADD/GGIO1.SwSupervsry.stVal", "ADD/GGIO6.CBOpnd.stVal",
+            "ADD/GGIO6.CBClsd.stVal", "ADD/GGIO3.CBSprgChrg.stVal", "ADD/GGIO6.QZ1cnctd.stVal",
+            "ADD/GGIO6.QZ1isltd.stVal", "ADD/GGIO6.QZ1earth.stVal", "ADD/GGIO6.QZ2cnctd.stVal",
+            "ADD/GGIO6.QZ2isltd.stVal", "ADD/GGIO6.QZ2earth.stVal", "ADD/GGIO5.SF61stComm.stVal",
+            "ADD/GGIO5.SF62ndBBI.stVal", "ADD/GGIO5.SF62ndCB.stVal", "ADD/GGIO5.SF62ndBBJ.stVal",
+            "ADD/GGIO6.Q18Clsd.stVal", "ADD/GGIO6.Q18Opnd.stVal", "ADD/GGIO6.Q28Clsd.stVal",
+            "ADD/GGIO6.Q28Opnd.stVal", "ADD/GGIO2.Lockout1Op.stVal", "ADD/GGIO2.Lockout2Op.stVal",
+            "AA1C1F13R4Application/.TCS1Fail.stVal", "AA1C1F13R4Application/.TCS2Fail.stVal",
+            "Q0_25Synchronization/CK_RSYN1.Rel", "ADD/GGIO2.ComFail.stVal", "ADD/GGIO2.TimeSynchrnz.stVal",
+            "ADD/GGIO2.FWUpdated.stVal"
+        };
+        var live = imported
+            .Select(reference => reference.Contains("TCS1Fail", StringComparison.OrdinalIgnoreCase)
+                ? "AA1C1F13R4ADD/GGIO2.TCS1Fail.stVal"
+                : reference.Contains("TCS2Fail", StringComparison.OrdinalIgnoreCase)
+                    ? "AA1C1F13R4ADD/GGIO2.TCS2Fail.stVal"
+                    : reference.StartsWith("ADD/", StringComparison.OrdinalIgnoreCase)
+                        ? "AA1C1F13R4" + reference
+                        : reference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var project = Project(imported[0], "AA1C1F13R4");
+        project.Ieds[0].TestPoints.Clear();
+        for (var i = 0; i < imported.Length; i++)
+            project.Ieds[0].TestPoints.Add(Point(imported[i], $"UCC-IEC-{7000 + i}", "AA1C1F13R4"));
+
+        var device = Device("AA1C1F13R4");
+        foreach (var reference in live)
+        {
+            device.Signals.Add(new SignalDefinition
+            {
+                Name = reference,
+                ObjectReference = reference,
+                FunctionalConstraint = "ST"
+            });
+        }
+
+        var summary = _binding.Bind(project, new[] { device });
+        Assert.Equal(30, project.Ieds[0].TestPoints.Count);
+        Assert.Equal(30, summary.SignalBoundCount);
+        Assert.All(project.Ieds[0].TestPoints, point => Assert.True(point.IsLiveBound, point.LiveBindingDiagnostics));
+    }
+
+    private static IoTestProject Project(string reference, string iedName = "AA1C1F03R4")
     {
         var project = new IoTestProject
         {
@@ -95,7 +162,7 @@ public sealed class IoTestLiveBindingServiceTests
             {
                 new IoTestIedPlan
                 {
-                    IedName = "AA1C1F03R4",
+                    IedName = iedName,
                     IpAddress = "192.168.81.70",
                     IedRole = "BCU - 6MD85",
                     TestPoints = { Point(reference) }
@@ -106,10 +173,10 @@ public sealed class IoTestLiveBindingServiceTests
         return project;
     }
 
-    private static IoTestPointPlan Point(string reference) => new()
+    private static IoTestPointPlan Point(string reference, string id = "TP-001", string iedName = "AA1C1F03R4") => new()
     {
-        TestPointId = "TP-001",
-        IedName = "AA1C1F03R4",
+        TestPointId = id,
+        IedName = iedName,
         IpAddress = "192.168.81.70",
         SignalName = "CB closed",
         ObjectReference = reference,
@@ -120,10 +187,10 @@ public sealed class IoTestLiveBindingServiceTests
         BindingStatus = "CID_DATASET_EXACT"
     };
 
-    private static Iec61850MonitorDevice Device() => new()
+    private static Iec61850MonitorDevice Device(string iedName = "AA1C1F03R4") => new()
     {
-        Name = "AA1C1F03R4",
-        SclIedName = "AA1C1F03R4",
+        Name = iedName,
+        SclIedName = iedName,
         IpAddress = "192.168.81.70",
         Port = 102,
         Status = "Ready"
