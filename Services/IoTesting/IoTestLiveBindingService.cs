@@ -129,7 +129,7 @@ public sealed class IoTestLiveBindingService
         }
 
         var expectedTelegrams = ImportedReferences(point)
-            .Select(reference => NormalizeTelegram(reference, point.IedName))
+            .SelectMany(reference => NormalizeImportedTelegramForms(reference, point.IedName, point.LogicalNode))
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -140,7 +140,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched uniquely after normalizing the IED/Application wrapper.",
+                "Live point matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
@@ -153,7 +153,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched uniquely after normalizing the IED/Application wrapper.",
+                "Discovered signal matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
                 signalCandidates[0].ObjectReference,
                 null);
         }
@@ -281,13 +281,58 @@ public sealed class IoTestLiveBindingService
         var domainSuffix = domain[name.Length..];
         var path = normalized[(slash + 1)..].TrimStart('/');
 
-        // Rev.3 report traceability may use IEDNameApplication/LD/LN.DO.DA,
-        // while the discovered MMS model uses IEDNameLD/LN.DO.DA. Both identify
-        // the same telegram; "Application" is a display wrapper, not an LD name.
+        // FAT source/report traceability can use IEDNameApplication/FunctionGroup/LN.DO.DA,
+        // while the live MMS model exposes the same function group as an LN prefix.
+        // "Application" is a display wrapper, not part of the live telegram identity.
         if (domainSuffix.Equals("application", StringComparison.OrdinalIgnoreCase))
             return path;
 
         return domainSuffix.Length == 0 ? path : domainSuffix + "/" + path;
+    }
+
+    internal static IReadOnlySet<string> NormalizeImportedTelegramForms(
+        string? reference,
+        string? iedName,
+        string? logicalNode)
+    {
+        var forms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalized = NormalizeTelegram(reference, iedName);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return forms;
+
+        forms.Add(normalized);
+        var collapsed = CollapseVerifiedDisplayHierarchy(normalized, logicalNode);
+        if (!string.IsNullOrWhiteSpace(collapsed))
+            forms.Add(collapsed);
+        return forms;
+    }
+
+    private static string CollapseVerifiedDisplayHierarchy(string normalizedTelegram, string? logicalNode)
+    {
+        var value = (normalizedTelegram ?? string.Empty).Trim();
+        var verifiedLn = NormalizeReference(logicalNode).Trim('/');
+        if (string.IsNullOrWhiteSpace(verifiedLn))
+            return value;
+
+        var firstDot = value.IndexOf('.');
+        if (firstDot <= 0)
+            return value;
+
+        var logicalNodePath = value[..firstDot];
+        var lastSlash = logicalNodePath.LastIndexOf('/');
+        if (lastSlash <= 0 || lastSlash >= logicalNodePath.Length - 1)
+            return value;
+
+        var terminalLn = logicalNodePath[(lastSlash + 1)..];
+        if (!terminalLn.Equals(verifiedLn, StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        // Siemens/DIGSI source exports can render a verified LN prefix as folders,
+        // e.g. ADD/GGIO1. Only collapse the imported pre-DO hierarchy when the final
+        // segment exactly equals the workbook LN metadata. Observed/live references
+        // are never collapsed, preventing AB/GGIO1 from matching A/BGGIO1 by accident.
+        var collapsedLogicalNode = logicalNodePath.Replace("/", string.Empty, StringComparison.Ordinal);
+        return collapsedLogicalNode + value[firstDot..];
     }
 
     private sealed record PointBinding(

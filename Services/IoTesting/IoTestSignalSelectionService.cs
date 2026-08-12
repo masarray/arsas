@@ -20,9 +20,9 @@ public sealed record IoTestSignalSelectionResult(
 
 /// <summary>
 /// Resolves the enabled IO-list scope against one discovered IED model without
-/// guessing. Exact source/event-log references are preferred. A normalized
-/// IED-name or Application wrapper is accepted only when it produces one unique
-/// non-control signal.
+/// guessing. Exact source/event-log references are preferred. Normalized IED,
+/// Application and verified vendor functional-group/LN-prefix forms are accepted
+/// only when they produce one unique non-control signal.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
@@ -117,7 +117,10 @@ public sealed class IoTestSignalSelectionService
         Iec61850MonitorDevice device)
     {
         var expected = IoTestLiveBindingService.ImportedReferences(point)
-            .Select(reference => IoTestLiveBindingService.NormalizeTelegram(reference, ied.IedName))
+            .SelectMany(reference => IoTestLiveBindingService.NormalizeImportedTelegramForms(
+                reference,
+                ied.IedName,
+                point.LogicalNode))
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (expected.Count == 0)

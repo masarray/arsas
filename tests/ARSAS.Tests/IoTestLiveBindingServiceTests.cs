@@ -45,6 +45,24 @@ public sealed class IoTestLiveBindingServiceTests
     }
 
     [Fact]
+    public void ApplicationFolderHierarchy_IsNormalizedToLiveLnPrefix()
+    {
+        var project = Project("AA1C1F03R4Application/ADD/GGIO6.CBClsd.stVal");
+        var device = Device();
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "CB closed",
+            ObjectReference = "AA1C1F03R4Application/ADDGGIO6.CBClsd.stVal",
+            FunctionalConstraint = "ST"
+        });
+
+        _binding.Bind(project, new[] { device });
+
+        Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
+        Assert.Contains("verified functional-group/LN boundary", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ActiveLivePoint_PopulatesCurrentEvidencePreview()
     {
         var project = Project("AA1C1F03R4ADD/GGIO6.CBClsd.stVal");
@@ -113,6 +131,7 @@ public sealed class IoTestLiveBindingServiceTests
         IpAddress = "192.168.81.70",
         SignalName = "CB closed",
         ObjectReference = reference,
+        LogicalNode = "GGIO6",
         FunctionalConstraint = "ST",
         ExpectedOnText = "Active",
         ExpectedOffText = "InActive",
