@@ -140,7 +140,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched uniquely after normalizing the IED/Application wrapper.",
+                "Live point matched uniquely after normalizing IEC 61850 logical-device/display wrappers.",
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
@@ -153,7 +153,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched uniquely after normalizing the IED/Application wrapper.",
+                "Discovered signal matched uniquely after normalizing IEC 61850 logical-device/display wrappers.",
                 signalCandidates[0].ObjectReference,
                 null);
         }
@@ -269,25 +269,22 @@ public sealed class IoTestLiveBindingService
     internal static string NormalizeTelegram(string? reference, string? iedName)
     {
         var normalized = NormalizeReference(RemoveFunctionalConstraintSuffix(reference));
-        var slash = normalized.IndexOf('/');
-        var name = (iedName ?? string.Empty).Trim().ToLowerInvariant();
-        if (slash <= 0 || string.IsNullOrWhiteSpace(name))
-            return normalized;
+        if (normalized.Length == 0)
+            return string.Empty;
 
-        var domain = normalized[..slash];
-        if (!domain.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-            return normalized;
+        // Exact-reference matching runs before this fallback and therefore preserves the
+        // logical-device identity whenever both sides expose it consistently. For FAT
+        // imports, however, vendor/report paths can contain one or more display/domain
+        // wrappers (for example IEDNameApplication/ADD/GGIO1...) while native MMS
+        // discovery can surface the same leaf as IEDNameApplication/GGIO1... or
+        // ADD/GGIO1.... Compare the LN.DO.DA tail only in this secondary path.
+        // Both callers require exactly one candidate; if two LDs expose the same LN/DO/DA
+        // tail, automatic binding remains ambiguous and is deliberately blocked.
+        var lastSlash = normalized.LastIndexOf('/');
+        if (lastSlash >= 0 && lastSlash < normalized.Length - 1)
+            return normalized[(lastSlash + 1)..].TrimStart('/');
 
-        var domainSuffix = domain[name.Length..];
-        var path = normalized[(slash + 1)..].TrimStart('/');
-
-        // Rev.3 report traceability may use IEDNameApplication/LD/LN.DO.DA,
-        // while the discovered MMS model uses IEDNameLD/LN.DO.DA. Both identify
-        // the same telegram; "Application" is a display wrapper, not an LD name.
-        if (domainSuffix.Equals("application", StringComparison.OrdinalIgnoreCase))
-            return path;
-
-        return domainSuffix.Length == 0 ? path : domainSuffix + "/" + path;
+        return normalized;
     }
 
     private sealed record PointBinding(
