@@ -59,7 +59,7 @@ public sealed class IoTestLiveBindingServiceTests
         _binding.Bind(project, new[] { device });
 
         Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
-        Assert.Contains("functional-group hierarchy", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verified functional-group/LN boundary", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -131,6 +131,7 @@ public sealed class IoTestLiveBindingServiceTests
         IpAddress = "192.168.81.70",
         SignalName = "CB closed",
         ObjectReference = reference,
+        LogicalNode = "GGIO6",
         FunctionalConstraint = "ST",
         ExpectedOnText = "Active",
         ExpectedOffText = "InActive",
