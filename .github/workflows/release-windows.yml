@@ -420,6 +420,15 @@ jobs:
           }
           if ($existingSha) { $body.sha = $existingSha }
 
-          $request = $body | ConvertTo-Json -Compress
-          $request | gh api --method PUT $apiPath --input - *> $null
+          $arguments = @(
+            "api", "--method", "PUT", $apiPath,
+            "--raw-field", "message=$($body.message)",
+            "--raw-field", "content=$($body.content)",
+            "--raw-field", "branch=$($body.branch)"
+          )
+          if ($existingSha) {
+            $arguments += @("--raw-field", "sha=$existingSha")
+          }
+
+          & gh @arguments *> $null
           if ($LASTEXITCODE -ne 0) { throw "Failed to record verified release publication." }
