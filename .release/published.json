@@ -1,32 +1,39 @@
 {
-  "schemaVersion": 1,
-  "product": "ARSAS",
-  "version": "1.6.20",
-  "tag": "v1.6.20",
-  "channel": "stable",
-  "publishedAtUtc": "2026-08-04T06:29:48Z",
-  "sourceCommit": "0a92467a15fab5e5ddf108a057d4349bfbae7248",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.20",
-  "installer": {
-    "name": "ARSAS-Windows-x64-Setup.exe",
-    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
-    "sha256": "c986eb6a709021cc50dcd0e39c81332ba88217b2e9e8d39a4a21a63da07cfde2",
-    "sizeBytes": 55257312
-  },
-  "portable": {
-    "name": "ARSAS-Windows-x64-Portable.exe",
-    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe",
-    "sha256": "5b4a8084ced7567d354d42da56b1dd137ee4f4c6272957d2cedb17cc88d8cc80",
-    "sizeBytes": 76310440
-  },
-  "checksums": {
-    "name": "ARSAS-Windows-x64-SHA256SUMS.txt",
-    "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt",
-    "sizeBytes": 193
-  },
-  "codeSigning": {
-    "status": "unsigned",
-    "platform": "Authenticode",
-    "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users."
-  }
+    "version":  "1.6.21",
+    "tag":  "v1.6.21",
+    "channel":  "stable",
+    "publishedAtUtc":  "2026-08-12T10:30:20.2599098Z",
+    "sourceCommit":  "3cb8bc2c455f23fa2b44865e7fdc8796500003b3",
+    "engine":  {
+                   "repository":  "masarray/ARIEC61850",
+                   "commit":  "61bbf2737cb09e72e8b143dc4a4b57dfb7e591ba"
+               },
+    "installer":  {
+                      "name":  "ARSAS-Windows-x64-Setup.exe",
+                      "url":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
+                      "sha256":  "e41b73ffa6c253155c30cfc1821ca1559913419fd49538dd86c86d83c001cac5",
+                      "sizeBytes":  55281560
+                  },
+    "portable":  {
+                     "name":  "ARSAS-Windows-x64-Portable.zip",
+                     "url":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.zip",
+                     "sha256":  "1fa2480ffe1ff6b52059800133c36d2f1a19d09ccb43aa6ca799cd1d01d37350",
+                     "sizeBytes":  74501608
+                 },
+    "checksums":  {
+                      "name":  "ARSAS-Windows-x64-SHA256SUMS.txt",
+                      "url":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt",
+                      "sizeBytes":  193
+                  },
+    "supplyChain":  {
+                        "sbomName":  "ARSAS-Windows-x64-SBOM.spdx.json",
+                        "sbomUrl":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SBOM.spdx.json",
+                        "sbomSha256":  "c1abab27c89f3dd78563f6fcd2b62b4f990eb41cf19efd5cc375878f20b9f54f",
+                        "sbomSizeBytes":  382098,
+                        "provenanceName":  "ARSAS-Windows-x64-PROVENANCE.json",
+                        "provenanceUrl":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-PROVENANCE.json",
+                        "provenanceSha256":  "7b538a8a790e03ced106dbc57001e8c9ff798b9a7688b4deb1a31ec3c40a6e1d",
+                        "attestationRepository":  "https://github.com/masarray/arsas/attestations",
+                        "attestationWorkflow":  "release-windows.yml"
+                    }
 }
