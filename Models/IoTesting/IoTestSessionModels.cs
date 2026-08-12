@@ -48,6 +48,15 @@ public sealed record IoTestJournalEntry
     public long ConnectionGeneration { get; init; }
     public string Verdict { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
+
+    // Supplemental FAT evidence (COMTRADE, time synchronization, and future
+    // device-level evidence) lives in the same hash-chained journal format as signal
+    // transitions. Empty defaults preserve backward compatibility with older journals.
+    public string EvidenceKind { get; init; } = string.Empty;
+    public string ArtifactName { get; init; } = string.Empty;
+    public string ArtifactPath { get; init; } = string.Empty;
+    public string ArtifactSha256 { get; init; } = string.Empty;
+    public long ArtifactBytes { get; init; }
 }
 
 public sealed record IoTestJournalEnvelope(
