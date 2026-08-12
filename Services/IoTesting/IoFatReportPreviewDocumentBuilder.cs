@@ -28,7 +28,11 @@ internal static class IoFatReportPreviewDocumentBuilder
     {
         ArgumentNullException.ThrowIfNull(project);
         // Replaces the legacy IoFatReportLayoutEngine.Build route with the document-controlled event-log layout.
-        var layout = IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        var layout = IoFatExecutiveReportLayoutEngine.Build(
+            project,
+            generatedAt ?? DateTimeOffset.Now,
+            draft,
+            IoFatPdfReportService.IsBlankForm(project));
         return Render(layout);
     }
 

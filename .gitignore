@@ -414,6 +414,10 @@ build/
 .vite/
 .cache/
 
+# Local FAT/IFAT exports and diagnostic captures
+/output/
+/outputs/
+
 * text=auto
 
 *.md text eol=lf

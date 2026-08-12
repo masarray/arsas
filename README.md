@@ -33,7 +33,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Start from an IED IP address, an SCL file, a saved project, an approved IO List workbook, or the built-in communication workspace.</sub>
 </div>
 
-> **Development and stable-release boundary:** the current `main` line is version **1.6.19** and includes the IO List FAT evidence workflow described below. The latest published stable Windows release remains **1.6.18** until a separately validated and tagged release is produced. Check the release notes before assuming the downloaded stable package contains a mainline feature.
+> **Development and stable-release boundary:** the current `main` line is version **1.6.20** and includes the controlled IO List FAT report workflow described below. The latest published stable Windows release remains **1.6.18** until a separately validated and tagged release is produced. Check the release notes before assuming the downloaded stable package contains a mainline feature.
 
 ## Why ARSAS stands out
 
@@ -86,7 +86,7 @@ A point passes only when a new ON transition and the corresponding OFF transitio
 ### IO FAT outputs
 
 - **Export Excel** — copies the approved workbook and updates matching `TestPointId` rows; the source file is never modified in place.
-- **Export PDF** — writes an A4 landscape PDF directly with the built-in dependency-free native PDF 1.4 engine ported from ARIEC60870 primitives.
+- **Export PDF Form / Report** — writes an A4 landscape blank IFAT customer-review form before testing and automatically changes to a result-gated FAT test record after execution begins.
 - **Export `.arsas`** — packages the source workbook, project snapshot, sealed hash-chain journals, Excel result, PDF report, manifest hashes, and handover notes for another workstation.
 - **Legacy compatibility** — existing `.arsas-iofat` filenames remain readable, while new projects use `.arsas`.
 

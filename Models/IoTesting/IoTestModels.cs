@@ -311,6 +311,7 @@ public sealed class IoTestIedPlan : ObservableObject
     public string Location { get; init; } = string.Empty;
     public string VoltageLevel { get; init; } = string.Empty;
     public string Switchgear { get; init; } = string.Empty;
+    public string PanelTag { get; init; } = string.Empty;
     public List<IoTestPointPlan> TestPoints { get; init; } = new();
 
     public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }

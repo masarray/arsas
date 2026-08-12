@@ -2,7 +2,28 @@
 
 Notable public changes to ARSAS are recorded here. Application releases must identify the exact ARIEC61850 engine commit used for build, tests, packaging, and release evidence.
 
-## 1.6.19 — Development
+## Unreleased
+
+- Added a controlled relay time-synchronization procedure covering SNTP/NTP, PTP/IEEE 1588, IRIG-B, relay `TimeQuality`, ARSAS UTC capture time, offset, tolerance, and capability-gated acceptance. ARSAS is documented as an evidence client; it does not set the relay clock or act as an SNTP server.
+- Added a capability-gated COMTRADE/disturbance-recording procedure and report scope for protection relays with a fault-record service. BCU and other devices without that capability are reported as N/A, not failed.
+
+## 1.6.20 - Development
+
+### Fixed
+
+- Native FAT PDFs no longer claim `AS TESTED` or `CUSTOMER FAT RECORD` while any signal is pending, under review, failed, or absent from the report scope.
+- Rev3 imports now retain the physical `Panel Tag` on each IED so the controlled PDF can declare the actual panel scope.
+
+### Added
+
+- Controlled FAT front matter covering document control, scope, test basis, acceptance criteria, executive IED summary, deviations, and handover signatures.
+- Result-gated report classifications: `PREVIEW`, `PARTIAL`, `REVIEW REQUIRED`, `FAILED`, and `AS TESTED`.
+- Detailed TRUE/FALSE evidence cells with IED timestamp, ARSAS capture timestamp, quality, acquisition source, observation sequence, and connection generation.
+- Explicit timestamp-integrity warnings when TRUE and FALSE evidence carry identical IED timestamps.
+- Automatic blank IFAT form output for a fresh, never-started scope, with customer-review status, planned signal schedule, expected states, and empty evidence/result fields.
+- Automatic transition to a FAT test record as soon as any test attempt starts; final `AS TESTED` remains gated by all scoped signals passing.
+
+## 1.6.19
 
 ### Fixed
 

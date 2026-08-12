@@ -89,7 +89,8 @@
                             Click="SaveProgress_Click" Margin="0,0,6,0"/>
                     <Button Content="Excel" Style="{StaticResource SoftButton}" Padding="11,7"
                             Click="ExportExcel_Click" Margin="0,0,6,0"/>
-                    <Button Content="PDF" Style="{StaticResource SoftButton}" Padding="11,7"
+                    <Button Content="PDF Form / Report" Style="{StaticResource SoftButton}" Padding="11,7"
+                            ToolTip="Fresh untested scope exports a blank IFAT form; recorded test activity exports a FAT test record."
                             Click="ExportPdf_Click" Margin="0,0,6,0"/>
                     <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="12,7"
                             Click="ExportHandover_Click" Margin="0,0,6,0"/>
@@ -166,10 +167,9 @@
                                         <ColumnDefinition Width="58"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Viewbox Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Path x:Name="RelayIcon"
-                                              Data="M 2 0 L 2 20 L 18 20 L 18 0 L 2 0 z M 3 1 L 17 1 L 17 19 L 3 19 L 3 1 z M 5 3 L 5 7 L 15 7 L 15 3 L 5 3 z M 6 4 L 14 4 L 14 6 L 6 6 L 6 4 z M 5 10 L 5 11 L 7 11 L 7 10 L 5 10 z M 9 10 L 9 11 L 11 11 L 11 10 L 9 10 z M 13 10 L 13 11 L 15 11 L 15 10 L 13 10 z M 5 13 L 5 14 L 7 14 L 7 13 L 5 13 z M 9 13 L 9 14 L 11 14 L 11 13 L 9 13 z M 13 13 L 13 14 L 15 14 L 15 13 L 13 13 z M 5 16 L 5 17 L 7 17 L 7 16 L 5 16 z M 9 16 L 9 17 L 11 17 L 11 16 L 9 16 z M 13 16 L 13 17 L 15 17 L 15 16 L 13 16 z"
-                                              Fill="#D94B55" Stretch="Uniform"/>
+                                    <Viewbox Width="46" Height="46" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Control x:Name="RelayIcon" Width="50" Height="50" Foreground="#D94B55"
+                                                 Template="{StaticResource IedRelayFrontPanelTemplate}"/>
                                     </Viewbox>
                                     <Grid Grid.Column="1" Margin="3,0,0,0">
                                         <Grid.RowDefinitions>
@@ -236,19 +236,19 @@
                                 </Grid>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsLiveConnected}" Value="True">
-                                        <Setter TargetName="RelayIcon" Property="Fill" Value="#D49A26"/>
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#D49A26"/>
                                         <Setter TargetName="StateBadge" Property="Background" Value="#FFF8E8"/>
                                         <Setter TargetName="StateBadge" Property="BorderBrush" Value="#E9C46A"/>
                                         <Setter TargetName="StateText" Property="Foreground" Value="#A56D00"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsLiveMonitoring}" Value="True">
-                                        <Setter TargetName="RelayIcon" Property="Fill" Value="#18A66A"/>
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#18A66A"/>
                                         <Setter TargetName="StateBadge" Property="Background" Value="#EAF8F1"/>
                                         <Setter TargetName="StateBadge" Property="BorderBrush" Value="#8FD1B1"/>
                                         <Setter TargetName="StateText" Property="Foreground" Value="#16845A"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsPreparing}" Value="True">
-                                        <Setter TargetName="RelayIcon" Property="Fill" Value="#4F7FEA"/>
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#4F7FEA"/>
                                         <Setter TargetName="CardProgress" Property="Visibility" Value="Visible"/>
                                         <Setter TargetName="StateBadge" Property="Background" Value="#EDF3FF"/>
                                         <Setter TargetName="StateBadge" Property="BorderBrush" Value="#9CB8F5"/>

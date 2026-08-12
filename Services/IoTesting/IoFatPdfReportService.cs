@@ -14,17 +14,41 @@ public static class IoFatPdfReportService
     public static byte[] Generate(IoTestProject project, DateTimeOffset? generatedAt = null)
     {
         ArgumentNullException.ThrowIfNull(project);
-        var layout = BuildLayout(project, generatedAt, draft: false);
+        var layout = BuildLayout(project, generatedAt, draft: false, blankForm: IsBlankForm(project));
         return IoFatNativePdfWriter.Build(layout, project);
+    }
+
+    /// <summary>
+    /// Returns true only while the enabled FAT scope has never entered a test attempt.
+    /// A fresh import is therefore exported as a customer-review blank form; any
+    /// baseline, transition, review, failure, or completed result becomes a test record.
+    /// </summary>
+    internal static bool IsBlankForm(IoTestProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        var points = project.Ieds
+            .SelectMany(ied => ied.TestPoints)
+            .Where(point => point.TestEnabled || point.Runtime.IsComplete)
+            .ToList();
+        return points.Count > 0 && points.All(point =>
+            point.Runtime.State == IoTestPointState.NotStarted &&
+            point.Runtime.Attempt == 0 &&
+            point.Runtime.OnEvidence == null &&
+            point.Runtime.OffEvidence == null);
     }
 
     internal static IoFatReportLayoutPlan BuildLayout(
         IoTestProject project,
         DateTimeOffset? generatedAt = null,
-        bool draft = false)
+        bool draft = false,
+        bool? blankForm = null)
     {
         ArgumentNullException.ThrowIfNull(project);
-        return IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        return IoFatExecutiveReportLayoutEngine.Build(
+            project,
+            generatedAt ?? DateTimeOffset.Now,
+            draft,
+            blankForm ?? IsBlankForm(project));
     }
 
     public static void Save(string fileName, IoTestProject project, DateTimeOffset? generatedAt = null)

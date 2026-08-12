@@ -2531,7 +2531,20 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
         // silently and the primary ARIEC61850 discovery remains authoritative.
         await using var supplemental = new ArIED61850Tester.Protocol.Iec61850.NativeIec61850Session();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        IReadOnlyDictionary<string, IReadOnlyList<string>> domainVariables =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> domainVariableLists =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> typeTreeVariables =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        NativeMmsDiscoverySnapshot PartialSnapshot()
+            => new()
+            {
+                DomainVariables = MergeDomainNameMaps(domainVariables, typeTreeVariables),
+                DomainVariableLists = domainVariableLists
+            };
 
         try
         {
@@ -2539,23 +2552,23 @@ public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClie
             if (!supplemental.IsMmsInitiated)
                 return new NativeMmsDiscoverySnapshot();
 
-            var domainVariables = await supplemental.DiscoverDomainVariableNamesAsync(timeout.Token).ConfigureAwait(false);
-            var typeTreeVariables = await supplemental.DiscoverDomainVariableTypeTreeNamesAsync(domainVariables, timeout.Token).ConfigureAwait(false);
-            var domainVariableLists = await supplemental.DiscoverDomainVariableListNamesAsync(timeout.Token).ConfigureAwait(false);
-            return new NativeMmsDiscoverySnapshot
-            {
-                DomainVariables = MergeDomainNameMaps(domainVariables, typeTreeVariables),
-                DomainVariableLists = domainVariableLists
-            };
+            // Preserve the complete paged name inventory before optional type-tree
+            // expansion. Large IEDs can exceed the compatibility-probe budget during
+            // VAA browsing; that must not erase names already read successfully.
+            domainVariables = await supplemental.DiscoverDomainVariableNamesAsync(timeout.Token).ConfigureAwait(false);
+            domainVariableLists = await supplemental.DiscoverDomainVariableListNamesAsync(timeout.Token).ConfigureAwait(false);
+            typeTreeVariables = await supplemental.DiscoverDomainVariableTypeTreeNamesAsync(domainVariables, timeout.Token).ConfigureAwait(false);
+            return PartialSnapshot();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Discovery must never fail only because the supplemental browse was rejected.
-            return new NativeMmsDiscoverySnapshot();
+            // Discovery must never fail only because an optional supplemental phase was
+            // rejected. Keep any completed GetNameList evidence collected before it.
+            return PartialSnapshot();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new NativeMmsDiscoverySnapshot();
+            return PartialSnapshot();
         }
     }
 

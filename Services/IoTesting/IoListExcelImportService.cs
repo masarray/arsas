@@ -184,6 +184,7 @@ public sealed class IoListExcelImportService
             ["Location"] = Get(source, "Location"),
             ["VoltageLevel"] = Get(source, "Voltage Level"),
             ["Switchgear"] = Get(source, "Switchgear"),
+            ["PanelTag"] = Get(source, "Panel Tag"),
             ["SignalName"] = Get(source, "Signal Description"),
             ["SignalAddress"] = Get(source, "Signal Alias"),
             ["DataType"] = Get(source, "Data Type"),
@@ -269,6 +270,7 @@ public sealed class IoListExcelImportService
             Location = Join(list, "Location"),
             VoltageLevel = Join(list, "VoltageLevel"),
             Switchgear = Join(list, "Switchgear"),
+            PanelTag = Join(list, "PanelTag"),
             TestPoints = list.Select(x => BuildPoint(key, x, findings)).ToList()
         };
     }

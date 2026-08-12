@@ -249,11 +249,18 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         if (!EnsureSessionSealedForExport("PDF evidence report"))
             return;
 
+        var blankForm = IoFatPdfReportService.IsBlankForm(Project);
         var dialog = new SaveFileDialog
         {
-            Title = "Export native ARSAS IO FAT PDF report",
-            Filter = "PDF evidence report (*.pdf)|*.pdf",
-            FileName = $"{SafeFileName(Project.ProjectId)}_IO-FAT_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
+            Title = blankForm
+                ? "Export ARSAS blank IFAT test form for customer review"
+                : "Export native ARSAS IO FAT test record",
+            Filter = blankForm
+                ? "Blank IFAT test form (*.pdf)|*.pdf"
+                : "PDF FAT test record (*.pdf)|*.pdf",
+            FileName = blankForm
+                ? $"{SafeFileName(Project.ProjectId)}_IFAT_Blank_Form_{DateTime.Now:yyyyMMdd_HHmm}.pdf"
+                : $"{SafeFileName(Project.ProjectId)}_IO-FAT_As-Tested_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
             AddExtension = true,
             DefaultExt = ".pdf",
             OverwritePrompt = true
@@ -268,8 +275,10 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             IoFatPdfReportService.Save(dialog.FileName, Project);
             MessageBox.Show(
                 this,
-                $"Native PDF evidence report created successfully.\n\n{dialog.FileName}",
-                "PDF report exported",
+                blankForm
+                    ? $"Blank IFAT test form created for customer review.\n\n{dialog.FileName}\n\nThe PDF declares the planned scope only; no test result is implied."
+                    : $"Native PDF FAT test record created successfully.\n\n{dialog.FileName}",
+                blankForm ? "Blank IFAT form exported" : "FAT test record exported",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }

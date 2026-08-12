@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "239019e9a66513807d88354f5959ff7dbf280868",
-  "sourcePullRequest": 53,
+  "commit": "61bbf2737cb09e72e8b143dc4a4b57dfb7e591ba",
+  "sourcePullRequest": 54,
   "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance."
 }

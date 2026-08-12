@@ -18,6 +18,8 @@ The workspace is designed for FAT teams that need to prove that an imported digi
 
 The first release is intentionally limited to imported **SDI / digital indication** rows. Analog tolerance testing, output commands, protection-function injection, GOOSE campaign execution, Sampled Values campaigns, formal approval signatures, and multi-user review are separate scopes.
 
+Time synchronization and COMTRADE/disturbance recording are supplementary, capability-gated relay tests. Their controlled procedure, acceptance evidence, and BCU exclusion are defined in [Relay time synchronization and disturbance-recording procedure](RELAY_TIME_SYNC_AND_DISTURBANCE_TEST.md). They are not silently inferred from IEC 61850 connectivity and are not part of the digital-indication state machine unless explicitly added to the approved FAT scope.
+
 ## Start paths
 
 The first-launch workspace presents two distinct choices:
@@ -140,7 +142,15 @@ The native PDF engine is ported from the project-owned ARIEC60870 implementation
 - repeated page and IED headers;
 - cross-reference table, trailer, and metadata.
 
-The report contains project identity, workbook SHA-256, project counters, per-IED sections, expected ON/OFF states, IED and ARSAS timestamps, quality, acquisition source, final result, and reason.
+The report starts with controlled front matter for document identity, source-workbook SHA-256, panel and IED scope, test method, acceptance rule, executive IED summary, deviations, and handover signatures. Detailed signal evidence is issued as **Appendix A**.
+
+Report classification is result-gated. `AS TESTED / CUSTOMER FAT RECORD` is used only when every signal in scope has passed. Any pending, review, failed, or empty scope produces a non-acceptance status such as `PARTIAL`, `REVIEW REQUIRED`, or `FAILED`; source-workbook document-control text cannot override the live result assessment.
+
+A fresh imported scope with no test attempt or captured evidence is exported automatically as **Blank IFAT Test Form - For Customer Review**. The blank issue presents the physical panels, IEDs, planned IEC 61850 references, expected TRUE/FALSE states, test sequence, review/approval signatures, and fields marked for completion during IFAT. It does not show PASS/REVIEW/FAILED/PENDING counters and does not claim a test result. A small footer identifies ARSAS IEC 61850 Protocol Tester as the automatic document generator.
+
+As soon as any enabled point enters a test attempt, PDF export changes automatically to a FAT test record. An incomplete execution is identified as a progress/review record; `AS TESTED` is reserved for a fully passed scope.
+
+Each TRUE and FALSE evidence cell contains the IED timestamp, ARSAS capture timestamp, quality, acquisition source, monotonic sequence, and connection generation. Repeated TRUE/FALSE IED timestamps are disclosed as timestamp-integrity warnings, while ARSAS capture order remains visible for review.
 
 The engine is intentionally bounded. It does not claim PDF/A, embedded custom fonts, digital signatures, accessibility tagging, or formal document approval.
 

@@ -52,12 +52,17 @@ internal static class IoFatNativePdfWriter
             .Select(point => point.ObjectReference)
             .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference))
             ?? project.ProjectId;
-        var title = $"{project.ProjectName} - IEC 61850 FAT Evidence Report";
-        var subject = $"Customer-readable FAT summary. Detailed evidence is retained in the ARSAS project and Excel export. Primary IEC 61850 reference: {primaryReference}";
+        var blankForm = IoFatPdfReportService.IsBlankForm(project);
+        var title = blankForm
+            ? $"{project.ProjectName} - IEC 61850 IFAT Test Form"
+            : $"{project.ProjectName} - IEC 61850 FAT Evidence Report";
+        var subject = blankForm
+            ? $"Blank IFAT form for customer review of the planned test scope. No executed test evidence is declared. Primary IEC 61850 reference: {primaryReference}"
+            : $"Controlled IEC 61850 FAT report with procedure basis, acceptance summary, and detailed transition evidence. Primary IEC 61850 reference: {primaryReference}";
         var infoId = AddObject(
             $"<< /Title ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(title))}) " +
             $"/Subject ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(subject))}) " +
-            "/Keywords (IEC 61850 FAT OFF ON OFF ARSAS) " +
+            $"/Keywords ({(blankForm ? "IEC 61850 IFAT blank test form planned scope ARSAS" : "IEC 61850 FAT IFAT FALSE TRUE FALSE ARSAS evidence traceability")}) " +
             "/Author (ARSAS) " +
             "/Creator (ARSAS Native PDF and FixedDocument Engine, adapted from ARIEC60870) " +
             "/Producer (ARSAS Native PDF Engine) " +

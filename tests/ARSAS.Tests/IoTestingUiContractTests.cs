@@ -53,7 +53,8 @@ public sealed class IoTestingUiContractTests
 
         Assert.Contains("Save", buttonContents);
         Assert.Contains("Excel", buttonContents);
-        Assert.Contains("PDF", buttonContents);
+        Assert.Contains("PDF Form / Report", buttonContents);
+        Assert.Contains("Fresh untested scope exports a blank IFAT form", document.ToString(), StringComparison.Ordinal);
         Assert.Contains("Export .arsas", buttonContents);
         Assert.Contains("Engineering", buttonContents);
         Assert.DoesNotContain("Autosave enabled", document.ToString(), StringComparison.Ordinal);
@@ -162,6 +163,26 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("AllPassedVisibilityConverter", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OnEvidence.CapturedAt", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime.OffEvidence.CapturedAt", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IedCards_UseReusableProtectionRelayFasciaArtwork()
+    {
+        var app = XDocument.Load(FindRepoFile("App.xaml")).ToString();
+        var mainWindow = XDocument.Load(FindRepoFile("MainWindow.xaml")).ToString();
+        var ioTesting = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml")).ToString();
+        var project = XDocument.Load(FindRepoFile("ArIED61850Tester.csproj")).ToString();
+
+        Assert.Contains("IedRelayFrontPanelTemplate", app, StringComparison.Ordinal);
+        Assert.Contains("RelayFasciaArtwork", app, StringComparison.Ordinal);
+        Assert.Contains("RelayStateRail", app, StringComparison.Ordinal);
+        Assert.True(File.Exists(FindRepoFile("Assets/ied-protection-relay-fascia.png")));
+        Assert.Contains("ied-protection-relay-fascia.png", project, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"RelayDeviceIcon\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("Template=\"{StaticResource IedRelayFrontPanelTemplate}\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"RelayIcon\"", ioTesting, StringComparison.Ordinal);
+        Assert.Contains("Template=\"{StaticResource IedRelayFrontPanelTemplate}\"", ioTesting, StringComparison.Ordinal);
+        Assert.DoesNotContain("M 2 0 L 2 20 L 18 20", ioTesting, StringComparison.Ordinal);
     }
 
     [Fact]
