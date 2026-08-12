@@ -115,17 +115,18 @@ public partial class MainWindow
         MmsRcbAvailabilitySnapshot? snapshot,
         bool connected = true)
     {
+        var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
         var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
             snapshot?.DataSetReference,
-            descriptor.DataSetReference);
+            descriptor.DataSetReference,
+            probeState);
         var memberCount = RcbExportEvidencePolicy.EffectiveMemberCount(
             snapshot?.DataSetMemberCount ?? 0,
             descriptor.DataSetMemberCount);
-        var evidenceConflict = snapshot != null &&
-                               !string.IsNullOrWhiteSpace(snapshot.DataSetReference) &&
-                               !string.IsNullOrWhiteSpace(descriptor.DataSetReference) &&
-                               !NormalizeRcbReference(snapshot.DataSetReference)
-                                   .Equals(NormalizeRcbReference(descriptor.DataSetReference), StringComparison.OrdinalIgnoreCase);
+        var evidenceConflict = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            descriptor.DataSetReference,
+            snapshot.DataSetReference,
+            probeState);
         var availability = evidenceConflict
             ? MmsRcbOperationalAvailability.Unknown
             : RcbExportEvidencePolicy.SourceAvailability(
@@ -133,29 +134,33 @@ public partial class MainWindow
                 descriptor.DataSetName,
                 descriptor.DataSetResolved,
                 descriptor.DataSetMemberCount);
-        var effectiveDataSetName = !string.IsNullOrWhiteSpace(snapshot?.DataSetReference)
-            ? LastReferenceSegment(snapshot.DataSetReference)
-            : descriptor.DataSetName;
+        var effectiveDataSetName = evidenceConflict
+            ? $"{(string.IsNullOrWhiteSpace(descriptor.DataSetName) ? "—" : descriptor.DataSetName)} ↔ {(string.IsNullOrWhiteSpace(snapshot?.DataSetReference) ? "—" : LastReferenceSegment(snapshot.DataSetReference))}"
+            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                ? string.Empty
+                : LastReferenceSegment(effectiveDataSetReference);
         var scope = !string.IsNullOrWhiteSpace(descriptor.LogicalDeviceInstance) ||
                     !string.IsNullOrWhiteSpace(descriptor.LogicalNodePath)
             ? $"{descriptor.LogicalDeviceInstance} / {descriptor.LogicalNodePath}".Trim(' ', '/')
             : RcbExportEvidencePolicy.ScopeFromReference(snapshot?.Reference ?? descriptor.DisplayReference);
         var reason = evidenceConflict
-            ? $"Configuration mismatch: source SCL binds {descriptor.DataSetReference}, while the live IED reports {snapshot!.DataSetReference}. Export is blocked until the mismatch is resolved."
+            ? $"Configuration mismatch: source SCL binds {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)}, while the live IED reports {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}. Export is blocked until the mismatch is resolved."
             : snapshot?.Reason ?? RcbExportEvidencePolicy.SourceReason(
                 descriptor.DataSetName,
                 descriptor.DataSetResolved,
                 descriptor.DataSetMemberCount,
                 connected);
         var dataSetDetail = evidenceConflict
-            ? $"Configuration mismatch • source {descriptor.DataSetReference} • live {snapshot!.DataSetReference}"
-            : snapshot?.DataSetDirectorySuccess == true
-                ? "Static DataSet • live directory verified"
-                : string.IsNullOrWhiteSpace(descriptor.DataSetName)
-                    ? "No configured DataSet • source model"
-                    : descriptor.DataSetResolved
-                        ? $"Static DataSet • source model{(descriptor.Indexed ? $" • indexed ×{descriptor.InstanceCount}" : string.Empty)}"
-                        : "Broken DataSet reference • source model";
+            ? $"Configuration mismatch • source {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)} • live {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}"
+            : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                ? "Configured DataSet • live DatSet binding unresolved"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                    ? "Static DataSet • live binding + directory verified"
+                    : string.IsNullOrWhiteSpace(descriptor.DataSetName)
+                        ? "No configured DataSet • source model"
+                        : descriptor.DataSetResolved
+                            ? $"Static DataSet • source model{(descriptor.Indexed ? $" • indexed ×{descriptor.InstanceCount}" : string.Empty)}"
+                            : "Broken DataSet reference • source model";
 
         return new RcbExportRow
         {
@@ -245,9 +250,11 @@ public partial class MainWindow
         foreach (var reportControl in model.ReportControls)
         {
             snapshots.TryGetValue(NormalizeRcbReference(reportControl.Reference), out var snapshot);
+            var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
             var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
                 snapshot?.DataSetReference,
-                reportControl.DataSetReference);
+                reportControl.DataSetReference,
+                probeState);
             dataSets.TryGetValue(NormalizeRcbReference(effectiveDataSetReference), out var dataSet);
             var members = RcbExportEvidencePolicy.EffectiveMemberCount(
                 snapshot?.DataSetMemberCount ?? 0,
@@ -257,27 +264,30 @@ public partial class MainWindow
                 effectiveDataSetReference,
                 dataSet != null,
                 members);
-            var liveOverridesDiscovery = snapshot != null &&
-                                         !string.IsNullOrWhiteSpace(snapshot.DataSetReference) &&
-                                         !string.IsNullOrWhiteSpace(reportControl.DataSetReference) &&
-                                         !NormalizeRcbReference(snapshot.DataSetReference)
-                                             .Equals(NormalizeRcbReference(reportControl.DataSetReference), StringComparison.OrdinalIgnoreCase);
+            var liveOverridesDiscovery = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+                reportControl.DataSetReference,
+                snapshot.DataSetReference,
+                probeState);
             var dataSetName = string.IsNullOrWhiteSpace(effectiveDataSetReference)
                 ? "—"
                 : string.IsNullOrWhiteSpace(dataSet?.Name)
                     ? LastReferenceSegment(effectiveDataSetReference)
                     : dataSet.Name;
             var dataSetDetail = liveOverridesDiscovery
-                ? "Live DatSet verified • overrides stale discovery binding"
-                : snapshot?.DataSetDirectorySuccess == true
-                    ? "Static DataSet • live directory verified"
-                    : snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
-                        ? "No configured DataSet • live verified"
-                        : string.IsNullOrWhiteSpace(effectiveDataSetReference)
-                            ? "DataSet binding unresolved"
-                            : dataSet == null
-                                ? "DataSet directory unresolved"
-                                : "Static DataSet • live discovery";
+                ? snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                    ? "Live DatSet verified empty • overrides stale discovery binding"
+                    : "Live DatSet verified • overrides stale discovery binding"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                    ? "Known DataSet • live DatSet binding unresolved"
+                    : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                        ? "Static DataSet • live binding + directory verified"
+                        : snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                            ? "No configured DataSet • live verified"
+                            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                                ? "DataSet binding unresolved"
+                                : dataSet == null
+                                    ? "DataSet directory unresolved"
+                                    : "Static DataSet • live discovery";
 
             rows.Add(new RcbExportRow
             {
