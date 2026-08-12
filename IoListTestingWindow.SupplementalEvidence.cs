@@ -52,7 +52,7 @@ public partial class IoListTestingWindow
         var button = new Button
         {
             Content = content,
-            Padding = new Thickness(10, 8),
+            Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 6, 0),
             MinWidth = 92
         };
