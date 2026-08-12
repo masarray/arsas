@@ -21,8 +21,8 @@ public sealed record IoTestSignalSelectionResult(
 /// <summary>
 /// Resolves the enabled IO-list scope against one discovered IED model without
 /// guessing. Exact source/event-log references are preferred. A normalized
-/// IED-name or Application wrapper is accepted only when it produces one unique
-/// non-control signal.
+/// logical-device/display wrapper is accepted only when it produces one unique
+/// non-control signal with the required functional constraint.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
@@ -105,8 +105,10 @@ public sealed class IoTestSignalSelectionService
         if (signal.IsControlSignal || string.IsNullOrWhiteSpace(signal.ObjectReference))
             return false;
 
-        return string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
-               string.IsNullOrWhiteSpace(signal.FunctionalConstraint) ||
+        if (string.IsNullOrWhiteSpace(point.FunctionalConstraint))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(signal.FunctionalConstraint) &&
                signal.FunctionalConstraint.Equals(point.FunctionalConstraint, StringComparison.OrdinalIgnoreCase);
     }
 
