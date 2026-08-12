@@ -118,6 +118,8 @@ public sealed class IoTestSignalSelectionServiceTests
                     EventLogSearchReference = "VI3p1_OperationalValues/RPRE_MMXU1.A",
                     DataAttribute = "cVal.mag.f",
                     FunctionalConstraint = "MX",
+                    ExpectedOnText = "Active",
+                    ExpectedOffText = "InActive",
                     ImportReady = true,
                     TestEnabled = true
                 }
