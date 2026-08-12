@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 
 namespace ArIED61850Tester;
@@ -18,6 +19,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Keep every IED card on one reusable template key while replacing the
+        // legacy bitmap fallback with the compact ARVREL-derived vector fascia.
+        // Installing this before StartupUri materializes also makes the portable
+        // smoke test validate that the vector ResourceDictionary is packaged.
+        InstallArvrelMiniIedFascia();
 
         if (Array.Exists(e.Args, argument =>
                 string.Equals(argument, "--portable-smoke-test", StringComparison.OrdinalIgnoreCase)))
@@ -35,6 +42,24 @@ public partial class App : Application
         Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
             new Action(() => _ = AppUpdateCoordinator.RunLazyAsync(_updateCancellation.Token)));
+    }
+
+    private void InstallArvrelMiniIedFascia()
+    {
+        var fasciaResources = new ResourceDictionary
+        {
+            Source = new Uri(
+                "/ARSAS;component/Resources/ArvrelMiniIedFascia.xaml",
+                UriKind.Relative)
+        };
+
+        if (fasciaResources["ArvrelMiniIedRelayFrontPanelTemplate"] is not ControlTemplate template)
+        {
+            throw new InvalidOperationException(
+                "The packaged ARVREL mini IED fascia resource is missing its ControlTemplate.");
+        }
+
+        Resources["IedRelayFrontPanelTemplate"] = template;
     }
 
     private static int RunPortableSmokeTest()
