@@ -76,6 +76,9 @@ public sealed class IoTestSignalSelectionService
                 continue;
             }
 
+            if (usedNormalizedPrefix)
+                ApplyImportedCanonicalReadReference(candidates[0], point);
+
             matches.Add(new IoTestSignalMatch(point, candidates[0], usedNormalizedPrefix));
         }
 
@@ -134,6 +137,77 @@ public sealed class IoTestSignalSelectionService
 
         observed = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, device.SclIedName);
         return expected.Contains(observed);
+    }
+
+    private static void ApplyImportedCanonicalReadReference(
+        SignalDefinition signal,
+        IoTestPointPlan point)
+    {
+        var canonical = BuildDirectImportedReadReference(point);
+        if (canonical.Length == 0)
+            return;
+
+        var canonicalTail = IoTestLiveBindingService.NormalizeTelegram(canonical, point.IedName);
+        var discoveredTail = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, point.IedName);
+        if (canonicalTail.Length == 0 ||
+            !canonicalTail.Equals(discoveredTail, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var oldReference = signal.ObjectReference;
+        if (IoTestLiveBindingService.NormalizeReference(oldReference)
+            .Equals(IoTestLiveBindingService.NormalizeReference(canonical), StringComparison.OrdinalIgnoreCase))
+            return;
+
+        signal.ObjectReference = canonical;
+        signal.DisplayReference = canonical;
+        signal.QualityReference = RebaseCompanionDomain(signal.QualityReference, canonical);
+        signal.TimestampReference = RebaseCompanionDomain(signal.TimestampReference, canonical);
+        signal.Source = string.IsNullOrWhiteSpace(signal.Source)
+            ? "IO FAT imported canonical MMS reference"
+            : $"{signal.Source} / IO FAT imported canonical MMS reference";
+    }
+
+    private static string BuildDirectImportedReadReference(IoTestPointPlan point)
+    {
+        foreach (var raw in new[] { point.EventLogSearchReference, point.SourceIecReference })
+        {
+            var reference = RemoveFunctionalConstraintSuffix(raw);
+            if (reference.Length == 0 || reference.Count(ch => ch == '/') != 1)
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(point.DataAttribute) &&
+                !reference.EndsWith("." + point.DataAttribute.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                reference += "." + point.DataAttribute.Trim();
+            }
+
+            return reference.Replace('$', '.');
+        }
+
+        return string.Empty;
+    }
+
+    private static string RebaseCompanionDomain(string? companionReference, string canonicalReference)
+    {
+        var companion = (companionReference ?? string.Empty).Trim().Replace('$', '.');
+        if (companion.Length == 0)
+            return string.Empty;
+
+        var canonicalSlash = canonicalReference.IndexOf('/');
+        var companionSlash = companion.LastIndexOf('/');
+        if (canonicalSlash <= 0 || companionSlash < 0 || companionSlash >= companion.Length - 1)
+            return companion;
+
+        return canonicalReference[..canonicalSlash] + companion[companionSlash..];
+    }
+
+    private static string RemoveFunctionalConstraintSuffix(string? reference)
+    {
+        var value = (reference ?? string.Empty).Trim();
+        var marker = value.LastIndexOf(" [", StringComparison.Ordinal);
+        if (marker > 0 && value.EndsWith(']'))
+            value = value[..marker].TrimEnd();
+        return value;
     }
 
     private static string Describe(IReadOnlyCollection<IoTestPointPlan> points)
