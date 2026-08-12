@@ -1,27 +1,21 @@
-using System.Collections;
-using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using ArIED61850Tester.Models;
-using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Installs the lightweight ballistic navigation treatment and enforces the operator-facing
-/// SAS point profile on every SignalDefinition collection displayed by a DataGrid. The full
-/// typed discovery/SCL models are not modified.
+/// Installs the lightweight ballistic navigation treatment. Discovered signal collections
+/// are deliberately never filtered or mutated here: presentation policy must not delete
+/// measurement, protection, or vendor-specific points from the live IEC 61850 model.
 /// </summary>
 internal static class SasOperationalUiPolicy
 {
-    private static readonly ConditionalWeakTable<object, CollectionSubscription> Subscriptions = new();
     private static readonly string[] NavigationButtonNames =
     {
         "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavGooseButton", "NavDiagnosticsButton"
@@ -31,54 +25,9 @@ internal static class SasOperationalUiPolicy
     internal static void Initialize()
     {
         EventManager.RegisterClassHandler(
-            typeof(DataGrid),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnDataGridLoaded));
-        EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(OnWindowLoaded));
-    }
-
-    private static void OnDataGridLoaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is not DataGrid grid || grid.ItemsSource is null)
-            return;
-
-        var source = grid.ItemsSource is ICollectionView view ? view.SourceCollection : grid.ItemsSource;
-        if (source is null || !LooksLikeSignalCollection(source))
-            return;
-
-        SchedulePrune(source, grid.Dispatcher);
-        if (source is INotifyCollectionChanged changed && !Subscriptions.TryGetValue(source, out _))
-            Subscriptions.Add(source, new CollectionSubscription(source, changed, grid.Dispatcher));
-    }
-
-    private static bool LooksLikeSignalCollection(object source)
-    {
-        var type = source.GetType();
-        if (type.GetInterfaces().Any(interfaceType =>
-                interfaceType.IsGenericType &&
-                interfaceType.GetGenericArguments().Length == 1 &&
-                interfaceType.GetGenericArguments()[0] == typeof(SignalDefinition)))
-            return true;
-
-        return source is IEnumerable enumerable && enumerable.Cast<object?>().FirstOrDefault(item => item is not null) is SignalDefinition;
-    }
-
-    private static void SchedulePrune(object source, Dispatcher dispatcher)
-        => dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() => Prune(source)));
-
-    private static void Prune(object source)
-    {
-        if (source is not IList list || list.IsReadOnly || list.IsFixedSize)
-            return;
-
-        for (var index = list.Count - 1; index >= 0; index--)
-        {
-            if (list[index] is SignalDefinition signal && !SasOperationalSignalPolicy.IsVisible(signal))
-                list.RemoveAt(index);
-        }
     }
 
     private static void OnWindowLoaded(object sender, RoutedEventArgs args)
@@ -253,29 +202,4 @@ internal static class SasOperationalUiPolicy
         return brush;
     }
 
-    private sealed class CollectionSubscription
-    {
-        private readonly object _source;
-        private readonly Dispatcher _dispatcher;
-        private bool _scheduled;
-
-        public CollectionSubscription(object source, INotifyCollectionChanged changed, Dispatcher dispatcher)
-        {
-            _source = source;
-            _dispatcher = dispatcher;
-            changed.CollectionChanged += OnCollectionChanged;
-        }
-
-        private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs args)
-        {
-            if (_scheduled)
-                return;
-            _scheduled = true;
-            _dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() =>
-            {
-                _scheduled = false;
-                Prune(_source);
-            }));
-        }
-    }
 }

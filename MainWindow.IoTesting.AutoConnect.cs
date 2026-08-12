@@ -154,24 +154,25 @@ public partial class MainWindow
             }
 
             if (!selection.Succeeded &&
-                selection.AmbiguousPoints.Count == 0 &&
                 selection.Matches.Count > 0 &&
-                selection.MissingPoints.Count > 0)
+                (selection.MissingPoints.Count > 0 || selection.AmbiguousPoints.Count > 0))
             {
                 // A missing read-only/status tag is a configuration finding, not a
                 // reason to block the rest of the FAT scope. The canonical resolver
                 // has already exhausted exact, wrapper, vendor-LD, and weak-reference
                 // forms. Keep the evidence trail, uncheck only proven-missing rows,
-                // and continue with the unique live matches.
+                // and continue with the unique live matches. Ambiguous rows follow
+                // the same non-blocking path: they are never guessed or armed.
                 var missingFindingCount = selection.MissingPoints.Count;
+                var ambiguousFindingCount = selection.AmbiguousPoints.Count;
                 _ioTestLiveBindingService.Bind(project, Devices);
-                foreach (var missingPoint in selection.MissingPoints)
+                foreach (var missingPoint in selection.MissingPoints.Concat(selection.AmbiguousPoints))
                 {
                     missingPoint.TestEnabled = false;
                     AddLog(
                         "WARN",
                         "IO Testing",
-                        $"FAT finding: {ied.IedName} {missingPoint.TestPointId} was not found in the discovered IED model and was disabled for this run. {missingPoint.LiveBindingDiagnostics}");
+                        $"FAT finding: {ied.IedName} {missingPoint.TestPointId} could not be bound uniquely to the discovered IED model and was disabled for this run. {missingPoint.LiveBindingDiagnostics}");
                 }
 
                 requestedPoints = requestedPoints
@@ -180,9 +181,9 @@ public partial class MainWindow
                 selection = new IoTestSignalSelectionResult(
                     selection.Matches,
                     Array.Empty<IoTestPointPlan>(),
-                    selection.AmbiguousPoints,
-                    $"Resolved {selection.Matches.Count} signal(s); {missingFindingCount} missing row(s) were disabled as FAT findings.");
-                ReportProgress($"{missingFindingCount} workbook row(s) are findings · continuing with {requestedPoints.Count} live signal(s)");
+                    Array.Empty<IoTestPointPlan>(),
+                    $"Resolved {selection.Matches.Count} signal(s); {missingFindingCount} missing and {ambiguousFindingCount} ambiguous row(s) were disabled as FAT findings.");
+                ReportProgress($"{missingFindingCount + ambiguousFindingCount} workbook row(s) are findings · continuing with {requestedPoints.Count} live signal(s)");
             }
 
             if (!selection.Succeeded)

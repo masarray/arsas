@@ -46,8 +46,9 @@ public sealed class IoTestingUiContractTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var buttonContents = document
             .Descendants(presentation + "Button")
-            .Select(button => (string?)button.Attribute("Content"))
-            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .SelectMany(button => button.Descendants(presentation + "TextBlock"))
+            .Select(text => (string?)text.Attribute("Text"))
+            .Where(text => !string.IsNullOrWhiteSpace(text))
             .Cast<string>()
             .ToList();
 
@@ -75,7 +76,9 @@ public sealed class IoTestingUiContractTests
             .Single(button => ((string?)button.Attribute("Click")) == "StartSelectedIedSafely_Click");
         var text = document.ToString();
 
-        Assert.Equal("{Binding SelectedStartWorkflowText}", (string?)startButton.Attribute("Content"));
+        Assert.Equal(
+            "{Binding SelectedStartWorkflowText}",
+            (string?)startButton.Descendants(presentation + "TextBlock").Single().Attribute("Text"));
         Assert.Equal("{Binding SelectedCanStartWorkflow}", (string?)startButton.Attribute("IsEnabled"));
         Assert.Contains("report-first acquisition", text, StringComparison.Ordinal);
         Assert.DoesNotContain("HeaderSpinnerRotate", text, StringComparison.Ordinal);
@@ -110,7 +113,10 @@ public sealed class IoTestingUiContractTests
             .Descendants(presentation + "Button")
             .Single(button => (string?)button.Attribute(x + "Name") == "WorkspacePreviewToggle");
         Assert.Equal("TogglePrintPreview_Click", (string?)previewToggle.Attribute("Click"));
-        Assert.Equal("Print Preview", (string?)previewToggle.Attribute("Content"));
+        Assert.Equal(
+            "Print Preview",
+            (string?)previewToggle.Descendants(presentation + "TextBlock").Single().Attribute("Text"));
+        Assert.Contains("LucidePrinter", previewToggle.ToString(), StringComparison.Ordinal);
 
         Assert.DoesNotContain("{Binding Session.StateText}", text, StringComparison.Ordinal);
         Assert.Contains("{Binding SelectedCanPause}", text, StringComparison.Ordinal);
@@ -149,8 +155,47 @@ public sealed class IoTestingUiContractTests
 
         Assert.Contains("FAT finding", source, StringComparison.Ordinal);
         Assert.Contains("missingPoint.TestEnabled = false", source, StringComparison.Ordinal);
-        Assert.Contains("selection.AmbiguousPoints.Count == 0", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("selection.AmbiguousPoints.Count == 0", source, StringComparison.Ordinal);
         Assert.Contains("continuing with {requestedPoints.Count} live signal(s)", source, StringComparison.Ordinal);
+        Assert.Contains("selection.MissingPoints.Concat(selection.AmbiguousPoints)", source, StringComparison.Ordinal);
+        Assert.Contains("they are never guessed or armed", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PresentationPolicy_NeverMutatesDiscoveredSignalCollections()
+    {
+        var source = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
+
+        Assert.Contains("never filtered or mutated", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SchedulePrune", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RemoveAt", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CollectionSubscription", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindows_StartMaximizedForFieldUse()
+    {
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var main = XDocument.Load(FindRepoFile("MainWindow.xaml"));
+        var fat = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+
+        Assert.Equal("Maximized", (string?)main.Root?.Attribute("WindowState"));
+        Assert.Equal("Maximized", (string?)fat.Root?.Attribute("WindowState"));
+    }
+
+    [Fact]
+    public void ConnectionFailures_UseNonModalTwoSecondShout()
+    {
+        var xaml = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml")).ToString();
+        var shout = File.ReadAllText(FindRepoFile("IoListTestingWindow.Shout.cs"));
+        var window = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
+        var context = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
+
+        Assert.Contains("x:Name=\"FailureShout\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromSeconds(2)", shout, StringComparison.Ordinal);
+        Assert.Contains("DoubleAnimation(1, 0", shout, StringComparison.Ordinal);
+        Assert.Contains("ShowFailureShout(title, result.Message)", window, StringComparison.Ordinal);
+        Assert.Contains("ShowFailureShout(\"Connect and start IED failed\", ex.Message)", context, StringComparison.Ordinal);
     }
 
     [Fact]

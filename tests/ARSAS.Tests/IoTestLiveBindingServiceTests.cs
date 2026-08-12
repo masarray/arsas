@@ -151,6 +151,59 @@ public sealed class IoTestLiveBindingServiceTests
         Assert.All(project.Ieds[0].TestPoints, point => Assert.True(point.IsLiveBound, point.LiveBindingDiagnostics));
     }
 
+    [Fact]
+    public void F13R1CidDigitalDataSet_BindsNineValidRowsAndLeavesMalformedRowAsFinding()
+    {
+        var imported = new[]
+        {
+            "AA1C1F13R1Application/CB1/RBRF1.OpIn.general",
+            "AA1C1F13R1Application/CB1/RBRF1.OpEx.general",
+            "AA1C1F13R1Application/VI3p1_5051OC3phase1/II_PTOC1.Op.general",
+            "AA1C1F13R1Application/VI3p1_5051NOCgndB1/NI_PTOC1.Op.general",
+            "AA1C1F13R1Application/.Op.general",
+            "AA1C1F13R1Application/VI1p1_27Undervoltage1/PTRC1.Op.general",
+            "AA1C1F13R1Application/ADD/GGIO1.ComFail.stVal",
+            "AA1C1F13R1Application/ADD/GGIO1.TimeSynchrnz.stVal",
+            "AA1C1F13R1Application/ADD/GGIO1.PrSetChgd.stVal",
+            "AA1C1F13R1Application/ADD/GGIO1.FWUpdated.stVal"
+        };
+        var observed = new[]
+        {
+            "AA1C1F13R1CB1/RBRF1.OpIn.general",
+            "AA1C1F13R1CB1/RBRF1.OpEx.general",
+            "AA1C1F13R1VI3p1_5051OC3phase1/II_PTOC1.Op.general",
+            "AA1C1F13R1VI3p1_5051NOCgndB1/NI_PTOC1.Op.general",
+            "AA1C1F13R1VI3p1_27Undervoltage1/PTRC1.Op.general",
+            "AA1C1F13R1VI1p1_27Undervoltage1/PTRC1.Op.general",
+            "AA1C1F13R1ADD/GGIO1.ComFail.stVal",
+            "AA1C1F13R1ADD/GGIO1.TimeSynchrnz.stVal",
+            "AA1C1F13R1ADD/GGIO1.PrSetChgd.stVal",
+            "AA1C1F13R1ADD/GGIO1.FWUpdated.stVal"
+        };
+        var project = Project(imported[0], "AA1C1F13R1");
+        project.Ieds[0].TestPoints.Clear();
+        for (var i = 0; i < imported.Length; i++)
+            project.Ieds[0].TestPoints.Add(Point(imported[i], $"UCC-IEC-{727 + i:0000}", "AA1C1F13R1"));
+
+        var device = Device("AA1C1F13R1");
+        foreach (var reference in observed)
+        {
+            device.Signals.Add(new SignalDefinition
+            {
+                Name = reference,
+                ObjectReference = reference,
+                FunctionalConstraint = "ST"
+            });
+        }
+
+        var summary = _binding.Bind(project, new[] { device });
+
+        Assert.Equal(9, summary.SignalBoundCount);
+        Assert.Equal(1, summary.MissingSignalCount);
+        Assert.Contains("Canonical imported", project.Ieds[0].TestPoints[4].LiveBindingDiagnostics, StringComparison.Ordinal);
+        Assert.Contains("Closest live references", project.Ieds[0].TestPoints[4].LiveBindingDiagnostics, StringComparison.Ordinal);
+    }
+
     private static IoTestProject Project(string reference, string iedName = "AA1C1F03R4")
     {
         var project = new IoTestProject

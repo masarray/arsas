@@ -150,12 +150,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
             PreparationStatusText = ex.Message;
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Connect and start IED failed",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            ShowFailureShout("Connect and start IED failed", ex.Message);
         }
         finally
         {
@@ -439,7 +434,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     {
         if (result.Succeeded)
             return;
-        MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        ShowFailureShout(title, result.Message);
     }
 
     private static string SafeFileName(string value)

@@ -1032,10 +1032,6 @@ public class SignalDefinition : ObservableObject
                r.Contains(".har") || r.Contains("harm") ||
                r.Contains(".thd") || r.Contains(".tdd") ||
                r.Contains(".hz") ||
-               r.Contains(".w.") || r.Contains("totw") ||
-               r.Contains(".var") || r.Contains("totvar") ||
-               r.Contains(".va") || r.Contains("totva") ||
-               r.Contains(".pf") ||
                r.Contains(".ang.") || r.EndsWith(".ang.f");
     }
 

@@ -141,7 +141,7 @@ public partial class IoListTestingWindow
         }
 
         _printPreviewToggle = WorkspacePreviewToggle;
-        _printPreviewToggle.Content = _printPreviewActive ? "Signals View" : "Print Preview";
+        WorkspacePreviewText.Text = _printPreviewActive ? "Signals View" : "Print Preview";
         _printPreviewToggle.ToolTip = "Toggle the selected IED between signal evidence and native print preview";
     }
 
@@ -251,12 +251,7 @@ public partial class IoListTestingWindow
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
             PreparationStatusText = ex.Message;
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Connect and start IED failed",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            ShowFailureShout("Connect and start IED failed", ex.Message);
         }
         finally
         {

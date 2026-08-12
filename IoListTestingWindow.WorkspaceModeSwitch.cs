@@ -37,15 +37,14 @@ public partial class IoListTestingWindow
             return;
         }
 
-        var originalEngineeringButton = VisualDescendants<Button>(this)
-            .FirstOrDefault(button => string.Equals(button.Content?.ToString(), "Engineering", StringComparison.Ordinal));
+        var originalEngineeringButton = EngineeringButton;
         if (originalEngineeringButton?.Parent is not WrapPanel actions)
             return;
 
         var originalIndex = actions.Children.IndexOf(originalEngineeringButton);
         var engineeringButton = new Button
         {
-            Content = "Engineering Workspace",
+            Content = CreateToolbarLabel("Engineering Workspace", "LucideWrench", FatWorkspaceBrush("#24324A")),
             Style = originalEngineeringButton.Style,
             Padding = originalEngineeringButton.Padding,
             Margin = new Thickness(0),
@@ -62,19 +61,19 @@ public partial class IoListTestingWindow
         var selectedMode = new Border
         {
             Tag = FatWorkspaceModeTag,
-            Background = TryFindResource("Accent") as Brush ?? FatWorkspaceBrush("#2563EB"),
-            CornerRadius = new CornerRadius(13),
-            Padding = new Thickness(11, 7, 11, 7),
+            Background = FatWorkspaceBrush("#EDF4FF"),
+            BorderBrush = FatWorkspaceBrush("#AFC6EE"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 7, 10, 7),
             Margin = new Thickness(0, 0, 6, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = "IO LIST FAT · LOADED",
-                Foreground = Brushes.White,
-                FontSize = 10.5,
-                FontWeight = FontWeights.Bold,
-                VerticalAlignment = VerticalAlignment.Center
-            }
+            Child = CreateToolbarLabel(
+                "IO LIST FAT · LOADED",
+                "LucideCheckCircle",
+                FatWorkspaceBrush("#285FB8"),
+                10.5,
+                FontWeights.Bold)
         };
 
         actions.Children.Insert(Math.Max(0, originalIndex), selectedMode);
@@ -95,6 +94,46 @@ public partial class IoListTestingWindow
 
         Storage?.ScheduleSave();
         Hide();
+    }
+
+    private StackPanel CreateToolbarLabel(
+        string text,
+        string iconResource,
+        Brush foreground,
+        double fontSize = 12.8,
+        FontWeight? fontWeight = null)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = TryFindResource(iconResource) as Geometry,
+            Stroke = foreground,
+            StrokeThickness = 2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent
+        };
+        panel.Children.Add(new Viewbox
+        {
+            Width = 15,
+            Height = 15,
+            Margin = new Thickness(0, 0, 7, 0),
+            Child = icon
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            Foreground = foreground,
+            FontSize = fontSize,
+            FontWeight = fontWeight ?? FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        return panel;
     }
 
     private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject

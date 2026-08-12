@@ -4,6 +4,12 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+- Fixed FAT discovery so UI presentation never mutates the canonical live signal collection; MMXU current, voltage, and fundamental power leaves remain available after discovery.
+- Added CID-shaped F13R1 binding coverage, including the `VI3p1_27Undervoltage1/PTRC1.Op.general [ST]` correction, and kept missing/ambiguous IO-list rows as disabled non-blocking FAT findings.
+- Added SIPROTEC COMTRADE FileOpen compatibility retries for case-sensitive uppercase companion extensions and bare filenames, strictly gated to file-non-existent before any byte transfer.
+- Reworked FAT toolbar actions with Lucide-compatible vectors and distinct button, primary CTA, status badge, and stop-button treatments.
+- Replaced modal FAT connection-failure dialogs with a non-blocking shout that fades automatically after two seconds.
+- Main engineering and FAT workspaces now start maximized for field laptops.
 - Added a controlled relay time-synchronization procedure covering SNTP/NTP, PTP/IEEE 1588, IRIG-B, relay `TimeQuality`, ARSAS UTC capture time, offset, tolerance, and capability-gated acceptance. ARSAS is documented as an evidence client; it does not set the relay clock or act as an SNTP server.
 - Added a capability-gated COMTRADE/disturbance-recording procedure and report scope for protection relays with a fault-record service. BCU and other devices without that capability are reported as N/A, not failed.
 

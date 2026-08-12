@@ -87,6 +87,37 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
             if (first.IsSuccess)
                 return first;
 
+            if (FaultRecordRemotePathFallbackPolicy.ShouldTryCompatibilityPaths(first) && IsSessionHealthy())
+            {
+                var attempted = new List<string> { "discovered path" };
+                var last = first;
+                foreach (var candidate in FaultRecordRemotePathFallbackPolicy.BuildCandidates(record))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    attempted.Add(candidate.Label);
+                    last = await DownloadCoreAsync(
+                        candidate.Record,
+                        destinationRoot,
+                        progress,
+                        cancellationToken).ConfigureAwait(false);
+                    if (last.IsSuccess)
+                    {
+                        return CloneResult(
+                            last,
+                            $"{last.Message} SIPROTEC compatibility path succeeded via {candidate.Label}; " +
+                            $"the discovered lowercase/segmented path returned MMS file-non-existent.");
+                    }
+
+                    if (!FaultRecordRemotePathFallbackPolicy.ShouldTryCompatibilityPaths(last) || !IsSessionHealthy())
+                        break;
+                }
+
+                first = CloneResult(
+                    last,
+                    $"SIPROTEC FileOpen compatibility paths were exhausted ({string.Join("; ", attempted)}). " +
+                    BuildFailureMessage(last));
+            }
+
             // A transport or receive-pump fault invalidates the MMS association. The
             // downloader cleans its temporary directory, so one complete reconnect and
             // bounded retry is safe and avoids turning a transient connection loss into
