@@ -7,6 +7,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatApplicationWrapperBindingRegressionTests
 {
     private readonly IoTestLiveBindingService _binding = new();
+    private readonly IoTestSignalSelectionService _selection = new();
 
     [Fact]
     public void TangguhApplicationAddWrapper_MatchesDiscoveryThatOmitsAdd_WhenUnique()
@@ -20,6 +21,27 @@ public sealed class IoFatApplicationWrapperBindingRegressionTests
         Assert.Equal(1, summary.SignalBoundCount);
         Assert.Equal(0, summary.MissingSignalCount);
         Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
+    }
+
+    [Fact]
+    public void TangguhSelection_CanonicalizesUniqueWrapperMatchToDirectAddMmsReference()
+    {
+        var project = Project("AA1C1F13R4Application/ADD/GGIO1.LocOpnCMDsta.stVal");
+        var device = Device();
+        var signal = Signal("AA1C1F13R4Application/GGIO1.LocOpnCMDsta.stVal", "ST");
+        signal.QualityReference = "AA1C1F13R4Application/GGIO1.LocOpnCMDsta.q";
+        signal.TimestampReference = "AA1C1F13R4Application/GGIO1.LocOpnCMDsta.t";
+        device.Signals.Add(signal);
+
+        var result = _selection.Resolve(project.Ieds[0], device);
+
+        Assert.True(result.Succeeded);
+        Assert.Single(result.Matches);
+        Assert.True(result.Matches[0].UsedNormalizedIedPrefix);
+        Assert.Equal("ADD/GGIO1.LocOpnCMDsta.stVal", signal.ObjectReference);
+        Assert.Equal("ADD/GGIO1.LocOpnCMDsta.q", signal.QualityReference);
+        Assert.Equal("ADD/GGIO1.LocOpnCMDsta.t", signal.TimestampReference);
+        Assert.Contains("IO FAT imported canonical MMS reference", signal.Source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -60,10 +82,26 @@ public sealed class IoFatApplicationWrapperBindingRegressionTests
         device.Signals.Add(Signal("AA1C1F13R4Application/GGIO1.LocOpnCMDsta.stVal", "MX"));
 
         var summary = _binding.Bind(project, new[] { device });
+        var selection = _selection.Resolve(project.Ieds[0], device);
 
         Assert.Equal(0, summary.SignalBoundCount);
         Assert.Equal(1, summary.MissingSignalCount);
         Assert.Equal(IoTestLiveBindingState.SignalNotFound, project.Ieds[0].TestPoints[0].LiveBindingState);
+        Assert.False(selection.Succeeded);
+        Assert.Single(selection.MissingPoints);
+    }
+
+    [Fact]
+    public void UnknownDiscoveredFunctionalConstraint_IsNotAutoSelectedForKnownFatConstraint()
+    {
+        var project = Project("AA1C1F13R4Application/ADD/GGIO1.LocOpnCMDsta.stVal");
+        var device = Device();
+        device.Signals.Add(Signal("AA1C1F13R4Application/GGIO1.LocOpnCMDsta.stVal", string.Empty));
+
+        var result = _selection.Resolve(project.Ieds[0], device);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.MissingPoints);
     }
 
     private static IoTestProject Project(string reference)
@@ -115,7 +153,8 @@ public sealed class IoFatApplicationWrapperBindingRegressionTests
         ObjectReference = reference,
         FunctionalConstraint = functionalConstraint,
         Category = "Status",
-        DataType = "Boolean"
+        DataType = "Boolean",
+        Source = "Synthetic live discovery"
     };
 
     private static Iec61850MonitorDevice Device() => new()
