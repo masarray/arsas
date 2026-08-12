@@ -2,6 +2,7 @@ using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 using System.Windows;
 
 namespace ArIED61850Tester;
@@ -114,21 +115,52 @@ public partial class MainWindow
         MmsRcbAvailabilitySnapshot? snapshot,
         bool connected = true)
     {
-        var memberCount = snapshot?.DataSetMemberCount > 0 ? snapshot.DataSetMemberCount : descriptor.DataSetMemberCount;
-        var availability = snapshot?.Availability ??
-            (!descriptor.DataSetResolved
-                ? MmsRcbOperationalAvailability.NoDataSet
-                : descriptor.DataSetMemberCount == 0
-                    ? MmsRcbOperationalAvailability.DataSetEmpty
-                    : MmsRcbOperationalAvailability.Unknown);
-        var reason = snapshot?.Reason ??
-            (!descriptor.DataSetResolved
-                ? "The SCL ReportControl does not resolve a DataSet in the same Logical Node."
-                : descriptor.DataSetMemberCount == 0
-                    ? "The SCL ReportControl references an empty DataSet."
-                    : connected
-                        ? "Press Check Availability to read RptEna, reservation, Owner, and the live DataSet directory."
-                        : "Offline SCL inventory only. Connect the IED to prove live RCB ownership state.");
+        var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
+        var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
+            snapshot?.DataSetReference,
+            descriptor.DataSetReference,
+            probeState);
+        var memberCount = RcbExportEvidencePolicy.EffectiveMemberCount(
+            snapshot?.DataSetMemberCount ?? 0,
+            descriptor.DataSetMemberCount);
+        var evidenceConflict = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            descriptor.DataSetReference,
+            snapshot.DataSetReference,
+            probeState);
+        var availability = evidenceConflict
+            ? MmsRcbOperationalAvailability.Unknown
+            : RcbExportEvidencePolicy.SourceAvailability(
+                snapshot?.Availability,
+                descriptor.DataSetName,
+                descriptor.DataSetResolved,
+                descriptor.DataSetMemberCount);
+        var effectiveDataSetName = evidenceConflict
+            ? $"{(string.IsNullOrWhiteSpace(descriptor.DataSetName) ? "—" : descriptor.DataSetName)} ↔ {(string.IsNullOrWhiteSpace(snapshot?.DataSetReference) ? "—" : LastReferenceSegment(snapshot.DataSetReference))}"
+            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                ? string.Empty
+                : LastReferenceSegment(effectiveDataSetReference);
+        var scope = !string.IsNullOrWhiteSpace(descriptor.LogicalDeviceInstance) ||
+                    !string.IsNullOrWhiteSpace(descriptor.LogicalNodePath)
+            ? $"{descriptor.LogicalDeviceInstance} / {descriptor.LogicalNodePath}".Trim(' ', '/')
+            : RcbExportEvidencePolicy.ScopeFromReference(snapshot?.Reference ?? descriptor.DisplayReference);
+        var reason = evidenceConflict
+            ? $"Configuration mismatch: source SCL binds {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)}, while the live IED reports {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}. Export is blocked until the mismatch is resolved."
+            : snapshot?.Reason ?? RcbExportEvidencePolicy.SourceReason(
+                descriptor.DataSetName,
+                descriptor.DataSetResolved,
+                descriptor.DataSetMemberCount,
+                connected);
+        var dataSetDetail = evidenceConflict
+            ? $"Configuration mismatch • source {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)} • live {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}"
+            : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                ? "Configured DataSet • live DatSet binding unresolved"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                    ? "Static DataSet • live binding + directory verified"
+                    : string.IsNullOrWhiteSpace(descriptor.DataSetName)
+                        ? "No configured DataSet • source model"
+                        : descriptor.DataSetResolved
+                            ? $"Static DataSet • source model{(descriptor.Indexed ? $" • indexed ×{descriptor.InstanceCount}" : string.Empty)}"
+                            : "Broken DataSet reference • source model";
 
         return new RcbExportRow
         {
@@ -136,21 +168,23 @@ public partial class MainWindow
             ExportName = snapshot?.Name ?? descriptor.Name,
             Name = snapshot?.Name ?? descriptor.Name,
             Reference = snapshot?.Reference ?? descriptor.DisplayReference,
+            ScopeText = scope,
             Type = descriptor.Type,
             Buffered = descriptor.Buffered,
-            DataSetName = string.IsNullOrWhiteSpace(descriptor.DataSetName) ? "—" : descriptor.DataSetName,
-            DataSetReference = snapshot?.DataSetReference ?? descriptor.DataSetReference,
-            DataSetDetail = descriptor.DataSetResolved
-                ? $"Static DataSet • source model{(descriptor.Indexed ? $" • indexed ×{descriptor.InstanceCount}" : string.Empty)}"
-                : "Unresolved DataSet",
+            DataSetName = string.IsNullOrWhiteSpace(effectiveDataSetName) ? "—" : effectiveDataSetName,
+            DataSetReference = effectiveDataSetReference,
+            DataSetDetail = dataSetDetail,
             MemberCount = memberCount,
             Availability = availability,
-            Confidence = snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
-            StatusText = snapshot == null && availability == MmsRcbOperationalAvailability.Unknown
-                ? "Not checked"
-                : RcbExportRow.ToStatusText(availability),
+            Confidence = evidenceConflict ? MmsRcbAvailabilityConfidence.Unknown : snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
+            StatusText = evidenceConflict
+                ? "Config mismatch"
+                : snapshot == null && availability == MmsRcbOperationalAvailability.Unknown
+                    ? "Not checked"
+                    : RcbExportRow.ToStatusText(availability),
             Reason = reason,
             Owner = snapshot?.Owner ?? string.Empty,
+            HasEvidenceConflict = evidenceConflict,
             IsSourceBacked = true,
             IsIndexedSource = descriptor.Indexed
         };
@@ -216,36 +250,66 @@ public partial class MainWindow
         foreach (var reportControl in model.ReportControls)
         {
             snapshots.TryGetValue(NormalizeRcbReference(reportControl.Reference), out var snapshot);
-            dataSets.TryGetValue(NormalizeRcbReference(reportControl.DataSetReference), out var dataSet);
-            var members = snapshot?.DataSetMemberCount > 0 ? snapshot.DataSetMemberCount : dataSet?.MemberCount ?? 0;
-            var availabilityState = snapshot?.Availability ??
-                (string.IsNullOrWhiteSpace(reportControl.DataSetReference)
-                    ? MmsRcbOperationalAvailability.NoDataSet
-                    : members == 0 ? MmsRcbOperationalAvailability.DataSetEmpty : MmsRcbOperationalAvailability.Unknown);
+            var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
+            var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
+                snapshot?.DataSetReference,
+                reportControl.DataSetReference,
+                probeState);
+            dataSets.TryGetValue(NormalizeRcbReference(effectiveDataSetReference), out var dataSet);
+            var members = RcbExportEvidencePolicy.EffectiveMemberCount(
+                snapshot?.DataSetMemberCount ?? 0,
+                dataSet?.MemberCount ?? 0);
+            var availabilityState = RcbExportEvidencePolicy.LiveModelAvailability(
+                snapshot?.Availability,
+                effectiveDataSetReference,
+                dataSet != null,
+                members);
+            var liveOverridesDiscovery = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+                reportControl.DataSetReference,
+                snapshot.DataSetReference,
+                probeState);
+            var dataSetName = string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                ? "—"
+                : string.IsNullOrWhiteSpace(dataSet?.Name)
+                    ? LastReferenceSegment(effectiveDataSetReference)
+                    : dataSet.Name;
+            var dataSetDetail = liveOverridesDiscovery
+                ? snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                    ? "Live DatSet verified empty • overrides stale discovery binding"
+                    : "Live DatSet verified • overrides stale discovery binding"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                    ? "Known DataSet • live DatSet binding unresolved"
+                    : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                        ? "Static DataSet • live binding + directory verified"
+                        : snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                            ? "No configured DataSet • live verified"
+                            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                                ? "DataSet binding unresolved"
+                                : dataSet == null
+                                    ? "DataSet directory unresolved"
+                                    : "Static DataSet • live discovery";
 
             rows.Add(new RcbExportRow
             {
                 ExportName = reportControl.Name,
                 Name = reportControl.Name,
                 Reference = reportControl.Reference,
+                ScopeText = RcbExportEvidencePolicy.ScopeFromReference(reportControl.Reference),
                 Type = reportControl.Buffered ? "Buffered" : "Unbuffered",
                 Buffered = reportControl.Buffered,
-                DataSetName = string.IsNullOrWhiteSpace(dataSet?.Name)
-                    ? LastReferenceSegment(reportControl.DataSetReference)
-                    : dataSet.Name,
-                DataSetReference = reportControl.DataSetReference,
-                DataSetDetail = snapshot?.DataSetDirectorySuccess == true
-                    ? "Static DataSet • live directory verified"
-                    : dataSet == null ? "Unresolved DataSet" : "Static DataSet • live discovery",
+                DataSetName = dataSetName,
+                DataSetReference = effectiveDataSetReference,
+                DataSetDetail = dataSetDetail,
                 MemberCount = members,
                 Availability = availabilityState,
                 Confidence = snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
                 StatusText = snapshot == null && availabilityState == MmsRcbOperationalAvailability.Unknown
                     ? "Not checked"
                     : RcbExportRow.ToStatusText(availabilityState),
-                Reason = snapshot?.Reason ??
-                         (members > 0 ? "Press Check Availability to prove RptEna and reservation state."
-                                      : "The live model does not expose a populated DataSet for this RCB."),
+                Reason = snapshot?.Reason ?? RcbExportEvidencePolicy.LiveModelReason(
+                    effectiveDataSetReference,
+                    dataSet != null,
+                    members),
                 Owner = snapshot?.Owner ?? string.Empty,
                 IsSourceBacked = false
             });
@@ -262,6 +326,8 @@ public partial class MainWindow
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (row.HasEvidenceConflict)
+            throw new InvalidOperationException("Source SCL and live IED DataSet bindings conflict. Resolve the configuration mismatch before exporting this RCB.");
         if (row.MemberCount <= 0)
             throw new InvalidOperationException("The selected RCB has no populated DataSet.");
 

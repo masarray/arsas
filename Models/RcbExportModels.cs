@@ -20,11 +20,13 @@ public sealed class RcbExportRow : ObservableObject
     public string ExportName { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string Reference { get; init; } = string.Empty;
+    public string ScopeText { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public bool Buffered { get; init; }
     public string DataSetName { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
     public string DataSetDetail { get; init; } = string.Empty;
+    public bool HasEvidenceConflict { get; init; }
     public bool IsSourceBacked { get; init; }
     public bool IsIndexedSource { get; init; }
 
@@ -59,12 +61,12 @@ public sealed class RcbExportRow : ObservableObject
     public string Reason { get => _reason; set => Set(ref _reason, value?.Trim() ?? string.Empty); }
     public string Owner { get => _owner; set => Set(ref _owner, value?.Trim() ?? string.Empty); }
 
-    public bool IsSelectable => MemberCount > 0 && Availability is
+    public bool IsSelectable => !HasEvidenceConflict && MemberCount > 0 && Availability is
         MmsRcbOperationalAvailability.Available or
         MmsRcbOperationalAvailability.UsedByCaller or
         MmsRcbOperationalAvailability.Unknown;
 
-    public bool RequiresConfirmation => Availability is
+    public bool RequiresConfirmation => !HasEvidenceConflict && Availability is
         MmsRcbOperationalAvailability.Unknown or
         MmsRcbOperationalAvailability.UsedByCaller;
 
@@ -76,13 +78,15 @@ public sealed class RcbExportRow : ObservableObject
         MmsRcbOperationalAvailability.Unknown => "⚠",
         _ => "❌"
     };
-    public Brush StatusBrush => Availability switch
-    {
-        MmsRcbOperationalAvailability.Available => BrushFrom(22, 163, 74),
-        MmsRcbOperationalAvailability.UsedByCaller => BrushFrom(37, 99, 235),
-        MmsRcbOperationalAvailability.Unknown => BrushFrom(202, 138, 4),
-        _ => BrushFrom(201, 42, 50)
-    };
+    public Brush StatusBrush => HasEvidenceConflict
+        ? BrushFrom(201, 42, 50)
+        : Availability switch
+        {
+            MmsRcbOperationalAvailability.Available => BrushFrom(22, 163, 74),
+            MmsRcbOperationalAvailability.UsedByCaller => BrushFrom(37, 99, 235),
+            MmsRcbOperationalAvailability.Unknown => BrushFrom(202, 138, 4),
+            _ => BrushFrom(201, 42, 50)
+        };
     public string SelectionIdentity => string.IsNullOrWhiteSpace(Reference) ? Name : Reference;
 
     public static string ToStatusText(MmsRcbOperationalAvailability availability)
@@ -169,7 +173,7 @@ public sealed class RcbExportFilterViewModel : ObservableObject
     public bool CanExport => SelectedRow?.IsSelectable == true;
     public string SelectionSummary => SelectedRow == null
         ? "No RCB selected"
-        : $"{SelectedRow.Name} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
+        : $"{SelectedRow.Name} • {SelectedRow.ScopeText} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
     public string RemovalSummary => SelectedRow == null
         ? $"0 retained • {Rows.Count} unchanged"
         : $"1 retained • {Math.Max(0, Rows.Count - 1)} removed";
