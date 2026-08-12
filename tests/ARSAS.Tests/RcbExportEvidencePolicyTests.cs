@@ -61,9 +61,68 @@ public sealed class RcbExportEvidencePolicyTests
     {
         var effective = RcbExportEvidencePolicy.EffectiveDataSetReference(
             "E016MD66CTRL/LLN0.DataSet",
-            string.Empty);
+            string.Empty,
+            MmsRcbDataSetProbeState.ReadSucceeded);
 
         Assert.Equal("E016MD66CTRL/LLN0.DataSet", effective);
+    }
+
+    [Fact]
+    public void LiveVerifiedEmpty_DoesNotResurrectStaleDiscoveryBinding()
+    {
+        var effective = RcbExportEvidencePolicy.EffectiveDataSetReference(
+            string.Empty,
+            "E016MD66CTRL/LLN0.DataSet",
+            MmsRcbDataSetProbeState.ReadSucceeded);
+
+        Assert.Equal(string.Empty, effective);
+    }
+
+    [Fact]
+    public void FailedLiveDatSetRead_PreservesPreviouslyKnownBindingAsFallbackOnly()
+    {
+        var effective = RcbExportEvidencePolicy.EffectiveDataSetReference(
+            string.Empty,
+            "E016MD66CTRL/LLN0.DataSet",
+            MmsRcbDataSetProbeState.ReadFailed);
+
+        Assert.Equal("E016MD66CTRL/LLN0.DataSet", effective);
+    }
+
+    [Fact]
+    public void SourceConfiguredButLiveVerifiedNone_IsConfigurationConflict()
+    {
+        Assert.True(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            "E016MD66CTRL/LLN0.DataSet",
+            string.Empty,
+            MmsRcbDataSetProbeState.ReadSucceeded));
+    }
+
+    [Fact]
+    public void SourceUnboundButLiveVerifiedDataSet_IsConfigurationConflict()
+    {
+        Assert.True(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            string.Empty,
+            "E016MD66CTRL/LLN0.DataSet",
+            MmsRcbDataSetProbeState.ReadSucceeded));
+    }
+
+    [Fact]
+    public void FailedLiveRead_DoesNotCreateFalseConfigurationConflict()
+    {
+        Assert.False(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            "E016MD66CTRL/LLN0.DataSet",
+            string.Empty,
+            MmsRcbDataSetProbeState.ReadFailed));
+    }
+
+    [Fact]
+    public void EquivalentSourceAndLiveBindings_AreNotConfigurationConflict()
+    {
+        Assert.False(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            "E016MD66CTRL/LLN0$DataSet",
+            "E016MD66CTRL/LLN0.DataSet",
+            MmsRcbDataSetProbeState.ReadSucceeded));
     }
 
     [Fact]
