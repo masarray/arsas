@@ -117,6 +117,7 @@ public sealed class IoTestSignalSelectionServiceTests
                     SourceIecReference = "VI3p1_OperationalValues/RPRE_MMXU1.A",
                     EventLogSearchReference = "VI3p1_OperationalValues/RPRE_MMXU1.A",
                     DataAttribute = "cVal.mag.f",
+                    LogicalNode = "RPRE_MMXU1",
                     FunctionalConstraint = "MX",
                     ExpectedOnText = "Active",
                     ExpectedOffText = "InActive",
@@ -144,19 +145,19 @@ public sealed class IoTestSignalSelectionServiceTests
     }
 
     [Fact]
-    public void HierarchyCollapseCollision_IsRejectedAsAmbiguous()
+    public void CrossBoundarySingletonCollision_IsNotAccepted()
     {
-        var ied = FieldIed(FieldPoint("UCC-IEC-0700", "ADD/GGIO1.SwLoc"));
+        var point = FieldPoint("UCC-IEC-0700", "AB/GGIO1.SwLoc");
+        var ied = FieldIed(point);
         var device = FieldDevice(
-            Signal("Expected form", "AA1C1F13R4Application/ADDGGIO1.SwLoc.stVal"),
-            Signal("Colliding hierarchy", "AA1C1F13R4Application/AD/DGGIO1.SwLoc.stVal"));
+            Signal("Different prefix boundary", "AA1C1F13R4Application/A/BGGIO1.SwLoc.stVal"));
 
         var result = _service.Resolve(ied, device);
 
         Assert.False(result.Succeeded);
-        Assert.False(result.CanRetryWithFreshDiscovery);
-        Assert.Single(result.AmbiguousPoints);
-        Assert.Empty(result.MissingPoints);
+        Assert.True(result.CanRetryWithFreshDiscovery);
+        Assert.Single(result.MissingPoints);
+        Assert.Empty(result.AmbiguousPoints);
     }
 
     [Fact]
@@ -236,12 +237,23 @@ public sealed class IoTestSignalSelectionServiceTests
         ReportDisplayReference = $"AA1C1F13R4Application/{eventReference}.stVal [ST]",
         DataAttribute = "stVal",
         LogicalDevice = "AA1C1F13R4Application",
+        LogicalNode = ExtractLogicalNode(eventReference),
         FunctionalConstraint = "ST",
         ExpectedOnText = "Active",
         ExpectedOffText = "InActive",
         ImportReady = true,
         TestEnabled = true
     };
+
+    private static string ExtractLogicalNode(string reference)
+    {
+        var path = (reference ?? string.Empty).Trim();
+        var slash = path.LastIndexOf('/');
+        if (slash >= 0 && slash < path.Length - 1)
+            path = path[(slash + 1)..];
+        var dot = path.IndexOf('.');
+        return dot > 0 ? path[..dot] : path;
+    }
 
     private static Iec61850MonitorDevice FieldDevice(params SignalDefinition[] signals)
     {
