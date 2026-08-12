@@ -143,6 +143,17 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
+    public void IoFatAutomaticPreparation_DisablesOnlyProvenMissingRowsAsFindings()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
+
+        Assert.Contains("FAT finding", source, StringComparison.Ordinal);
+        Assert.Contains("missingPoint.TestEnabled = false", source, StringComparison.Ordinal);
+        Assert.Contains("selection.AmbiguousPoints.Count == 0", source, StringComparison.Ordinal);
+        Assert.Contains("continuing with {requestedPoints.Count} live signal(s)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoTestingWindow_UsesRelayTimestampEvidenceAndPremiumGridDensity()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
