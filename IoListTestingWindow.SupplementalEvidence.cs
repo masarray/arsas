@@ -38,8 +38,8 @@ public partial class IoListTestingWindow
         _timeSyncEvidenceButton = CreateEvidenceButton("Time Sync · —", RefreshTimeSyncEvidence_Click);
         _timeSyncEvidenceButton.ToolTip = "Capture IEC 61850 time-synchronization evidence for the selected IED";
 
-        _comtradeEvidenceButton = CreateEvidenceButton("COMTRADE · 0", OpenComtradeEvidence_Click);
-        _comtradeEvidenceButton.ToolTip = "Browse/download relay fault records; detected local COMTRADE becomes FAT evidence";
+        _comtradeEvidenceButton = CreateEvidenceButton("COMTRADE · —", OpenComtradeEvidence_Click);
+        _comtradeEvidenceButton.ToolTip = "Browse relay fault records. A remote COMTRADE listing is sufficient File Service FAT evidence; download is optional.";
 
         var insertionIndex = actionPanel.Children.IndexOf(WorkspacePreviewToggle) + 1;
         actionPanel.Children.Insert(insertionIndex, _timeSyncEvidenceButton);
@@ -72,7 +72,7 @@ public partial class IoListTestingWindow
         {
             _timeSyncEvidenceButton.Content = "Time Sync · —";
             _timeSyncEvidenceButton.ToolTip = "Select an IED first";
-            _comtradeEvidenceButton.Content = "COMTRADE · 0";
+            _comtradeEvidenceButton.Content = "COMTRADE · —";
             _comtradeEvidenceButton.ToolTip = "Select an IED first";
             return;
         }
@@ -92,14 +92,12 @@ public partial class IoListTestingWindow
             Storage,
             ied.IedName,
             IoFatSupplementalEvidenceService.ComtradeKind);
-        var latestComtrade = IoFatSupplementalEvidenceService.ReadLatest(
-            Storage,
-            ied.IedName,
-            IoFatSupplementalEvidenceService.ComtradeKind);
-        _comtradeEvidenceButton.Content = $"COMTRADE · {comtradeCount}";
-        _comtradeEvidenceButton.ToolTip = latestComtrade == null
-            ? "Open relay fault records. Downloaded or already-detected local records become IED-level FAT evidence."
-            : $"Latest: {latestComtrade.DisplayText}\nSHA-256: {latestComtrade.ArtifactSha256}\n{latestComtrade.ArtifactPath}";
+        _comtradeEvidenceButton.Content = ied.HasRemoteComtradeEvidence
+            ? $"COMTRADE · PASS · {comtradeCount}"
+            : $"COMTRADE · {comtradeCount}";
+        _comtradeEvidenceButton.ToolTip = ied.HasRemoteComtradeEvidence
+            ? $"File Service PASS via IEC 61850 FileDirectory\nLatest remote COMTRADE: {ied.LatestComtradeFiles}\nRemote path: {ied.LatestComtradeRemotePath}\nDownload is optional additional verification."
+            : "Open relay fault records. A supported remote COMTRADE returned by IEC 61850 FileDirectory becomes IED-level FAT evidence immediately; download is optional.";
     }
 
     private async Task CaptureTimeSyncEvidenceAfterPreparationAsync(
@@ -170,7 +168,17 @@ public partial class IoListTestingWindow
         };
         window.ShowDialog();
 
-        var captured = 0;
+        // A successful FileDirectory browse that returns a supported fault record is the
+        // primary FAT evidence. Download is intentionally not a prerequisite.
+        var remoteEvidence = IoFatRemoteComtradeEvidenceService.CaptureLatest(
+            Storage,
+            Project,
+            ied,
+            window.Records.Select(row => row.Record));
+
+        // Preserve stronger optional local-artifact evidence when the operator also
+        // downloaded a record. A failed or skipped download never removes remote PASS.
+        var downloadedCaptured = 0;
         foreach (var row in window.Records.Where(row =>
                      row.LocalState == FaultRecordLocalState.Downloaded &&
                      !string.IsNullOrWhiteSpace(row.LocalDirectory)))
@@ -182,12 +190,18 @@ public partial class IoListTestingWindow
                 row.RecordName,
                 row.LocalDirectory);
             if (evidence != null)
-                captured++;
+                downloadedCaptured++;
         }
 
-        if (captured > 0)
+        if (remoteEvidence != null)
         {
-            PreparationStatusText = $"{ied.IedName} · COMTRADE/fault-record evidence detected and journaled.";
+            PreparationStatusText =
+                $"{ied.IedName} · File Service PASS · latest COMTRADE {ied.LatestComtradeFiles} · download optional.";
+            Storage?.ScheduleSave();
+        }
+        else if (downloadedCaptured > 0)
+        {
+            PreparationStatusText = $"{ied.IedName} · downloaded COMTRADE/fault-record evidence journaled.";
             Storage?.ScheduleSave();
         }
 
