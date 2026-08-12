@@ -8,13 +8,46 @@ namespace ArIED61850Tester.Services;
 /// </summary>
 public static class RcbExportEvidencePolicy
 {
-    public static string EffectiveDataSetReference(string? liveReference, string? fallbackReference)
-        => !string.IsNullOrWhiteSpace(liveReference)
+    public static string EffectiveDataSetReference(
+        string? liveReference,
+        string? fallbackReference,
+        MmsRcbDataSetProbeState liveProbeState = MmsRcbDataSetProbeState.NotAttempted)
+    {
+        // A successful live DatSet read is authoritative even when the returned value is
+        // empty. Falling back in that case would resurrect a stale discovery/SCL binding
+        // and contradict positive live evidence.
+        if (liveProbeState == MmsRcbDataSetProbeState.ReadSucceeded)
+            return (liveReference ?? string.Empty).Trim();
+
+        return !string.IsNullOrWhiteSpace(liveReference)
             ? liveReference.Trim()
             : (fallbackReference ?? string.Empty).Trim();
+    }
 
     public static int EffectiveMemberCount(int liveMemberCount, int fallbackMemberCount)
         => liveMemberCount > 0 ? liveMemberCount : Math.Max(0, fallbackMemberCount);
+
+    public static bool HasSourceLiveBindingConflict(
+        string? sourceReference,
+        string? liveReference,
+        MmsRcbDataSetProbeState liveProbeState)
+    {
+        // Only positive live binding evidence may contradict the source SCL. A failed or
+        // unattempted live read is unresolved evidence, not a configuration mismatch.
+        if (liveProbeState != MmsRcbDataSetProbeState.ReadSucceeded)
+            return false;
+
+        var source = NormalizeReference(sourceReference);
+        var live = NormalizeReference(liveReference);
+        if (source.Length == 0 && live.Length == 0)
+            return false;
+        if (source.Length == 0 || live.Length == 0)
+            return true;
+        return !source.Equals(live, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string DisplayBinding(string? reference)
+        => string.IsNullOrWhiteSpace(reference) ? "<none>" : reference.Trim();
 
     public static MmsRcbOperationalAvailability SourceAvailability(
         MmsRcbOperationalAvailability? liveAvailability,
@@ -110,4 +143,7 @@ public static class RcbExportEvidencePolicy
             ? domain
             : $"{domain} / {logicalNode}";
     }
+
+    private static string NormalizeReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.');
 }
