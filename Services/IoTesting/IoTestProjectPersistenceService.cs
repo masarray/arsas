@@ -372,6 +372,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 ied.Location,
                 ied.VoltageLevel,
                 ied.Switchgear,
+                ied.PrimarySntpServer,
+                ied.RedundantSntpServer,
+                ied.TimeSyncScopeResult,
+                ied.ComtradeApplicability,
+                ied.ComtradeScopeResult,
                 ied.TestPoints.Select(point => new IoTestPointData(
                     point.TestPointId,
                     point.IedName,
@@ -439,6 +444,18 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 VoltageLevel = ied.VoltageLevel,
                 Switchgear = ied.Switchgear,
                 TestPoints = ied.TestPoints.Select(RestorePoint).ToList()
+            }).Select(restored =>
+            {
+                var metadata = snapshot.Project.Ieds.First(source =>
+                    source.IedName.Equals(restored.IedName, StringComparison.OrdinalIgnoreCase) &&
+                    source.IpAddress.Equals(restored.IpAddress, StringComparison.OrdinalIgnoreCase));
+                restored.ApplyScopeMetadata(
+                    metadata.PrimarySntpServer,
+                    metadata.RedundantSntpServer,
+                    metadata.TimeSyncScopeResult,
+                    metadata.ComtradeApplicability,
+                    metadata.ComtradeScopeResult);
+                return restored;
             }).ToList()
         };
         project.InitializeRuntimeNotifications();
@@ -702,6 +719,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string Location,
         string VoltageLevel,
         string Switchgear,
+        string PrimarySntpServer,
+        string RedundantSntpServer,
+        string TimeSyncScopeResult,
+        string ComtradeApplicability,
+        string ComtradeScopeResult,
         List<IoTestPointData> TestPoints);
 
     private sealed record IoTestPointData(

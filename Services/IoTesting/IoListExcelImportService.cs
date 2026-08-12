@@ -22,6 +22,7 @@ public sealed class IoListExcelImportService
 {
     private const string LegacySheet = "ARSAS_SIGNAL_IMPORT";
     private const string Rev3Sheet = "FAT_Points_Import";
+    private const string IedScopeSheet = "IED_Scope";
     private const string DocumentSheet = "Document_Control";
     private const int MaxWorkbookBytes = 50 * 1024 * 1024;
     private const int MaxRows = 20_000;
@@ -146,6 +147,22 @@ public sealed class IoListExcelImportService
             .OrderBy(x => x.Key.Name, StringComparer.OrdinalIgnoreCase)
             .Select(x => BuildIed(x.Key, x, findings))
             .ToList();
+        if (rev3)
+        {
+            var scope = ReadIedScope(archive, cancellationToken);
+            foreach (var ied in ieds)
+            {
+                if (scope.TryGetValue(ied.IpAddress, out var metadata))
+                {
+                    ied.ApplyScopeMetadata(
+                        metadata.PrimarySntpServer,
+                        metadata.RedundantSntpServer,
+                        metadata.TimeSyncResult,
+                        metadata.ComtradeApplicability,
+                        metadata.ComtradeResult);
+                }
+            }
+        }
         var project = new IoTestProject
         {
             ProjectId = projectIds.Count == 1 ? projectIds[0] : string.Empty,
@@ -251,6 +268,33 @@ public sealed class IoListExcelImportService
             IssueStatus = Get(values, "Overall document-control status"),
             SourceDocumentName = source
         };
+    }
+
+    private static Dictionary<string, IedScopeMetadata> ReadIedScope(ZipArchive archive, CancellationToken token)
+    {
+        if (!TrySheetPath(archive, IedScopeSheet, out _))
+            return new(StringComparer.OrdinalIgnoreCase);
+
+        var rows = ReadRows(archive, IedScopeSheet, false, token);
+        if (rows.Count < 2)
+            return new(StringComparer.OrdinalIgnoreCase);
+
+        var headers = Headers(rows[0], IedScopeSheet, new List<IoTestImportFinding>());
+        var result = new Dictionary<string, IedScopeMetadata>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows.Skip(1))
+        {
+            var values = Values(row, headers);
+            var ip = Get(values, "IP Address");
+            if (!IPAddress.TryParse(ip, out _))
+                continue;
+            result[ip] = new IedScopeMetadata(
+                Get(values, "Primary SNTP"),
+                Get(values, "Redundant SNTP"),
+                Get(values, "Time Sync Result"),
+                Get(values, "COMTRADE Applicability"),
+                Get(values, "COMTRADE Result"));
+        }
+        return result;
     }
 
     private static string ExtractRevision(string value)
@@ -418,6 +462,12 @@ public sealed class IoListExcelImportService
     private sealed record Row(int Number, IReadOnlyDictionary<int, string> Cells);
     private sealed record ImportedRow(int Number, IReadOnlyDictionary<string, string> Values);
     private sealed record IedKey(string Name, string Ip);
+    private sealed record IedScopeMetadata(
+        string PrimarySntpServer,
+        string RedundantSntpServer,
+        string TimeSyncResult,
+        string ComtradeApplicability,
+        string ComtradeResult);
     private sealed class IedKeyComparer : IEqualityComparer<IedKey>
     {
         public static IedKeyComparer Instance { get; } = new();

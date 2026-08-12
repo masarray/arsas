@@ -873,6 +873,8 @@ internal static class IoFatExecutiveReportLayoutEngine
         if (!string.IsNullOrWhiteSpace(ied.VoltageLevel)) values.Add(ied.VoltageLevel.Trim());
         if (!string.IsNullOrWhiteSpace(ied.Switchgear)) values.Add(ied.Switchgear.Trim());
         if (!string.IsNullOrWhiteSpace(ied.PanelTag)) values.Add("Panel " + ied.PanelTag.Trim());
+        if (!string.IsNullOrWhiteSpace(ied.PrimarySntpServer) || !string.IsNullOrWhiteSpace(ied.RedundantSntpServer))
+            values.Add($"SNTP {FirstNonEmpty(ied.PrimarySntpServer, "-")} / {FirstNonEmpty(ied.RedundantSntpServer, "-")}");
         return values.Count == 0 ? "Device details not supplied" : string.Join("  |  ", values);
     }
 

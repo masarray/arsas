@@ -77,6 +77,22 @@ public sealed class IoListExcelImportServiceTests
             finding.Code == "XLSX_HEADER_MISSING" && finding.Message.Contains("ObjectReference"));
     }
 
+    [Fact]
+    public void Rev4ScopeMetadata_IsReadByIedIpAndRetainedForReports()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoListExcelImportService.cs"));
+        var model = File.ReadAllText(FindRepoFile("Models/IoTesting/IoTestModels.cs"));
+        var persistence = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestProjectPersistenceService.cs"));
+
+        Assert.Contains("IED_Scope", source, StringComparison.Ordinal);
+        Assert.Contains("Primary SNTP", source, StringComparison.Ordinal);
+        Assert.Contains("Redundant SNTP", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyScopeMetadata", source, StringComparison.Ordinal);
+        Assert.Contains("PrimarySntpServer", model, StringComparison.Ordinal);
+        Assert.Contains("ComtradeApplicability", model, StringComparison.Ordinal);
+        Assert.Contains("PrimarySntpServer", persistence, StringComparison.Ordinal);
+    }
+
     private static string[] RequiredHeaders() =>
     [
         "ProjectId", "SchemaVersion", "TestPointId", "TestEnabled", "ImportReady",
@@ -147,5 +163,18 @@ public sealed class IoListExcelImportServiceTests
             index /= 26;
         }
         return name;
+    }
+
+    private static string FindRepoFile(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+        throw new FileNotFoundException($"Could not locate repository file '{relativePath}'.");
     }
 }

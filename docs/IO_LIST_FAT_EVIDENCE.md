@@ -20,6 +20,8 @@ The first release is intentionally limited to imported **SDI / digital indicatio
 
 Time synchronization and COMTRADE/disturbance recording are supplementary, capability-gated relay tests. Their controlled procedure, acceptance evidence, and BCU exclusion are defined in [Relay time synchronization and disturbance-recording procedure](RELAY_TIME_SYNC_AND_DISTURBANCE_TEST.md). They are not silently inferred from IEC 61850 connectivity and are not part of the digital-indication state machine unless explicitly added to the approved FAT scope.
 
+For Rev4 workbooks, ARSAS also reads the optional `IED_Scope` sheet by IP address. `Primary SNTP`, `Redundant SNTP`, `Time Sync Result`, `COMTRADE Applicability`, and `COMTRADE Result` are retained with the IED plan, shown in report device metadata, and preserved in `.arsas` continuation snapshots.
+
 ## Start paths
 
 The first-launch workspace presents two distinct choices:

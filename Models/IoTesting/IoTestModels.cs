@@ -312,6 +312,11 @@ public sealed class IoTestIedPlan : ObservableObject
     public string VoltageLevel { get; init; } = string.Empty;
     public string Switchgear { get; init; } = string.Empty;
     public string PanelTag { get; init; } = string.Empty;
+    public string PrimarySntpServer { get; private set; } = string.Empty;
+    public string RedundantSntpServer { get; private set; } = string.Empty;
+    public string TimeSyncScopeResult { get; private set; } = string.Empty;
+    public string ComtradeApplicability { get; private set; } = string.Empty;
+    public string ComtradeScopeResult { get; private set; } = string.Empty;
     public List<IoTestPointPlan> TestPoints { get; init; } = new();
 
     public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
@@ -368,6 +373,20 @@ public sealed class IoTestIedPlan : ObservableObject
     public int ReviewCount => TestPoints.Count(point => point.Runtime.State == IoTestPointState.Review);
     public int BoundCount => TestPoints.Count(point => point.IsLiveBound);
     public int PendingCount => Math.Max(0, EnabledCount - PassedCount - ReviewCount);
+
+    public void ApplyScopeMetadata(
+        string? primarySntpServer,
+        string? redundantSntpServer,
+        string? timeSyncScopeResult,
+        string? comtradeApplicability,
+        string? comtradeScopeResult)
+    {
+        PrimarySntpServer = primarySntpServer?.Trim() ?? string.Empty;
+        RedundantSntpServer = redundantSntpServer?.Trim() ?? string.Empty;
+        TimeSyncScopeResult = timeSyncScopeResult?.Trim() ?? string.Empty;
+        ComtradeApplicability = comtradeApplicability?.Trim() ?? string.Empty;
+        ComtradeScopeResult = comtradeScopeResult?.Trim() ?? string.Empty;
+    }
 
     public void ApplyLiveDeviceBinding(
         string? deviceId,
