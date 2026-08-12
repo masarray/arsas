@@ -20,9 +20,8 @@ public sealed record IoTestSignalSelectionResult(
 
 /// <summary>
 /// Resolves the enabled IO-list scope against one discovered IED model without
-/// guessing. Exact source/event-log references are preferred. Normalized IED,
-/// Application and verified vendor functional-group/LN-prefix forms are accepted
-/// only when they produce one unique non-control signal.
+/// guessing. Exact references remain highest priority. Canonical IEC 61850 forms
+/// accept vendor-safe spelling differences only when the best candidate is unique.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
@@ -43,32 +42,34 @@ public sealed class IoTestSignalSelectionService
 
         foreach (var point in requested)
         {
-            var exactReferences = IoTestLiveBindingService.ImportedReferences(point)
-                .Select(IoTestLiveBindingService.NormalizeReference)
-                .Where(value => value.Length > 0)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var candidates = device.Signals
+            var importedReferences = IoTestLiveBindingService.ImportedReferences(point);
+            var scored = device.Signals
                 .Where(signal => IsEligible(signal, point))
-                .Where(signal => exactReferences.Contains(
-                    IoTestLiveBindingService.NormalizeReference(signal.ObjectReference)))
+                .Select(signal => new ScoredSignal(
+                    signal,
+                    importedReferences.Count == 0
+                        ? 0
+                        : importedReferences.Max(reference => IoTestReferenceMatcher.Score(
+                            reference,
+                            signal.ObjectReference,
+                            ied.IedName,
+                            device.Name,
+                            device.SclIedName,
+                            point.LogicalNode))))
+                .Where(item => item.Score > 0)
                 .ToList();
-            var usedNormalizedPrefix = false;
 
-            if (candidates.Count == 0)
-            {
-                candidates = device.Signals
-                    .Where(signal => IsEligible(signal, point))
-                    .Where(signal => NormalizedTelegramMatches(signal, point, ied, device))
-                    .ToList();
-                usedNormalizedPrefix = true;
-            }
-
-            if (candidates.Count == 0)
+            if (scored.Count == 0)
             {
                 missing.Add(point);
                 continue;
             }
+
+            var bestScore = scored.Max(item => item.Score);
+            var candidates = scored
+                .Where(item => item.Score == bestScore)
+                .Select(item => item.Signal)
+                .ToList();
 
             if (candidates.Count != 1 || !usedSignals.Add(candidates[0]))
             {
@@ -76,7 +77,10 @@ public sealed class IoTestSignalSelectionService
                 continue;
             }
 
-            matches.Add(new IoTestSignalMatch(point, candidates[0], usedNormalizedPrefix));
+            matches.Add(new IoTestSignalMatch(
+                point,
+                candidates[0],
+                bestScore < IoTestReferenceMatcher.ExactScore));
         }
 
         if (missing.Count > 0 || ambiguous.Count > 0)
@@ -93,11 +97,15 @@ public sealed class IoTestSignalSelectionService
                 string.Join(" ", details));
         }
 
+        var smartCount = matches.Count(match => match.UsedNormalizedIedPrefix);
+        var smartText = smartCount == 0
+            ? string.Empty
+            : $" {smartCount} used unique canonical IEC 61850 matching.";
         return new IoTestSignalSelectionResult(
             matches,
             missing,
             ambiguous,
-            $"Resolved {matches.Count} enabled IO-list signal(s) to unique discovered model points.");
+            $"Resolved {matches.Count} enabled IO-list signal(s) to unique discovered model points.{smartText}");
     }
 
     private static bool IsEligible(SignalDefinition signal, IoTestPointPlan point)
@@ -110,33 +118,6 @@ public sealed class IoTestSignalSelectionService
                signal.FunctionalConstraint.Equals(point.FunctionalConstraint, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool NormalizedTelegramMatches(
-        SignalDefinition signal,
-        IoTestPointPlan point,
-        IoTestIedPlan ied,
-        Iec61850MonitorDevice device)
-    {
-        var expected = IoTestLiveBindingService.ImportedReferences(point)
-            .SelectMany(reference => IoTestLiveBindingService.NormalizeImportedTelegramForms(
-                reference,
-                ied.IedName,
-                point.LogicalNode))
-            .Where(value => value.Length > 0)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (expected.Count == 0)
-            return false;
-
-        var observed = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, device.Name);
-        if (expected.Contains(observed))
-            return true;
-
-        if (string.IsNullOrWhiteSpace(device.SclIedName))
-            return false;
-
-        observed = IoTestLiveBindingService.NormalizeTelegram(signal.ObjectReference, device.SclIedName);
-        return expected.Contains(observed);
-    }
-
     private static string Describe(IReadOnlyCollection<IoTestPointPlan> points)
     {
         var values = points
@@ -147,4 +128,6 @@ public sealed class IoTestSignalSelectionService
             values.Add($"…and {points.Count - values.Count} more");
         return string.Join(", ", values);
     }
+
+    private sealed record ScoredSignal(SignalDefinition Signal, int Score);
 }

@@ -99,9 +99,11 @@ public partial class IoListTestingWindow
         }
     }
 
-    public int SelectedEvidenceCount => SelectedIed?.TestPoints.Sum(point =>
-        (point.Runtime.OnEvidence == null ? 0 : 1) +
-        (point.Runtime.OffEvidence == null ? 0 : 1)) ?? 0;
+    public int SelectedEvidenceCount =>
+        (SelectedIed?.TestPoints.Sum(point =>
+            (point.Runtime.OnEvidence == null ? 0 : 1) +
+            (point.Runtime.OffEvidence == null ? 0 : 1)) ?? 0) +
+        SelectedSupplementalEvidenceCount;
 
     private bool IsSelectedSessionIed =>
         SelectedIed != null && ReferenceEquals(Session.ActiveIed, SelectedIed);
@@ -109,7 +111,12 @@ public partial class IoListTestingWindow
     private void IoListTestingWindow_ContentRendered(object? sender, EventArgs e)
     {
         Dispatcher.BeginInvoke(
-            new Action(InstallSelectedIedContext),
+            new Action(() =>
+            {
+                InstallSelectedIedContext();
+                InstallSupplementalEvidenceControls();
+                RefreshSupplementalEvidenceControls();
+            }),
             DispatcherPriority.ContextIdle);
     }
 
@@ -230,6 +237,8 @@ public partial class IoListTestingWindow
                     ShowActionResult(preparation, "IED acquisition could not start");
                     return;
                 }
+
+                await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, selectedIed);
             }
 
             var result = Session.Start(selectedIed);
@@ -296,7 +305,9 @@ public partial class IoListTestingWindow
         Raise(nameof(SelectedStartWorkflowText));
         Raise(nameof(SelectedFooterStatusText));
         Raise(nameof(SelectedProgressText));
+        Raise(nameof(SelectedSupplementalEvidenceCount));
         Raise(nameof(SelectedEvidenceCount));
+        RefreshSupplementalEvidenceControls();
     }
 
     private void ContextWindow_Closed(object? sender, EventArgs e)

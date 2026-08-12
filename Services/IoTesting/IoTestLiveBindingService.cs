@@ -89,7 +89,8 @@ public sealed class IoTestLiveBindingService
 
     private static PointBinding BindPoint(IoTestPointPlan point, Iec61850MonitorDevice device)
     {
-        if (!point.ImportReady || ImportedReferences(point).Count == 0)
+        var importedReferences = ImportedReferences(point);
+        if (!point.ImportReady || importedReferences.Count == 0)
         {
             return new PointBinding(
                 IoTestLiveBindingState.SignalNotFound,
@@ -98,7 +99,7 @@ public sealed class IoTestLiveBindingService
                 null);
         }
 
-        var expectedReferences = ImportedReferences(point)
+        var expectedReferences = importedReferences
             .Select(NormalizeReference)
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -116,7 +117,7 @@ public sealed class IoTestLiveBindingService
         }
 
         var exactSignals = device.Signals
-            .Where(item => !item.IsControlSignal &&
+            .Where(item => IsSignalEligible(item, point) &&
                            expectedReferences.Contains(NormalizeReference(item.ObjectReference)))
             .ToList();
         if (exactSignals.Count == 1)
@@ -128,43 +129,82 @@ public sealed class IoTestLiveBindingService
                 null);
         }
 
-        var expectedTelegrams = ImportedReferences(point)
-            .SelectMany(reference => NormalizeImportedTelegramForms(reference, point.IedName, point.LogicalNode))
-            .Where(value => value.Length > 0)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var livePointCandidates = device.Points
-            .Where(item => MatchesAnyTelegram(item.IecReference, device, expectedTelegrams))
-            .ToList();
+        var livePointCandidates = BestCandidates(
+            device.Points,
+            item => item.IecReference,
+            importedReferences,
+            point,
+            device);
         if (livePointCandidates.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
+                "Live point matched uniquely using canonical IEC 61850 spelling, including IED/Application, MMS FC tokens and verified functional-group/LN boundary rules.",
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
 
-        var signalCandidates = device.Signals
-            .Where(item => !item.IsControlSignal &&
-                           MatchesAnyTelegram(item.ObjectReference, device, expectedTelegrams))
-            .ToList();
+        var signalCandidates = BestCandidates(
+            device.Signals.Where(item => IsSignalEligible(item, point)).ToList(),
+            item => item.ObjectReference,
+            importedReferences,
+            point,
+            device);
         if (signalCandidates.Count == 1)
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
+                "Discovered signal matched uniquely using canonical IEC 61850 spelling, including IED/Application, MMS FC tokens and verified functional-group/LN boundary rules.",
                 signalCandidates[0].ObjectReference,
                 null);
         }
 
         var reason = exactLivePoints.Count > 1 || exactSignals.Count > 1 ||
                      signalCandidates.Count > 1 || livePointCandidates.Count > 1
-            ? "More than one live candidate matched the imported telegram; automatic binding was withheld."
+            ? "More than one equally strong IEC 61850 candidate matched the imported telegram; automatic binding was withheld."
             : device.Signals.Count == 0
                 ? "The IED is loaded but its signal model has not been discovered yet."
-                : "None of the imported IEC 61850/event-log references was found in the loaded IED model.";
+                : "None of the imported IEC 61850/event-log references was found in the loaded IED model after conservative canonical matching.";
         return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null);
+    }
+
+    private static bool IsSignalEligible(SignalDefinition signal, IoTestPointPlan point)
+    {
+        if (signal.IsControlSignal || string.IsNullOrWhiteSpace(signal.ObjectReference))
+            return false;
+
+        return string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
+               string.IsNullOrWhiteSpace(signal.FunctionalConstraint) ||
+               signal.FunctionalConstraint.Equals(point.FunctionalConstraint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<T> BestCandidates<T>(
+        IReadOnlyCollection<T> candidates,
+        Func<T, string?> referenceSelector,
+        IReadOnlyCollection<string> importedReferences,
+        IoTestPointPlan point,
+        Iec61850MonitorDevice device)
+    {
+        var scored = candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Score = importedReferences.Max(reference => IoTestReferenceMatcher.Score(
+                    reference,
+                    referenceSelector(candidate),
+                    point.IedName,
+                    device.Name,
+                    device.SclIedName,
+                    point.LogicalNode))
+            })
+            .Where(item => item.Score > 0)
+            .ToList();
+
+        if (scored.Count == 0)
+            return new List<T>();
+
+        var best = scored.Max(item => item.Score);
+        return scored.Where(item => item.Score == best).Select(item => item.Candidate).ToList();
     }
 
     internal static IReadOnlyList<string> ImportedReferences(IoTestPointPlan point)
@@ -220,21 +260,6 @@ public sealed class IoTestLiveBindingService
         return value;
     }
 
-    private static bool MatchesAnyTelegram(
-        string? observedReference,
-        Iec61850MonitorDevice device,
-        IReadOnlySet<string> expectedTelegrams)
-    {
-        if (expectedTelegrams.Count == 0)
-            return false;
-
-        if (expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.Name)))
-            return true;
-
-        return !string.IsNullOrWhiteSpace(device.SclIedName) &&
-               expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.SclIedName));
-    }
-
     private static Iec61850MonitorDevice? FindDevice(
         IoTestIedPlan plan,
         IReadOnlyCollection<Iec61850MonitorDevice> devices)
@@ -259,81 +284,16 @@ public sealed class IoTestLiveBindingService
            device.SclIedName.Equals(iedName, StringComparison.OrdinalIgnoreCase);
 
     internal static string NormalizeReference(string? reference)
-        => (reference ?? string.Empty)
-            .Trim()
-            .Replace('$', '.')
-            .Replace("..", ".")
-            .TrimEnd('.')
-            .ToLowerInvariant();
+        => IoTestReferenceMatcher.NormalizeRaw(reference);
 
     internal static string NormalizeTelegram(string? reference, string? iedName)
-    {
-        var normalized = NormalizeReference(RemoveFunctionalConstraintSuffix(reference));
-        var slash = normalized.IndexOf('/');
-        var name = (iedName ?? string.Empty).Trim().ToLowerInvariant();
-        if (slash <= 0 || string.IsNullOrWhiteSpace(name))
-            return normalized;
-
-        var domain = normalized[..slash];
-        if (!domain.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-            return normalized;
-
-        var domainSuffix = domain[name.Length..];
-        var path = normalized[(slash + 1)..].TrimStart('/');
-
-        // FAT source/report traceability can use IEDNameApplication/FunctionGroup/LN.DO.DA,
-        // while the live MMS model exposes the same function group as an LN prefix.
-        // "Application" is a display wrapper, not part of the live telegram identity.
-        if (domainSuffix.Equals("application", StringComparison.OrdinalIgnoreCase))
-            return path;
-
-        return domainSuffix.Length == 0 ? path : domainSuffix + "/" + path;
-    }
+        => IoTestReferenceMatcher.NormalizeTelegram(reference, iedName);
 
     internal static IReadOnlySet<string> NormalizeImportedTelegramForms(
         string? reference,
         string? iedName,
         string? logicalNode)
-    {
-        var forms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var normalized = NormalizeTelegram(reference, iedName);
-        if (string.IsNullOrWhiteSpace(normalized))
-            return forms;
-
-        forms.Add(normalized);
-        var collapsed = CollapseVerifiedDisplayHierarchy(normalized, logicalNode);
-        if (!string.IsNullOrWhiteSpace(collapsed))
-            forms.Add(collapsed);
-        return forms;
-    }
-
-    private static string CollapseVerifiedDisplayHierarchy(string normalizedTelegram, string? logicalNode)
-    {
-        var value = (normalizedTelegram ?? string.Empty).Trim();
-        var verifiedLn = NormalizeReference(logicalNode).Trim('/');
-        if (string.IsNullOrWhiteSpace(verifiedLn))
-            return value;
-
-        var firstDot = value.IndexOf('.');
-        if (firstDot <= 0)
-            return value;
-
-        var logicalNodePath = value[..firstDot];
-        var lastSlash = logicalNodePath.LastIndexOf('/');
-        if (lastSlash <= 0 || lastSlash >= logicalNodePath.Length - 1)
-            return value;
-
-        var terminalLn = logicalNodePath[(lastSlash + 1)..];
-        if (!terminalLn.Equals(verifiedLn, StringComparison.OrdinalIgnoreCase))
-            return value;
-
-        // Siemens/DIGSI source exports can render a verified LN prefix as folders,
-        // e.g. ADD/GGIO1. Only collapse the imported pre-DO hierarchy when the final
-        // segment exactly equals the workbook LN metadata. Observed/live references
-        // are never collapsed, preventing AB/GGIO1 from matching A/BGGIO1 by accident.
-        var collapsedLogicalNode = logicalNodePath.Replace("/", string.Empty, StringComparison.Ordinal);
-        return collapsedLogicalNode + value[firstDot..];
-    }
+        => IoTestReferenceMatcher.ImportedForms(reference, iedName, logicalNode);
 
     private sealed record PointBinding(
         IoTestLiveBindingState State,

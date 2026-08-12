@@ -313,6 +313,21 @@ public sealed class IoTestIedPlan : ObservableObject
     public string Switchgear { get; init; } = string.Empty;
     public List<IoTestPointPlan> TestPoints { get; init; } = new();
 
+    // Persisted IED-level file-service evidence. A successful IEC 61850 FileDirectory
+    // listing is sufficient FAT evidence that the remote file service is accessible;
+    // FileOpen/FileRead download remains optional deeper verification.
+    public string LatestComtradeFiles { get; set; } = string.Empty;
+    public string LatestComtradeRemotePath { get; set; } = string.Empty;
+    public string LatestComtradeCompleteness { get; set; } = string.Empty;
+    public string LatestComtradeAcquisitionSource { get; set; } = string.Empty;
+    public DateTimeOffset? LatestComtradeModifiedAtUtc { get; set; }
+    public DateTimeOffset? LatestComtradeCapturedAtUtc { get; set; }
+    public int LatestComtradeFileCount { get; set; }
+    public long LatestComtradeKnownSizeBytes { get; set; }
+
+    [JsonIgnore]
+    public bool HasRemoteComtradeEvidence => !string.IsNullOrWhiteSpace(LatestComtradeFiles);
+
     public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
     public string LiveStatusText { get => _liveStatusText; private set => Set(ref _liveStatusText, value ?? string.Empty); }
 

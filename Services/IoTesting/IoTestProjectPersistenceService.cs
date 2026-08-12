@@ -407,7 +407,17 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                         point.Runtime.Attempt,
                         point.Runtime.CurrentValue,
                         point.Runtime.CurrentQuality,
-                        point.Runtime.CurrentSource))).ToList())).ToList()));
+                        point.Runtime.CurrentSource))).ToList())
+            {
+                LatestComtradeFiles = ied.LatestComtradeFiles,
+                LatestComtradeRemotePath = ied.LatestComtradeRemotePath,
+                LatestComtradeCompleteness = ied.LatestComtradeCompleteness,
+                LatestComtradeAcquisitionSource = ied.LatestComtradeAcquisitionSource,
+                LatestComtradeModifiedAtUtc = ied.LatestComtradeModifiedAtUtc,
+                LatestComtradeCapturedAtUtc = ied.LatestComtradeCapturedAtUtc,
+                LatestComtradeFileCount = ied.LatestComtradeFileCount,
+                LatestComtradeKnownSizeBytes = ied.LatestComtradeKnownSizeBytes
+            }).ToList()));
 
     private static async Task<IoTestProject> LoadSnapshotAsync(string path, CancellationToken cancellationToken)
     {
@@ -438,6 +448,14 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 Location = ied.Location,
                 VoltageLevel = ied.VoltageLevel,
                 Switchgear = ied.Switchgear,
+                LatestComtradeFiles = ied.LatestComtradeFiles ?? string.Empty,
+                LatestComtradeRemotePath = ied.LatestComtradeRemotePath ?? string.Empty,
+                LatestComtradeCompleteness = ied.LatestComtradeCompleteness ?? string.Empty,
+                LatestComtradeAcquisitionSource = ied.LatestComtradeAcquisitionSource ?? string.Empty,
+                LatestComtradeModifiedAtUtc = ied.LatestComtradeModifiedAtUtc,
+                LatestComtradeCapturedAtUtc = ied.LatestComtradeCapturedAtUtc,
+                LatestComtradeFileCount = ied.LatestComtradeFileCount,
+                LatestComtradeKnownSizeBytes = ied.LatestComtradeKnownSizeBytes,
                 TestPoints = ied.TestPoints.Select(RestorePoint).ToList()
             }).ToList()
         };
@@ -510,7 +528,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         var builder = new StringBuilder();
         builder.Append("<!doctype html><html><head><meta charset=\"utf-8\"><title>")
             .Append(Html(project.ProjectName)).Append(" - IO FAT Report</title><style>")
-            .Append("body{font-family:Segoe UI,Arial,sans-serif;color:#172033;margin:28px}h1{margin:0;color:#2458b8}h2{margin-top:30px;border-bottom:2px solid #dbe6f6;padding-bottom:6px}.meta{background:#f5f8fd;border:1px solid #dbe6f6;border-radius:10px;padding:14px;margin:16px 0}.summary{display:flex;gap:12px;flex-wrap:wrap}.pill{border:1px solid #dbe6f6;border-radius:16px;padding:7px 12px;background:#fff}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #cdd8e8;padding:6px;vertical-align:top}th{background:#eaf1fb;text-align:left}.pass{color:#08783f;font-weight:700}.review,.failed{color:#a75800;font-weight:700}.pending{color:#667085}@media print{body{margin:8mm}.ied{page-break-before:always}.ied:first-of-type{page-break-before:auto}.no-print{display:none}}@page{size:A4 landscape;margin:8mm}</style></head><body>");
+            .Append("body{font-family:Segoe UI,Arial,sans-serif;color:#172033;margin:28px}h1{margin:0;color:#2458b8}h2{margin-top:30px;border-bottom:2px solid #dbe6f6;padding-bottom:6px}.meta{background:#f5f8fd;border:1px solid #dbe6f6;border-radius:10px;padding:14px;margin:16px 0}.summary{display:flex;gap:12px;flex-wrap:wrap}.pill{border:1px solid #dbe6f6;border-radius:16px;padding:7px 12px;background:#fff}.file-evidence{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin:8px 0 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #cdd8e8;padding:6px;vertical-align:top}th{background:#eaf1fb;text-align:left}.pass{color:#08783f;font-weight:700}.review,.failed{color:#a75800;font-weight:700}.pending{color:#667085}@media print{body{margin:8mm}.ied{page-break-before:always}.ied:first-of-type{page-break-before:auto}.no-print{display:none}}@page{size:A4 landscape;margin:8mm}</style></head><body>");
         builder.Append("<h1>ARSAS IO List FAT Evidence Report</h1><div class=\"meta\"><b>Project:</b> ").Append(Html(project.ProjectName))
             .Append("<br><b>Project ID:</b> ").Append(Html(project.ProjectId))
             .Append("<br><b>Source workbook:</b> ").Append(Html(project.SourceWorkbookName))
@@ -524,8 +542,20 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         foreach (var ied in project.Ieds)
         {
             builder.Append("<section class=\"ied\"><h2>").Append(Html(ied.IedName)).Append(" · ").Append(Html(ied.IpAddress)).Append("</h2>")
-                .Append("<p>").Append(Html(ied.IedRole)).Append(" · ").Append(Html(ied.Location)).Append(" · ").Append(Html(ied.VoltageLevel)).Append("</p>")
-                .Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Expected ON/OFF</th><th>ON evidence</th><th>OFF evidence</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
+                .Append("<p>").Append(Html(ied.IedRole)).Append(" · ").Append(Html(ied.Location)).Append(" · ").Append(Html(ied.VoltageLevel)).Append("</p>");
+
+            if (ied.HasRemoteComtradeEvidence)
+            {
+                builder.Append("<div class=\"file-evidence\"><b>IEC 61850 File Service:</b> <span class=\"pass\">PASS</span>")
+                    .Append("<br><b>Latest remote COMTRADE:</b> ").Append(Html(ied.LatestComtradeFiles))
+                    .Append("<br><b>Remote path:</b> ").Append(Html(ied.LatestComtradeRemotePath))
+                    .Append("<br><b>Relay modified:</b> ").Append(Html(ied.LatestComtradeModifiedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss zzz") ?? "not supplied"))
+                    .Append("<br><b>Evidence source:</b> IEC 61850 FileDirectory")
+                    .Append("<br><b>Download:</b> Optional additional verification; not a FAT gate.")
+                    .Append("</div>");
+            }
+
+            builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Expected ON/OFF</th><th>ON evidence</th><th>OFF evidence</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
             var index = 0;
             foreach (var point in ied.TestPoints)
             {
@@ -702,7 +732,17 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string Location,
         string VoltageLevel,
         string Switchgear,
-        List<IoTestPointData> TestPoints);
+        List<IoTestPointData> TestPoints)
+    {
+        public string LatestComtradeFiles { get; init; } = string.Empty;
+        public string LatestComtradeRemotePath { get; init; } = string.Empty;
+        public string LatestComtradeCompleteness { get; init; } = string.Empty;
+        public string LatestComtradeAcquisitionSource { get; init; } = string.Empty;
+        public DateTimeOffset? LatestComtradeModifiedAtUtc { get; init; }
+        public DateTimeOffset? LatestComtradeCapturedAtUtc { get; init; }
+        public int LatestComtradeFileCount { get; init; }
+        public long LatestComtradeKnownSizeBytes { get; init; }
+    }
 
     private sealed record IoTestPointData(
         string TestPointId,

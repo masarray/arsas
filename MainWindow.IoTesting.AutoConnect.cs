@@ -168,6 +168,15 @@ public partial class MainWindow
                 match.Signal.IsSelected = true;
                 selectionChanged = true;
             }
+
+            // Time synchronization is device-level FAT evidence rather than an ON/OFF
+            // test point. If the live model exposes an explicit status (for example
+            // SIPROTEC TimeSynchrnz or MiCOM LLN0.SyncSt), arm that one extra read-only
+            // signal so the FAT window can capture the real IED value automatically.
+            var timeSyncArmed = IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device);
+            if (timeSyncArmed)
+                selectionChanged = true;
+
             device.RecountSelectedSignals();
             device.RefreshComputed();
             RaiseWorkspaceCounts();
@@ -218,7 +227,10 @@ public partial class MainWindow
             var acquisitionText = acquisition.PollingCount == 0
                 ? $"report-backed {acquisition.ReportCount}/{requestedPoints.Count}"
                 : $"report-backed {acquisition.ReportCount}/{requestedPoints.Count} · MMS fallback {acquisition.PollingCount}";
-            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}";
+            var timeSyncText = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device) == null
+                ? " · time-sync fallback ready"
+                : " · time-sync status armed";
+            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}";
             SetStatus(message);
             AddLog(
                 acquisition.PollingCount == 0 ? "INFO" : "WARN",
