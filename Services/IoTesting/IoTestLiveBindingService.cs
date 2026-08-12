@@ -129,7 +129,7 @@ public sealed class IoTestLiveBindingService
         }
 
         var expectedTelegrams = ImportedReferences(point)
-            .SelectMany(reference => NormalizeTelegramForms(reference, point.IedName))
+            .SelectMany(reference => NormalizeImportedTelegramForms(reference, point.IedName, point.LogicalNode))
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -140,7 +140,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched uniquely after normalizing the IED/Application and functional-group hierarchy.",
+                "Live point matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
@@ -153,7 +153,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched uniquely after normalizing the IED/Application and functional-group hierarchy.",
+                "Discovered signal matched uniquely after normalizing the IED/Application and verified functional-group/LN boundary.",
                 signalCandidates[0].ObjectReference,
                 null);
         }
@@ -228,11 +228,11 @@ public sealed class IoTestLiveBindingService
         if (expectedTelegrams.Count == 0)
             return false;
 
-        if (NormalizeTelegramForms(observedReference, device.Name).Any(expectedTelegrams.Contains))
+        if (expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.Name)))
             return true;
 
         return !string.IsNullOrWhiteSpace(device.SclIedName) &&
-               NormalizeTelegramForms(observedReference, device.SclIedName).Any(expectedTelegrams.Contains);
+               expectedTelegrams.Contains(NormalizeTelegram(observedReference, device.SclIedName));
     }
 
     private static Iec61850MonitorDevice? FindDevice(
@@ -290,7 +290,10 @@ public sealed class IoTestLiveBindingService
         return domainSuffix.Length == 0 ? path : domainSuffix + "/" + path;
     }
 
-    internal static IReadOnlySet<string> NormalizeTelegramForms(string? reference, string? iedName)
+    internal static IReadOnlySet<string> NormalizeImportedTelegramForms(
+        string? reference,
+        string? iedName,
+        string? logicalNode)
     {
         var forms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var normalized = NormalizeTelegram(reference, iedName);
@@ -298,28 +301,36 @@ public sealed class IoTestLiveBindingService
             return forms;
 
         forms.Add(normalized);
-        var collapsed = CollapseDisplayHierarchy(normalized);
+        var collapsed = CollapseVerifiedDisplayHierarchy(normalized, logicalNode);
         if (!string.IsNullOrWhiteSpace(collapsed))
             forms.Add(collapsed);
         return forms;
     }
 
-    private static string CollapseDisplayHierarchy(string normalizedTelegram)
+    private static string CollapseVerifiedDisplayHierarchy(string normalizedTelegram, string? logicalNode)
     {
         var value = (normalizedTelegram ?? string.Empty).Trim();
+        var verifiedLn = NormalizeReference(logicalNode).Trim('/');
+        if (string.IsNullOrWhiteSpace(verifiedLn))
+            return value;
+
         var firstDot = value.IndexOf('.');
         if (firstDot <= 0)
             return value;
 
         var logicalNodePath = value[..firstDot];
-        if (!logicalNodePath.Contains('/'))
+        var lastSlash = logicalNodePath.LastIndexOf('/');
+        if (lastSlash <= 0 || lastSlash >= logicalNodePath.Length - 1)
             return value;
 
-        // Siemens/DIGSI source exports can render LN prefixes as folders, e.g.
-        // ADD/GGIO1 or VI3p1_OperationalValues/RPRE_MMXU1. MMS/SCL identifies the
-        // same LN as ADDGGIO1 or VI3p1_OperationalValuesRPRE_MMXU1. Collapse only
-        // the pre-DO hierarchy; DO/DA separators remain untouched. Candidate
-        // uniqueness is still enforced by the caller, so this is not fuzzy matching.
+        var terminalLn = logicalNodePath[(lastSlash + 1)..];
+        if (!terminalLn.Equals(verifiedLn, StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        // Siemens/DIGSI source exports can render a verified LN prefix as folders,
+        // e.g. ADD/GGIO1. Only collapse the imported pre-DO hierarchy when the final
+        // segment exactly equals the workbook LN metadata. Observed/live references
+        // are never collapsed, preventing AB/GGIO1 from matching A/BGGIO1 by accident.
         var collapsedLogicalNode = logicalNodePath.Replace("/", string.Empty, StringComparison.Ordinal);
         return collapsedLogicalNode + value[firstDot..];
     }
