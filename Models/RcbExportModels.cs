@@ -20,6 +20,7 @@ public sealed class RcbExportRow : ObservableObject
     public string ExportName { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string Reference { get; init; } = string.Empty;
+    public string ScopeText { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public bool Buffered { get; init; }
     public string DataSetName { get; init; } = string.Empty;
@@ -169,7 +170,7 @@ public sealed class RcbExportFilterViewModel : ObservableObject
     public bool CanExport => SelectedRow?.IsSelectable == true;
     public string SelectionSummary => SelectedRow == null
         ? "No RCB selected"
-        : $"{SelectedRow.Name} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
+        : $"{SelectedRow.Name} • {SelectedRow.ScopeText} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
     public string RemovalSummary => SelectedRow == null
         ? $"0 retained • {Rows.Count} unchanged"
         : $"1 retained • {Math.Max(0, Rows.Count - 1)} removed";
