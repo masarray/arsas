@@ -50,7 +50,7 @@ public sealed class IoTestSmartReferenceMatcherTests
         var ied = Ied(Point("TP-003", "CTRL/SPo32GGIO1.Ind1", "ST", "SPo32GGIO1"));
         var device = Device(Signal(
             "Binary indication",
-            "AA1C1F03R2CTRL/SPo32GGIO1$ST$Ind1$stVal",
+            "AA1C1F06R2CTRL/SPo32GGIO1$ST$Ind1$stVal",
             "ST"));
 
         var result = _service.Resolve(ied, device);
@@ -64,8 +64,8 @@ public sealed class IoTestSmartReferenceMatcherTests
     {
         var ied = Ied(Point("TP-004", "CTRL/SPo32GGIO1.Ind1", "ST", "SPo32GGIO1"));
         var device = Device(
-            Signal("A", "AA1C1F03R2CTRL/SPo32GGIO1$ST$Ind1$stVal", "ST"),
-            Signal("B", "AA1C1F03R2CTRL/SPo32GGIO1.Ind1.stVal", "ST"));
+            Signal("A", "AA1C1F06R2CTRL/SPo32GGIO1$ST$Ind1$stVal", "ST"),
+            Signal("B", "AA1C1F06R2CTRL/SPo32GGIO1.Ind1.stVal", "ST"));
 
         var result = _service.Resolve(ied, device);
 
