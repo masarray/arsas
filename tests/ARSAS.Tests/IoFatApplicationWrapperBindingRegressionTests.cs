@@ -92,14 +92,18 @@ public sealed class IoFatApplicationWrapperBindingRegressionTests
     }
 
     [Fact]
-    public void UnknownDiscoveredFunctionalConstraint_IsNotAutoSelectedForKnownFatConstraint()
+    public void UnknownDiscoveredFunctionalConstraint_IsNotAcceptedForKnownFatConstraint()
     {
         var project = Project("AA1C1F13R4Application/ADD/GGIO1.LocOpnCMDsta.stVal");
         var device = Device();
         device.Signals.Add(Signal("AA1C1F13R4Application/GGIO1.LocOpnCMDsta.stVal", string.Empty));
 
+        var summary = _binding.Bind(project, new[] { device });
         var result = _selection.Resolve(project.Ieds[0], device);
 
+        Assert.Equal(0, summary.SignalBoundCount);
+        Assert.Equal(1, summary.MissingSignalCount);
+        Assert.Equal(IoTestLiveBindingState.SignalNotFound, project.Ieds[0].TestPoints[0].LiveBindingState);
         Assert.False(result.Succeeded);
         Assert.Single(result.MissingPoints);
     }
