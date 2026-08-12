@@ -43,8 +43,8 @@
         </Style>
 
         <Style x:Key="RcbDataGridRow" TargetType="DataGridRow">
-            <Setter Property="Height" Value="44"/>
-            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="MinHeight" Value="48"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -124,7 +124,7 @@
                       AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
                       CanUserSortColumns="False" HeadersVisibility="Column" GridLinesVisibility="All"
                       HorizontalGridLinesBrush="#E1E8F1" VerticalGridLinesBrush="#E1E8F1"
-                      RowHeaderWidth="0" RowHeight="44" AlternationCount="2"
+                      RowHeaderWidth="0" RowHeight="48" AlternationCount="2"
                       SelectionMode="Single" SelectionUnit="FullRow" VerticalContentAlignment="Center"
                       Background="Transparent" BorderThickness="0"
                       ColumnHeaderStyle="{StaticResource RcbTableHeader}"
@@ -147,9 +147,12 @@
                     <DataGridTemplateColumn Header="REPORT CONTROL BLOCK" Width="2.2*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Style="{StaticResource RcbCellText}" Text="{Binding Name}"
-                                           FontWeight="SemiBold" Foreground="{StaticResource RcbInk}"
-                                           ToolTip="{Binding Reference}"/>
+                                <StackPanel Margin="12,4,8,3" VerticalAlignment="Center" ToolTip="{Binding Reference}">
+                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource RcbInk}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding ScopeText}" Margin="0,1,0,0" FontSize="10.2"
+                                               Foreground="{StaticResource RcbMuted}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
