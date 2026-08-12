@@ -104,7 +104,8 @@ public sealed class IoTestLiveBindingService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var exactLivePoints = device.Points
-            .Where(item => expectedReferences.Contains(NormalizeReference(item.IecReference)))
+            .Where(item => FunctionalConstraintMatches(point.FunctionalConstraint, item.FunctionalConstraint) &&
+                           expectedReferences.Contains(NormalizeReference(item.IecReference)))
             .ToList();
         if (exactLivePoints.Count == 1)
         {
@@ -117,6 +118,7 @@ public sealed class IoTestLiveBindingService
 
         var exactSignals = device.Signals
             .Where(item => !item.IsControlSignal &&
+                           FunctionalConstraintMatches(point.FunctionalConstraint, item.FunctionalConstraint) &&
                            expectedReferences.Contains(NormalizeReference(item.ObjectReference)))
             .ToList();
         if (exactSignals.Count == 1)
@@ -134,7 +136,8 @@ public sealed class IoTestLiveBindingService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var livePointCandidates = device.Points
-            .Where(item => MatchesAnyTelegram(item.IecReference, device, expectedTelegrams))
+            .Where(item => FunctionalConstraintMatches(point.FunctionalConstraint, item.FunctionalConstraint) &&
+                           MatchesAnyTelegram(item.IecReference, device, expectedTelegrams))
             .ToList();
         if (livePointCandidates.Count == 1)
         {
@@ -147,6 +150,7 @@ public sealed class IoTestLiveBindingService
 
         var signalCandidates = device.Signals
             .Where(item => !item.IsControlSignal &&
+                           FunctionalConstraintMatches(point.FunctionalConstraint, item.FunctionalConstraint) &&
                            MatchesAnyTelegram(item.ObjectReference, device, expectedTelegrams))
             .ToList();
         if (signalCandidates.Count == 1)
@@ -163,7 +167,7 @@ public sealed class IoTestLiveBindingService
             ? "More than one live candidate matched the imported telegram; automatic binding was withheld."
             : device.Signals.Count == 0
                 ? "The IED is loaded but its signal model has not been discovered yet."
-                : "None of the imported IEC 61850/event-log references was found in the loaded IED model.";
+                : "None of the imported IEC 61850/event-log references was found in the loaded IED model with the required functional constraint.";
         return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null);
     }
 
@@ -219,6 +223,11 @@ public sealed class IoTestLiveBindingService
             value = value[..marker].TrimEnd();
         return value;
     }
+
+    private static bool FunctionalConstraintMatches(string? expected, string? observed)
+        => string.IsNullOrWhiteSpace(expected) ||
+           string.IsNullOrWhiteSpace(observed) ||
+           expected.Trim().Equals(observed.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static bool MatchesAnyTelegram(
         string? observedReference,
