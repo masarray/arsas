@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "8b46cfed0614a4d0b0a5bf73fa7a6e77cf6fe817",
-  "sourcePullRequest": 55,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance."
+  "commit": "d041a1e05c2082f966b1e06a977b2f67261fea02",
+  "sourcePullRequest": 60,
+  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Production baseline includes engine-owned DataSet semantic binding plus design/live reconciliation and exact targeted MMS probe APIs."
 }

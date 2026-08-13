@@ -53,6 +53,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_sclWorkspace, value)) return;
             _sclWorkspace = value;
+            RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
     }
@@ -64,6 +65,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_liveDiscoveryModel, value)) return;
             _liveDiscoveryModel = value;
+            RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
     }
@@ -73,10 +75,23 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         get => _sclComparison;
         set
         {
-            if (ReferenceEquals(_sclComparison, value)) return;
-            _sclComparison = value;
+            var effective = BuildAuthoritativeSclComparison() ?? value;
+            if (ReferenceEquals(_sclComparison, effective)) return;
+            _sclComparison = effective;
             RefreshComputed();
         }
+    }
+
+    private SclLiveModelComparisonResult? BuildAuthoritativeSclComparison()
+        => _sclWorkspace != null && _liveDiscoveryModel != null
+            ? SclLiveModelComparer.Compare(_sclWorkspace.DesignModel, _liveDiscoveryModel)
+            : null;
+
+    private void RefreshAuthoritativeSclComparison()
+    {
+        var comparison = BuildAuthoritativeSclComparison();
+        if (comparison != null)
+            _sclComparison = comparison;
     }
 
     public string SclSourcePath
