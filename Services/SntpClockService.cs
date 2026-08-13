@@ -172,10 +172,12 @@ public sealed class SntpClockService : IAsyncDisposable
                 catch { }
             }
 
-            if (_rawTransport != null)
+            var raw = _rawTransport;
+            _rawTransport = null;
+            if (raw != null)
             {
-                try { await _rawTransport.DisposeAsync().ConfigureAwait(false); } catch { }
-                _rawTransport = null;
+                raw.Faulted -= RawTransport_Faulted;
+                try { await raw.DisposeAsync().ConfigureAwait(false); } catch { }
             }
 
             cancellation?.Dispose();
@@ -255,11 +257,13 @@ public sealed class SntpClockService : IAsyncDisposable
         CancellationToken startCancellation)
     {
         startCancellation.ThrowIfCancellationRequested();
+        SntpRawNpcapTransport? raw = null;
         try
         {
-            var raw = new SntpRawNpcapTransport(binding);
-            await raw.StartAsync(HandleRawClientRequestAsync, serviceCancellation.Token).ConfigureAwait(false);
+            raw = new SntpRawNpcapTransport(binding);
+            raw.Faulted += RawTransport_Faulted;
             _rawTransport = raw;
+            await raw.StartAsync(HandleRawClientRequestAsync, serviceCancellation.Token).ConfigureAwait(false);
             _transportMode = SntpClockTransportMode.NpcapRaw;
 
             SetState(
@@ -273,6 +277,14 @@ public sealed class SntpClockService : IAsyncDisposable
         }
         catch (Exception rawException)
         {
+            if (raw != null)
+            {
+                raw.Faulted -= RawTransport_Faulted;
+                if (ReferenceEquals(_rawTransport, raw))
+                    _rawTransport = null;
+                try { await raw.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+
             try { serviceCancellation.Cancel(); } catch { }
             serviceCancellation.Dispose();
             if (ReferenceEquals(_serviceCancellation, serviceCancellation))
@@ -283,6 +295,16 @@ public sealed class SntpClockService : IAsyncDisposable
                 SntpClockServiceState.PortUnavailable,
                 $"UDP/123 unavailable ({udpFailure}) and Npcap RAW fallback could not start: {rawException.Message}. IEC 61850 remains unaffected.");
         }
+    }
+
+    private void RawTransport_Faulted(Exception exception)
+    {
+        if (_serviceCancellation?.IsCancellationRequested != false)
+            return;
+
+        SetState(
+            SntpClockServiceState.Faulted,
+            $"Npcap RAW SNTP capture failed: {exception.Message}. IEC 61850 remains unaffected.");
     }
 
     private async Task ReceiveLoopAsync(UdpClient udp, CancellationToken cancellationToken)
