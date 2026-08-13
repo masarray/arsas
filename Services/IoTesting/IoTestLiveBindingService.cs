@@ -19,14 +19,34 @@ public sealed class IoTestLiveBindingService
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(devices);
+        return BindPlans(project.Ieds, devices.ToList(), project.SignalCount);
+    }
 
-        var deviceList = devices.ToList();
+    /// <summary>
+    /// Rebinds one FAT IED only. Connection preparation can run for several IEDs at the
+    /// same time; a slow/offline IED must never clear another IED's already-proven live
+    /// state just because a full-project refresh happened during an await boundary.
+    /// </summary>
+    public IoTestLiveBindingSummary BindIed(
+        IoTestIedPlan ied,
+        IEnumerable<Iec61850MonitorDevice> devices)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        ArgumentNullException.ThrowIfNull(devices);
+        return BindPlans(new[] { ied }, devices.ToList(), ied.TestPoints.Count);
+    }
+
+    private static IoTestLiveBindingSummary BindPlans(
+        IReadOnlyCollection<IoTestIedPlan> plans,
+        IReadOnlyCollection<Iec61850MonitorDevice> deviceList,
+        int signalCount)
+    {
         var deviceBoundCount = 0;
         var signalBoundCount = 0;
         var livePointCount = 0;
         var missingSignalCount = 0;
 
-        foreach (var iedPlan in project.Ieds)
+        foreach (var iedPlan in plans)
         {
             var device = FindDevice(iedPlan, deviceList);
             if (device == null)
@@ -79,9 +99,9 @@ public sealed class IoTestLiveBindingService
         }
 
         return new IoTestLiveBindingSummary(
-            project.Ieds.Count,
+            plans.Count,
             deviceBoundCount,
-            project.SignalCount,
+            signalCount,
             signalBoundCount,
             livePointCount,
             missingSignalCount);
