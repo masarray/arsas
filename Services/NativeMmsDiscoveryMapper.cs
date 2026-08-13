@@ -510,17 +510,17 @@ public static class NativeMmsDiscoveryMapper
             }
 
             if (IsFundamentalScalarMeasurementObject(first))
-                {
-                    if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
-                                         string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
-                        yield return Append(current, "f");
-                    else
-                        yield return Append(current, "mag", "f");
-                    yield break;
-                }
-
+            {
                 if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
+                    yield return Append(current, "f");
+                else
+                    yield return Append(current, "mag", "f");
+                yield break;
+            }
+
+            if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
             {
                 yield return Append(current, "f");
                 yield break;
@@ -696,12 +696,12 @@ public static class NativeMmsDiscoveryMapper
         }
 
         if ((lnClass is "MMXU" or "MMXN") && IsFundamentalScalarMeasurementObject(name))
-            {
-                yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
-                yield break;
-            }
+        {
+            yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
+            yield break;
+        }
 
-            if (LooksLikeAnalogDataObject(name))
+        if (LooksLikeAnalogDataObject(name))
         {
             yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
             yield break;
