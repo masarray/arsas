@@ -14,9 +14,8 @@ public partial class MainWindow
     private string _lastClockSyncStatus = string.Empty;
     private bool _clockSyncLifecycleAttached;
 
-    protected override void OnContentRendered(EventArgs e)
+    private void InitializeClockSyncLifecycle()
     {
-        base.OnContentRendered(e);
         if (_clockSyncLifecycleAttached)
             return;
 
