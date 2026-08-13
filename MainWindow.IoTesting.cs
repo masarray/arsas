@@ -21,6 +21,7 @@ public partial class MainWindow
     private IoTestSessionController? _activeIoTestSessionController;
     private long _ioTestObservationSequence;
     private int? _pollingIntervalBeforeIoFat;
+    private int _ioFatEvidenceDrainDispatchActive;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -401,8 +402,36 @@ public partial class MainWindow
         => new(
             project,
             ResolveIoTestDevice,
-            action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
+            DispatchIoFatEvidence,
             evidenceRoot);
+
+    private void DispatchIoFatEvidence(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        // A newly observed edge must reach the FAT evidence evaluator before normal UI
+        // background work, preserving the immediate TRUE-edge behavior from #150. When
+        // the bounded drain reschedules itself from inside the current callback, lower the
+        // continuation to Background so Render/Input are not starved by a large snapshot burst.
+        var priority = Volatile.Read(ref _ioFatEvidenceDrainDispatchActive) == 0
+            ? DispatcherPriority.DataBind
+            : DispatcherPriority.Background;
+
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                Interlocked.Increment(ref _ioFatEvidenceDrainDispatchActive);
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _ioFatEvidenceDrainDispatchActive);
+                }
+            }),
+            priority);
+    }
 
     private static string IoTestingProjectsRoot() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
