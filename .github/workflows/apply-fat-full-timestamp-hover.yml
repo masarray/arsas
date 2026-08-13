@@ -1,0 +1,31 @@
+name: Apply FAT full timestamp hover
+
+on:
+  push:
+    branches:
+      - fix/fat-full-timestamp-hover
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/fat-full-timestamp-hover
+          fetch-depth: 0
+
+      - name: Apply exact tooltip patch
+        run: python tools/apply-fat-full-timestamp-hover.py
+
+      - name: Commit product-only diff
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Show full-resolution IED timestamp on FAT hover"
+          git push origin HEAD:fix/fat-full-timestamp-hover
