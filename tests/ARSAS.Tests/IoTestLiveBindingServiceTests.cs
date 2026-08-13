@@ -81,7 +81,7 @@ public sealed class IoTestLiveBindingServiceTests
         Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
         Assert.Equal(
             "AA1C1F03R4Application/ADDGGIO2$ST$TCS1Fail$stVal",
-            project.Ieds[0].TestPoints[0].LiveBoundReference);
+            project.Ieds[0].TestPoints[0].LiveSignalReference);
     }
 
     [Fact]
