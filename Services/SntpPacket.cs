@@ -46,16 +46,25 @@ public static class SntpPacket
         var version = Math.Min(request.Version, (byte)4);
         var leap = synchronized ? profile.LeapIndicator : (byte)3;
         response[0] = (byte)((leap << 6) | (version << 3) | 4);
-        response[1] = synchronized ? profile.Stratum : (byte)16;
-        response[2] = unchecked((byte)profile.PollExponent);
+        response[1] = synchronized ? profile.Stratum : (byte)0;
+        response[2] = unchecked((byte)request.PollExponent); // RFC 4330: copy request Poll field intact.
         response[3] = unchecked((byte)profile.PrecisionExponent);
+
+        // Originate is always the client's Transmit timestamp, copied bit-for-bit.
+        request.TransmitTimestampRaw.CopyTo(response, 24);
+
+        if (!synchronized)
+        {
+            // RFC 4330 server start/unsynchronized state: stratum 0, INIT, all timestamps
+            // zero except Originate when replying to a client request.
+            WriteReferenceId(response.AsSpan(12, 4), "INIT");
+            return response;
+        }
 
         WriteSignedFixed16_16(response.AsSpan(4, 4), profile.RootDelay);
         WriteUnsignedFixed16_16(response.AsSpan(8, 4), profile.RootDispersion);
-        WriteReferenceId(response.AsSpan(12, 4), synchronized ? profile.ReferenceId : "INIT");
+        WriteReferenceId(response.AsSpan(12, 4), profile.ReferenceId);
         WriteTimestamp(response.AsSpan(16, 8), profile.ReferenceUtc == default ? transmitUtc : profile.ReferenceUtc);
-
-        request.TransmitTimestampRaw.CopyTo(response, 24);
         WriteTimestamp(response.AsSpan(32, 8), receiveUtc);
         WriteTimestamp(response.AsSpan(40, 8), transmitUtc);
         return response;
@@ -69,13 +78,19 @@ public static class SntpPacket
         var response = new byte[MinimumLength];
         var leap = synchronized ? profile.LeapIndicator : (byte)3;
         response[0] = (byte)((leap << 6) | (4 << 3) | 5);
-        response[1] = synchronized ? profile.Stratum : (byte)16;
+        response[1] = synchronized ? profile.Stratum : (byte)0;
         response[2] = unchecked((byte)profile.PollExponent);
         response[3] = unchecked((byte)profile.PrecisionExponent);
 
+        if (!synchronized)
+        {
+            WriteReferenceId(response.AsSpan(12, 4), "INIT");
+            return response;
+        }
+
         WriteSignedFixed16_16(response.AsSpan(4, 4), profile.RootDelay);
         WriteUnsignedFixed16_16(response.AsSpan(8, 4), profile.RootDispersion);
-        WriteReferenceId(response.AsSpan(12, 4), synchronized ? profile.ReferenceId : "INIT");
+        WriteReferenceId(response.AsSpan(12, 4), profile.ReferenceId);
         WriteTimestamp(response.AsSpan(16, 8), profile.ReferenceUtc == default ? transmitUtc : profile.ReferenceUtc);
         WriteTimestamp(response.AsSpan(40, 8), transmitUtc);
         return response;
@@ -155,15 +170,15 @@ public readonly record struct SntpClientRequest(
 public sealed record SntpServerProfile
 {
     /// <summary>
-    /// ARSAS intentionally advertises the Windows clock as a low-priority local reference.
-    /// This avoids pretending that the laptop is a GPS/PTP grandmaster.
+    /// ARSAS intentionally advertises the Windows clock as a low-priority local commissioning reference.
+    /// This avoids pretending that the laptop is a GPS/PTP grandmaster or a traceable stratum-1 source.
     /// </summary>
     public byte Stratum { get; init; } = 15;
     public byte LeapIndicator { get; init; }
-    public sbyte PollExponent { get; init; } = 4;
-    public sbyte PrecisionExponent { get; init; } = -20;
+    public sbyte PollExponent { get; init; } = 6;
+    public sbyte PrecisionExponent { get; init; } = -10;
     public TimeSpan RootDelay { get; init; } = TimeSpan.Zero;
-    public TimeSpan RootDispersion { get; init; } = TimeSpan.FromMilliseconds(20);
+    public TimeSpan RootDispersion { get; init; } = TimeSpan.FromMilliseconds(50);
     public string ReferenceId { get; init; } = "LOCL";
     public DateTimeOffset ReferenceUtc { get; init; }
 }
