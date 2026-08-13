@@ -133,6 +133,17 @@ public partial class MainWindow
                 ReportProgress($"{ied.IedName} association ready · reusing the loaded model");
             }
 
+            // Never let a runtime anchor from an earlier model silently decide a fresh
+            // FAT preparation. Re-prove every requested row against the current model;
+            // successful smart matches are anchored again immediately below.
+            foreach (var point in requestedPoints)
+            {
+                point.ApplyLiveBinding(
+                    IoTestLiveBindingState.NotEvaluated,
+                    "Revalidating the imported FAT reference against the current IED model.",
+                    device.DeviceId);
+            }
+
             ReportProgress($"Matching {requestedPoints.Count} workbook signal(s)");
             var selection = _ioTestSignalSelectionService.Resolve(ied, device);
             if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery)
@@ -150,6 +161,13 @@ public partial class MainWindow
                 }
 
                 usedSavedModel = false;
+                foreach (var point in requestedPoints)
+                {
+                    point.ApplyLiveBinding(
+                        IoTestLiveBindingState.NotEvaluated,
+                        "Revalidating after fresh live-model discovery.",
+                        device.DeviceId);
+                }
                 selection = _ioTestSignalSelectionService.Resolve(ied, device);
             }
 
@@ -163,6 +181,19 @@ public partial class MainWindow
             var selectionChanged = false;
             foreach (var match in selection.Matches)
             {
+                // Preserve the unique reference proven by the preparation pass. This is
+                // essential for legacy weak rows such as `.Op.general`: the live-binding
+                // phase must follow the proven exact model object rather than re-guess it.
+                match.TestPoint.ApplyLiveBinding(
+                    match.UsedNormalizedIedPrefix
+                        ? IoTestLiveBindingState.BoundNormalized
+                        : IoTestLiveBindingState.BoundExact,
+                    match.UsedNormalizedIedPrefix
+                        ? "FAT preparation resolved one unique canonical IEC 61850 model reference."
+                        : "FAT preparation matched the exact imported IEC 61850 model reference.",
+                    device.DeviceId,
+                    match.Signal.ObjectReference);
+
                 if (match.Signal.IsSelected)
                     continue;
                 match.Signal.IsSelected = true;
