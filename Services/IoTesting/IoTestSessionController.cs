@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Reflection;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
@@ -8,6 +9,8 @@ namespace ArIED61850Tester.Services.IoTesting;
 
 public sealed class IoTestSessionController : ObservableObject, IDisposable
 {
+    private const int MaxSnapshotsPerDrain = 64;
+    private const int DrainBudgetMilliseconds = 4;
     private static readonly string CurrentApplicationVersion =
         typeof(IoTestSessionController).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -157,14 +160,21 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             EvidenceRecordCount = 0;
             LastJournalHash = string.Empty;
             JournalIntegrityText = "Evidence journal open · hash chain initialized";
-            AppendRequired(SessionEvent("session_started", "FAT session started with a live baseline for every enabled bound point."));
 
+            // Establish all baselines first, then persist the startup records with one
+            // durable flush. Hash chaining is unchanged, but a 100-point FAT no longer
+            // performs 101 synchronous fsync operations on the UI thread.
+            var startupEntries = new List<IoTestJournalEntry>(bindings.Count + 1)
+            {
+                SessionEvent("session_started", "FAT session started with a live baseline for every enabled bound point.")
+            };
             foreach (var binding in bindings)
             {
                 var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
                 _evaluator.StartAttempt(binding.Point, observation);
-                AppendRequired(PointEvent("baseline", binding.Point, observation, null, binding.Point.Runtime.StatusReason));
+                startupEntries.Add(PointEvent("baseline", binding.Point, observation, null, binding.Point.Runtime.StatusReason));
             }
+            AppendBatchRequired(startupEntries);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -257,6 +267,26 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         return IoTestSessionActionResult.Success(reason);
     }
 
+    public IoTestSessionActionResult ResetForCleanRetest()
+    {
+        ThrowIfDisposed();
+        if (IsSessionActive)
+            return IoTestSessionActionResult.Failure("Stop the active FAT session before creating a clean retest session.");
+
+        CleanupSessionResources(disposeJournal: true);
+        SessionId = Guid.Empty;
+        StartedAtUtc = null;
+        CompletedAtUtc = null;
+        JournalPath = string.Empty;
+        EvidenceRecordCount = 0;
+        LastJournalHash = string.Empty;
+        JournalIntegrityText = "No evidence journal open";
+        State = IoTestSessionState.Idle;
+        StatusText = "Clean FAT retest ready. No evidence has been captured in the new session yet.";
+        RaiseProgress();
+        return IoTestSessionActionResult.Success(StatusText);
+    }
+
     public void Enqueue(Iec61850EventEntry entry)
     {
         if (entry == null || _disposed || State != IoTestSessionState.Running)
@@ -309,10 +339,19 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
 
     private void DrainPendingSnapshots()
     {
+        var stopwatch = Stopwatch.StartNew();
+        var processed = 0;
         try
         {
-            while (_pendingSnapshots.TryDequeue(out var snapshot))
+            while (processed < MaxSnapshotsPerDrain &&
+                   stopwatch.ElapsedMilliseconds < DrainBudgetMilliseconds &&
+                   _pendingSnapshots.TryDequeue(out var snapshot))
+            {
                 ProcessSnapshot(snapshot);
+                processed++;
+                if (State != IoTestSessionState.Running)
+                    break;
+            }
         }
         finally
         {
@@ -548,6 +587,28 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
     {
         if (!AppendOrFault(entry))
             throw new InvalidOperationException(StatusText);
+    }
+
+    private void AppendBatchRequired(IReadOnlyCollection<IoTestJournalEntry> entries)
+    {
+        try
+        {
+            var journal = _journal ?? throw new InvalidOperationException("No evidence journal is open for the active FAT session.");
+            var envelopes = journal.AppendBatch(entries);
+            if (envelopes.Count == 0)
+                throw new InvalidOperationException("Evidence journal startup batch produced no records.");
+            var envelope = envelopes[^1];
+            EvidenceRecordCount = envelope.JournalSequence;
+            LastJournalHash = envelope.Hash;
+            JournalIntegrityText = $"Evidence journal open · {EvidenceRecordCount} record(s) · SHA-256 {ShortHash(LastJournalHash)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException)
+        {
+            State = IoTestSessionState.Faulted;
+            StatusText = $"Evidence journal write failed; FAT capture stopped: {ex.Message}";
+            CleanupSessionResources(disposeJournal: true, keepActiveIed: true);
+            throw new InvalidOperationException(StatusText, ex);
+        }
     }
 
     private bool AppendOrFault(IoTestJournalEntry entry)
