@@ -27,6 +27,7 @@ public sealed class SntpRawNpcapTransport : IAsyncDisposable
         (_adapterSelector, _localMac) = ResolveNpcapAdapter(binding);
     }
 
+    public event Action<Exception>? Faulted;
     public string AdapterSelector => _adapterSelector;
 
     public Task StartAsync(
@@ -45,7 +46,7 @@ public sealed class SntpRawNpcapTransport : IAsyncDisposable
     }
 
     public async Task SendReplyAsync(
-        in SntpRawClientFrame request,
+        SntpRawClientFrame request,
         ReadOnlyMemory<byte> sntpPayload,
         CancellationToken cancellationToken = default)
     {
@@ -101,6 +102,13 @@ public sealed class SntpRawNpcapTransport : IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Faulted?.Invoke(ex);
+        }
     }
 
     private ushort NextIdentification()
@@ -122,9 +130,13 @@ public sealed class SntpRawNpcapTransport : IAsyncDisposable
             throw new InvalidOperationException("Npcap is not installed or no capture adapters are available.");
 
         var normalizedId = Normalize(binding.InterfaceId);
-        var byId = adapters.FirstOrDefault(adapter => Normalize(adapter.Name).Contains(normalizedId, StringComparison.OrdinalIgnoreCase));
-        if (byId != null)
-            return (byId.Name, localMac);
+        if (!string.IsNullOrEmpty(normalizedId))
+        {
+            var byId = adapters.FirstOrDefault(adapter =>
+                Normalize(adapter.Name).Contains(normalizedId, StringComparison.OrdinalIgnoreCase));
+            if (byId != null)
+                return (byId.Name, localMac);
+        }
 
         var normalizedMac = Convert.ToHexString(localMac);
         var byMac = adapters
