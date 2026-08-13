@@ -1,58 +1,52 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.22",
-  "title": "Smart FAT evidence with remote COMTRADE discovery and durable per-IED reporting",
-  "titleId": "Evidence FAT cerdas dengan discovery COMTRADE remote dan reporting per-IED yang durable",
-  "summary": "ARSAS 1.6.22 strengthens IO List FAT for real relay testing: safe IEC 61850 reference matching, explicit time-sync evidence, remote COMTRADE/FileDirectory evidence without requiring a download, and persistent latest-record reporting per IED.",
-  "summaryId": "ARSAS 1.6.22 memperkuat IO List FAT untuk pengujian relay nyata: matching referensi IEC 61850 yang aman, evidence time-sync yang eksplisit, evidence COMTRADE/FileDirectory remote tanpa mewajibkan download, serta reporting latest record yang persistent per IED.",
+  "version": "1.6.23",
+  "title": "Safer TCS smart finding for real FAT relay testing",
+  "titleId": "Smart finding TCS yang lebih aman untuk FAT relay nyata",
+  "summary": "ARSAS 1.6.23 fixes the FAT smart-finding regression that could mark valid TCS points as missing when customer IO rows contain only pathless object leaves such as .TCS1Fail or .TCS2Fail. The recovery remains conservative: exact object identity is required, near names are rejected and duplicate leaves remain ambiguous.",
+  "summaryId": "ARSAS 1.6.23 memperbaiki regresi smart finding FAT yang dapat menandai point TCS valid sebagai missing ketika row IO customer hanya berisi object leaf tanpa path seperti .TCS1Fail atau .TCS2Fail. Recovery tetap konservatif: identitas object harus exact, nama yang hanya mirip ditolak dan duplicate leaf tetap ambiguous.",
   "highlights": [
-    "IO List FAT now resolves safe IEC 61850 naming variations across MMS and SCL without fuzzy or Levenshtein guessing; ambiguous equal-best matches remain blocked.",
-    "A supported remote COMTRADE/fault-record entry returned by IEC 61850 FileDirectory is recorded as File Service FAT PASS for that IED; downloading the record is optional additional verification.",
-    "ARSAS selects the latest remote fault record by relay LastModifiedUtc and records the exact COMTRADE filename(s), remote path, completeness, relay timestamp, file count and known size.",
-    "Native PDF/print preview and portable FAT handover reporting now include File Service / COMTRADE evidence with the latest remote filename and a clear OPTIONAL download status.",
-    "Supplemental FAT evidence is persisted per IED across workspace restart and handover restore, and remote discovery is appended to the existing tamper-evident evidence journal.",
-    "Explicit time-synchronization signals are captured when available, while timestamp fallback remains clearly identified as observation rather than a false synchronization claim."
+    "Pathless imported TCS leaves such as .TCS1Fail and .TCS2Fail can now resolve to a unique full IEC 61850 MMS object such as ADDGGIO2.TCS1Fail.stVal.",
+    "The fallback is lower priority than exact and canonical IEC 61850 matching and never uses fuzzy or Levenshtein similarity.",
+    "A duplicate object leaf present in more than one logical node remains ambiguous and automatic FAT binding is withheld.",
+    "Near-name objects such as TCS11Fail or TCS1Healthy remain missing instead of being guessed.",
+    "The fix is covered in both FAT signal selection and live-binding regression tests so the signal cannot pass preflight and then disappear when monitoring starts."
   ],
   "highlightsId": [
-    "IO List FAT kini menyelesaikan variasi penamaan IEC 61850 yang aman antara MMS dan SCL tanpa fuzzy atau Levenshtein guessing; equal-best match yang ambigu tetap diblokir.",
-    "Entry COMTRADE/fault-record remote yang didukung dan dikembalikan oleh IEC 61850 FileDirectory dicatat sebagai File Service FAT PASS untuk IED tersebut; download record bersifat optional sebagai verifikasi tambahan.",
-    "ARSAS memilih fault record remote terbaru berdasarkan LastModifiedUtc relay dan mencatat nama file COMTRADE persis, remote path, completeness, timestamp relay, jumlah file dan known size.",
-    "Native PDF/print preview dan portable FAT handover report kini mencakup File Service / COMTRADE evidence dengan nama file remote terbaru dan status download OPTIONAL yang jelas.",
-    "Supplemental FAT evidence dipertahankan per IED setelah workspace restart dan handover restore, serta remote discovery ditambahkan ke tamper-evident evidence journal yang sudah ada.",
-    "Signal time-synchronization eksplisit dicatat bila tersedia, sedangkan timestamp fallback tetap dinyatakan sebagai observation dan tidak dipakai untuk klaim sinkronisasi palsu."
+    "Imported TCS leaf tanpa path seperti .TCS1Fail dan .TCS2Fail kini dapat resolve ke satu full IEC 61850 MMS object yang unik seperti ADDGGIO2.TCS1Fail.stVal.",
+    "Fallback ini memiliki prioritas lebih rendah daripada exact dan canonical IEC 61850 matching serta tidak pernah memakai fuzzy atau Levenshtein similarity.",
+    "Duplicate object leaf yang muncul pada lebih dari satu logical node tetap ambiguous dan automatic FAT binding ditahan.",
+    "Object dengan nama yang hanya mirip seperti TCS11Fail atau TCS1Healthy tetap missing dan tidak ditebak.",
+    "Fix dilindungi regression test pada FAT signal selection dan live binding sehingga signal tidak bisa lolos preflight lalu hilang ketika monitoring dimulai."
   ],
   "improvements": [
-    "The FAT bootstrap restore path now restores IED-level COMTRADE evidence instead of restoring only signal transition progress.",
-    "COMTRADE discovery and report persistence are covered by regression tests, including newest-record selection and restart recovery.",
-    "Existing fault-record transfer hardening remains available for optional deeper testing, including session reconnect/retry and detailed FileOpen/FileRead diagnostics.",
-    "The release is built from the same source revision used for Windows release regression tests, installer smoke testing and portable single-EXE smoke testing.",
+    "FAT smart matching now includes a bounded exact object-leaf recovery score below exact, canonical and safe implicit-leaf matches.",
+    "Functional-constraint filtering remains active in the selection and live-binding layers.",
+    "The v1.6.23 release source passed full application regression testing, portable single-EXE smoke testing and silent installer install/uninstall testing before publication.",
     "Release assets include SHA-256 checksums, SPDX SBOM, provenance metadata and GitHub artifact attestations."
   ],
   "improvementsId": [
-    "Jalur restore bootstrap FAT kini memulihkan COMTRADE evidence tingkat IED, bukan hanya progress transisi signal.",
-    "COMTRADE discovery dan persistence report dilindungi regression test, termasuk pemilihan record terbaru dan recovery setelah restart.",
-    "Hardening fault-record transfer yang sudah ada tetap tersedia untuk pengujian optional yang lebih dalam, termasuk session reconnect/retry dan diagnostic FileOpen/FileRead yang detail.",
-    "Release dibangun dari source revision yang sama dengan Windows release regression test, installer smoke test dan portable single-EXE smoke test.",
+    "FAT smart matching kini memiliki bounded exact object-leaf recovery score di bawah exact, canonical dan safe implicit-leaf match.",
+    "Functional-constraint filtering tetap aktif pada layer selection dan live binding.",
+    "Source release v1.6.23 lulus full application regression test, portable single-EXE smoke test dan silent installer install/uninstall test sebelum dipublikasikan.",
     "Asset release mencakup checksum SHA-256, SPDX SBOM, metadata provenance dan GitHub artifact attestation."
   ],
   "knownLimitations": [
-    "File Service FAT PASS in this release proves successful IEC 61850 FileDirectory discovery of a supported remote fault record; it does not claim that FileOpen, FileRead or FileClose transfer succeeded.",
-    "Actual relay interoperability still requires FAT-bench validation against the physical IED and network being tested.",
+    "Physical relay validation is still required to confirm the affected TCS rows against the actual IED model used at the FAT bench.",
+    "If the same pathless object leaf exists in multiple logical nodes, ARSAS intentionally blocks automatic binding and requires a more attributable reference.",
+    "File Service FAT PASS proves successful IEC 61850 FileDirectory discovery of a supported remote fault record; it does not claim FileOpen, FileRead or FileClose transfer succeeded.",
     "Windows x64 is the only packaged desktop platform in the current stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
-    "A portable executable cannot bypass AppLocker, Windows Defender Application Control, antivirus, download-zone or corporate execution policy.",
-    "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic.",
-    "Automatic IO List transition testing currently focuses on approved SDI points; analog tolerance and authorized command campaigns remain separate bounded work."
+    "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "File Service FAT PASS pada release ini membuktikan keberhasilan IEC 61850 FileDirectory discovery terhadap remote fault record yang didukung; status ini tidak mengklaim FileOpen, FileRead atau FileClose transfer berhasil.",
-    "Interoperability relay nyata tetap harus divalidasi di FAT bench terhadap IED fisik dan network yang sedang diuji.",
+    "Validasi relay fisik tetap diperlukan untuk memastikan row TCS yang terdampak terhadap model IED aktual yang dipakai di FAT bench.",
+    "Jika object leaf tanpa path yang sama muncul pada beberapa logical node, ARSAS secara sengaja memblokir automatic binding dan membutuhkan reference yang lebih attributable.",
+    "File Service FAT PASS membuktikan keberhasilan IEC 61850 FileDirectory discovery terhadap remote fault record yang didukung; status ini tidak mengklaim FileOpen, FileRead atau FileClose transfer berhasil.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release saat ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
-    "Executable portable tidak dapat melewati AppLocker, Windows Defender Application Control, antivirus, download-zone atau corporate execution policy.",
-    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait.",
-    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance dan authorized command campaign tetap merupakan pekerjaan terkontrol yang terpisah."
+    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -65,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.22 Engineering and FAT workflow context",
-    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.22",
-    "caption": "Representative ARSAS workspace. Version 1.6.22 focuses on safer FAT evidence semantics, remote COMTRADE discovery and durable reporting without overstating file-transfer interoperability.",
-    "captionId": "Representasi workspace ARSAS. Versi 1.6.22 berfokus pada semantik FAT evidence yang lebih aman, remote COMTRADE discovery dan reporting durable tanpa melebih-lebihkan interoperabilitas file transfer."
+    "alt": "Representative ARSAS 1.6.23 Engineering and FAT workflow context",
+    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.23",
+    "caption": "Representative ARSAS FAT workspace. Version 1.6.23 focuses on recovering valid pathless TCS object leaves without weakening ambiguity and near-name safety guards.",
+    "captionId": "Representasi workspace FAT ARSAS. Versi 1.6.23 berfokus memulihkan pathless TCS object leaf yang valid tanpa melemahkan guard ambiguity dan near-name."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.22"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.23"
 }
