@@ -103,6 +103,12 @@ internal static class P2IndustrialWorkstationUx
             var query = search.Text.Trim();
             view.Filter = item => item is Iec61850MonitorDevice device && MatchesDevice(device, query);
             view.Refresh();
+
+            if (query.Length > 0 &&
+                (window.SelectedDevice == null || !MatchesDevice(window.SelectedDevice, query)))
+            {
+                window.SelectedDevice = view.Cast<object>().OfType<Iec61850MonitorDevice>().FirstOrDefault();
+            }
         };
 
         window.PreviewKeyDown += (_, e) =>
@@ -170,6 +176,12 @@ internal static class P2IndustrialWorkstationUx
             var query = iedSearch.Text.Trim();
             iedView.Filter = item => item is IoTestIedPlan ied && MatchesFatIed(ied, query);
             iedView.Refresh();
+
+            if (query.Length > 0 &&
+                (window.SelectedIed == null || !MatchesFatIed(window.SelectedIed, query)))
+            {
+                window.SelectedIed = iedView.Cast<object>().OfType<IoTestIedPlan>().FirstOrDefault();
+            }
         };
 
         signalSearch.TextChanged += (_, _) => state.RefreshSignalFilter(window.SelectedIed);
@@ -301,13 +313,19 @@ internal static class P2IndustrialWorkstationUx
         else if (text.StartsWith("COMTRADE", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconComtradeContent");
         else if (text.Equals("Connect", StringComparison.OrdinalIgnoreCase) ||
+                 text.StartsWith("Connecting", StringComparison.OrdinalIgnoreCase) ||
                  text.StartsWith("Refresh", StringComparison.OrdinalIgnoreCase) ||
                  text.StartsWith("Prepare", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconConnectContent");
-        else if (text.Contains("FAT", StringComparison.OrdinalIgnoreCase) ||
+        else if (text.Equals("ENGINEERING", StringComparison.OrdinalIgnoreCase))
+            ApplyTemplate(button, owner, "IconExplorerNavContent");
+        else if (text.StartsWith("IO LIST FAT", StringComparison.OrdinalIgnoreCase))
+            ApplyTemplate(button, owner, "IconEventsNavContent");
+        else if (text.Equals("Start FAT", StringComparison.OrdinalIgnoreCase) ||
+                 text.StartsWith("Continue FAT", StringComparison.OrdinalIgnoreCase) ||
+                 text.StartsWith("Retest FAT", StringComparison.OrdinalIgnoreCase) ||
                  text.Contains("Connect & Start", StringComparison.OrdinalIgnoreCase) ||
-                 text.Contains("Connect & Continue", StringComparison.OrdinalIgnoreCase) ||
-                 text.Contains("Retest", StringComparison.OrdinalIgnoreCase))
+                 text.Contains("Connect & Continue", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconStartFatContent");
         else if (text.Equals("Stop", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconStopContent");
