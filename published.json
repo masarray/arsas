@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.25",
-  "tag": "v1.6.25",
+  "version": "1.6.26",
+  "tag": "v1.6.26",
   "channel": "stable",
-  "publishedAtUtc": "2026-08-13T06:58:31Z",
-  "sourceCommit": "6313739147652e424dd2855928f1ad8e24a1adaf",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.25",
+  "publishedAtUtc": "2026-08-13T07:56:23Z",
+  "sourceCommit": "cfc158d4a4023c27cff65f454d4131cadde8665f",
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.26",
   "installer": {
     "name": "ARSAS-Windows-x64-Setup.exe",
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
-    "sha256": "c1b4d6d8d029ca1ec6ccdb26766a962b3f8477330fbc0b022aca737beb53e7e7",
-    "sizeBytes": 55312520
+    "sha256": "70442c83af6e070bc202f819bdccbc5266c26fb8793554b04e77ba4045e831a2",
+    "sizeBytes": 55312927
   },
   "portable": {
     "name": "ARSAS-Windows-x64-Portable.exe",
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe",
-    "sha256": "a63b177ca72b2f20fd012bd1a38ab402797dae8fcc5954177eaa74d60dc24c02",
-    "sizeBytes": 76383202
+    "sha256": "78b91dfa36aaaa70ff9ff4633f7a59ff2f0cb82f1ffce0996188a78f69539042",
+    "sizeBytes": 76383549
   },
   "checksums": {
     "name": "ARSAS-Windows-x64-SHA256SUMS.txt",
