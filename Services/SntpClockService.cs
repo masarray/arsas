@@ -14,11 +14,25 @@ public enum SntpClockServiceState
     Faulted
 }
 
+public enum SntpClockTransportMode
+{
+    None,
+    UdpSocket,
+    NpcapRaw
+}
+
 public sealed record SntpClientObservation(
     IPAddress Address,
     DateTimeOffset LastRequestUtc,
     int RequestCount,
     byte Version);
+
+public sealed record SntpReplyObservation(
+    IPAddress Address,
+    DateTimeOffset SentUtc,
+    long ReplyCount,
+    byte Version,
+    SntpClockTransportMode TransportMode);
 
 public sealed record SntpClockServiceSnapshot(
     SntpClockServiceState State,
@@ -26,17 +40,24 @@ public sealed record SntpClockServiceSnapshot(
     SntpNetworkBinding? Binding,
     DateTimeOffset? LastBroadcastUtc,
     int ObservedClientCount,
-    bool ClockHealthy);
+    bool ClockHealthy,
+    SntpClockTransportMode TransportMode,
+    long BroadcastCount,
+    long ClientRequestCount,
+    long ReplyCount,
+    DateTimeOffset? LastRequestUtc,
+    DateTimeOffset? LastReplyUtc);
 
 /// <summary>
 /// Lightweight SNTPv4 commissioning clock for ARSAS.
 ///
-/// Design goals:
-/// - clean-room wire implementation from RFC semantics;
-/// - one UDP/123 service bound only to the station-bus interface chosen by Windows routing;
-/// - Mode 4 unicast replies plus Mode 5 directed broadcasts;
-/// - no dependency on MMS/GOOSE/SV protocol code;
-/// - fail-open for IEC 61850: any SNTP problem is diagnostic only and never breaks an IED association.
+/// Preferred path is a normal UDP/123 socket bound to the station-bus interface. When
+/// Windows Time or another service already owns UDP/123, ARSAS falls back to a raw Npcap
+/// Ethernet transport on the same adapter. ARSAS never stops or reconfigures W32Time.
+///
+/// Evidence is deliberately split into broadcast sent, client request observed and
+/// Mode-4 reply sent. None of those signals alone is presented as proof that the IED has
+/// synchronized its internal clock.
 /// </summary>
 public sealed class SntpClockService : IAsyncDisposable
 {
@@ -46,14 +67,21 @@ public sealed class SntpClockService : IAsyncDisposable
     private readonly SntpServerProfile _profile;
     private readonly TimeSpan _broadcastInterval;
     private UdpClient? _udp;
+    private SntpRawNpcapTransport? _rawTransport;
     private CancellationTokenSource? _serviceCancellation;
     private Task? _receiveTask;
     private Task? _broadcastTask;
     private SntpNetworkBinding? _binding;
     private DateTimeOffset? _lastBroadcastUtc;
+    private DateTimeOffset? _lastRequestUtc;
+    private DateTimeOffset? _lastReplyUtc;
     private SntpClockServiceState _state = SntpClockServiceState.Stopped;
+    private SntpClockTransportMode _transportMode = SntpClockTransportMode.None;
     private string _detail = "SNTP clock service is stopped.";
     private int _broadcastPulseRequested;
+    private long _broadcastCount;
+    private long _clientRequestCount;
+    private long _replyCount;
 
     public SntpClockService(
         SntpServerProfile? profile = null,
@@ -65,6 +93,7 @@ public sealed class SntpClockService : IAsyncDisposable
 
     public event Action<SntpClockServiceSnapshot>? StatusChanged;
     public event Action<SntpClientObservation>? ClientRequestObserved;
+    public event Action<SntpReplyObservation>? ReplySent;
 
     public SntpClockServiceSnapshot Snapshot
         => new(
@@ -73,7 +102,13 @@ public sealed class SntpClockService : IAsyncDisposable
             _binding,
             _lastBroadcastUtc,
             _clients.Count,
-            _clockHealth.Sample().IsHealthy);
+            _clockHealth.Sample().IsHealthy,
+            _transportMode,
+            Interlocked.Read(ref _broadcastCount),
+            Interlocked.Read(ref _clientRequestCount),
+            Interlocked.Read(ref _replyCount),
+            _lastRequestUtc,
+            _lastReplyUtc);
 
     public IReadOnlyCollection<SntpClientObservation> ObservedClients
         => _clients.Values.OrderBy(item => item.Address.ToString(), StringComparer.OrdinalIgnoreCase).ToArray();
@@ -86,7 +121,7 @@ public sealed class SntpClockService : IAsyncDisposable
         try
         {
             var requestedBinding = SntpNetworkRouteResolver.ResolveForRemote(iedAddress);
-            if (_udp != null && _binding != null)
+            if ((_udp != null || _rawTransport != null) && _binding != null)
             {
                 if (_binding.LocalAddress.Equals(requestedBinding.LocalAddress))
                 {
@@ -96,7 +131,7 @@ public sealed class SntpClockService : IAsyncDisposable
 
                 SetState(
                     SntpClockServiceState.Serving,
-                    $"SNTP remains bound to {_binding.Summary}. IED {iedAddress} routes through {requestedBinding.LocalAddress}; multi-NIC serving is deferred to the raw/Npcap transport phase.");
+                    $"SNTP remains bound to {_binding.Summary}. IED {iedAddress} routes through {requestedBinding.LocalAddress}; one station-bus clock transport is active at a time.");
                 return;
             }
 
@@ -137,9 +172,21 @@ public sealed class SntpClockService : IAsyncDisposable
                 catch { }
             }
 
+            var raw = _rawTransport;
+            _rawTransport = null;
+            if (raw != null)
+            {
+                raw.Faulted -= RawTransport_Faulted;
+                try { await raw.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+
             cancellation?.Dispose();
             _binding = null;
             _lastBroadcastUtc = null;
+            _lastRequestUtc = null;
+            _lastReplyUtc = null;
+            _transportMode = SntpClockTransportMode.None;
+            ResetEvidenceCounters();
             SetState(SntpClockServiceState.Stopped, "SNTP clock service is stopped.");
         }
         finally
@@ -154,51 +201,110 @@ public sealed class SntpClockService : IAsyncDisposable
         _lifecycleGate.Dispose();
     }
 
-    private Task StartCoreAsync(SntpNetworkBinding binding, CancellationToken cancellationToken)
+    private async Task StartCoreAsync(SntpNetworkBinding binding, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         SetState(SntpClockServiceState.Starting, $"Preparing SNTP on {binding.Summary}.");
 
+        ResetEvidenceCounters();
+        _clients.Clear();
+        _clockHealth.Reset();
+        _binding = binding;
+
+        var serviceCancellation = new CancellationTokenSource();
+        _serviceCancellation = serviceCancellation;
+
         var udp = new UdpClient(AddressFamily.InterNetwork);
         try
         {
-            // Do not co-bind UDP/123. If Windows Time or another server owns it, fail clearly
-            // rather than risk nondeterministic packet delivery between two NTP listeners.
+            // Prefer the ordinary Windows socket path when it is actually available.
+            // Never co-bind or stop W32Time: a bind conflict falls through to Npcap RAW.
             udp.Client.ExclusiveAddressUse = true;
             udp.EnableBroadcast = true;
             udp.Client.Bind(new IPEndPoint(binding.LocalAddress, 123));
+
+            _udp = udp;
+            _transportMode = SntpClockTransportMode.UdpSocket;
+            SetState(
+                SntpClockServiceState.Serving,
+                binding.DirectedBroadcast == null
+                    ? $"SNTP UDP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}. No usable directed broadcast is available."
+                    : $"SNTP UDP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
+
+            _receiveTask = ReceiveLoopAsync(udp, serviceCancellation.Token);
+            _broadcastTask = BroadcastLoopAsync(binding, serviceCancellation.Token);
+            RequestImmediateBroadcast();
+            return;
         }
         catch (SocketException ex)
         {
             udp.Dispose();
-            SetState(
-                SntpClockServiceState.PortUnavailable,
-                $"UDP/123 is unavailable on {binding.LocalAddress} ({ex.SocketErrorCode}). Windows Time or another NTP service may already own the port.");
-            return Task.CompletedTask;
+            _udp = null;
+            await StartRawFallbackAsync(binding, ex.SocketErrorCode.ToString(), serviceCancellation, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             udp.Dispose();
-            SetState(SntpClockServiceState.Faulted, $"Could not start SNTP on {binding.LocalAddress}: {ex.Message}");
-            return Task.CompletedTask;
+            _udp = null;
+            await StartRawFallbackAsync(binding, ex.Message, serviceCancellation, cancellationToken).ConfigureAwait(false);
         }
+    }
 
-        _binding = binding;
-        _udp = udp;
-        _clients.Clear();
-        _clockHealth.Reset();
-        _serviceCancellation = new CancellationTokenSource();
+    private async Task StartRawFallbackAsync(
+        SntpNetworkBinding binding,
+        string udpFailure,
+        CancellationTokenSource serviceCancellation,
+        CancellationToken startCancellation)
+    {
+        startCancellation.ThrowIfCancellationRequested();
+        SntpRawNpcapTransport? raw = null;
+        try
+        {
+            raw = new SntpRawNpcapTransport(binding);
+            raw.Faulted += RawTransport_Faulted;
+            _rawTransport = raw;
+            await raw.StartAsync(HandleRawClientRequestAsync, serviceCancellation.Token).ConfigureAwait(false);
+            _transportMode = SntpClockTransportMode.NpcapRaw;
+
+            SetState(
+                SntpClockServiceState.Serving,
+                binding.DirectedBroadcast == null
+                    ? $"UDP/123 unavailable ({udpFailure}); Npcap RAW SNTP fallback active on {binding.InterfaceName} / {binding.LocalAddress}. Windows Time was left unchanged."
+                    : $"UDP/123 unavailable ({udpFailure}); Npcap RAW SNTP fallback active on {binding.InterfaceName} / {binding.LocalAddress}. Mode 5 broadcast targets {binding.DirectedBroadcast}:123. Windows Time was left unchanged.");
+
+            _broadcastTask = BroadcastLoopAsync(binding, serviceCancellation.Token);
+            RequestImmediateBroadcast();
+        }
+        catch (Exception rawException)
+        {
+            if (raw != null)
+            {
+                raw.Faulted -= RawTransport_Faulted;
+                if (ReferenceEquals(_rawTransport, raw))
+                    _rawTransport = null;
+                try { await raw.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+
+            try { serviceCancellation.Cancel(); } catch { }
+            serviceCancellation.Dispose();
+            if (ReferenceEquals(_serviceCancellation, serviceCancellation))
+                _serviceCancellation = null;
+            _binding = null;
+            _transportMode = SntpClockTransportMode.None;
+            SetState(
+                SntpClockServiceState.PortUnavailable,
+                $"UDP/123 unavailable ({udpFailure}) and Npcap RAW fallback could not start: {rawException.Message}. IEC 61850 remains unaffected.");
+        }
+    }
+
+    private void RawTransport_Faulted(Exception exception)
+    {
+        if (_serviceCancellation?.IsCancellationRequested != false)
+            return;
 
         SetState(
-            SntpClockServiceState.Serving,
-            binding.DirectedBroadcast == null
-                ? $"SNTP unicast server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}. This subnet has no usable directed broadcast address."
-                : $"SNTP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
-
-        _receiveTask = ReceiveLoopAsync(udp, _serviceCancellation.Token);
-        _broadcastTask = BroadcastLoopAsync(udp, binding, _serviceCancellation.Token);
-        RequestImmediateBroadcast();
-        return Task.CompletedTask;
+            SntpClockServiceState.Faulted,
+            $"Npcap RAW SNTP capture failed: {exception.Message}. IEC 61850 remains unaffected.");
     }
 
     private async Task ReceiveLoopAsync(UdpClient udp, CancellationToken cancellationToken)
@@ -223,62 +329,84 @@ public sealed class SntpClockService : IAsyncDisposable
             if (!SntpPacket.TryReadClientRequest(received.Buffer, out var request))
                 continue;
 
-            var health = _clockHealth.Sample(receiveUtc);
-            var transmitUtc = DateTimeOffset.UtcNow;
-            byte[] reply;
-            try
-            {
-                reply = SntpPacket.BuildServerReply(
-                    received.Buffer,
-                    receiveUtc,
-                    transmitUtc,
-                    _profile with { ReferenceUtc = health.ReferenceUtc },
-                    health.IsHealthy);
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-                SetState(SntpClockServiceState.Serving,
-                    "SNTP request was ignored because the Windows UTC value is outside the NTP timestamp range.");
+            RecordClientRequest(received.RemoteEndPoint.Address, receiveUtc, request.Version);
+            var reply = BuildReplyOrNull(received.Buffer, receiveUtc, out var transmitUtc);
+            if (reply == null)
                 continue;
-            }
 
             try
             {
                 await udp.SendAsync(reply, reply.Length, received.RemoteEndPoint).ConfigureAwait(false);
+                RecordReply(received.RemoteEndPoint.Address, transmitUtc, request.Version);
             }
             catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (SocketException ex)
             {
                 if (!cancellationToken.IsCancellationRequested)
                     SetState(SntpClockServiceState.Faulted, $"SNTP reply to {received.RemoteEndPoint.Address} failed: {ex.SocketErrorCode}.");
-                continue;
             }
-
-            var key = received.RemoteEndPoint.Address.ToString();
-            var observation = _clients.AddOrUpdate(
-                key,
-                _ => new SntpClientObservation(received.RemoteEndPoint.Address, transmitUtc, 1, request.Version),
-                (_, previous) => previous with
-                {
-                    LastRequestUtc = transmitUtc,
-                    RequestCount = previous.RequestCount + 1,
-                    Version = request.Version
-                });
-            ClientRequestObserved?.Invoke(observation);
         }
     }
 
-    private async Task BroadcastLoopAsync(
-        UdpClient udp,
-        SntpNetworkBinding binding,
+    private async Task HandleRawClientRequestAsync(
+        SntpRawClientFrame rawRequest,
+        DateTimeOffset receiveUtc,
         CancellationToken cancellationToken)
+    {
+        if (!SntpPacket.TryReadClientRequest(rawRequest.Payload, out var request))
+            return;
+
+        RecordClientRequest(rawRequest.SourceAddress, receiveUtc, request.Version);
+        var reply = BuildReplyOrNull(rawRequest.Payload, receiveUtc, out var transmitUtc);
+        if (reply == null)
+            return;
+
+        var raw = _rawTransport;
+        if (raw == null)
+            return;
+
+        try
+        {
+            await raw.SendReplyAsync(rawRequest, reply, cancellationToken).ConfigureAwait(false);
+            RecordReply(rawRequest.SourceAddress, transmitUtc, request.Version);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            SetState(SntpClockServiceState.Faulted, $"RAW SNTP reply to {rawRequest.SourceAddress} failed: {ex.Message}");
+        }
+    }
+
+    private byte[]? BuildReplyOrNull(ReadOnlySpan<byte> requestPacket, DateTimeOffset receiveUtc, out DateTimeOffset transmitUtc)
+    {
+        var health = _clockHealth.Sample(receiveUtc);
+        transmitUtc = DateTimeOffset.UtcNow;
+        try
+        {
+            return SntpPacket.BuildServerReply(
+                requestPacket,
+                receiveUtc,
+                transmitUtc,
+                _profile with { ReferenceUtc = health.ReferenceUtc },
+                health.IsHealthy);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            SetState(
+                SntpClockServiceState.Serving,
+                "SNTP request was ignored because the Windows UTC value is outside the NTP timestamp range.");
+            return null;
+        }
+    }
+
+    private async Task BroadcastLoopAsync(SntpNetworkBinding binding, CancellationToken cancellationToken)
     {
         if (binding.DirectedBroadcast == null)
             return;
 
-        var destination = new IPEndPoint(binding.DirectedBroadcast, 123);
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-
         while (!cancellationToken.IsCancellationRequested)
         {
             try
@@ -295,15 +423,17 @@ public sealed class SntpClockService : IAsyncDisposable
                             now,
                             _profile with { ReferenceUtc = health.ReferenceUtc },
                             synchronized: true);
-                        await udp.SendAsync(packet, packet.Length, destination).ConfigureAwait(false);
+
+                        await SendBroadcastPacketAsync(binding.DirectedBroadcast, packet, cancellationToken).ConfigureAwait(false);
                         _lastBroadcastUtc = now;
+                        Interlocked.Increment(ref _broadcastCount);
                         PublishStatus();
                     }
                     else
                     {
                         SetState(
                             SntpClockServiceState.Serving,
-                            $"SNTP is listening on {binding.LocalAddress}:123, but this broadcast was suppressed because the Windows clock health check failed: {health.Detail}");
+                            $"SNTP broadcast suppressed because the Windows clock health check failed: {health.Detail}");
                     }
                 }
 
@@ -318,7 +448,68 @@ public sealed class SntpClockService : IAsyncDisposable
                     SetState(SntpClockServiceState.Faulted, $"SNTP broadcast failed: {ex.SocketErrorCode}.");
                 break;
             }
+            catch (Exception ex)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    SetState(SntpClockServiceState.Faulted, $"SNTP broadcast failed: {ex.Message}");
+                break;
+            }
         }
+    }
+
+    private async Task SendBroadcastPacketAsync(
+        IPAddress directedBroadcast,
+        byte[] packet,
+        CancellationToken cancellationToken)
+    {
+        if (_transportMode == SntpClockTransportMode.UdpSocket && _udp != null)
+        {
+            var destination = new IPEndPoint(directedBroadcast, 123);
+            await _udp.SendAsync(packet, packet.Length, destination).ConfigureAwait(false);
+            return;
+        }
+
+        if (_transportMode == SntpClockTransportMode.NpcapRaw && _rawTransport != null)
+        {
+            await _rawTransport.SendBroadcastAsync(directedBroadcast, packet, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        throw new InvalidOperationException("No active SNTP transport is available for broadcast.");
+    }
+
+    private void RecordClientRequest(IPAddress address, DateTimeOffset requestUtc, byte version)
+    {
+        _lastRequestUtc = requestUtc;
+        Interlocked.Increment(ref _clientRequestCount);
+        var key = address.ToString();
+        var observation = _clients.AddOrUpdate(
+            key,
+            _ => new SntpClientObservation(address, requestUtc, 1, version),
+            (_, previous) => previous with
+            {
+                LastRequestUtc = requestUtc,
+                RequestCount = previous.RequestCount + 1,
+                Version = version
+            });
+        ClientRequestObserved?.Invoke(observation);
+        PublishStatus();
+    }
+
+    private void RecordReply(IPAddress address, DateTimeOffset sentUtc, byte version)
+    {
+        _lastReplyUtc = sentUtc;
+        var replyCount = Interlocked.Increment(ref _replyCount);
+        ReplySent?.Invoke(new SntpReplyObservation(address, sentUtc, replyCount, version, _transportMode));
+        PublishStatus();
+    }
+
+    private void ResetEvidenceCounters()
+    {
+        Interlocked.Exchange(ref _broadcastCount, 0);
+        Interlocked.Exchange(ref _clientRequestCount, 0);
+        Interlocked.Exchange(ref _replyCount, 0);
+        Interlocked.Exchange(ref _broadcastPulseRequested, 0);
     }
 
     private void SetState(SntpClockServiceState state, string detail)
@@ -372,7 +563,6 @@ public sealed class SntpClockService : IAsyncDisposable
 
                 if (jump > TimeSpan.FromSeconds(2))
                 {
-                    // Reject one packet after a large wall-clock step, then re-baseline.
                     _baselineUtc = now;
                     _baselineTimestamp = Stopwatch.GetTimestamp();
                     _referenceUtc = now;

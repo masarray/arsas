@@ -91,7 +91,7 @@ begin
   begin
     SuppressibleMsgBox(
       'ARSAS is installed and its MMS/SCL features are ready.' + #13#10 + #13#10 +
-      'Npcap was not detected. Install Npcap separately before using the GOOSE Subscriber. ' +
+      'Npcap was not detected. Install Npcap separately before using the GOOSE Subscriber or the Clock Sync RAW fallback that keeps SNTP working when Windows already owns UDP/123. ' +
       'Keep WinPcap API compatibility enabled when required by your engineering workstation policy.',
       mbInformation,
       MB_OK,

@@ -26,6 +26,7 @@ public partial class MainWindow
             {
                 await _sntpClockService.StopAsync();
                 _clockSyncObservedClients.Clear();
+                _clockSyncRepliedClients.Clear();
                 AddLog("INFO", "Clock Sync",
                     "Clock Sync disabled from the FAT workspace. IEC 61850 monitoring remains active.");
             }
@@ -48,6 +49,6 @@ public partial class MainWindow
             AttachClockSyncDevice(device);
 
         AddLog("INFO", "Clock Sync",
-            "Clock Sync enabled from the FAT workspace. ARSAS will advertise laptop time to connected IPv4 IEDs using the SIPROTEC-compatible SNTP profile.");
+            "Clock Sync enabled from the FAT workspace. ARSAS will serve connected IPv4 IEDs using normal UDP/123 when available and an Npcap RAW fallback when Windows already owns that port. Windows Time is never stopped or reconfigured.");
     }
 }
