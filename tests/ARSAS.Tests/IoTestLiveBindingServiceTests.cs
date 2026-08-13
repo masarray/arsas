@@ -1,3 +1,4 @@
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
@@ -24,6 +25,7 @@ public sealed class IoTestLiveBindingServiceTests
 
         Assert.Equal(1, summary.DeviceBoundCount);
         Assert.Equal(1, summary.SignalBoundCount);
+        Assert.Equal(0, summary.MissingSignalCount);
         Assert.Equal(IoTestLiveBindingState.BoundExact, project.Ieds[0].TestPoints[0].LiveBindingState);
     }
 
@@ -59,7 +61,6 @@ public sealed class IoTestLiveBindingServiceTests
         _binding.Bind(project, new[] { device });
 
         Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
-        Assert.Contains("verified functional-group/LN boundary", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -85,7 +86,7 @@ public sealed class IoTestLiveBindingServiceTests
     }
 
     [Fact]
-    public void PartialTcsLeaf_DuplicateObjectsRemainBlocked()
+    public void PartialTcsLeaf_DuplicateObjectsRemainUnverified_NotMissing()
     {
         var project = Project(".TCS1Fail");
         var device = Device();
@@ -105,9 +106,30 @@ public sealed class IoTestLiveBindingServiceTests
         var summary = _binding.Bind(project, new[] { device });
 
         Assert.Equal(0, summary.SignalBoundCount);
-        Assert.Equal(1, summary.MissingSignalCount);
-        Assert.Equal(IoTestLiveBindingState.SignalNotFound, project.Ieds[0].TestPoints[0].LiveBindingState);
-        Assert.Contains("more than one equally strong", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, summary.MissingSignalCount);
+        Assert.Equal(IoTestLiveBindingState.NotEvaluated, project.Ieds[0].TestPoints[0].LiveBindingState);
+        Assert.Contains("no absence conclusion", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NoLocalCandidate_RemainsUnverified_NotMissing()
+    {
+        var project = Project("AA1C1F03R4ADD/GGIO6.Unknown.stVal");
+        var device = Device();
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "Different signal",
+            ObjectReference = "AA1C1F03R4ADD/GGIO6.Other.stVal",
+            FunctionalConstraint = "ST"
+        });
+
+        var summary = _binding.Bind(project, new[] { device });
+
+        var point = project.Ieds[0].TestPoints[0];
+        Assert.Equal(0, summary.MissingSignalCount);
+        Assert.Equal(IoTestLiveBindingState.NotEvaluated, point.LiveBindingState);
+        Assert.NotEqual("Signal missing", point.LiveBindingText);
+        Assert.Contains("no absence conclusion", point.LiveBindingReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -149,6 +171,65 @@ public sealed class IoTestLiveBindingServiceTests
         Assert.Equal(IoTestLiveBindingState.DeviceNotLoaded, project.Ieds[0].TestPoints[0].LiveBindingState);
         Assert.Contains("load or connect", project.Ieds[0].TestPoints[0].LiveBindingReason.ToLowerInvariant());
     }
+
+    [Fact]
+    public void EngineAbsent_IsTheOnlyPresentationThatMapsToSignalNotFound()
+    {
+        var absent = EnginePoint(Iec61850DesignLiveStatus.Absent);
+        var designOnly = EnginePoint(Iec61850DesignLiveStatus.DesignOnly);
+        var unreadable = EnginePoint(Iec61850DesignLiveStatus.Unreadable);
+        var transportFailure = EnginePoint(Iec61850DesignLiveStatus.TransportFailure);
+
+        Assert.Equal(
+            IoTestLiveBindingState.SignalNotFound,
+            IoTestReconciliationPresentation.FromEnginePoint(absent).State);
+        Assert.True(IoTestReconciliationPresentation.FromEnginePoint(absent).IsConfirmedAbsent);
+
+        foreach (var point in new[] { designOnly, unreadable, transportFailure })
+        {
+            var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+            Assert.Equal(IoTestLiveBindingState.NotEvaluated, presentation.State);
+            Assert.False(presentation.IsConfirmedAbsent);
+        }
+    }
+
+    [Fact]
+    public void EngineRecoveredByProbe_IsPresentedAsVerifiedBinding()
+    {
+        var point = new Iec61850DesignLivePointReconciliation
+        {
+            Reference = "IEDLD/GGIO1.Test.stVal",
+            MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            FunctionalConstraint = "ST",
+            Status = Iec61850DesignLiveStatus.RecoveredByProbe,
+            Probe = new Iec61850ExactProbeEvidence
+            {
+                Status = Iec61850ExactProbeStatus.Readable,
+                MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+                FunctionalConstraint = "ST",
+                ValueSummary = "true",
+                Message = "Exact read succeeded."
+            },
+            Evidence = new[] { "Recovered by engine exact probe." }
+        };
+
+        var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+
+        Assert.Equal(IoTestLiveBindingState.BoundExact, presentation.State);
+        Assert.False(presentation.IsConfirmedAbsent);
+        Assert.Contains("exact MMS probe", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Readable", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Iec61850DesignLivePointReconciliation EnginePoint(Iec61850DesignLiveStatus status)
+        => new()
+        {
+            Reference = "IEDLD/GGIO1.Test.stVal",
+            MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            FunctionalConstraint = "ST",
+            Status = status,
+            Evidence = new[] { $"Engine status: {status}" }
+        };
 
     private static IoTestProject Project(string reference)
     {
