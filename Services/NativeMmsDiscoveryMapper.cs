@@ -509,7 +509,18 @@ public static class NativeMmsDiscoveryMapper
                 yield break;
             }
 
-            if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase)))
+            if (IsFundamentalScalarMeasurementObject(first))
+            {
+                if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
+                    yield return Append(current, "f");
+                else
+                    yield return Append(current, "mag", "f");
+                yield break;
+            }
+
+            if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
             {
                 yield return Append(current, "f");
                 yield break;
@@ -684,6 +695,12 @@ public static class NativeMmsDiscoveryMapper
             yield break;
         }
 
+        if ((lnClass is "MMXU" or "MMXN") && IsFundamentalScalarMeasurementObject(name))
+        {
+            yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
+            yield break;
+        }
+
         if (LooksLikeAnalogDataObject(name))
         {
             yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
@@ -703,6 +720,9 @@ public static class NativeMmsDiscoveryMapper
     private static bool LooksLikeAvrDomain(string domain)
         => domain.Contains("AVR", StringComparison.OrdinalIgnoreCase) ||
            domain.Contains("ATCC", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFundamentalScalarMeasurementObject(string name)
+        => EqualsAny(name, "Hz", "TotW", "TotVAr", "TotVA", "TotPF");
 
     private static bool LooksLikeAnalogDataObject(string name)
     {
@@ -740,9 +760,14 @@ public static class NativeMmsDiscoveryMapper
     private static string InferUnitFromDataObject(string name)
     {
         var lower = name.ToLowerInvariant();
-        if (lower.Contains('v')) return "V";
+        if (lower is "totvar" or "var") return "VAr";
+        if (lower is "totva" or "va") return "VA";
+        if (lower is "totw" or "w") return "W";
+        if (lower == "hz") return "Hz";
+        if (lower.Contains("pf")) return string.Empty;
         if (lower.Contains("loda") || lower.Contains("circa") || lower.Contains("limloda")) return "A";
         if (lower.Contains("phang")) return "deg";
+        if (lower.Contains('v')) return "V";
         if (lower.Contains("tms")) return "s";
         return string.Empty;
     }
@@ -891,7 +916,7 @@ public static class NativeMmsDiscoveryMapper
         if (r.EndsWith(".t") || r.EndsWith(".tm")) return "Timestamp";
         if (r.EndsWith(".pos.stval")) return "Position";
         if (r.Contains(".setmag") || r.EndsWith(".setval")) return "Setting";
-        if (r.EndsWith(".mag.f") || r.Contains(".cval.mag.f")) return "Measurement";
+        if (r.EndsWith(".mag.f") || r.EndsWith(".instmag.f") || r.Contains(".cval.mag.f")) return "Measurement";
         if (IsProtectionClass(cls) || r.EndsWith(".op.general") || r.EndsWith(".str.general") || r.EndsWith(".tr.general")) return "Protection";
         if (cls is "ATCC" or "AVC" or "AVCO" or "GGIO" or "YPTR") return "Status";
         return "Status";
@@ -918,11 +943,14 @@ public static class NativeMmsDiscoveryMapper
         var r = Normalize(reference);
         if (r.Contains(".a.")) return "A";
         if (r.Contains("loda") || r.Contains("circa") || r.Contains("limloda")) return "A";
+        if (r.Contains(".totvar.") || r.Contains(".var.")) return "VAr";
+        if (r.Contains(".totva.") || r.Contains(".va.")) return "VA";
+        if (r.Contains(".totw.") || r.Contains(".w.")) return "W";
+        if (r.Contains(".hz.")) return "Hz";
         if (r.Contains(".phv.") || r.Contains(".ppv.")) return "V";
         if (r.Contains("ctlv") || r.Contains("bndctrv") || r.Contains("ctldv")) return "V";
         if (r.Contains("phang")) return "deg";
         if (r.Contains("tms")) return "s";
-        if (r.Contains(".hz")) return "Hz";
         return string.Empty;
     }
 
@@ -957,7 +985,9 @@ public static class NativeMmsDiscoveryMapper
         if (parent.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)) parent = parent[..^14];
         else if (parent.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)) parent = parent[..^6];
         else if (parent.EndsWith(".general", StringComparison.OrdinalIgnoreCase)) parent = parent[..^8];
+        else if (parent.EndsWith(".instCVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^15];
         else if (parent.EndsWith(".cVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^11];
+        else if (parent.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^10];
         else if (parent.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^6];
         else
         {

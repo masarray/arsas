@@ -14,6 +14,7 @@ public static class SasOperationalSignalPolicy
     private static readonly Regex GgioAnalog = new(@"\.anin\d+\.(?:mag\.)?f$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MeterEnergy = new(@"\.(?:totwh|totvarh|supwh|dmdwh|rcvwh)\.(?:actval|stval)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex FundamentalPower = new(@"\.(?:w|var|va|pf)\.(?:phsa|phsb|phsc|net|tot)\.", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex FundamentalScalarPower = new(@"\.(?:totw|totvar|totva|totpf|hz)\.(?:instmag|mag)\.f$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex StatisticOrHarmonic = new(@"(^|[./])(?:har|harm|min|max|mean|avg|average|dmd|dmmd)\d*(?:mmxu|mmxn)|\.(?:mean|min|max|avg|average|dmd|har|harm|thd|tdd)(?:[.$/]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex GgioControl = new(@"\.(?:spcso|dpcso|inc|iscso|apcso|bscso)\d*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -127,7 +128,7 @@ public static class SasOperationalSignalPolicy
         if (StatisticOrHarmonic.IsMatch(reference))
             return false;
 
-        if (reference.EndsWith(".hz.mag.f", StringComparison.OrdinalIgnoreCase))
+        if (FundamentalScalarPower.IsMatch(reference))
             return true;
 
         var hasMagnitude = reference.Contains(".cval.mag.f", StringComparison.OrdinalIgnoreCase) ||
