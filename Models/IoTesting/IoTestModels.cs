@@ -167,11 +167,15 @@ public sealed class IoTestPointRuntime : ObservableObject
         CurrentValue = observation.RawValue;
         CurrentQuality = observation.Quality;
         CurrentSource = observation.AcquisitionSource;
-        CurrentIedTimestamp = observation.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture) ?? "—";
+        CurrentIedTimestamp = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+            observation.IedTimestamp,
+            "yyyy-MM-dd HH:mm:ss.fff zzz");
     }
 
     private static string FormatRelayTimestamp(DateTimeOffset? value)
-        => value?.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) ?? "—";
+        => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+            value,
+            "yyyy-MM-dd HH:mm:ss.fff");
 
     private static string BuildEvidenceToolTip(IoTestTransitionEvidence? evidence, string label)
     {
