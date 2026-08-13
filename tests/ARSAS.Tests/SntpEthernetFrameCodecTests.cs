@@ -148,15 +148,15 @@ public sealed class SntpEthernetFrameCodecTests
         BinaryPrimitives.WriteUInt16BigEndian(ip.Slice(2, 2), (ushort)ipLength);
         ip[8] = 64;
         ip[9] = 17;
-        RelayIp.GetAddressBytes().CopyTo(ip.Slice(12, 4));
-        LaptopIp.GetAddressBytes().CopyTo(ip.Slice(16, 4));
+        RelayIp.GetAddressBytes().AsSpan().CopyTo(ip.Slice(12, 4));
+        LaptopIp.GetAddressBytes().AsSpan().CopyTo(ip.Slice(16, 4));
         BinaryPrimitives.WriteUInt16BigEndian(ip.Slice(10, 2), InternetChecksum(ip));
 
         var udp = frame.AsSpan(ethernetLength + 20, udpLength);
         BinaryPrimitives.WriteUInt16BigEndian(udp.Slice(0, 2), sourcePort);
         BinaryPrimitives.WriteUInt16BigEndian(udp.Slice(2, 2), destinationPort);
         BinaryPrimitives.WriteUInt16BigEndian(udp.Slice(4, 2), (ushort)udpLength);
-        ntpPayload.CopyTo(udp.Slice(8));
+        ntpPayload.AsSpan().CopyTo(udp.Slice(8));
         return frame;
     }
 
