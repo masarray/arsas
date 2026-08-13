@@ -1,7 +1,7 @@
 {
-  "version": "1.6.24",
+  "version": "1.6.25",
   "channel": "stable",
   "platform": "windows-x64",
   "primaryAsset": "ARSAS-Windows-x64-Setup.exe",
-  "publicationRequest": 12
+  "publicationRequest": 13
 }
