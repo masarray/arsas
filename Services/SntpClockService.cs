@@ -192,8 +192,8 @@ public sealed class SntpClockService : IAsyncDisposable
         SetState(
             SntpClockServiceState.Serving,
             binding.DirectedBroadcast == null
-                ? $"SNTP unicast server active on {binding.LocalAddress}:123. This subnet has no usable directed broadcast address."
-                : $"SNTP server active on {binding.LocalAddress}:123; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
+                ? $"SNTP unicast server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}. This subnet has no usable directed broadcast address."
+                : $"SNTP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
 
         _receiveTask = ReceiveLoopAsync(udp, _serviceCancellation.Token);
         _broadcastTask = BroadcastLoopAsync(udp, binding, _serviceCancellation.Token);
@@ -383,7 +383,7 @@ public sealed class SntpClockService : IAsyncDisposable
                     true,
                     now,
                     _referenceUtc,
-                    "Windows UTC is monotonic and sane; advertised as low-priority local reference (stratum 15), not GPS/PTP.");
+                    $"Windows UTC is monotonic and sane; advertised as local commissioning source with SIPROTEC compatibility stratum {_profile.Stratum}, not as GPS/PTP traceability.");
             }
         }
     }
