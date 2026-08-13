@@ -14,7 +14,7 @@ public partial class IoListTestingWindow
     private bool _selectedIedContextInstalled;
 
     public bool SelectedCanStartWorkflow =>
-        SelectedIed != null && !IsPreparingIed && Session.CanStart;
+        SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
 
     public bool SelectedCanPause =>
         IsSelectedSessionIed && Session.CanPause;
@@ -32,27 +32,30 @@ public partial class IoListTestingWindow
             if (SelectedIed == null)
                 return "Select IED";
 
-            if (_preparingIed != null)
-            {
-                return ReferenceEquals(_preparingIed, SelectedIed)
-                    ? $"Connecting {SelectedIed.IedName}…"
-                    : $"{_preparingIed.IedName} connecting…";
-            }
+            if (SelectedIed.IsPreparing)
+                return $"Connecting {SelectedIed.IedName}…";
 
             if (Session.IsSessionActive)
             {
                 return IsSelectedSessionIed
                     ? "IED session active"
-                    : $"{Session.ActiveIed?.IedName ?? "Another IED"} active";
+                    : $"{Session.ActiveIed?.IedName ?? "Another IED"} FAT active";
             }
 
             var enabled = EnabledPoints(SelectedIed);
-            if (enabled.Count > 0 && enabled.All(point => point.Runtime.State == IoTestPointState.Passed))
-                return "Reconnect / Retest";
+            var allPassed = enabled.Count > 0 && enabled.All(point => point.Runtime.State == IoTestPointState.Passed);
+            var hasCompleted = enabled.Any(point => point.Runtime.IsComplete);
 
-            return enabled.Any(point => point.Runtime.IsComplete)
-                ? "Connect & Continue IED"
-                : "Connect & Start IED";
+            if (SelectedIed.IsLiveMonitoring)
+            {
+                if (allPassed)
+                    return "Retest FAT";
+                return hasCompleted ? "Continue FAT" : "Start FAT";
+            }
+
+            if (allPassed)
+                return "Reconnect / Retest";
+            return hasCompleted ? "Connect & Continue IED" : "Connect & Start IED";
         }
     }
 
@@ -63,8 +66,8 @@ public partial class IoListTestingWindow
             if (SelectedIed == null)
                 return "Select an imported IED.";
 
-            if (ReferenceEquals(_preparingIed, SelectedIed))
-                return PreparationStatusText;
+            if (SelectedIed.IsPreparing)
+                return SelectedIed.PreparationStatusText;
 
             if (IsSelectedSessionIed && Session.State != IoTestSessionState.Idle)
                 return Session.StatusText;
@@ -152,12 +155,100 @@ public partial class IoListTestingWindow
         _printPreviewToggle.ToolTip = "Toggle the selected IED between signal evidence and native print preview";
     }
 
-    private async void StartSelectedIedSafely_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Card-local connection action. Several different IED cards can run this method at
+    /// once; each device owns its own MainWindow connection workflow and model progress.
+    /// Evidence capture remains a separate, single-active session selected by Start FAT.
+    /// </summary>
+    private async void ConnectIed_Click(object sender, RoutedEventArgs e)
     {
-        if (IsPreparingIed)
+        var targetIed = (sender as FrameworkElement)?.DataContext as IoTestIedPlan;
+        if (targetIed == null || targetIed.IsPreparing)
             return;
 
+        var enabledReady = targetIed.TestPoints
+            .Where(point => point.TestEnabled && point.ImportReady)
+            .ToList();
+        if (enabledReady.Count == 0)
+        {
+            ShowActionResult(
+                IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED."),
+                "IED connection scope is not ready");
+            return;
+        }
+
+        // For a continuation, connect only what still needs evidence. Completed rows keep
+        // their sealed evidence and do not have to exist in a replacement relay model.
+        // If every row is already complete, refresh the complete enabled scope instead.
+        var pendingScope = enabledReady.Where(point => !point.Runtime.IsComplete).ToList();
+        IReadOnlyCollection<IoTestPointPlan> connectionScope = pendingScope.Count > 0
+            ? pendingScope
+            : enabledReady;
+
+        if (ReferenceEquals(SelectedIed, targetIed))
+            PreparationStatusText = $"Connecting {targetIed.IedName} · {targetIed.IpAddress}:102";
+        RaisePreparationProperties();
+        RaiseSelectedIedContextProperties();
+
+        try
+        {
+            if (Owner is not MainWindow engineeringWindow)
+                return;
+
+            var progress = new Progress<string>(message =>
+            {
+                if (ReferenceEquals(SelectedIed, targetIed))
+                    PreparationStatusText = message;
+                RaiseStatusProperties();
+                RaiseSelectedIedContextProperties();
+            });
+
+            var preparation = await PrepareIndependentIedConnectionAsync(
+                engineeringWindow,
+                targetIed,
+                progress,
+                connectionScope);
+
+            RaiseStatusProperties();
+            RaiseSelectedIedContextProperties();
+            if (!preparation.Succeeded)
+            {
+                if (ReferenceEquals(SelectedIed, targetIed))
+                    PreparationStatusText = preparation.Message;
+                ShowActionResult(preparation, $"{targetIed.IedName} acquisition could not start");
+                return;
+            }
+
+            await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, targetIed);
+            if (ReferenceEquals(SelectedIed, targetIed))
+                PreparationStatusText = $"{targetIed.IedName} live · ready for FAT evidence";
+            Storage?.ScheduleSave();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            if (ReferenceEquals(SelectedIed, targetIed))
+                PreparationStatusText = ex.Message;
+            MessageBox.Show(
+                this,
+                ex.Message,
+                $"Connect {targetIed.IedName} failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            targetIed.SetPreparationState(false, targetIed.LiveStatusText);
+            RaisePreparationProperties();
+            RaiseSelectedIedContextProperties();
+        }
+    }
+
+    private async void StartSelectedIedSafely_Click(object sender, RoutedEventArgs e)
+    {
         var selectedIed = SelectedIed;
+        if (selectedIed?.IsPreparing == true)
+            return;
+
         if (selectedIed == null)
         {
             var missingSelection = IoTestSessionPreflight.Validate(null);
@@ -180,7 +271,7 @@ public partial class IoListTestingWindow
         {
             var answer = MessageBox.Show(
                 this,
-                $"All {completedPoints.Count} enabled rows for {selectedIed.IedName} already contain completed evidence.\n\nA normal Connect click will not erase them. Choose Yes only when you intentionally want to retest every completed row and replace its ON/OFF evidence.",
+                $"All {completedPoints.Count} enabled rows for {selectedIed.IedName} already contain completed evidence.\n\nA normal Start FAT click will not erase them. Choose Yes only when you intentionally want to retest every completed row and replace its ON/OFF evidence.",
                 "Retest completed evidence?",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
@@ -220,7 +311,6 @@ public partial class IoListTestingWindow
             {
                 var progress = new Progress<string>(message =>
                 {
-                    selectedIed.SetPreparationState(true, message);
                     PreparationStatusText = message;
                     RaiseStatusProperties();
                     RaiseSelectedIedContextProperties();
@@ -278,6 +368,17 @@ public partial class IoListTestingWindow
         }
     }
 
+    private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync(
+        MainWindow engineeringWindow,
+        IoTestIedPlan targetIed,
+        IProgress<string> progress,
+        IReadOnlyCollection<IoTestPointPlan> connectionScope)
+        => engineeringWindow.PrepareIoTestIedForFatAsync(
+            Project,
+            targetIed,
+            progress,
+            connectionScope);
+
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(SelectedIed) or nameof(IsPreparingIed) or nameof(PreparationStatusText))
@@ -289,6 +390,9 @@ public partial class IoListTestingWindow
 
     private void ContextIed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
+            RaisePreparationProperties();
+
         if (!ReferenceEquals(sender, SelectedIed))
             return;
 

@@ -9,20 +9,25 @@ public partial class MainWindow
     private readonly IoTestSignalSelectionService _ioTestSignalSelectionService = new();
 
     /// <summary>
-    /// Prepares one imported IO-list IED for a monitoring-only FAT session. The workbook
-    /// supplies the endpoint and exact signal scope, so the operator does not need to
-    /// duplicate Add IED and signal-selection work in the engineering window.
+    /// Prepares one imported IO-list IED for monitoring-only FAT acquisition. Calls for
+    /// different IEDs are independent and may overlap; the IED model itself owns the
+    /// preparation flag, while live binding is deliberately scoped to this IED only.
     /// </summary>
     internal async Task<IoTestSessionActionResult> PrepareIoTestIedForFatAsync(
         IoTestProject project,
         IoTestIedPlan ied,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        IReadOnlyCollection<IoTestPointPlan>? requestedPointsOverride = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(ied);
 
-        var requestedPoints = ied.TestPoints
+        if (ied.IsPreparing)
+            return IoTestSessionActionResult.Failure($"{ied.IedName} is already being prepared for FAT acquisition.");
+
+        var requestedPoints = (requestedPointsOverride ?? ied.TestPoints)
             .Where(point => point.TestEnabled && point.ImportReady)
+            .Distinct()
             .ToList();
         if (requestedPoints.Count == 0)
             return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
@@ -49,7 +54,7 @@ public partial class MainWindow
                 Port = 102,
                 AllowDynamicDataSetWrites = true,
                 Status = "IO FAT ready to connect",
-                Detail = "Connect & Start will discover the live model and arm report-first acquisition for the imported FAT scope."
+                Detail = "Connect will discover the live model and arm report-first acquisition for this IED's imported FAT scope."
             };
             Devices.Add(device);
             RaiseWorkspaceCounts();
@@ -113,7 +118,7 @@ public partial class MainWindow
 
                 if (!connected)
                 {
-                    _ioTestLiveBindingService.Bind(project, Devices);
+                    _ioTestLiveBindingService.BindIed(ied, Devices);
                     return IoTestSessionActionResult.Failure(
                         $"ARSAS could not connect to {ied.IedName} at {ied.IpAddress}:102. Open Diagnostics for the MMS association or discovery error.");
                 }
@@ -124,7 +129,7 @@ public partial class MainWindow
                 await StopDeviceConnectionAsync(device);
                 if (!await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false))
                 {
-                    _ioTestLiveBindingService.Bind(project, Devices);
+                    _ioTestLiveBindingService.BindIed(ied, Devices);
                     return IoTestSessionActionResult.Failure($"Full live-model discovery failed for {ied.IedName}.");
                 }
             }
@@ -145,7 +150,18 @@ public partial class MainWindow
             }
 
             ReportProgress($"Matching {requestedPoints.Count} workbook signal(s)");
-            var selection = _ioTestSignalSelectionService.Resolve(ied, device);
+            var selection = _ioTestSignalSelectionService.Resolve(
+                new IoTestIedPlan
+                {
+                    IedName = ied.IedName,
+                    IpAddress = ied.IpAddress,
+                    IedRole = ied.IedRole,
+                    Location = ied.Location,
+                    VoltageLevel = ied.VoltageLevel,
+                    Switchgear = ied.Switchgear,
+                    TestPoints = requestedPoints
+                },
+                device);
             if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery)
             {
                 ReportProgress("Refreshing live model once · saved model missed workbook points");
@@ -156,7 +172,7 @@ public partial class MainWindow
 
                 if (!await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false))
                 {
-                    _ioTestLiveBindingService.Bind(project, Devices);
+                    _ioTestLiveBindingService.BindIed(ied, Devices);
                     return IoTestSessionActionResult.Failure($"Live-model refresh failed for {ied.IedName}.");
                 }
 
@@ -168,12 +184,23 @@ public partial class MainWindow
                         "Revalidating after fresh live-model discovery.",
                         device.DeviceId);
                 }
-                selection = _ioTestSignalSelectionService.Resolve(ied, device);
+                selection = _ioTestSignalSelectionService.Resolve(
+                    new IoTestIedPlan
+                    {
+                        IedName = ied.IedName,
+                        IpAddress = ied.IpAddress,
+                        IedRole = ied.IedRole,
+                        Location = ied.Location,
+                        VoltageLevel = ied.VoltageLevel,
+                        Switchgear = ied.Switchgear,
+                        TestPoints = requestedPoints
+                    },
+                    device);
             }
 
             if (!selection.Succeeded)
             {
-                _ioTestLiveBindingService.Bind(project, Devices);
+                _ioTestLiveBindingService.BindIed(ied, Devices);
                 return IoTestSessionActionResult.Failure(
                     $"ARSAS could not prepare the imported FAT scope safely. {selection.Message}");
             }
@@ -212,7 +239,7 @@ public partial class MainWindow
             device.RefreshComputed();
             RaiseWorkspaceCounts();
 
-            _ioTestLiveBindingService.Bind(project, Devices);
+            _ioTestLiveBindingService.BindIed(ied, Devices);
             var allRequestedPointsLive = requestedPoints.All(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
 
@@ -227,20 +254,20 @@ public partial class MainWindow
                 ReportProgress("Arming static RCB first · dynamic DataSet/URCB for uncovered points");
                 if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
                 {
-                    _ioTestLiveBindingService.Bind(project, Devices);
+                    _ioTestLiveBindingService.BindIed(ied, Devices);
                     return IoTestSessionActionResult.Failure(
                         $"{ied.IedName} connected, but ARSAS could not start live acquisition for the imported FAT scope.");
                 }
             }
 
             var acquisition = await SettleIoFatReportPriorityAsync(
-                project,
+                ied,
                 requestedPoints,
                 device,
                 ReportProgress,
                 allowSingleRestart: true);
 
-            var binding = _ioTestLiveBindingService.Bind(project, Devices);
+            var binding = _ioTestLiveBindingService.BindIed(ied, Devices);
             var liveCount = requestedPoints.Count(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
             if (liveCount != requestedPoints.Count)
@@ -266,18 +293,18 @@ public partial class MainWindow
             AddLog(
                 acquisition.PollingCount == 0 ? "INFO" : "WARN",
                 "IO Testing",
-                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. Project live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
+                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
         catch (OperationCanceledException)
         {
-            _ioTestLiveBindingService.Bind(project, Devices);
+            _ioTestLiveBindingService.BindIed(ied, Devices);
             return IoTestSessionActionResult.Failure($"Connection preparation for {ied.IedName} was cancelled.");
         }
         catch (Exception ex)
         {
-            _ioTestLiveBindingService.Bind(project, Devices);
+            _ioTestLiveBindingService.BindIed(ied, Devices);
             AddLog("ERROR", "IO Testing", $"{ied.IedName} automatic preparation failed: {ex}");
             MarkDiagnosticAlert();
             return IoTestSessionActionResult.Failure(
@@ -292,14 +319,14 @@ public partial class MainWindow
     }
 
     private async Task<IoFatAcquisitionSummary> SettleIoFatReportPriorityAsync(
-        IoTestProject project,
+        IoTestIedPlan ied,
         IReadOnlyCollection<IoTestPointPlan> requestedPoints,
         Iec61850MonitorDevice device,
         Action<string> reportProgress,
         bool allowSingleRestart)
     {
         var first = await ObserveIoFatAcquisitionAsync(
-            project,
+            ied,
             requestedPoints,
             device,
             reportProgress,
@@ -320,7 +347,7 @@ public partial class MainWindow
             return first;
 
         return await ObserveIoFatAcquisitionAsync(
-            project,
+            ied,
             requestedPoints,
             device,
             reportProgress,
@@ -328,7 +355,7 @@ public partial class MainWindow
     }
 
     private async Task<IoFatAcquisitionSummary> ObserveIoFatAcquisitionAsync(
-        IoTestProject project,
+        IoTestIedPlan ied,
         IReadOnlyCollection<IoTestPointPlan> requestedPoints,
         Iec61850MonitorDevice device,
         Action<string> reportProgress,
@@ -341,7 +368,7 @@ public partial class MainWindow
         while (DateTime.UtcNow < deadline && device.IsMonitoring)
         {
             await Task.Delay(120);
-            _ioTestLiveBindingService.Bind(project, Devices);
+            _ioTestLiveBindingService.BindIed(ied, Devices);
             last = ReadIoFatAcquisitionSummary(requestedPoints, device);
 
             if (!announced)

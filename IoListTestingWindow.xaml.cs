@@ -10,7 +10,6 @@ namespace ArIED61850Tester;
 public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 {
     private IoTestIedPlan? _selectedIed;
-    private IoTestIedPlan? _preparingIed;
     private string _preparationStatusText = string.Empty;
 
     public IoListTestingWindow()
@@ -47,11 +46,13 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             _selectedIed = value;
             Raise();
             Raise(nameof(SelectedIedSummary));
-            Raise(nameof(CanStartWorkflow));
+            RaisePreparationProperties();
         }
     }
 
-    public bool IsPreparingIed => _preparingIed != null;
+    // Compatibility aggregate used for close/edit protection. It no longer blocks
+    // another IED from starting its own independent connection workflow.
+    public bool IsPreparingIed => Project.Ieds.Any(ied => ied.IsPreparing);
 
     public string PreparationStatusText
     {
@@ -67,22 +68,23 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public Visibility PreparationVisibility => IsPreparingIed ? Visibility.Visible : Visibility.Collapsed;
-    public string PreparationIedText => _preparingIed == null ? string.Empty : $"Preparing {_preparingIed.IedName}";
+    public Visibility PreparationVisibility => SelectedIed?.IsPreparing == true ? Visibility.Visible : Visibility.Collapsed;
+    public string PreparationIedText => SelectedIed?.IsPreparing == true ? $"Preparing {SelectedIed.IedName}" : string.Empty;
 
     public bool CanStartWorkflow =>
-        SelectedIed != null && !IsPreparingIed && Session.CanStart;
+        SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
 
-    // Explorer navigation stays available while one IED is connecting or another FAT
-    // session is running. This is inspection-only; the active evidence scope remains
-    // pinned to Session.ActiveIed.
+    // Explorer navigation stays available while one or more IEDs are connecting or a
+    // FAT evidence session is running. Each IED card owns its own connection progress.
     public bool CanSelectIed => true;
 
+    // Keep plan mutation frozen while any network preparation is consuming the selected
+    // FAT scope, or while the evidence controller owns a session.
     public bool CanEditPlan =>
         !IsPreparingIed && Session.CanEditPlan;
 
     public string StartWorkflowText =>
-        IsPreparingIed ? $"Connecting {_preparingIed!.IedName}…" : "Connect & Start IED";
+        SelectedIed?.IsPreparing == true ? $"Connecting {SelectedIed.IedName}…" : "Connect & Start IED";
 
     public string ProjectSummary =>
         $"{Project.Ieds.Count} IED · {Project.SignalCount} points · {Project.LiveBoundSignalCount} live";
@@ -91,18 +93,18 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         ? "Select an imported IED"
         : $"{SelectedIed.IpAddress} · {SelectedIed.EnabledCount} test points · {SelectedIed.LiveStatusText}";
 
-    public string FooterStatusText => IsPreparingIed
-        ? PreparationStatusText
+    public string FooterStatusText => SelectedIed?.IsPreparing == true
+        ? SelectedIed.PreparationStatusText
         : Session.StatusText;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private async void StartSession_Click(object sender, RoutedEventArgs e)
     {
-        if (IsPreparingIed)
+        var selectedIed = SelectedIed;
+        if (selectedIed?.IsPreparing == true)
             return;
 
-        var selectedIed = SelectedIed;
         var preflight = IoTestSessionPreflight.Validate(selectedIed);
         if (!preflight.Succeeded)
         {
@@ -110,16 +112,17 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        SetPreparingIed(selectedIed!, $"Connecting {selectedIed!.IedName} · {selectedIed.IpAddress}:102");
+        PreparationStatusText = $"Connecting {selectedIed!.IedName} · {selectedIed.IpAddress}:102";
+        RaisePreparationProperties();
         try
         {
             if (Owner is MainWindow engineeringWindow)
             {
                 var progress = new Progress<string>(message =>
                 {
-                    selectedIed.SetPreparationState(true, message);
                     PreparationStatusText = message;
                     RaiseStatusProperties();
+                    RaisePreparationProperties();
                 });
                 var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(
                     Project,
@@ -160,7 +163,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         finally
         {
             selectedIed.SetPreparationState(false, selectedIed.LiveStatusText);
-            SetPreparingIed(null, string.Empty);
+            RaisePreparationProperties();
         }
     }
 
@@ -347,9 +350,10 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     {
         if (IsPreparingIed)
         {
+            var activeNames = string.Join(", ", Project.Ieds.Where(ied => ied.IsPreparing).Select(ied => ied.IedName));
             MessageBox.Show(
                 this,
-                $"ARSAS is still preparing {_preparingIed!.IedName}. You can inspect other IEDs while it runs, but wait for acquisition setup to finish before closing this workspace.",
+                $"ARSAS is still preparing {activeNames}. You can inspect or connect other IEDs while these independent workflows run, but finish preparation before closing this workspace.",
                 "IED preparation in progress",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -404,8 +408,14 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private void SetPreparingIed(IoTestIedPlan? ied, string status)
     {
-        _preparingIed = ied;
+        // Retained as a lightweight UI refresh hook for older call paths. Preparation
+        // ownership now lives on IoTestIedPlan, so parallel IEDs never share one lock.
         PreparationStatusText = status;
+        RaisePreparationProperties();
+    }
+
+    private void RaisePreparationProperties()
+    {
         Raise(nameof(IsPreparingIed));
         Raise(nameof(PreparationVisibility));
         Raise(nameof(PreparationIedText));
@@ -418,9 +428,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private void RaiseStatusProperties()
     {
-        Raise(nameof(CanStartWorkflow));
-        Raise(nameof(CanSelectIed));
-        Raise(nameof(CanEditPlan));
+        RaisePreparationProperties();
         Raise(nameof(ProjectSummary));
         Raise(nameof(SelectedIedSummary));
         Raise(nameof(FooterStatusText));

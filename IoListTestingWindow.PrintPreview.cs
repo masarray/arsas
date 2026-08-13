@@ -22,7 +22,6 @@ public partial class IoListTestingWindow
     private Button? _printPreviewToggle;
     private TextBlock? _printPreviewZoomText;
     private TextBlock? _printPreviewPageText;
-    private DispatcherTimer? _preparationStateGuard;
 
     protected override void OnContentRendered(EventArgs e)
     {
@@ -31,7 +30,6 @@ public partial class IoListTestingWindow
             return;
 
         InstallPerIedPrintPreview();
-        InstallPreparationStateGuard();
         PropertyChanged += PrintPreviewWindow_PropertyChanged;
         Session.PropertyChanged += PrintPreviewSession_PropertyChanged;
         Closed += PrintPreviewWindow_Closed;
@@ -441,22 +439,6 @@ public partial class IoListTestingWindow
         return new DataTemplate { VisualTree = text };
     }
 
-    private void InstallPreparationStateGuard()
-    {
-        _preparationStateGuard = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(180) };
-        _preparationStateGuard.Tick += (_, _) => ClearStalePreparationFlags();
-        _preparationStateGuard.Start();
-    }
-
-    private void ClearStalePreparationFlags()
-    {
-        foreach (var ied in Project.Ieds)
-        {
-            if (ied.IsPreparing && !ReferenceEquals(ied, _preparingIed))
-                ied.SetPreparationState(false, ied.LiveStatusText);
-        }
-    }
-
     private void PrintPreviewWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_printPreviewActive && e.PropertyName == nameof(SelectedIed))
@@ -471,7 +453,6 @@ public partial class IoListTestingWindow
 
     private void PrintPreviewWindow_Closed(object? sender, EventArgs e)
     {
-        _preparationStateGuard?.Stop();
         PropertyChanged -= PrintPreviewWindow_PropertyChanged;
         Session.PropertyChanged -= PrintPreviewSession_PropertyChanged;
         Closed -= PrintPreviewWindow_Closed;

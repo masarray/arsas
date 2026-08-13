@@ -340,6 +340,8 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isPreparing, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
+            Raise(nameof(CanPrepareConnection));
         }
     }
 
@@ -359,6 +361,7 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isLiveConnected, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
         }
     }
 
@@ -371,11 +374,24 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isLiveMonitoring, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
         }
     }
 
     [JsonIgnore]
     public string CardStateText => IsPreparing ? "CONNECTING" : IsLiveMonitoring ? "LIVE" : IsLiveConnected ? "READY" : "OFFLINE";
+
+    [JsonIgnore]
+    public string ConnectionActionText => IsPreparing
+        ? "Connecting…"
+        : IsLiveMonitoring
+            ? "Refresh"
+            : IsLiveConnected
+                ? "Prepare"
+                : "Connect";
+
+    [JsonIgnore]
+    public bool CanPrepareConnection => !IsPreparing;
 
     public int EnabledCount => TestPoints.Count(point => point.TestEnabled);
     public int PassedCount => TestPoints.Count(point => point.Runtime.State == IoTestPointState.Passed);
@@ -404,6 +420,8 @@ public sealed class IoTestIedPlan : ObservableObject
         if (!isPreparing && string.IsNullOrWhiteSpace(status))
             PreparationStatusText = string.Empty;
         Raise(nameof(CardStateText));
+        Raise(nameof(ConnectionActionText));
+        Raise(nameof(CanPrepareConnection));
     }
 
     public void InitializeRuntimeNotifications()
