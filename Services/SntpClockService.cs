@@ -383,7 +383,7 @@ public sealed class SntpClockService : IAsyncDisposable
                     true,
                     now,
                     _referenceUtc,
-                    $"Windows UTC is monotonic and sane; advertised as local commissioning source with SIPROTEC compatibility stratum {_profile.Stratum}, not as GPS/PTP traceability.");
+                    "Windows UTC is monotonic and sane; synchronized SNTP is advertised as a local commissioning source, not as GPS/PTP traceability.");
             }
         }
     }
