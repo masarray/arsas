@@ -48,13 +48,13 @@ jobs:
           set -euo pipefail
           mkdir -p _release-sync
           release_ready=false
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > _release-sync/release.tmp.json 2>/dev/null; then
               mv _release-sync/release.tmp.json _release-sync/release.json
               release_ready=true
               break
             fi
-            echo "Release $RELEASE_TAG is not visible yet (attempt $attempt/30); retrying in 10 seconds."
+            echo "Release $RELEASE_TAG is not visible yet (attempt $attempt/60); retrying in 10 seconds."
             sleep 10
           done
           if [[ "$release_ready" != "true" ]]; then
@@ -179,19 +179,20 @@ jobs:
               if not re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")) or int(item.get("sizeBytes", 0)) < 1_000_000:
                   raise SystemExit(f"Invalid {key} evidence")
 
-      - name: Update main release records
+      - name: Update public landing release record
         shell: bash
         run: |
           set -euo pipefail
           cp _release-sync/published.json landing/latest.json
-          cp _release-sync/published.json .release/published.json
-          if git diff --quiet -- landing/latest.json .release/published.json; then
-            echo "Main release records are already synchronized."
+          if git diff --quiet -- landing/latest.json; then
+            echo "Public landing release record is already synchronized."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add landing/latest.json .release/published.json
+            git add landing/latest.json
             git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release evidence"
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
 
