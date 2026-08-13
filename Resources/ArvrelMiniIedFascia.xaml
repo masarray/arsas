@@ -4,60 +4,60 @@
 
     <!--
       Compact IED-card adaptation of the ARVREL VirtualRelay visual language.
-      Source inspiration: masarray/arvrel · Controls/VirtualRelay.
+      P2 moves the enclosure toward the lighter blue-steel / powder-coated gray
+      used by modern protection relays so the fascia stays industrial without
+      becoming a black visual block on the Light Greige workspace.
 
-      Deliberately not a scaled copy of the full 560x710 operator relay. The card
-      keeps only the hardware identity that survives at 46-50 px: layered shell,
-      LED bank, LCD bezel/face, compact keypad and a data-driven state rail.
-      No microscopic labels or decorative text are rendered at card scale.
+      Only hardware identity that survives at 46-50 px is rendered: enclosure,
+      LED bank, bright LCD, compact keypad and the data-driven state rail.
     -->
 
     <LinearGradientBrush x:Key="ArvrelMiniShellBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#59656C" Offset="0"/>
-        <GradientStop Color="#343F45" Offset="0.48"/>
-        <GradientStop Color="#1B2328" Offset="1"/>
+        <GradientStop Color="#A9B5BA" Offset="0"/>
+        <GradientStop Color="#87979F" Offset="0.48"/>
+        <GradientStop Color="#6E8089" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="ArvrelMiniFaceBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#465158" Offset="0"/>
-        <GradientStop Color="#364148" Offset="0.58"/>
-        <GradientStop Color="#293238" Offset="1"/>
+        <GradientStop Color="#B4BEC2" Offset="0"/>
+        <GradientStop Color="#98A6AC" Offset="0.58"/>
+        <GradientStop Color="#7F9098" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="ArvrelMiniModuleBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#303B41" Offset="0"/>
-        <GradientStop Color="#222B30" Offset="1"/>
+        <GradientStop Color="#74848B" Offset="0"/>
+        <GradientStop Color="#5B6B72" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="ArvrelMiniLcdBezelBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#0E1518" Offset="0"/>
-        <GradientStop Color="#344149" Offset="0.46"/>
-        <GradientStop Color="#0A1013" Offset="1"/>
+        <GradientStop Color="#596970" Offset="0"/>
+        <GradientStop Color="#829198" Offset="0.46"/>
+        <GradientStop Color="#4D5D64" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="ArvrelMiniLcdFaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#EEF3EF" Offset="0"/>
-        <GradientStop Color="#D8E1DB" Offset="1"/>
+        <GradientStop Color="#EDF3EE" Offset="0"/>
+        <GradientStop Color="#CEDBD2" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="ArvrelMiniKeyBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#58646B" Offset="0"/>
-        <GradientStop Color="#303A40" Offset="1"/>
+        <GradientStop Color="#93A0A5" Offset="0"/>
+        <GradientStop Color="#748289" Offset="1"/>
     </LinearGradientBrush>
 
     <ControlTemplate x:Key="ArvrelMiniIedRelayFrontPanelTemplate" TargetType="{x:Type Control}">
         <Grid Width="50" Height="50" SnapsToDevicePixels="True" UseLayoutRounding="True">
-            <!-- ARVREL-like layered industrial enclosure. -->
+            <!-- Light blue-steel powder-coated enclosure with darker recessed seams. -->
             <Border x:Name="ArvrelMiniShell"
                     Margin="1"
                     CornerRadius="3.4"
                     Background="{StaticResource ArvrelMiniShellBrush}"
-                    BorderBrush="#7A878E"
+                    BorderBrush="#C8D0D3"
                     BorderThickness="0.8">
                 <Border Margin="1.8"
                         CornerRadius="2.5"
-                        Background="#151D21"
-                        BorderBrush="#536168"
+                        Background="#65757C"
+                        BorderBrush="#AAB5B9"
                         BorderThickness="0.6">
                     <Border Margin="1.3"
                             CornerRadius="1.8"
                             Background="{StaticResource ArvrelMiniFaceBrush}"
-                            BorderBrush="#68757B"
+                            BorderBrush="#D3D9DB"
                             BorderThickness="0.5">
                         <Grid Margin="2.4,2.5,2.4,4.8">
                             <Grid.RowDefinitions>
@@ -65,7 +65,8 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <!-- Calm blue ARVREL accent: visible as hardware identity, not branding text. -->
+                            <!-- Keep the original ARVREL blue identity accent for regression
+                                 compatibility while the rest of the enclosure is much lighter. -->
                             <Grid Grid.Row="0">
                                 <Border Height="1.15" Width="13"
                                         HorizontalAlignment="Left"
@@ -75,7 +76,7 @@
                                 <Border Height="1" Width="5"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Top"
-                                        Background="#65737B"
+                                        Background="#D4DADC"
                                         CornerRadius="0.5"/>
                             </Grid>
 
@@ -88,13 +89,13 @@
                                     <ColumnDefinition Width="8"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Reduced ARVREL status lamp bank. The first lamp follows
-                                     the IED card Foreground so connection/test state remains live. -->
+                                <!-- Status lamps are brighter than the enclosure so they remain
+                                     readable at card size. First lamp follows live card state. -->
                                 <Border x:Name="ArvrelMiniLedBank"
                                         Grid.Column="0"
                                         CornerRadius="1.5"
                                         Background="{StaticResource ArvrelMiniModuleBrush}"
-                                        BorderBrush="#56636A"
+                                        BorderBrush="#C2CACE"
                                         BorderThickness="0.55">
                                     <Grid Margin="1.5,2">
                                         <Grid.RowDefinitions>
@@ -106,34 +107,34 @@
                                         <Ellipse Grid.Row="0" Width="2.8" Height="2.8"
                                                  HorizontalAlignment="Center"
                                                  Fill="{TemplateBinding Foreground}"
-                                                 Stroke="#B8C2C7" StrokeThickness="0.35"/>
+                                                 Stroke="#EDF2F1" StrokeThickness="0.4"/>
                                         <Ellipse Grid.Row="1" Width="2.55" Height="2.55"
                                                  HorizontalAlignment="Center"
-                                                 Fill="#D6A23B" Opacity="0.82"
-                                                 Stroke="#89969C" StrokeThickness="0.3"/>
+                                                 Fill="#E6B54C" Opacity="0.96"
+                                                 Stroke="#EEF1EF" StrokeThickness="0.32"/>
                                         <Ellipse Grid.Row="2" Width="2.55" Height="2.55"
                                                  HorizontalAlignment="Center"
-                                                 Fill="#52636D"
-                                                 Stroke="#89969C" StrokeThickness="0.3"/>
+                                                 Fill="#768D98"
+                                                 Stroke="#D5DDDF" StrokeThickness="0.3"/>
                                         <Ellipse Grid.Row="3" Width="2.55" Height="2.55"
                                                  HorizontalAlignment="Center"
-                                                 Fill="#52636D"
-                                                 Stroke="#89969C" StrokeThickness="0.3"/>
+                                                 Fill="#768D98"
+                                                 Stroke="#D5DDDF" StrokeThickness="0.3"/>
                                     </Grid>
                                 </Border>
 
-                                <!-- LCD keeps the ARVREL pale industrial face and blue header,
-                                     but replaces unreadable miniature text with geometric telemetry. -->
+                                <!-- Brighter pale-green LCD and blue header create the visual focus
+                                     expected from SIPROTEC / ABB / Reyrolle-class protection relays. -->
                                 <Border x:Name="ArvrelMiniLcd"
                                         Grid.Column="2"
                                         CornerRadius="1.4"
                                         Background="{StaticResource ArvrelMiniLcdBezelBrush}"
-                                        BorderBrush="#69767C"
+                                        BorderBrush="#D2DADC"
                                         BorderThickness="0.65"
                                         Padding="1.15">
                                     <Border CornerRadius="0.8"
                                             Background="{StaticResource ArvrelMiniLcdFaceBrush}"
-                                            BorderBrush="#111719"
+                                            BorderBrush="#506168"
                                             BorderThickness="0.4">
                                         <Grid ClipToBounds="True">
                                             <Grid.RowDefinitions>
@@ -141,7 +142,7 @@
                                                 <RowDefinition Height="*"/>
                                                 <RowDefinition Height="3.4"/>
                                             </Grid.RowDefinitions>
-                                            <Border Grid.Row="0" Background="#4B7086"/>
+                                            <Border Grid.Row="0" Background="#5B8297"/>
                                             <Grid Grid.Row="1" Margin="2.2,2,2.2,1.6">
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="*"/>
@@ -150,13 +151,13 @@
                                                 </Grid.RowDefinitions>
                                                 <Border Grid.Row="0" Height="1" Width="9"
                                                         HorizontalAlignment="Left"
-                                                        Background="#5E7478" CornerRadius="0.5"/>
+                                                        Background="#60797A" CornerRadius="0.5"/>
                                                 <Border Grid.Row="1" Height="1" Width="12"
                                                         HorizontalAlignment="Left"
-                                                        Background="#718589" CornerRadius="0.5"/>
+                                                        Background="#78908E" CornerRadius="0.5"/>
                                                 <Border Grid.Row="2" Height="1" Width="7"
                                                         HorizontalAlignment="Left"
-                                                        Background="#5E7478" CornerRadius="0.5"/>
+                                                        Background="#60797A" CornerRadius="0.5"/>
                                             </Grid>
                                             <Grid Grid.Row="2">
                                                 <Grid.ColumnDefinitions>
@@ -164,29 +165,29 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0" Background="#426F8C"/>
-                                                <Border Grid.Column="1" Background="#C7D1CE" BorderBrush="#899995" BorderThickness="0.4,0,0,0"/>
-                                                <Border Grid.Column="2" Background="#C7D1CE" BorderBrush="#899995" BorderThickness="0.4,0,0,0"/>
+                                                <Border Grid.Column="0" Background="#4F7B95"/>
+                                                <Border Grid.Column="1" Background="#D4DDD7" BorderBrush="#93A19D" BorderThickness="0.4,0,0,0"/>
+                                                <Border Grid.Column="2" Background="#D4DDD7" BorderBrush="#93A19D" BorderThickness="0.4,0,0,0"/>
                                             </Grid>
                                         </Grid>
                                     </Border>
                                 </Border>
 
-                                <!-- Six tactile-key silhouettes preserve the relay/operator-console read
-                                     without rendering labels that would alias at card dimensions. -->
+                                <!-- Tactile keys remain steel-gray; the lower-left blue key gives
+                                     just enough instrument identity without turning the relay dark. -->
                                 <Border x:Name="ArvrelMiniKeypad"
                                         Grid.Column="4"
                                         CornerRadius="1.5"
                                         Background="{StaticResource ArvrelMiniModuleBrush}"
-                                        BorderBrush="#56636A"
+                                        BorderBrush="#C2CACE"
                                         BorderThickness="0.55">
                                     <UniformGrid Rows="3" Columns="2" Margin="1.15">
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#7C898F" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#7C898F" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#7C898F" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#7C898F" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="#416C85" BorderBrush="#82959E" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#7C898F" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="#557F98" BorderBrush="#D7E0E3" BorderThickness="0.35"/>
+                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
                                     </UniformGrid>
                                 </Border>
                             </Grid>
@@ -195,14 +196,14 @@
                 </Border>
             </Border>
 
-            <!-- Data-driven card state survives the visual port. -->
+            <!-- Data-driven status rail stays semantic and independent from the shell. -->
             <Border x:Name="RelayStateRail"
                     Height="2.2"
                     Margin="6,0,6,2.2"
                     VerticalAlignment="Bottom"
                     Background="{TemplateBinding Foreground}"
                     CornerRadius="1.1"
-                    Opacity="0.92"/>
+                    Opacity="0.96"/>
         </Grid>
     </ControlTemplate>
 </ResourceDictionary>
