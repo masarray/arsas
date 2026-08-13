@@ -162,8 +162,9 @@ public sealed class SntpClockService : IAsyncDisposable
         var udp = new UdpClient(AddressFamily.InterNetwork);
         try
         {
-            udp.Client.ExclusiveAddressUse = false;
-            udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            // Do not co-bind UDP/123. If Windows Time or another server owns it, fail clearly
+            // rather than risk nondeterministic packet delivery between two NTP listeners.
+            udp.Client.ExclusiveAddressUse = true;
             udp.EnableBroadcast = true;
             udp.Client.Bind(new IPEndPoint(binding.LocalAddress, 123));
         }
