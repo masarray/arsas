@@ -19,19 +19,15 @@ public static class Iec61850TimestampPresentation
     /// </summary>
     public static DateTimeOffset RoundToNearestMillisecond(DateTimeOffset value)
     {
-        var remainder = value.Ticks % TicksPerMillisecond;
-        if (remainder == 0)
-            return value;
+        var delta = MillisecondDelta(value.Ticks);
+        if (delta > 0 && value.UtcTicks > DateTime.MaxValue.Ticks - delta)
+            delta = -(value.Ticks % TicksPerMillisecond);
+        return value.AddTicks(delta);
+    }
 
-        var delta = remainder >= HalfMillisecondTicks
-            ? TicksPerMillisecond - remainder
-            : -remainder;
-
-        // DateTimeOffset cannot represent a tick beyond DateTime.MaxValue. This boundary
-        // is irrelevant for relay timestamps, but keep the formatter total and deterministic.
-        if (delta > 0 && value.Ticks > DateTime.MaxValue.Ticks - delta)
-            delta = -remainder;
-
+    public static DateTime RoundToNearestMillisecond(DateTime value)
+    {
+        var delta = MillisecondDelta(value.Ticks);
         return value.AddTicks(delta);
     }
 
@@ -40,4 +36,23 @@ public static class Iec61850TimestampPresentation
 
     public static string FormatMilliseconds(DateTimeOffset? value, string format, string missing = "—")
         => value.HasValue ? FormatMilliseconds(value.Value, format) : missing;
+
+    public static string FormatMilliseconds(DateTime value, string format)
+        => RoundToNearestMillisecond(value).ToString(format, CultureInfo.InvariantCulture);
+
+    private static long MillisecondDelta(long ticks)
+    {
+        var remainder = ticks % TicksPerMillisecond;
+        if (remainder == 0)
+            return 0;
+
+        var delta = remainder >= HalfMillisecondTicks
+            ? TicksPerMillisecond - remainder
+            : -remainder;
+
+        if (delta > 0 && ticks > DateTime.MaxValue.Ticks - delta)
+            return -remainder;
+
+        return delta;
+    }
 }
