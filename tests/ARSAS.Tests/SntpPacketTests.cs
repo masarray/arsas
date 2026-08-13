@@ -24,6 +24,7 @@ public sealed class SntpPacketTests
 
         Assert.Equal(4, reply[0] & 0x07);
         Assert.Equal(4, (reply[0] >> 3) & 0x07);
+        Assert.Equal(SntpServerProfile.SiprotecCompatibilityStratum, reply[1]);
         Assert.Equal(9, unchecked((sbyte)reply[2]));
         Assert.Equal(request.AsSpan(40, 8).ToArray(), reply.AsSpan(24, 8).ToArray());
         Assert.InRange((SntpPacket.ReadTimestamp(reply.AsSpan(32, 8), receive) - receive).Duration(), TimeSpan.Zero, TimeSpan.FromTicks(2));
@@ -31,7 +32,7 @@ public sealed class SntpPacketTests
     }
 
     [Fact]
-    public void Broadcast_IsMode5_AndUsesLowPriorityLocalStratum()
+    public void Broadcast_IsMode5_AndUsesSiprotecCompatibilityStratum()
     {
         var now = new DateTimeOffset(2026, 8, 13, 2, 3, 4, TimeSpan.Zero);
         var packet = SntpPacket.BuildBroadcast(now, new SntpServerProfile());
@@ -39,7 +40,8 @@ public sealed class SntpPacketTests
         Assert.Equal(SntpPacket.MinimumLength, packet.Length);
         Assert.Equal(5, packet[0] & 0x07);
         Assert.Equal(4, (packet[0] >> 3) & 0x07);
-        Assert.Equal(15, packet[1]);
+        Assert.Equal((byte)2, SntpServerProfile.SiprotecCompatibilityStratum);
+        Assert.Equal(SntpServerProfile.SiprotecCompatibilityStratum, packet[1]);
         Assert.Equal(6, unchecked((sbyte)packet[2]));
         Assert.Equal("LOCL", System.Text.Encoding.ASCII.GetString(packet, 12, 4));
         Assert.InRange((SntpPacket.ReadTimestamp(packet.AsSpan(40, 8), now) - now).Duration(), TimeSpan.Zero, TimeSpan.FromTicks(2));
