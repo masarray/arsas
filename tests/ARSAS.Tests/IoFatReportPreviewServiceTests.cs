@@ -148,11 +148,14 @@ public sealed class IoFatReportPreviewServiceTests
     public void PreviewKeepsProgressOnIedCardOnly()
     {
         var previewSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.PrintPreview.cs"));
+        var progressSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.RealPreparationProgress.cs"));
         var xaml = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
 
         Assert.Contains("RemoveMainPreparationSurface", previewSource, StringComparison.Ordinal);
         Assert.Contains("workspaceGrid.Children.Remove(preparationSurface)", previewSource, StringComparison.Ordinal);
-        Assert.Contains("ClearStalePreparationFlags", previewSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClearStalePreparationFlags", previewSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_preparingIed", previewSource, StringComparison.Ordinal);
+        Assert.Contains("var active = ied.IsPreparing;", progressSource, StringComparison.Ordinal);
         Assert.Contains("CardProgress", xaml, StringComparison.Ordinal);
     }
 
