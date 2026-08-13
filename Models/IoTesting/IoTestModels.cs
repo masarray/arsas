@@ -1,35 +1,17 @@
-using ArIED61850Tester.Models;
-
 using System.ComponentModel;
-using System.Globalization;
 using System.Text.Json.Serialization;
 
 namespace ArIED61850Tester.Models.IoTesting;
 
 public enum IoTestPointState
 {
-    NotStarted,
-    WaitingForBaseline,
-    WaitingForOffBaseline,
-    ArmedForOn,
-    OnCaptured,
+    Pending,
+    WaitingForOn,
+    WaitingForOff,
     Passed,
     Review,
-    Failed
-}
-
-public enum IoEvidenceTransition
-{
-    Baseline,
-    On,
-    Off
-}
-
-public enum IoEvidenceVerdict
-{
-    Accepted,
-    Review,
-    Rejected
+    Failed,
+    Disabled
 }
 
 public enum IoTestLiveBindingState
@@ -42,165 +24,120 @@ public enum IoTestLiveBindingState
     LivePointReady
 }
 
-public sealed record IoTestObservation(
-    bool? NormalizedState,
-    string RawValue,
-    DateTimeOffset CapturedAt,
-    DateTimeOffset? IedTimestamp,
-    string Quality,
-    string AcquisitionSource,
-    long Sequence,
-    long ConnectionGeneration);
+public enum IoTestSessionState
+{
+    Idle,
+    Running,
+    Paused,
+    Interrupted,
+    Completed,
+    Stopped,
+    Faulted
+}
 
-public sealed record IoTestTransitionEvidence(
-    Guid EvidenceId,
-    IoEvidenceTransition Transition,
-    bool? PreviousState,
-    bool ObservedState,
-    string RawValue,
-    DateTimeOffset CapturedAt,
-    DateTimeOffset? IedTimestamp,
-    string Quality,
-    string AcquisitionSource,
-    long Sequence,
-    long ConnectionGeneration,
-    IoEvidenceVerdict Verdict,
-    string VerdictReason);
+public enum IoEvidenceTransition
+{
+    Baseline,
+    On,
+    Off
+}
+
+public enum IoEvidenceVerdict
+{
+    Accepted,
+    Rejected,
+    Review
+}
+
+public sealed class IoTestEvidence
+{
+    public IoEvidenceTransition Transition { get; init; }
+    public IoEvidenceVerdict Verdict { get; init; }
+    public string Value { get; init; } = string.Empty;
+    public DateTimeOffset PcTimestamp { get; init; }
+    public DateTimeOffset? IedTimestamp { get; init; }
+    public string Quality { get; init; } = string.Empty;
+    public string Source { get; init; } = string.Empty;
+    public long SourceSequence { get; init; }
+    public long ConnectionGeneration { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
 
 public sealed class IoTestPointRuntime : ObservableObject
 {
-    private IoTestPointState _state = IoTestPointState.NotStarted;
-    private bool? _lastObservedState;
-    private long _lastSequence = -1;
-    private long _connectionGeneration = -1;
-    private IoTestTransitionEvidence? _onEvidence;
-    private IoTestTransitionEvidence? _offEvidence;
-    private string _statusReason = "Not started";
-    private int _attempt;
-    private string _currentValue = "-";
-    private string _currentQuality = "Unknown";
-    private string _currentSource = "Not connected";
+    private IoTestPointState _state = IoTestPointState.Pending;
+    private string _currentValue = "—";
+    private string _currentQuality = "—";
+    private string _currentSource = "—";
     private string _currentIedTimestamp = "—";
+    private string _statusReason = "Waiting to start";
+    private IoTestEvidence? _onEvidence;
+    private IoTestEvidence? _offEvidence;
 
     public IoTestPointState State
     {
         get => _state;
-        internal set
+        set
         {
             if (Set(ref _state, value))
             {
-                Raise(nameof(IsComplete));
                 Raise(nameof(StateText));
+                Raise(nameof(IsComplete));
             }
         }
     }
 
-    public bool? LastObservedState { get => _lastObservedState; internal set => Set(ref _lastObservedState, value); }
-    public long LastSequence { get => _lastSequence; internal set => Set(ref _lastSequence, value); }
-    public long ConnectionGeneration { get => _connectionGeneration; internal set => Set(ref _connectionGeneration, value); }
-    public IoTestTransitionEvidence? OnEvidence
-    {
-        get => _onEvidence;
-        internal set
-        {
-            if (!Set(ref _onEvidence, value))
-                return;
-            Raise(nameof(OnRelayTimestampText));
-            Raise(nameof(OnEvidenceToolTip));
-        }
-    }
+    public string CurrentValue { get => _currentValue; set => Set(ref _currentValue, value ?? "—"); }
+    public string CurrentQuality { get => _currentQuality; set => Set(ref _currentQuality, value ?? "—"); }
+    public string CurrentSource { get => _currentSource; set => Set(ref _currentSource, value ?? "—"); }
+    public string CurrentIedTimestamp { get => _currentIedTimestamp; set => Set(ref _currentIedTimestamp, value ?? "—"); }
+    public string StatusReason { get => _statusReason; set => Set(ref _statusReason, value ?? string.Empty); }
+    public IoTestEvidence? OnEvidence { get => _onEvidence; set { if (Set(ref _onEvidence, value)) RaiseEvidenceProperties(); } }
+    public IoTestEvidence? OffEvidence { get => _offEvidence; set { if (Set(ref _offEvidence, value)) RaiseEvidenceProperties(); } }
 
-    public IoTestTransitionEvidence? OffEvidence
-    {
-        get => _offEvidence;
-        internal set
-        {
-            if (!Set(ref _offEvidence, value))
-                return;
-            Raise(nameof(OffRelayTimestampText));
-            Raise(nameof(OffEvidenceToolTip));
-        }
-    }
-    public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
-    public int Attempt { get => _attempt; internal set => Set(ref _attempt, value); }
-    public string CurrentValue { get => _currentValue; internal set => Set(ref _currentValue, string.IsNullOrWhiteSpace(value) ? "-" : value); }
-    public string CurrentQuality { get => _currentQuality; internal set => Set(ref _currentQuality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
-    public string CurrentSource { get => _currentSource; internal set => Set(ref _currentSource, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
-
-    [JsonIgnore]
-    public string CurrentIedTimestamp
-    {
-        get => _currentIedTimestamp;
-        internal set => Set(ref _currentIedTimestamp, string.IsNullOrWhiteSpace(value) ? "—" : value);
-    }
-
-    public bool IsComplete => State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed;
-
-    [JsonIgnore]
     public string StateText => State switch
     {
-        IoTestPointState.NotStarted => "Not started",
-        IoTestPointState.WaitingForBaseline => "Waiting baseline",
-        IoTestPointState.WaitingForOffBaseline => "Waiting OFF",
-        IoTestPointState.ArmedForOn => "Ready for ON",
-        IoTestPointState.OnCaptured => "ON captured",
+        IoTestPointState.Pending => "PENDING",
+        IoTestPointState.WaitingForOn => "WAIT ON",
+        IoTestPointState.WaitingForOff => "WAIT OFF",
         IoTestPointState.Passed => "PASS",
         IoTestPointState.Review => "REVIEW",
-        IoTestPointState.Failed => "FAIL",
-        _ => State.ToString()
+        IoTestPointState.Failed => "FAILED",
+        IoTestPointState.Disabled => "DISABLED",
+        _ => State.ToString().ToUpperInvariant()
     };
 
-    [JsonIgnore]
-    public string OnRelayTimestampText => FormatRelayTimestamp(OnEvidence?.IedTimestamp);
+    public bool IsComplete => State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed;
+    public string OnRelayTimestampText => EvidenceTimestampText(OnEvidence);
+    public string OffRelayTimestampText => EvidenceTimestampText(OffEvidence);
+    public string OnEvidenceToolTip => EvidenceToolTip(OnEvidence);
+    public string OffEvidenceToolTip => EvidenceToolTip(OffEvidence);
 
-    [JsonIgnore]
-    public string OffRelayTimestampText => FormatRelayTimestamp(OffEvidence?.IedTimestamp);
+    private static string EvidenceTimestampText(IoTestEvidence? evidence)
+        => evidence?.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz") ?? "—";
 
-    [JsonIgnore]
-    public string OnEvidenceToolTip => BuildEvidenceToolTip(OnEvidence, "ON");
-
-    [JsonIgnore]
-    public string OffEvidenceToolTip => BuildEvidenceToolTip(OffEvidence, "OFF");
-
-    internal void ApplyObservation(IoTestObservation observation)
-    {
-        CurrentValue = observation.RawValue;
-        CurrentQuality = observation.Quality;
-        CurrentSource = observation.AcquisitionSource;
-        CurrentIedTimestamp = observation.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture) ?? "—";
-    }
-
-    private static string FormatRelayTimestamp(DateTimeOffset? value)
-        => value?.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) ?? "—";
-
-    private static string BuildEvidenceToolTip(IoTestTransitionEvidence? evidence, string label)
+    private static string EvidenceToolTip(IoTestEvidence? evidence)
     {
         if (evidence == null)
-            return $"{label} transition has not been captured.";
-
-        var relay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
-        var captured = evidence.CapturedAt.ToString("O", CultureInfo.InvariantCulture);
-        return $"Relay timestamp: {relay}\nARSAS capture: {captured}\nQuality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n{evidence.Verdict}: {evidence.VerdictReason}";
+            return "No evidence captured";
+        var relay = evidence.IedTimestamp?.ToString("O") ?? "unavailable";
+        return $"Relay: {relay}\nPC: {evidence.PcTimestamp:O}\nQuality: {evidence.Quality}\nSource: {evidence.Source}\nVerdict: {evidence.Verdict}\n{evidence.Reason}";
     }
 
-    internal void ResetAttempt()
+    private void RaiseEvidenceProperties()
     {
-        State = IoTestPointState.WaitingForBaseline;
-        LastObservedState = null;
-        LastSequence = -1;
-        ConnectionGeneration = -1;
-        OnEvidence = null;
-        OffEvidence = null;
-        StatusReason = "Waiting for a trustworthy baseline";
-        Attempt++;
+        Raise(nameof(OnRelayTimestampText));
+        Raise(nameof(OffRelayTimestampText));
+        Raise(nameof(OnEvidenceToolTip));
+        Raise(nameof(OffEvidenceToolTip));
     }
 }
 
 public sealed class IoTestPointPlan : ObservableObject
 {
-    private bool _testEnabled = true;
-    private IoTestLiveBindingState _liveBindingState = IoTestLiveBindingState.NotEvaluated;
-    private string _liveBindingReason = "Live binding has not been evaluated";
+    private bool _testEnabled;
+    private IoTestLiveBindingState _liveBindingState;
+    private string _liveBindingReason = string.Empty;
     private string _liveDeviceId = string.Empty;
     private string _liveSignalReference = string.Empty;
 
@@ -208,15 +145,12 @@ public sealed class IoTestPointPlan : ObservableObject
     public required string IedName { get; init; }
     public required string IpAddress { get; init; }
     public required string SignalName { get; init; }
-    public required string ObjectReference { get; init; }
-    public required string FunctionalConstraint { get; init; }
-    public required string ExpectedOnText { get; init; }
-    public required string ExpectedOffText { get; init; }
-    public int ExpectedOnRaw { get; init; } = 1;
-    public int ExpectedOffRaw { get; init; }
-    public string DataType { get; init; } = "SDI";
-    public string SignalAddress { get; init; } = string.Empty;
-    public string DataSetName { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string ObjectReference { get; init; } = string.Empty;
+    public string FunctionalConstraint { get; init; } = string.Empty;
+    public string ExpectedOnText { get; init; } = string.Empty;
+    public string ExpectedOffText { get; init; } = string.Empty;
+    public string SignalType { get; init; } = string.Empty;
     public string LogicalDevice { get; init; } = string.Empty;
     public string LogicalNode { get; init; } = string.Empty;
     public string DataObject { get; init; } = string.Empty;
@@ -340,6 +274,8 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isPreparing, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
+            Raise(nameof(CanPrepareConnection));
         }
     }
 
@@ -359,6 +295,7 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isLiveConnected, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
         }
     }
 
@@ -371,11 +308,24 @@ public sealed class IoTestIedPlan : ObservableObject
             if (!Set(ref _isLiveMonitoring, value))
                 return;
             Raise(nameof(CardStateText));
+            Raise(nameof(ConnectionActionText));
         }
     }
 
     [JsonIgnore]
     public string CardStateText => IsPreparing ? "CONNECTING" : IsLiveMonitoring ? "LIVE" : IsLiveConnected ? "READY" : "OFFLINE";
+
+    [JsonIgnore]
+    public string ConnectionActionText => IsPreparing
+        ? "Connecting…"
+        : IsLiveMonitoring
+            ? "Refresh"
+            : IsLiveConnected
+                ? "Prepare"
+                : "Connect";
+
+    [JsonIgnore]
+    public bool CanPrepareConnection => !IsPreparing;
 
     public int EnabledCount => TestPoints.Count(point => point.TestEnabled);
     public int PassedCount => TestPoints.Count(point => point.Runtime.State == IoTestPointState.Passed);
@@ -404,6 +354,8 @@ public sealed class IoTestIedPlan : ObservableObject
         if (!isPreparing && string.IsNullOrWhiteSpace(status))
             PreparationStatusText = string.Empty;
         Raise(nameof(CardStateText));
+        Raise(nameof(ConnectionActionText));
+        Raise(nameof(CanPrepareConnection));
     }
 
     public void InitializeRuntimeNotifications()
