@@ -1,0 +1,88 @@
+name: Agent live power measurement repair v3
+
+on:
+  push:
+    branches:
+      - agent/fix-live-power-measurements
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout isolated repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable ARIEC61850 integration lock
+        shell: pwsh
+        run: |
+          $lockPath = ".\engines\ARIEC61850.lock.json"
+          if (!(Test-Path $lockPath)) { throw "ARIEC61850 lock file was not found." }
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $lock.ref -ne 'main' -or
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: pwsh
+        run: |
+          $enginePath = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) "ARIEC61850"
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" $enginePath
+          git -C $enginePath fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C $enginePath checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C $enginePath rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Apply exact guarded patch from reviewed v2 recipe
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import textwrap
+
+          recipe = Path('.github/workflows/agent-live-power-patch-v2.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(recipe) if line.strip() == "python - <<'PY'") + 1
+          end = next(i for i in range(start, len(recipe)) if recipe[i].strip() == 'PY')
+          script = textwrap.dedent('\n'.join(recipe[start:end]))
+          if 'replace_once(' not in script or 'LivePowerMeasurementRegressionTests.cs' not in script:
+              raise SystemExit('reviewed patch recipe extraction failed')
+          exec(compile(script, 'agent-live-power-patch-v2.py', 'exec'), {})
+          '@ | python -
+
+      - name: Targeted live power regression tests
+        shell: pwsh
+        run: dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj --configuration Release --filter FullyQualifiedName~LivePowerMeasurementRegressionTests
+
+      - name: Full ARSAS regression suite
+        shell: pwsh
+        run: dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj --configuration Release --no-restore
+
+      - name: Commit only validated repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/agent-live-power-patch-v2.yml .github/workflows/agent-live-power-patch-v3.yml
+          git add Models/SignalDefinition.cs Services/SasOperationalSignalPolicy.cs Services/IecSignalReadResolver.cs Services/NativeMmsDiscoveryMapper.cs tests/ARSAS.Tests/LivePowerMeasurementRegressionTests.cs
+          git diff --cached --check
+          git status --short
+          git commit -m "fix: restore fundamental power live measurements"
+          git push origin HEAD:agent/fix-live-power-measurements
