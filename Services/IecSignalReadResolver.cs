@@ -94,6 +94,10 @@ public static class IecSignalReadResolver
             AddUnique(candidates, ReplaceToken(reference, ".instCVal.mag.f", ".cVal.mag.f"));
         else if (reference.Contains(".cVal.mag.f", StringComparison.OrdinalIgnoreCase))
             AddUnique(candidates, ReplaceToken(reference, ".cVal.mag.f", ".instCVal.mag.f"));
+        else if (reference.Contains(".instMag.f", StringComparison.OrdinalIgnoreCase))
+            AddUnique(candidates, ReplaceToken(reference, ".instMag.f", ".mag.f"));
+        else if (reference.Contains(".mag.f", StringComparison.OrdinalIgnoreCase))
+            AddUnique(candidates, ReplaceToken(reference, ".mag.f", ".instMag.f"));
     }
 
     private static void AddUnique(ICollection<string> candidates, string reference)
@@ -105,7 +109,7 @@ public static class IecSignalReadResolver
     private static string BuildCompanionReference(string reference, string companion)
     {
         var parent = Normalize(reference);
-        foreach (var suffix in new[] { ".instCVal.mag.f", ".cVal.mag.f", ".mag.f" })
+        foreach (var suffix in new[] { ".instCVal.mag.f", ".cVal.mag.f", ".instMag.f", ".mag.f" })
         {
             if (!parent.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
             parent = parent[..^suffix.Length];

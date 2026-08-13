@@ -986,17 +986,23 @@ public class SignalDefinition : ObservableObject
     {
         var r = NormalizeRef(normalizedReference);
         if (IsStatisticsOrHarmonicNoise(r)) return false;
-        if (!r.EndsWith(".mag.f")) return false;
+        if (!r.EndsWith(".f")) return false;
+
+        // Fundamental scalar MV objects use mag/instMag rather than the CMV cVal/instCVal path.
+        // Keep both readable variants as SCADA-grade so live-only vendor schemas do not demote power totals.
+        if (Regex.IsMatch(
+            r,
+            @"\.(?:totw|totvar|totva|totpf|hz)\.(?:instmag|mag)\.f$",
+            RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
 
         var operationalValues = r.Contains("operationalvalues") || r.Contains("operational_values");
-        if (operationalValues)
-        {
-            if (!r.Contains(".instcval.mag.f")) return false;
-        }
-        else
-        {
-            if (!r.Contains(".cval.mag.f") || r.Contains(".instcval.")) return false;
-        }
+        var instantaneousComplex = r.Contains(".instcval.mag.f");
+        var bufferedComplex = r.Contains(".cval.mag.f") && !instantaneousComplex;
+        if (operationalValues ? !instantaneousComplex : !bufferedComplex)
+            return false;
 
         return r.Contains(".a.phsa.") ||
                r.Contains(".a.phsb.") ||
@@ -1008,7 +1014,11 @@ public class SignalDefinition : ObservableObject
                r.Contains(".phv.phsc.") ||
                r.Contains(".ppv.phsab.") ||
                r.Contains(".ppv.phsbc.") ||
-               r.Contains(".ppv.phsca.");
+               r.Contains(".ppv.phsca.") ||
+               Regex.IsMatch(
+                   r,
+                   @"\.(?:w|var|va|pf)\.(?:phsa|phsb|phsc|net|tot)\.(?:instcval|cval)\.mag\.f$",
+                   RegexOptions.IgnoreCase);
     }
 
     public static bool IsInstantCurrentOrVoltageMagnitude(string normalizedReference)
@@ -1031,11 +1041,6 @@ public class SignalDefinition : ObservableObject
                r.Contains(".dmd") || r.Contains("demand") ||
                r.Contains(".har") || r.Contains("harm") ||
                r.Contains(".thd") || r.Contains(".tdd") ||
-               r.Contains(".hz") ||
-               r.Contains(".w.") || r.Contains("totw") ||
-               r.Contains(".var") || r.Contains("totvar") ||
-               r.Contains(".va") || r.Contains("totva") ||
-               r.Contains(".pf") ||
                r.Contains(".ang.") || r.EndsWith(".ang.f");
     }
 
