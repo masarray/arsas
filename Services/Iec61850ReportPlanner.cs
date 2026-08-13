@@ -5,6 +5,7 @@ namespace ArIED61850Tester.Services;
 public static class Iec61850ReportPlanner
 {
     private const int DynamicDataSetChunkSize = 96;
+    private const int FastCommissioningPollingThresholdMs = 500;
 
     public static IReadOnlyList<ReportControlPlan> BuildPlans(
         Iec61850MonitorDevice device,
@@ -19,9 +20,18 @@ public static class Iec61850ReportPlanner
         var plans = new List<ReportControlPlan>();
         var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // FAT/commissioning digital points intentionally use deterministic fast MMS reads.
+        // At <= 500 ms the point is explicitly asking for commissioning latency rather than
+        // low-rate report verification. Leaving it out of the report plan also prevents the
+        // runtime from stretching its verification interval into multi-second territory.
+        // Normal Live Monitor points keep the existing report-first policy.
+        var reportCandidates = all
+            .Where(point => !IsFastCommissioningPoint(point))
+            .ToList();
+
         // Static discovery hints are candidates only. Exact coverage is confirmed later
         // from the DataSet members returned by the native report subscription planner.
-        var staticGroups = all
+        var staticGroups = reportCandidates
             .Where(point => !string.IsNullOrWhiteSpace(point.ReportControlReference) ||
                             !string.IsNullOrWhiteSpace(point.DataSetReference))
             .GroupBy(BuildStaticKey, StringComparer.OrdinalIgnoreCase);
@@ -48,7 +58,7 @@ public static class Iec61850ReportPlanner
         // monitoring stops; polling remains the final fallback.
         if (dynamicWritesAllowed)
         {
-            var dynamicMembers = all
+            var dynamicMembers = reportCandidates
                 .Where(point => !assigned.Contains(point.PointKey))
                 .ToList();
 
@@ -74,6 +84,7 @@ public static class Iec61850ReportPlanner
         IEnumerable<Iec61850MonitorPoint> points)
     {
         var members = points
+            .Where(point => !IsFastCommissioningPoint(point))
             .GroupBy(point => point.PointKey, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .ToList();
@@ -127,6 +138,9 @@ public static class Iec61850ReportPlanner
                text.Contains(".BR.", StringComparison.OrdinalIgnoreCase) ||
                text.Contains("buffer", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsFastCommissioningPoint(Iec61850MonitorPoint point)
+        => point.PollingIntervalMs <= FastCommissioningPollingThresholdMs && IsFastPoint(point);
 
     private static bool IsFastPoint(Iec61850MonitorPoint point)
     {
