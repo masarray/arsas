@@ -1,56 +1,58 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.20",
-  "title": "True portable single EXE and consistent protection-relay UI",
-  "titleId": "Portable single EXE nyata dan UI protection relay yang konsisten",
-  "summary": "ARSAS 1.6.20 publishes the Windows portable package as one self-contained EXE, keeps the validated installer path, strengthens runtime and supply-chain checks, and aligns the IED relay fascia across Engineering and IO List FAT.",
-  "summaryId": "ARSAS 1.6.20 mempublikasikan paket portable Windows sebagai satu EXE self-contained, mempertahankan jalur installer yang tervalidasi, memperkuat pemeriksaan runtime dan supply chain, serta menyelaraskan fascia relay IED pada Engineering dan IO List FAT.",
+  "version": "1.6.22",
+  "title": "Smart FAT evidence with remote COMTRADE discovery and durable per-IED reporting",
+  "titleId": "Evidence FAT cerdas dengan discovery COMTRADE remote dan reporting per-IED yang durable",
+  "summary": "ARSAS 1.6.22 strengthens IO List FAT for real relay testing: safe IEC 61850 reference matching, explicit time-sync evidence, remote COMTRADE/FileDirectory evidence without requiring a download, and persistent latest-record reporting per IED.",
+  "summaryId": "ARSAS 1.6.22 memperkuat IO List FAT untuk pengujian relay nyata: matching referensi IEC 61850 yang aman, evidence time-sync yang eksplisit, evidence COMTRADE/FileDirectory remote tanpa mewajibkan download, serta reporting latest record yang persistent per IED.",
   "highlights": [
-    "The public portable asset is now one ARSAS-Windows-x64-Portable.exe and does not require an installed .NET runtime or application-requested elevation.",
-    "CI enforces exactly one distributed portable file and smoke-tests engine provenance, ARIEC61850, managed Npcap dependencies and user temporary-directory access.",
-    "The Windows installer remains based on the separately validated multi-file self-contained publish and passes silent current-user install and uninstall testing.",
-    "IED Explorer and IO List FAT now share the protection-relay fascia, with LIVE/STOP below the artwork and no misleading icon-level glow.",
-    "Release assets include SHA-256 checksums, SPDX SBOM, provenance metadata and GitHub artifact attestations."
+    "IO List FAT now resolves safe IEC 61850 naming variations across MMS and SCL without fuzzy or Levenshtein guessing; ambiguous equal-best matches remain blocked.",
+    "A supported remote COMTRADE/fault-record entry returned by IEC 61850 FileDirectory is recorded as File Service FAT PASS for that IED; downloading the record is optional additional verification.",
+    "ARSAS selects the latest remote fault record by relay LastModifiedUtc and records the exact COMTRADE filename(s), remote path, completeness, relay timestamp, file count and known size.",
+    "Native PDF/print preview and portable FAT handover reporting now include File Service / COMTRADE evidence with the latest remote filename and a clear OPTIONAL download status.",
+    "Supplemental FAT evidence is persisted per IED across workspace restart and handover restore, and remote discovery is appended to the existing tamper-evident evidence journal.",
+    "Explicit time-synchronization signals are captured when available, while timestamp fallback remains clearly identified as observation rather than a false synchronization claim."
   ],
   "highlightsId": [
-    "Asset portable publik kini berupa satu ARSAS-Windows-x64-Portable.exe dan tidak memerlukan .NET terpasang atau elevation yang diminta aplikasi.",
-    "CI memastikan hanya ada satu file portable yang didistribusikan serta menguji provenance engine, ARIEC61850, dependency Npcap managed dan akses temporary directory user.",
-    "Installer Windows tetap menggunakan publish self-contained multi-file yang divalidasi terpisah dan lulus silent install serta uninstall pada scope current user.",
-    "IED Explorer dan IO List FAT kini memakai fascia protection relay yang sama, dengan LIVE/STOP di bawah artwork dan tanpa glow status yang menyesatkan.",
-    "Asset release mencakup checksum SHA-256, SPDX SBOM, metadata provenance dan GitHub artifact attestation."
+    "IO List FAT kini menyelesaikan variasi penamaan IEC 61850 yang aman antara MMS dan SCL tanpa fuzzy atau Levenshtein guessing; equal-best match yang ambigu tetap diblokir.",
+    "Entry COMTRADE/fault-record remote yang didukung dan dikembalikan oleh IEC 61850 FileDirectory dicatat sebagai File Service FAT PASS untuk IED tersebut; download record bersifat optional sebagai verifikasi tambahan.",
+    "ARSAS memilih fault record remote terbaru berdasarkan LastModifiedUtc relay dan mencatat nama file COMTRADE persis, remote path, completeness, timestamp relay, jumlah file dan known size.",
+    "Native PDF/print preview dan portable FAT handover report kini mencakup File Service / COMTRADE evidence dengan nama file remote terbaru dan status download OPTIONAL yang jelas.",
+    "Supplemental FAT evidence dipertahankan per IED setelah workspace restart dan handover restore, serta remote discovery ditambahkan ke tamper-evident evidence journal yang sudah ada.",
+    "Signal time-synchronization eksplisit dicatat bila tersedia, sedangkan timestamp fallback tetap dinyatakan sebagai observation dan tidak dipakai untuk klaim sinkronisasi palsu."
   ],
   "improvements": [
-    "Portable publication keeps WPF and packet-capture compatibility by disabling trimming and bundling native/content payloads for extraction to the current user's .NET bundle cache.",
-    "The application manifest uses asInvoker so ARSAS itself does not request UAC elevation.",
-    "Release checksum, download, documentation and attestation paths identify the portable EXE instead of the legacy ZIP.",
-    "UI regression contracts cover the shared relay image, status placement and removal of the former calculator-style icon.",
-    "Release metadata is synchronized across the application, changelog, citation, Download Center and bilingual release notes."
+    "The FAT bootstrap restore path now restores IED-level COMTRADE evidence instead of restoring only signal transition progress.",
+    "COMTRADE discovery and report persistence are covered by regression tests, including newest-record selection and restart recovery.",
+    "Existing fault-record transfer hardening remains available for optional deeper testing, including session reconnect/retry and detailed FileOpen/FileRead diagnostics.",
+    "The release is built from the same source revision used for Windows release regression tests, installer smoke testing and portable single-EXE smoke testing.",
+    "Release assets include SHA-256 checksums, SPDX SBOM, provenance metadata and GitHub artifact attestations."
   ],
   "improvementsId": [
-    "Publikasi portable mempertahankan kompatibilitas WPF dan packet capture dengan mematikan trimming serta membundel payload native/content untuk diekstrak ke .NET bundle cache milik user.",
-    "Manifest aplikasi memakai asInvoker sehingga ARSAS sendiri tidak meminta elevation UAC.",
-    "Jalur checksum, download, dokumentasi dan attestation release mengidentifikasi portable EXE, bukan ZIP legacy.",
-    "Contract regression UI mencakup gambar relay bersama, penempatan status dan penghapusan icon lama bergaya kalkulator.",
-    "Metadata release diselaraskan pada aplikasi, changelog, citation, Download Center dan catatan rilis bilingual."
+    "Jalur restore bootstrap FAT kini memulihkan COMTRADE evidence tingkat IED, bukan hanya progress transisi signal.",
+    "COMTRADE discovery dan persistence report dilindungi regression test, termasuk pemilihan record terbaru dan recovery setelah restart.",
+    "Hardening fault-record transfer yang sudah ada tetap tersedia untuk pengujian optional yang lebih dalam, termasuk session reconnect/retry dan diagnostic FileOpen/FileRead yang detail.",
+    "Release dibangun dari source revision yang sama dengan Windows release regression test, installer smoke test dan portable single-EXE smoke test.",
+    "Asset release mencakup checksum SHA-256, SPDX SBOM, metadata provenance dan GitHub artifact attestation."
   ],
   "knownLimitations": [
+    "File Service FAT PASS in this release proves successful IEC 61850 FileDirectory discovery of a supported remote fault record; it does not claim that FileOpen, FileRead or FileClose transfer succeeded.",
+    "Actual relay interoperability still requires FAT-bench validation against the physical IED and network being tested.",
     "Windows x64 is the only packaged desktop platform in the current stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "A portable executable cannot bypass AppLocker, Windows Defender Application Control, antivirus, download-zone or corporate execution policy.",
-    "The .NET single-file host extracts bundled runtime payloads to the current user's bundle cache on first launch; the user profile and temporary directory must be writable.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic.",
-    "Automatic IO List transition testing currently focuses on approved SDI points; analog tolerance and authorized command campaigns remain separate bounded work.",
-    "Raw SMV lanes are not calibrated current or voltage measurements until trusted SCL mapping, scaling, synchronization and independent verification are available."
+    "Automatic IO List transition testing currently focuses on approved SDI points; analog tolerance and authorized command campaigns remain separate bounded work."
   ],
   "knownLimitationsId": [
+    "File Service FAT PASS pada release ini membuktikan keberhasilan IEC 61850 FileDirectory discovery terhadap remote fault record yang didukung; status ini tidak mengklaim FileOpen, FileRead atau FileClose transfer berhasil.",
+    "Interoperability relay nyata tetap harus divalidasi di FAT bench terhadap IED fisik dan network yang sedang diuji.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release saat ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Executable portable tidak dapat melewati AppLocker, Windows Defender Application Control, antivirus, download-zone atau corporate execution policy.",
-    "Host single-file .NET mengekstrak payload runtime ke bundle cache user pada first launch; profil user dan temporary directory harus writable.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait.",
-    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance dan authorized command campaign tetap merupakan pekerjaan terkontrol yang terpisah.",
-    "Raw lane SMV bukan calibrated current atau voltage measurement sampai trusted SCL mapping, scaling, synchronization dan independent verification tersedia."
+    "Automatic transition testing IO List saat ini berfokus pada point SDI yang disetujui; analog tolerance dan authorized command campaign tetap merupakan pekerjaan terkontrol yang terpisah."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -63,11 +65,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.20 Engineering workspace with attributable IED values, quality and timestamps",
-    "altId": "Representasi Engineering workspace ARSAS 1.6.20 dengan value IED, quality dan timestamp yang attributable",
-    "caption": "Representative Engineering workspace for ARSAS 1.6.20. This release changes Windows packaging and relay-fascia consistency without expanding unsupported protocol claims.",
-    "captionId": "Representasi Engineering workspace ARSAS 1.6.20. Release ini mengubah packaging Windows dan konsistensi fascia relay tanpa memperluas klaim protocol yang belum didukung."
+    "alt": "Representative ARSAS 1.6.22 Engineering and FAT workflow context",
+    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.22",
+    "caption": "Representative ARSAS workspace. Version 1.6.22 focuses on safer FAT evidence semantics, remote COMTRADE discovery and durable reporting without overstating file-transfer interoperability.",
+    "captionId": "Representasi workspace ARSAS. Versi 1.6.22 berfokus pada semantik FAT evidence yang lebih aman, remote COMTRADE discovery dan reporting durable tanpa melebih-lebihkan interoperabilitas file transfer."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.20"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.22"
 }
