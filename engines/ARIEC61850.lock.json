@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "8b46cfed0614a4d0b0a5bf73fa7a6e77cf6fe817",
-  "sourcePullRequest": 55,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance."
+  "commit": "5f64b0b47ece5c0b62bedb087d111c2db013ff45",
+  "sourcePullRequest": 59,
+  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Integration branch pins the CI-green DataSet semantic-binding head; production must move to the merged main SHA before release."
 }
