@@ -159,7 +159,10 @@ public static class IoFatExcelResultExportService
     }
 
     private static string Timestamp(DateTimeOffset? value)
-        => value?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture) ?? string.Empty;
+        => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+            value,
+            "yyyy-MM-dd HH:mm:ss.fff zzz",
+            string.Empty);
 
     private static string EvidenceResult(IoTestTransitionEvidence? evidence) => evidence?.Verdict switch
     {
