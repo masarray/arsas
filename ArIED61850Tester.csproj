@@ -67,6 +67,6 @@
     <Error Condition="!Exists('$(ArIec61850Project)')"
            Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
     <Error Condition="!Exists('$(ArIec61850NpcapProject)')"
-           Text="ARIEC61850 Npcap transport project was not found at '$(ArIec61850NpcapProject)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850NpcapProject=FULL_PATH_TO_AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj." />
+           Text="ARIEC61850 Npcap transport project was not found at '$(ArIec61850NpcapProject)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850NpcapProject=FULL_PATH_TO_AR.Iec61850.Transports.Npcap.csproj." />
   </Target>
 </Project>
