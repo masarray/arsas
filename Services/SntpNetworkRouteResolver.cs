@@ -29,25 +29,31 @@ public static class SntpNetworkRouteResolver
 
         var interfaces = GetIpv4Candidates();
 
-        // Prefer an explicit same-subnet match. This is deterministic for normal station-bus layouts.
+        // Ask Windows which local address it would route to the IED. UDP Connect does not
+        // transmit a datagram; it only selects a route/local endpoint for this socket.
+        try
+        {
+            using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            probe.Connect(new IPEndPoint(remoteAddress, 123));
+            if (probe.LocalEndPoint is IPEndPoint localEndPoint)
+            {
+                var routed = interfaces.FirstOrDefault(candidate => candidate.Address.Equals(localEndPoint.Address));
+                if (routed != null)
+                    return Build(routed);
+            }
+        }
+        catch (SocketException)
+        {
+            // Continue with a deterministic same-subnet fallback below.
+        }
+
         foreach (var candidate in interfaces)
         {
             if (IsSameSubnet(candidate.Address, remoteAddress, candidate.Mask))
                 return Build(candidate);
         }
 
-        // Fall back to the Windows routing table without sending any datagram.
-        using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        probe.Connect(new IPEndPoint(remoteAddress, 123));
-        if (probe.LocalEndPoint is not IPEndPoint localEndPoint)
-            throw new InvalidOperationException($"Windows could not resolve a route to {remoteAddress}.");
-
-        var routed = interfaces.FirstOrDefault(candidate => candidate.Address.Equals(localEndPoint.Address));
-        if (routed == null)
-            throw new InvalidOperationException(
-                $"Windows selected {localEndPoint.Address} for {remoteAddress}, but ARSAS could not resolve its subnet mask.");
-
-        return Build(routed);
+        throw new InvalidOperationException($"Windows could not resolve an active IPv4 station-bus route to {remoteAddress}.");
     }
 
     public static IPAddress? ComputeDirectedBroadcast(IPAddress address, IPAddress mask)
