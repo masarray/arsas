@@ -84,11 +84,9 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(device.SclIedName))
             device.SclIedName = ied.IedName;
 
-        // Monitoring-only toward the process: no control commands are executed. Use
-        // configured RCB/DataSet coverage first, then an association-scoped temporary
-        // dynamic DataSet/URCB when exact coverage is missing, with bounded MMS
-        // verification/fallback last. Temporary report resources are released when the
-        // native monitoring session stops.
+        // Monitoring-only toward the process: no control commands are executed. FAT uses
+        // deterministic fast MMS acquisition for digital commissioning points while the
+        // normal engineering workspace keeps report-first behavior for ordinary intervals.
         device.AllowDynamicDataSetWrites = true;
 
         try
@@ -242,16 +240,18 @@ public partial class MainWindow
             _ioTestLiveBindingService.BindIed(ied, Devices);
             var allRequestedPointsLive = requestedPoints.All(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
+            var fatPollingNotActive = device.IsMonitoring &&
+                                      device.Points.Any(point => point.PollingIntervalMs > 500);
 
-            if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive))
+            if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive || fatPollingNotActive))
             {
-                ReportProgress("Refreshing report acquisition for the workbook scope");
+                ReportProgress("Refreshing FAT acquisition · deterministic fast digital polling");
                 await StopDeviceMonitorAsync(device);
             }
 
             if (!device.IsMonitoring)
             {
-                ReportProgress("Arming static RCB first · dynamic DataSet/URCB for uncovered points");
+                ReportProgress("Starting FAT live acquisition · fast MMS verification");
                 if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
                 {
                     _ioTestLiveBindingService.BindIed(ied, Devices);
@@ -260,12 +260,14 @@ public partial class MainWindow
                 }
             }
 
+            // Do not hold the operator behind an 8–18 second report-settling phase. FAT
+            // readiness is the first usable live image; report planning for non-fast points
+            // can continue in the monitor loop after the card is already responsive.
             var acquisition = await SettleIoFatReportPriorityAsync(
                 ied,
                 requestedPoints,
                 device,
-                ReportProgress,
-                allowSingleRestart: true);
+                ReportProgress);
 
             var binding = _ioTestLiveBindingService.BindIed(ied, Devices);
             var liveCount = requestedPoints.Count(point =>
@@ -284,16 +286,16 @@ public partial class MainWindow
             var modelText = usedSavedModel ? "saved model" : "live model";
             var acquisitionText = acquisition.PollingCount == 0
                 ? $"report-backed {acquisition.ReportCount}/{requestedPoints.Count}"
-                : $"report-backed {acquisition.ReportCount}/{requestedPoints.Count} · MMS fallback {acquisition.PollingCount}";
+                : $"fast MMS {acquisition.PollingCount} · report-backed {acquisition.ReportCount}";
             var timeSyncText = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device) == null
                 ? " · time-sync fallback ready"
                 : " · time-sync status armed";
             var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}";
             SetStatus(message);
             AddLog(
-                acquisition.PollingCount == 0 ? "INFO" : "WARN",
+                acquisition.PollingCount == 0 ? "INFO" : "INFO",
                 "IO Testing",
-                $"{message}. Acquisition policy: configured RCB → temporary dynamic DataSet/URCB → bounded MMS verification/fallback. No process control commands are enabled. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
+                $"{message}. FAT acquisition prioritizes deterministic fast MMS for digital commissioning points; normal engineering monitoring retains report-first behavior. No process control commands are enabled. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
@@ -322,36 +324,14 @@ public partial class MainWindow
         IoTestIedPlan ied,
         IReadOnlyCollection<IoTestPointPlan> requestedPoints,
         Iec61850MonitorDevice device,
-        Action<string> reportProgress,
-        bool allowSingleRestart)
+        Action<string> reportProgress)
     {
-        var first = await ObserveIoFatAcquisitionAsync(
-            ied,
-            requestedPoints,
-            device,
-            reportProgress,
-            TimeSpan.FromSeconds(8));
-
-        if (!allowSingleRestart ||
-            first.PollingCount == 0 ||
-            !device.AllowDynamicDataSetWrites ||
-            !device.IsMonitoring)
-        {
-            return first;
-        }
-
-        reportProgress($"{first.PollingCount} point(s) still on MMS fallback · rebuilding the report plan once");
-        await StopDeviceMonitorAsync(device);
-        await Task.Delay(180);
-        if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
-            return first;
-
         return await ObserveIoFatAcquisitionAsync(
             ied,
             requestedPoints,
             device,
             reportProgress,
-            TimeSpan.FromSeconds(10));
+            TimeSpan.FromMilliseconds(2500));
     }
 
     private async Task<IoFatAcquisitionSummary> ObserveIoFatAcquisitionAsync(
@@ -364,30 +344,40 @@ public partial class MainWindow
         var deadline = DateTime.UtcNow + timeout;
         var last = ReadIoFatAcquisitionSummary(requestedPoints, device);
         var announced = false;
+        var nextBindingRefreshUtc = DateTime.MinValue;
 
         while (DateTime.UtcNow < deadline && device.IsMonitoring)
         {
-            await Task.Delay(120);
-            _ioTestLiveBindingService.BindIed(ied, Devices);
+            await Task.Delay(100);
+            var nowUtc = DateTime.UtcNow;
+            if (nowUtc >= nextBindingRefreshUtc)
+            {
+                _ioTestLiveBindingService.BindIed(ied, Devices);
+                nextBindingRefreshUtc = nowUtc.AddMilliseconds(250);
+            }
             last = ReadIoFatAcquisitionSummary(requestedPoints, device);
 
             if (!announced)
             {
-                reportProgress("Validating static/dynamic report coverage · MMS is fallback only");
+                reportProgress("Waiting for first live FAT image · report optimization continues in background");
                 announced = true;
             }
 
-            var plannerSettled = !ContainsPlannerStage(device.AcquisitionMode);
-            if (last.LiveCount == requestedPoints.Count &&
-                plannerSettled &&
-                last.UnknownCount == 0 &&
-                (last.PollingCount == 0 || DateTime.UtcNow >= deadline - TimeSpan.FromSeconds(2)))
-            {
+            var liveImageReady = requestedPoints.All(HasUsableFatLiveValue);
+            if (last.LiveCount == requestedPoints.Count && liveImageReady && last.UnknownCount == 0)
                 break;
-            }
         }
 
-        return last;
+        _ioTestLiveBindingService.BindIed(ied, Devices);
+        return ReadIoFatAcquisitionSummary(requestedPoints, device);
+    }
+
+    private static bool HasUsableFatLiveValue(IoTestPointPlan point)
+    {
+        var value = (point.Runtime.CurrentValue ?? string.Empty).Trim();
+        return value.Length > 0 && value != "-" && value != "—" &&
+               !value.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+               !value.Contains("pending", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IoFatAcquisitionSummary ReadIoFatAcquisitionSummary(
@@ -421,12 +411,6 @@ public partial class MainWindow
         => source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
            source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
            source.Contains("report", StringComparison.OrdinalIgnoreCase);
-
-    private static bool ContainsPlannerStage(string? mode)
-        => (mode ?? string.Empty).Contains("arming", StringComparison.OrdinalIgnoreCase) ||
-           (mode ?? string.Empty).Contains("live start", StringComparison.OrdinalIgnoreCase) ||
-           (mode ?? string.Empty).Contains("preparing", StringComparison.OrdinalIgnoreCase) ||
-           (mode ?? string.Empty).Contains("settling", StringComparison.OrdinalIgnoreCase);
 
     private sealed record IoFatAcquisitionSummary(
         int LiveCount,

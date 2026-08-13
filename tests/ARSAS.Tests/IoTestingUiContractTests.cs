@@ -125,18 +125,20 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoFatAutomaticPreparation_UsesSmartReportingWithoutProcessControls()
+    public void IoFatAutomaticPreparation_UsesFastCommissioningAcquisitionWithoutProcessControls()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
         Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
         Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("configured RCB", source, StringComparison.Ordinal);
-        Assert.Contains("dynamic DataSet/URCB", source, StringComparison.Ordinal);
-        Assert.Contains("bounded MMS verification/fallback", source, StringComparison.Ordinal);
+        Assert.Contains("deterministic fast MMS", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("first live FAT image", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
-        Assert.Contains("rebuilding the report plan once", source, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromSeconds(10)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteControlAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InspectControlAsync", source, StringComparison.Ordinal);
     }

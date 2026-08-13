@@ -11,6 +11,15 @@ public interface IIoTestEvidenceJournal : IDisposable
     long RecordCount { get; }
     string LastHash { get; }
     IoTestJournalEnvelope Append(IoTestJournalEntry entry);
+
+    // Existing test doubles and alternate journals keep working through this default
+    // implementation. The production journal overrides it so a baseline batch performs
+    // one durable disk flush instead of one fsync per FAT point.
+    IReadOnlyList<IoTestJournalEnvelope> AppendBatch(IEnumerable<IoTestJournalEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return entries.Select(Append).ToList();
+    }
 }
 
 public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
@@ -68,20 +77,50 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            var sequence = checked(_recordCount + 1);
-            var previousHash = _lastHash;
-            var hashInput = JsonSerializer.SerializeToUtf8Bytes(
-                new JournalHashInput(sequence, previousHash, entry),
-                JsonOptions);
-            var hash = Convert.ToHexString(SHA256.HashData(hashInput)).ToLowerInvariant();
-            var envelope = new IoTestJournalEnvelope(sequence, previousHash, hash, entry);
-            _writer.WriteLine(JsonSerializer.Serialize(envelope, JsonOptions));
-            _writer.Flush();
-            _stream.Flush(flushToDisk: true);
-            _recordCount = sequence;
-            _lastHash = hash;
+            var envelope = AppendCore(entry);
+            FlushDurable();
             return envelope;
         }
+    }
+
+    public IReadOnlyList<IoTestJournalEnvelope> AppendBatch(IEnumerable<IoTestJournalEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var envelopes = new List<IoTestJournalEnvelope>();
+            foreach (var entry in entries)
+            {
+                ArgumentNullException.ThrowIfNull(entry);
+                envelopes.Add(AppendCore(entry));
+            }
+
+            if (envelopes.Count > 0)
+                FlushDurable();
+            return envelopes;
+        }
+    }
+
+    private IoTestJournalEnvelope AppendCore(IoTestJournalEntry entry)
+    {
+        var sequence = checked(_recordCount + 1);
+        var previousHash = _lastHash;
+        var hashInput = JsonSerializer.SerializeToUtf8Bytes(
+            new JournalHashInput(sequence, previousHash, entry),
+            JsonOptions);
+        var hash = Convert.ToHexString(SHA256.HashData(hashInput)).ToLowerInvariant();
+        var envelope = new IoTestJournalEnvelope(sequence, previousHash, hash, entry);
+        _writer.WriteLine(JsonSerializer.Serialize(envelope, JsonOptions));
+        _recordCount = sequence;
+        _lastHash = hash;
+        return envelope;
+    }
+
+    private void FlushDurable()
+    {
+        _writer.Flush();
+        _stream.Flush(flushToDisk: true);
     }
 
     public static IoTestJournalVerificationResult Verify(string filePath)
