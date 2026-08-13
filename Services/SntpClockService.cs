@@ -60,7 +60,7 @@ public sealed class SntpClockService : IAsyncDisposable
         TimeSpan? broadcastInterval = null)
     {
         _profile = profile ?? new SntpServerProfile();
-        _broadcastInterval = NormalizeBroadcastInterval(broadcastInterval ?? TimeSpan.FromSeconds(16));
+        _broadcastInterval = NormalizeBroadcastInterval(broadcastInterval ?? TimeSpan.FromSeconds(64));
     }
 
     public event Action<SntpClockServiceSnapshot>? StatusChanged;
@@ -332,7 +332,7 @@ public sealed class SntpClockService : IAsyncDisposable
         => StatusChanged?.Invoke(Snapshot);
 
     private static TimeSpan NormalizeBroadcastInterval(TimeSpan interval)
-        => interval < TimeSpan.FromSeconds(16) ? TimeSpan.FromSeconds(16) : interval;
+        => interval < TimeSpan.FromSeconds(64) ? TimeSpan.FromSeconds(64) : interval;
 
     private sealed class SntpClockHealthMonitor
     {
