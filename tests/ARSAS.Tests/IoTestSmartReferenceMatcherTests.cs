@@ -74,11 +74,68 @@ public sealed class IoTestSmartReferenceMatcherTests
         Assert.Empty(result.MissingPoints);
     }
 
+    [Fact]
+    public void PartialTcsLeafReferences_ResolveUniquelyWithoutFuzzyGuessing()
+    {
+        var ied = FieldIed(
+            FieldPoint("UCC-IEC-TCS1", ".TCS1Fail"),
+            FieldPoint("UCC-IEC-TCS2", ".TCS2Fail"));
+        var device = FieldDevice(
+            Signal("Trip coil monitoring 1", "AA1C1F13R4Application/ADDGGIO2$ST$TCS1Fail$stVal", "ST"),
+            Signal("Trip coil monitoring 2", "AA1C1F13R4Application/ADDGGIO2$ST$TCS2Fail$stVal", "ST"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(2, result.Matches.Count);
+        Assert.Empty(result.MissingPoints);
+        Assert.Empty(result.AmbiguousPoints);
+        Assert.All(result.Matches, match => Assert.True(match.UsedNormalizedIedPrefix));
+    }
+
+    [Fact]
+    public void PartialLeafReference_RemainsAmbiguousWhenObjectOccursInTwoLogicalNodes()
+    {
+        var ied = FieldIed(FieldPoint("UCC-IEC-TCS1", ".TCS1Fail"));
+        var device = FieldDevice(
+            Signal("TCS from ADD", "AA1C1F13R4Application/ADDGGIO2$ST$TCS1Fail$stVal", "ST"),
+            Signal("TCS from alternate LN", "AA1C1F13R4Application/ALTGGIO3$ST$TCS1Fail$stVal", "ST"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(result.MissingPoints);
+        Assert.Single(result.AmbiguousPoints);
+    }
+
+    [Fact]
+    public void PartialLeafReference_DoesNotUseNearTextSimilarity()
+    {
+        var ied = FieldIed(FieldPoint("UCC-IEC-TCS1", ".TCS1Fail"));
+        var device = FieldDevice(
+            Signal("Different numbered failure", "AA1C1F13R4Application/ADDGGIO2$ST$TCS11Fail$stVal", "ST"),
+            Signal("Healthy state", "AA1C1F13R4Application/ADDGGIO2$ST$TCS1Healthy$stVal", "ST"));
+
+        var result = _service.Resolve(ied, device);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.MissingPoints);
+        Assert.Empty(result.AmbiguousPoints);
+    }
+
     private static IoTestIedPlan Ied(params IoTestPointPlan[] points) => new()
     {
         IedName = "AA1C1F06R2",
         IpAddress = "192.168.81.53",
         IedRole = "Protection relay",
+        TestPoints = points.ToList()
+    };
+
+    private static IoTestIedPlan FieldIed(params IoTestPointPlan[] points) => new()
+    {
+        IedName = "AA1C1F13R4",
+        IpAddress = "192.168.81.17",
+        IedRole = "BCU - 6MD85",
         TestPoints = points.ToList()
     };
 
@@ -97,6 +154,23 @@ public sealed class IoTestSmartReferenceMatcherTests
         TestEnabled = true
     };
 
+    private static IoTestPointPlan FieldPoint(string id, string reference) => new()
+    {
+        TestPointId = id,
+        IedName = "AA1C1F13R4",
+        IpAddress = "192.168.81.17",
+        SignalName = id,
+        ObjectReference = reference,
+        LogicalDevice = "AA1C1F13R4Application",
+        LogicalNode = "-",
+        DataAttribute = "stVal",
+        FunctionalConstraint = "ST",
+        ExpectedOnText = "Trip",
+        ExpectedOffText = "Normal",
+        ImportReady = true,
+        TestEnabled = true
+    };
+
     private static Iec61850MonitorDevice Device(params SignalDefinition[] signals)
     {
         var device = new Iec61850MonitorDevice
@@ -104,6 +178,19 @@ public sealed class IoTestSmartReferenceMatcherTests
             Name = "AA1C1F06R2",
             SclIedName = "AA1C1F06R2",
             IpAddress = "192.168.81.53",
+            Port = 102
+        };
+        device.Signals.AddRange(signals);
+        return device;
+    }
+
+    private static Iec61850MonitorDevice FieldDevice(params SignalDefinition[] signals)
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "AA1C1F13R4",
+            SclIedName = "AA1C1F13R4",
+            IpAddress = "192.168.81.17",
             Port = 102
         };
         device.Signals.AddRange(signals);
