@@ -1,0 +1,469 @@
+name: Agent live power measurement repair
+
+on:
+  push:
+    branches:
+      - agent/fix-live-power-measurements
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout isolated repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Apply guarded fundamental-power patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"guard failed: {path}: expected exactly one match, found {count}")
+              p.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+
+          # 1) Fundamental power/frequency must not be classified as statistics/harmonic noise.
+          replace_once(
+              "Models/SignalDefinition.cs",
+              '''    public static bool IsDefaultScadaMeasurementMagnitude(string normalizedReference)
+              {
+                  var r = NormalizeRef(normalizedReference);
+                  if (IsStatisticsOrHarmonicNoise(r)) return false;
+                  if (!r.EndsWith(".mag.f")) return false;
+
+                  var operationalValues = r.Contains("operationalvalues") || r.Contains("operational_values");
+                  if (operationalValues)
+                  {
+                      if (!r.Contains(".instcval.mag.f")) return false;
+                  }
+                  else
+                  {
+                      if (!r.Contains(".cval.mag.f") || r.Contains(".instcval.")) return false;
+                  }
+
+                  return r.Contains(".a.phsa.") ||
+                         r.Contains(".a.phsb.") ||
+                         r.Contains(".a.phsc.") ||
+                         r.Contains(".a.neut.") ||
+                         r.Contains(".a.net.") ||
+                         r.Contains(".phv.phsa.") ||
+                         r.Contains(".phv.phsb.") ||
+                         r.Contains(".phv.phsc.") ||
+                         r.Contains(".ppv.phsab.") ||
+                         r.Contains(".ppv.phsbc.") ||
+                         r.Contains(".ppv.phsca.");
+              }
+          ''',
+              '''    public static bool IsDefaultScadaMeasurementMagnitude(string normalizedReference)
+              {
+                  var r = NormalizeRef(normalizedReference);
+                  if (IsStatisticsOrHarmonicNoise(r)) return false;
+                  if (!r.EndsWith(".f")) return false;
+
+                  // Fundamental scalar MV objects use mag/instMag rather than the CMV cVal/instCVal path.
+                  // Keep both readable variants as SCADA-grade so live-only vendor schemas do not demote power totals.
+                  if (Regex.IsMatch(
+                      r,
+                      @"\\.(?:totw|totvar|totva|totpf|hz)\\.(?:instmag|mag)\\.f$",
+                      RegexOptions.IgnoreCase))
+                  {
+                      return true;
+                  }
+
+                  var operationalValues = r.Contains("operationalvalues") || r.Contains("operational_values");
+                  var instantaneousComplex = r.Contains(".instcval.mag.f");
+                  var bufferedComplex = r.Contains(".cval.mag.f") && !instantaneousComplex;
+                  if (operationalValues ? !instantaneousComplex : !bufferedComplex)
+                      return false;
+
+                  return r.Contains(".a.phsa.") ||
+                         r.Contains(".a.phsb.") ||
+                         r.Contains(".a.phsc.") ||
+                         r.Contains(".a.neut.") ||
+                         r.Contains(".a.net.") ||
+                         r.Contains(".phv.phsa.") ||
+                         r.Contains(".phv.phsb.") ||
+                         r.Contains(".phv.phsc.") ||
+                         r.Contains(".ppv.phsab.") ||
+                         r.Contains(".ppv.phsbc.") ||
+                         r.Contains(".ppv.phsca.") ||
+                         Regex.IsMatch(
+                             r,
+                             @"\\.(?:w|var|va|pf)\\.(?:phsa|phsb|phsc|net|tot)\\.(?:instcval|cval)\\.mag\\.f$",
+                             RegexOptions.IgnoreCase);
+              }
+          ''')
+
+          replace_once(
+              "Models/SignalDefinition.cs",
+              '''               r.Contains(".thd") || r.Contains(".tdd") ||
+                         r.Contains(".hz") ||
+                         r.Contains(".w.") || r.Contains("totw") ||
+                         r.Contains(".var") || r.Contains("totvar") ||
+                         r.Contains(".va") || r.Contains("totva") ||
+                         r.Contains(".pf") ||
+                         r.Contains(".ang.") || r.EndsWith(".ang.f");''',
+              '''               r.Contains(".thd") || r.Contains(".tdd") ||
+                         r.Contains(".ang.") || r.EndsWith(".ang.f");''')
+
+          # 2) Operator policy: include fundamental scalar power/frequency as real MMXU/MMXN measurements.
+          replace_once(
+              "Services/SasOperationalSignalPolicy.cs",
+              '''    private static readonly Regex FundamentalPower = new(@"\\.(?:w|var|va|pf)\\.(?:phsa|phsb|phsc|net|tot)\\.", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+              private static readonly Regex StatisticOrHarmonic = new(@"(^|[./])(?:har|harm|min|max|mean|avg|average|dmd|dmmd)\\d*(?:mmxu|mmxn)|\\.(?:mean|min|max|avg|average|dmd|har|harm|thd|tdd)(?:[.$/]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);''',
+              '''    private static readonly Regex FundamentalPower = new(@"\\.(?:w|var|va|pf)\\.(?:phsa|phsb|phsc|net|tot)\\.", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+              private static readonly Regex FundamentalScalarPower = new(@"\\.(?:totw|totvar|totva|totpf|hz)\\.(?:instmag|mag)\\.f$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+              private static readonly Regex StatisticOrHarmonic = new(@"(^|[./])(?:har|harm|min|max|mean|avg|average|dmd|dmmd)\\d*(?:mmxu|mmxn)|\\.(?:mean|min|max|avg|average|dmd|har|harm|thd|tdd)(?:[.$/]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);''')
+
+          replace_once(
+              "Services/SasOperationalSignalPolicy.cs",
+              '''        if (reference.EndsWith(".hz.mag.f", StringComparison.OrdinalIgnoreCase))
+                      return true;
+
+                  var hasMagnitude = reference.Contains(".cval.mag.f", StringComparison.OrdinalIgnoreCase) ||''',
+              '''        if (FundamentalScalarPower.IsMatch(reference))
+                      return true;
+
+                  var hasMagnitude = reference.Contains(".cval.mag.f", StringComparison.OrdinalIgnoreCase) ||''')
+
+          # 3) Read resolver: scalar MV mag <-> instMag fallback plus correct q/t parent resolution.
+          replace_once(
+              "Services/IecSignalReadResolver.cs",
+              '''        if (reference.Contains(".instCVal.mag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".instCVal.mag.f", ".cVal.mag.f"));
+                  else if (reference.Contains(".cVal.mag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".cVal.mag.f", ".instCVal.mag.f"));''',
+              '''        if (reference.Contains(".instCVal.mag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".instCVal.mag.f", ".cVal.mag.f"));
+                  else if (reference.Contains(".cVal.mag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".cVal.mag.f", ".instCVal.mag.f"));
+                  else if (reference.Contains(".instMag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".instMag.f", ".mag.f"));
+                  else if (reference.Contains(".mag.f", StringComparison.OrdinalIgnoreCase))
+                      AddUnique(candidates, ReplaceToken(reference, ".mag.f", ".instMag.f"));''')
+
+          replace_once(
+              "Services/IecSignalReadResolver.cs",
+              '''        foreach (var suffix in new[] { ".instCVal.mag.f", ".cVal.mag.f", ".mag.f" })''',
+              '''        foreach (var suffix in new[] { ".instCVal.mag.f", ".cVal.mag.f", ".instMag.f", ".mag.f" })''')
+
+          # 4) Native discovery: only recover scalar power when that DO is actually present; do not synthesize it from an MMXU shell.
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''            if (EqualsAny(first, "A", "PhV", "PPV"))
+                          {
+                              foreach (var expanded in ExpandMeasurementMagnitude(current, first))
+                                  yield return expanded;
+                              yield break;
+                          }
+
+                          if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase)))
+                          {
+                              yield return Append(current, "f");
+                              yield break;
+                          }''',
+              '''            if (EqualsAny(first, "A", "PhV", "PPV"))
+                          {
+                              foreach (var expanded in ExpandMeasurementMagnitude(current, first))
+                                  yield return expanded;
+                              yield break;
+                          }
+
+                          if (IsFundamentalScalarMeasurementObject(first))
+                          {
+                              if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
+                                                   string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
+                                  yield return Append(current, "f");
+                              else
+                                  yield return Append(current, "mag", "f");
+                              yield break;
+                          }
+
+                          if (current.Any(p => string.Equals(p, "mag", StringComparison.OrdinalIgnoreCase) ||
+                                               string.Equals(p, "instMag", StringComparison.OrdinalIgnoreCase)))
+                          {
+                              yield return Append(current, "f");
+                              yield break;
+                          }''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''        if (lnClass == "MMXU" && EqualsAny(name, "A", "PhV", "PPV"))
+                      {
+                          var unit = name.Equals("A", StringComparison.OrdinalIgnoreCase) ? "A" : "V";
+                          foreach (var path in ExpandMeasurementMagnitude(new[] { name }, name))
+                              yield return new FallbackPoint(name, "MX", string.Join('.', path.Skip(1)), "Float32", "Measurement", unit);
+                          yield break;
+                      }
+
+                      if (LooksLikeAnalogDataObject(name))''',
+              '''        if (lnClass == "MMXU" && EqualsAny(name, "A", "PhV", "PPV"))
+                      {
+                          var unit = name.Equals("A", StringComparison.OrdinalIgnoreCase) ? "A" : "V";
+                          foreach (var path in ExpandMeasurementMagnitude(new[] { name }, name))
+                              yield return new FallbackPoint(name, "MX", string.Join('.', path.Skip(1)), "Float32", "Measurement", unit);
+                          yield break;
+                      }
+
+                      if (lnClass is "MMXU" or "MMXN" && IsFundamentalScalarMeasurementObject(name))
+                      {
+                          yield return new FallbackPoint(name, "MX", "mag.f", "Float32", "Measurement", InferUnitFromDataObject(name));
+                          yield break;
+                      }
+
+                      if (LooksLikeAnalogDataObject(name))''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''    private static bool LooksLikeAnalogDataObject(string name)
+              {''',
+              '''    private static bool IsFundamentalScalarMeasurementObject(string name)
+                  => EqualsAny(name, "Hz", "TotW", "TotVAr", "TotVA", "TotPF");
+
+              private static bool LooksLikeAnalogDataObject(string name)
+              {''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''    private static string InferUnitFromDataObject(string name)
+              {
+                  var lower = name.ToLowerInvariant();
+                  if (lower.Contains('v')) return "V";
+                  if (lower.Contains("loda") || lower.Contains("circa") || lower.Contains("limloda")) return "A";
+                  if (lower.Contains("phang")) return "deg";
+                  if (lower.Contains("tms")) return "s";
+                  return string.Empty;
+              }''',
+              '''    private static string InferUnitFromDataObject(string name)
+              {
+                  var lower = name.ToLowerInvariant();
+                  if (lower is "totvar" or "var") return "VAr";
+                  if (lower is "totva" or "va") return "VA";
+                  if (lower is "totw" or "w") return "W";
+                  if (lower == "hz") return "Hz";
+                  if (lower.Contains("pf")) return string.Empty;
+                  if (lower.Contains("loda") || lower.Contains("circa") || lower.Contains("limloda")) return "A";
+                  if (lower.Contains("phang")) return "deg";
+                  if (lower.Contains('v')) return "V";
+                  if (lower.Contains("tms")) return "s";
+                  return string.Empty;
+              }''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''        if (r.Contains(".setmag") || r.EndsWith(".setval")) return "Setting";
+                  if (r.EndsWith(".mag.f") || r.Contains(".cval.mag.f")) return "Measurement";''',
+              '''        if (r.Contains(".setmag") || r.EndsWith(".setval")) return "Setting";
+                  if (r.EndsWith(".mag.f") || r.EndsWith(".instmag.f") || r.Contains(".cval.mag.f")) return "Measurement";''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''    private static string InferUnit(string reference)
+              {
+                  var r = Normalize(reference);
+                  if (r.Contains(".a.")) return "A";
+                  if (r.Contains("loda") || r.Contains("circa") || r.Contains("limloda")) return "A";
+                  if (r.Contains(".phv.") || r.Contains(".ppv.")) return "V";
+                  if (r.Contains("ctlv") || r.Contains("bndctrv") || r.Contains("ctldv")) return "V";
+                  if (r.Contains("phang")) return "deg";
+                  if (r.Contains("tms")) return "s";
+                  if (r.Contains(".hz")) return "Hz";
+                  return string.Empty;
+              }''',
+              '''    private static string InferUnit(string reference)
+              {
+                  var r = Normalize(reference);
+                  if (r.Contains(".a.")) return "A";
+                  if (r.Contains("loda") || r.Contains("circa") || r.Contains("limloda")) return "A";
+                  if (r.Contains(".totvar.") || r.Contains(".var.")) return "VAr";
+                  if (r.Contains(".totva.") || r.Contains(".va.")) return "VA";
+                  if (r.Contains(".totw.") || r.Contains(".w.")) return "W";
+                  if (r.Contains(".hz.")) return "Hz";
+                  if (r.Contains(".phv.") || r.Contains(".ppv.")) return "V";
+                  if (r.Contains("ctlv") || r.Contains("bndctrv") || r.Contains("ctldv")) return "V";
+                  if (r.Contains("phang")) return "deg";
+                  if (r.Contains("tms")) return "s";
+                  return string.Empty;
+              }''')
+
+          replace_once(
+              "Services/NativeMmsDiscoveryMapper.cs",
+              '''        else if (parent.EndsWith(".general", StringComparison.OrdinalIgnoreCase)) parent = parent[..^8];
+                  else if (parent.EndsWith(".cVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^11];
+                  else if (parent.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^6];''',
+              '''        else if (parent.EndsWith(".general", StringComparison.OrdinalIgnoreCase)) parent = parent[..^8];
+                  else if (parent.EndsWith(".instCVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^15];
+                  else if (parent.EndsWith(".cVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^11];
+                  else if (parent.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^10];
+                  else if (parent.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^6];''')
+
+          # 5) Regression tests: behavior, units, companion references, and anti-noise guard.
+          test_path = Path("tests/ARSAS.Tests/LivePowerMeasurementRegressionTests.cs")
+          if test_path.exists():
+              raise SystemExit(f"guard failed: {test_path} already exists")
+          test_path.write_text(r'''using ArIED61850Tester.Models;
+          using ArIED61850Tester.Services;
+
+          namespace ARSAS.Tests;
+
+          public sealed class LivePowerMeasurementRegressionTests
+          {
+              [Theory]
+              [InlineData("IEDLD/MMXU1.TotW.mag.f")]
+              [InlineData("IEDLD/MMXU1.TotW.instMag.f")]
+              [InlineData("IEDLD/MMXU1.TotVAr.mag.f")]
+              [InlineData("IEDLD/MMXU1.TotVA.mag.f")]
+              [InlineData("IEDLD/MMXU1.TotPF.mag.f")]
+              [InlineData("IEDLD/MMXU1.Hz.mag.f")]
+              [InlineData("IEDLD/MMXU1.W.phsA.cVal.mag.f")]
+              public void FundamentalPower_IsPublishableOperatorMeasurement(string reference)
+              {
+                  var signal = NewMeasurement(reference);
+
+                  Assert.False(SignalDefinition.IsStatisticsOrHarmonicNoise(reference));
+                  Assert.True(signal.CanPublishAsSignal);
+                  Assert.True(SasOperationalSignalPolicy.IsOperationalValue(signal));
+              }
+
+              [Theory]
+              [InlineData("IEDLD/Har2MMXU1.A.phsA.cVal.mag.f")]
+              [InlineData("IEDLD/MMXU1.THD.mag.f")]
+              [InlineData("IEDLD/MMXU1.MeanA.mag.f")]
+              [InlineData("IEDLD/MMXU1.DmdW.mag.f")]
+              public void StatisticsAndHarmonics_RemainNoise(string reference)
+              {
+                  Assert.True(SignalDefinition.IsStatisticsOrHarmonicNoise(reference));
+              }
+
+              [Fact]
+              public void NativeShallowMmxuPowerObjects_AreRecoveredWithCorrectUnits()
+              {
+                  var snapshot = new NativeMmsDiscoverySnapshot
+                  {
+                      DomainVariables = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                      {
+                          ["IEDLD"] = new[]
+                          {
+                              "MMXU1$MX$TotW",
+                              "MMXU1$MX$TotVAr",
+                              "MMXU1$MX$TotVA",
+                              "MMXU1$MX$TotPF",
+                              "MMXU1$MX$Hz"
+                          }
+                      }
+                  };
+
+                  var signals = NativeMmsDiscoveryMapper.BuildSignals(snapshot);
+
+                  AssertMeasurement(signals, "IEDLD/MMXU1.TotW.mag.f", "W");
+                  AssertMeasurement(signals, "IEDLD/MMXU1.TotVAr.mag.f", "VAr");
+                  AssertMeasurement(signals, "IEDLD/MMXU1.TotVA.mag.f", "VA");
+                  AssertMeasurement(signals, "IEDLD/MMXU1.TotPF.mag.f", string.Empty);
+                  AssertMeasurement(signals, "IEDLD/MMXU1.Hz.mag.f", "Hz");
+              }
+
+              [Fact]
+              public void NativeInstantMagnitude_UsesDataObjectCompanionReferences()
+              {
+                  var snapshot = new NativeMmsDiscoverySnapshot
+                  {
+                      DomainVariables = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                      {
+                          ["IEDLD"] = new[] { "MMXU1$MX$TotW$instMag$f" }
+                      }
+                  };
+
+                  var signal = Assert.Single(NativeMmsDiscoveryMapper.BuildSignals(snapshot)
+                      .Where(item => item.ObjectReference.Equals("IEDLD/MMXU1.TotW.instMag.f", StringComparison.OrdinalIgnoreCase)));
+
+                  Assert.Equal("Measurement", signal.Category);
+                  Assert.Equal("W", signal.Unit);
+                  Assert.Equal("IEDLD/MMXU1.TotW.q", signal.QualityReference);
+                  Assert.Equal("IEDLD/MMXU1.TotW.t", signal.TimestampReference);
+              }
+
+              [Fact]
+              public void ScalarMagnitudeResolver_KeepsMagAndInstMagSiblingFallback()
+              {
+                  var source = File.ReadAllText(FindRepoFile("Services/IecSignalReadResolver.cs"));
+                  Assert.Contains("ReplaceToken(reference, \".instMag.f\", \".mag.f\")", source, StringComparison.Ordinal);
+                  Assert.Contains("ReplaceToken(reference, \".mag.f\", \".instMag.f\")", source, StringComparison.Ordinal);
+                  Assert.Contains("\".instMag.f\", \".mag.f\"", source, StringComparison.Ordinal);
+              }
+
+              private static SignalDefinition NewMeasurement(string reference) => new()
+              {
+                  Name = reference,
+                  ObjectReference = reference,
+                  FunctionalConstraint = "MX",
+                  DataType = "Float32",
+                  Category = "Measurement",
+                  Source = "SCL design model",
+                  ProbeStatus = "Readable",
+                  Value = "0",
+                  Quality = "Good"
+              };
+
+              private static void AssertMeasurement(IReadOnlyList<SignalDefinition> signals, string reference, string unit)
+              {
+                  var signal = Assert.Single(signals.Where(item =>
+                      item.ObjectReference.Equals(reference, StringComparison.OrdinalIgnoreCase)));
+                  Assert.Equal("MX", signal.FunctionalConstraint);
+                  Assert.Equal("Float32", signal.DataType);
+                  Assert.Equal("Measurement", signal.Category);
+                  Assert.Equal(unit, signal.Unit);
+                  Assert.True(signal.CanPublishAsSignal);
+              }
+
+              private static string FindRepoFile(string relativePath)
+              {
+                  DirectoryInfo? directory = new(AppContext.BaseDirectory);
+                  while (directory != null)
+                  {
+                      var candidate = Path.Combine(directory.FullName, relativePath);
+                      if (File.Exists(candidate))
+                          return candidate;
+                      directory = directory.Parent;
+                  }
+                  throw new FileNotFoundException(relativePath);
+              }
+          }
+          ''', encoding="utf-8", newline="\n")
+          PY
+
+      - name: Targeted live power regression tests
+        shell: pwsh
+        run: dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj --configuration Release --filter FullyQualifiedName~LivePowerMeasurementRegressionTests
+
+      - name: Full ARSAS regression suite
+        shell: pwsh
+        run: dotnet test tests/ARSAS.Tests/ARSAS.Tests.csproj --configuration Release --no-restore
+
+      - name: Commit only validated repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/agent-live-power-patch.yml
+          git add Models/SignalDefinition.cs Services/SasOperationalSignalPolicy.cs Services/IecSignalReadResolver.cs Services/NativeMmsDiscoveryMapper.cs tests/ARSAS.Tests/LivePowerMeasurementRegressionTests.cs
+          git diff --cached --check
+          git status --short
+          git commit -m "fix: restore fundamental power live measurements"
+          git push origin HEAD:agent/fix-live-power-measurements
