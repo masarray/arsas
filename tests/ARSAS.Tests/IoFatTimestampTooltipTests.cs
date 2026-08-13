@@ -7,7 +7,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatTimestampTooltipTests
 {
     [Fact]
-    public void TimestampHover_ShowsRoundedDisplayAndRawFullPrecision()
+    public void TimestampHover_ShowsRoundedDisplayAndDecodedFullPrecision()
     {
         var timestamp = new DateTimeOffset(2026, 8, 13, 12, 0, 31, TimeSpan.FromHours(7))
             .AddTicks(2_006_000);
@@ -34,9 +34,10 @@ public sealed class IoFatTimestampTooltipTests
 
         Assert.Contains("Displayed (rounded to nearest ms): 2026-08-13 12:00:31.201 +07:00", tooltip, StringComparison.Ordinal);
         Assert.Contains(
-            "Raw IED timestamp (full precision): " + timestamp.ToString("O", CultureInfo.InvariantCulture),
+            "Decoded IED timestamp (full precision): " + timestamp.ToString("O", CultureInfo.InvariantCulture),
             tooltip,
             StringComparison.Ordinal);
+        Assert.DoesNotContain("Raw IED timestamp", tooltip, StringComparison.Ordinal);
         Assert.Contains("ARSAS capture (full precision):", tooltip, StringComparison.Ordinal);
         Assert.Contains("Quality: Good", tooltip, StringComparison.Ordinal);
         Assert.Contains("Source: BRCB", tooltip, StringComparison.Ordinal);
