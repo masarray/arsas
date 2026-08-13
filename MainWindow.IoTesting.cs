@@ -23,6 +23,7 @@ public partial class MainWindow
     protected override void OnInitialized(EventArgs e)
     {
         base.OnInitialized(e);
+        InitializeClockSyncLifecycle();
         Dispatcher.BeginInvoke(new Action(InstallFirstRunTestingChoices), DispatcherPriority.Loaded);
     }
 
