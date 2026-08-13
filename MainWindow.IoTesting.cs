@@ -14,11 +14,13 @@ namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
+    private const int IoFatPollingIntervalMs = 250;
     private readonly IoListExcelImportService _ioListExcelImportService = new();
     private readonly IoTestLiveBindingService _ioTestLiveBindingService = new();
     private FrameworkElement? _ioListTestingLauncherCard;
     private IoTestSessionController? _activeIoTestSessionController;
     private long _ioTestObservationSequence;
+    private int? _pollingIntervalBeforeIoFat;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -351,6 +353,12 @@ public partial class MainWindow
                 MessageBoxImage.Information);
         }
 
+        // FAT is a commissioning workflow: discrete IO must feel immediate even when
+        // report configuration is incomplete. The previous engineering poll interval is
+        // restored when the FAT window closes so normal Live Monitor behavior is unchanged.
+        _pollingIntervalBeforeIoFat ??= PollingIntervalMs;
+        PollingIntervalMs = Math.Min(PollingIntervalMs, IoFatPollingIntervalMs);
+
         var controller = launch.Session;
         var persistence = launch.Workspace;
         var window = new IoListTestingWindow(launch.Project, controller, persistence) { Owner = this };
@@ -367,6 +375,12 @@ public partial class MainWindow
                 _activeIoTestSessionController = null;
             controller.Dispose();
             persistence.Dispose();
+
+            if (_pollingIntervalBeforeIoFat.HasValue)
+            {
+                PollingIntervalMs = _pollingIntervalBeforeIoFat.Value;
+                _pollingIntervalBeforeIoFat = null;
+            }
 
             if (!IsLoaded)
                 return;
@@ -387,7 +401,7 @@ public partial class MainWindow
         => new(
             project,
             ResolveIoTestDevice,
-            action => Dispatcher.BeginInvoke(action, DispatcherPriority.DataBind),
+            action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
             evidenceRoot);
 
     private static string IoTestingProjectsRoot() => Path.Combine(

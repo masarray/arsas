@@ -30,6 +30,39 @@ public sealed class IoTestEvidenceJournalTests
     }
 
     [Fact]
+    public void AppendBatch_CreatesSameVerifiableOrderedHashChain()
+    {
+        var root = TempDirectory();
+        var project = Project();
+        var ied = project.Ieds[0];
+        var sessionId = Guid.NewGuid();
+        string path;
+
+        using (var journal = IoTestEvidenceJournal.Create(root, project, ied, sessionId, DateTimeOffset.UtcNow))
+        {
+            path = journal.FilePath;
+            var envelopes = journal.AppendBatch(new[]
+            {
+                Entry(project, ied, sessionId, "session_started"),
+                Entry(project, ied, sessionId, "baseline"),
+                Entry(project, ied, sessionId, "baseline")
+            });
+
+            Assert.Equal(3, envelopes.Count);
+            Assert.Equal(3, journal.RecordCount);
+            Assert.Equal(1, envelopes[0].JournalSequence);
+            Assert.Equal(2, envelopes[1].JournalSequence);
+            Assert.Equal(3, envelopes[2].JournalSequence);
+            Assert.Equal(envelopes[0].Hash, envelopes[1].PreviousHash);
+            Assert.Equal(envelopes[1].Hash, envelopes[2].PreviousHash);
+        }
+
+        var verification = IoTestEvidenceJournal.Verify(path);
+        Assert.True(verification.IsValid, verification.Error);
+        Assert.Equal(3, verification.RecordCount);
+    }
+
+    [Fact]
     public void Verify_RejectsTamperedEvidenceLine()
     {
         var root = TempDirectory();

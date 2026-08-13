@@ -10,6 +10,7 @@ public partial class IoListTestingWindow
 {
     private Button? _comtradeEvidenceButton;
     private Button? _timeSyncEvidenceButton;
+    private Button? _cleanSessionButton;
 
     public int SelectedSupplementalEvidenceCount
     {
@@ -41,9 +42,13 @@ public partial class IoListTestingWindow
         _comtradeEvidenceButton = CreateEvidenceButton("COMTRADE · —", OpenComtradeEvidence_Click);
         _comtradeEvidenceButton.ToolTip = "Browse relay fault records. A remote COMTRADE listing is sufficient File Service FAT evidence; download is optional.";
 
+        _cleanSessionButton = CreateEvidenceButton("New Clean FAT", NewCleanFatSession_Click);
+        _cleanSessionButton.ToolTip = "Archive all current FAT evidence and reset the project to a zero-evidence retest session";
+
         var insertionIndex = actionPanel.Children.IndexOf(WorkspacePreviewToggle) + 1;
         actionPanel.Children.Insert(insertionIndex, _timeSyncEvidenceButton);
         actionPanel.Children.Insert(insertionIndex + 1, _comtradeEvidenceButton);
+        actionPanel.Children.Insert(insertionIndex + 2, _cleanSessionButton);
         RefreshSupplementalEvidenceControls();
     }
 
@@ -154,6 +159,64 @@ public partial class IoListTestingWindow
         }
 
         await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, SelectedIed);
+    }
+
+    private void NewCleanFatSession_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            this,
+            "Create a NEW CLEAN FAT session for this project?\n\n" +
+            "• All current ON/OFF evidence and relay timestamps will be cleared from the active workspace.\n" +
+            "• Time Sync and COMTRADE evidence will be cleared from the active report.\n" +
+            "• Existing hash-chained evidence files will NOT be deleted or rewritten; they will be verified and archived outside the new export scope.\n" +
+            "• All import-ready IO points will be enabled again for retest.\n\n" +
+            "Use this after correcting relay time synchronization or whenever the customer requires a completely fresh FAT run.",
+            "New Clean FAT Session",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            if (Session.IsSessionActive)
+            {
+                var stopped = Session.Stop("Sealed before New Clean FAT retest reset.");
+                if (!stopped.Succeeded)
+                {
+                    ShowActionResult(stopped, "Could not seal the active FAT session");
+                    return;
+                }
+            }
+
+            var storage = Storage ?? throw new InvalidOperationException("FAT workspace persistence is not available.");
+            var result = IoFatCleanSessionService.ResetForRetest(storage, Project);
+            var sessionReset = Session.ResetForCleanRetest();
+            if (!sessionReset.Succeeded)
+            {
+                ShowActionResult(sessionReset, "Clean FAT session state could not be reset");
+                return;
+            }
+
+            PreparationStatusText = result.ArchivedJournalCount > 0
+                ? $"NEW CLEAN FAT ready · {result.ResetPointCount} point(s) reset · {result.ArchivedJournalCount} prior journal(s) archived"
+                : $"NEW CLEAN FAT ready · {result.ResetPointCount} point(s) reset · active evidence is empty";
+            RefreshSupplementalEvidenceControls();
+            Raise(nameof(SelectedSupplementalEvidenceCount));
+            Raise(nameof(SelectedEvidenceCount));
+            RaiseStatusProperties();
+            RaiseSelectedIedContextProperties();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "New Clean FAT Session failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void OpenComtradeEvidence_Click(object sender, RoutedEventArgs e)
