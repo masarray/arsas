@@ -32,7 +32,9 @@ public sealed class IoFatProtection27RegressionTests
         Assert.Equal(
             "AA1C1F03R3VI3p1_27Undervoltage1/PTRC1$ST$Op$general",
             match.Signal.ObjectReference);
-        Assert.True(match.UsedNormalizedIedPrefix);
+        // Event-log reference + DA reconstructs the exact MMS identity, so this
+        // intentionally wins at ExactScore rather than being reported as a normalized fallback.
+        Assert.False(match.UsedNormalizedIedPrefix);
     }
 
     [Fact]
