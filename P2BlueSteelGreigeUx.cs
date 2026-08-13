@@ -40,6 +40,10 @@ internal static class P2BlueSteelGreigeUx
                 ApplyIoFatWindow(ioFatWindow);
                 break;
         }
+
+        // P2.1 sits above the palette layer: search, Lucide affordances and tighter
+        // workstation chrome are visual-only and keep all protocol/session semantics intact.
+        P2IndustrialWorkstationUx.Apply(window);
     }
 
     private static void ApplyMainWindow(MainWindow window)
