@@ -60,7 +60,7 @@ public partial class IoListTestingWindow
                 _preparationDisplayStates[ied] = state;
             }
 
-            var active = ied.IsPreparing || ReferenceEquals(_preparingIed, ied);
+            var active = ied.IsPreparing;
             if (active && !state.WasActive)
                 state.Reset();
 
