@@ -63,6 +63,54 @@ public sealed class IoTestLiveBindingServiceTests
     }
 
     [Fact]
+    public void PartialTcsLeaf_IsBoundUniquelyToDiscoveredSignal()
+    {
+        var project = Project(".TCS1Fail");
+        var device = Device();
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "Trip coil monitoring 1",
+            ObjectReference = "AA1C1F03R4Application/ADDGGIO2$ST$TCS1Fail$stVal",
+            FunctionalConstraint = "ST"
+        });
+
+        var summary = _binding.Bind(project, new[] { device });
+
+        Assert.Equal(1, summary.SignalBoundCount);
+        Assert.Equal(0, summary.MissingSignalCount);
+        Assert.Equal(IoTestLiveBindingState.BoundNormalized, project.Ieds[0].TestPoints[0].LiveBindingState);
+        Assert.Equal(
+            "AA1C1F03R4Application/ADDGGIO2$ST$TCS1Fail$stVal",
+            project.Ieds[0].TestPoints[0].LiveBoundReference);
+    }
+
+    [Fact]
+    public void PartialTcsLeaf_DuplicateObjectsRemainBlocked()
+    {
+        var project = Project(".TCS1Fail");
+        var device = Device();
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "Trip coil monitoring 1 ADD",
+            ObjectReference = "AA1C1F03R4Application/ADDGGIO2$ST$TCS1Fail$stVal",
+            FunctionalConstraint = "ST"
+        });
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "Trip coil monitoring 1 ALT",
+            ObjectReference = "AA1C1F03R4Application/ALTGGIO3$ST$TCS1Fail$stVal",
+            FunctionalConstraint = "ST"
+        });
+
+        var summary = _binding.Bind(project, new[] { device });
+
+        Assert.Equal(0, summary.SignalBoundCount);
+        Assert.Equal(1, summary.MissingSignalCount);
+        Assert.Equal(IoTestLiveBindingState.SignalNotFound, project.Ieds[0].TestPoints[0].LiveBindingState);
+        Assert.Contains("more than one equally strong", project.Ieds[0].TestPoints[0].LiveBindingReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ActiveLivePoint_PopulatesCurrentEvidencePreview()
     {
         var project = Project("AA1C1F03R4ADD/GGIO6.CBClsd.stVal");
