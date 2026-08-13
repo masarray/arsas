@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -19,6 +20,11 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // P2 installs one calm industrial visual system before StartupUri materializes.
+        // Existing XAML keeps its semantic resource keys while the overlay replaces
+        // glare-heavy white/blue surfaces with Blue Steel + Light Greige equivalents.
+        InstallP2BlueSteelGreigeTheme();
 
         // Keep every IED card on one reusable template key while replacing the
         // legacy bitmap fallback with the compact ARVREL-derived vector fascia.
@@ -42,6 +48,33 @@ public partial class App : Application
         Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
             new Action(() => _ = AppUpdateCoordinator.RunLazyAsync(_updateCancellation.Token)));
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+
+        // A handful of legacy controls own local visual resources. Re-apply the
+        // tiny P2 adapter when windows activate so newly opened FAT workspaces also
+        // inherit the selected industrial theme without touching engine workflows.
+        P2BlueSteelGreigeUx.ApplyToOpenWindows(this);
+    }
+
+    private void InstallP2BlueSteelGreigeTheme()
+    {
+        var themeResources = new ResourceDictionary
+        {
+            Source = new Uri(
+                "/ARSAS;component/Resources/P2BlueSteelGreige.xaml",
+                UriKind.Relative)
+        };
+
+        // Application.Resources itself has higher lookup precedence than merged
+        // dictionaries, so copy the P2 entries into the primary dictionary. This
+        // lets every existing StaticResource key resolve to the new visual contract
+        // when StartupUri builds its windows.
+        foreach (DictionaryEntry entry in themeResources)
+            Resources[entry.Key] = entry.Value;
     }
 
     private void InstallArvrelMiniIedFascia()

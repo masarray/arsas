@@ -1,0 +1,649 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      ARSAS P2 visual system — Blue Steel + Light Greige.
+
+      Design intent:
+      * blue-steel shell gives the workstation an industrial control-room identity;
+      * warm greige reading surfaces avoid the glare of large pure-white regions;
+      * dense engineering grids use low-contrast zebra rows for scan comfort;
+      * blue is reserved for focus/action, while green/amber/red remain semantic.
+
+      This dictionary is installed as an application-resource overlay at startup so
+      existing XAML keeps one semantic resource vocabulary and engine/UI code remains
+      untouched by theme work.
+    -->
+
+    <!-- Core palette -->
+    <Color x:Key="InkColor">#28343D</Color>
+    <Color x:Key="MutedColor">#65727B</Color>
+    <Color x:Key="AccentColor">#2474D8</Color>
+    <Color x:Key="AccentDeepColor">#185FB8</Color>
+    <Color x:Key="SoftBlueColor">#DDE8F2</Color>
+    <Color x:Key="BgColor">#263F52</Color>
+    <Color x:Key="LineColor">#C8CDD0</Color>
+    <Color x:Key="SurfaceColor">#EEEAE3</Color>
+    <Color x:Key="SurfaceElevatedColor">#F3F0EA</Color>
+    <Color x:Key="BorderSubtleColor">#C6CCCF</Color>
+    <Color x:Key="BorderStrongColor">#9DA9B0</Color>
+    <Color x:Key="SuccessColor">#3E8E5B</Color>
+    <Color x:Key="DangerColor">#C84C4C</Color>
+    <Color x:Key="WarningColor">#C28A2C</Color>
+
+    <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}"/>
+    <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}"/>
+    <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}"/>
+    <SolidColorBrush x:Key="AccentDeep" Color="{StaticResource AccentDeepColor}"/>
+    <SolidColorBrush x:Key="SoftBlue" Color="{StaticResource SoftBlueColor}"/>
+    <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}"/>
+    <SolidColorBrush x:Key="Line" Color="{StaticResource LineColor}"/>
+    <SolidColorBrush x:Key="Surface" Color="{StaticResource SurfaceColor}"/>
+    <SolidColorBrush x:Key="SurfaceElevated" Color="{StaticResource SurfaceElevatedColor}"/>
+    <SolidColorBrush x:Key="BorderSubtle" Color="{StaticResource BorderSubtleColor}"/>
+    <SolidColorBrush x:Key="BorderStrong" Color="{StaticResource BorderStrongColor}"/>
+    <SolidColorBrush x:Key="Success" Color="{StaticResource SuccessColor}"/>
+    <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}"/>
+    <SolidColorBrush x:Key="Warning" Color="{StaticResource WarningColor}"/>
+    <SolidColorBrush x:Key="Panel" Color="#F3F0EA"/>
+
+    <!-- Named P2 surfaces are also consumed by the tiny runtime chrome adapter. -->
+    <SolidColorBrush x:Key="BlueSteelNavSurface" Color="#2A465B"/>
+    <SolidColorBrush x:Key="BlueSteelNavBorder" Color="#48657A"/>
+    <SolidColorBrush x:Key="BlueSteelFooterSurface" Color="#203A4F"/>
+    <SolidColorBrush x:Key="GreigeWorkspace" Color="#E9E5DE"/>
+    <SolidColorBrush x:Key="GreigeSurface" Color="#F2EFE9"/>
+    <SolidColorBrush x:Key="GreigeSurfaceRaised" Color="#F5F2EC"/>
+    <SolidColorBrush x:Key="GreigeRowA" Color="#F3F0EA"/>
+    <SolidColorBrush x:Key="GreigeRowB" Color="#ECE8E1"/>
+    <SolidColorBrush x:Key="GreigeHeader" Color="#E1DDD5"/>
+    <SolidColorBrush x:Key="GreigeHover" Color="#E4E9EA"/>
+    <SolidColorBrush x:Key="GreigeSelected" Color="#DCE7EF"/>
+    <SolidColorBrush x:Key="SteelDivider" Color="#BFC6C9"/>
+    <SolidColorBrush x:Key="SteelDividerStrong" Color="#9EAAB0"/>
+
+    <SolidColorBrush x:Key="RowHover" Color="#E6EBEC"/>
+    <SolidColorBrush x:Key="RowSelected" Color="#DCE7EF"/>
+    <SolidColorBrush x:Key="RowSelectedBorder" Color="#8FAABD"/>
+
+    <!-- Shell / surface hierarchy -->
+    <LinearGradientBrush x:Key="AppBackgroundGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#1E394E" Offset="0"/>
+        <GradientStop Color="#2B4A60" Offset="0.48"/>
+        <GradientStop Color="#233F54" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="PremiumSurface" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F5F2EC" Offset="0"/>
+        <GradientStop Color="#EEEAE3" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="PremiumSurfaceHover" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F6F3ED" Offset="0"/>
+        <GradientStop Color="#E5EAEB" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="PremiumSurfaceSelected" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F2F0EA" Offset="0"/>
+        <GradientStop Color="#DCE7EF" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#2E82E6" Offset="0"/>
+        <GradientStop Color="#185FB8" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="SoftButtonGradient" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F4F1EB" Offset="0"/>
+        <GradientStop Color="#E5E2DC" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="IedCardSurface" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F5F2EC" Offset="0"/>
+        <GradientStop Color="#ECE8E1" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IedCardHover" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F6F3ED" Offset="0"/>
+        <GradientStop Color="#E2E8E9" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IedCardSelected" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F3F1EB" Offset="0"/>
+        <GradientStop Color="#D8E6F1" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IedCardConnected" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F4F2EB" Offset="0"/>
+        <GradientStop Color="#E1EEE3" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IedCardConnectedSelected" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F2F0EA" Offset="0"/>
+        <GradientStop Color="#DCEADF" Offset="0.52"/>
+        <GradientStop Color="#D6E5F0" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="CommandPanelSurface" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F2EFE8" Offset="0"/>
+        <GradientStop Color="#E4E1DB" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="CommandHeaderSurface" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#D9E1E5" Offset="0"/>
+        <GradientStop Color="#EAE8E2" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- Shadows are deliberately restrained: industrial depth without floating-card noise. -->
+    <DropShadowEffect x:Key="CardShadow" BlurRadius="14" ShadowDepth="3" Opacity="0.12" Color="#102635"/>
+    <DropShadowEffect x:Key="ButtonShadow" BlurRadius="12" ShadowDepth="3" Opacity="0.20" Color="#102B45"/>
+    <DropShadowEffect x:Key="SoftShadow" BlurRadius="10" ShadowDepth="2" Opacity="0.11" Color="#142D3E"/>
+    <DropShadowEffect x:Key="SteelShellShadow" BlurRadius="12" ShadowDepth="2" Opacity="0.22" Color="#102431"/>
+
+    <!-- Typography remains compact and neutral for all-day engineering use. -->
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    </Style>
+    <Style x:Key="BodyText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.2"/>
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    </Style>
+    <Style x:Key="Caption" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+        <Setter Property="FontSize" Value="11.8"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    </Style>
+    <Style x:Key="MicroLabel" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#5D6A73"/>
+        <Setter Property="FontSize" Value="10.6"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    </Style>
+
+    <!-- Panels -->
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource PremiumSurface}"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="13"/>
+        <Setter Property="BorderBrush" Value="{StaticResource SteelDividerStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
+    </Style>
+
+    <Style x:Key="MetricCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="16,13"/>
+        <Setter Property="MinHeight" Value="46"/>
+    </Style>
+
+    <!-- Primary / secondary actions -->
+    <Style x:Key="PrimaryButton" TargetType="Button">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
+        <Setter Property="BorderBrush" Value="#4A8DCE"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="12.4"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="9">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.18" Color="#163654"/>
+                        </Border.Effect>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{StaticResource AccentDeep}"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#73A7D8"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.82"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.42"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SoftButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="{StaticResource SoftButtonGradient}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource SteelDivider}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="12.3"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="9">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#DFE5E6"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#96A5AD"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#D5DBDC"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.44"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MiniChipButton" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+        <Setter Property="Padding" Value="11,5"/>
+        <Setter Property="MinHeight" Value="29"/>
+        <Setter Property="FontSize" Value="11.9"/>
+        <Setter Property="Background" Value="#E9E7E1"/>
+    </Style>
+
+    <Style x:Key="IedIconButton" TargetType="Button">
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="1"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#DCE3E5"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#A8B4BA"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#CED7DA"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.30"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Top navigation sits on a blue-steel shell instead of a bright rounded capsule. -->
+    <Style x:Key="SegmentedNavButton" TargetType="Button">
+        <Setter Property="Foreground" Value="#D9E5EC"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="12.7"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="HitSurface" Background="Transparent" CornerRadius="8" Margin="2">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HitSurface" Property="Background" Value="#244B66"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.42"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RuntimeSegmentButton" TargetType="Button" BasedOn="{StaticResource SegmentedNavButton}"/>
+
+    <!-- Data grids: warm greige reading field, controlled zebra rows, stronger value scan. -->
+    <Style x:Key="ModernDataGrid" TargetType="DataGrid">
+        <Setter Property="AutoGenerateColumns" Value="False"/>
+        <Setter Property="HeadersVisibility" Value="Column"/>
+        <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="#D4D0C9"/>
+        <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+        <Setter Property="RowHeaderWidth" Value="0"/>
+        <Setter Property="Background" Value="{StaticResource GreigeSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource SteelDividerStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="SelectionMode" Value="Single"/>
+        <Setter Property="SelectionUnit" Value="FullRow"/>
+        <Setter Property="ClipboardCopyMode" Value="IncludeHeader"/>
+        <Setter Property="CanUserResizeColumns" Value="True"/>
+        <Setter Property="CanUserSortColumns" Value="True"/>
+        <Setter Property="CanUserAddRows" Value="False"/>
+        <Setter Property="CanUserDeleteRows" Value="False"/>
+        <Setter Property="RowHeight" Value="34"/>
+        <Setter Property="ColumnHeaderHeight" Value="35"/>
+        <Setter Property="RowBackground" Value="{StaticResource GreigeRowA}"/>
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource GreigeRowB}"/>
+        <Setter Property="AlternationCount" Value="2"/>
+        <Setter Property="FontSize" Value="12.3"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+        <Setter Property="Background" Value="{StaticResource GreigeHeader}"/>
+        <Setter Property="Foreground" Value="#45545E"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="BorderBrush" Value="#B9C0C3"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+    <Style TargetType="DataGridCell">
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style TargetType="DataGridRow">
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1,0"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridRow">
+                    <Border x:Name="RowBorder" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <DataGridCellsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeSelected}"/>
+                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="#8FAABD"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CommandDataGrid" TargetType="DataGrid" BasedOn="{StaticResource ModernDataGrid}">
+        <Setter Property="RowHeight" Value="46"/>
+        <Setter Property="ColumnHeaderHeight" Value="38"/>
+        <Setter Property="CanUserResizeColumns" Value="False"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
+
+    <Style x:Key="CommandDataGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="Background" Value="#D8E0E3"/>
+        <Setter Property="Foreground" Value="#42525D"/>
+        <Setter Property="BorderBrush" Value="#AEB9BE"/>
+    </Style>
+
+    <Style x:Key="CommandDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+    <Style x:Key="CommandDataGridRow" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+    <!-- P2 styles used to override the FAT window's legacy local white grid resources. -->
+    <Style x:Key="P2FatDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+    </Style>
+    <Style x:Key="P2FatDataGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="FontSize" Value="10.7"/>
+    </Style>
+    <Style x:Key="P2FatDataGridRow" TargetType="DataGridRow">
+        <Setter Property="MinHeight" Value="48"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridRow">
+                    <Border x:Name="RowBorder" Background="{TemplateBinding Background}">
+                        <DataGridCellsPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeSelected}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Cleaner industrial IED cards with a narrow blue selection rail. -->
+    <Style x:Key="P2MainIedListItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
+                                Margin="0,8,0,8" CornerRadius="2" Background="Transparent"/>
+                        <Border x:Name="Card" Margin="5,0,0,0"
+                                Background="{StaticResource IedCardSurface}"
+                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                CornerRadius="10" Padding="9">
+                            <ContentPresenter/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnected}"/>
+                            <Setter TargetName="Card" Property="BorderBrush" Value="#83A990"/>
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardHover}"/>
+                            <Setter TargetName="Card" Property="BorderBrush" Value="#8FA2AB"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardSelected}"/>
+                            <Setter TargetName="Card" Property="BorderBrush" Value="#7897AD"/>
+                            <Setter TargetName="SelectionRail" Property="Background" Value="{StaticResource Accent}"/>
+                        </Trigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsMonitoring}" Value="True"/>
+                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource IedCardConnectedSelected}"/>
+                            <Setter TargetName="Card" Property="BorderBrush" Value="#6F9D84"/>
+                            <Setter TargetName="SelectionRail" Property="Background" Value="{StaticResource Accent}"/>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="P2FatIedListItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
+                                Margin="0,8,0,8" CornerRadius="2" Background="Transparent"/>
+                        <Border x:Name="IedCard" Margin="5,0,0,0"
+                                Background="{StaticResource IedCardSurface}"
+                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                CornerRadius="10" Padding="10">
+                            <ContentPresenter/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="IedCard" Property="Background" Value="{StaticResource IedCardHover}"/>
+                            <Setter TargetName="IedCard" Property="BorderBrush" Value="#8FA2AB"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="IedCard" Property="Background" Value="{StaticResource IedCardSelected}"/>
+                            <Setter TargetName="IedCard" Property="BorderBrush" Value="#7897AD"/>
+                            <Setter TargetName="SelectionRail" Property="Background" Value="{StaticResource Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="IedCard" Property="Opacity" Value="0.56"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Inputs also leave pure white behind so dialogs remain visually consistent. -->
+    <Style TargetType="TextBox">
+        <Setter Property="BorderBrush" Value="#B8C1C5"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="11,7"/>
+        <Setter Property="Background" Value="#F1EEE8"/>
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="MinHeight" Value="36"/>
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="BorderBrush" Value="#B8C1C5"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Background" Value="#F1EEE8"/>
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="MinHeight" Value="36"/>
+    </Style>
+
+    <Style x:Key="VerticalScrollBarThumb" TargetType="Thumb">
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Width="4" MinHeight="46" HorizontalAlignment="Center"
+                            Background="#98A5AB" CornerRadius="3" Opacity="0.78"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Width" Value="5"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="HorizontalScrollBarThumb" TargetType="Thumb">
+        <Setter Property="MinWidth" Value="42"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Height="4" MinWidth="54" VerticalAlignment="Center"
+                            Background="#98A5AB" CornerRadius="3" Opacity="0.78"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Height" Value="5"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
