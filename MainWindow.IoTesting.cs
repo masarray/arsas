@@ -387,7 +387,7 @@ public partial class MainWindow
         => new(
             project,
             ResolveIoTestDevice,
-            action => Dispatcher.BeginInvoke(action, DispatcherPriority.Background),
+            action => Dispatcher.BeginInvoke(action, DispatcherPriority.DataBind),
             evidenceRoot);
 
     private static string IoTestingProjectsRoot() => Path.Combine(
