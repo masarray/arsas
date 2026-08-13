@@ -203,8 +203,8 @@ public partial class IoListTestingWindow
                 RaiseSelectedIedContextProperties();
             });
 
-            var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(
-                Project,
+            var preparation = await PrepareIndependentIedConnectionAsync(
+                engineeringWindow,
                 targetIed,
                 progress,
                 connectionScope);
@@ -367,6 +367,17 @@ public partial class IoListTestingWindow
             RaiseSelectedIedContextProperties();
         }
     }
+
+    private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync(
+        MainWindow engineeringWindow,
+        IoTestIedPlan targetIed,
+        IProgress<string> progress,
+        IReadOnlyCollection<IoTestPointPlan> connectionScope)
+        => engineeringWindow.PrepareIoTestIedForFatAsync(
+            Project,
+            targetIed,
+            progress,
+            connectionScope);
 
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
