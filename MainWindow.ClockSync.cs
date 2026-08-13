@@ -12,11 +12,15 @@ public partial class MainWindow
     private readonly SemaphoreSlim _clockSyncIntegrationGate = new(1, 1);
     private readonly HashSet<string> _clockSyncObservedClients = new(StringComparer.OrdinalIgnoreCase);
     private string _lastClockSyncStatus = string.Empty;
+    private bool _clockSyncLifecycleAttached;
 
-    protected override void OnInitialized(EventArgs e)
+    protected override void OnContentRendered(EventArgs e)
     {
-        base.OnInitialized(e);
+        base.OnContentRendered(e);
+        if (_clockSyncLifecycleAttached)
+            return;
 
+        _clockSyncLifecycleAttached = true;
         Devices.CollectionChanged += ClockSyncDevices_CollectionChanged;
         foreach (var device in Devices)
             AttachClockSyncDevice(device);
