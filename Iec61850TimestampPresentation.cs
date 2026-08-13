@@ -5,7 +5,8 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Customer-facing IEC 61850 timestamp presentation helpers.
 /// IEC 61850 timestamps retain their original full-resolution value in the model/evidence;
-/// this class only rounds when a millisecond-resolution string is requested.
+/// this class only rounds when a millisecond-resolution string is requested, matching
+/// the nearest-millisecond presentation expected when comparing relay and SAS event logs.
 /// </summary>
 public static class Iec61850TimestampPresentation
 {
