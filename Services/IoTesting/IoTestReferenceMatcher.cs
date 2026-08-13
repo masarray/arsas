@@ -5,8 +5,9 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// <summary>
 /// Conservative IEC 61850 reference matcher used by FAT binding. It understands
 /// equivalent MMS/SCL spellings (IED-prefixed domains, the DIGSI Application display
-/// wrapper, functional-constraint tokens inside MMS references, and verified Siemens
-/// functional-group/LN display folders) but never uses fuzzy text similarity.
+/// wrapper, functional-constraint tokens inside MMS references, verified Siemens
+/// functional-group/LN display folders, and exact unique object-leaf recovery for
+/// incomplete imported references) but never uses fuzzy text similarity.
 /// </summary>
 internal static class IoTestReferenceMatcher
 {
@@ -24,6 +25,7 @@ internal static class IoTestReferenceMatcher
     internal const int ExactScore = 100;
     internal const int CanonicalScore = 90;
     internal const int ContainerScore = 70;
+    internal const int PartialObjectScore = 60;
 
     internal static int Score(
         string? importedReference,
@@ -52,6 +54,20 @@ internal static class IoTestReferenceMatcher
             {
                 if (IsSafeImplicitLeafMatch(expected, observed))
                     return ContainerScore;
+            }
+        }
+
+        // Some customer FAT sheets contain a valid exact data-object name but have
+        // lost the LD/LN path, for example `.TCS1Fail`. Recover that case only by an
+        // exact IEC object-leaf boundary match. This deliberately scores below every
+        // fully attributable form; the caller still requires one unique best candidate,
+        // so duplicate leaves in different logical nodes remain ambiguous and blocked.
+        foreach (var expected in importedForms)
+        {
+            foreach (var observed in observedForms)
+            {
+                if (IsSafePartialObjectMatch(expected, observed))
+                    return PartialObjectScore;
             }
         }
 
@@ -208,4 +224,75 @@ internal static class IoTestReferenceMatcher
         var suffix = observed[(expected.Length + 1)..];
         return SafeImplicitValueLeaves.Contains(suffix);
     }
+
+    private static bool IsSafePartialObjectMatch(string expected, string observed)
+    {
+        var expectedObject = ParsePartialImportedObject(expected);
+        if (expectedObject is null)
+            return false;
+
+        var observedObject = ParseObservedObject(observed);
+        if (observedObject is null ||
+            !expectedObject.ObjectName.Equals(observedObject.ObjectName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (expectedObject.ValueSuffix.Length > 0)
+        {
+            return expectedObject.ValueSuffix.Equals(
+                observedObject.ValueSuffix,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return observedObject.ValueSuffix.Length == 0 ||
+               SafeImplicitValueLeaves.Contains(observedObject.ValueSuffix);
+    }
+
+    private static ObjectLeaf? ParsePartialImportedObject(string value)
+    {
+        var normalized = (value ?? string.Empty).Trim().TrimStart('.').TrimEnd('.');
+        if (normalized.Length == 0 || normalized.Contains('/'))
+            return null;
+
+        var stripped = StripSafeValueSuffix(normalized);
+        if (stripped.Base.Length == 0 || stripped.Base.Contains('.') || !IsIecIdentifier(stripped.Base))
+            return null;
+
+        return new ObjectLeaf(stripped.Base, stripped.Suffix);
+    }
+
+    private static ObjectLeaf? ParseObservedObject(string value)
+    {
+        var normalized = (value ?? string.Empty).Trim().Trim('.');
+        if (normalized.Length == 0)
+            return null;
+
+        var stripped = StripSafeValueSuffix(normalized);
+        var separator = Math.Max(stripped.Base.LastIndexOf('/'), stripped.Base.LastIndexOf('.'));
+        var objectName = separator >= 0 ? stripped.Base[(separator + 1)..] : stripped.Base;
+        if (!IsIecIdentifier(objectName))
+            return null;
+
+        return new ObjectLeaf(objectName, stripped.Suffix);
+    }
+
+    private static (string Base, string Suffix) StripSafeValueSuffix(string value)
+    {
+        foreach (var leaf in SafeImplicitValueLeaves.OrderByDescending(item => item.Length))
+        {
+            var suffix = "." + leaf;
+            if (!value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return (value[..^suffix.Length], leaf.ToLowerInvariant());
+        }
+
+        return (value, string.Empty);
+    }
+
+    private static bool IsIecIdentifier(string value)
+        => Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
+
+    private sealed record ObjectLeaf(string ObjectName, string ValueSuffix);
 }
