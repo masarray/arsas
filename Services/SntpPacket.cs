@@ -170,10 +170,15 @@ public readonly record struct SntpClientRequest(
 public sealed record SntpServerProfile
 {
     /// <summary>
-    /// ARSAS intentionally advertises the Windows clock as a low-priority local commissioning reference.
-    /// This avoids pretending that the laptop is a GPS/PTP grandmaster or a traceable stratum-1 source.
+    /// SIPROTEC compatibility advertisement used by ARSAS commissioning Clock Sync.
+    /// Field experience with SIPROTEC requires a trusted-looking low stratum; stratum 2
+    /// is deliberately used instead of stratum 1 so ARSAS does not claim to be a primary
+    /// GPS/PTP/atomic reference. ReferenceId remains LOCL and diagnostics state that the
+    /// laptop clock is a local commissioning source, not a traceable grandmaster.
     /// </summary>
-    public byte Stratum { get; init; } = 15;
+    public const byte SiprotecCompatibilityStratum = 2;
+
+    public byte Stratum { get; init; } = SiprotecCompatibilityStratum;
     public byte LeapIndicator { get; init; }
     public sbyte PollExponent { get; init; } = 6;
     public sbyte PrecisionExponent { get; init; } = -10;
