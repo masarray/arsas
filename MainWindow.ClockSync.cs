@@ -11,8 +11,12 @@ public partial class MainWindow
     private readonly SntpClockService _sntpClockService = new();
     private readonly SemaphoreSlim _clockSyncIntegrationGate = new(1, 1);
     private readonly HashSet<string> _clockSyncObservedClients = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _clockSyncRepliedClients = new(StringComparer.OrdinalIgnoreCase);
     private string _lastClockSyncStatus = string.Empty;
     private bool _clockSyncLifecycleAttached;
+
+    internal event Action<SntpClockServiceSnapshot>? ClockSyncSnapshotChanged;
+    internal SntpClockServiceSnapshot ClockSyncSnapshot => _sntpClockService.Snapshot;
 
     private void InitializeClockSyncLifecycle()
     {
@@ -26,6 +30,7 @@ public partial class MainWindow
 
         _sntpClockService.StatusChanged += ClockSyncService_StatusChanged;
         _sntpClockService.ClientRequestObserved += ClockSyncService_ClientRequestObserved;
+        _sntpClockService.ReplySent += ClockSyncService_ReplySent;
         Closed += ClockSyncMainWindow_Closed;
     }
 
@@ -104,7 +109,11 @@ public partial class MainWindow
     {
         void Publish()
         {
-            var status = $"{snapshot.State}|{snapshot.Detail}";
+            // FAT telemetry must receive every evidence-counter change even when the textual
+            // service detail did not change. The live log remains deduplicated separately.
+            ClockSyncSnapshotChanged?.Invoke(snapshot);
+
+            var status = $"{snapshot.State}|{snapshot.TransportMode}|{snapshot.Detail}";
             if (status.Equals(_lastClockSyncStatus, StringComparison.Ordinal))
                 return;
 
@@ -131,8 +140,6 @@ public partial class MainWindow
 
         void Publish()
         {
-            // A request from the same client can occur indefinitely. Keep the live log quiet:
-            // first observation proves the client is using ARSAS; counters remain in the service snapshot.
             if (!_clockSyncObservedClients.Add(key))
                 return;
 
@@ -140,7 +147,30 @@ public partial class MainWindow
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
             var name = device?.Name ?? key;
             AddLog("INFO", "Clock Sync",
-                $"{name} ({key}) requested SNTPv{observation.Version}; ARSAS returned a Mode 4 reply from the station-bus interface.");
+                $"{name} ({key}) sent an SNTPv{observation.Version} client request to ARSAS. Request observed; synchronization is not yet proven.");
+        }
+
+        if (Dispatcher.CheckAccess())
+            Publish();
+        else
+            Dispatcher.BeginInvoke(new Action(Publish));
+    }
+
+    private void ClockSyncService_ReplySent(SntpReplyObservation observation)
+    {
+        var key = observation.Address.ToString();
+
+        void Publish()
+        {
+            if (!_clockSyncRepliedClients.Add(key))
+                return;
+
+            var device = Devices.FirstOrDefault(item =>
+                item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
+            var name = device?.Name ?? key;
+            var transport = observation.TransportMode == SntpClockTransportMode.NpcapRaw ? "Npcap RAW" : "UDP";
+            AddLog("INFO", "Clock Sync",
+                $"{name} ({key}) received an ARSAS SNTP Mode 4 reply via {transport}. Reply sent; relay clock synchronization remains unproven until device evidence confirms it.");
         }
 
         if (Dispatcher.CheckAccess())
@@ -159,6 +189,7 @@ public partial class MainWindow
 
             _sntpClockService.StatusChanged -= ClockSyncService_StatusChanged;
             _sntpClockService.ClientRequestObserved -= ClockSyncService_ClientRequestObserved;
+            _sntpClockService.ReplySent -= ClockSyncService_ReplySent;
             await _sntpClockService.DisposeAsync();
         }
         catch
