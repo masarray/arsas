@@ -6,7 +6,8 @@ namespace ArIED61850Tester.Services;
 
 /// <summary>
 /// Presentation adapter from the engine-owned SCL workspace model to ArIED signal rows.
-/// This class deliberately contains no XML parsing or IEC 61850 type-template traversal.
+/// This class deliberately contains no XML parsing, IEC 61850 type-template traversal,
+/// FCD expansion, or CDC value-selection semantics.
 /// </summary>
 public static class SclWorkspaceSignalMapper
 {
@@ -19,7 +20,11 @@ public static class SclWorkspaceSignalMapper
     {
         ArgumentNullException.ThrowIfNull(workspace);
 
-        var dataSetBindings = BuildDataSetBindings(workspace.DesignModel);
+        // The engine is authoritative for FCD/FCDA -> DataAttribute semantics.
+        // ARSAS only projects the engine result into operator-facing rows.
+        var semanticBindings = Iec61850DataSetSemanticBindingResolver.Resolve(workspace.DesignModel);
+        var dataSetBindings = BuildDataSetBindings(semanticBindings);
+        var staticPrimaryReferences = BuildStaticPrimaryReferences(semanticBindings);
         var reportBindings = BuildReportBindings(workspace.DesignModel);
         var signals = new List<SignalDefinition>();
 
@@ -36,8 +41,9 @@ public static class SclWorkspaceSignalMapper
         }
 
         return signals
-            .Where(signal => SasOperationalSignalPolicy.IsVisible(signal))
-            .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Where(signal => SasOperationalSignalPolicy.IsVisible(signal) ||
+                             staticPrimaryReferences.Contains(signal.ObjectReference))
+            .GroupBy(signal => NormalizePresentationReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
@@ -64,9 +70,8 @@ public static class SclWorkspaceSignalMapper
                 continue;
 
             var reference = attribute.ObjectReference;
-            var normalized = NormalizeReference(reference);
-            dataSetBindings.TryGetValue(normalized, out var dataSetReference);
-            reportBindings.TryGetValue(NormalizeReference(dataSetReference), out var reportReference);
+            dataSetBindings.TryGetValue(reference, out var dataSetReference);
+            reportBindings.TryGetValue(dataSetReference ?? string.Empty, out var reportReference);
             var category = ResolveCategory(logicalNode.LnClass, dataObject.Name, dataObject.InferredCdc, fc);
 
             signals.Add(new SignalDefinition
@@ -120,9 +125,8 @@ public static class SclWorkspaceSignalMapper
             Leaf(attribute.AttributePath).Equals("ctlModel", StringComparison.OrdinalIgnoreCase));
         var status = dataObject.Attributes.FirstOrDefault(attribute =>
             Leaf(attribute.AttributePath).Equals("stVal", StringComparison.OrdinalIgnoreCase));
-        var normalizedStatus = NormalizeReference(status?.ObjectReference);
-        dataSetBindings.TryGetValue(normalizedStatus, out var dataSetReference);
-        reportBindings.TryGetValue(NormalizeReference(dataSetReference), out var reportReference);
+        dataSetBindings.TryGetValue(status?.ObjectReference ?? string.Empty, out var dataSetReference);
+        reportBindings.TryGetValue(dataSetReference ?? string.Empty, out var reportReference);
 
         signals.Add(new SignalDefinition
         {
@@ -153,29 +157,37 @@ public static class SclWorkspaceSignalMapper
         });
     }
 
-    private static Dictionary<string, string> BuildDataSetBindings(LiveIedModelDiscoveryDocument model)
+    private static Dictionary<string, string> BuildDataSetBindings(LiveIedDataSetSemanticBindingDocument semanticBindings)
     {
         var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var dataSet in model.DataSets)
+        foreach (var member in semanticBindings.Members)
         {
-            foreach (var member in dataSet.Members)
+            if (!member.IsResolved)
+                continue;
+
+            foreach (var attribute in member.ResolvedAttributes)
             {
-                var key = NormalizeReference(member.Reference);
-                if (!string.IsNullOrWhiteSpace(key))
-                    bindings.TryAdd(key, dataSet.Reference);
+                if (!string.IsNullOrWhiteSpace(attribute.Reference))
+                    bindings.TryAdd(attribute.Reference, member.DataSetReference);
             }
         }
+
         return bindings;
     }
+
+    private static HashSet<string> BuildStaticPrimaryReferences(LiveIedDataSetSemanticBindingDocument semanticBindings)
+        => semanticBindings.Members
+            .Select(member => member.PrimaryValueReference)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static Dictionary<string, string> BuildReportBindings(LiveIedModelDiscoveryDocument model)
     {
         var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var report in model.ReportControls)
         {
-            var key = NormalizeReference(report.DataSetReference);
-            if (!string.IsNullOrWhiteSpace(key))
-                bindings.TryAdd(key, report.Reference);
+            if (!string.IsNullOrWhiteSpace(report.DataSetReference))
+                bindings.TryAdd(report.DataSetReference, report.Reference);
         }
         return bindings;
     }
@@ -243,19 +255,13 @@ public static class SclWorkspaceSignalMapper
         return index >= 0 ? text[(index + 1)..] : text;
     }
 
-    private static string NormalizeReference(string? reference)
+    /// <summary>
+    /// Presentation-only dedup normalization. It must not be used to infer
+    /// DataSet membership or IEC 61850 semantic targets; the engine owns that.
+    /// </summary>
+    private static string NormalizePresentationReference(string? reference)
     {
-        var text = (reference ?? string.Empty).Trim();
-        var fcMarker = text.LastIndexOf(" [", StringComparison.Ordinal);
-        if (fcMarker >= 0)
-            text = text[..fcMarker];
-        text = text.Replace('$', '.').Replace("//", "/", StringComparison.Ordinal).Trim();
-
-        // SCL FCDA display references commonly use IED/LD/LN while MMS domains use IEDLD/LN.
-        var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length >= 3)
-            text = string.Concat(parts[0], parts[1], "/", string.Join("/", parts.Skip(2)));
-
+        var text = (reference ?? string.Empty).Trim().Replace('$', '.').Replace("//", "/", StringComparison.Ordinal);
         return text.ToUpperInvariant();
     }
 }
