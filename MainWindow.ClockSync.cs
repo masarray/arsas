@@ -162,9 +162,5 @@ public partial class MainWindow
         {
             // Application shutdown must never be blocked by a commissioning helper service.
         }
-        finally
-        {
-            _clockSyncIntegrationGate.Dispose();
-        }
     }
 }
