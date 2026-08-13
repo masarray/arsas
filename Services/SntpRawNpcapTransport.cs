@@ -91,7 +91,7 @@ public sealed class SntpRawNpcapTransport : IAsyncDisposable
         {
             await foreach (var captured in transport.CaptureAsync(options, cancellationToken).ConfigureAwait(false))
             {
-                if (!SntpEthernetFrameCodec.TryParseClientRequest(captured.Frame, _binding.LocalAddress, out var request))
+                if (!SntpEthernetFrameCodec.TryParseClientRequest(captured.Frame.Span, _binding.LocalAddress, out var request))
                     continue;
 
                 var handler = _requestHandler;
