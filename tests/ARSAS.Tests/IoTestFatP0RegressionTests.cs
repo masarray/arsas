@@ -29,7 +29,7 @@ public sealed class IoTestFatP0RegressionTests
     }
 
     [Fact]
-    public void FatEvidenceDrain_YieldsUiAndStartupJournalUsesOneDurableBatch()
+    public void FatEvidenceDrain_PrioritizesFirstEdgeButYieldsContinuationAndBatchesStartupJournal()
     {
         var controller = Read("Services/IoTesting/IoTestSessionController.cs");
         var journal = Read("Services/IoTesting/IoTestEvidenceJournal.cs");
@@ -41,8 +41,16 @@ public sealed class IoTestFatP0RegressionTests
         Assert.Contains("AppendBatchRequired(startupEntries)", controller, StringComparison.Ordinal);
         Assert.Contains("AppendBatch(IEnumerable<IoTestJournalEntry> entries)", journal, StringComparison.Ordinal);
         Assert.Contains("FlushDurable();", journal, StringComparison.Ordinal);
+
+        // Preserve #150's immediate TRUE-edge scheduling while retaining P0's bounded
+        // drain/yield behavior for bursts. The first dispatch is DataBind; a reschedule
+        // requested while that drain is active is intentionally demoted to Background.
+        Assert.Contains("DispatchIoFatEvidence", main, StringComparison.Ordinal);
+        Assert.Contains("Volatile.Read(ref _ioFatEvidenceDrainDispatchActive) == 0", main, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.DataBind", main, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Background", main, StringComparison.Ordinal);
-        Assert.DoesNotContain("DispatcherPriority.DataBind", main, StringComparison.Ordinal);
+        Assert.Contains("Interlocked.Increment(ref _ioFatEvidenceDrainDispatchActive)", main, StringComparison.Ordinal);
+        Assert.Contains("Interlocked.Decrement(ref _ioFatEvidenceDrainDispatchActive)", main, StringComparison.Ordinal);
     }
 
     [Fact]
