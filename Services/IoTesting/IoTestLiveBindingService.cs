@@ -111,7 +111,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Exact imported IEC 61850 reference is already active in the live monitor.",
+                "Exact imported or prepared IEC 61850 reference is already active in the live monitor.",
                 exactLivePoints[0].IecReference,
                 exactLivePoints[0]);
         }
@@ -124,7 +124,7 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundExact,
-                "Exact imported IEC 61850 reference is present in the discovered IED model.",
+                "Exact imported or prepared IEC 61850 reference is present in the discovered IED model.",
                 exactSignals[0].ObjectReference,
                 null);
         }
@@ -223,6 +223,14 @@ public sealed class IoTestLiveBindingService
         Add(point.EventLogSearchReference);
         Add(point.SourceIecReference);
         Add(point.ReportDisplayReference);
+
+        // During FAT preparation the signal-selection pass may prove one unique live
+        // model reference from otherwise incomplete source metadata (for example a
+        // legacy 7SX80 ANSI-27 row). Keep that exact prepared reference authoritative
+        // for subsequent model/live-point binding. It is transient runtime state and is
+        // cleared automatically whenever ApplyLiveBinding reports a non-bound result.
+        if (point.IsLiveBound)
+            Add(point.LiveSignalReference);
 
         var eventReference = !string.IsNullOrWhiteSpace(point.EventLogSearchReference)
             ? point.EventLogSearchReference.Trim()
