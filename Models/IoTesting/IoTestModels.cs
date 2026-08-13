@@ -182,9 +182,17 @@ public sealed class IoTestPointRuntime : ObservableObject
         if (evidence == null)
             return $"{label} transition has not been captured.";
 
-        var relay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
+        var displayed = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+            evidence.IedTimestamp,
+            "yyyy-MM-dd HH:mm:ss.fff zzz",
+            "not supplied");
+        var rawRelay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
         var captured = evidence.CapturedAt.ToString("O", CultureInfo.InvariantCulture);
-        return $"Relay timestamp: {relay}\nARSAS capture: {captured}\nQuality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n{evidence.Verdict}: {evidence.VerdictReason}";
+        return $"Displayed (rounded to nearest ms): {displayed}\n" +
+               $"Raw IED timestamp (full precision): {rawRelay}\n" +
+               $"ARSAS capture (full precision): {captured}\n" +
+               $"Quality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n" +
+               $"{evidence.Verdict}: {evidence.VerdictReason}";
     }
 
     internal void ResetAttempt()
