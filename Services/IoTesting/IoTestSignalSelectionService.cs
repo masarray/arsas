@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -22,9 +23,15 @@ public sealed record IoTestSignalSelectionResult(
 /// Resolves the enabled IO-list scope against one discovered IED model without
 /// guessing. Exact references remain highest priority. Canonical IEC 61850 forms
 /// accept vendor-safe spelling differences only when the best candidate is unique.
+/// Weak source rows are resolved only after stronger references have claimed their
+/// signals, allowing deterministic sibling evidence without fuzzy text matching.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
+    private static readonly Regex ProtectionCodeRegex = new(
+        @"\((?<code>\d{2,3}[A-Z]{0,3})(?:\s*-\s*[^)]*)?\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public IoTestSignalSelectionResult Resolve(
         IoTestIedPlan ied,
         Iec61850MonitorDevice device)
@@ -39,6 +46,7 @@ public sealed class IoTestSignalSelectionService
         var missing = new List<IoTestPointPlan>();
         var ambiguous = new List<IoTestPointPlan>();
         var usedSignals = new HashSet<SignalDefinition>();
+        var unresolved = new List<CandidateSet>();
 
         foreach (var point in requested)
         {
@@ -70,18 +78,46 @@ public sealed class IoTestSignalSelectionService
                 .Where(item => item.Score == bestScore)
                 .Select(item => item.Signal)
                 .ToList();
-
-            if (candidates.Count != 1 || !usedSignals.Add(candidates[0]))
-            {
-                ambiguous.Add(point);
-                continue;
-            }
-
-            matches.Add(new IoTestSignalMatch(
-                point,
-                candidates[0],
-                bestScore < IoTestReferenceMatcher.ExactScore));
+            unresolved.Add(new CandidateSet(point, bestScore, candidates));
         }
+
+        // Resolve the strongest references first. This makes the result independent of
+        // workbook row order and lets a weak legacy row use already-proven sibling
+        // assignments as elimination evidence. No candidate is ever selected by text
+        // similarity: it must still be the one unique best IEC object left.
+        var madeProgress = true;
+        while (madeProgress && unresolved.Count > 0)
+        {
+            madeProgress = false;
+            foreach (var candidateSet in unresolved
+                         .OrderByDescending(item => item.BestScore)
+                         .ThenBy(item => item.Candidates.Count)
+                         .ToArray())
+            {
+                var candidates = candidateSet.Candidates
+                    .Where(signal => !usedSignals.Contains(signal))
+                    .ToList();
+
+                if (candidateSet.BestScore <= IoTestReferenceMatcher.PartialObjectScore && candidates.Count > 1)
+                    candidates = NarrowByProtectionIdentity(candidateSet.Point, candidates);
+
+                if (candidates.Count != 1)
+                    continue;
+
+                var signal = candidates[0];
+                if (!usedSignals.Add(signal))
+                    continue;
+
+                matches.Add(new IoTestSignalMatch(
+                    candidateSet.Point,
+                    signal,
+                    candidateSet.BestScore < IoTestReferenceMatcher.ExactScore));
+                unresolved.Remove(candidateSet);
+                madeProgress = true;
+            }
+        }
+
+        ambiguous.AddRange(unresolved.Select(item => item.Point));
 
         if (missing.Count > 0 || ambiguous.Count > 0)
         {
@@ -108,6 +144,41 @@ public sealed class IoTestSignalSelectionService
             $"Resolved {matches.Count} enabled IO-list signal(s) to unique discovered model points.{smartText}");
     }
 
+    private static List<SignalDefinition> NarrowByProtectionIdentity(
+        IoTestPointPlan point,
+        IReadOnlyCollection<SignalDefinition> candidates)
+    {
+        var match = ProtectionCodeRegex.Match(point.SignalName ?? string.Empty);
+        if (!match.Success)
+            return candidates.ToList();
+
+        // P0 field regression: a few legacy 7SX80 rows retained only `.Op.general`
+        // while the user-visible signal description still proved ANSI 27. Do not turn
+        // this into a generic fuzzy-name matcher. For ANSI 27 only, accept the explicit
+        // live IEC identity used by protection models (27Undervoltage / PTUV), and still
+        // require one unique candidate after stronger sibling references are claimed.
+        var code = match.Groups["code"].Value.ToUpperInvariant();
+        if (!code.Equals("27", StringComparison.Ordinal))
+            return candidates.ToList();
+
+        var narrowed = candidates
+            .Where(signal => IsProtection27Reference(signal.ObjectReference))
+            .ToList();
+        return narrowed.Count == 0 ? candidates.ToList() : narrowed;
+    }
+
+    private static bool IsProtection27Reference(string? reference)
+    {
+        var normalized = IoTestReferenceMatcher.NormalizeRaw(reference);
+        if (normalized.Contains("27undervoltage", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return Regex.IsMatch(
+            normalized,
+            @"(?:^|[/_.])ptuv\d*(?:[/.]|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
     private static bool IsEligible(SignalDefinition signal, IoTestPointPlan point)
     {
         if (signal.IsControlSignal || string.IsNullOrWhiteSpace(signal.ObjectReference))
@@ -130,4 +201,8 @@ public sealed class IoTestSignalSelectionService
     }
 
     private sealed record ScoredSignal(SignalDefinition Signal, int Score);
+    private sealed record CandidateSet(
+        IoTestPointPlan Point,
+        int BestScore,
+        IReadOnlyList<SignalDefinition> Candidates);
 }
