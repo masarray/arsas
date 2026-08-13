@@ -73,6 +73,7 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         var contextUx = ReadRepoFile("IoListTestingWindow.ContextUx.cs");
         var progressUx = ReadRepoFile("IoListTestingWindow.RealPreparationProgress.cs");
         var connectUx = ReadRepoFile("IoListTestingWindow.MultiIedConnectionUx.cs");
+        var printPreview = ReadRepoFile("IoListTestingWindow.PrintPreview.cs");
         var session = ReadRepoFile("Services/IoTesting/IoTestSessionController.cs");
 
         Assert.Contains("_ioTestLiveBindingService.BindIed(ied, Devices)", autoConnect, StringComparison.Ordinal);
@@ -83,6 +84,8 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("SelectedIed.IsPreparing", contextUx, StringComparison.Ordinal);
         Assert.Contains("var active = ied.IsPreparing;", progressUx, StringComparison.Ordinal);
         Assert.DoesNotContain("_preparingIed", progressUx, StringComparison.Ordinal);
+        Assert.DoesNotContain("_preparingIed", printPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClearStalePreparationFlags", printPreview, StringComparison.Ordinal);
         Assert.Contains("Other IED connection workflows keep running", connectUx, StringComparison.Ordinal);
         Assert.Contains("new Binding(nameof(SelectedIed))", connectUx, StringComparison.Ordinal);
 
