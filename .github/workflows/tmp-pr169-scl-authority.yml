@@ -1,0 +1,62 @@
+name: PR169 one-shot SCL comparison patch
+
+on:
+  push:
+    branches:
+      - integrate/ariec61850-dataset-semantic-bindings
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integrate/ariec61850-dataset-semantic-bindings
+          fetch-depth: 0
+
+      - name: Replace projected authoritative comparison
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('MainWindow.xaml.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''        var expectedModel = SclLiveSignalModelProjection.Build(
+              device.SclWorkspace.IedName,
+              device.SclWorkspace.AccessPointName,
+              SclWorkspaceSignalMapper.BuildSignals(device.SclWorkspace));
+          var observedModel = SclLiveSignalModelProjection.Build(
+              device.Name,
+              device.SclWorkspace.AccessPointName,
+              liveSignals);
+          var comparison = SclLiveModelComparer.Compare(expectedModel, observedModel);
+          device.SclComparison = comparison;
+'''
+          new = '''        // The engine design model and NativeIec61850Client.LastLiveModel are authoritative.
+          // Signal projection remains a legacy/cache fallback only when native discovery is unavailable.
+          var expectedModel = device.SclWorkspace.DesignModel;
+          var observedModel = device.LiveDiscoveryModel ?? SclLiveSignalModelProjection.Build(
+              device.Name,
+              device.SclWorkspace.AccessPointName,
+              liveSignals);
+          var comparison = SclLiveModelComparer.Compare(expectedModel, observedModel);
+          device.SclComparison = comparison;
+          comparison = device.SclComparison ?? comparison;
+'''
+          if old not in text:
+              raise SystemExit('Target ApplySclLiveComparison block not found exactly; refusing broad edit.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml.cs
+          git diff --cached --check
+          git commit -m "Use native live model for SCL comparison"
+          git push origin HEAD:integrate/ariec61850-dataset-semantic-bindings
