@@ -575,8 +575,9 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     {
         if (evidence == null)
             return "<span class=\"pending\">—</span>";
-        var iedTime = evidence.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff zzz") ?? "not supplied";
-        return Html($"IED {iedTime}\nARSAS {evidence.CapturedAt:yyyy-MM-dd HH:mm:ss.fff zzz}\n{evidence.RawValue} · {evidence.Quality} · {evidence.AcquisitionSource}\n{evidence.Verdict}")
+        var iedTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff zzz", "not supplied");
+        var arsasTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.CapturedAt, "yyyy-MM-dd HH:mm:ss.fff zzz");
+        return Html($"IED {iedTime}\nARSAS {arsasTime}\n{evidence.RawValue} · {evidence.Quality} · {evidence.AcquisitionSource}\n{evidence.Verdict}")
             .Replace("\n", "<br>", StringComparison.Ordinal);
     }
 

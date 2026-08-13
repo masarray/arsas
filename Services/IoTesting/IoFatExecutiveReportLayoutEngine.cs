@@ -401,7 +401,7 @@ internal static class IoFatExecutiveReportLayoutEngine
     }
 
     private static string RelayTime(IoTestTransitionEvidence? evidence)
-        => evidence?.IedTimestamp?.ToString("yyyy-MM-dd\nHH:mm:ss.fff", CultureInfo.InvariantCulture) ?? "-";
+        => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence?.IedTimestamp, "yyyy-MM-dd\nHH:mm:ss.fff", "-");
 
     private static string BuildDeviceMeta(IoTestIedPlan ied)
     {

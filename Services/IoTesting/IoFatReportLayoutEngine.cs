@@ -408,7 +408,7 @@ internal static class IoFatReportLayoutEngine
         if (evidence?.IedTimestamp == null)
             return "-";
 
-        return evidence.IedTimestamp.Value.ToString("yyyy-MM-dd\nHH:mm:ss.fff", CultureInfo.InvariantCulture);
+        return global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.IedTimestamp.Value, "yyyy-MM-dd\nHH:mm:ss.fff");
     }
 
     private static string BuildDeviceMeta(IoTestIedPlan ied)

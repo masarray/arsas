@@ -1,3 +1,4 @@
+using ArIED61850Tester;
 using System.ComponentModel;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
@@ -26,7 +27,9 @@ public sealed class IoFatImmediateEvidenceRegressionTests
         Assert.NotNull(point.Runtime.OnEvidence);
         Assert.Null(point.Runtime.OffEvidence);
         Assert.Equal(
-            point.Runtime.OnEvidence!.IedTimestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            Iec61850TimestampPresentation.FormatMilliseconds(
+                point.Runtime.OnEvidence!.IedTimestamp,
+                "yyyy-MM-dd HH:mm:ss.fff"),
             point.Runtime.OnRelayTimestampText);
         Assert.NotEqual("—", point.Runtime.OnRelayTimestampText);
         Assert.True(onTimestampNotificationRaised);

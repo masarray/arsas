@@ -27,8 +27,10 @@ public static class Iec61850ValueFormatter
             double d => AppendUnit(d.ToString("0.######", CultureInfo.InvariantCulture), unit),
             float f => AppendUnit(f.ToString("0.######", CultureInfo.InvariantCulture), unit),
             decimal d => AppendUnit(d.ToString("0.######", CultureInfo.InvariantCulture), unit),
-            DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
-            DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture),
+            DateTime dt => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+                dt, "yyyy-MM-dd HH:mm:ss.fff"),
+            DateTimeOffset dto => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
+                dto, "yyyy-MM-dd HH:mm:ss.fff zzz"),
             _ => value.ToString() ?? "-"
         };
     }
