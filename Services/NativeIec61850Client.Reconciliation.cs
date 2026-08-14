@@ -75,6 +75,23 @@ public sealed partial class NativeIec61850Client
             cancellationToken);
     }
 
+    internal static bool HasReconciliationOwner(string? ipAddress, int port)
+    {
+        var host = (ipAddress ?? string.Empty).Trim();
+        if (host.Length == 0)
+            return false;
+        var normalizedPort = port <= 0 ? 102 : port;
+
+        lock (ReconciliationOwnerRegistryGate)
+        {
+            PruneReconciliationOwnersLocked();
+            return ReconciliationOwners.Any(reference =>
+                reference.TryGetTarget(out var client) &&
+                client._host.Equals(host, StringComparison.OrdinalIgnoreCase) &&
+                client._port == normalizedPort);
+        }
+    }
+
     private static NativeIec61850Client ResolveReconciliationOwner(string ipAddress, int port)
     {
         var host = ipAddress.Trim();
