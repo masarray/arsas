@@ -1,3 +1,4 @@
+using System.Windows;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -12,6 +13,18 @@ public partial class SignalSelectionWizardWindow
         {
             signal.DisplayReference = Iec61850MonitorPoint.StripIedNamePrefix(signal.ObjectReference, _device.Name);
             signal.PropertyChanged += Signal_PropertyChanged;
+        }
+
+        // Window initialization can run inside InitializeComponent(), before the caller's
+        // object initializer assigns Owner. Register recovered rows through the actual
+        // application MainWindow so they receive the same owner/property-change lifecycle
+        // as rows produced by the normal discovery pipeline.
+        if (Application.Current?.MainWindow is MainWindow mainWindow)
+            mainWindow.RegisterRecoveredDataSetSignals(_device, merge);
+        else
+        {
+            _device.RecountSelectedSignals();
+            _device.RefreshComputed();
         }
 
         base.OnInitialized(e);
