@@ -27,6 +27,7 @@ public sealed class DataSetSignalInventoryTests
         Assert.Equal("ST", signal.FunctionalConstraint);
         Assert.False(signal.IsSelected);
         Assert.True(signal.IsReportCapable);
+        Assert.Equal("Not probed", signal.ProbeStatus);
         Assert.Contains("mandatory primary DataSet signal", signal.ReportCoverageReason, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -74,6 +75,33 @@ public sealed class DataSetSignalInventoryTests
         Assert.Equal("IEDLD0/LLN0.Events", signal.DataSetReference);
         Assert.True(signal.IsReportCapable);
         Assert.False(signal.IsSelected);
+    }
+
+    [Fact]
+    public void ExistingMmsStyleReference_MatchesLiteralEngineReferenceWithoutAppCanonicalization()
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "IED",
+            LiveDiscoveryModel = BuildDataSetModel()
+        };
+        device.Signals.Add(new SignalDefinition
+        {
+            Name = "Ind1",
+            ObjectReference = "IEDLD0/GGIO1$ST$Ind1$stVal",
+            FunctionalConstraint = "ST",
+            DataType = "Boolean",
+            Category = "Status",
+            IsSelected = false
+        });
+
+        var result = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
+
+        var signal = Assert.Single(device.Signals);
+        Assert.Equal(0, result.AddedCount);
+        Assert.Equal(1, result.EnrichedExistingCount);
+        Assert.Equal("IEDLD0/GGIO1$ST$Ind1$stVal", signal.ObjectReference);
+        Assert.Equal("IEDLD0/LLN0.Events", signal.DataSetReference);
     }
 
     [Fact]
