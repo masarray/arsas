@@ -78,6 +78,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public int ConsecutiveHealthProbeFailures { get; set; }
         public string HealthProbePointKey { get; set; } = string.Empty;
         public int ControlCommandActive;
+        public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
@@ -377,6 +378,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.NextHealthProbeUtc = DateTime.UtcNow.AddSeconds(1);
         session.ConsecutiveHealthProbeFailures = 0;
         session.HealthProbePointKey = string.Empty;
+        session.HybridValidation.Reset(null);
 
         var safePollMs = Math.Clamp(pollingIntervalMs <= 0 ? 1000 : pollingIntervalMs, 50, 600000);
         foreach (var signal in selected)
@@ -398,9 +400,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             .Select(point => point.PointKey)
             .FirstOrDefault() ?? string.Empty;
 
-        var plans = Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
+        var hasHybridAuthority = session.Client.CanUseHybridReportPlanner(device);
+        var plans = hasHybridAuthority
+            ? Array.Empty<ReportControlPlan>()
+            : Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
         session.PendingReportPlans = plans;
-        session.ReportSetupPending = plans.Count > 0;
+        session.ReportSetupPending = hasHybridAuthority || plans.Count > 0;
         session.ReportSetupNotBeforeUtc = DateTime.UtcNow.AddMilliseconds(350);
         session.ReportSetupDeadlineUtc = DateTime.UtcNow.AddMilliseconds(1500);
         ResetPollQueue(session);
@@ -408,16 +413,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         device.IsMonitoring = true;
         device.IsConnected = true;
         device.Status = "Monitoring";
-        device.AcquisitionMode = plans.Count > 0
-            ? "MMS live start • arming smart reporting"
+        device.AcquisitionMode = session.ReportSetupPending
+            ? "MMS live start • arming ARIEC hybrid reporting"
             : $"MMS polling fallback • {session.Points.Count} point(s)";
-        device.Detail = plans.Count > 0
-            ? $"{session.Points.Count} point(s): MMS is reading the initial live image immediately while static/dynamic reporting is validated in the same independent IED session."
+        device.Detail = session.ReportSetupPending
+            ? $"{session.Points.Count} point(s): MMS is reading the initial live image immediately while the ARIEC hybrid planner validates fresh static/dynamic BRCB/URCB capability in the same independent IED session."
             : $"{session.Points.Count} point(s): no report candidate is available; MMS polling is active.";
         device.RefreshComputed();
 
         Log("INFO", device.Name,
-            $"Fast live start: points={session.Points.Count}, pending report plan(s)={plans.Count}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
+            $"Fast live start: points={session.Points.Count}, legacy compatibility plan(s)={plans.Count}, ARIEC hybrid authority={(hasHybridAuthority ? "available" : "unavailable")}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
 
         session.MonitorTask = Task.Run(
             () => MonitorLoopAsync(session, session.MonitorCancellation.Token),
@@ -550,6 +555,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             $"Live Monitor feedback injected immediately: {point.IecReference}={display}; reportCorrelation={(state.AwaitingCommandReportEdge ? "awaiting dchg" : "not report-assigned")}.");
     }
 
+    public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+        if (!_sessions.TryGetValue(deviceId, out var session))
+            throw new InvalidOperationException($"No IEC 61850 runtime session exists for device '{deviceId}'.");
+        return session.HybridValidation.Capture(session.Device);
+    }
+
     public async Task StopMonitoringAsync(string deviceId)
     {
         if (!_sessions.TryGetValue(deviceId, out var session))
@@ -598,7 +611,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var result = await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
+                var result = plan.IsEngineAuthoritative
+                    ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
+                    : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
+                session.HybridValidation.RecordActivation(plan, result);
                 if (!result.IsSuccess)
                 {
                     Log("WARN", session.Device.Name,
@@ -608,7 +624,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     continue;
                 }
 
-                plan.Status = result.UsedDynamicDataSet ? "Dynamic active" : "Static active";
+                plan.Status = plan.IsEngineAuthoritative
+                    ? $"{plan.EngineAcquisitionKind} active"
+                    : result.UsedDynamicDataSet ? "Dynamic active" : "Static active";
                 session.ActiveReportPlans[plan.PlanId] = plan;
                 session.ActiveReportPlanOrder.Add(plan);
 
@@ -634,7 +652,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 if (result.CoveredReferences.Count == 0)
                 {
-                    var recoveryWillRun = !result.UsedDynamicDataSet &&
+                    var recoveryWillRun = !plan.IsEngineAuthoritative &&
+                                          !result.UsedDynamicDataSet &&
                                           plan.AllowDynamicDataSetWrites &&
                                           plan.Bindings.Count > 0;
                     Log(recoveryWillRun ? "INFO" : "WARN", session.Device.Name,
@@ -651,7 +670,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 // A discovered static DataSet can cover only part of a heuristic group.
                 // Recover the exact uncovered remainder through temporary dynamic reporting
                 // before leaving those points on cyclic MMS polling.
-                if (!result.UsedDynamicDataSet &&
+                if (!plan.IsEngineAuthoritative &&
+                    !result.UsedDynamicDataSet &&
                     plan.AllowDynamicDataSetWrites &&
                     coveredPoints.Count < plan.Bindings.Count)
                 {
@@ -761,6 +781,45 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             initialImageReady
                 ? "Initial live image is available. Validating static/dynamic report acquisition in the background monitor pipeline."
                 : "Initial live-image deadline reached. Continuing report validation while MMS fallback remains active.");
+
+        if (session.Client.CanUseHybridReportPlanner(session.Device))
+        {
+            NativeHybridReportPlanningResult hybrid;
+            try
+            {
+                hybrid = await session.Client.BuildHybridReportPlansAsync(
+                    session.Device,
+                    session.Points.Values.ToArray(),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                hybrid = new NativeHybridReportPlanningResult
+                {
+                    IsAuthoritative = true,
+                    Authority = "ARIEC61850 hybrid acquisition",
+                    Status = "Planner failure / polling safe",
+                    Summary = $"ARIEC hybrid planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted; bounded MMS polling remains active.",
+                    RequestedPointCount = session.Points.Count,
+                    PollingPointKeys = session.Points.Keys.ToArray(),
+                    PollingFallbackSignalCount = session.Points.Count,
+                    Warnings = [$"Hybrid planning exception: {ex.GetType().Name}: {ex.Message}"]
+                };
+            }
+
+            session.HybridValidation.Reset(hybrid);
+            plans = hybrid.ReportPlans;
+            Log("INFO", session.Device.Name,
+                $"Hybrid authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, dynamicBRCB={hybrid.DynamicBrcbSignalCount}, dynamicURCB={hybrid.DynamicUrcbSignalCount}, polling={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. {hybrid.Summary}");
+            foreach (var warning in hybrid.Warnings.Take(5))
+                Log("WARN", session.Device.Name, warning);
+        }
+        else
+        {
+            session.HybridValidation.Reset(null);
+            Log("INFO", session.Device.Name,
+                "ARIEC typed live-model authority is unavailable for this saved/session model; retaining the existing legacy report planner only as compatibility fallback.");
+        }
 
         await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
         ResetPollQueue(session);
@@ -914,6 +973,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     trustReportEdge: true,
                     hasProcessValue: update.HasValue);
             }
+
+            var verifiedReportPointKeys = slice.Updates
+                .Select(update => FindPointForReportReference(session, update.Reference))
+                .Where(point => point is not null)
+                .Select(point => point!)
+                .Where(point => session.States.TryGetValue(point.PointKey, out var state) && state.ReportChangeVerified)
+                .Select(point => point.PointKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            session.HybridValidation.RecordSlice(plan, slice, verifiedReportPointKeys);
 
             foreach (var warning in slice.Warnings.Take(2))
                 Log("WARN", session.Device.Name, warning);
