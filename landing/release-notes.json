@@ -1,50 +1,50 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.23",
-  "title": "Safer TCS smart finding for real FAT relay testing",
-  "titleId": "Smart finding TCS yang lebih aman untuk FAT relay nyata",
-  "summary": "ARSAS 1.6.23 fixes the FAT smart-finding regression that could mark valid TCS points as missing when customer IO rows contain only pathless object leaves such as .TCS1Fail or .TCS2Fail. The recovery remains conservative: exact object identity is required, near names are rejected and duplicate leaves remain ambiguous.",
-  "summaryId": "ARSAS 1.6.23 memperbaiki regresi smart finding FAT yang dapat menandai point TCS valid sebagai missing ketika row IO customer hanya berisi object leaf tanpa path seperti .TCS1Fail atau .TCS2Fail. Recovery tetap konservatif: identitas object harus exact, nama yang hanya mirip ditolak dan duplicate leaf tetap ambiguous.",
+  "version": "1.6.28",
+  "title": "Restored workstation startup, UTC-Time precision and live MMXU measurements",
+  "titleId": "Pemulihan startup workstation, presisi UTC-Time dan pengukuran live MMXU",
+  "summary": "ARSAS 1.6.28 restores the first-run engineering launchers and immediate FAT evidence priority, advances IEC 61850 UTC-Time decoding precision, restores fundamental live MMXU/MMXN power and frequency measurements, and clarifies timestamp evidence wording.",
+  "summaryId": "ARSAS 1.6.28 memulihkan launcher engineering saat first-run dan prioritas evidence FAT yang cepat, meningkatkan presisi decoding IEC 61850 UTC-Time, memulihkan pengukuran live power dan frequency MMXU/MMXN yang fundamental, serta memperjelas wording evidence timestamp.",
   "highlights": [
-    "Pathless imported TCS leaves such as .TCS1Fail and .TCS2Fail can now resolve to a unique full IEC 61850 MMS object such as ADDGGIO2.TCS1Fail.stVal.",
-    "The fallback is lower priority than exact and canonical IEC 61850 matching and never uses fuzzy or Levenshtein similarity.",
-    "A duplicate object leaf present in more than one logical node remains ambiguous and automatic FAT binding is withheld.",
-    "Near-name objects such as TCS11Fail or TCS1Healthy remain missing instead of being guessed.",
-    "The fix is covered in both FAT signal selection and live-binding regression tests so the signal cannot pass preflight and then disappear when monitoring starts."
+    "First-run SCL, Add IED by IP, project and Excel IO-list launcher cards are restored without removing the workstation visual layer.",
+    "FAT TRUE/evidence priority is restored so attributable evidence can surface promptly without starving the UI.",
+    "The ARIEC61850 engine baseline preserves the IEC 61850 24-bit fractional-second value through decoding; the customer regression value 0x33 0x5A 0x86 decodes to 31.2006000 at .NET tick resolution.",
+    "Fundamental MMXU/MMXN live power and frequency measurements are restored with bounded mag/instMag sibling handling and corrected power-unit presentation.",
+    "FAT timestamp hover wording is explicitly 'Decoded IED timestamp (full precision)' so the stable release does not overclaim exact packet-byte provenance."
   ],
   "highlightsId": [
-    "Imported TCS leaf tanpa path seperti .TCS1Fail dan .TCS2Fail kini dapat resolve ke satu full IEC 61850 MMS object yang unik seperti ADDGGIO2.TCS1Fail.stVal.",
-    "Fallback ini memiliki prioritas lebih rendah daripada exact dan canonical IEC 61850 matching serta tidak pernah memakai fuzzy atau Levenshtein similarity.",
-    "Duplicate object leaf yang muncul pada lebih dari satu logical node tetap ambiguous dan automatic FAT binding ditahan.",
-    "Object dengan nama yang hanya mirip seperti TCS11Fail atau TCS1Healthy tetap missing dan tidak ditebak.",
-    "Fix dilindungi regression test pada FAT signal selection dan live binding sehingga signal tidak bisa lolos preflight lalu hilang ketika monitoring dimulai."
+    "Launcher first-run untuk SCL, Add IED by IP, project dan Excel IO-list dipulihkan tanpa menghilangkan workstation visual layer.",
+    "Prioritas TRUE/evidence FAT dipulihkan agar evidence yang attributable dapat tampil cepat tanpa membuat UI starvation.",
+    "Baseline engine ARIEC61850 mempertahankan nilai fractional-second 24-bit IEC 61850 sepanjang decoding; nilai regression customer 0x33 0x5A 0x86 didecode menjadi 31.2006000 pada resolusi tick .NET.",
+    "Pengukuran live power dan frequency MMXU/MMXN yang fundamental dipulihkan dengan bounded mag/instMag sibling handling dan presentasi unit power yang dikoreksi.",
+    "Wording hover timestamp FAT secara eksplisit menjadi 'Decoded IED timestamp (full precision)' agar stable release tidak mengklaim provenance byte packet exact yang belum disimpan pada build tersebut."
   ],
   "improvements": [
-    "FAT smart matching now includes a bounded exact object-leaf recovery score below exact, canonical and safe implicit-leaf matches.",
-    "Functional-constraint filtering remains active in the selection and live-binding layers.",
-    "The v1.6.23 release source passed full application regression testing, portable single-EXE smoke testing and silent installer install/uninstall testing before publication.",
-    "Release assets include SHA-256 checksums, SPDX SBOM, provenance metadata and GitHub artifact attestations."
+    "The release source passed the standard ARSAS application regression and portable single-EXE smoke gates before publication.",
+    "Focused IO FAT and Sampled Values evidence validation remained part of the release gate.",
+    "The Windows installer passed compile plus silent install/uninstall smoke validation before publication.",
+    "Published v1.6.28 assets include SHA-256 evidence, SPDX SBOM and provenance metadata; the stable installer and portable asset hashes are reflected in landing/latest.json."
   ],
   "improvementsId": [
-    "FAT smart matching kini memiliki bounded exact object-leaf recovery score di bawah exact, canonical dan safe implicit-leaf match.",
-    "Functional-constraint filtering tetap aktif pada layer selection dan live binding.",
-    "Source release v1.6.23 lulus full application regression test, portable single-EXE smoke test dan silent installer install/uninstall test sebelum dipublikasikan.",
-    "Asset release mencakup checksum SHA-256, SPDX SBOM, metadata provenance dan GitHub artifact attestation."
+    "Source release lulus gate standard application regression ARSAS dan portable single-EXE smoke sebelum publikasi.",
+    "Validasi evidence IO FAT dan Sampled Values yang terfokus tetap menjadi bagian release gate.",
+    "Windows installer lulus compile serta silent install/uninstall smoke validation sebelum publikasi.",
+    "Asset v1.6.28 yang dipublikasikan mencakup evidence SHA-256, SPDX SBOM dan metadata provenance; hash installer stable dan portable direfleksikan pada landing/latest.json."
   ],
   "knownLimitations": [
-    "Physical relay validation is still required to confirm the affected TCS rows against the actual IED model used at the FAT bench.",
-    "If the same pathless object leaf exists in multiple logical nodes, ARSAS intentionally blocks automatic binding and requires a more attributable reference.",
-    "File Service FAT PASS proves successful IEC 61850 FileDirectory discovery of a supported remote fault record; it does not claim FileOpen, FileRead or FileClose transfer succeeded.",
-    "Windows x64 is the only packaged desktop platform in the current stable release.",
+    "ARSAS 1.6.28 preserves the full decoded IEC 61850 timestamp at .NET 100 ns resolution, but this stable release does not claim to retain the exact original 8-byte UTC-Time packet payload in FAT evidence.",
+    "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in the evidence hover.",
+    "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI.",
+    "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "Validasi relay fisik tetap diperlukan untuk memastikan row TCS yang terdampak terhadap model IED aktual yang dipakai di FAT bench.",
-    "Jika object leaf tanpa path yang sama muncul pada beberapa logical node, ARSAS secara sengaja memblokir automatic binding dan membutuhkan reference yang lebih attributable.",
-    "File Service FAT PASS membuktikan keberhasilan IEC 61850 FileDirectory discovery terhadap remote fault record yang didukung; status ini tidak mengklaim FileOpen, FileRead atau FileClose transfer berhasil.",
-    "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release saat ini.",
+    "ARSAS 1.6.28 mempertahankan full decoded IEC 61850 timestamp pada resolusi 100 ns .NET, namun stable release ini tidak mengklaim penyimpanan exact original 8-byte UTC-Time packet payload pada evidence FAT.",
+    "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence hover.",
+    "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI.",
+    "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait."
   ],
@@ -59,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.23 Engineering and FAT workflow context",
-    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.23",
-    "caption": "Representative ARSAS FAT workspace. Version 1.6.23 focuses on recovering valid pathless TCS object leaves without weakening ambiguity and near-name safety guards.",
-    "captionId": "Representasi workspace FAT ARSAS. Versi 1.6.23 berfokus memulihkan pathless TCS object leaf yang valid tanpa melemahkan guard ambiguity dan near-name."
+    "alt": "Representative ARSAS 1.6.28 Engineering and FAT workflow context",
+    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.28",
+    "caption": "Representative ARSAS Engineering/FAT workspace for stable release 1.6.28, including restored startup workflows, precise decoded timestamp evidence and live measurement fixes.",
+    "captionId": "Representasi workspace Engineering/FAT ARSAS untuk stable release 1.6.28, termasuk pemulihan workflow startup, evidence decoded timestamp yang presisi dan perbaikan live measurement."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.23"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.28"
 }
