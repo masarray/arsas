@@ -41,6 +41,44 @@ public static class Iec61850TimestampPresentation
     public static string FormatMilliseconds(DateTime value, string format)
         => RoundToNearestMillisecond(value).ToString(format, CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Formats a full-resolution timestamp string for a compact live-grid display while
+    /// leaving the source string untouched for evidence, search and full-precision tooltips.
+    /// Non-timestamp values are returned unchanged rather than guessed.
+    /// </summary>
+    public static string FormatMilliseconds(
+        string? value,
+        string format = "yyyy-MM-dd HH:mm:ss.fff",
+        string missing = "-")
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0 || text == "-")
+            return text.Length == 0 ? missing : text;
+
+        // Relay timestamps in the live workspace normally have no explicit offset.
+        // Parse those as DateTime first so presentation never invents or shifts a zone.
+        if (DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.RoundtripKind,
+                out var dateTime))
+        {
+            return FormatMilliseconds(dateTime, format);
+        }
+
+        // Preserve explicit-offset timestamps when they are supplied by another surface.
+        if (DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var dateTimeOffset))
+        {
+            return FormatMilliseconds(dateTimeOffset, format);
+        }
+
+        return text;
+    }
+
     private static long MillisecondDelta(long ticks)
     {
         var remainder = ticks % TicksPerMillisecond;
