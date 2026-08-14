@@ -400,9 +400,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             .Select(point => point.PointKey)
             .FirstOrDefault() ?? string.Empty;
 
-        var plans = Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
+        var hasHybridAuthority = session.Client.CanUseHybridReportPlanner(device);
+        var plans = hasHybridAuthority
+            ? Array.Empty<ReportControlPlan>()
+            : Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
         session.PendingReportPlans = plans;
-        session.ReportSetupPending = plans.Count > 0 || session.Client.CanUseHybridReportPlanner(device);
+        session.ReportSetupPending = hasHybridAuthority || plans.Count > 0;
         session.ReportSetupNotBeforeUtc = DateTime.UtcNow.AddMilliseconds(350);
         session.ReportSetupDeadlineUtc = DateTime.UtcNow.AddMilliseconds(1500);
         ResetPollQueue(session);
@@ -419,7 +422,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         device.RefreshComputed();
 
         Log("INFO", device.Name,
-            $"Fast live start: points={session.Points.Count}, legacy compatibility plan(s)={plans.Count}, ARIEC hybrid authority={(session.Client.CanUseHybridReportPlanner(device) ? "available" : "unavailable")}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
+            $"Fast live start: points={session.Points.Count}, legacy compatibility plan(s)={plans.Count}, ARIEC hybrid authority={(hasHybridAuthority ? "available" : "unavailable")}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
 
         session.MonitorTask = Task.Run(
             () => MonitorLoopAsync(session, session.MonitorCancellation.Token),
@@ -649,7 +652,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 if (result.CoveredReferences.Count == 0)
                 {
-                    var recoveryWillRun = !result.UsedDynamicDataSet &&
+                    var recoveryWillRun = !plan.IsEngineAuthoritative &&
+                                          !result.UsedDynamicDataSet &&
                                           plan.AllowDynamicDataSetWrites &&
                                           plan.Bindings.Count > 0;
                     Log(recoveryWillRun ? "INFO" : "WARN", session.Device.Name,
