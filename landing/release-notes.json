@@ -1,49 +1,49 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.28",
-  "title": "Restored workstation startup, UTC-Time precision and live MMXU measurements",
-  "titleId": "Pemulihan startup workstation, presisi UTC-Time dan pengukuran live MMXU",
-  "summary": "ARSAS 1.6.28 restores the first-run engineering launchers and immediate FAT evidence priority, advances IEC 61850 UTC-Time decoding precision, restores fundamental live MMXU/MMXN power and frequency measurements, and clarifies timestamp evidence wording.",
-  "summaryId": "ARSAS 1.6.28 memulihkan launcher engineering saat first-run dan prioritas evidence FAT yang cepat, meningkatkan presisi decoding IEC 61850 UTC-Time, memulihkan pengukuran live power dan frequency MMXU/MMXN yang fundamental, serta memperjelas wording evidence timestamp.",
+  "version": "1.6.29",
+  "title": "Authoritative DataSet reconciliation and complete signal-selection inventory",
+  "titleId": "Rekonsiliasi DataSet authoritative dan inventory pemilihan signal yang lengkap",
+  "summary": "ARSAS 1.6.29 strengthens IEC 61850 engineering consistency by consuming ARIEC61850-owned DataSet semantics and connected design/live reconciliation, preserving authoritative protocol verdicts, improving Explorer/FAT usability, and restoring mandatory static DataSet primary signals to the Signal Selection inventory without forcing user selection.",
+  "summaryId": "ARSAS 1.6.29 memperkuat konsistensi engineering IEC 61850 dengan menggunakan semantic DataSet dan rekonsiliasi design/live yang dimiliki ARIEC61850, mempertahankan verdict protocol yang authoritative, meningkatkan usability Explorer/FAT, serta memulihkan signal primary static DataSet yang mandatory ke inventory Signal Selection tanpa memaksa pilihan user.",
   "highlights": [
-    "First-run SCL, Add IED by IP, project and Excel IO-list launcher cards are restored without removing the workstation visual layer.",
-    "FAT TRUE/evidence priority is restored so attributable evidence can surface promptly without starving the UI.",
-    "The ARIEC61850 engine baseline preserves the IEC 61850 24-bit fractional-second value through decoding; the customer regression value 0x33 0x5A 0x86 decodes to 31.2006000 at .NET tick resolution.",
-    "Fundamental MMXU/MMXN live power and frequency measurements are restored with bounded mag/instMag sibling handling and corrected power-unit presentation.",
-    "FAT timestamp hover wording is explicitly 'Decoded IED timestamp (full precision)' so the stable release does not overclaim exact packet-byte provenance."
+    "ARSAS consumes ARIEC61850-owned DataSet semantic bindings instead of duplicating IEC 61850 reference or member heuristics in the application layer.",
+    "Connected design/live reconciliation now preserves the engine contract that only protocol-confirmed Absent may become Signal missing; local discovery or row misses remain non-authoritative diagnostics.",
+    "Connected reconciliation reuses the existing MMS session owner, while the pinned ARIEC61850 baseline also carries validated COMTRADE/FileOpen interoperability without app-side remote-path guessing.",
+    "Explorer/FAT usability includes Live Signal Values search, concise timestamp presentation with full decoded precision available as evidence, and bulk-selection affordances for relevant engineering tables.",
+    "ARIEC-declared mandatory primary static DataSet signals are restored to Signal Selection inventory when application curation would otherwise hide them; recovered rows remain unchecked and Not probed until normal user selection and acquisition occur."
   ],
   "highlightsId": [
-    "Launcher first-run untuk SCL, Add IED by IP, project dan Excel IO-list dipulihkan tanpa menghilangkan workstation visual layer.",
-    "Prioritas TRUE/evidence FAT dipulihkan agar evidence yang attributable dapat tampil cepat tanpa membuat UI starvation.",
-    "Baseline engine ARIEC61850 mempertahankan nilai fractional-second 24-bit IEC 61850 sepanjang decoding; nilai regression customer 0x33 0x5A 0x86 didecode menjadi 31.2006000 pada resolusi tick .NET.",
-    "Pengukuran live power dan frequency MMXU/MMXN yang fundamental dipulihkan dengan bounded mag/instMag sibling handling dan presentasi unit power yang dikoreksi.",
-    "Wording hover timestamp FAT secara eksplisit menjadi 'Decoded IED timestamp (full precision)' agar stable release tidak mengklaim provenance byte packet exact yang belum disimpan pada build tersebut."
+    "ARSAS menggunakan binding semantic DataSet milik ARIEC61850 tanpa menduplikasi heuristic reference atau member IEC 61850 pada application layer.",
+    "Rekonsiliasi design/live yang connected mempertahankan kontrak engine bahwa hanya Absent yang terkonfirmasi protocol yang boleh menjadi Signal missing; miss pada discovery lokal atau row tetap merupakan diagnostic yang non-authoritative.",
+    "Rekonsiliasi connected menggunakan kembali owner sesi MMS yang sudah ada, sementara baseline ARIEC61850 yang dipin juga membawa interoperability COMTRADE/FileOpen yang telah divalidasi tanpa remote-path guessing di sisi aplikasi.",
+    "Usability Explorer/FAT mencakup pencarian Live Signal Values, presentasi timestamp yang ringkas dengan full decoded precision tetap tersedia sebagai evidence, serta bulk-selection pada tabel engineering yang relevan.",
+    "Signal primary static DataSet yang dinyatakan mandatory oleh ARIEC dipulihkan ke inventory Signal Selection ketika application curation sebelumnya dapat menyembunyikannya; row recovery tetap unchecked dan Not probed sampai dipilih user dan dibaca melalui acquisition normal."
   ],
   "improvements": [
-    "The release source passed the standard ARSAS application regression and portable single-EXE smoke gates before publication.",
-    "Focused IO FAT and Sampled Values evidence validation remained part of the release gate.",
-    "The Windows installer passed compile plus silent install/uninstall smoke validation before publication.",
-    "Published v1.6.28 assets include SHA-256 evidence, SPDX SBOM and provenance metadata; the stable installer and portable asset hashes are reflected in landing/latest.json."
+    "The ARIEC61850 application/engine ownership boundary is tightened: protocol/model semantics, canonicalization, DataSet authority, reconciliation and MMS failure meaning stay in the engine while ARSAS owns workflow, lifecycle and presentation.",
+    "Mandatory DataSet inventory recovery is idempotent, enriches an existing row instead of duplicating it, and compares only literal reference forms already exposed by ARIEC61850.",
+    "The release source is gated by the standard ARSAS solution build and regression suite plus portable and Windows installer smoke validation before publication.",
+    "Stable Windows publication produces installer and portable binaries together with SHA-256 checksums, SPDX SBOM, application/engine provenance and GitHub artifact attestations."
   ],
   "improvementsId": [
-    "Source release lulus gate standard application regression ARSAS dan portable single-EXE smoke sebelum publikasi.",
-    "Validasi evidence IO FAT dan Sampled Values yang terfokus tetap menjadi bagian release gate.",
-    "Windows installer lulus compile serta silent install/uninstall smoke validation sebelum publikasi.",
-    "Asset v1.6.28 yang dipublikasikan mencakup evidence SHA-256, SPDX SBOM dan metadata provenance; hash installer stable dan portable direfleksikan pada landing/latest.json."
+    "Boundary ownership ARIEC61850 application/engine diperketat: semantic protocol/model, canonicalization, authority DataSet, reconciliation dan arti MMS failure tetap berada di engine sementara ARSAS memiliki workflow, lifecycle dan presentation.",
+    "Recovery inventory DataSet mandatory bersifat idempotent, memperkaya row yang sudah ada alih-alih membuat duplicate, dan hanya membandingkan bentuk reference literal yang memang sudah diekspos oleh ARIEC61850.",
+    "Source release digate oleh build solution dan regression suite ARSAS standard serta portable dan Windows installer smoke validation sebelum publikasi.",
+    "Publikasi Windows stable menghasilkan binary installer dan portable bersama SHA-256 checksum, SPDX SBOM, provenance aplikasi/engine dan GitHub artifact attestation."
   ],
   "knownLimitations": [
-    "ARSAS 1.6.28 preserves the full decoded IEC 61850 timestamp at .NET 100 ns resolution, but this stable release does not claim to retain the exact original 8-byte UTC-Time packet payload in FAT evidence.",
-    "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in the evidence hover.",
-    "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI.",
+    "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI, including vendor-specific model exposure and field network conditions.",
+    "Inventory presence is intentionally not the same as MMS readability: recovered mandatory DataSet rows remain Not probed until normal acquisition verifies them.",
+    "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in evidence views.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "ARSAS 1.6.28 mempertahankan full decoded IEC 61850 timestamp pada resolusi 100 ns .NET, namun stable release ini tidak mengklaim penyimpanan exact original 8-byte UTC-Time packet payload pada evidence FAT.",
-    "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence hover.",
-    "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI.",
+    "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI, termasuk exposure model vendor-specific dan kondisi network di lapangan.",
+    "Kehadiran pada inventory sengaja tidak disamakan dengan MMS readability: row mandatory DataSet hasil recovery tetap Not probed sampai acquisition normal memverifikasinya.",
+    "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence view.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait."
@@ -59,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.28 Engineering and FAT workflow context",
-    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.28",
-    "caption": "Representative ARSAS Engineering/FAT workspace for stable release 1.6.28, including restored startup workflows, precise decoded timestamp evidence and live measurement fixes.",
-    "captionId": "Representasi workspace Engineering/FAT ARSAS untuk stable release 1.6.28, termasuk pemulihan workflow startup, evidence decoded timestamp yang presisi dan perbaikan live measurement."
+    "alt": "Representative ARSAS 1.6.29 Engineering and FAT workflow context",
+    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.29",
+    "caption": "Representative ARSAS Engineering/FAT workspace for stable release 1.6.29, including live-value search, engine-authoritative reconciliation evidence and complete mandatory DataSet signal inventory.",
+    "captionId": "Representasi workspace Engineering/FAT ARSAS untuk stable release 1.6.29, termasuk pencarian live value, evidence rekonsiliasi authoritative dari engine dan inventory signal mandatory DataSet yang lengkap."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.28"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.29"
 }
