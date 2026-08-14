@@ -51,7 +51,7 @@ public partial class MainWindow
         if (_liveSignalSearchInstalled)
             return;
 
-        var dataGrid = FindVisualChildren<DataGrid>(this)
+        var dataGrid = FindLiveSignalVisualChildren<DataGrid>(this)
             .FirstOrDefault(IsExplorerLiveSignalGrid);
         if (dataGrid?.Parent is not Grid host)
             return;
@@ -378,7 +378,7 @@ public partial class MainWindow
             _liveSignalSearchView.Filter = null;
     }
 
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+    private static IEnumerable<T> FindLiveSignalVisualChildren<T>(DependencyObject root)
         where T : DependencyObject
     {
         for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
@@ -386,7 +386,7 @@ public partial class MainWindow
             var child = VisualTreeHelper.GetChild(root, index);
             if (child is T typed)
                 yield return typed;
-            foreach (var descendant in FindVisualChildren<T>(child))
+            foreach (var descendant in FindLiveSignalVisualChildren<T>(child))
                 yield return descendant;
         }
     }
