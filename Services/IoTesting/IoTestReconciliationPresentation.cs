@@ -21,6 +21,7 @@ public static class IoTestReconciliationPresentation
             Iec61850DesignLiveStatus.Compatible => IoTestLiveBindingState.BoundNormalized,
             Iec61850DesignLiveStatus.RecoveredByProbe => IoTestLiveBindingState.BoundExact,
             Iec61850DesignLiveStatus.RecoveredByAlternateProbe => IoTestLiveBindingState.BoundNormalized,
+            Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery => IoTestLiveBindingState.BoundNormalized,
             // SignalNotFound is deliberately reserved for an engine-confirmed Absent verdict.
             Iec61850DesignLiveStatus.Absent => IoTestLiveBindingState.SignalNotFound,
             _ => IoTestLiveBindingState.NotEvaluated
@@ -32,7 +33,10 @@ public static class IoTestReconciliationPresentation
             Iec61850DesignLiveStatus.Compatible => "ARIEC status: Compatible",
             Iec61850DesignLiveStatus.RecoveredByProbe => "ARIEC status: RecoveredByProbe",
             Iec61850DesignLiveStatus.RecoveredByAlternateProbe => "ARIEC status: RecoveredByAlternateProbe",
-            Iec61850DesignLiveStatus.DesignOnly => "ARIEC status: DesignOnly · exact verification required",
+            Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery => "ARIEC status: RecoveredByAlternateDiscovery",
+            Iec61850DesignLiveStatus.DesignOnly => point.ProbeDeferredByBudget
+                ? "ARIEC status: DesignOnly · verification deferred by probe budget"
+                : "ARIEC status: DesignOnly · exact verification required",
             Iec61850DesignLiveStatus.LiveOnly => "ARIEC status: LiveOnly",
             Iec61850DesignLiveStatus.FunctionalConstraintMismatch => "ARIEC status: FunctionalConstraintMismatch",
             Iec61850DesignLiveStatus.TypeMismatch => "ARIEC status: TypeMismatch",
@@ -58,6 +62,10 @@ public static class IoTestReconciliationPresentation
             evidence.Add($"Canonical: {canonical}");
         if (!string.IsNullOrWhiteSpace(effective))
             evidence.Add($"Effective: {effective}");
+        if (point.AlternateStrategy.HasValue)
+            evidence.Add($"Alternate strategy: {point.AlternateStrategy.Value}");
+        if (point.ProbeDeferredByBudget)
+            evidence.Add("Verification deferred by ARIEC probe budget; no absence conclusion was made");
 
         foreach (var item in point.Evidence.Where(item => !string.IsNullOrWhiteSpace(item)))
             evidence.Add(item.Trim());
