@@ -21,9 +21,7 @@ public partial class MainWindow
 
     private DataGrid? _liveSignalSearchGrid;
     private TextBox? _liveSignalSearchBox;
-    private TextBlock? _liveSignalSearchPlaceholder;
     private TextBlock? _liveSignalSearchCount;
-    private Button? _liveSignalSearchClearButton;
     private ICollectionView? _liveSignalSearchView;
     private INotifyCollectionChanged? _liveSignalSearchCollection;
     private DependencyPropertyDescriptor? _liveSignalItemsSourceDescriptor;
@@ -88,7 +86,7 @@ public partial class MainWindow
         var toolbar = new Grid
         {
             Margin = new Thickness(2, 0, 2, 9),
-            Height = 38
+            Height = 34
         };
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -116,7 +114,7 @@ public partial class MainWindow
         });
         _liveSignalSearchCount = new TextBlock
         {
-            Text = "",
+            Text = string.Empty,
             FontSize = 10.8,
             Foreground = new SolidColorBrush(Color.FromRgb(126, 142, 165)),
             Margin = new Thickness(9, 0, 0, 0),
@@ -125,104 +123,36 @@ public partial class MainWindow
         titlePanel.Children.Add(_liveSignalSearchCount);
         toolbar.Children.Add(titlePanel);
 
-        var searchShell = new Border
-        {
-            Width = 390,
-            Height = 36,
-            CornerRadius = new CornerRadius(12),
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(205, 217, 233)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(10, 0, 5, 0),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(searchShell, 1);
-
-        var searchGrid = new Grid();
-        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
-
-        var searchIcon = new Grid
-        {
-            Width = 15,
-            Height = 15,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        searchIcon.Children.Add(new Ellipse
-        {
-            Width = 9,
-            Height = 9,
-            Stroke = new SolidColorBrush(Color.FromRgb(99, 117, 142)),
-            StrokeThickness = 1.55,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top
-        });
-        searchIcon.Children.Add(new Border
-        {
-            Width = 6,
-            Height = 1.5,
-            Background = new SolidColorBrush(Color.FromRgb(99, 117, 142)),
-            RenderTransform = new RotateTransform(45),
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 1, 2)
-        });
-        searchGrid.Children.Add(searchIcon);
-
-        var textHost = new Grid();
-        Grid.SetColumn(textHost, 1);
-        _liveSignalSearchPlaceholder = new TextBlock
-        {
-            Text = "Search signal, IEC reference, value…",
-            FontSize = 11.6,
-            Foreground = new SolidColorBrush(Color.FromRgb(144, 158, 179)),
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-        textHost.Children.Add(_liveSignalSearchPlaceholder);
-
         _liveSignalSearchBox = new TextBox
         {
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            FontSize = 11.8,
-            Foreground = new SolidColorBrush(Color.FromRgb(42, 57, 78)),
-            VerticalContentAlignment = VerticalAlignment.Center,
-            CaretBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-            ToolTip = "Filter the current live workspace. Ctrl+F focuses search; Esc clears it."
+            Width = 390,
+            Style = ResolveIndustrialSearchStyle(),
+            Tag = "Search signal, IEC reference, value, quality or acquisition",
+            ToolTip = "Filter the current live workspace. Ctrl+F focuses search; Esc clears it.",
+            VerticalAlignment = VerticalAlignment.Center
         };
         _liveSignalSearchBox.TextChanged += LiveSignalSearch_TextChanged;
         _liveSignalSearchBox.PreviewKeyDown += LiveSignalSearch_BoxPreviewKeyDown;
-        textHost.Children.Add(_liveSignalSearchBox);
-        searchGrid.Children.Add(textHost);
+        Grid.SetColumn(_liveSignalSearchBox, 1);
+        toolbar.Children.Add(_liveSignalSearchBox);
 
-        _liveSignalSearchClearButton = new Button
-        {
-            Content = "×",
-            Width = 24,
-            Height = 24,
-            Padding = new Thickness(0),
-            Margin = new Thickness(2, 0, 0, 0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Foreground = new SolidColorBrush(Color.FromRgb(104, 120, 144)),
-            FontSize = 16,
-            FontWeight = FontWeights.Normal,
-            Cursor = Cursors.Hand,
-            Visibility = Visibility.Collapsed,
-            ToolTip = "Clear search"
-        };
-        _liveSignalSearchClearButton.Click += (_, _) => ClearLiveSignalSearch();
-        Grid.SetColumn(_liveSignalSearchClearButton, 2);
-        searchGrid.Children.Add(_liveSignalSearchClearButton);
-
-        searchShell.Child = searchGrid;
-        toolbar.Children.Add(searchShell);
         return toolbar;
+    }
+
+    private Style? ResolveIndustrialSearchStyle()
+    {
+        var style = TryFindResource("IndustrialSearchTextBox") as Style
+                    ?? Application.Current?.TryFindResource("IndustrialSearchTextBox") as Style;
+        if (style != null)
+            return style;
+
+        // Defensive fallback for load ordering: use the same resource dictionary that
+        // P2IndustrialWorkstationUx uses for the IED Explorer search field.
+        var dictionary = new ResourceDictionary
+        {
+            Source = new Uri("/ARSAS;component/Resources/P2IndustrialControls.xaml", UriKind.Relative)
+        };
+        return dictionary["IndustrialSearchTextBox"] as Style;
     }
 
     private static bool IsExplorerLiveSignalGrid(DataGrid grid)
@@ -265,17 +195,7 @@ public partial class MainWindow
     }
 
     private void LiveSignalSearch_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_liveSignalSearchPlaceholder != null)
-            _liveSignalSearchPlaceholder.Visibility = string.IsNullOrWhiteSpace(_liveSignalSearchBox?.Text)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        if (_liveSignalSearchClearButton != null)
-            _liveSignalSearchClearButton.Visibility = string.IsNullOrWhiteSpace(_liveSignalSearchBox?.Text)
-                ? Visibility.Collapsed
-                : Visibility.Visible;
-        ApplyLiveSignalSearch();
-    }
+        => ApplyLiveSignalSearch();
 
     private void LiveSignalSearch_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => Dispatcher.BeginInvoke(new Action(UpdateLiveSignalSearchCount));
