@@ -12,8 +12,11 @@ namespace ArIED61850Tester.Services;
 public sealed partial class NativeIec61850Client
 {
     private sealed record AuthoritativeHybridSubscription(
-        ArMms.MmsReportSubscriptionPlan Subscription,
-        ArMms.MmsHybridAcquisitionKind Kind);
+        ArMms.MmsHybridAcquisitionKind Kind,
+        string ReportControlReference,
+        Iec61850SignalCatalogDocument Catalog,
+        IReadOnlyList<Iec61850SignalDescriptor> Signals,
+        ArMms.MmsHybridReportAcquisitionOptions Options);
 
     private readonly Dictionary<string, AuthoritativeHybridSubscription> _authoritativeHybridSubscriptions =
         new(StringComparer.OrdinalIgnoreCase);
@@ -125,22 +128,26 @@ public sealed partial class NativeIec61850Client
                 cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
+        var plannerOptions = new ArMms.MmsHybridReportAcquisitionOptions
+        {
+            AllowStaticBrcb = true,
+            AllowStaticUrcb = true,
+            AllowDynamicBrcb = device.AllowDynamicDataSetWrites,
+            AllowDynamicUrcb = device.AllowDynamicDataSetWrites,
+            // Existing caller-owned RCB reuse needs session aliasing semantics in ARSAS.
+            // Until that is explicit, fail closed instead of starting a second monitor
+            // against an RCB already owned by this association.
+            AllowCallerOwnedReports = false,
+            AllowPollingFallback = true,
+            RequireExactAvailabilityEvidence = true
+        };
         var enginePlan = ArMms.MmsHybridReportAcquisitionPlanner.Build(
             catalog,
             descriptorPoints.Keys,
             discovery.ReportInventory,
             availability,
             discovery.IedDirectory,
-            new ArMms.MmsHybridReportAcquisitionOptions
-            {
-                AllowStaticBrcb = true,
-                AllowStaticUrcb = true,
-                AllowDynamicBrcb = device.AllowDynamicDataSetWrites,
-                AllowDynamicUrcb = device.AllowDynamicDataSetWrites,
-                AllowCallerOwnedReports = true,
-                AllowPollingFallback = true,
-                RequireExactAvailabilityEvidence = true
-            });
+            plannerOptions);
 
         var reportPlans = new List<ReportControlPlan>();
         foreach (var segment in enginePlan.Segments.Where(segment => segment.IsReportBacked))
@@ -176,8 +183,11 @@ public sealed partial class NativeIec61850Client
             };
 
             _authoritativeHybridSubscriptions[appPlan.PlanId] = new AuthoritativeHybridSubscription(
-                segment.ReportPlan,
-                segment.Kind);
+                segment.Kind,
+                segment.ReportControlReference,
+                catalog,
+                segment.Signals.ToArray(),
+                plannerOptions);
             reportPlans.Add(appPlan);
         }
 
@@ -290,7 +300,75 @@ public sealed partial class NativeIec61850Client
             };
         }
 
-        var subscription = authoritative.Subscription;
+        // P2.2 planning is intentionally an intent, not permission to write forever.
+        // Re-read the exact selected RCB immediately before execution, then ask the same
+        // ARIEC planner to classify that fresh evidence again. ARSAS never reimplements
+        // RptEna/reservation/DataSet safety semantics here.
+        var callerOwned = _reportMonitorSessions.Values
+            .Select(session => session.ReportControl.Reference)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var freshAvailability = await RunMmsOperationAsync(
+            () => _session.CheckReportControlAvailabilityAsync(
+                discovery.ReportInventory,
+                discovery.IedDirectory,
+                new ArMms.MmsRcbAvailabilityOptions
+                {
+                    MaxReportControls = 512,
+                    ReadDataSetDirectories = true,
+                    CallerOwnedRcbReferences = callerOwned
+                },
+                cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+
+        var selectedSnapshots = freshAvailability.ReportControls
+            .Where(snapshot => SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference))
+            .ToArray();
+        if (selectedSnapshots.Length != 1)
+        {
+            return new NativeReportMonitorStartResult
+            {
+                IsSuccess = false,
+                PlanId = plan.PlanId,
+                Message = $"ARIEC execution revalidation withheld {authoritative.Kind}: expected one fresh availability snapshot for {authoritative.ReportControlReference}, found {selectedSnapshots.Length}. No RCB/DataSet write was attempted; MMS polling remains active.",
+                Warnings = freshAvailability.Warnings
+            };
+        }
+
+        var selectedAvailability = new ArMms.MmsRcbAvailabilityResult
+        {
+            CheckedAtUtc = freshAvailability.CheckedAtUtc,
+            ReportControls = selectedSnapshots,
+            Warnings = freshAvailability.Warnings
+        };
+        var revalidatedPlan = ArMms.MmsHybridReportAcquisitionPlanner.Build(
+            authoritative.Catalog,
+            authoritative.Signals,
+            discovery.ReportInventory,
+            selectedAvailability,
+            discovery.IedDirectory,
+            authoritative.Options);
+        var revalidatedSegment = revalidatedPlan.Segments.FirstOrDefault(segment =>
+            segment.IsReportBacked &&
+            segment.ReportPlan is not null &&
+            segment.Kind == authoritative.Kind &&
+            SameLiteralReference(segment.ReportControlReference, authoritative.ReportControlReference));
+        if (revalidatedSegment?.ReportPlan is null)
+        {
+            return new NativeReportMonitorStartResult
+            {
+                IsSuccess = false,
+                PlanId = plan.PlanId,
+                Message = $"ARIEC execution revalidation withheld {authoritative.Kind} on {authoritative.ReportControlReference}: fresh engine evidence no longer reproduces the planned report segment. No RCB/DataSet write was attempted; MMS polling remains active.",
+                Warnings = freshAvailability.Warnings
+                    .Concat(revalidatedPlan.Warnings)
+                    .Concat(revalidatedPlan.Blockers)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+            };
+        }
+
+        var subscription = revalidatedSegment.ReportPlan;
         if (!subscription.IsReady)
         {
             return new NativeReportMonitorStartResult
@@ -417,6 +495,9 @@ public sealed partial class NativeIec61850Client
             .Select(LiteralReference)
             .Distinct(StringComparer.OrdinalIgnoreCase);
     }
+
+    private static bool SameLiteralReference(string? left, string? right)
+        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
 
     private static string LiteralReference(string? reference)
         => (reference ?? string.Empty).Trim();
