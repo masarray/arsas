@@ -1,0 +1,37 @@
+name: Agent guarded hybrid authority cleanup
+
+on:
+  push:
+    branches:
+      - agent/consume-hybrid-report-planner-p23
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-runtime:
+    if: ${{ !contains(github.event.head_commit.message, '[hybrid-authority-clean]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Apply exact guarded cleanup
+        run: python .agent/apply_hybrid_authority_cleanup.py
+
+      - name: Commit guarded cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Services/Iec61850MonitorRuntime.cs
+          if git diff --cached --quiet; then
+            echo "Authority cleanup produced no diff; refusing an empty commit."
+            exit 1
+          fi
+          git commit -m "Make ARIEC hybrid authority exclusive in monitor planning [hybrid-authority-clean]"
+          git push origin HEAD:${{ github.ref_name }}
