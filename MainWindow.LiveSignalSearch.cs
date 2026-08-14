@@ -43,7 +43,7 @@ public partial class MainWindow
         if (sender is not MainWindow window || !ReferenceEquals(e.OriginalSource, window))
             return;
 
-        window.Dispatcher.BeginInvoke(window.InstallLiveSignalSearch);
+        window.Dispatcher.BeginInvoke(new Action(window.InstallLiveSignalSearch));
     }
 
     private void InstallLiveSignalSearch()
@@ -230,16 +230,17 @@ public partial class MainWindow
         var headers = grid.Columns
             .Select(column => column.Header?.ToString() ?? string.Empty)
             .ToArray();
+
+        // This six-column signature is unique to the selected-IED live-value workspace.
+        // The global monitor has an additional IED column and the command grid has a
+        // different schema, so no visual-tree TabItem assumptions are required.
         return headers.Length == 6 &&
                headers[0].Equals("Signal", StringComparison.OrdinalIgnoreCase) &&
                headers[1].Equals("IEC Telegram", StringComparison.OrdinalIgnoreCase) &&
                headers[2].Equals("Value", StringComparison.OrdinalIgnoreCase) &&
                headers[3].Equals("Quality", StringComparison.OrdinalIgnoreCase) &&
                headers[4].Equals("IED Timestamp", StringComparison.OrdinalIgnoreCase) &&
-               headers[5].Equals("Acquisition", StringComparison.OrdinalIgnoreCase) &&
-               FindAncestor<TabItem>(grid)?.Header?.ToString()?.Equals(
-                   "IEC 61850 Explorer",
-                   StringComparison.OrdinalIgnoreCase) == true;
+               headers[5].Equals("Acquisition", StringComparison.OrdinalIgnoreCase);
     }
 
     private void LiveSignalSearch_ItemsSourceChanged(object? sender, EventArgs e)
@@ -277,7 +278,7 @@ public partial class MainWindow
     }
 
     private void LiveSignalSearch_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => Dispatcher.BeginInvoke(UpdateLiveSignalSearchCount);
+        => Dispatcher.BeginInvoke(new Action(UpdateLiveSignalSearchCount));
 
     private void ApplyLiveSignalSearch()
     {
@@ -388,18 +389,5 @@ public partial class MainWindow
             foreach (var descendant in FindVisualChildren<T>(child))
                 yield return descendant;
         }
-    }
-
-    private static T? FindAncestor<T>(DependencyObject child)
-        where T : DependencyObject
-    {
-        var current = VisualTreeHelper.GetParent(child);
-        while (current != null)
-        {
-            if (current is T typed)
-                return typed;
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
     }
 }
