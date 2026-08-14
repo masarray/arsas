@@ -17,7 +17,7 @@ namespace ArIED61850Tester.Services;
 /// <summary>
 /// Native IEC 61850 MMS client backed by the ARIEC61850 engine.
 /// </summary>
-public sealed class NativeIec61850Client : IIec61850Client, IIec61850ControlClient
+public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850ControlClient
 {
     private readonly ArMms.MmsClientSession _session = new();
     private readonly SemaphoreSlim _mmsIoGate = new(1, 1);
