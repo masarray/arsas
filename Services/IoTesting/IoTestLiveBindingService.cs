@@ -73,6 +73,9 @@ public sealed class IoTestLiveBindingService
                 device.IsConnected,
                 device.IsMonitoring);
 
+            // Binding is intentionally cache-only. Reconciliation production is async and
+            // happens in the FAT/session lifecycle; this path must never perform MMS reads
+            // or block the UI while an IED is slow.
             var reconciliation = BuildEngineReconciliation(device);
             foreach (var point in iedPlan.TestPoints)
             {
@@ -112,30 +115,8 @@ public sealed class IoTestLiveBindingService
 
     private static EngineReconciliationContext BuildEngineReconciliation(Iec61850MonitorDevice device)
     {
-        if (device.SclWorkspace == null)
-            return new EngineReconciliationContext(null, "No SCL design model is attached to this ARSAS IED workspace.");
-        if (device.LiveDiscoveryModel == null)
-            return new EngineReconciliationContext(null, "No authoritative ARIEC live discovery model is available yet.");
-
-        try
-        {
-            // Reconciliation is engine-owned. No app-side protocol/reference inference is
-            // added here. A null probe deliberately means DesignOnly remains DesignOnly;
-            // ARSAS must never turn a discovery miss into confirmed absence.
-            var document = Iec61850DesignLiveReconciler.ReconcileAsync(
-                    device.SclWorkspace.DesignModel,
-                    device.LiveDiscoveryModel,
-                    probe: null)
-                .GetAwaiter()
-                .GetResult();
-            return new EngineReconciliationContext(document, string.Empty);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return new EngineReconciliationContext(
-                null,
-                $"ARIEC reconciliation could not be produced: {ex.GetType().Name}: {ex.Message}");
-        }
+        var cached = IoTestReconciliationCache.Get(device);
+        return new EngineReconciliationContext(cached.Document, cached.FailureReason);
     }
 
     private static PointBinding BindPoint(
@@ -317,6 +298,10 @@ public sealed class IoTestLiveBindingService
             yield return point.Reference;
         if (!string.IsNullOrWhiteSpace(point.MmsReference))
             yield return point.MmsReference;
+        if (!string.IsNullOrWhiteSpace(point.CanonicalMmsReference))
+            yield return point.CanonicalMmsReference;
+        if (!string.IsNullOrWhiteSpace(point.EffectiveMmsReference))
+            yield return point.EffectiveMmsReference;
         if (!string.IsNullOrWhiteSpace(point.ObservedReference))
             yield return point.ObservedReference;
         if (!string.IsNullOrWhiteSpace(point.ObservedMmsReference))
