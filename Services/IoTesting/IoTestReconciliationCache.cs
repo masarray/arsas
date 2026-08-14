@@ -8,23 +8,41 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// Owns the ARSAS-side lifecycle of engine reconciliation documents.
 ///
 /// Reconciliation production is asynchronous and cancellable; synchronous FAT/UI binding
-/// only reads the latest document for the exact design/live model object pair. This keeps
-/// network-capable reconciliation out of UI binding paths when ARIEC later exposes the
-/// connected P1.3 facade.
-///
-/// The current P1.2 integration deliberately passes probe:null. ARIEC therefore owns all
-/// reconciliation semantics while discovery misses remain DesignOnly instead of being
-/// promoted to protocol absence by ARSAS.
+/// only reads the latest document for the exact design/live model object pair. Network-capable
+/// reconciliation is injected as a high-level producer, so FAT/UI code never owns an MMS
+/// session, an exact-read probe, or protocol failure classification.
 /// </summary>
 public static class IoTestReconciliationCache
 {
     private static readonly ConcurrentDictionary<Iec61850MonitorDevice, CacheEntry> Entries = new();
 
+    /// <summary>
+    /// Offline/model-only producer retained for deterministic tests and non-connected model
+    /// inspection. Production FAT connection flows should supply the session-bound ARIEC
+    /// connected producer overload below.
+    /// </summary>
+    public static Task RefreshAsync(
+        Iec61850MonitorDevice device,
+        CancellationToken cancellationToken = default)
+        => RefreshAsync(
+            device,
+            static (design, live, token) => Iec61850DesignLiveReconciler.ReconcileAsync(
+                design,
+                live,
+                probe: null,
+                cancellationToken: token),
+            cancellationToken);
+
     public static async Task RefreshAsync(
         Iec61850MonitorDevice device,
+        Func<LiveIedModelDiscoveryDocument,
+            LiveIedModelDiscoveryDocument,
+            CancellationToken,
+            Task<Iec61850DesignLiveReconciliationDocument>> producer,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(producer);
 
         var designModel = device.SclWorkspace?.DesignModel;
         var liveModel = device.LiveDiscoveryModel;
@@ -36,13 +54,7 @@ public static class IoTestReconciliationCache
 
         try
         {
-            var document = await Iec61850DesignLiveReconciler.ReconcileAsync(
-                    designModel,
-                    liveModel,
-                    probe: null,
-                    cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
+            var document = await producer(designModel, liveModel, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
             // Do not publish a document for a model generation that changed while the
@@ -80,20 +92,29 @@ public static class IoTestReconciliationCache
     }
 
     /// <summary>
-    /// Refreshes IEDs sequentially by design. P1.2 does not perform network reads here,
-    /// and the sequential contract also prevents a future connected reconciler from turning
-    /// a project-level refresh into an uncontrolled parallel probe storm.
+    /// Refreshes IEDs sequentially by design. The sequential contract prevents a project
+    /// refresh from turning bounded relay verification into an uncontrolled multi-IED probe storm.
     /// </summary>
     public static async Task RefreshAsync(
         IEnumerable<Iec61850MonitorDevice> devices,
+        Func<Iec61850MonitorDevice,
+            LiveIedModelDiscoveryDocument,
+            LiveIedModelDiscoveryDocument,
+            CancellationToken,
+            Task<Iec61850DesignLiveReconciliationDocument>> producer,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(devices);
+        ArgumentNullException.ThrowIfNull(producer);
 
         foreach (var device in devices.Distinct())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await RefreshAsync(device, cancellationToken).ConfigureAwait(false);
+            await RefreshAsync(
+                    device,
+                    (design, live, token) => producer(device, design, live, token),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
