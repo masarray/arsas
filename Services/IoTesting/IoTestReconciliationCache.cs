@@ -8,20 +8,41 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// Owns the ARSAS-side lifecycle of engine reconciliation documents.
 ///
 /// Reconciliation production is asynchronous and cancellable; synchronous FAT/UI binding
-/// only reads the latest document for the exact design/live model object pair. Network-capable
-/// reconciliation is injected as a high-level producer, so FAT/UI code never owns an MMS
-/// session, an exact-read probe, or protocol failure classification.
+/// only reads the latest document for the exact design/live model object pair. Production
+/// refreshes delegate to the native session owner, which in turn calls the ARIEC connected
+/// facade. FAT/UI code never owns an MMS session, an exact-read probe, or protocol failure
+/// classification.
 /// </summary>
 public static class IoTestReconciliationCache
 {
     private static readonly ConcurrentDictionary<Iec61850MonitorDevice, CacheEntry> Entries = new();
 
     /// <summary>
-    /// Offline/model-only producer retained for deterministic tests and non-connected model
-    /// inspection. Production FAT connection flows should supply the session-bound ARIEC
-    /// connected producer overload below.
+    /// Production refresh: use the already-active NativeIec61850Client association and let
+    /// ARIEC61850 own exact reads, alternate strategies, probe budgets, and failure verdicts.
     /// </summary>
     public static Task RefreshAsync(
+        Iec61850MonitorDevice device,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        return RefreshAsync(
+            device,
+            (design, live, token) => NativeIec61850Client.ReconcileConnectedAsync(
+                device.IpAddress,
+                device.Port,
+                design,
+                live,
+                options: null,
+                cancellationToken: token),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Explicit model-only refresh for deterministic tests and offline model inspection.
+    /// It never produces protocol absence because no exact read probe is supplied.
+    /// </summary>
+    public static Task RefreshModelOnlyAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken = default)
         => RefreshAsync(
