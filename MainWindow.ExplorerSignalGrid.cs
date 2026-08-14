@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
+using WpfToolTip = System.Windows.Controls.ToolTip;
 
 namespace ArIED61850Tester;
 
@@ -88,20 +89,20 @@ public partial class MainWindow
 
         // Scope the premium tooltip styling to this live-value DataGrid so unrelated
         // application tooltips retain their established appearance.
-        signalGrid.Resources[typeof(ToolTip)] = BuildExplorerTimestampToolTipStyle();
+        signalGrid.Resources[typeof(WpfToolTip)] = BuildExplorerTimestampToolTipStyle();
     }
 
     private static Style BuildExplorerTimestampToolTipStyle()
     {
-        var style = new Style(typeof(ToolTip));
+        var style = new Style(typeof(WpfToolTip));
         style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
         style.Setters.Add(new Setter(Control.FontSizeProperty, 11.4));
         style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
-        style.Setters.Add(new Setter(ToolTip.PlacementProperty, PlacementMode.Mouse));
-        style.Setters.Add(new Setter(ToolTip.HorizontalOffsetProperty, 10d));
-        style.Setters.Add(new Setter(ToolTip.VerticalOffsetProperty, 12d));
+        style.Setters.Add(new Setter(WpfToolTip.PlacementProperty, PlacementMode.Mouse));
+        style.Setters.Add(new Setter(WpfToolTip.HorizontalOffsetProperty, 10d));
+        style.Setters.Add(new Setter(WpfToolTip.VerticalOffsetProperty, 12d));
 
-        var template = new ControlTemplate(typeof(ToolTip));
+        var template = new ControlTemplate(typeof(WpfToolTip));
         var chrome = new FrameworkElementFactory(typeof(Border));
         chrome.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(35, 49, 59)));
         chrome.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(91, 111, 123)));
