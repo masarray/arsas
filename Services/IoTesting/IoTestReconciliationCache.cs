@@ -18,14 +18,20 @@ public static class IoTestReconciliationCache
     private static readonly ConcurrentDictionary<Iec61850MonitorDevice, CacheEntry> Entries = new();
 
     /// <summary>
-    /// Production refresh: use the already-active NativeIec61850Client association and let
-    /// ARIEC61850 own exact reads, alternate strategies, probe budgets, and failure verdicts.
+    /// Production refresh: when a native session owner exists for this endpoint, use its
+    /// already-active association and let ARIEC61850 own exact reads, alternate strategies,
+    /// probe budgets, and failure verdicts. A workspace that has never created a session may
+    /// still build a model-only document; that path can only remain DesignOnly, never Absent.
     /// </summary>
     public static Task RefreshAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(device);
+
+        if (!NativeIec61850Client.HasReconciliationOwner(device.IpAddress, device.Port))
+            return RefreshModelOnlyAsync(device, cancellationToken);
+
         return RefreshAsync(
             device,
             (design, live, token) => NativeIec61850Client.ReconcileConnectedAsync(
