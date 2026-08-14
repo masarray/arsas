@@ -64,6 +64,10 @@ public sealed class HybridReportPhysicalValidationPlan
     public int PlannedSignalCount { get; init; }
     public bool ActivationSucceeded { get; init; }
     public string ActivationMessage { get; init; } = string.Empty;
+    public string SubscriptionSummary { get; init; } = string.Empty;
+    public int MemberCount { get; init; }
+    public int SetupWriteStepCount { get; init; }
+    public bool UsedDynamicDataSet { get; init; }
     public int ReportFrameCount { get; init; }
     public int ReportUpdateCount { get; init; }
     public int ChangeVerifiedPointCount { get; init; }
