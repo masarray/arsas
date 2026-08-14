@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -189,6 +190,85 @@ public sealed class HybridReportPhysicalValidationTests
         Assert.Equal(0, snapshot.ChangeVerifiedPointCount);
     }
 
+    [Fact]
+    public void ConcurrentMonitorUpdatesAndSnapshots_RemainAtomicAndConsistent()
+    {
+        var plan = EnginePlan("concurrent", "StaticUrcb", "IEDLD0/LLN0.RP.urcb01", "IEDLD0/LLN0.Events", "p-concurrent");
+        var planning = new NativeHybridReportPlanningResult
+        {
+            IsAuthoritative = true,
+            ReportPlans = [plan],
+            StaticUrcbSignalCount = 1,
+            Warnings = ["stable warning"]
+        };
+        var activation = new NativeReportMonitorStartResult
+        {
+            IsSuccess = true,
+            PlanId = plan.PlanId,
+            Message = "Static URCB active"
+        };
+        var slice = new NativeReportMonitorSliceResult
+        {
+            PlanId = plan.PlanId,
+            ReportFrames = [new NativeReportFrameMetadata { ReceivedAt = DateTimeOffset.UtcNow }],
+            Updates = [new NativeReportValueUpdate { Reference = "IEDLD0/GGIO1.Ind1.stVal", Value = "true" }],
+            Warnings = ["slice warning"]
+        };
+        var tracker = new HybridReportPhysicalValidationTracker();
+        tracker.Reset(planning);
+        var errors = new ConcurrentQueue<Exception>();
+
+        Parallel.For(0, 1000, iteration =>
+        {
+            try
+            {
+                if (iteration % 17 == 0)
+                    tracker.Reset(planning);
+                tracker.RecordActivation(plan, activation);
+                tracker.RecordSlice(plan, slice, [$"point-{iteration % 5}"]);
+
+                var snapshot = tracker.Capture(Device());
+                Assert.Equal(snapshot.ReportFrameCount, snapshot.Plans.Sum(item => item.ReportFrameCount));
+                Assert.Equal(snapshot.ReportUpdateCount, snapshot.Plans.Sum(item => item.ReportUpdateCount));
+                Assert.Equal(snapshot.ChangeVerifiedPointCount, snapshot.Plans.Sum(item => item.ChangeVerifiedPointCount));
+                Assert.Equal(snapshot.Warnings.Count, snapshot.Warnings.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            }
+            catch (Exception ex)
+            {
+                errors.Enqueue(ex);
+            }
+        });
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Reconnect_ReusesTheSameHybridPlanningPipelineAsInitialSetup()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var reconnectStart = source.IndexOf("private async Task TryReconnectAsync", StringComparison.Ordinal);
+        var reconnectEnd = source.IndexOf("private async Task ForceReconnectAsync", reconnectStart, StringComparison.Ordinal);
+        Assert.True(reconnectStart >= 0 && reconnectEnd > reconnectStart);
+
+        var reconnect = source[reconnectStart..reconnectEnd];
+        Assert.Contains("BuildReportPlansForCurrentAssociationAsync(", reconnect, StringComparison.Ordinal);
+        Assert.Contains("ResetAssociationReportEvidence(session);", reconnect, StringComparison.Ordinal);
+        Assert.Contains("await StartReportPlansAsync(session, plans", reconnect, StringComparison.Ordinal);
+        Assert.True(
+            source.Split("BuildReportPlansForCurrentAssociationAsync(", StringSplitOptions.None).Length - 1 >= 3,
+            "Initial setup and reconnect must both call the shared hybrid planning pipeline.");
+
+        var resetStart = source.IndexOf("private static void ResetAssociationReportEvidence", StringComparison.Ordinal);
+        var resetEnd = source.IndexOf("private async Task ForceReconnectAsync", resetStart, StringComparison.Ordinal);
+        Assert.True(resetStart >= 0 && resetEnd > resetStart);
+        var reset = source[resetStart..resetEnd];
+        Assert.Contains("state.ReportTrafficSeen = false;", reset, StringComparison.Ordinal);
+        Assert.Contains("state.ReportChangeVerified = false;", reset, StringComparison.Ordinal);
+        Assert.Contains("state.AwaitingCommandReportEdge = false;", reset, StringComparison.Ordinal);
+        Assert.Contains("state.AcquisitionLabel = \"MMS polling\";", reset, StringComparison.Ordinal);
+    }
+
     private static ReportControlPlan EnginePlan(
         string planId,
         string kind,
@@ -222,4 +302,17 @@ public sealed class HybridReportPhysicalValidationTests
             IpAddress = "192.0.2.10",
             Port = 102
         };
+
+    private static string FindRepoFile(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+        throw new FileNotFoundException(relativePath);
+    }
 }

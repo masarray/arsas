@@ -4,6 +4,14 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.31 — 2026-08-15
+
+### Fixed
+
+- Smart reconnect now rebuilds report acquisition through the same ARIEC-authoritative hybrid planner used by initial monitoring, preserving fresh static/dynamic BRCB/URCB assignments instead of silently reverting to legacy planning.
+- Reconnect clears report-traffic, change-verification, command-correlation, and acquisition-label state from the previous MMS association before new plans start, preventing false physical evidence after GI/integrity updates.
+- Hybrid physical-validation snapshots and monitor updates are synchronized, preventing collection-modified exceptions and torn evidence while live report frames are being processed.
+
 ## 1.6.30 — 2026-08-15
 
 ### Added
