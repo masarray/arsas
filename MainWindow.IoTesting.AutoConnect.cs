@@ -237,6 +237,12 @@ public partial class MainWindow
             device.RefreshComputed();
             RaiseWorkspaceCounts();
 
+            // Reconciliation belongs to the connection/discovery lifecycle, not to the
+            // synchronous UI binding loop. P1.2 remains probe:null inside the cache;
+            // P1.3 can later replace that producer with the engine-owned connected facade.
+            ReportProgress("Reconciling SCL design with authoritative live model");
+            await IoTestReconciliationCache.RefreshAsync(device, _applicationCancellation.Token);
+
             _ioTestLiveBindingService.BindIed(ied, Devices);
             var allRequestedPointsLive = requestedPoints.All(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
