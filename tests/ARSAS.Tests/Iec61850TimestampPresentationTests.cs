@@ -35,6 +35,23 @@ public sealed class Iec61850TimestampPresentationTests
     }
 
     [Fact]
+    public void LiveWorkspaceString_RoundsToThreeFractionalDigits_WithoutChangingSource()
+    {
+        const string fullPrecision = "2026-08-14 13:48:12.9165859";
+
+        var display = Iec61850TimestampPresentation.FormatMilliseconds(fullPrecision);
+
+        Assert.Equal("2026-08-14 13:48:12.917", display);
+        Assert.Equal("2026-08-14 13:48:12.9165859", fullPrecision);
+    }
+
+    [Theory]
+    [InlineData("-", "-")]
+    [InlineData("relay timestamp unavailable", "relay timestamp unavailable")]
+    public void LiveWorkspaceString_NonTimestampValues_AreNotInvented(string source, string expected)
+        => Assert.Equal(expected, Iec61850TimestampPresentation.FormatMilliseconds(source));
+
+    [Fact]
     public void Rounding_CarriesAcrossSecondAndMinuteBoundary()
     {
         var timestamp = new DateTimeOffset(2026, 8, 13, 12, 0, 59, TimeSpan.FromHours(7))

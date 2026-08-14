@@ -1,3 +1,4 @@
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -72,9 +73,13 @@ public sealed class IoTestLiveBindingService
                 device.IsConnected,
                 device.IsMonitoring);
 
+            // Binding is intentionally cache-only. Reconciliation production is async and
+            // happens in the FAT/session lifecycle; this path must never perform MMS reads
+            // or block the UI while an IED is slow.
+            var reconciliation = BuildEngineReconciliation(device);
             foreach (var point in iedPlan.TestPoints)
             {
-                var binding = BindPoint(point, device);
+                var binding = BindPoint(point, device, reconciliation);
                 point.ApplyLiveBinding(binding.State, binding.Reason, device.DeviceId, binding.Reference);
                 if (point.IsLiveBound)
                     signalBoundCount++;
@@ -93,6 +98,7 @@ public sealed class IoTestLiveBindingService
                 }
                 else if (binding.State == IoTestLiveBindingState.SignalNotFound)
                 {
+                    // SignalNotFound is reserved for ARIEC61850's confirmed Absent verdict.
                     missingSignalCount++;
                 }
             }
@@ -107,15 +113,45 @@ public sealed class IoTestLiveBindingService
             missingSignalCount);
     }
 
-    private static PointBinding BindPoint(IoTestPointPlan point, Iec61850MonitorDevice device)
+    private static EngineReconciliationContext BuildEngineReconciliation(Iec61850MonitorDevice device)
+    {
+        var cached = IoTestReconciliationCache.Get(device);
+        return new EngineReconciliationContext(cached.Document, cached.FailureReason);
+    }
+
+    private static PointBinding BindPoint(
+        IoTestPointPlan point,
+        Iec61850MonitorDevice device,
+        EngineReconciliationContext reconciliation)
     {
         var importedReferences = ImportedReferences(point);
         if (!point.ImportReady || importedReferences.Count == 0)
         {
             return new PointBinding(
-                IoTestLiveBindingState.SignalNotFound,
-                "The imported row is not ready for automatic live binding.",
+                IoTestLiveBindingState.NotEvaluated,
+                "The imported row is not ready for automatic live binding; no absence conclusion was made.",
                 string.Empty,
+                null);
+        }
+
+        var enginePoint = FindEngineReconciliationPoint(
+            point,
+            device,
+            importedReferences,
+            reconciliation.Document,
+            out var engineAmbiguous);
+        var enginePresentation = enginePoint == null
+            ? null
+            : IoTestReconciliationPresentation.FromEnginePoint(enginePoint);
+
+        // Only ARIEC61850 may prove true absence. Never let cached/discovered application
+        // rows override a confirmed engine Absent verdict.
+        if (enginePresentation?.IsConfirmedAbsent == true)
+        {
+            return new PointBinding(
+                IoTestLiveBindingState.SignalNotFound,
+                enginePresentation.Reason,
+                enginePresentation.Reference,
                 null);
         }
 
@@ -131,7 +167,9 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Exact imported or prepared IEC 61850 reference is already active in the live monitor.",
+                WithEngineEvidence(
+                    "Exact imported or prepared IEC 61850 reference is already active in the live monitor.",
+                    enginePresentation),
                 exactLivePoints[0].IecReference,
                 exactLivePoints[0]);
         }
@@ -144,7 +182,9 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundExact,
-                "Exact imported or prepared IEC 61850 reference is present in the discovered IED model.",
+                WithEngineEvidence(
+                    "Exact imported or prepared IEC 61850 reference is present in the ARSAS signal workspace.",
+                    enginePresentation),
                 exactSignals[0].ObjectReference,
                 null);
         }
@@ -159,7 +199,9 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.LivePointReady,
-                "Live point matched uniquely using canonical IEC 61850 spelling, including IED/Application, MMS FC tokens and verified functional-group/LN boundary rules.",
+                WithEngineEvidence(
+                    "One existing ARSAS live row matched the imported FAT row; protocol absence status remains owned by ARIEC reconciliation.",
+                    enginePresentation),
                 livePointCandidates[0].IecReference,
                 livePointCandidates[0]);
         }
@@ -174,19 +216,104 @@ public sealed class IoTestLiveBindingService
         {
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
-                "Discovered signal matched uniquely using canonical IEC 61850 spelling, including IED/Application, MMS FC tokens and verified functional-group/LN boundary rules.",
+                WithEngineEvidence(
+                    "One existing ARSAS signal row matched the imported FAT row; protocol absence status remains owned by ARIEC reconciliation.",
+                    enginePresentation),
                 signalCandidates[0].ObjectReference,
                 null);
         }
 
-        var reason = exactLivePoints.Count > 1 || exactSignals.Count > 1 ||
-                     signalCandidates.Count > 1 || livePointCandidates.Count > 1
-            ? "More than one equally strong IEC 61850 candidate matched the imported telegram; automatic binding was withheld."
+        if (enginePresentation != null)
+        {
+            return new PointBinding(
+                enginePresentation.State,
+                enginePresentation.Reason,
+                enginePresentation.Reference,
+                null);
+        }
+
+        var localReason = exactLivePoints.Count > 1 || exactSignals.Count > 1 ||
+                          signalCandidates.Count > 1 || livePointCandidates.Count > 1
+            ? "More than one equally strong ARSAS row matched the imported FAT point; automatic live-row binding was withheld."
             : device.Signals.Count == 0
-                ? "The IED is loaded but its signal model has not been discovered yet."
-                : "None of the imported IEC 61850/event-log references was found in the loaded IED model after conservative canonical matching.";
-        return new PointBinding(IoTestLiveBindingState.SignalNotFound, reason, string.Empty, null);
+                ? "The IED is loaded but its ARSAS signal workspace has not been populated yet."
+                : "No unique ARSAS live/signal row matched this imported FAT point.";
+
+        var engineReason = engineAmbiguous
+            ? "More than one ARIEC reconciliation point matched the imported row; no absence conclusion was made."
+            : string.IsNullOrWhiteSpace(reconciliation.FailureReason)
+                ? "No unique ARIEC reconciliation point was associated with this imported row; no absence conclusion was made."
+                : reconciliation.FailureReason + " No absence conclusion was made.";
+
+        // A local lookup miss is explicitly NotEvaluated. It is never SignalNotFound.
+        return new PointBinding(
+            IoTestLiveBindingState.NotEvaluated,
+            $"{localReason} {engineReason}",
+            string.Empty,
+            null);
     }
+
+    private static Iec61850DesignLivePointReconciliation? FindEngineReconciliationPoint(
+        IoTestPointPlan point,
+        Iec61850MonitorDevice device,
+        IReadOnlyCollection<string> importedReferences,
+        Iec61850DesignLiveReconciliationDocument? document,
+        out bool ambiguous)
+    {
+        ambiguous = false;
+        if (document == null || document.Points.Count == 0)
+            return null;
+
+        var scored = document.Points
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Score = EngineReferences(candidate)
+                    .Select(engineReference => importedReferences.Max(importedReference =>
+                        IoTestReferenceMatcher.Score(
+                            importedReference,
+                            engineReference,
+                            point.IedName,
+                            device.Name,
+                            device.SclIedName,
+                            point.LogicalNode)))
+                    .DefaultIfEmpty(0)
+                    .Max()
+            })
+            .Where(item => item.Score > 0)
+            .ToList();
+
+        if (scored.Count == 0)
+            return null;
+
+        var bestScore = scored.Max(item => item.Score);
+        var best = scored.Where(item => item.Score == bestScore).Select(item => item.Candidate).ToList();
+        ambiguous = best.Count > 1;
+        return best.Count == 1 ? best[0] : null;
+    }
+
+    private static IEnumerable<string> EngineReferences(Iec61850DesignLivePointReconciliation point)
+    {
+        if (!string.IsNullOrWhiteSpace(point.Reference))
+            yield return point.Reference;
+        if (!string.IsNullOrWhiteSpace(point.MmsReference))
+            yield return point.MmsReference;
+        if (!string.IsNullOrWhiteSpace(point.CanonicalMmsReference))
+            yield return point.CanonicalMmsReference;
+        if (!string.IsNullOrWhiteSpace(point.EffectiveMmsReference))
+            yield return point.EffectiveMmsReference;
+        if (!string.IsNullOrWhiteSpace(point.ObservedReference))
+            yield return point.ObservedReference;
+        if (!string.IsNullOrWhiteSpace(point.ObservedMmsReference))
+            yield return point.ObservedMmsReference;
+    }
+
+    private static string WithEngineEvidence(
+        string localReason,
+        IoTestReconciliationPresentationResult? enginePresentation)
+        => enginePresentation == null
+            ? localReason
+            : $"{localReason} {enginePresentation.Reason}";
 
     private static bool IsSignalEligible(SignalDefinition signal, IoTestPointPlan point)
     {
@@ -245,10 +372,9 @@ public sealed class IoTestLiveBindingService
         Add(point.ReportDisplayReference);
 
         // During FAT preparation the signal-selection pass may prove one unique live
-        // model reference from otherwise incomplete source metadata (for example a
-        // legacy 7SX80 ANSI-27 row). Keep that exact prepared reference authoritative
-        // for subsequent model/live-point binding. It is transient runtime state and is
-        // cleared automatically whenever ApplyLiveBinding reports a non-bound result.
+        // model reference from otherwise incomplete source metadata. Keep that exact
+        // prepared row available for subsequent UI/live-point lookup only; it is not
+        // evidence that an IEC 61850 design point is present or absent.
         if (point.IsLiveBound)
             Add(point.LiveSignalReference);
 
@@ -322,6 +448,10 @@ public sealed class IoTestLiveBindingService
         string? iedName,
         string? logicalNode)
         => IoTestReferenceMatcher.ImportedForms(reference, iedName, logicalNode);
+
+    private sealed record EngineReconciliationContext(
+        Iec61850DesignLiveReconciliationDocument? Document,
+        string FailureReason);
 
     private sealed record PointBinding(
         IoTestLiveBindingState State,

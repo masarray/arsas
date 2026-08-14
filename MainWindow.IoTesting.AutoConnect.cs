@@ -136,6 +136,12 @@ public partial class MainWindow
                 ReportProgress($"{ied.IedName} association ready · reusing the loaded model");
             }
 
+            // Reconciliation belongs to the connection/discovery lifecycle, before local
+            // FAT row selection. P1.2 remains probe:null inside the cache; P1.3 can later
+            // replace only that producer with the engine-owned connected facade.
+            ReportProgress("Reconciling SCL design with authoritative live model");
+            await IoTestReconciliationCache.RefreshAsync(device, _applicationCancellation.Token);
+
             // Never let a runtime anchor from an earlier model silently decide a fresh
             // FAT preparation. Re-prove every requested row against the current model;
             // successful smart matches are anchored again immediately below.
@@ -175,6 +181,9 @@ public partial class MainWindow
                 }
 
                 usedSavedModel = false;
+                ReportProgress("Reconciling refreshed live model with SCL design");
+                await IoTestReconciliationCache.RefreshAsync(device, _applicationCancellation.Token);
+
                 foreach (var point in requestedPoints)
                 {
                     point.ApplyLiveBinding(
