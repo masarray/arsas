@@ -304,6 +304,58 @@ public sealed class IoTestLiveBindingServiceTests
     }
 
     [Fact]
+    public void EngineRecoveredByAlternateDiscovery_IsVerifiedWithoutProbe()
+    {
+        const string canonical = "IEDLD/MMXU1$MX$TotW$mag$f";
+        const string effective = "IEDLD/MMXU1$MX$TotW$instMag$f";
+        var point = new Iec61850DesignLivePointReconciliation
+        {
+            Reference = "IEDLD/MMXU1.TotW.mag.f",
+            MmsReference = canonical,
+            CanonicalMmsReference = canonical,
+            EffectiveMmsReference = effective,
+            ObservedMmsReference = effective,
+            FunctionalConstraint = "MX",
+            AlternateStrategy = Iec61850AlternateReferenceStrategyKind.MagnitudeInstantaneousSibling,
+            Status = Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery,
+            Evidence = new[] { "Recovered from native live discovery before probing." }
+        };
+
+        var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+
+        Assert.Equal(IoTestLiveBindingState.BoundNormalized, presentation.State);
+        Assert.False(presentation.IsConfirmedAbsent);
+        Assert.Equal(effective, presentation.Reference);
+        Assert.Contains("RecoveredByAlternateDiscovery", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains($"Canonical: {canonical}", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains($"Effective: {effective}", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains("MagnitudeInstantaneousSibling", presentation.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("Probe attempt", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProbeBudgetDeferred_RemainsNotVerifiedAndNeverMissing()
+    {
+        var point = new Iec61850DesignLivePointReconciliation
+        {
+            Reference = "IEDLD/GGIO1.Test.stVal",
+            MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            CanonicalMmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            FunctionalConstraint = "ST",
+            Status = Iec61850DesignLiveStatus.DesignOnly,
+            ProbeDeferredByBudget = true,
+            Evidence = new[] { "Exact verification was deferred because the bounded probe budget was exhausted." }
+        };
+
+        var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+
+        Assert.Equal(IoTestLiveBindingState.NotEvaluated, presentation.State);
+        Assert.False(presentation.IsConfirmedAbsent);
+        Assert.Contains("probe budget", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no absence conclusion", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void CacheCold_BindingDoesNotProduceReconciliationSynchronously()
     {
         var project = Project("AA1C1F03R4ADD/GGIO6.Unknown.stVal");
