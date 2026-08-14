@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "f362cfcdce36ffc7ade933c16cf06da6fe3b4921",
-  "sourcePullRequest": 62,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. P1.2 baseline adds conservative alternate MMS probing with canonical/effective reference evidence and probe-attempt history while keeping protocol semantics engine-owned."
+  "commit": "0f1db91a7c96dc99bfb08f0246817fd61030b2ad",
+  "sourcePullRequest": 63,
+  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. P1.3 baseline adds the engine-owned connected reconciliation facade, alternate-discovery recovery, centralized probe classification, and bounded probe-budget evidence while keeping IEC 61850 verification semantics out of ARSAS."
 }
