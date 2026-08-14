@@ -34,6 +34,46 @@ public sealed class NativeIec61850ConnectedReconciliationTests
     }
 
     [Fact]
+    public async Task EndpointResolver_UsesExistingNativeOwner_WithoutCreatingAnotherSession()
+    {
+        const string ipAddress = "203.0.113.77";
+        const int port = 65102;
+        await using var client = new NativeIec61850Client();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        // NativeIec61850Client records the endpoint before entering the cancellable
+        // association operation. An already-cancelled token therefore registers the
+        // session owner deterministically without performing TCP/MMS network I/O.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.ConnectAsync(ipAddress, port, cancelled.Token));
+
+        var design = BuildModel(new TestAttribute(
+            "IEDLD0/GGIO1.Ind1.stVal",
+            "IEDLD0/GGIO1$ST$Ind1$stVal",
+            "ST",
+            "BOOLEAN",
+            string.Empty));
+
+        var result = await NativeIec61850Client.ReconcileConnectedAsync(
+            ipAddress,
+            port,
+            design,
+            EmptyLive(),
+            new Iec61850DesignLiveReconciliationOptions
+            {
+                ProbeAllMissingDesignAttributes = true,
+                ProbeKnownAlternateReferences = false,
+                MaxProbeTargetCount = 1
+            });
+
+        var point = Assert.Single(result.Points);
+        Assert.Equal(Iec61850DesignLiveStatus.TransportFailure, point.Status);
+        Assert.Equal(Iec61850ExactProbeStatus.TransportFailure, point.Probe?.Status);
+        Assert.Equal(0, result.AbsentCount);
+    }
+
+    [Fact]
     public async Task AlternateDiscovery_ThroughNativeOwner_RecoversWithoutNetworkProbe()
     {
         const string canonical = "IEDLD0/MMXU1$MX$TotW$mag$f";
