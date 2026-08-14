@@ -112,6 +112,44 @@ public sealed class HybridReportPhysicalValidationTests
     }
 
     [Fact]
+    public void DynamicSetupEvidence_DoesNotClaimReportTrafficBeforeAFrameArrives()
+    {
+        var dynamicPlan = EnginePlan("dynamic-brcb", "DynamicBrcb", "IEDLD0/LLN0.BR.brcb02", "IEDLD0/LLN0.AR_HYB_01", "p-dynamic");
+        var tracker = new HybridReportPhysicalValidationTracker();
+        tracker.Reset(new NativeHybridReportPlanningResult
+        {
+            IsAuthoritative = true,
+            Authority = "ARIEC61850 MmsHybridReportAcquisitionPlanner",
+            Status = "FullReportCoverage",
+            ReportPlans = [dynamicPlan],
+            DynamicBrcbSignalCount = 1
+        });
+
+        tracker.RecordActivation(dynamicPlan, new NativeReportMonitorStartResult
+        {
+            IsSuccess = true,
+            PlanId = dynamicPlan.PlanId,
+            Message = "Dynamic BRCB configured and enabled",
+            SubscriptionSummary = "dynamic dataset AR_HYB_01",
+            MemberCount = 1,
+            WriteStepCount = 5,
+            UsedDynamicDataSet = true
+        });
+
+        var snapshot = tracker.Capture(Device());
+        var plan = Assert.Single(snapshot.Plans);
+
+        Assert.False(snapshot.HasPhysicalReportEvidence);
+        Assert.Equal(1, snapshot.ActivatedReportPlanCount);
+        Assert.Equal(0, snapshot.ReportFrameCount);
+        Assert.Equal("DynamicBrcb", plan.AcquisitionKind);
+        Assert.True(plan.UsedDynamicDataSet);
+        Assert.Equal(1, plan.MemberCount);
+        Assert.Equal(5, plan.SetupWriteStepCount);
+        Assert.Equal("dynamic dataset AR_HYB_01", plan.SubscriptionSummary);
+    }
+
+    [Fact]
     public void LegacyPlanTraffic_IsNotClaimedAsAriecHybridPhysicalEvidence()
     {
         var legacyPlan = new ReportControlPlan
