@@ -1,5 +1,6 @@
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
+using ArMms = AR.Iec61850.Mms;
 
 namespace ARSAS.Tests;
 
@@ -78,6 +79,57 @@ public sealed class LivePowerMeasurementRegressionTests
         Assert.Equal("W", signal.Unit);
         Assert.Equal("IEDLD/MMXU1.TotW.q", signal.QualityReference);
         Assert.Equal("IEDLD/MMXU1.TotW.t", signal.TimestampReference);
+    }
+
+    [Fact]
+    public void LiveModelInstantMagnitude_PreservesDataObjectCompanionsAndFriendlyName()
+    {
+        const string reference = "IEDLD/MMXU1.Hz.instMag.f";
+
+        Assert.True(NativeIec61850Client.TryBuildLiveModelCompanionReference(reference, "q", out var qualityReference));
+        Assert.True(NativeIec61850Client.TryBuildLiveModelCompanionReference(reference, "t", out var timestampReference));
+
+        Assert.Equal("IEDLD/MMXU1.Hz.q", qualityReference);
+        Assert.Equal("IEDLD/MMXU1.Hz.t", timestampReference);
+
+        var name = NativeIec61850Client.MakeLiveModelFriendlyName(reference, "Hz", "Measurement", "FloatingPoint");
+        Assert.Equal("MMXU1 Hz Instantaneous value", name);
+        Assert.DoesNotContain("inStatusue", name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MonitorInstantMagnitude_UsesDataObjectCompanionReferences()
+    {
+        const string reference = "IEDLD/MMXU1.Hz.instMag.f";
+
+        Assert.Equal("IEDLD/MMXU1.Hz.q", Iec61850MonitorRuntime.BuildCompanionReference(reference, "q"));
+        Assert.Equal("IEDLD/MMXU1.Hz.t", Iec61850MonitorRuntime.BuildCompanionReference(reference, "t"));
+    }
+
+    [Fact]
+    public void ReportInventoryClone_PreservesLiveDynamicSlotEvidence()
+    {
+        var source = new ArMms.MmsReportControlCandidate
+        {
+            Domain = "IEDLD",
+            LogicalNode = "LLN0",
+            FunctionalConstraint = "RP",
+            Name = "urcb01",
+            Reference = "IEDLD/LLN0.RP.urcb01",
+            DataSetProbeState = ArMms.MmsRcbDataSetProbeState.ReadSucceeded,
+            DataSetProbeMessage = "DatSet read succeeded and is empty.",
+            EnabledState = "false",
+            ReservationState = "false",
+            Owner = "-"
+        };
+
+        var clone = NativeIec61850Client.CloneReportControlForPlanning(source);
+
+        Assert.Equal(source.DataSetProbeState, clone.DataSetProbeState);
+        Assert.Equal(source.DataSetProbeMessage, clone.DataSetProbeMessage);
+        Assert.Equal(source.EnabledState, clone.EnabledState);
+        Assert.Equal(source.ReservationState, clone.ReservationState);
+        Assert.Equal(source.Owner, clone.Owner);
     }
 
     [Fact]

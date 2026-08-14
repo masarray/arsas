@@ -144,7 +144,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 () => _session.DiscoverAsync(
                     probeReportAttributes: true,
                     maxReportAttributeProbes: 64,
-                    cancellationToken),
+                    cancellationToken,
+                    readDataSetDirectories: true,
+                    maxDataSetDirectoryReads: 512),
                 cancellationToken).ConfigureAwait(false);
 
             _lastDiscovery = discovery;
@@ -657,7 +659,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 () => _session.DiscoverAsync(
                     probeReportAttributes: true,
                     maxReportAttributeProbes: 96,
-                    cancellationToken),
+                    cancellationToken,
+                    readDataSetDirectories: true,
+                    maxDataSetDirectoryReads: 512),
                 cancellationToken).ConfigureAwait(false);
 
             _lastDiscovery = discovery;
@@ -721,7 +725,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var forceDynamicPlan = ShouldForceDynamicReportPlan(plan);
         foreach (var rcb in source.ReportControls)
         {
-            var clone = CloneReportControl(rcb);
+            var clone = CloneReportControlForPlanning(rcb);
             // A temporary dynamic DataSet must be paired with explicit dchg/qchg/dupd
             // trigger options. Previously the dynamic planner inherited whatever TrgOps
             // happened to be stored in the free URCB, so GI/integrity worked while CB
@@ -759,7 +763,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return inventory;
     }
 
-    private static ArMms.MmsReportControlCandidate CloneReportControl(ArMms.MmsReportControlCandidate source)
+    internal static ArMms.MmsReportControlCandidate CloneReportControlForPlanning(ArMms.MmsReportControlCandidate source)
         => new()
         {
             Domain = source.Domain,
@@ -769,12 +773,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             Reference = source.Reference,
             Buffered = source.Buffered,
             DataSetReference = source.DataSetReference,
+            DataSetProbeState = source.DataSetProbeState,
+            DataSetProbeMessage = source.DataSetProbeMessage,
             ReportId = source.ReportId,
             ConfRev = source.ConfRev,
             IntegrityPeriodMs = source.IntegrityPeriodMs,
             EnabledState = source.EnabledState,
             ReservationState = source.ReservationState,
             ReservationTimeSeconds = source.ReservationTimeSeconds,
+            Owner = source.Owner,
             BufferTimeMs = source.BufferTimeMs,
             TriggerOptions = source.TriggerOptions,
             OptionalFields = source.OptionalFields,
@@ -3685,12 +3692,12 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var isCore = SignalDefinition.IsCoreScadaSignal(reference, SignalDefinition.DetectLogicalNodeClass(ln), dataType, category);
 
         var normalizedReference = reference.Trim().Replace('$', '.');
-        TryBuildCompanionReference(normalizedReference, "q", out var qRef);
-        TryBuildCompanionReference(normalizedReference, "t", out var tRef);
+        TryBuildLiveModelCompanionReference(normalizedReference, "q", out var qRef);
+        TryBuildLiveModelCompanionReference(normalizedReference, "t", out var tRef);
 
         return new SignalDefinition
         {
-            Name = MakeArIecFriendlyName(reference, dataObjectName, category, semanticKind),
+            Name = MakeLiveModelFriendlyName(reference, dataObjectName, category, semanticKind),
             ObjectReference = normalizedReference,
             FunctionalConstraint = functionalConstraint.Trim().ToUpperInvariant(),
             DataType = dataType,
@@ -3710,7 +3717,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         };
     }
 
-    private static bool TryBuildCompanionReference(string reference, string companion, out string companionReference)
+    internal static bool TryBuildLiveModelCompanionReference(string reference, string companion, out string companionReference)
     {
         companionReference = string.Empty;
         if (!companion.Equals("q", StringComparison.OrdinalIgnoreCase) && !companion.Equals("t", StringComparison.OrdinalIgnoreCase)) return false;
@@ -3725,6 +3732,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         else if (parent.EndsWith(".general", StringComparison.OrdinalIgnoreCase)) parent = parent[..^8];
         else if (parent.EndsWith(".instCVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^15];
         else if (parent.EndsWith(".cVal.mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^11];
+        else if (parent.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^10];
         else if (parent.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)) parent = parent[..^6];
         else
         {
@@ -3779,15 +3787,17 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return string.Empty;
     }
 
-    private static string MakeArIecFriendlyName(string reference, string dataObjectName, string category, string semanticKind)
+    internal static string MakeLiveModelFriendlyName(string reference, string dataObjectName, string category, string semanticKind)
     {
         var ln = ExtractLogicalNode(reference);
         var path = reference.Contains('.') ? reference[(reference.IndexOf('.') + 1)..] : reference;
         path = path
             .Replace("valWTr.posVal", "Position", StringComparison.OrdinalIgnoreCase)
+            .Replace("instCVal.mag.f", "Instantaneous value", StringComparison.OrdinalIgnoreCase)
             .Replace("cVal.mag.f", "Value", StringComparison.OrdinalIgnoreCase)
+            .Replace("instMag.f", "Instantaneous value", StringComparison.OrdinalIgnoreCase)
             .Replace("mag.f", "Value", StringComparison.OrdinalIgnoreCase)
-            .Replace("stVal", "Status", StringComparison.OrdinalIgnoreCase)
+            .Replace(".stVal", ".Status", StringComparison.OrdinalIgnoreCase)
             .Replace("general", "General", StringComparison.OrdinalIgnoreCase);
 
         return $"{ln} {path}".Replace('.', ' ').Replace("  ", " ").Trim();

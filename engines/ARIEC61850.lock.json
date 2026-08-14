@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "b60d1272345ec7eabde9efb4e0acbfe26ebf2584",
-  "sourcePullRequest": 71,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Baseline includes engine-owned connected reconciliation plus merged COMTRADE/MMS FileOpen interoperability through PR #71, including canonical nested-path handling, bounded directory revalidation/recovery, preservation of the server-returned raw FileDirectory GraphicString identity, and one bounded evidence-driven replay of that exact identity. ARSAS does not invent MMS file-path semantics."
+  "commit": "32351b42b4719e5dccfa068fbbd797c2414a6b4b",
+  "sourcePullRequest": 75,
+  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Baseline includes connected reconciliation, COMTRADE/MMS FileOpen interoperability, UTC-Time wire provenance, typed signal catalog query/coverage APIs, and authoritative hybrid reporting. PR #75 adds bounded live DataSet-directory discovery and permits a verified-free dynamic RCB to own a temporary DataSet whose members reside in other logical devices. ARSAS consumes these typed engine decisions and does not recreate IEC report capability heuristics."
 }
