@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply exact guarded patch
-        run: python .agent/apply_hybrid_runtime_patch.py
+        run: python .agent/apply_hybrid_runtime_patch_v2.py
 
       - name: Commit guarded patch
         shell: bash
