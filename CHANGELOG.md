@@ -4,6 +4,20 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.30 — 2026-08-15
+
+### Added
+
+- ARIEC-authoritative hybrid acquisition planning and execution for static BRCB/URCB, verified-free dynamic RCB slots, and per-signal MMS polling residuals.
+- Physical validation tracking that distinguishes successful RCB setup from received report frames and verified process-value changes.
+
+### Fixed
+
+- Live discovery now requests and retains DataSet directories, so static DataSet members are present in the signal catalog and signal inventory.
+- Hybrid catalog matching now selects the owning primary-value descriptor instead of treating its related quality and timestamp descriptors as ambiguous duplicates.
+- Report-planning inventory clones preserve live `DatSet`, owner, enable, and reservation probe evidence, allowing verified-empty dynamic slots to remain eligible.
+- Instantaneous magnitude references such as `Hz.instMag.f` now resolve quality and timestamp companions at `Hz.q` and `Hz.t`; friendly signal names no longer corrupt `instMag` into `inStatusue`.
+
 ## 1.6.20 — 2026-08-04
 
 ### Added
