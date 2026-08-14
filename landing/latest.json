@@ -30,3 +30,4 @@
     "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users."
   }
 }
+
