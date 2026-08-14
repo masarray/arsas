@@ -1,40 +1,40 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.29",
-  "title": "Authoritative DataSet reconciliation and complete signal-selection inventory",
-  "titleId": "Rekonsiliasi DataSet authoritative dan inventory pemilihan signal yang lengkap",
-  "summary": "ARSAS 1.6.29 strengthens IEC 61850 engineering consistency by consuming ARIEC61850-owned DataSet semantics and connected design/live reconciliation, preserving authoritative protocol verdicts, improving Explorer/FAT usability, and restoring mandatory static DataSet primary signals to the Signal Selection inventory without forcing user selection.",
-  "summaryId": "ARSAS 1.6.29 memperkuat konsistensi engineering IEC 61850 dengan menggunakan semantic DataSet dan rekonsiliasi design/live yang dimiliki ARIEC61850, mempertahankan verdict protocol yang authoritative, meningkatkan usability Explorer/FAT, serta memulihkan signal primary static DataSet yang mandatory ke inventory Signal Selection tanpa memaksa pilihan user.",
+  "version": "1.6.30",
+  "title": "Live DataSet discovery and hybrid RCB acquisition",
+  "titleId": "Discovery DataSet live dan acquisition RCB hybrid",
+  "summary": "ARSAS 1.6.30 repairs the live reporting pipeline from discovery through acquisition: DataSet members are retained, static and dynamic BRCB/URCB coverage is planned by ARIEC61850, and only uncovered signals fall back to MMS polling. Quality and timestamp companions for instantaneous measurements are mapped to their correct IEC references.",
+  "summaryId": "ARSAS 1.6.30 memperbaiki pipeline live reporting dari discovery sampai acquisition: member DataSet dipertahankan, coverage static dan dynamic BRCB/URCB direncanakan oleh ARIEC61850, dan hanya signal yang tidak ter-cover yang fallback ke MMS polling. Companion quality dan timestamp untuk instantaneous measurement dipetakan ke IEC reference yang benar.",
   "highlights": [
-    "ARSAS consumes ARIEC61850-owned DataSet semantic bindings instead of duplicating IEC 61850 reference or member heuristics in the application layer.",
-    "Connected design/live reconciliation now preserves the engine contract that only protocol-confirmed Absent may become Signal missing; local discovery or row misses remain non-authoritative diagnostics.",
-    "Connected reconciliation reuses the existing MMS session owner, while the pinned ARIEC61850 baseline also carries validated COMTRADE/FileOpen interoperability without app-side remote-path guessing.",
-    "Explorer/FAT usability includes Live Signal Values search, concise timestamp presentation with full decoded precision available as evidence, and bulk-selection affordances for relevant engineering tables.",
-    "ARIEC-declared mandatory primary static DataSet signals are restored to Signal Selection inventory when application curation would otherwise hide them; recovered rows remain unchecked and Not probed until normal user selection and acquisition occur."
+    "Live discovery requests bounded DataSet directories and retains their members, preventing report-capable signals from disappearing between MMS discovery and the application catalog.",
+    "ARSAS executes the ARIEC61850 hybrid plan across static BRCB, static URCB, verified-free dynamic RCB slots, and per-signal MMS polling residuals.",
+    "Dynamic RCB planning supports temporary DataSets whose members reside in logical devices different from the RCB owner, as permitted by the live server model.",
+    "Report catalog matching selects the owning primary-value descriptor even when related quality and timestamp descriptors share the same primary reference.",
+    "Instantaneous magnitude values such as Hz.instMag.f resolve their quality and timestamp companions at Hz.q and Hz.t, while preserving clear operator-facing names."
   ],
   "highlightsId": [
-    "ARSAS menggunakan binding semantic DataSet milik ARIEC61850 tanpa menduplikasi heuristic reference atau member IEC 61850 pada application layer.",
-    "Rekonsiliasi design/live yang connected mempertahankan kontrak engine bahwa hanya Absent yang terkonfirmasi protocol yang boleh menjadi Signal missing; miss pada discovery lokal atau row tetap merupakan diagnostic yang non-authoritative.",
-    "Rekonsiliasi connected menggunakan kembali owner sesi MMS yang sudah ada, sementara baseline ARIEC61850 yang dipin juga membawa interoperability COMTRADE/FileOpen yang telah divalidasi tanpa remote-path guessing di sisi aplikasi.",
-    "Usability Explorer/FAT mencakup pencarian Live Signal Values, presentasi timestamp yang ringkas dengan full decoded precision tetap tersedia sebagai evidence, serta bulk-selection pada tabel engineering yang relevan.",
-    "Signal primary static DataSet yang dinyatakan mandatory oleh ARIEC dipulihkan ke inventory Signal Selection ketika application curation sebelumnya dapat menyembunyikannya; row recovery tetap unchecked dan Not probed sampai dipilih user dan dibaca melalui acquisition normal."
+    "Live discovery meminta directory DataSet secara terbatas dan mempertahankan member-nya, sehingga signal report-capable tidak lagi hilang di antara MMS discovery dan catalog aplikasi.",
+    "ARSAS mengeksekusi hybrid plan ARIEC61850 melalui static BRCB, static URCB, slot dynamic RCB yang terverifikasi free, dan residual MMS polling per signal.",
+    "Perencanaan dynamic RCB mendukung DataSet sementara dengan member pada logical device yang berbeda dari owner RCB, sesuai model live server.",
+    "Pemetaan report catalog memilih descriptor primary value pemiliknya walaupun descriptor quality dan timestamp terkait menggunakan primary reference yang sama.",
+    "Instantaneous magnitude seperti Hz.instMag.f menemukan companion quality dan timestamp pada Hz.q dan Hz.t, sambil mempertahankan nama yang jelas bagi operator."
   ],
   "improvements": [
-    "The ARIEC61850 application/engine ownership boundary is tightened: protocol/model semantics, canonicalization, DataSet authority, reconciliation and MMS failure meaning stay in the engine while ARSAS owns workflow, lifecycle and presentation.",
-    "Mandatory DataSet inventory recovery is idempotent, enriches an existing row instead of duplicating it, and compares only literal reference forms already exposed by ARIEC61850.",
+    "Fresh RCB availability is revalidated before any setup write, and static or dynamic control blocks are reused only when the live evidence still permits it.",
+    "Physical validation evidence distinguishes successful RCB setup from actual report frames and verified process-value changes, avoiding false claims of report delivery.",
     "The release source is gated by the standard ARSAS solution build and regression suite plus portable and Windows installer smoke validation before publication.",
     "Stable Windows publication produces installer and portable binaries together with SHA-256 checksums, SPDX SBOM, application/engine provenance and GitHub artifact attestations."
   ],
   "improvementsId": [
-    "Boundary ownership ARIEC61850 application/engine diperketat: semantic protocol/model, canonicalization, authority DataSet, reconciliation dan arti MMS failure tetap berada di engine sementara ARSAS memiliki workflow, lifecycle dan presentation.",
-    "Recovery inventory DataSet mandatory bersifat idempotent, memperkaya row yang sudah ada alih-alih membuat duplicate, dan hanya membandingkan bentuk reference literal yang memang sudah diekspos oleh ARIEC61850.",
+    "Availability RCB terbaru divalidasi ulang sebelum setup write, dan control block static atau dynamic hanya digunakan ketika evidence live masih mengizinkannya.",
+    "Evidence validasi fisik membedakan setup RCB yang berhasil dari report frame aktual dan perubahan process value yang terverifikasi, sehingga tidak ada klaim palsu mengenai report delivery.",
     "Source release digate oleh build solution dan regression suite ARSAS standard serta portable dan Windows installer smoke validation sebelum publikasi.",
     "Publikasi Windows stable menghasilkan binary installer dan portable bersama SHA-256 checksum, SPDX SBOM, provenance aplikasi/engine dan GitHub artifact attestation."
   ],
   "knownLimitations": [
     "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI, including vendor-specific model exposure and field network conditions.",
-    "Inventory presence is intentionally not the same as MMS readability: recovered mandatory DataSet rows remain Not probed until normal acquisition verifies them.",
+    "A successful RCB setup is intentionally not treated as proof that report frames were received; field validation must confirm frames and value changes for the target IED and network.",
     "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in evidence views.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
@@ -42,7 +42,7 @@
   ],
   "knownLimitationsId": [
     "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI, termasuk exposure model vendor-specific dan kondisi network di lapangan.",
-    "Kehadiran pada inventory sengaja tidak disamakan dengan MMS readability: row mandatory DataSet hasil recovery tetap Not probed sampai acquisition normal memverifikasinya.",
+    "Setup RCB yang berhasil sengaja tidak dianggap sebagai bukti bahwa report frame telah diterima; validasi lapangan harus mengonfirmasi frame dan perubahan value pada IED dan network target.",
     "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence view.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
@@ -59,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.29 Engineering and FAT workflow context",
-    "altId": "Representasi konteks workflow Engineering dan FAT ARSAS 1.6.29",
-    "caption": "Representative ARSAS Engineering/FAT workspace for stable release 1.6.29, including live-value search, engine-authoritative reconciliation evidence and complete mandatory DataSet signal inventory.",
-    "captionId": "Representasi workspace Engineering/FAT ARSAS untuk stable release 1.6.29, termasuk pencarian live value, evidence rekonsiliasi authoritative dari engine dan inventory signal mandatory DataSet yang lengkap."
+    "alt": "Representative ARSAS 1.6.30 live values and IEC 61850 acquisition workspace",
+    "altId": "Representasi workspace live values dan acquisition IEC 61850 ARSAS 1.6.30",
+    "caption": "Representative ARSAS live-value workspace for stable release 1.6.30. Acquisition labels identify report delivery only after report frames are received; uncovered signals remain explicit MMS polling residuals.",
+    "captionId": "Representasi workspace live value ARSAS untuk stable release 1.6.30. Label acquisition mengidentifikasi report delivery hanya setelah report frame diterima; signal yang tidak ter-cover tetap ditampilkan sebagai residual MMS polling."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.29"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.30"
 }
