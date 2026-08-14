@@ -17,6 +17,13 @@ public sealed class ReportControlPlan
     public string TriggerOptions { get; set; } = string.Empty;
     public string OptionalFields { get; set; } = string.Empty;
     public string Status { get; set; } = "Planned";
+    /// <summary>
+    /// True when the report selection and exact subscription plan came from the
+    /// ARIEC61850 hybrid acquisition planner. ARSAS must execute that plan as-is rather
+    /// than rebuilding static/dynamic capability decisions locally.
+    /// </summary>
+    public bool IsEngineAuthoritative { get; set; }
+    public string EngineAcquisitionKind { get; set; } = string.Empty;
     public List<Iec61850MonitorPoint> Bindings { get; set; } = new();
 
     public int BindingCount => Bindings.Count;
