@@ -15,6 +15,10 @@ internal sealed class HybridReportPhysicalValidationTracker
         public bool ActivationAttempted { get; set; }
         public bool ActivationSucceeded { get; set; }
         public string ActivationMessage { get; set; } = "Not attempted";
+        public string SubscriptionSummary { get; set; } = string.Empty;
+        public int MemberCount { get; set; }
+        public int SetupWriteStepCount { get; set; }
+        public bool UsedDynamicDataSet { get; set; }
         public int ReportFrameCount { get; set; }
         public int ReportUpdateCount { get; set; }
         public HashSet<string> ChangeVerifiedPointKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -56,6 +60,10 @@ internal sealed class HybridReportPhysicalValidationTracker
         state.ActivationAttempted = true;
         state.ActivationSucceeded = result.IsSuccess;
         state.ActivationMessage = result.Message;
+        state.SubscriptionSummary = result.SubscriptionSummary;
+        state.MemberCount = result.MemberCount;
+        state.SetupWriteStepCount = result.WriteStepCount;
+        state.UsedDynamicDataSet = result.UsedDynamicDataSet;
         foreach (var warning in result.Warnings)
             AddWarning(warning);
     }
@@ -114,6 +122,10 @@ internal sealed class HybridReportPhysicalValidationTracker
                 PlannedSignalCount = state.Plan.Bindings.Count,
                 ActivationSucceeded = state.ActivationSucceeded,
                 ActivationMessage = state.ActivationMessage,
+                SubscriptionSummary = state.SubscriptionSummary,
+                MemberCount = state.MemberCount,
+                SetupWriteStepCount = state.SetupWriteStepCount,
+                UsedDynamicDataSet = state.UsedDynamicDataSet,
                 ReportFrameCount = state.ReportFrameCount,
                 ReportUpdateCount = state.ReportUpdateCount,
                 ChangeVerifiedPointCount = state.ChangeVerifiedPointKeys.Count,
