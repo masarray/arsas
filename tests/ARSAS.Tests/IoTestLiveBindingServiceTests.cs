@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
@@ -176,18 +177,28 @@ public sealed class IoTestLiveBindingServiceTests
     public void EngineAbsent_IsTheOnlyPresentationThatMapsToSignalNotFound()
     {
         var absent = EnginePoint(Iec61850DesignLiveStatus.Absent);
-        var designOnly = EnginePoint(Iec61850DesignLiveStatus.DesignOnly);
-        var unreadable = EnginePoint(Iec61850DesignLiveStatus.Unreadable);
-        var transportFailure = EnginePoint(Iec61850DesignLiveStatus.TransportFailure);
 
         Assert.Equal(
             IoTestLiveBindingState.SignalNotFound,
             IoTestReconciliationPresentation.FromEnginePoint(absent).State);
         Assert.True(IoTestReconciliationPresentation.FromEnginePoint(absent).IsConfirmedAbsent);
 
-        foreach (var point in new[] { designOnly, unreadable, transportFailure })
+        var diagnosticStatuses = new[]
         {
-            var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+            Iec61850DesignLiveStatus.DesignOnly,
+            Iec61850DesignLiveStatus.InvalidTarget,
+            Iec61850DesignLiveStatus.Unreadable,
+            Iec61850DesignLiveStatus.TransportFailure,
+            Iec61850DesignLiveStatus.FunctionalConstraintMismatch,
+            Iec61850DesignLiveStatus.TypeMismatch,
+            Iec61850DesignLiveStatus.Ambiguous,
+            Iec61850DesignLiveStatus.UnresolvedDesign,
+            Iec61850DesignLiveStatus.LiveOnly
+        };
+
+        foreach (var status in diagnosticStatuses)
+        {
+            var presentation = IoTestReconciliationPresentation.FromEnginePoint(EnginePoint(status));
             Assert.Equal(IoTestLiveBindingState.NotEvaluated, presentation.State);
             Assert.False(presentation.IsConfirmedAbsent);
         }
@@ -200,6 +211,8 @@ public sealed class IoTestLiveBindingServiceTests
         {
             Reference = "IEDLD/GGIO1.Test.stVal",
             MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            CanonicalMmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            EffectiveMmsReference = "IEDLD/GGIO1$ST$Test$stVal",
             FunctionalConstraint = "ST",
             Status = Iec61850DesignLiveStatus.RecoveredByProbe,
             Probe = new Iec61850ExactProbeEvidence
@@ -217,8 +230,109 @@ public sealed class IoTestLiveBindingServiceTests
 
         Assert.Equal(IoTestLiveBindingState.BoundExact, presentation.State);
         Assert.False(presentation.IsConfirmedAbsent);
-        Assert.Contains("exact MMS probe", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RecoveredByProbe", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains("Canonical:", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains("Effective:", presentation.Reason, StringComparison.Ordinal);
         Assert.Contains("Readable", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EngineRecoveredByAlternateProbe_PresentsCanonicalEffectiveAndAttempts()
+    {
+        const string canonical = "IEDLD/MMXU1$MX$TotW$mag$f";
+        const string effective = "IEDLD/MMXU1$MX$TotW$instMag$f";
+        var point = new Iec61850DesignLivePointReconciliation
+        {
+            Reference = "IEDLD/MMXU1.TotW.mag.f",
+            MmsReference = canonical,
+            CanonicalMmsReference = canonical,
+            EffectiveMmsReference = effective,
+            FunctionalConstraint = "MX",
+            Status = Iec61850DesignLiveStatus.RecoveredByAlternateProbe,
+            Probe = new Iec61850ExactProbeEvidence
+            {
+                Status = Iec61850ExactProbeStatus.Readable,
+                MmsReference = effective,
+                FunctionalConstraint = "MX",
+                ValueSummary = "123.4",
+                Message = "Alternate exact read succeeded."
+            },
+            ProbeAttempts = new Iec61850ProbeAttemptEvidence[]
+            {
+                new()
+                {
+                    IsCanonical = true,
+                    Explanation = "Canonical MMS target.",
+                    Probe = new Iec61850ExactProbeEvidence
+                    {
+                        Status = Iec61850ExactProbeStatus.Absent,
+                        MmsReference = canonical,
+                        FunctionalConstraint = "MX",
+                        FailureCode = 4,
+                        Message = "object-undefined"
+                    }
+                },
+                new()
+                {
+                    IsCanonical = false,
+                    AlternateStrategy = Iec61850AlternateReferenceStrategyKind.MagnitudeInstantaneousSibling,
+                    Explanation = "IEC 61850 measurement sibling mag.f -> instMag.f.",
+                    Probe = new Iec61850ExactProbeEvidence
+                    {
+                        Status = Iec61850ExactProbeStatus.Readable,
+                        MmsReference = effective,
+                        FunctionalConstraint = "MX",
+                        ValueSummary = "123.4",
+                        Message = "Alternate exact read succeeded."
+                    }
+                }
+            },
+            Evidence = new[] { "Recovered by bounded engine alternate probing." }
+        };
+
+        var presentation = IoTestReconciliationPresentation.FromEnginePoint(point);
+
+        Assert.Equal(IoTestLiveBindingState.BoundNormalized, presentation.State);
+        Assert.False(presentation.IsConfirmedAbsent);
+        Assert.Equal(effective, presentation.Reference);
+        Assert.Contains("RecoveredByAlternateProbe", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains($"Canonical: {canonical}", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains($"Effective: {effective}", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains("MagnitudeInstantaneousSibling", presentation.Reason, StringComparison.Ordinal);
+        Assert.Contains("Probe attempt 2", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("engine failure code: 4", presentation.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CacheCold_BindingDoesNotProduceReconciliationSynchronously()
+    {
+        var project = Project("AA1C1F03R4ADD/GGIO6.Unknown.stVal");
+        var device = DeviceWithModels();
+        IoTestReconciliationCache.Invalidate(device);
+
+        var before = IoTestReconciliationCache.Get(device);
+        _binding.Bind(project, new[] { device });
+        var after = IoTestReconciliationCache.Get(device);
+
+        Assert.False(before.IsCurrent);
+        Assert.False(after.IsCurrent);
+        Assert.Null(after.Document);
+        Assert.Contains("cache is not ready", after.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AsyncRefresh_PublishesReconciliationForExactModelGeneration()
+    {
+        var device = DeviceWithModels();
+        IoTestReconciliationCache.Invalidate(device);
+
+        await IoTestReconciliationCache.RefreshAsync(device);
+        var cached = IoTestReconciliationCache.Get(device);
+
+        Assert.True(cached.IsCurrent);
+        Assert.NotNull(cached.Document);
+        Assert.NotNull(cached.ProducedAtUtc);
+        Assert.Equal(string.Empty, cached.FailureReason);
     }
 
     private static Iec61850DesignLivePointReconciliation EnginePoint(Iec61850DesignLiveStatus status)
@@ -226,6 +340,8 @@ public sealed class IoTestLiveBindingServiceTests
         {
             Reference = "IEDLD/GGIO1.Test.stVal",
             MmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            CanonicalMmsReference = "IEDLD/GGIO1$ST$Test$stVal",
+            EffectiveMmsReference = "IEDLD/GGIO1$ST$Test$stVal",
             FunctionalConstraint = "ST",
             Status = status,
             Evidence = new[] { $"Engine status: {status}" }
@@ -276,4 +392,31 @@ public sealed class IoTestLiveBindingServiceTests
         Port = 102,
         Status = "Ready"
     };
+
+    private static Iec61850MonitorDevice DeviceWithModels()
+    {
+        var designModel = new LiveIedModelDiscoveryDocument
+        {
+            IedName = "AA1C1F03R4"
+        };
+        var liveModel = new LiveIedModelDiscoveryDocument
+        {
+            IedName = "AA1C1F03R4"
+        };
+
+        return new Iec61850MonitorDevice
+        {
+            Name = "AA1C1F03R4",
+            SclIedName = "AA1C1F03R4",
+            IpAddress = "192.168.81.70",
+            Port = 102,
+            Status = "Ready",
+            SclWorkspace = new SclIedWorkspace
+            {
+                IedName = "AA1C1F03R4",
+                DesignModel = designModel
+            },
+            LiveDiscoveryModel = liveModel
+        };
+    }
 }
