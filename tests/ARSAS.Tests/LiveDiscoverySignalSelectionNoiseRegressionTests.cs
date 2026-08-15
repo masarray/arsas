@@ -6,26 +6,26 @@ namespace ARSAS.Tests;
 public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
 {
     [Theory]
-    [InlineData("AA1C1F13R4ADD/GAPC1.Mod.stVal", "GAPC1", "ST", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4ADD/GAPC1.Beh.stVal", "GAPC1", "ST", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4ADD/GAPC1.Health.stVal", "GAPC1", "ST", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4ADD/GAPC1.NamPlt.d", "GAPC1", "DC", "VisString255", "Metadata", false)]
-    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.subVal", "GGIO1", "SV", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.subQ", "GGIO1", "SV", "Quality", "Quality", false)]
-    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.blkEna", "GGIO1", "BL", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.d.stVal", "GGIO1", "ST", "Boolean", "Status", false)]
-    [InlineData("AA1C1F13R4Application/LLN0.q.stVal", "LLN0", "ST", "Boolean", "Status", false)]
-    public void EngineeringAndProtocolLeaves_AreNotOperationalValues(
+    [InlineData("AA1C1F13R4ADD/GAPC1.Mod.stVal", "GAPC1", "ST", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4ADD/GAPC1.Beh.stVal", "GAPC1", "ST", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4ADD/GAPC1.Health.stVal", "GAPC1", "ST", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4ADD/GAPC1.NamPlt.d", "GAPC1", "DC", "VisString255", "Metadata")]
+    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.subVal", "GGIO1", "SV", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.subQ", "GGIO1", "SV", "Quality", "Quality")]
+    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.blkEna", "GGIO1", "BL", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4ADD/GGIO1.LocOpnCMDsta.d.stVal", "GGIO1", "ST", "Boolean", "Status")]
+    [InlineData("AA1C1F13R4Application/LLN0.q.stVal", "LLN0", "ST", "Boolean", "Status")]
+    public void EngineeringAndProtocolLeaves_AreRejectedFromLiveSignalSelection(
         string reference,
         string logicalNode,
         string fc,
         string dataType,
-        string category,
-        bool expected)
+        string category)
     {
         var signal = NewSignal(reference, logicalNode, fc, dataType, category);
 
-        Assert.Equal(expected, SasOperationalSignalPolicy.IsVisible(signal));
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsProtocolOrEngineeringNoise(reference));
+        Assert.False(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
     }
 
     [Theory]
@@ -35,13 +35,14 @@ public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
     [InlineData("AA1C1F13R4ADD/GGIO1.Mod.Oper.ctlNum")]
     [InlineData("AA1C1F13R4ADD/GGIO1.Mod.Oper.Check")]
     [InlineData("AA1C1F13R4ADD/GGIO1.Mod.ctlModel")]
-    public void ControlServiceLeaves_AreNotOperationalControls(string reference)
+    public void ControlServiceLeaves_AreRejectedFromLiveSignalSelection(string reference)
     {
         var signal = NewSignal(reference, "GGIO1", "CO", "Struct", "Control");
         signal.IsControlSignal = true;
         signal.ControlCdc = "SPC";
 
-        Assert.False(SasOperationalSignalPolicy.IsVisible(signal));
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsProtocolOrEngineeringNoise(reference));
+        Assert.False(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
     }
 
     [Theory]
@@ -58,7 +59,8 @@ public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
     {
         var signal = NewSignal(reference, logicalNode, fc, dataType, category);
 
-        Assert.True(SasOperationalSignalPolicy.IsVisible(signal));
+        Assert.False(LiveDiscoverySignalSelectionPolicy.IsProtocolOrEngineeringNoise(reference));
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
     }
 
     [Fact]
@@ -68,7 +70,7 @@ public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
         signal.IsControlSignal = true;
         signal.ControlCdc = "DPC";
 
-        Assert.True(SasOperationalSignalPolicy.IsVisible(signal));
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
     }
 
     [Fact]
@@ -84,8 +86,22 @@ public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
         signal.DisplayReference = signal.ObjectReference;
 
         Assert.False(SasOperationalSignalPolicy.IsVisible(signal));
-        Assert.True(SasOperationalUiPolicy.IsPresentationVisible(signal));
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
         Assert.DoesNotContain(".stVal", signal.DisplayReference, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void StaticDataSetAuthority_WinsEvenIfConfiguredMemberLooksLikeEngineeringState()
+    {
+        var signal = NewSignal(
+            "IEDLD/LLN0.Beh",
+            "LLN0",
+            "ST",
+            "Enum",
+            "DataSet");
+        signal.DataSetReference = "IEDLD/LLN0$Configured";
+
+        Assert.True(LiveDiscoverySignalSelectionPolicy.IsVisible(signal));
     }
 
     [Fact]
@@ -95,7 +111,7 @@ public sealed class LiveDiscoverySignalSelectionNoiseRegressionTests
 
         Assert.Contains("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
         Assert.Contains("_signalSelectionBaseFilter = SignalsView.Filter", source, StringComparison.Ordinal);
-        Assert.Contains("SasOperationalUiPolicy.IsPresentationVisible(signal)", source, StringComparison.Ordinal);
+        Assert.Contains("LiveDiscoverySignalSelectionPolicy.IsVisible(signal)", source, StringComparison.Ordinal);
         Assert.Contains("SignalsView.Filter = _signalSelectionOperationalFilter", source, StringComparison.Ordinal);
         Assert.Contains("SignalsView.Filter = _signalSelectionBaseFilter", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RemoveAt(", source, StringComparison.Ordinal);
