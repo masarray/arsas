@@ -40,9 +40,27 @@ public static class SclWorkspaceSignalMapper
             }
         }
 
-        return signals
+        // First apply the normal presentation policy, then merge ARIEC's mandatory
+        // DataSet inventory. Doing the merge after the visibility filter is deliberate:
+        // an unresolved object-level FCD (common in Siemens CID files) may have no leaf
+        // DataAttribute yet, but membership in a static DataSet is sufficient authority
+        // for the member to exist as a Signal Selection row.
+        var visibleSignals = signals
             .Where(signal => SasOperationalSignalPolicy.IsVisible(signal) ||
                              staticPrimaryReferences.Contains(signal.ObjectReference))
+            .GroupBy(signal => NormalizePresentationReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(
+            visibleSignals,
+            workspace.DesignModel);
+
+        // Keep offline provenance explicit for rows restored from object-level FCDs.
+        foreach (var signal in merge.AddedSignals)
+            signal.Source = $"SCL design model • {signal.Source}";
+
+        return visibleSignals
             .GroupBy(signal => NormalizePresentationReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(signal => signal.SortPriority)
