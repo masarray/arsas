@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,20 +7,20 @@ using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Installs the lightweight ballistic navigation treatment and enforces the operator-facing
-/// SAS point profile on every SignalDefinition collection displayed by a DataGrid. The full
-/// typed discovery/SCL models are not modified.
+/// Installs the lightweight ballistic navigation treatment and applies the operator-facing
+/// SAS point profile as a presentation-only DataGrid filter. The authoritative signal
+/// collection must never be mutated by UI policy because it also carries static DataSet
+/// membership, diagnostics, project persistence, and runtime acquisition identity.
 /// </summary>
 internal static class SasOperationalUiPolicy
 {
-    private static readonly ConditionalWeakTable<object, CollectionSubscription> Subscriptions = new();
+    private static readonly ConditionalWeakTable<object, object> FilteredViews = new();
     private static readonly string[] NavigationButtonNames =
     {
         "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavGooseButton", "NavDiagnosticsButton"
@@ -45,17 +44,32 @@ internal static class SasOperationalUiPolicy
         if (sender is not DataGrid grid || grid.ItemsSource is null)
             return;
 
-        var source = grid.ItemsSource is ICollectionView view ? view.SourceCollection : grid.ItemsSource;
-        if (source is null || !LooksLikeSignalCollection(source))
+        var view = grid.ItemsSource as ICollectionView ?? CollectionViewSource.GetDefaultView(grid.ItemsSource);
+        if (view is null || !LooksLikeSignalCollection(view.SourceCollection) || !view.CanFilter)
+            return;
+        if (FilteredViews.TryGetValue(view, out _))
             return;
 
-        SchedulePrune(source, grid.Dispatcher);
-        if (source is INotifyCollectionChanged changed && !Subscriptions.TryGetValue(source, out _))
-            Subscriptions.Add(source, new CollectionSubscription(source, changed, grid.Dispatcher));
+        // Compose with a grid/window-specific filter instead of replacing it. Signal
+        // Selection already owns search/quick-filter semantics, while this policy only
+        // contributes the default SAS presentation rule.
+        var previousFilter = view.Filter;
+        view.Filter = item =>
+        {
+            if (previousFilter is not null && !previousFilter(item))
+                return false;
+
+            return item is not SignalDefinition signal || IsPresentationVisible(signal);
+        };
+        FilteredViews.Add(view, new object());
+        view.Refresh();
     }
 
-    private static bool LooksLikeSignalCollection(object source)
+    private static bool LooksLikeSignalCollection(object? source)
     {
+        if (source is null)
+            return false;
+
         var type = source.GetType();
         if (type.GetInterfaces().Any(interfaceType =>
                 interfaceType.IsGenericType &&
@@ -66,19 +80,16 @@ internal static class SasOperationalUiPolicy
         return source is IEnumerable enumerable && enumerable.Cast<object?>().FirstOrDefault(item => item is not null) is SignalDefinition;
     }
 
-    private static void SchedulePrune(object source, Dispatcher dispatcher)
-        => dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() => Prune(source)));
-
-    private static void Prune(object source)
+    internal static bool IsPresentationVisible(SignalDefinition signal)
     {
-        if (source is not IList list || list.IsReadOnly || list.IsFixedSize)
-            return;
+        ArgumentNullException.ThrowIfNull(signal);
 
-        for (var index = list.Count - 1; index >= 0; index--)
-        {
-            if (list[index] is SignalDefinition signal && !SasOperationalSignalPolicy.IsVisible(signal))
-                list.RemoveAt(index);
-        }
+        // Static DataSet membership is protocol authority, not an optional operator hint.
+        // Object-level FCD members can intentionally fail the normal exact-leaf policy;
+        // they must still remain visible in Signal Selection and, critically, remain in
+        // the underlying device.Signals inventory.
+        return !string.IsNullOrWhiteSpace(signal.DataSetReference) ||
+               SasOperationalSignalPolicy.IsVisible(signal);
     }
 
     private static void OnWindowLoaded(object sender, RoutedEventArgs args)
@@ -251,31 +262,5 @@ internal static class SasOperationalUiPolicy
         brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#4F46E5"), 1));
         brush.Freeze();
         return brush;
-    }
-
-    private sealed class CollectionSubscription
-    {
-        private readonly object _source;
-        private readonly Dispatcher _dispatcher;
-        private bool _scheduled;
-
-        public CollectionSubscription(object source, INotifyCollectionChanged changed, Dispatcher dispatcher)
-        {
-            _source = source;
-            _dispatcher = dispatcher;
-            changed.CollectionChanged += OnCollectionChanged;
-        }
-
-        private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs args)
-        {
-            if (_scheduled)
-                return;
-            _scheduled = true;
-            _dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() =>
-            {
-                _scheduled = false;
-                Prune(_source);
-            }));
-        }
     }
 }
