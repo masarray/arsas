@@ -1,1 +1,0 @@
-UI presentation filtering must not remove SignalDefinition instances from device.Signals.
