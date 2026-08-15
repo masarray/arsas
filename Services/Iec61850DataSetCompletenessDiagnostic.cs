@@ -3,6 +3,15 @@ using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
 
+public sealed record Iec61850DataSetCompletenessDataSetSnapshot(
+    string Reference,
+    int StaticMemberCount,
+    int RepresentedCount,
+    IReadOnlyList<string> MissingReferences)
+{
+    public int MissingCount => MissingReferences.Count;
+}
+
 public sealed record Iec61850DataSetCompletenessSnapshot(
     int DataSetCount,
     int StaticMemberCount,
@@ -13,9 +22,11 @@ public sealed record Iec61850DataSetCompletenessSnapshot(
 {
     public int MissingCount => MissingReferences.Count;
     public bool IsComplete => StaticMemberCount == RepresentedCount && MissingCount == 0;
+    public IReadOnlyList<Iec61850DataSetCompletenessDataSetSnapshot> DataSets { get; init; }
+        = Array.Empty<Iec61850DataSetCompletenessDataSetSnapshot>();
 
     public string Summary =>
-        $"DataSets={DataSetCount:N0}; static members={StaticMemberCount:N0}; mandatory inventory={MandatoryInventoryCount:N0}; " +
+        $"DataSets={DataSetCount:N0}; static members={StaticMemberCount:N0}; semantic descriptors={MandatoryInventoryCount:N0}; " +
         $"represented={RepresentedCount:N0}/{StaticMemberCount:N0}; primary leaf unresolved={PrimaryLeafUnresolvedCount:N0}; missing={MissingCount:N0}";
 }
 
@@ -45,58 +56,94 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
         var missing = new List<string>();
         var represented = 0;
-        var staticMembers = model.DataSets
-            .OrderBy(dataSet => dataSet.Reference, StringComparer.OrdinalIgnoreCase)
-            .SelectMany(dataSet => dataSet.Members
-                .OrderBy(member => member.Index)
-                .Select(member => new
-                {
-                    DataSetReference = dataSet.Reference,
-                    member.Index,
-                    Reference = Literal(member.Reference)
-                }))
-            .ToArray();
+        var staticMemberCount = 0;
+        var dataSetSnapshots = new List<Iec61850DataSetCompletenessDataSetSnapshot>();
 
-        foreach (var member in staticMembers)
+        foreach (var dataSet in model.DataSets.OrderBy(item => item.Reference, StringComparer.OrdinalIgnoreCase))
         {
-            if (member.Reference.Length > 0 && signalReferences.Contains(member.Reference))
+            var dataSetMissing = new List<string>();
+            var dataSetRepresented = 0;
+            var members = dataSet.Members.OrderBy(member => member.Index).ToArray();
+            staticMemberCount += members.Length;
+
+            foreach (var member in members)
             {
-                represented++;
-                continue;
+                var memberReference = Literal(member.Reference);
+                if (memberReference.Length > 0 && signalReferences.Contains(memberReference))
+                {
+                    represented++;
+                    dataSetRepresented++;
+                    continue;
+                }
+
+                var reference = memberReference.Length == 0 ? "<no static member reference>" : memberReference;
+                var diagnosticReference = $"{dataSet.Reference}[{member.Index}] -> {reference}";
+                missing.Add(diagnosticReference);
+                dataSetMissing.Add(diagnosticReference);
             }
 
-            var reference = member.Reference.Length == 0 ? "<no static member reference>" : member.Reference;
-            missing.Add($"{member.DataSetReference}[{member.Index}] -> {reference}");
+            dataSetSnapshots.Add(new Iec61850DataSetCompletenessDataSetSnapshot(
+                dataSet.Reference,
+                members.Length,
+                dataSetRepresented,
+                dataSetMissing));
         }
 
         return new Iec61850DataSetCompletenessSnapshot(
             model.DataSets.Count,
-            staticMembers.Length,
+            staticMemberCount,
             mandatory.Count,
             represented,
             mandatory.Count(descriptor => descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved),
-            missing);
+            missing)
+        {
+            DataSets = dataSetSnapshots
+        };
     }
 
     public static IEnumerable<string> FormatReportLines(Iec61850DataSetCompletenessSnapshot snapshot, int maxMissing = 12)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        yield return $"Static DataSets   : {snapshot.DataSetCount:N0}";
-        yield return $"Static members    : {snapshot.StaticMemberCount:N0}";
-        yield return $"Mandatory inventory: {snapshot.MandatoryInventoryCount:N0} descriptor(s)";
-        yield return $"Signal Selection  : {snapshot.RepresentedCount:N0}/{snapshot.StaticMemberCount:N0} static member(s) represented";
-        yield return $"Primary unresolved: {snapshot.PrimaryLeafUnresolvedCount:N0}";
-        yield return $"Missing inventory : {snapshot.MissingCount:N0}";
+        yield return $"Static DataSets      : {snapshot.DataSetCount:N0}";
+        yield return $"Static members       : {snapshot.StaticMemberCount:N0}";
+        yield return $"Signal Selection     : {snapshot.RepresentedCount:N0}/{snapshot.StaticMemberCount:N0} static member(s) represented";
+        yield return $"Missing static member: {snapshot.MissingCount:N0}";
+        yield return $"Semantic descriptors : {snapshot.MandatoryInventoryCount:N0}";
+        yield return $"Primary unresolved   : {snapshot.PrimaryLeafUnresolvedCount:N0}";
 
-        if (snapshot.MissingCount == 0)
+        foreach (var dataSet in snapshot.DataSets)
+        {
+            yield return $"  {dataSet.Reference}: {dataSet.RepresentedCount:N0}/{dataSet.StaticMemberCount:N0} represented • {dataSet.MissingCount:N0} missing";
+        }
+
+        if (snapshot.MissingCount == 0 || maxMissing <= 0)
             yield break;
 
-        foreach (var reference in snapshot.MissingReferences.Take(Math.Max(0, maxMissing)))
-            yield return $"  MISSING         : {reference}";
+        // Sample every failing DataSet instead of taking only the first N members from
+        // the first DataSet. This keeps Analog and Digital evidence visible together.
+        var failingDataSets = snapshot.DataSets
+            .Where(dataSet => dataSet.MissingCount > 0)
+            .ToArray();
+        var perDataSetLimit = Math.Max(1, maxMissing / Math.Max(1, failingDataSets.Length));
+        var emitted = 0;
 
-        if (snapshot.MissingCount > maxMissing)
-            yield return $"  ...             : {snapshot.MissingCount - maxMissing:N0} more missing member(s)";
+        foreach (var dataSet in failingDataSets)
+        {
+            foreach (var reference in dataSet.MissingReferences.Take(perDataSetLimit))
+            {
+                if (emitted >= maxMissing)
+                    break;
+                yield return $"  MISSING            : {reference}";
+                emitted++;
+            }
+
+            if (emitted >= maxMissing)
+                break;
+        }
+
+        if (snapshot.MissingCount > emitted)
+            yield return $"  ...                : {snapshot.MissingCount - emitted:N0} more missing member(s)";
     }
 
     private static string Literal(string? reference)
