@@ -14,9 +14,9 @@ public sealed record Iec61850DataSetSignalInventoryMergeResult(
 /// <summary>
 /// Application-side projection of ARIEC-owned DataSet signal authority.
 ///
-/// ARIEC decides which IEC 61850 signals are mandatory primary DataSet members.
-/// ARSAS only guarantees that those already-classified engine signals are present in
-/// the user-visible signal inventory. No IEC reference guessing, fuzzy matching, or
+/// ARIEC decides which IEC 61850 signals are mandatory DataSet inventory members.
+/// ARSAS only guarantees that those engine-owned descriptors are present in the
+/// user-visible signal inventory. No IEC reference guessing, fuzzy matching, or
 /// DataSet semantic inference is performed here.
 /// </summary>
 public static class Iec61850DataSetSignalInventoryService
@@ -29,8 +29,7 @@ public static class Iec61850DataSetSignalInventoryService
         if (device.LiveDiscoveryModel is null)
             return new Iec61850DataSetSignalInventoryMergeResult(Array.Empty<SignalDefinition>(), 0, 0);
 
-        var catalog = Iec61850SignalCatalogBuilder.Build(device.LiveDiscoveryModel);
-        var mandatory = catalog.GetMandatoryPrimarySignals();
+        var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(device.LiveDiscoveryModel);
         if (mandatory.Count == 0)
             return new Iec61850DataSetSignalInventoryMergeResult(Array.Empty<SignalDefinition>(), 0, 0);
 
@@ -83,6 +82,7 @@ public static class Iec61850DataSetSignalInventoryService
         var primaryMembership = FirstMembership(descriptor);
         var report = descriptor.ReportMemberships.FirstOrDefault();
         var dataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown");
+        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
         return new SignalDefinition
         {
             Name = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, reference),
@@ -90,19 +90,25 @@ public static class Iec61850DataSetSignalInventoryService
             FunctionalConstraint = descriptor.FunctionalConstraint,
             DataType = dataType,
             Category = "DataSet",
-            Confidence = "High",
+            Confidence = unresolved ? "Medium" : "High",
             DataSetReference = primaryMembership?.DataSetReference ?? string.Empty,
             ReportControlReference = report?.ReportControlReference ?? string.Empty,
             QualityReference = descriptor.QualityReference,
             TimestampReference = descriptor.TimestampReference,
-            Source = "ARIEC61850 signal catalog • mandatory static DataSet member",
+            Source = unresolved
+                ? "ARIEC61850 signal inventory • mandatory static DataSet member • primary leaf unresolved"
+                : "ARIEC61850 signal inventory • mandatory static DataSet member",
             IsSelected = false,
             IsReportCapable = true,
-            ReportCoverage = report is null
-                ? "Static DataSet member • MMS polling fallback"
-                : "Static report/DataSet • polling fallback",
+            ReportCoverage = unresolved
+                ? report is null
+                    ? "Static DataSet member • primary leaf unresolved"
+                    : "Static report/DataSet • primary leaf unresolved"
+                : report is null
+                    ? "Static DataSet member • MMS polling fallback"
+                    : "Static report/DataSet • polling fallback",
             ReportCoverageReason = BuildCoverageReason(descriptor),
-            ProbeStatus = "Not probed",
+            ProbeStatus = unresolved ? "DataSet member — primary leaf unresolved" : "Not probed",
             Value = "-",
             Quality = "Unknown",
             DeviceTimestamp = "-"
@@ -140,9 +146,14 @@ public static class Iec61850DataSetSignalInventoryService
              signal.ReportCoverage.Equals("Polling fallback", StringComparison.OrdinalIgnoreCase)) &&
             (membership is not null || report is not null))
         {
-            signal.ReportCoverage = report is null
-                ? "Static DataSet member • MMS polling fallback"
-                : "Static report/DataSet • polling fallback";
+            var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+            signal.ReportCoverage = unresolved
+                ? report is null
+                    ? "Static DataSet member • primary leaf unresolved"
+                    : "Static report/DataSet • primary leaf unresolved"
+                : report is null
+                    ? "Static DataSet member • MMS polling fallback"
+                    : "Static report/DataSet • polling fallback";
             changed = true;
         }
 
@@ -204,9 +215,13 @@ public static class Iec61850DataSetSignalInventoryService
         var membershipText = memberships.Length == 0
             ? "static DataSet membership"
             : string.Join(", ", memberships);
+        var resolutionText = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved
+            ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
+            : string.Empty;
 
-        return $"ARIEC61850 mandatory primary DataSet signal: {membershipText}. " +
-               "Inventory presence is engine-authoritative; user selection remains independent.";
+        return $"ARIEC61850 mandatory static DataSet member: {membershipText}." +
+               resolutionText +
+               " Inventory presence is engine-authoritative; user selection remains independent.";
     }
 
     private static string LiteralReference(string? reference)
