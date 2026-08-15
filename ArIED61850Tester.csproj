@@ -28,6 +28,8 @@
     <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>
     <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == '' and '$(ARIEC61850_NPCAP_PROJECT)' != ''">$(ARIEC61850_NPCAP_PROJECT)</ArIec61850NpcapProject>
     <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == ''">..\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj</ArIec61850NpcapProject>
+    <ArIec61850LockPath>$(MSBuildProjectDirectory)\engines\ARIEC61850.lock.json</ArIec61850LockPath>
+    <ArIec61850LockValidator>$(MSBuildProjectDirectory)\scripts\validate-ariec61850-lock.ps1</ArIec61850LockValidator>
   </PropertyGroup>
 
   <ItemGroup>
@@ -68,5 +70,15 @@
            Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
     <Error Condition="!Exists('$(ArIec61850NpcapProject)')"
            Text="ARIEC61850 Npcap transport project was not found at '$(ArIec61850NpcapProject)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850NpcapProject=FULL_PATH_TO_AR.Iec61850.Transports.Npcap.csproj." />
+    <Error Condition="!Exists('$(ArIec61850LockValidator)')"
+           Text="ARIEC61850 lock validator was not found at '$(ArIec61850LockValidator)'." />
+    <Error Condition="!Exists('$(ArIec61850LockPath)')"
+           Text="ARIEC61850 integration lock was not found at '$(ArIec61850LockPath)'." />
+  </Target>
+
+  <Target Name="ValidateArIec61850Revision"
+          BeforeTargets="ResolveProjectReferences"
+          DependsOnTargets="ValidateArIec61850Project">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ArIec61850LockValidator)&quot; -LockPath &quot;$(ArIec61850LockPath)&quot; -EngineProject &quot;$(ArIec61850Project)&quot; -ProjectRoot &quot;$(MSBuildProjectDirectory)&quot;" />
   </Target>
 </Project>
