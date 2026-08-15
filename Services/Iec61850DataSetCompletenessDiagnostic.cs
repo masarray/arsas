@@ -37,8 +37,9 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
         var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model);
         var signalReferences = signals
-            .Select(signal => Literal(signal.ObjectReference))
-            .Where(reference => reference.Length > 0)
+            .SelectMany(signal => new[] { signal.DisplayReference, signal.ObjectReference })
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .Select(Literal)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var missing = new List<string>();
@@ -97,16 +98,28 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
     private static IEnumerable<string> EngineReferenceCandidates(Iec61850SignalDescriptor descriptor)
     {
-        return new[]
+        var membershipReferences = descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .SelectMany(membership => new[]
             {
-                descriptor.PrimaryValueReference,
-                descriptor.DesignReference,
-                descriptor.ObservedReference,
-                descriptor.PrimaryValueMmsReference,
-                descriptor.CanonicalMmsReference,
-                descriptor.EffectiveMmsReference,
-                descriptor.ObservedMmsReference
-            }
+                membership.CanonicalMemberReference,
+                membership.OriginalMemberReference
+            });
+
+        var descriptorReferences = new[]
+        {
+            descriptor.PrimaryValueReference,
+            descriptor.DesignReference,
+            descriptor.ObservedReference,
+            descriptor.PrimaryValueMmsReference,
+            descriptor.CanonicalMmsReference,
+            descriptor.EffectiveMmsReference,
+            descriptor.ObservedMmsReference
+        };
+
+        return membershipReferences
+            .Concat(descriptorReferences)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(Literal)
             .Distinct(StringComparer.OrdinalIgnoreCase);
