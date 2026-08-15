@@ -30,6 +30,8 @@
     <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == ''">..\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj</ArIec61850NpcapProject>
     <ArIec61850LockPath>$(MSBuildProjectDirectory)\engines\ARIEC61850.lock.json</ArIec61850LockPath>
     <ArIec61850LockValidator>$(MSBuildProjectDirectory)\scripts\validate-ariec61850-lock.ps1</ArIec61850LockValidator>
+    <ArIec61850PowerShell Condition="'$(OS)' == 'Windows_NT'">powershell</ArIec61850PowerShell>
+    <ArIec61850PowerShell Condition="'$(OS)' != 'Windows_NT'">pwsh</ArIec61850PowerShell>
   </PropertyGroup>
 
   <ItemGroup>
@@ -79,6 +81,6 @@
   <Target Name="ValidateArIec61850Revision"
           BeforeTargets="ResolveProjectReferences"
           DependsOnTargets="ValidateArIec61850Project">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ArIec61850LockValidator)&quot; -LockPath &quot;$(ArIec61850LockPath)&quot; -EngineProject &quot;$(ArIec61850Project)&quot; -ProjectRoot &quot;$(MSBuildProjectDirectory)&quot;" />
+    <Exec Command="$(ArIec61850PowerShell) -NoProfile -ExecutionPolicy Bypass -File &quot;$(ArIec61850LockValidator)&quot; -LockPath &quot;$(ArIec61850LockPath)&quot; -EngineProject &quot;$(ArIec61850Project)&quot; -ProjectRoot &quot;$(MSBuildProjectDirectory)&quot;" />
   </Target>
 </Project>
