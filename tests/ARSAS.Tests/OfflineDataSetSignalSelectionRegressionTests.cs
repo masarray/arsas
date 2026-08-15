@@ -35,6 +35,30 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
+    public void SignalSelectionRecovery_RunsAgainAfterLegacyConstructorDisplayPreparation()
+    {
+        var source = File.ReadAllText(FindRepoFile("SignalSelectionWizardWindow.DataSetAuthority.cs"));
+
+        Assert.Contains("protected override void OnContentRendered(EventArgs e)", source, StringComparison.Ordinal);
+        Assert.Contains("RestoreAuthoritativeDataSetInventory();", source, StringComparison.Ordinal);
+        Assert.Contains("SignalsView.Refresh();", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "runtime primary leaf can survive as a replacement for a static FCDA/FCD",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EngineLock_PinsMemberCentricStaticDataSetInventory()
+    {
+        var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+
+        Assert.Contains("761fa0df9ca84fbe15352d2670f03fddbe8784ba", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 78", source, StringComparison.Ordinal);
+        Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void CompletenessReport_SamplesEveryFailingDataSetAndSeparatesSemanticDescriptors()
     {
         var snapshot = new Iec61850DataSetCompletenessSnapshot(
