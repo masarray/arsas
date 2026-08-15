@@ -54,7 +54,7 @@ public sealed class DataSetCompletenessDiagnosticTests
         Assert.Equal(1, snapshot.MissingCount);
         Assert.Contains("AA1C1F13R4ADD/GGIO6.CBOpnd", snapshot.MissingReferences[0]);
         Assert.DoesNotContain("CBOpnd.stVal", snapshot.MissingReferences[0]);
-        Assert.Contains("[0]", snapshot.MissingReferences[0]);
+        Assert.Contains("[1]", snapshot.MissingReferences[0]);
         Assert.False(snapshot.IsComplete);
     }
 
