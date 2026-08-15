@@ -3,18 +3,14 @@ namespace ARSAS.Tests;
 public sealed class FirstRunLauncherRegressionTests
 {
     [Fact]
-    public void FirstRunLauncher_RemovesDecorativeBorderSynchronouslyBeforeQueuedDiscovery()
+    public void FirstRunLauncher_SelectsOperationalCardWithoutAssumingSingleBorder()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.FirstRunLauncherRepair.cs"));
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
 
-        var loadedHandler = source.IndexOf("private static void FirstRunLauncherRepair_Loaded", StringComparison.Ordinal);
-        var removeBeforeQueue = source.IndexOf("window.RemoveFirstRunHeroTintBeforeLauncherDiscovery();", loadedHandler, StringComparison.Ordinal);
-        var queueContextIdle = source.IndexOf("window.Dispatcher.BeginInvoke", loadedHandler, StringComparison.Ordinal);
-
-        Assert.True(loadedHandler >= 0);
-        Assert.True(removeBeforeQueue > loadedHandler);
-        Assert.True(queueContextIdle > removeBeforeQueue);
-        Assert.Contains("before that queued callback can execute SingleOrDefault", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("heroGrid.Children.OfType<Border>().SingleOrDefault()", source, StringComparison.Ordinal);
+        Assert.Contains("P2IndustrialHeroTint", source, StringComparison.Ordinal);
+        Assert.Contains("border.Child is StackPanel", source, StringComparison.Ordinal);
+        Assert.Contains("FirstOrDefault(border =>", source, StringComparison.Ordinal);
     }
 
     [Fact]
