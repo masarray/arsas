@@ -12,17 +12,18 @@ public sealed record Iec61850DataSetCompletenessSnapshot(
     IReadOnlyList<string> MissingReferences)
 {
     public int MissingCount => MissingReferences.Count;
-    public bool IsComplete => MandatoryInventoryCount == RepresentedCount && MissingCount == 0;
+    public bool IsComplete => StaticMemberCount == RepresentedCount && MissingCount == 0;
 
     public string Summary =>
         $"DataSets={DataSetCount:N0}; static members={StaticMemberCount:N0}; mandatory inventory={MandatoryInventoryCount:N0}; " +
-        $"represented={RepresentedCount:N0}/{MandatoryInventoryCount:N0}; primary leaf unresolved={PrimaryLeafUnresolvedCount:N0}; missing={MissingCount:N0}";
+        $"represented={RepresentedCount:N0}/{StaticMemberCount:N0}; primary leaf unresolved={PrimaryLeafUnresolvedCount:N0}; missing={MissingCount:N0}";
 }
 
 /// <summary>
 /// Actionable diagnostic for static IEC 61850 DataSet inventory completeness.
-/// ARIEC remains the authority for mandatory signal descriptors and reference identity;
-/// ARSAS only measures whether those descriptors are represented in Signal Selection.
+/// ARIEC remains the authority for reference identity and primary-leaf resolution.
+/// ARSAS measures every static FCDA member directly so projection aggregation can never
+/// make a partially represented DataSet appear complete.
 /// </summary>
 public static class Iec61850DataSetCompletenessDiagnostic
 {
@@ -44,31 +45,33 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
         var missing = new List<string>();
         var represented = 0;
-        foreach (var descriptor in mandatory)
+        var staticMembers = model.DataSets
+            .OrderBy(dataSet => dataSet.Reference, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(dataSet => dataSet.Members
+                .OrderBy(member => member.Index)
+                .Select(member => new
+                {
+                    DataSetReference = dataSet.Reference,
+                    member.Index,
+                    Reference = Literal(member.Reference)
+                }))
+            .ToArray();
+
+        foreach (var member in staticMembers)
         {
-            var candidates = EngineReferenceCandidates(descriptor).ToArray();
-            if (candidates.Any(signalReferences.Contains))
+            if (member.Reference.Length > 0 && signalReferences.Contains(member.Reference))
             {
                 represented++;
                 continue;
             }
 
-            var reference = candidates.FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(reference))
-                reference = "<no engine reference>";
-
-            var membership = descriptor.DataSetMemberships
-                .OrderBy(item => item.DataSetReference, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.MemberIndex)
-                .FirstOrDefault();
-            missing.Add(membership is null
-                ? reference
-                : $"{membership.DataSetReference}[{membership.MemberIndex}] -> {reference}");
+            var reference = member.Reference.Length == 0 ? "<no static member reference>" : member.Reference;
+            missing.Add($"{member.DataSetReference}[{member.Index}] -> {reference}");
         }
 
         return new Iec61850DataSetCompletenessSnapshot(
             model.DataSets.Count,
-            model.DataSets.Sum(dataSet => dataSet.Members.Count),
+            staticMembers.Length,
             mandatory.Count,
             represented,
             mandatory.Count(descriptor => descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved),
@@ -81,8 +84,8 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
         yield return $"Static DataSets   : {snapshot.DataSetCount:N0}";
         yield return $"Static members    : {snapshot.StaticMemberCount:N0}";
-        yield return $"Mandatory inventory: {snapshot.MandatoryInventoryCount:N0}";
-        yield return $"Signal Selection  : {snapshot.RepresentedCount:N0}/{snapshot.MandatoryInventoryCount:N0} represented";
+        yield return $"Mandatory inventory: {snapshot.MandatoryInventoryCount:N0} descriptor(s)";
+        yield return $"Signal Selection  : {snapshot.RepresentedCount:N0}/{snapshot.StaticMemberCount:N0} static member(s) represented";
         yield return $"Primary unresolved: {snapshot.PrimaryLeafUnresolvedCount:N0}";
         yield return $"Missing inventory : {snapshot.MissingCount:N0}";
 
@@ -94,35 +97,6 @@ public static class Iec61850DataSetCompletenessDiagnostic
 
         if (snapshot.MissingCount > maxMissing)
             yield return $"  ...             : {snapshot.MissingCount - maxMissing:N0} more missing member(s)";
-    }
-
-    private static IEnumerable<string> EngineReferenceCandidates(Iec61850SignalDescriptor descriptor)
-    {
-        var membershipReferences = descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .SelectMany(membership => new[]
-            {
-                membership.CanonicalMemberReference,
-                membership.OriginalMemberReference
-            });
-
-        var descriptorReferences = new[]
-        {
-            descriptor.PrimaryValueReference,
-            descriptor.DesignReference,
-            descriptor.ObservedReference,
-            descriptor.PrimaryValueMmsReference,
-            descriptor.CanonicalMmsReference,
-            descriptor.EffectiveMmsReference,
-            descriptor.ObservedMmsReference
-        };
-
-        return membershipReferences
-            .Concat(descriptorReferences)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(Literal)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     private static string Literal(string? reference)
