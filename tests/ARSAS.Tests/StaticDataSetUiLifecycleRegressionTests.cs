@@ -21,6 +21,7 @@ public sealed class StaticDataSetUiLifecycleRegressionTests
         };
 
         var signals = SclWorkspaceSignalMapper.BuildSignals(workspace).ToList();
+        var sourceCount = signals.Count;
         var before = Iec61850DataSetCompletenessDiagnostic.Evaluate(model, signals);
 
         var presented = signals.Where(SasOperationalUiPolicy.IsPresentationVisible).ToArray();
@@ -29,12 +30,12 @@ public sealed class StaticDataSetUiLifecycleRegressionTests
         Assert.Equal(2, before.StaticMemberCount);
         Assert.Equal(2, before.RepresentedCount);
         Assert.Equal(0, before.MissingCount);
+        Assert.Equal(sourceCount, signals.Count);
         Assert.Equal(2, after.RepresentedCount);
         Assert.Equal(0, after.MissingCount);
 
         Assert.Contains(presented, signal => signal.DisplayReference == "AA1C1F13R4ADD/GGIO6.CBOpnd");
         Assert.Contains(presented, signal => signal.DisplayReference == "AA1C1F13R4MEAS/MMXU1.A.phsA");
-        Assert.Equal(signals.Count, signals.Count); // presentation decision must not mutate source inventory
     }
 
     private static XDocument BuildFixture()
