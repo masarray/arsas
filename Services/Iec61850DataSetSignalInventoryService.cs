@@ -27,16 +27,31 @@ public static class Iec61850DataSetSignalInventoryService
         ArgumentNullException.ThrowIfNull(device);
 
         if (device.LiveDiscoveryModel is null)
-            return new Iec61850DataSetSignalInventoryMergeResult(Array.Empty<SignalDefinition>(), 0, 0);
+            return EmptyResult();
 
-        var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(device.LiveDiscoveryModel);
+        return EnsureMandatorySignals(device.Signals, device.LiveDiscoveryModel);
+    }
+
+    /// <summary>
+    /// Merges the engine-authoritative DataSet inventory into an arbitrary signal collection.
+    /// This is intentionally shared by live MMS discovery and offline SCL projection so both
+    /// paths expose the same mandatory DataSet members in Signal Selection.
+    /// </summary>
+    public static Iec61850DataSetSignalInventoryMergeResult EnsureMandatorySignals(
+        ICollection<SignalDefinition> signals,
+        LiveIedModelDiscoveryDocument model)
+    {
+        ArgumentNullException.ThrowIfNull(signals);
+        ArgumentNullException.ThrowIfNull(model);
+
+        var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model);
         if (mandatory.Count == 0)
-            return new Iec61850DataSetSignalInventoryMergeResult(Array.Empty<SignalDefinition>(), 0, 0);
+            return EmptyResult();
 
         // Keep application matching literal. The engine owns IEC 61850 reference
         // canonicalization; ARSAS only compares the reference forms that the engine has
         // already exposed on the descriptor.
-        var existing = device.Signals
+        var existing = signals
             .Where(signal => !string.IsNullOrWhiteSpace(signal.ObjectReference))
             .GroupBy(signal => LiteralReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
@@ -66,7 +81,7 @@ public static class Iec61850DataSetSignalInventoryService
                 continue;
 
             var signal = CreateSignal(descriptor, reference);
-            device.Signals.Add(signal);
+            signals.Add(signal);
             foreach (var key in EngineReferenceCandidates(descriptor).Append(LiteralReference(reference)))
                 existing.TryAdd(key, signal);
             added.Add(signal);
@@ -74,6 +89,9 @@ public static class Iec61850DataSetSignalInventoryService
 
         return new Iec61850DataSetSignalInventoryMergeResult(added, enriched, mandatory.Count);
     }
+
+    private static Iec61850DataSetSignalInventoryMergeResult EmptyResult()
+        => new(Array.Empty<SignalDefinition>(), 0, 0);
 
     private static SignalDefinition CreateSignal(
         Iec61850SignalDescriptor descriptor,
