@@ -181,7 +181,7 @@ public partial class App : Application
         {
             Debug.WriteLine(exception);
             if (Current?.MainWindow is MainWindow mainWindow)
-                mainWindow.ReportUnexpectedUiError(exception);
+                mainWindow.ReportUnexpectedUiErrorWithStackTrace(exception);
         }
         catch (Exception reportingError)
         {
