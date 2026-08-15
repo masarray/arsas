@@ -28,28 +28,38 @@ public partial class MainWindow
         if (sender is not MainWindow window)
             return;
 
-        // MainWindow.IoTesting queues its normal launcher at Loaded priority. Run after
-        // that attempt so this path is only a compatibility repair, never a replacement.
+        // MainWindow.IoTesting queued InstallFirstRunTestingChoices at Loaded priority
+        // during OnInitialized. Remove the decorative Border synchronously while handling
+        // Loaded, before that queued callback can execute SingleOrDefault over hero Borders.
+        // This prevents the startup exception instead of merely repairing the launcher
+        // after the exception was swallowed by the dispatcher error handler.
+        window.RemoveFirstRunHeroTintBeforeLauncherDiscovery();
+
+        // Run the compatibility audit after the normal launcher attempt. At this point it
+        // only restores actions/Z-order or retries if some unrelated condition prevented
+        // the normal launcher from materializing.
         window.Dispatcher.BeginInvoke(
             new Action(window.RestoreFirstRunLauncherContract),
             DispatcherPriority.ContextIdle);
+    }
+
+    private void RemoveFirstRunHeroTintBeforeLauncherDiscovery()
+    {
+        var heroGrid = FindFirstRunHeroGrid();
+        var tint = heroGrid?.Children
+            .OfType<Border>()
+            .FirstOrDefault(border => Equals(border.Tag, "P2IndustrialHeroTint"));
+        if (heroGrid != null && tint != null)
+            heroGrid.Children.Remove(tint);
     }
 
     private void RestoreFirstRunLauncherContract()
     {
         if (_ioListTestingLauncherCard == null)
         {
-            var heroGrid = FindFirstRunHeroGrid();
-            var tint = heroGrid?.Children
-                .OfType<Border>()
-                .FirstOrDefault(border => Equals(border.Tag, "P2IndustrialHeroTint"));
-
-            // P2.1 originally inserted its tint as a Border. The legacy launcher
-            // intentionally looked for the single Border that represented the general
-            // testing card, so the decorative Border made SingleOrDefault fail.
-            if (heroGrid != null && tint != null)
-                heroGrid.Children.Remove(tint);
-
+            // Defensive retry: remove a tint that may have been re-applied between Loaded
+            // and ContextIdle, then invoke the legacy launcher against one operational card.
+            RemoveFirstRunHeroTintBeforeLauncherDiscovery();
             InstallFirstRunTestingChoices();
 
             if (_ioListTestingLauncherCard == null)

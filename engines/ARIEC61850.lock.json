@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "4fc3119be2bb97e0ea3a8d31fb990e6a1a089e60",
-  "sourcePullRequest": 77,
-  "purpose": "Pins the ARIEC61850 engine used by ARSAS. PR #76 preserves every mandatory static DataSet member, including unresolved object-level FCD members without inventing .stVal. PR #77 canonicalizes SCL DataSet member identity across logical devices so parser display references such as IED/LD/LN.DO [FC] resolve to the same IEDLD/LN.DO identity used by the live model."
+  "commit": "761fa0df9ca84fbe15352d2670f03fddbe8784ba",
+  "sourcePullRequest": 78,
+  "purpose": "Pins the ARIEC61850 engine used by ARSAS. PR #76 preserves unresolved static DataSet members, PR #77 canonicalizes cross-logical-device SCL references, and PR #78 makes mandatory Signal Selection inventory protocol-member-centric: exactly one descriptor per static DataSet member while keeping resolved runtime primary leaves separate from the original FCDA/FCD identity."
 }
