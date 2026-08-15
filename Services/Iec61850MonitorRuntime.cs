@@ -782,6 +782,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 ? "Initial live image is available. Validating static/dynamic report acquisition in the background monitor pipeline."
                 : "Initial live-image deadline reached. Continuing report validation while MMS fallback remains active.");
 
+        plans = await BuildReportPlansForCurrentAssociationAsync(
+            session,
+            plans,
+            cancellationToken).ConfigureAwait(false);
+
+        await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
+        ResetPollQueue(session);
+        UpdateDeviceAcquisitionSummary(session);
+    }
+
+    private async Task<IReadOnlyList<ReportControlPlan>> BuildReportPlansForCurrentAssociationAsync(
+        DeviceSession session,
+        IReadOnlyList<ReportControlPlan> legacyPlans,
+        CancellationToken cancellationToken)
+    {
         if (session.Client.CanUseHybridReportPlanner(session.Device))
         {
             NativeHybridReportPlanningResult hybrid;
@@ -808,22 +823,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
 
             session.HybridValidation.Reset(hybrid);
-            plans = hybrid.ReportPlans;
             Log("INFO", session.Device.Name,
                 $"Hybrid authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, dynamicBRCB={hybrid.DynamicBrcbSignalCount}, dynamicURCB={hybrid.DynamicUrcbSignalCount}, polling={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. {hybrid.Summary}");
             foreach (var warning in hybrid.Warnings.Take(5))
                 Log("WARN", session.Device.Name, warning);
-        }
-        else
-        {
-            session.HybridValidation.Reset(null);
-            Log("INFO", session.Device.Name,
-                "ARIEC typed live-model authority is unavailable for this saved/session model; retaining the existing legacy report planner only as compatibility fallback.");
+
+            return hybrid.ReportPlans;
         }
 
-        await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
-        ResetPollQueue(session);
-        UpdateDeviceAcquisitionSummary(session);
+        session.HybridValidation.Reset(null);
+        Log("INFO", session.Device.Name,
+            "ARIEC typed live-model authority is unavailable for this saved/session model; retaining the existing legacy report planner only as compatibility fallback.");
+        return legacyPlans;
     }
 
     private void UpdateDeviceAcquisitionSummary(DeviceSession session)
@@ -1415,7 +1426,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
         session.LastUnroutedReportCount = 0;
-        var plans = Iec61850ReportPlanner.BuildPlans(session.Device, session.Points.Values);
+        session.PendingReportPlans = Array.Empty<ReportControlPlan>();
+        session.ReportSetupPending = false;
+        session.ReportSetupNotBeforeUtc = DateTime.MinValue;
+        session.ReportSetupDeadlineUtc = DateTime.MinValue;
+        ResetAssociationReportEvidence(session);
+        var legacyPlans = Iec61850ReportPlanner.BuildPlans(session.Device, session.Points.Values);
+        var plans = await BuildReportPlansForCurrentAssociationAsync(
+            session,
+            legacyPlans,
+            cancellationToken).ConfigureAwait(false);
         await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
         ResetPollQueue(session);
         UpdateDeviceAcquisitionSummary(session);
@@ -1428,6 +1448,28 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.Device.Detail = $"MMS reconnected. {session.Points.Count} point(s) resumed.";
         session.Device.RefreshComputed();
         Log("INFO", session.Device.Name, "MMS reconnect successful. Monitoring resumed automatically.");
+    }
+
+    private static void ResetAssociationReportEvidence(DeviceSession session)
+    {
+        foreach (var state in session.States.Values)
+        {
+            state.ReportTrafficSeen = false;
+            state.ReportChangeVerified = false;
+            state.LastReportUtc = DateTime.MinValue;
+            state.ReportMissLogged = false;
+            state.AwaitingCommandReportEdge = false;
+            state.CommandReportMissLogged = false;
+            state.StaleReportSuppressedLogged = false;
+            state.CommandFeedbackValue = string.Empty;
+            state.LastCommandFeedbackUtc = DateTime.MinValue;
+            state.CommandFeedbackGuardUntilUtc = DateTime.MinValue;
+            state.CommandReportDeadlineUtc = DateTime.MinValue;
+            state.AcquisitionLabel = "MMS polling";
+            state.SourceMode = "Report rearming / MMS polling fallback";
+            state.Reason = "new MMS association / report evidence reset";
+            state.Status = "Reconnected / report rearming";
+        }
     }
 
     private async Task ForceReconnectAsync(DeviceSession session, string reason)

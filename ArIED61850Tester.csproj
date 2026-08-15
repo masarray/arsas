@@ -15,9 +15,9 @@
     <Product>ARSAS</Product>
     <AssemblyTitle>ARSAS - IEC 61850 Engineering Workstation</AssemblyTitle>
     <Description>Open-source Windows IEC 61850 engineering workstation for MMS model discovery, reporting, independent multi-IED monitoring, GOOSE subscription, fault-record file transfer, Sampled Values engineering and evidence export, SCL workflows, diagnostics, sequence of events, and guarded control validation.</Description>
-    <Version>1.6.30</Version>
-    <AssemblyVersion>1.6.30.0</AssemblyVersion>
-    <FileVersion>1.6.30.0</FileVersion>
+    <Version>1.6.31</Version>
+    <AssemblyVersion>1.6.31.0</AssemblyVersion>
+    <FileVersion>1.6.31.0</FileVersion>
     <PackageProjectUrl>https://github.com/masarray/arsas</PackageProjectUrl>
     <RepositoryUrl>https://github.com/masarray/arsas</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
