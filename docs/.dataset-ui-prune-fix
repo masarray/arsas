@@ -1,2 +1,0 @@
-field-root-cause: SasOperationalUiPolicy mutated device.Signals via IList.RemoveAt
-fix-contract: presentation-only ICollectionView filter; static DataSet membership always visible
