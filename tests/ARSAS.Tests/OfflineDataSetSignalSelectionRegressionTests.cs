@@ -20,6 +20,25 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
+    public void SignalSelectionConstructor_PreservesExistingStaticFcdaDisplayIdentity()
+    {
+        var source = File.ReadAllText(FindRepoFile("SignalSelectionWizardWindow.xaml.cs"));
+
+        Assert.Contains(
+            "if (string.IsNullOrWhiteSpace(signal.DisplayReference))",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "signal.DisplayReference = Iec61850MonitorPoint.StripIedNamePrefix(signal.ObjectReference, device.Name);\n            signal.PropertyChanged",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Static DataSet inventory owns DisplayReference",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SignalSelectionRecovery_DoesNotOverwriteStaticFcdaDisplayIdentity()
     {
         var source = File.ReadAllText(FindRepoFile("SignalSelectionWizardWindow.DataSetAuthority.cs"));
