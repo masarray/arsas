@@ -1,34 +1,38 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.30",
-  "title": "Live DataSet discovery and hybrid RCB acquisition",
-  "titleId": "Discovery DataSet live dan acquisition RCB hybrid",
-  "summary": "ARSAS 1.6.30 repairs the live reporting pipeline from discovery through acquisition: DataSet members are retained, static and dynamic BRCB/URCB coverage is planned by ARIEC61850, and only uncovered signals fall back to MMS polling. Quality and timestamp companions for instantaneous measurements are mapped to their correct IEC references.",
-  "summaryId": "ARSAS 1.6.30 memperbaiki pipeline live reporting dari discovery sampai acquisition: member DataSet dipertahankan, coverage static dan dynamic BRCB/URCB direncanakan oleh ARIEC61850, dan hanya signal yang tidak ter-cover yang fallback ke MMS polling. Companion quality dan timestamp untuk instantaneous measurement dipetakan ke IEC reference yang benar.",
+  "version": "1.6.31",
+  "title": "Reconnect-safe live DataSet discovery and hybrid RCB acquisition",
+  "titleId": "Discovery DataSet live dan acquisition RCB hybrid yang aman saat reconnect",
+  "summary": "ARSAS 1.6.31 completes the repaired live reporting pipeline from discovery through reconnect: DataSet members are retained, static and dynamic BRCB/URCB coverage is planned by ARIEC61850, only uncovered signals fall back to MMS polling, and a new MMS association cannot inherit report or command-correlation evidence from the previous connection.",
+  "summaryId": "ARSAS 1.6.31 melengkapi perbaikan pipeline live reporting dari discovery sampai reconnect: member DataSet dipertahankan, coverage static dan dynamic BRCB/URCB direncanakan oleh ARIEC61850, hanya signal yang tidak ter-cover yang fallback ke MMS polling, dan association MMS baru tidak dapat mewarisi evidence report atau korelasi command dari koneksi sebelumnya.",
   "highlights": [
     "Live discovery requests bounded DataSet directories and retains their members, preventing report-capable signals from disappearing between MMS discovery and the application catalog.",
     "ARSAS executes the ARIEC61850 hybrid plan across static BRCB, static URCB, verified-free dynamic RCB slots, and per-signal MMS polling residuals.",
     "Dynamic RCB planning supports temporary DataSets whose members reside in logical devices different from the RCB owner, as permitted by the live server model.",
     "Report catalog matching selects the owning primary-value descriptor even when related quality and timestamp descriptors share the same primary reference.",
-    "Instantaneous magnitude values such as Hz.instMag.f resolve their quality and timestamp companions at Hz.q and Hz.t, while preserving clear operator-facing names."
+    "Instantaneous magnitude values such as Hz.instMag.f resolve their quality and timestamp companions at Hz.q and Hz.t, while preserving clear operator-facing names.",
+    "Smart reconnect runs the same authoritative hybrid planner as initial monitoring, with fresh RCB availability checks and clean per-association report evidence."
   ],
   "highlightsId": [
     "Live discovery meminta directory DataSet secara terbatas dan mempertahankan member-nya, sehingga signal report-capable tidak lagi hilang di antara MMS discovery dan catalog aplikasi.",
     "ARSAS mengeksekusi hybrid plan ARIEC61850 melalui static BRCB, static URCB, slot dynamic RCB yang terverifikasi free, dan residual MMS polling per signal.",
     "Perencanaan dynamic RCB mendukung DataSet sementara dengan member pada logical device yang berbeda dari owner RCB, sesuai model live server.",
     "Pemetaan report catalog memilih descriptor primary value pemiliknya walaupun descriptor quality dan timestamp terkait menggunakan primary reference yang sama.",
-    "Instantaneous magnitude seperti Hz.instMag.f menemukan companion quality dan timestamp pada Hz.q dan Hz.t, sambil mempertahankan nama yang jelas bagi operator."
+    "Instantaneous magnitude seperti Hz.instMag.f menemukan companion quality dan timestamp pada Hz.q dan Hz.t, sambil mempertahankan nama yang jelas bagi operator.",
+    "Smart reconnect menjalankan authoritative hybrid planner yang sama dengan initial monitoring, termasuk pemeriksaan availability RCB terbaru dan evidence report per-association yang bersih."
   ],
   "improvements": [
     "Fresh RCB availability is revalidated before any setup write, and static or dynamic control blocks are reused only when the live evidence still permits it.",
     "Physical validation evidence distinguishes successful RCB setup from actual report frames and verified process-value changes, avoiding false claims of report delivery.",
+    "Physical-validation mutation and snapshot capture are synchronized so operator diagnostics cannot observe torn counters or collection changes while report frames arrive.",
     "The release source is gated by the standard ARSAS solution build and regression suite plus portable and Windows installer smoke validation before publication.",
     "Stable Windows publication produces installer and portable binaries together with SHA-256 checksums, SPDX SBOM, application/engine provenance and GitHub artifact attestations."
   ],
   "improvementsId": [
     "Availability RCB terbaru divalidasi ulang sebelum setup write, dan control block static atau dynamic hanya digunakan ketika evidence live masih mengizinkannya.",
     "Evidence validasi fisik membedakan setup RCB yang berhasil dari report frame aktual dan perubahan process value yang terverifikasi, sehingga tidak ada klaim palsu mengenai report delivery.",
+    "Mutasi dan snapshot physical validation disinkronisasi agar diagnostic operator tidak melihat counter yang torn atau perubahan collection ketika report frame masuk.",
     "Source release digate oleh build solution dan regression suite ARSAS standard serta portable dan Windows installer smoke validation sebelum publikasi.",
     "Publikasi Windows stable menghasilkan binary installer dan portable bersama SHA-256 checksum, SPDX SBOM, provenance aplikasi/engine dan GitHub artifact attestation."
   ],
@@ -59,11 +63,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.30 live values and IEC 61850 acquisition workspace",
-    "altId": "Representasi workspace live values dan acquisition IEC 61850 ARSAS 1.6.30",
-    "caption": "Representative ARSAS live-value workspace for stable release 1.6.30. Acquisition labels identify report delivery only after report frames are received; uncovered signals remain explicit MMS polling residuals.",
-    "captionId": "Representasi workspace live value ARSAS untuk stable release 1.6.30. Label acquisition mengidentifikasi report delivery hanya setelah report frame diterima; signal yang tidak ter-cover tetap ditampilkan sebagai residual MMS polling."
+    "alt": "Representative ARSAS 1.6.31 live values and reconnect-safe IEC 61850 acquisition workspace",
+    "altId": "Representasi workspace live values dan acquisition IEC 61850 ARSAS 1.6.31 yang aman saat reconnect",
+    "caption": "Representative ARSAS live-value workspace for stable release 1.6.31. Acquisition labels identify report delivery only after report frames are received; reconnect resets association-scoped evidence and uncovered signals remain explicit MMS polling residuals.",
+    "captionId": "Representasi workspace live value ARSAS untuk stable release 1.6.31. Label acquisition mengidentifikasi report delivery hanya setelah report frame diterima; reconnect mereset evidence per-association dan signal yang tidak ter-cover tetap ditampilkan sebagai residual MMS polling."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.30"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.31"
 }
