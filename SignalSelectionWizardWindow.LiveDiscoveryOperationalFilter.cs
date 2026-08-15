@@ -1,5 +1,6 @@
 using System.Windows;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -48,7 +49,7 @@ public partial class SignalSelectionWizardWindow
                 return false;
 
             return item is SignalDefinition signal &&
-                   SasOperationalUiPolicy.IsPresentationVisible(signal);
+                   LiveDiscoverySignalSelectionPolicy.IsVisible(signal);
         };
 
         SignalsView.Filter = _signalSelectionOperationalFilter;
