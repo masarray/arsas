@@ -69,7 +69,13 @@ public partial class SignalSelectionWizardWindow : Window, INotifyPropertyChange
 
         foreach (var signal in device.Signals)
         {
-            signal.DisplayReference = Iec61850MonitorPoint.StripIedNamePrefix(signal.ObjectReference, device.Name);
+            // Static DataSet inventory owns DisplayReference. Only legacy/non-DataSet rows
+            // that have no display identity may fall back to a shortened runtime reference.
+            if (string.IsNullOrWhiteSpace(signal.DisplayReference))
+            {
+                signal.DisplayReference =
+                    Iec61850MonitorPoint.StripIedNamePrefix(signal.ObjectReference, device.Name);
+            }
             signal.PropertyChanged += Signal_PropertyChanged;
         }
 

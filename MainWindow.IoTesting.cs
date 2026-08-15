@@ -47,7 +47,14 @@ public partial class MainWindow
         if (emptyState?.Child is not Grid heroGrid)
             return;
 
-        var generalTestingCard = heroGrid.Children.OfType<Border>().SingleOrDefault();
+        // The hero can contain visual-only Borders (for example P2IndustrialHeroTint).
+        // Launcher discovery must identify the operational card by content contract rather
+        // than asserting that the visual tree contains exactly one Border.
+        var generalTestingCard = heroGrid.Children
+            .OfType<Border>()
+            .FirstOrDefault(border =>
+                !Equals(border.Tag, "P2IndustrialHeroTint") &&
+                border.Child is StackPanel);
         if (generalTestingCard?.Child is not StackPanel generalContent)
             return;
 
