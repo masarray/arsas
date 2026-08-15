@@ -83,6 +83,20 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
+
+                var dataSetModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel;
+                if (dataSetModel is not null)
+                {
+                    var completeness = Iec61850DataSetCompletenessDiagnostic.Evaluate(dataSetModel, device.Signals);
+                    builder.AppendLine("DataSet inventory:");
+                    foreach (var line in Iec61850DataSetCompletenessDiagnostic.FormatReportLines(completeness))
+                        builder.AppendLine($"  {line}");
+                }
+                else
+                {
+                    builder.AppendLine("DataSet inventory: unavailable (no SCL/live discovery model)");
+                }
+
                 var route = AnalyzeRoute(device.IpAddress);
                 builder.AppendLine($"TCP probe        : {probe?.Result ?? "not run"} {probe?.Detail ?? string.Empty}".TrimEnd());
                 builder.AppendLine($"Route source     : {route.Source}");
