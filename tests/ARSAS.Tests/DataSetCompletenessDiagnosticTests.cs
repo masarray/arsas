@@ -20,9 +20,15 @@ public sealed class DataSetCompletenessDiagnosticTests
 
         Assert.Equal(1, merge.MandatoryCatalogCount);
         var signal = Assert.Single(signals);
-        Assert.Equal("AA1C1F13R4ADD/GGIO6.CBOpnd", signal.ObjectReference);
-        Assert.False(signal.ObjectReference.EndsWith(".stVal", StringComparison.Ordinal));
-        Assert.DoesNotContain("[ST]", signal.ObjectReference);
+
+        // IEC Telegram / Signal Selection must preserve the exact static FCDA FCD identity.
+        Assert.Equal("AA1C1F13R4ADD/GGIO6.CBOpnd", signal.DisplayReference);
+        Assert.False(signal.DisplayReference.EndsWith(".stVal", StringComparison.Ordinal));
+        Assert.DoesNotContain("[ST]", signal.DisplayReference);
+
+        // Runtime acquisition may use the primary DataAttribute resolved by ARIEC. Keeping
+        // this separate from DisplayReference prevents the UI from rewriting the DataSet.
+        Assert.Equal("AA1C1F13R4ADD/GGIO6.CBOpnd.stVal", signal.ObjectReference);
 
         Assert.Equal(1, snapshot.DataSetCount);
         Assert.Equal(1, snapshot.StaticMemberCount);
@@ -46,7 +52,8 @@ public sealed class DataSetCompletenessDiagnosticTests
         Assert.Equal(1, snapshot.MandatoryInventoryCount);
         Assert.Equal(0, snapshot.RepresentedCount);
         Assert.Equal(1, snapshot.MissingCount);
-        Assert.Contains("GGIO6.CBOpnd", snapshot.MissingReferences[0]);
+        Assert.Contains("AA1C1F13R4ADD/GGIO6.CBOpnd", snapshot.MissingReferences[0]);
+        Assert.DoesNotContain("CBOpnd.stVal", snapshot.MissingReferences[0]);
         Assert.Contains("[0]", snapshot.MissingReferences[0]);
         Assert.False(snapshot.IsComplete);
     }
