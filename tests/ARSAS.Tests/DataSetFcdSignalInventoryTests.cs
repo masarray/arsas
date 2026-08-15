@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -35,6 +36,45 @@ public sealed class DataSetFcdSignalInventoryTests
         });
         Assert.Contains(device.Signals, signal => signal.ObjectReference == "IEDLD0/GGIO1.Dig01");
         Assert.Contains(device.Signals, signal => signal.ObjectReference == "IEDLD0/MMXU1.Ana22");
+    }
+
+    [Fact]
+    public void OpenScl_Mapper_Preserves_Realistic_Ggio_DataSet_Members_When_Primary_Leaf_Is_Unresolved()
+    {
+        var references = new[]
+        {
+            "IEDLD0/GGIO6.CBOpnd",
+            "IEDLD0/GGIO6.CBClsd",
+            "IEDLD0/GGIO6.QZ2cnctd",
+            "IEDLD0/GGIO3.CBSprgChrg",
+            "IEDLD0/GGIO2.TCS1Fail",
+            "IEDLD0/GGIO2.ComFail",
+            "IEDLD0/GGIO2.FWUpdated",
+            "IEDLD0/GGIO1.LocOpnCMDsta"
+        };
+        var digitalMembers = references
+            .Select((reference, index) => Member(index, reference, "ST"))
+            .ToArray();
+        var model = BuildModel(digitalMembers, Array.Empty<LiveIedDataSetMemberModel>());
+        var workspace = new SclIedWorkspace
+        {
+            IedName = "IED",
+            AccessPointName = "P1",
+            DesignModel = model
+        };
+
+        var signals = SclWorkspaceSignalMapper.BuildSignals(workspace);
+
+        Assert.Equal(references.Length, signals.Count);
+        foreach (var reference in references)
+        {
+            var signal = Assert.Single(signals, item => item.ObjectReference == reference);
+            Assert.Equal("DataSet", signal.Category);
+            Assert.Equal("ST", signal.FunctionalConstraint);
+            Assert.Equal("IEDLD0/LLN0.Digital", signal.DataSetReference);
+            Assert.Contains("SCL design model", signal.Source, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("primary leaf unresolved", signal.ReportCoverage, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
