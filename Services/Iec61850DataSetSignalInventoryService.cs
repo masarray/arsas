@@ -49,18 +49,20 @@ public static class Iec61850DataSetSignalInventoryService
             return EmptyResult();
 
         // Keep application matching literal. The engine owns IEC 61850 reference
-        // canonicalization; ARSAS only compares the reference forms that the engine has
-        // already exposed on the descriptor.
+        // canonicalization; ARSAS only compares reference forms already exposed by ARIEC.
+        // DisplayReference is included because static FCD identity is intentionally kept
+        // separate from a resolved runtime DataAttribute reference such as .stVal.
         var existing = signals
-            .Where(signal => !string.IsNullOrWhiteSpace(signal.ObjectReference))
-            .GroupBy(signal => LiteralReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            .SelectMany(signal => SignalReferenceCandidates(signal).Select(reference => (reference, signal)))
+            .GroupBy(item => item.reference, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().signal, StringComparer.OrdinalIgnoreCase);
 
         var added = new List<SignalDefinition>();
         var enriched = 0;
 
         foreach (var descriptor in mandatory)
         {
+            var inventoryReference = InventoryReference(descriptor);
             var engineReferences = EngineReferenceCandidates(descriptor).ToArray();
             var current = engineReferences
                 .Select(reference => existing.TryGetValue(reference, out var signal) ? signal : null)
@@ -68,22 +70,36 @@ public static class Iec61850DataSetSignalInventoryService
 
             if (current is not null)
             {
-                if (ApplyEngineDataSetAuthority(current, descriptor))
+                if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference))
                     enriched++;
+
+                foreach (var key in EngineReferenceCandidates(descriptor)
+                             .Concat(SignalReferenceCandidates(current))
+                             .Append(inventoryReference)
+                             .Where(value => !string.IsNullOrWhiteSpace(value)))
+                {
+                    existing.TryAdd(LiteralReference(key), current);
+                }
                 continue;
             }
 
-            var reference = FirstNonEmpty(
+            var runtimeReference = FirstNonEmpty(
                 descriptor.PrimaryValueReference,
                 descriptor.DesignReference,
                 descriptor.ObservedReference);
+            var reference = FirstNonEmpty(runtimeReference, inventoryReference);
             if (string.IsNullOrWhiteSpace(reference))
                 continue;
 
-            var signal = CreateSignal(descriptor, reference);
+            var signal = CreateSignal(descriptor, reference, inventoryReference);
             signals.Add(signal);
-            foreach (var key in EngineReferenceCandidates(descriptor).Append(LiteralReference(reference)))
-                existing.TryAdd(key, signal);
+            foreach (var key in EngineReferenceCandidates(descriptor)
+                         .Concat(SignalReferenceCandidates(signal))
+                         .Append(inventoryReference)
+                         .Where(value => !string.IsNullOrWhiteSpace(value)))
+            {
+                existing.TryAdd(LiteralReference(key), signal);
+            }
             added.Add(signal);
         }
 
@@ -95,16 +111,23 @@ public static class Iec61850DataSetSignalInventoryService
 
     private static SignalDefinition CreateSignal(
         Iec61850SignalDescriptor descriptor,
-        string reference)
+        string runtimeReference,
+        string inventoryReference)
     {
         var primaryMembership = FirstMembership(descriptor);
         var report = descriptor.ReportMemberships.FirstOrDefault();
         var dataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown");
         var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+        var staticReference = FirstNonEmpty(inventoryReference, runtimeReference);
+        var objectReference = unresolved ? staticReference : FirstNonEmpty(runtimeReference, staticReference);
+
         return new SignalDefinition
         {
-            Name = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, reference),
-            ObjectReference = reference,
+            Name = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, staticReference),
+            ObjectReference = objectReference,
+            // Signal Selection binds IEC Telegram to DisplayReference. Preserve the exact
+            // static FCDA/FCD member here even when ARIEC resolves a readable primary leaf.
+            DisplayReference = staticReference,
             FunctionalConstraint = descriptor.FunctionalConstraint,
             DataType = dataType,
             Category = "DataSet",
@@ -135,11 +158,23 @@ public static class Iec61850DataSetSignalInventoryService
 
     private static bool ApplyEngineDataSetAuthority(
         SignalDefinition signal,
-        Iec61850SignalDescriptor descriptor)
+        Iec61850SignalDescriptor descriptor,
+        string inventoryReference)
     {
         var changed = false;
         var membership = FirstMembership(descriptor);
         var report = descriptor.ReportMemberships.FirstOrDefault();
+        var staticReference = FirstNonEmpty(inventoryReference, signal.DisplayReference, signal.ObjectReference);
+
+        // Never replace the user-visible static DataSet member with a guessed/resolved leaf.
+        // ObjectReference can remain the engine-resolved runtime leaf for MMS reads; the
+        // selector's IEC Telegram column is bound to DisplayReference.
+        if (!string.IsNullOrWhiteSpace(staticReference) &&
+            !string.Equals(signal.DisplayReference, staticReference, StringComparison.OrdinalIgnoreCase))
+        {
+            signal.DisplayReference = staticReference;
+            changed = true;
+        }
 
         if (membership is not null &&
             !string.Equals(signal.DataSetReference, membership.DataSetReference, StringComparison.OrdinalIgnoreCase))
@@ -197,9 +232,24 @@ public static class Iec61850DataSetSignalInventoryService
         return changed;
     }
 
+    private static IEnumerable<string> SignalReferenceCandidates(SignalDefinition signal)
+        => new[] { signal.DisplayReference, signal.ObjectReference }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(LiteralReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
     private static IEnumerable<string> EngineReferenceCandidates(Iec61850SignalDescriptor descriptor)
     {
-        var values = new[]
+        var membershipReferences = descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .SelectMany(membership => new[]
+            {
+                membership.CanonicalMemberReference,
+                membership.OriginalMemberReference
+            });
+
+        var descriptorReferences = new[]
         {
             descriptor.PrimaryValueReference,
             descriptor.DesignReference,
@@ -210,10 +260,22 @@ public static class Iec61850DataSetSignalInventoryService
             descriptor.ObservedMmsReference
         };
 
-        return values
+        return membershipReferences
+            .Concat(descriptorReferences)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(LiteralReference)
             .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string InventoryReference(Iec61850SignalDescriptor descriptor)
+    {
+        var membership = FirstMembership(descriptor);
+        return FirstNonEmpty(
+            membership?.CanonicalMemberReference,
+            membership?.OriginalMemberReference,
+            descriptor.DesignReference,
+            descriptor.ObservedReference,
+            descriptor.PrimaryValueReference);
     }
 
     private static Iec61850SignalDataSetMembership? FirstMembership(Iec61850SignalDescriptor descriptor)
@@ -239,7 +301,7 @@ public static class Iec61850DataSetSignalInventoryService
             : "mandatory primary DataSet signal";
         var resolutionText = unresolved
             ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
-            : string.Empty;
+            : " The static FCDA identity stays visible even when a readable primary DataAttribute is resolved for runtime acquisition.";
 
         return $"ARIEC61850 {authorityText}: {membershipText}." +
                resolutionText +
