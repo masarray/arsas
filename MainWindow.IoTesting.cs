@@ -335,7 +335,7 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            SetStatus("IO List import cancelled.");
+            SetStatus("ARSAS IO FAT project import cancelled.");
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
