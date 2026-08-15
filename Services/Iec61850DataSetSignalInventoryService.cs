@@ -215,11 +215,15 @@ public static class Iec61850DataSetSignalInventoryService
         var membershipText = memberships.Length == 0
             ? "static DataSet membership"
             : string.Join(", ", memberships);
-        var resolutionText = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved
+        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+        var authorityText = unresolved
+            ? "mandatory static DataSet member"
+            : "mandatory primary DataSet signal";
+        var resolutionText = unresolved
             ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
             : string.Empty;
 
-        return $"ARIEC61850 mandatory static DataSet member: {membershipText}." +
+        return $"ARIEC61850 {authorityText}: {membershipText}." +
                resolutionText +
                " Inventory presence is engine-authoritative; user selection remains independent.";
     }
