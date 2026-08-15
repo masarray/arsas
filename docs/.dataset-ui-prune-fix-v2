@@ -1,0 +1,1 @@
+Authoritative SignalDefinition collections must never be destructively filtered by DataGrid UI policy.
