@@ -60,9 +60,12 @@ public static class SclWorkspaceSignalMapper
         foreach (var signal in merge.AddedSignals)
             signal.Source = $"SCL design model • {signal.Source}";
 
+        // Do not deduplicate again by runtime ObjectReference after the authoritative
+        // DataSet merge. A static FCD/FCDA member and a generic runtime signal may resolve
+        // to the same primary leaf, but they are not the same inventory identity. The
+        // pre-merge GroupBy already removes duplicate generic runtime rows; every row added
+        // by ARIEC after that point is mandatory protocol evidence and must survive intact.
         return visibleSignals
-            .GroupBy(signal => NormalizePresentationReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
@@ -207,6 +210,7 @@ public static class SclWorkspaceSignalMapper
             if (!string.IsNullOrWhiteSpace(report.DataSetReference))
                 bindings.TryAdd(report.DataSetReference, report.Reference);
         }
+
         return bindings;
     }
 
