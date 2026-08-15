@@ -11,7 +11,16 @@ public partial class SignalSelectionWizardWindow
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(_device);
         foreach (var signal in merge.AddedSignals)
         {
-            signal.DisplayReference = Iec61850MonitorPoint.StripIedNamePrefix(signal.ObjectReference, _device.Name);
+            // DisplayReference is the engine-authoritative static FCDA/FCD identity.
+            // Do not rewrite it from ObjectReference: ObjectReference may point to the
+            // resolved runtime leaf (for example .stVal) while Signal Selection must
+            // continue to show the exact DataSet member.
+            if (string.IsNullOrWhiteSpace(signal.DisplayReference))
+            {
+                signal.DisplayReference = Iec61850MonitorPoint.StripIedNamePrefix(
+                    signal.ObjectReference,
+                    _device.Name);
+            }
             signal.PropertyChanged += Signal_PropertyChanged;
         }
 
