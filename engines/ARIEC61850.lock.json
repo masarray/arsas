@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "32351b42b4719e5dccfa068fbbd797c2414a6b4b",
-  "sourcePullRequest": 75,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Baseline includes connected reconciliation, COMTRADE/MMS FileOpen interoperability, UTC-Time wire provenance, typed signal catalog query/coverage APIs, and authoritative hybrid reporting. PR #75 adds bounded live DataSet-directory discovery and permits a verified-free dynamic RCB to own a temporary DataSet whose members reside in other logical devices. ARSAS consumes these typed engine decisions and does not recreate IEC report capability heuristics."
+  "commit": "52f8e383711f63d4a37af742fc92243be80aa0d6",
+  "sourcePullRequest": 76,
+  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Baseline includes connected reconciliation, COMTRADE/MMS FileOpen interoperability, UTC-Time wire provenance, typed signal catalog query/coverage APIs, authoritative hybrid reporting, bounded live DataSet-directory discovery, and cross-logical-device dynamic RCB planning. PR #76 adds the engine-owned DataSet selection inventory projection so every static DataSet member remains application-visible even when an FCD/DataObject-level member has no uniquely resolved primary DataAttribute yet. Resolved primary signals remain preferred; unresolved members are preserved without inventing leaf semantics."
 }
