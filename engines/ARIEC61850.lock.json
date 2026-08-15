@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "52f8e383711f63d4a37af742fc92243be80aa0d6",
-  "sourcePullRequest": 76,
-  "purpose": "Immutable ARIEC61850 revision for ARSAS CI, tests, packaging, diagnostics, and release provenance. Baseline includes connected reconciliation, COMTRADE/MMS FileOpen interoperability, UTC-Time wire provenance, typed signal catalog query/coverage APIs, authoritative hybrid reporting, bounded live DataSet-directory discovery, and cross-logical-device dynamic RCB planning. PR #76 adds the engine-owned DataSet selection inventory projection so every static DataSet member remains application-visible even when an FCD/DataObject-level member has no uniquely resolved primary DataAttribute yet. Resolved primary signals remain preferred; unresolved members are preserved without inventing leaf semantics."
+  "commit": "4fc3119be2bb97e0ea3a8d31fb990e6a1a089e60",
+  "sourcePullRequest": 77,
+  "purpose": "Pins the ARIEC61850 engine used by ARSAS. PR #76 preserves every mandatory static DataSet member, including unresolved object-level FCD members without inventing .stVal. PR #77 canonicalizes SCL DataSet member identity across logical devices so parser display references such as IED/LD/LN.DO [FC] resolve to the same IEDLD/LN.DO identity used by the live model."
 }
