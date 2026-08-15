@@ -23,10 +23,8 @@ public sealed class SclMapperDataSetAuthorityRegressionTests
             ".GroupBy(signal => NormalizePresentationReference(signal.ObjectReference)",
             postMergeProjection,
             StringComparison.Ordinal);
-        Assert.Contains(
-            "every row added\n        // by ARIEC after that point is mandatory protocol evidence",
-            postMergeProjection,
-            StringComparison.Ordinal);
+        Assert.Contains("return visibleSignals", postMergeProjection, StringComparison.Ordinal);
+        Assert.Contains(".OrderBy(signal => signal.SortPriority)", postMergeProjection, StringComparison.Ordinal);
     }
 
     [Fact]
