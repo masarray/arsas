@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using AR.Iec61850.Scl.Engineering;
+using AR.Iec61850.Scl.Workspace;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -33,6 +34,29 @@ public sealed class SiemensStaticDataSetSelectionRegressionTests
             Assert.DoesNotContain("[ST]", signal.DisplayReference, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("[MX]", signal.DisplayReference, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public void SiemensLike_58Member_CrossLd_StaticDataSets_Survive_Real_SclMapper_Path()
+    {
+        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "Siprotec_58_member.cid");
+        var workspace = new SclIedWorkspace
+        {
+            IedName = "AA1C1F13R4",
+            AccessPointName = "E",
+            DesignModel = model
+        };
+
+        var signals = SclWorkspaceSignalMapper.BuildSignals(workspace);
+        var snapshot = Iec61850DataSetCompletenessDiagnostic.Evaluate(model, signals);
+
+        Assert.Equal(58, snapshot.StaticMemberCount);
+        Assert.Equal(58, snapshot.MandatoryInventoryCount);
+        Assert.Equal(58, snapshot.RepresentedCount);
+        Assert.Equal(0, snapshot.MissingCount);
+        Assert.True(snapshot.IsComplete);
+        Assert.Contains(signals, signal => signal.DisplayReference == "AA1C1F13R4ADD/GGIO1.Dig01");
+        Assert.Contains(signals, signal => signal.DisplayReference == "AA1C1F13R4MEAS/MMXU1.Ana22");
     }
 
     private static XDocument BuildFixture()
