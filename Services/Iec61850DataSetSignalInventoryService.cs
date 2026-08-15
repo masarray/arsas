@@ -26,10 +26,15 @@ public static class Iec61850DataSetSignalInventoryService
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        if (device.LiveDiscoveryModel is null)
+        // Signal Selection is also opened directly from an offline CID/SCD workspace.
+        // In that workflow LiveDiscoveryModel is intentionally null; the SCL design model
+        // is the authoritative inventory and must not be ignored. Prefer the live model
+        // only after a real association/discovery has produced one.
+        var authoritativeModel = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        if (authoritativeModel is null)
             return EmptyResult();
 
-        return EnsureMandatorySignals(device.Signals, device.LiveDiscoveryModel);
+        return EnsureMandatorySignals(device.Signals, authoritativeModel);
     }
 
     /// <summary>
