@@ -180,6 +180,58 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Modern search-field clear affordance: quiet at rest, obvious on hover/focus,
+             and large enough to hit without looking like a separate toolbar button. -->
+        <Style x:Key="GlobalSearchClearButton" TargetType="Button">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,0,3,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#667085"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="ClipToBounds" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Width="28" Height="28"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#EEF3F8"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#D8E2EC"/>
+                                <Setter Property="Foreground" Value="#475467"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#E3EBF4"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#C9D7E5"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#EEF4FF"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#7AA7F7"/>
+                                <Setter Property="Foreground" Value="#2563EB"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="12">
@@ -246,13 +298,32 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                        <Button Grid.Column="2"
-                                Content="×"
-                                Style="{StaticResource MiniChipButton}"
-                                Padding="8,2"
-                                Margin="3"
+                        <Button x:Name="GlobalSearchClearButton"
+                                Grid.Column="2"
+                                Style="{StaticResource GlobalSearchClearButton}"
                                 Click="ClearGlobalFilter_Click"
-                                ToolTip="Clear global search"/>
+                                ToolTip="Clear search"
+                                AutomationProperties.Name="Clear global search">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GlobalSearchClearButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=GlobalSearchTextBox}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <Viewbox Width="14" Height="14"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     Stretch="Uniform" SnapsToDevicePixels="True">
+                                <Path Data="{StaticResource LucideX}"
+                                      Fill="Transparent"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                      StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"/>
+                            </Viewbox>
+                        </Button>
                     </Grid>
                 </Border>
 
