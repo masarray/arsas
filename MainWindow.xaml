@@ -991,7 +991,7 @@
                                 <StackPanel>
                                     <Border Width="48" Height="48" CornerRadius="16" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" HorizontalAlignment="Center">
                                         <Viewbox Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource LucideBell}" Style="{StaticResource LucideIcon}" Stroke="#2563EB"/>
+                                            <Path Data="M18,8 A6,6 0 0 0 6,8 C6,15 3,17 3,17 H21 C21,17 18,15 18,8 M10,21 H14" Style="{StaticResource LucideIcon}" Stroke="#2563EB"/>
                                         </Viewbox>
                                     </Border>
                                     <TextBlock Text="No annunciator signals configured" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center" Margin="0,14,0,0"/>

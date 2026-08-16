@@ -204,7 +204,7 @@ internal static class MainWindowNavigationLayoutFix
             return;
 
         // Border padding owns 10 px horizontally. The nav grid itself is divided into
-        // five equal star columns, so this is the exact width used by each button cell.
+        // six equal star columns, so this is the exact width used by each button cell.
         var contentWidth = Math.Max(0d, shellWidth - 10d);
         var cellWidth = contentWidth / 6d;
         pill.Width = Math.Max(1d, cellWidth - 2d);
