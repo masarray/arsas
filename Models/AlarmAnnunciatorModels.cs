@@ -271,11 +271,9 @@ public sealed class AlarmAnnunciatorDeviceGroup : ObservableObject
         }
 
         if (changed)
-        {
             Raise(nameof(VisualState));
-            Raise(nameof(StatusText));
-        }
         Raise(nameof(ConfiguredCount));
+        Raise(nameof(StatusText));
         Raise(nameof(LampOpacity));
     }
 
