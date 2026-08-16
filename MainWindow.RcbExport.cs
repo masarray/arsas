@@ -78,9 +78,28 @@ public partial class MainWindow
         SclReportControlInventoryResult? sourceInventory,
         MmsRcbAvailabilityResult? availability)
     {
-        if (sourceInventory != null)
-            return BuildSourceBackedRcbRows(device, sourceInventory, availability);
-        return BuildLiveModelRcbRows(device.LiveDiscoveryModel, availability);
+        var liveRows = BuildLiveModelRcbRows(device.LiveDiscoveryModel, availability);
+        if (sourceInventory == null)
+            return liveRows;
+
+        // Never let an older/source SCL hide RCBs that the connected IED actually
+        // exposes. Source-backed rows are preferred for exact export identity, then
+        // unmatched live-discovery rows are appended as first-class export choices.
+        var rows = BuildSourceBackedRcbRows(device, sourceInventory, availability).ToList();
+        var seen = rows
+            .Select(row => NormalizeRcbReference(row.Reference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var liveRow in liveRows)
+        {
+            var key = NormalizeRcbReference(liveRow.Reference);
+            if (!seen.Add(key))
+                continue;
+            rows.Add(liveRow);
+        }
+
+        return rows;
     }
 
     private static IReadOnlyList<RcbExportRow> BuildSourceBackedRcbRows(
@@ -144,7 +163,7 @@ public partial class MainWindow
             ? $"{descriptor.LogicalDeviceInstance} / {descriptor.LogicalNodePath}".Trim(' ', '/')
             : RcbExportEvidencePolicy.ScopeFromReference(snapshot?.Reference ?? descriptor.DisplayReference);
         var reason = evidenceConflict
-            ? $"Configuration mismatch: source SCL binds {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)}, while the live IED reports {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}. Export is blocked until the mismatch is resolved."
+            ? $"Configuration mismatch: source SCL binds {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)}, while the live IED reports {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}. Export remains available; this mismatch is preserved as operator evidence."
             : snapshot?.Reason ?? RcbExportEvidencePolicy.SourceReason(
                 descriptor.DataSetName,
                 descriptor.DataSetResolved,
@@ -326,13 +345,12 @@ public partial class MainWindow
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (row.HasEvidenceConflict)
-            throw new InvalidOperationException("Source SCL and live IED DataSet bindings conflict. Resolve the configuration mismatch before exporting this RCB.");
-        if (row.MemberCount <= 0)
-            throw new InvalidOperationException("The selected RCB has no populated DataSet.");
 
         if (row.IsSourceBacked && !string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
         {
+            if (row.HasEvidenceConflict)
+                AddLog("WARN", "RCB Export", $"{device.Name}: exporting source-backed RCB {row.Reference} with source/live DataSet mismatch preserved as evidence.");
+
             var result = await Task.Run(() => LegacySasSclExporter.WriteFiles(
                 device.SclSourcePath,
                 outputPath,
@@ -365,16 +383,22 @@ public partial class MainWindow
 
         var liveModel = device.LiveDiscoveryModel
             ?? throw new InvalidOperationException("A source SCL file or complete live discovery model is required for legacy SAS export.");
-        var selectedDataSet = liveModel.DataSets.FirstOrDefault(dataSet =>
-            NormalizeRcbReference(dataSet.Reference)
-                .Equals(NormalizeRcbReference(row.DataSetReference), StringComparison.OrdinalIgnoreCase));
+        var selectedDataSet = string.IsNullOrWhiteSpace(row.DataSetReference)
+            ? null
+            : liveModel.DataSets.FirstOrDefault(dataSet =>
+                NormalizeRcbReference(dataSet.Reference)
+                    .Equals(NormalizeRcbReference(row.DataSetReference), StringComparison.OrdinalIgnoreCase));
         var exportModel = liveModel;
-        if (selectedDataSet is null || selectedDataSet.Members.Count == 0)
+
+        // An RCB with no DataSet is still a real RCB and must remain exportable.
+        // Only request FCDA evidence when the RCB actually declares a DataSet.
+        if (!string.IsNullOrWhiteSpace(row.DataSetReference) &&
+            (selectedDataSet is null || selectedDataSet.Members.Count == 0))
         {
             if (availability is null)
             {
                 throw new InvalidOperationException(
-                    "The live discovery model does not contain FCDA member references for this DataSet. Click Check Availability, wait for the read-only audit to finish, then export again.");
+                    "The selected RCB declares a DataSet, but live discovery has no FCDA directory evidence yet. Click Check Availability, wait for the read-only audit to finish, then export again.");
             }
 
             exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
