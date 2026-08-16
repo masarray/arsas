@@ -300,7 +300,6 @@
                         </TextBlock>
                         <Button x:Name="GlobalSearchClearButton"
                                 Grid.Column="2"
-                                Style="{StaticResource GlobalSearchClearButton}"
                                 Click="ClearGlobalFilter_Click"
                                 ToolTip="Clear search"
                                 AutomationProperties.Name="Clear global search">
