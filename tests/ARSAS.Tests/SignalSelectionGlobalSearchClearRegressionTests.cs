@@ -31,7 +31,7 @@ public sealed class SignalSelectionGlobalSearchClearRegressionTests
 
         Assert.Equal("ClearGlobalFilter_Click", (string?)clearButton.Attribute("Click"));
         Assert.Equal("Clear search", (string?)clearButton.Attribute("ToolTip"));
-        Assert.Equal("Clear global search", (string?)clearButton.Attribute(presentation + "AutomationProperties.Name"));
+        Assert.Equal("Clear global search", (string?)clearButton.Attribute("AutomationProperties.Name"));
         Assert.Null(clearButton.Attribute("Content"));
         Assert.Null(clearButton.Attribute("Style"));
 
