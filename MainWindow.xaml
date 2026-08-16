@@ -76,8 +76,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="5" Width="148" Height="34"
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="6" Width="148" Height="34"
                             HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
                             Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
@@ -93,8 +94,9 @@
                     <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavEventsButton" Grid.Column="2" Content="Event Log" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavGooseButton" Grid.Column="3" Content="GOOSE Subscriber" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavDiagnosticsButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
+                    <Button x:Name="NavAlarmButton" Grid.Column="3" Content="Alarm Annunciator" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavGooseButton" Grid.Column="4" Content="GOOSE Subscriber" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
@@ -108,17 +110,9 @@
                 </Grid>
             </Border>
 
-            <WrapPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
-                    <TextBlock Text="{Binding ConnectionInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
-                </Border>
-                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6" Margin="0,0,8,0">
-                    <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
-                </Border>
-                <Border Background="{StaticResource PremiumSurface}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="15" Padding="10,6">
-                    <TextBlock Text="{Binding EventInsightText}" FontSize="12.5" Foreground="{StaticResource Ink}"/>
-                </Border>
-            </WrapPanel>
+            <!-- Runtime counts intentionally live only in the bottom status bar.
+                 Keeping the header free of duplicate status chips reduces visual noise
+                 and reserves width for the six workflow destinations. -->
         </Grid>
 
         <TabControl x:Name="MainTabs" Grid.Row="1" SelectedIndex="0"
@@ -480,6 +474,18 @@
                                             <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="1.05*" MinWidth="145"/>
                                             <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="1.55*" MinWidth="205"/>
                                             <DataGridTemplateColumn Header="Value" Width="0.8*" MinWidth="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
+                                            <DataGridTemplateColumn Header="Alarm" Width="72" MinWidth="68">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <CheckBox IsChecked="{Binding IsAnnunciatorSelected, Mode=OneWay}"
+                                                                  IsEnabled="{Binding CanUseAsAnnunciator}"
+                                                                  Tag="{Binding}" Click="AnnunciatorSelection_Click"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                  ToolTip="{Binding AnnunciatorSelectionToolTip}"
+                                                                  FocusVisualStyle="{x:Null}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
                                             <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="1.05*" MinWidth="150"/>
@@ -844,6 +850,157 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
+                </Border>
+            </TabItem>
+
+            <!-- EVENT-LATCHED ALARM ANNUNCIATOR -->
+            <TabItem Header="Alarm Annunciator">
+                <Border Style="{StaticResource Card}" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Width="34" Height="34" CornerRadius="12" Background="#FFF1F0" BorderBrush="#FECACA" BorderThickness="1" Margin="0,0,11,0">
+                                    <Ellipse Width="12" Height="12" Fill="#DC2626"
+                                             Opacity="{Binding AnnunciatorBeaconOpacity}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="Alarm Annunciator" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="SOE-latched alarm windows • momentary relay pulses remain visible until acknowledgement"
+                                               FontSize="12.1" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="10,6" Margin="0,0,9,0">
+                                    <TextBlock Text="{Binding AnnunciatorSummaryText}" FontSize="11.8" Foreground="{StaticResource Ink}"/>
+                                </Border>
+                                <Button Content="ACK ALL" Style="{StaticResource PrimaryButton}" Padding="14,7"
+                                        Click="AcknowledgeAllAlarms_Click"
+                                        ToolTip="Acknowledge every unacknowledged annunciator occurrence. Active process conditions remain steadily indicated until they return to normal."/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Grid.Row="2">
+                            <ScrollViewer Visibility="{Binding AnnunciatorContentVisibility}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding AnnunciatorAlarms}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="286" MinHeight="158" Margin="0,0,10,10" Padding="14" CornerRadius="15" BorderThickness="1.2">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#F8FAFC"/>
+                                                        <Setter Property="BorderBrush" Value="#D8E1EC"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding VisualState}" Value="ActiveUnacknowledged">
+                                                                <Setter Property="Background" Value="#FFF1F0"/>
+                                                                <Setter Property="BorderBrush" Value="#FCA5A5"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding VisualState}" Value="ActiveAcknowledged">
+                                                                <Setter Property="Background" Value="#FFF7ED"/>
+                                                                <Setter Property="BorderBrush" Value="#FDBA74"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding VisualState}" Value="ReturnedUnacknowledged">
+                                                                <Setter Property="Background" Value="#FFF8E7"/>
+                                                                <Setter Property="BorderBrush" Value="#F5C76B"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Ellipse Width="11" Height="11" Margin="0,0,8,0" Opacity="{Binding LampOpacity}">
+                                                                <Ellipse.Style>
+                                                                    <Style TargetType="Ellipse">
+                                                                        <Setter Property="Fill" Value="#94A3B8"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding VisualState}" Value="ActiveUnacknowledged"><Setter Property="Fill" Value="#DC2626"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding VisualState}" Value="ActiveAcknowledged"><Setter Property="Fill" Value="#EA580C"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding VisualState}" Value="ReturnedUnacknowledged"><Setter Property="Fill" Value="#D97706"/></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Ellipse.Style>
+                                                            </Ellipse>
+                                                            <TextBlock Text="{Binding SignalName}" FontSize="13.3" FontWeight="SemiBold" Foreground="#1D2939" TextTrimming="CharacterEllipsis" MaxWidth="178"/>
+                                                        </StackPanel>
+                                                        <Border Grid.Column="1" CornerRadius="8" Padding="7,3" BorderThickness="1">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="#EEF2F6"/>
+                                                                    <Setter Property="BorderBrush" Value="#D8E1EA"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding VisualState}" Value="ActiveUnacknowledged"><Setter Property="Background" Value="#FEE2E2"/><Setter Property="BorderBrush" Value="#FCA5A5"/></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding VisualState}" Value="ActiveAcknowledged"><Setter Property="Background" Value="#FFEDD5"/><Setter Property="BorderBrush" Value="#FDBA74"/></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding VisualState}" Value="ReturnedUnacknowledged"><Setter Property="Background" Value="#FEF3C7"/><Setter Property="BorderBrush" Value="#F5C76B"/></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding StateText}" FontSize="9.7" FontWeight="Bold" Foreground="#475467"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <StackPanel Grid.Row="1" Margin="19,6,0,0">
+                                                        <TextBlock Text="{Binding DeviceName}" FontSize="10.8" Foreground="#475467" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding IecTelegram}" FontSize="10.1" Foreground="#667085" TextTrimming="CharacterEllipsis" ToolTip="{Binding IecReference}"/>
+                                                    </StackPanel>
+                                                    <Grid Grid.Row="2" Margin="19,9,0,0">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding StateDetail}" FontSize="10.4" Foreground="#475467" TextWrapping="Wrap" MaxWidth="190"/>
+                                                            <TextBlock Text="{Binding LastEventTimestamp, StringFormat=Last SOE {0}}" FontSize="9.7" Foreground="#98A2B3" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1" Content="ACK" Tag="{Binding}" Click="AcknowledgeAlarm_Click"
+                                                                Style="{StaticResource SoftButton}" Padding="10,5" Margin="8,0,0,0"
+                                                                IsEnabled="{Binding CanAcknowledge}" VerticalAlignment="Bottom"/>
+                                                    </Grid>
+                                                    <Grid Grid.Row="3" Margin="19,9,0,0">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding CurrentValue, StringFormat=Value {0}}" FontSize="10" FontWeight="SemiBold" Foreground="#344054"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ActivationCountText}" FontSize="9.7" Foreground="#667085"/>
+                                                    </Grid>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <Border Visibility="{Binding AnnunciatorEmptyVisibility}" Background="#FAFCFF" BorderBrush="#D9E4F1" BorderThickness="1" CornerRadius="18" Padding="28"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="620">
+                                <StackPanel>
+                                    <Border Width="48" Height="48" CornerRadius="16" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" HorizontalAlignment="Center">
+                                        <Viewbox Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Path Data="M18,8 A6,6 0 0 0 6,8 C6,15 3,17 3,17 H21 C21,17 18,15 18,8 M10,21 H14" Style="{StaticResource LucideIcon}" Stroke="#2563EB"/>
+                                        </Viewbox>
+                                    </Border>
+                                    <TextBlock Text="No annunciator signals configured" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                                    <TextBlock Text="In IEC 61850 Explorer, tick Alarm for the ST/protection status points you want to retain. Alarm state is driven by Event Log/SOE edges, so short relay pulses remain latched until ACK."
+                                               TextWrapping="Wrap" TextAlignment="Center" FontSize="12.4" Foreground="{StaticResource Muted}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
                 </Border>
             </TabItem>
 

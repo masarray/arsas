@@ -600,6 +600,7 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     private string _status = "Queued";
     private long _sequence;
     private bool _isRecentlyChanged;
+    private bool _isAnnunciatorSelected;
 
     public string DeviceId { get; set; } = string.Empty;
     public string DeviceName { get; set; } = string.Empty;
@@ -639,6 +640,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     public string Status { get => _status; set => Set(ref _status, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public long Sequence { get => _sequence; set => Set(ref _sequence, value); }
     public bool IsRecentlyChanged { get => _isRecentlyChanged; set => Set(ref _isRecentlyChanged, value); }
+    public bool IsAnnunciatorSelected { get => _isAnnunciatorSelected; set => Set(ref _isAnnunciatorSelected, value); }
+    public bool CanUseAsAnnunciator => FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase);
+    public string AnnunciatorSelectionToolTip => CanUseAsAnnunciator
+        ? "Latch this IEC 61850 ST point in Alarm Annunciator using SOE/Event Log edges."
+        : "Alarm Annunciator selection is limited to IEC 61850 ST status points.";
 
     /// <summary>
     /// Applies a process value and returns true only for a real semantic transition.
@@ -837,6 +843,7 @@ public sealed class Iec61850TesterDeviceProfile
     public string SclIedName { get; set; } = string.Empty;
     public string SclAccessPointName { get; set; } = string.Empty;
     public List<string> SelectedReferences { get; set; } = new();
+    public List<string> AnnunciatorReferences { get; set; } = new();
     public List<Iec61850CachedSignalProfile> CachedSignals { get; set; } = new();
 }
 
