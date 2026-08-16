@@ -29,12 +29,15 @@ public sealed class MainWindowTopBarLayoutRegressionTests
     }
 
     [Fact]
-    public void ResponsiveCorrection_RunsAfterLegacySelectionAnimationAndOnWindowResize()
+    public void ResponsiveCorrection_RunsAfterSelectionResizeAndRepeatedNavClick()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
         Assert.Contains("window.SizeChanged += MainWindow_SizeChanged", source, StringComparison.Ordinal);
         Assert.Contains("tabs.SelectionChanged += MainTabs_SelectionChanged", source, StringComparison.Ordinal);
+        Assert.Contains("Button.ClickEvent", source, StringComparison.Ordinal);
+        Assert.Contains("OnMainWindowButtonClick", source, StringComparison.Ordinal);
+        Assert.Contains("A repeated click on the already-selected tab", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Loaded", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ContextIdle", source, StringComparison.Ordinal);
         Assert.Contains("QueuePillCorrection(window, animate: true)", source, StringComparison.Ordinal);
