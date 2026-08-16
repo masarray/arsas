@@ -68,13 +68,14 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMemberCentricStaticDataSetInventory()
+    public void EngineLock_PinsMergedReportProjectionEngineWithoutLosingMemberCentricInventory()
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
-        Assert.Contains("761fa0df9ca84fbe15352d2670f03fddbe8784ba", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 78", source, StringComparison.Ordinal);
+        Assert.Contains("1ed53ab3252902f680d76adbadd25790bf6f8ca4", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 79", source, StringComparison.Ordinal);
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
