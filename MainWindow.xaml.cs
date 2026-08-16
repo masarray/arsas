@@ -540,7 +540,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, 4);
+        index = Math.Clamp(index, 0, 5);
         MainTabs.SelectedIndex = index;
         UpdateNavigationVisuals(index, animate: true);
     }
@@ -555,13 +555,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             foreach (var device in Devices)
                 device.ClearUnreadEvents();
         }
-        else if (MainTabs.SelectedIndex == 3)
+        else if (MainTabs.SelectedIndex == 4)
         {
             // Defer optional Npcap/model work until after the selected tab has rendered.
             // An unavailable capture dependency must never leave the workspace blank.
             ActivateGooseSubscriberWorkspace();
         }
-        else if (MainTabs.SelectedIndex == 4)
+        else if (MainTabs.SelectedIndex == 5)
         {
             ClearDiagnosticAlert();
         }
@@ -574,7 +574,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        var target = Math.Clamp(index, 0, 4) * 150d;
+        var target = Math.Clamp(index, 0, 5) * 150d;
         if (animate)
         {
             var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(190))
@@ -589,7 +589,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             WorkflowPillTranslate.X = target;
         }
 
-        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavGooseButton, NavDiagnosticsButton };
+        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavAlarmButton, NavGooseButton, NavDiagnosticsButton };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));
     }
@@ -1850,6 +1850,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     .Select(signal => NormalizeReference(signal.ObjectReference))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList(),
+                AnnunciatorReferences = GetAnnunciatorReferencesForDevice(device),
                 CachedSignals = device.HasDiscoveryCache
                     ? device.Signals
                         .Where(signal => !signal.IsControlSignal || signal.IsValidControlObject)
@@ -1971,6 +1972,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     _pendingProjectSelections[device.DeviceId] = selectedReferences;
                 }
+
+                RestoreAnnunciatorReferences(device, profile.AnnunciatorReferences);
             }
 
             SelectedDevice = Devices.FirstOrDefault();
@@ -2410,7 +2413,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MarkDiagnosticAlert()
     {
-        if (MainTabs?.SelectedIndex == 4 || _hasUnreadDiagnosticError)
+        if (MainTabs?.SelectedIndex == 5 || _hasUnreadDiagnosticError)
             return;
 
         _hasUnreadDiagnosticError = true;
