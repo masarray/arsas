@@ -104,4 +104,19 @@ public sealed class ReportProcessValueSafetyTests
 
         Assert.True(safe, reason);
     }
+
+    [Fact]
+    public void QualitySignal_RemainsAllowedAsNativeBitString()
+    {
+        const string raw = "bits(0000, unused=3)";
+
+        var safe = ReportProcessValueSafety.IsSafe(
+            raw,
+            raw,
+            "Quality",
+            "IEDLD0/GGIO1.Ind1.q",
+            out var reason);
+
+        Assert.True(safe, reason);
+    }
 }
