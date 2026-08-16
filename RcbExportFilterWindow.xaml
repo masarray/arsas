@@ -208,10 +208,10 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="{Binding SelectionSummary}" FontSize="11.8" FontWeight="SemiBold"
-                           Foreground="{StaticResource RcbInk}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Text="{Binding RemovalSummary}" Margin="12,0,0,0" FontSize="11.2"
-                           Foreground="#315DBF" VerticalAlignment="Center"/>
+                <TextBlock x:Name="FooterSelectionSummaryText" Text="{Binding SelectionSummary}" FontSize="11.8" FontWeight="SemiBold"
+                           Foreground="#F4F8FC" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="FooterRemovalSummaryText" Text="{Binding RemovalSummary}" Margin="12,0,0,0" FontSize="11.2"
+                           Foreground="#93C5FD" VerticalAlignment="Center"/>
             </StackPanel>
 
             <TextBlock x:Name="MockStatusText" Visibility="Collapsed"
