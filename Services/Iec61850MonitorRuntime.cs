@@ -1394,6 +1394,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             IpAddress = point.IpAddress,
             SignalName = point.SignalName,
             IecReference = point.IecReference,
+            IecDataType = point.IecDataType,
             OldValue = oldValue,
             NewValue = display,
             Quality = quality,

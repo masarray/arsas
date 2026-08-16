@@ -618,7 +618,20 @@ public sealed class Iec61850MonitorPoint : ObservableObject
 
     public string PointKey => $"{DeviceId}|{NormalizeReference(IecReference)}";
     public string IecTelegram => StripIedNamePrefix(IecReference, DeviceName);
-    public string Value { get => _value; set => Set(ref _value, string.IsNullOrWhiteSpace(value) ? "-" : value); }
+    public string Value
+    {
+        get => _value;
+        set
+        {
+            if (Set(ref _value, string.IsNullOrWhiteSpace(value) ? "-" : value))
+            {
+                Raise(nameof(DisplayValue));
+                Raise(nameof(ValueTone));
+            }
+        }
+    }
+    public string DisplayValue => Value;
+    public string ValueTone => Iec61850ValueStatePresentation.Classify(Value, IecDataType);
     public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string SourceMode { get => _sourceMode; set => Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
@@ -742,6 +755,7 @@ public sealed class Iec61850EventEntry
     public string IpAddress { get; init; } = string.Empty;
     public string SignalName { get; init; } = string.Empty;
     public string IecReference { get; init; } = string.Empty;
+    public string IecDataType { get; init; } = string.Empty;
     public string OldValue { get; init; } = "-";
     public string NewValue { get; init; } = "-";
     public string Quality { get; init; } = "Unknown";
@@ -764,23 +778,8 @@ public sealed class Iec61850EventEntry
 
     public string ChangeText => $"{EdgeType} · {OldValue} → {NewValue}";
     public string EventValue => string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
-    public string ValueTone
-    {
-        get
-        {
-            var text = EventValue.Trim().ToLowerInvariant();
-            if (text.Contains("closed") ||
-                text is "true" or "on" or "active" or "asserted" or "1" or "1.0")
-                return "Energized";
-            if (text.Contains("open") ||
-                text is "false" or "off" or "inactive" or "deasserted" or "0" or "0.0")
-                return "Deenergized";
-            if (text.Contains("intermediate") || text.Contains("bad") ||
-                text.Contains("00") || text.Contains("11"))
-                return "Abnormal";
-            return "Neutral";
-        }
-    }
+    public string DisplayValue => EventValue;
+    public string ValueTone => Iec61850ValueStatePresentation.Classify(EventValue, IecDataType);
 
     public string IecTelegram => Iec61850MonitorPoint.StripIedNamePrefix(IecReference, DeviceName);
 

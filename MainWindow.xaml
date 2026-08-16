@@ -6,6 +6,52 @@
         WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
+    <Window.Resources>
+        <!-- Process state is intentionally separate from health/severity. Active is
+             ARSAS blue, inactive is slate, abnormal/intermediate is amber. Red/green
+             remain reserved for faults, bad quality, availability and success. -->
+        <DataTemplate x:Key="ProcessValueBadgeTemplate">
+            <Border x:Name="ProcessValueBadge"
+                    CornerRadius="9" Padding="8,3" MinWidth="62"
+                    HorizontalAlignment="Left"
+                    Background="#F6F8FB" BorderBrush="#DCE3EC" BorderThickness="1">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse x:Name="ProcessValueDot" Width="7" Height="7" Margin="0,0,6,0"
+                             Fill="#94A3B8" Stroke="#94A3B8" StrokeThickness="1.2"
+                             VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ProcessValueText"
+                               Text="{Binding DisplayValue}" ToolTip="{Binding DisplayValue}"
+                               FontSize="11.8" FontWeight="SemiBold" Foreground="#344054"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding ValueTone}" Value="Active">
+                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#EAF4FF"/>
+                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#B8D8F5"/>
+                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#245F9E"/>
+                    <Setter TargetName="ProcessValueDot" Property="Fill" Value="#2F80ED"/>
+                    <Setter TargetName="ProcessValueDot" Property="Stroke" Value="#2F80ED"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTone}" Value="Inactive">
+                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F3F6F9"/>
+                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#D5DEE8"/>
+                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#617286"/>
+                    <Setter TargetName="ProcessValueDot" Property="Fill" Value="Transparent"/>
+                    <Setter TargetName="ProcessValueDot" Property="Stroke" Value="#7C8FA3"/>
+                    <Setter TargetName="ProcessValueDot" Property="StrokeThickness" Value="1.7"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTone}" Value="Abnormal">
+                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#FFF8E6"/>
+                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#F2D28A"/>
+                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#946200"/>
+                    <Setter TargetName="ProcessValueDot" Property="Fill" Value="#F59E0B"/>
+                    <Setter TargetName="ProcessValueDot" Property="Stroke" Value="#F59E0B"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -433,7 +479,7 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="1.05*" MinWidth="145"/>
                                             <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="1.55*" MinWidth="205"/>
-                                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="0.8*" MinWidth="125"/>
+                                            <DataGridTemplateColumn Header="Value" Width="0.8*" MinWidth="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                             <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
                                             <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="1.05*" MinWidth="150"/>
@@ -528,12 +574,12 @@
                                                                             <Setter Property="BorderThickness" Value="1"/>
                                                                             <Style.Triggers>
                                                                                 <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized">
-                                                                                    <Setter Property="Background" Value="#FEF3F2"/>
-                                                                                    <Setter Property="BorderBrush" Value="#FECDCA"/>
+                                                                                    <Setter Property="Background" Value="#EAF4FF"/>
+                                                                                    <Setter Property="BorderBrush" Value="#B8D8F5"/>
                                                                                 </DataTrigger>
                                                                                 <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized">
-                                                                                    <Setter Property="Background" Value="#ECFDF3"/>
-                                                                                    <Setter Property="BorderBrush" Value="#ABEFC6"/>
+                                                                                    <Setter Property="Background" Value="#F3F6F9"/>
+                                                                                    <Setter Property="BorderBrush" Value="#D5DEE8"/>
                                                                                 </DataTrigger>
                                                                                 <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal">
                                                                                     <Setter Property="Background" Value="#FFFAEB"/>
@@ -547,8 +593,8 @@
                                                                             <Style TargetType="TextBlock">
                                                                                 <Setter Property="Foreground" Value="#344054"/>
                                                                                 <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized"><Setter Property="Foreground" Value="#B42318"/></DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized"><Setter Property="Foreground" Value="#067647"/></DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized"><Setter Property="Foreground" Value="#245F9E"/></DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized"><Setter Property="Foreground" Value="#617286"/></DataTrigger>
                                                                                     <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal"><Setter Property="Foreground" Value="#B54708"/></DataTrigger>
                                                                                 </Style.Triggers>
                                                                             </Style>
@@ -756,7 +802,7 @@
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="195"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320"/>
-                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="125"/>
+                                <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
                                 <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
@@ -774,7 +820,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="IEC 61850 Sequence of Events" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="SCADA/SAS SOE: each row shows the new process value directly. Closed/ON/true is red, Open/OFF/false is green, and intermediate/bad states are amber. Non-events stay out."
+                                <TextBlock Text="SCADA/SAS SOE: state values use ARSAS blue for active and slate for inactive; intermediate/bad states use amber. Color describes state, not alarm severity. Non-events stay out."
                                            FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
@@ -792,33 +838,7 @@
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="190"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="300"/>
-                                <DataGridTemplateColumn Header="Value" Width="150">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Border x:Name="ValueBadge" CornerRadius="9" Padding="10,4" HorizontalAlignment="Left"
-                                                    Background="#F1F5F9" BorderBrush="#D8E0EA" BorderThickness="1">
-                                                <TextBlock x:Name="ValueText" Text="{Binding EventValue}" FontWeight="SemiBold" Foreground="#344054"/>
-                                            </Border>
-                                            <DataTemplate.Triggers>
-                                                <DataTrigger Binding="{Binding ValueTone}" Value="Energized">
-                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FEE4E2"/>
-                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#FDA29B"/>
-                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#B42318"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding ValueTone}" Value="Deenergized">
-                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#ECFDF3"/>
-                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#86EFAC"/>
-                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#067647"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding ValueTone}" Value="Abnormal">
-                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FFFAEB"/>
-                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#FEC84B"/>
-                                                    <Setter TargetName="ValueText" Property="Foreground" Value="#B54708"/>
-                                                </DataTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Value" Width="150" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="150"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
                             </DataGrid.Columns>
