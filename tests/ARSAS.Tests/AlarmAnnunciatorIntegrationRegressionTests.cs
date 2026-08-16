@@ -55,26 +55,43 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
     public void Explorer_OffersExplicitAlarmCheckbox_AndAnnunciatorWorkspaceUsesAckControls()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
+        var section = ExtractAnnunciatorSection(source);
 
         Assert.Contains("Header=\"Alarm\"", source, StringComparison.Ordinal);
         Assert.Contains("IsAnnunciatorSelected", source, StringComparison.Ordinal);
         Assert.Contains("CanUseAsAnnunciator", source, StringComparison.Ordinal);
         Assert.Contains("Click=\"AnnunciatorSelection_Click\"", source, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Alarm Annunciator\"", source, StringComparison.Ordinal);
-        Assert.Contains("FLASH = UNACK", source, StringComparison.Ordinal);
-        Assert.Contains("Text=\"VALUE\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding CurrentValue}\" FontSize=\"24\"", source, StringComparison.Ordinal);
-        Assert.Contains("AnnunciatorAlarms", source, StringComparison.Ordinal);
-        Assert.Contains("Click=\"AcknowledgeAlarm_Click\"", source, StringComparison.Ordinal);
-        Assert.Contains("Click=\"AcknowledgeAllAlarms_Click\"", source, StringComparison.Ordinal);
-        Assert.Contains("ActiveUnacknowledged", source, StringComparison.Ordinal);
-        Assert.Contains("ActiveAcknowledged", source, StringComparison.Ordinal);
-        Assert.Contains("ReturnedUnacknowledged", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StateDetail", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StringFormat=Last SOE {0}", source, StringComparison.Ordinal);
-        Assert.Contains("<Border.ToolTip>", source, StringComparison.Ordinal);
-        Assert.Contains("StringFormat=Last SOE: {0}", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StaticResource LucideBell", source, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Alarm Annunciator\"", section, StringComparison.Ordinal);
+        Assert.Contains("FLASH = UNACK", section, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CurrentValue}\" FontSize=\"18\"", section, StringComparison.Ordinal);
+        Assert.Contains("Click=\"AcknowledgeAlarm_Click\"", section, StringComparison.Ordinal);
+        Assert.Contains("Click=\"AcknowledgeAllAlarms_Click\"", section, StringComparison.Ordinal);
+        Assert.Contains("ActiveUnacknowledged", section, StringComparison.Ordinal);
+        Assert.Contains("ActiveAcknowledged", section, StringComparison.Ordinal);
+        Assert.Contains("ReturnedUnacknowledged", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("StateDetail", section, StringComparison.Ordinal);
+        Assert.Contains("<Border.ToolTip>", section, StringComparison.Ordinal);
+        Assert.Contains("StringFormat=Last SOE: {0}", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("StaticResource LucideBell", section, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Annunciator_UsesVirtualizedIedRail_AndVerticalColumnMajorFascia()
+    {
+        var section = ExtractAnnunciatorSection(File.ReadAllText(FindRepoFile("MainWindow.xaml")));
+
+        Assert.Contains("ItemsSource=\"{Binding AnnunciatorDevices}\"", section, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding SelectedAnnunciatorDevice, Mode=TwoWay}\"", section, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", section, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", section, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding SelectedAnnunciatorDevice.Alarms}\"", section, StringComparison.Ordinal);
+        Assert.Contains("<WrapPanel Orientation=\"Vertical\"/>", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("<WrapPanel Orientation=\"Horizontal\"/>", section, StringComparison.Ordinal);
+        Assert.Contains("Width=\"250\" Height=\"64\"", section, StringComparison.Ordinal);
+        Assert.Contains("Width=\"22\" Height=\"22\"", section, StringComparison.Ordinal);
+        Assert.Contains("Content=\"ACK IED\"", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"ACK ALL\"", section, StringComparison.Ordinal);
+        Assert.Contains("SelectedAnnunciatorDevice.DeviceName", section, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,6 +106,18 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.DoesNotContain("ReadValueAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartDeviceAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartMonitoring", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Annunciator_FlashAndAckWorkAreBoundedToVisibleIedOrIedRail()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.AlarmAnnunciator.cs"));
+
+        Assert.Contains("SelectedAnnunciatorDevice.Alarms.Where(item => item.IsFlashing)", source, StringComparison.Ordinal);
+        Assert.Contains("AnnunciatorDevices.Where(group => group.HasUnacknowledged)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("foreach (var alarm in AnnunciatorAlarms)", source, StringComparison.Ordinal);
+        Assert.Contains("foreach (var item in group.Alarms.Where(item => item.CanAcknowledge).ToArray())", source, StringComparison.Ordinal);
+        Assert.Contains("select an IED first", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,6 +143,16 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains("AnnunciatorReferences = GetAnnunciatorReferencesForDevice(device)", source, StringComparison.Ordinal);
         Assert.Contains("RestoreAnnunciatorReferences(device, profile.AnnunciatorReferences)", source, StringComparison.Ordinal);
         Assert.Contains("public List<string> AnnunciatorReferences", models, StringComparison.Ordinal);
+    }
+
+    private static string ExtractAnnunciatorSection(string source)
+    {
+        const string start = "<!-- EVENT-LATCHED ALARM ANNUNCIATOR -->";
+        const string end = "<!-- SCL / DISCOVERY-AWARE GOOSE SUBSCRIBER -->";
+        var startIndex = source.IndexOf(start, StringComparison.Ordinal);
+        var endIndex = source.IndexOf(end, StringComparison.Ordinal);
+        Assert.True(startIndex >= 0 && endIndex > startIndex, "Alarm Annunciator XAML section was not found.");
+        return source[startIndex..endIndex];
     }
 
     private static string FindRepoFile(string relativePath)
