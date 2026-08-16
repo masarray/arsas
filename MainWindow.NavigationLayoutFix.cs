@@ -48,6 +48,11 @@ internal static class MainWindowNavigationLayoutFix
             typeof(MainWindow),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(OnMainWindowLoaded));
+        EventManager.RegisterClassHandler(
+            typeof(MainWindow),
+            Button.ClickEvent,
+            new RoutedEventHandler(OnMainWindowButtonClick),
+            handledEventsToo: true);
     }
 
     private static void OnMainWindowLoaded(object sender, RoutedEventArgs e)
@@ -79,6 +84,20 @@ internal static class MainWindowNavigationLayoutFix
                 ApplyResponsiveLayout(window);
                 PositionPill(window, animate: false);
             }));
+    }
+
+    private static void OnMainWindowButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MainWindow window || e.Source is not Button button)
+            return;
+
+        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavGooseButton" or "NavDiagnosticsButton"))
+            return;
+
+        // A repeated click on the already-selected tab does not raise SelectionChanged,
+        // but the legacy click handler still writes its fixed 150 px animation target.
+        // Correct after the routed Click has fully returned in both cases.
+        QueuePillCorrection(window, animate: true);
     }
 
     private static void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
