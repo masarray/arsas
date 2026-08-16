@@ -1,0 +1,33 @@
+name: Temporary Annunciator panel visual patch
+
+on:
+  push:
+    branches:
+      - polish/annunciator-panel-ux
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: polish/annunciator-panel-ux
+          fetch-depth: 0
+      - run: python scripts/patch-annunciator-panel-ux.py
+      - run: git diff --check
+      - name: Commit visual redesign
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Patch already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml MainWindow.NavigationLayoutFix.cs MainWindow.AlarmAnnunciator.cs
+          git commit -m "Redesign Alarm Annunciator for instant operator readability"
+          git push origin HEAD:polish/annunciator-panel-ux
