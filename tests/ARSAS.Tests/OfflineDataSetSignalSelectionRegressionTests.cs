@@ -72,11 +72,13 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
-        Assert.Contains("e23b295b87760be8f7f0ce978a6987027ea50523", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 80", source, StringComparison.Ordinal);
+        Assert.Contains("becda399b4a3ae34831215fc915798b4f846c1be", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 81", source, StringComparison.Ordinal);
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("zero OptFlds", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quarantining unmapped canonical report metadata", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
