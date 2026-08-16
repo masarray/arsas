@@ -554,15 +554,17 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="{Binding SelectionCountText}"
+                <TextBlock x:Name="FooterSelectionCountText"
+                           Text="{Binding SelectionCountText}"
                            FontSize="12.2"
                            FontWeight="SemiBold"
-                           Foreground="#344054"
+                           Foreground="#F4F8FC"
                            VerticalAlignment="Center"/>
-                <Border Width="1" Height="16" Background="#D0D5DD" Margin="11,0"/>
-                <TextBlock Text="{Binding VisibleCountText}"
+                <Border x:Name="FooterSummarySeparator" Width="1" Height="16" Background="#8FA8BC" Margin="11,0"/>
+                <TextBlock x:Name="FooterVisibleCountText"
+                           Text="{Binding VisibleCountText}"
                            FontSize="12"
-                           Foreground="#667085"
+                           Foreground="#C9D8E5"
                            VerticalAlignment="Center"/>
             </StackPanel>
 
