@@ -21,8 +21,11 @@ public sealed partial class NativeIec61850Client
     private readonly Dictionary<string, AuthoritativeHybridSubscription> _authoritativeHybridSubscriptions =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private static LiveIedModelDiscoveryDocument? ResolveHybridPlanningModel(Iec61850MonitorDevice? device)
+        => device?.LiveDiscoveryModel ?? device?.SclWorkspace?.DesignModel;
+
     internal bool CanUseHybridReportPlanner(Iec61850MonitorDevice device)
-        => device?.LiveDiscoveryModel is not null;
+        => ResolveHybridPlanningModel(device) is not null;
 
     public async Task<NativeHybridReportPlanningResult> BuildHybridReportPlansAsync(
         Iec61850MonitorDevice device,
@@ -35,14 +38,15 @@ public sealed partial class NativeIec61850Client
 
         _authoritativeHybridSubscriptions.Clear();
 
-        if (device.LiveDiscoveryModel is null)
+        var planningModel = ResolveHybridPlanningModel(device);
+        if (planningModel is null)
         {
             return new NativeHybridReportPlanningResult
             {
                 IsAuthoritative = false,
                 Authority = "Legacy compatibility",
                 Status = "Typed catalog unavailable",
-                Summary = "ARIEC hybrid planning was not used because no engine live-discovery model is attached to this device.",
+                Summary = "ARIEC hybrid planning was not used because neither a live-discovery model nor an opened SCL design model is attached to this device.",
                 RequestedPointCount = points.Count
             };
         }
@@ -61,7 +65,14 @@ public sealed partial class NativeIec61850Client
             };
         }
 
-        var catalog = Iec61850SignalCatalogBuilder.Build(device.LiveDiscoveryModel);
+        // A fast SCL connect deliberately skips full live-model discovery. The opened SCL
+        // design model is still an ARIEC-typed model and is therefore valid as the catalog
+        // authority for literal signal mapping. It is NOT treated as live RCB evidence:
+        // fresh report discovery and availability checks below remain mandatory.
+        var catalog = Iec61850SignalCatalogBuilder.Build(planningModel);
+        var catalogAuthority = device.LiveDiscoveryModel is not null
+            ? "live-discovery model"
+            : "opened SCL design model";
         var index = BuildLiteralCatalogIndex(catalog);
         var descriptorPoints = new Dictionary<Iec61850SignalDescriptor, Iec61850MonitorPoint>();
         var unmapped = new List<Iec61850MonitorPoint>();
@@ -79,7 +90,7 @@ public sealed partial class NativeIec61850Client
             return new NativeHybridReportPlanningResult
             {
                 IsAuthoritative = true,
-                Authority = "ARIEC61850 typed signal catalog",
+                Authority = $"ARIEC61850 typed signal catalog ({catalogAuthority})",
                 Status = "No exact catalog mapping",
                 Summary = "No selected point had one unambiguous literal match to an ARIEC catalog descriptor. ARSAS did not guess an IEC reference; bounded MMS polling remains active.",
                 RequestedPointCount = points.Count,
@@ -217,7 +228,7 @@ public sealed partial class NativeIec61850Client
         return new NativeHybridReportPlanningResult
         {
             IsAuthoritative = true,
-            Authority = "ARIEC61850 MmsHybridReportAcquisitionPlanner",
+            Authority = $"ARIEC61850 MmsHybridReportAcquisitionPlanner ({catalogAuthority})",
             Status = enginePlan.Status.ToString(),
             Summary = enginePlan.Summary,
             ReportPlans = reportPlans,
@@ -300,10 +311,11 @@ public sealed partial class NativeIec61850Client
             };
         }
 
-        // P2.2 planning is intentionally an intent, not permission to write forever.
+        // Planning is intentionally an intent, not permission to write forever.
         // Re-read the exact selected RCB immediately before execution, then ask the same
-        // ARIEC planner to classify that fresh evidence again. ARSAS never reimplements
-        // RptEna/reservation/DataSet safety semantics here.
+        // ARIEC planner to classify that fresh evidence again. This is especially important
+        // for SCL fast-connect, where the typed catalog may be design-sourced but execution
+        // authority must always be live-sourced.
         var callerOwned = _reportMonitorSessions.Values
             .Select(session => session.ReportControl.Reference)
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
