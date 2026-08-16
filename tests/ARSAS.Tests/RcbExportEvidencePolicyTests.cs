@@ -139,7 +139,7 @@ public sealed class RcbExportEvidencePolicyTests
     }
 
     [Fact]
-    public void EvidenceConflict_BlocksSelectionEvenWhenMembersExist()
+    public void EvidenceConflict_RemainsSelectableAndRequiresConfirmation()
     {
         var row = new RcbExportRow
         {
@@ -153,7 +153,8 @@ public sealed class RcbExportEvidencePolicyTests
             HasEvidenceConflict = true
         };
 
-        Assert.False(row.IsSelectable);
+        Assert.True(row.IsSelectable);
+        Assert.True(row.RequiresConfirmation);
     }
 
     [Fact]
