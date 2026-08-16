@@ -30,8 +30,7 @@ internal static class MainWindowNavigationLayoutFix
         "IEC 61850 Explorer",
         "Live Monitor",
         "Event Log",
-        "GOOSE Subscriber",
-        "Diagnostics"
+        "GOOSE Subscriber"
     ];
 
     private static readonly string[] CompactLabels =
@@ -39,8 +38,7 @@ internal static class MainWindowNavigationLayoutFix
         "Explorer",
         "Live",
         "Events",
-        "GOOSE",
-        "Diagnostics"
+        "GOOSE"
     ];
 
     [ModuleInitializer]
@@ -70,6 +68,17 @@ internal static class MainWindowNavigationLayoutFix
 
         ApplyResponsiveLayout(window);
         QueuePillCorrection(window, animate: false);
+
+        // WorkspaceModeSwitch is installed by a separate Loaded class handler. Run one
+        // deferred pass so its dynamically inserted controls are included regardless of
+        // module/class-handler registration order.
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.ContextIdle,
+            new Action(() =>
+            {
+                ApplyResponsiveLayout(window);
+                PositionPill(window, animate: false);
+            }));
     }
 
     private static void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -79,6 +88,19 @@ internal static class MainWindowNavigationLayoutFix
 
         ApplyResponsiveLayout(window);
         QueuePillCorrection(window, animate: false);
+    }
+
+    private static void WorkspaceModeChild_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || Window.GetWindow(element) is not MainWindow window)
+            return;
+
+        // The FAT button can change to "... LOADED" after the window is already shown.
+        // Re-apply the current breakpoint so that state text is compacted intentionally
+        // instead of making the top bar overflow.
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            new Action(() => ApplyResponsiveLayout(window)));
     }
 
     private static void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -101,7 +123,9 @@ internal static class MainWindowNavigationLayoutFix
             window.FindName("WorkflowNavGrid") is not Grid grid)
             return;
 
-        var availableWidth = Math.Max(window.ActualWidth, window.Width);
+        var availableWidth = window.ActualWidth > 0d
+            ? window.ActualWidth
+            : !double.IsNaN(window.Width) && window.Width > 0d ? window.Width : 1480d;
         var wide = availableWidth >= WideBreakpoint;
         var medium = availableWidth >= MediumBreakpoint;
         var shellWidth = wide ? WideNavWidth : medium ? MediumNavWidth : CompactNavWidth;
@@ -121,7 +145,11 @@ internal static class MainWindowNavigationLayoutFix
             if (button == null)
                 continue;
 
-            button.Content = labels[index];
+            // Diagnostics owns a StackPanel containing its text plus the red alert
+            // badge. Never replace that Content tree while changing layout density.
+            if (index < labels.Length)
+                button.Content = labels[index];
+
             button.MinHeight = 40;
             button.MinWidth = 0;
             button.Margin = new Thickness(1);
@@ -192,6 +220,9 @@ internal static class MainWindowNavigationLayoutFix
 
         if (modes.Children.Count > 1 && modes.Children[1] is Button fatButton)
         {
+            fatButton.SizeChanged -= WorkspaceModeChild_SizeChanged;
+            fatButton.SizeChanged += WorkspaceModeChild_SizeChanged;
+
             // Do not overwrite the LOADED state used by WorkspaceModeSwitch; compact it
             // while preserving that state signal.
             var loaded = fatButton.Content?.ToString()?.Contains("LOADED", StringComparison.OrdinalIgnoreCase) == true;
@@ -213,8 +244,13 @@ internal static class MainWindowNavigationLayoutFix
     {
         if (window.FindName("WorkflowNavShell") is not Border shell ||
             window.FindName("WorkflowPill") is not Border pill ||
-            window.FindName("MainTabs") is not TabControl tabs ||
-            pill.RenderTransform is not TranslateTransform translate)
+            window.FindName("MainTabs") is not TabControl tabs)
+            return;
+
+        var translate = window.FindName("WorkflowPillTranslate") as TranslateTransform;
+        if (translate == null && pill.RenderTransform is TransformGroup group)
+            translate = group.Children.OfType<TranslateTransform>().LastOrDefault();
+        if (translate == null)
             return;
 
         var contentWidth = Math.Max(0d, shell.ActualWidth - shell.Padding.Left - shell.Padding.Right);
