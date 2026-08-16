@@ -1,0 +1,33 @@
+name: Temporary Alarm Annunciator integration patch
+
+on:
+  push:
+    branches:
+      - feature/alarm-annunciator
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/alarm-annunciator
+          fetch-depth: 0
+      - run: python scripts/patch-alarm-annunciator.py
+      - run: git diff --check
+      - name: Commit patched integration files
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Patch already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml MainWindow.xaml.cs MainWindow.NavigationLayoutFix.cs Models/MonitorModels.cs
+          git commit -m "Integrate Alarm Annunciator workspace and selection"
+          git push origin HEAD:feature/alarm-annunciator
