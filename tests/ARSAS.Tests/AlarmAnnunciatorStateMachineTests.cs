@@ -72,6 +72,44 @@ public sealed class AlarmAnnunciatorStateMachineTests
         Assert.True(item.IsFlashing);
     }
 
+    [Fact]
+    public void DeviceGroup_AggregatesOnlyItsOwnAlarmState_AndFlashesIndependently()
+    {
+        var first = NewItem();
+        var second = new AlarmAnnunciatorItem
+        {
+            DeviceId = "ied-1",
+            PointKey = "ied-1|iedld/ggio1.alm.stval",
+            ConfiguredReference = "iedld/ggio1.alm.stval",
+            DeviceName = "IED1",
+            SignalName = "GGIO Alarm",
+            IecReference = "IEDLD/GGIO1.Alm.stVal",
+            IecDataType = "Boolean"
+        };
+        var group = new AlarmAnnunciatorDeviceGroup { DeviceId = "ied-1", DeviceName = "IED1" };
+        group.Alarms.Add(first);
+        group.Alarms.Add(second);
+
+        first.ApplyEvent(NewEvent("False", "True"));
+        group.Recalculate(flashPhase: true);
+
+        Assert.Equal(2, group.ConfiguredCount);
+        Assert.Equal(1, group.ActiveCount);
+        Assert.Equal(1, group.UnacknowledgedCount);
+        Assert.Equal(AlarmAnnunciatorDeviceGroup.UnacknowledgedState, group.VisualState);
+        Assert.Equal(1d, group.LampOpacity);
+
+        group.SetFlashPhase(false);
+        Assert.Equal(0.18d, group.LampOpacity, 3);
+
+        first.Acknowledge(DateTimeOffset.Now);
+        group.Recalculate(flashPhase: true);
+        Assert.Equal(1, group.ActiveCount);
+        Assert.Equal(0, group.UnacknowledgedCount);
+        Assert.Equal(AlarmAnnunciatorDeviceGroup.ActiveState, group.VisualState);
+        Assert.Equal(1d, group.LampOpacity);
+    }
+
     [Theory]
     [InlineData("ST", true)]
     [InlineData("st", true)]

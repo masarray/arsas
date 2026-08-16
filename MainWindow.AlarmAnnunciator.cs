@@ -15,28 +15,54 @@ namespace ArIED61850Tester;
 /// Trigger authority is the same SOE/Event Log stream shown to the operator. The
 /// annunciator never invents a second IEC 61850 acquisition path. A momentary alarm
 /// edge therefore remains visible even after the process value has returned to normal.
+///
+/// Presentation is grouped by IED. Only the selected IED's alarm windows are rendered;
+/// the IED rail retains independent alarm/unacknowledged indication for every configured
+/// device. This keeps both layout and flash updates bounded for large SAS projects.
 /// </summary>
 public partial class MainWindow
 {
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingAnnunciatorEvents = new();
     private readonly Dictionary<string, List<string>> _annunciatorConfiguredReferences = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AlarmAnnunciatorItem> _annunciatorByPointKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, AlarmAnnunciatorDeviceGroup> _annunciatorDeviceById = new(StringComparer.OrdinalIgnoreCase);
     private DispatcherTimer? _annunciatorUiTimer;
+    private AlarmAnnunciatorDeviceGroup? _selectedAnnunciatorDevice;
     private bool _annunciatorInitialized;
     private bool _annunciatorFlashPhase = true;
     private int _annunciatorUiTicks;
 
     public BulkObservableCollection<AlarmAnnunciatorItem> AnnunciatorAlarms { get; } = new();
+    public BulkObservableCollection<AlarmAnnunciatorDeviceGroup> AnnunciatorDevices { get; } = new();
 
-    public int AnnunciatorConfiguredCount => _annunciatorConfiguredReferences.Values.Sum(items => items.Count);
-    public int AnnunciatorActiveCount => AnnunciatorAlarms.Count(item => item.HasLatchedOccurrence && item.CurrentProcessActive);
-    public int AnnunciatorUnacknowledgedCount => AnnunciatorAlarms.Count(item => item.CanAcknowledge);
+    public AlarmAnnunciatorDeviceGroup? SelectedAnnunciatorDevice
+    {
+        get => _selectedAnnunciatorDevice;
+        set
+        {
+            if (ReferenceEquals(_selectedAnnunciatorDevice, value))
+                return;
+            _selectedAnnunciatorDevice = value;
+            if (_selectedAnnunciatorDevice != null)
+            {
+                _selectedAnnunciatorDevice.SetFlashPhase(_annunciatorFlashPhase);
+                foreach (var alarm in _selectedAnnunciatorDevice.Alarms.Where(item => item.IsFlashing))
+                    alarm.SetFlashPhase(_annunciatorFlashPhase);
+            }
+            Raise();
+        }
+    }
+
+    public int AnnunciatorConfiguredCount => AnnunciatorDevices.Sum(group => group.ConfiguredCount);
+    public int AnnunciatorActiveCount => AnnunciatorDevices.Sum(group => group.ActiveCount);
+    public int AnnunciatorUnacknowledgedCount => AnnunciatorDevices.Sum(group => group.UnacknowledgedCount);
+    public int AnnunciatorDeviceCount => AnnunciatorDevices.Count;
     public bool AnnunciatorHasUnacknowledged => AnnunciatorUnacknowledgedCount > 0;
-    public string AnnunciatorSummaryText => $"{AnnunciatorActiveCount} ACTIVE • {AnnunciatorUnacknowledgedCount} UNACK • {AnnunciatorConfiguredCount} WINDOWS";
-    public Visibility AnnunciatorEmptyVisibility => AnnunciatorAlarms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility AnnunciatorContentVisibility => AnnunciatorAlarms.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public string AnnunciatorSummaryText => $"{AnnunciatorActiveCount} ACTIVE • {AnnunciatorUnacknowledgedCount} UNACK • {AnnunciatorDeviceCount} IED • {AnnunciatorConfiguredCount} WINDOWS";
+    public Visibility AnnunciatorEmptyVisibility => AnnunciatorDevices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility AnnunciatorContentVisibility => AnnunciatorDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     public double AnnunciatorBeaconOpacity => AnnunciatorHasUnacknowledged
-        ? (_annunciatorFlashPhase ? 1d : 0.22d)
+        ? (_annunciatorFlashPhase ? 1d : 0.18d)
         : AnnunciatorActiveCount > 0 ? 1d : 0.32d;
 
     [ModuleInitializer]
@@ -107,8 +133,17 @@ public partial class MainWindow
 
         _annunciatorUiTicks = 0;
         _annunciatorFlashPhase = !_annunciatorFlashPhase;
-        foreach (var alarm in AnnunciatorAlarms)
-            alarm.SetFlashPhase(_annunciatorFlashPhase);
+
+        // At scale, do not invalidate every alarm window in the project. Only visible
+        // flashing windows and the compact IED rail indicators need a 2 Hz update.
+        if (SelectedAnnunciatorDevice != null)
+        {
+            foreach (var alarm in SelectedAnnunciatorDevice.Alarms.Where(item => item.IsFlashing))
+                alarm.SetFlashPhase(_annunciatorFlashPhase);
+        }
+        foreach (var group in AnnunciatorDevices.Where(group => group.HasUnacknowledged))
+            group.SetFlashPhase(_annunciatorFlashPhase);
+
         Raise(nameof(AnnunciatorBeaconOpacity));
     }
 
@@ -236,20 +271,31 @@ public partial class MainWindow
             return;
 
         SetStatus($"Alarm acknowledged: {item.DeviceName} / {item.SignalName}.");
+        RefreshAnnunciatorDeviceGroup(item.DeviceId);
         RaiseAnnunciatorSummary();
     }
 
     private void AcknowledgeAllAlarms_Click(object sender, RoutedEventArgs e)
     {
+        var group = SelectedAnnunciatorDevice;
+        if (group == null)
+        {
+            SetStatus("Alarm Annunciator: select an IED first.");
+            return;
+        }
+
         var acknowledgedAt = DateTimeOffset.Now;
         var count = 0;
-        foreach (var item in AnnunciatorAlarms.Where(item => item.CanAcknowledge).ToArray())
+        foreach (var item in group.Alarms.Where(item => item.CanAcknowledge).ToArray())
         {
             if (item.Acknowledge(acknowledgedAt))
                 count++;
         }
 
-        SetStatus(count == 0 ? "Alarm Annunciator: no unacknowledged alarms." : $"Alarm Annunciator: acknowledged {count} alarm(s).");
+        RefreshAnnunciatorDeviceGroup(group.DeviceId);
+        SetStatus(count == 0
+            ? $"{group.DeviceName}: no unacknowledged alarms."
+            : $"{group.DeviceName}: acknowledged {count} alarm(s).");
         RaiseAnnunciatorSummary();
     }
 
@@ -327,18 +373,56 @@ public partial class MainWindow
         _annunciatorByPointKey[item.PointKey] = item;
         item.PropertyChanged += AnnunciatorItem_PropertyChanged;
         AnnunciatorAlarms.Add(item);
+
+        var group = EnsureAnnunciatorDeviceGroup(item.DeviceId, item.DeviceName);
+        if (!group.Alarms.Contains(item))
+            group.Alarms.Add(item);
+        group.Recalculate(_annunciatorFlashPhase);
         RaiseAnnunciatorSummary();
+    }
+
+    private AlarmAnnunciatorDeviceGroup EnsureAnnunciatorDeviceGroup(string deviceId, string deviceName)
+    {
+        if (_annunciatorDeviceById.TryGetValue(deviceId, out var existing))
+        {
+            existing.DeviceName = deviceName;
+            return existing;
+        }
+
+        var group = new AlarmAnnunciatorDeviceGroup
+        {
+            DeviceId = deviceId,
+            DeviceName = deviceName
+        };
+        _annunciatorDeviceById[deviceId] = group;
+        AnnunciatorDevices.Add(group);
+        SelectedAnnunciatorDevice ??= group;
+        return group;
     }
 
     private void AnnunciatorItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AlarmAnnunciatorItem.VisualState) or
-            nameof(AlarmAnnunciatorItem.CanAcknowledge) or
-            nameof(AlarmAnnunciatorItem.CurrentProcessActive) or
-            nameof(AlarmAnnunciatorItem.HasLatchedOccurrence))
+        if (sender is not AlarmAnnunciatorItem item)
+            return;
+
+        if (e.PropertyName == nameof(AlarmAnnunciatorItem.DeviceName) &&
+            _annunciatorDeviceById.TryGetValue(item.DeviceId, out var namedGroup))
         {
+            namedGroup.DeviceName = item.DeviceName;
+        }
+
+        if (e.PropertyName == nameof(AlarmAnnunciatorItem.VisualState))
+        {
+            RefreshAnnunciatorDeviceGroup(item.DeviceId);
             RaiseAnnunciatorSummary();
         }
+    }
+
+    private void RefreshAnnunciatorDeviceGroup(string deviceId)
+    {
+        if (!_annunciatorDeviceById.TryGetValue(deviceId, out var group))
+            return;
+        group.Recalculate(_annunciatorFlashPhase);
     }
 
     private void RemoveAnnunciatorItem(string pointKey)
@@ -347,6 +431,22 @@ public partial class MainWindow
             return;
         item.PropertyChanged -= AnnunciatorItem_PropertyChanged;
         AnnunciatorAlarms.Remove(item);
+
+        if (_annunciatorDeviceById.TryGetValue(item.DeviceId, out var group))
+        {
+            group.Alarms.Remove(item);
+            if (group.Alarms.Count == 0)
+            {
+                _annunciatorDeviceById.Remove(group.DeviceId);
+                AnnunciatorDevices.Remove(group);
+                if (ReferenceEquals(SelectedAnnunciatorDevice, group))
+                    SelectedAnnunciatorDevice = AnnunciatorDevices.FirstOrDefault();
+            }
+            else
+            {
+                group.Recalculate(_annunciatorFlashPhase);
+            }
+        }
         RaiseAnnunciatorSummary();
     }
 
@@ -365,6 +465,9 @@ public partial class MainWindow
             item.PropertyChanged -= AnnunciatorItem_PropertyChanged;
         AnnunciatorAlarms.Clear();
         _annunciatorByPointKey.Clear();
+        AnnunciatorDevices.Clear();
+        _annunciatorDeviceById.Clear();
+        SelectedAnnunciatorDevice = null;
         while (_pendingAnnunciatorEvents.TryDequeue(out _)) { }
         foreach (var point in GlobalPoints)
             point.IsAnnunciatorSelected = false;
@@ -416,6 +519,7 @@ public partial class MainWindow
         Raise(nameof(AnnunciatorConfiguredCount));
         Raise(nameof(AnnunciatorActiveCount));
         Raise(nameof(AnnunciatorUnacknowledgedCount));
+        Raise(nameof(AnnunciatorDeviceCount));
         Raise(nameof(AnnunciatorHasUnacknowledged));
         Raise(nameof(AnnunciatorSummaryText));
         Raise(nameof(AnnunciatorEmptyVisibility));

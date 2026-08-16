@@ -61,6 +61,14 @@ public sealed class AlarmAnnunciatorItem : ObservableObject
         _ => "NORMAL"
     };
 
+    public string CompactStateText => VisualState switch
+    {
+        ActiveUnacknowledgedState => "UNACK",
+        ActiveAcknowledgedState => "ACK",
+        ReturnedUnacknowledgedState => "RTN",
+        _ => string.Empty
+    };
+
     public string StateDetail => VisualState switch
     {
         ActiveUnacknowledgedState => "Active condition waiting for acknowledgement",
@@ -72,7 +80,7 @@ public sealed class AlarmAnnunciatorItem : ObservableObject
     public bool IsFlashing => HasLatchedOccurrence && !IsAcknowledged;
     public bool CanAcknowledge => HasLatchedOccurrence && !IsAcknowledged;
     public bool IsNormal => !HasLatchedOccurrence;
-    public double LampOpacity => IsFlashing ? (_flashPhase ? 1d : 0.22d) : HasLatchedOccurrence ? 1d : 0.32d;
+    public double LampOpacity => IsFlashing ? (_flashPhase ? 1d : 0.18d) : HasLatchedOccurrence ? 1d : 0.34d;
     public string AcknowledgedText => AcknowledgedAt.HasValue
         ? $"ACK {AcknowledgedAt.Value.LocalDateTime:HH:mm:ss}"
         : "Not acknowledged";
@@ -185,6 +193,7 @@ public sealed class AlarmAnnunciatorItem : ObservableObject
     {
         Raise(nameof(VisualState));
         Raise(nameof(StateText));
+        Raise(nameof(CompactStateText));
         Raise(nameof(StateDetail));
         Raise(nameof(IsFlashing));
         Raise(nameof(CanAcknowledge));
@@ -206,5 +215,73 @@ public sealed class AlarmAnnunciatorItem : ObservableObject
             Iec61850ValueStatePresentation.Abnormal => true,
             _ => null
         };
+    }
+}
+
+/// <summary>
+/// Stable per-IED alarm group used by the annunciator rail. Only one group's alarm
+/// windows are rendered at a time, which keeps the UI bounded even when a project has
+/// hundreds of IEDs and thousands of configured annunciator points.
+/// </summary>
+public sealed class AlarmAnnunciatorDeviceGroup : ObservableObject
+{
+    public const string NormalState = "Normal";
+    public const string ActiveState = "Active";
+    public const string UnacknowledgedState = "Unacknowledged";
+
+    private string _deviceName = "IED";
+    private int _activeCount;
+    private int _unacknowledgedCount;
+    private bool _flashPhase = true;
+
+    public string DeviceId { get; init; } = string.Empty;
+    public string DeviceName { get => _deviceName; set => Set(ref _deviceName, string.IsNullOrWhiteSpace(value) ? "IED" : value.Trim()); }
+    public BulkObservableCollection<AlarmAnnunciatorItem> Alarms { get; } = new();
+
+    public int ConfiguredCount => Alarms.Count;
+    public int ActiveCount => _activeCount;
+    public int UnacknowledgedCount => _unacknowledgedCount;
+    public bool HasUnacknowledged => UnacknowledgedCount > 0;
+    public string VisualState => HasUnacknowledged ? UnacknowledgedState : ActiveCount > 0 ? ActiveState : NormalState;
+    public string StatusText => HasUnacknowledged
+        ? $"{UnacknowledgedCount} UNACK • {ConfiguredCount} windows"
+        : ActiveCount > 0
+            ? $"{ActiveCount} ACTIVE • {ConfiguredCount} windows"
+            : $"{ConfiguredCount} windows";
+    public double LampOpacity => HasUnacknowledged ? (_flashPhase ? 1d : 0.18d) : ActiveCount > 0 ? 1d : 0.30d;
+
+    public void Recalculate(bool flashPhase)
+    {
+        _flashPhase = flashPhase;
+        var active = Alarms.Count(item => item.HasLatchedOccurrence && item.CurrentProcessActive);
+        var unacknowledged = Alarms.Count(item => item.CanAcknowledge);
+        var changed = false;
+        if (_activeCount != active)
+        {
+            _activeCount = active;
+            changed = true;
+            Raise(nameof(ActiveCount));
+        }
+        if (_unacknowledgedCount != unacknowledged)
+        {
+            _unacknowledgedCount = unacknowledged;
+            changed = true;
+            Raise(nameof(UnacknowledgedCount));
+            Raise(nameof(HasUnacknowledged));
+        }
+
+        if (changed)
+            Raise(nameof(VisualState));
+        Raise(nameof(ConfiguredCount));
+        Raise(nameof(StatusText));
+        Raise(nameof(LampOpacity));
+    }
+
+    public void SetFlashPhase(bool phase)
+    {
+        if (!HasUnacknowledged || _flashPhase == phase)
+            return;
+        _flashPhase = phase;
+        Raise(nameof(LampOpacity));
     }
 }
