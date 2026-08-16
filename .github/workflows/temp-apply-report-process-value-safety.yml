@@ -1,0 +1,33 @@
+name: Temporary report process-value safety patch
+
+on:
+  push:
+    branches:
+      - fix/report-process-value-safety
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/report-process-value-safety
+          fetch-depth: 0
+      - run: python scripts/patch-report-process-value-safety.py
+      - run: git diff --check
+      - name: Commit integrated safety boundary
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Safety patch already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Services/Iec61850MonitorRuntime.cs tests/ARSAS.Tests/OfflineDataSetSignalSelectionRegressionTests.cs
+          git commit -m "Reject impossible report values before SOE state mutation"
+          git push origin HEAD:fix/report-process-value-safety
