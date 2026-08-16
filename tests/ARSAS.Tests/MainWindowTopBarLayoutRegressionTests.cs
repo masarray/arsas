@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class MainWindowTopBarLayoutRegressionTests
 {
     [Fact]
-    public void NavigationLayout_UsesResponsiveWidthsAndFullWideLabels()
+    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSixDestinationLabels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
@@ -11,9 +11,9 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         Assert.Contains("MediumNavWidth = 900d", source, StringComparison.Ordinal);
         Assert.Contains("CompactNavWidth = 720d", source, StringComparison.Ordinal);
         Assert.Contains("\"IEC 61850 Explorer\"", source, StringComparison.Ordinal);
-        Assert.Contains("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
-        Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
         Assert.Contains("\"Alarm\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
         Assert.Contains("var labels = wide ? FullLabels : CompactLabels", source, StringComparison.Ordinal);
     }
 

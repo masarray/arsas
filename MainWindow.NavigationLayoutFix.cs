@@ -30,7 +30,7 @@ internal static class MainWindowNavigationLayoutFix
         "IEC 61850 Explorer",
         "Live Monitor",
         "Event Log",
-        "Alarm Annunciator",
+        "Alarm",
         "GOOSE Subscriber"
     ];
 
