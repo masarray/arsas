@@ -24,7 +24,7 @@ internal static class SasOperationalUiPolicy
     private static readonly ConditionalWeakTable<object, object> FilteredViews = new();
     private static readonly string[] NavigationButtonNames =
     {
-        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavGooseButton", "NavDiagnosticsButton"
+        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton"
     };
 
     [ModuleInitializer]
@@ -120,6 +120,8 @@ internal static class SasOperationalUiPolicy
         if (window.FindName("WorkflowNavGrid") is Grid navGrid)
             navGrid.ClipToBounds = false;
 
+        // Every workflow destination must participate in the same capsule treatment.
+        // Omitting one button breaks both selected-index mapping and the visual language.
         var buttons = NavigationButtonNames
             .Select(name => window.FindName(name) as Button)
             .Where(button => button is not null)
@@ -134,10 +136,10 @@ internal static class SasOperationalUiPolicy
             button.Template = template;
             button.Height = 38;
             button.Margin = new Thickness(2);
-            button.Padding = new Thickness(12, 0, 12, 0);
+            button.Padding = new Thickness(10, 0, 10, 0);
             button.BorderThickness = new Thickness(1);
             button.Cursor = Cursors.Hand;
-            button.FontSize = 12.8;
+            button.FontSize = 12.4;
             button.PreviewMouseLeftButtonUp -= OnNavigationClick;
             button.PreviewMouseLeftButtonUp += OnNavigationClick;
         }
