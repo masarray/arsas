@@ -20,7 +20,7 @@ public sealed class RcbExportEvidencePolicyTests
     }
 
     [Fact]
-    public void E016Style_UnboundExtUrcb_IsNoDataSetFromPositiveSclEvidence()
+    public void SourceUnboundDynamicRcb_RemainsUnknownBeforeLiveCheck_NotOperationalFailure()
     {
         var availability = RcbExportEvidencePolicy.SourceAvailability(
             liveAvailability: null,
@@ -28,7 +28,8 @@ public sealed class RcbExportEvidencePolicyTests
             dataSetResolved: false,
             configuredMemberCount: 0);
 
-        Assert.Equal(MmsRcbOperationalAvailability.NoDataSet, availability);
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, availability);
+        Assert.NotEqual(MmsRcbOperationalAvailability.NoDataSet, availability);
     }
 
     [Fact]
@@ -99,20 +100,39 @@ public sealed class RcbExportEvidencePolicyTests
     }
 
     [Fact]
-    public void SourceUnboundButLiveVerifiedDataSet_IsConfigurationConflict()
+    public void SourceUnboundButLiveVerifiedDataSet_IsDynamicBinding_NotConfigurationConflict()
     {
-        Assert.True(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+        const string live = "AA1C1F13R4Application/LLN0.AR_HYB_01";
+
+        Assert.True(RcbExportEvidencePolicy.IsDynamicRuntimeBinding(
             string.Empty,
-            "E016MD66CTRL/LLN0.DataSet",
+            live,
+            MmsRcbDataSetProbeState.ReadSucceeded));
+        Assert.False(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            string.Empty,
+            live,
             MmsRcbDataSetProbeState.ReadSucceeded));
     }
 
     [Fact]
-    public void FailedLiveRead_DoesNotCreateFalseConfigurationConflict()
+    public void SourceConfiguredAndLiveVerifiedDifferentDataSet_IsConfigurationConflict()
+    {
+        Assert.True(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            "AA1C1F13R4Application/LLN0.StaticSet",
+            "AA1C1F13R4Application/LLN0.AR_HYB_01",
+            MmsRcbDataSetProbeState.ReadSucceeded));
+    }
+
+    [Fact]
+    public void FailedLiveRead_DoesNotCreateFalseConfigurationConflictOrDynamicBinding()
     {
         Assert.False(RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
             "E016MD66CTRL/LLN0.DataSet",
             string.Empty,
+            MmsRcbDataSetProbeState.ReadFailed));
+        Assert.False(RcbExportEvidencePolicy.IsDynamicRuntimeBinding(
+            string.Empty,
+            "E016MD66CTRL/LLN0.RuntimeSet",
             MmsRcbDataSetProbeState.ReadFailed));
     }
 
@@ -123,6 +143,19 @@ public sealed class RcbExportEvidencePolicyTests
             "E016MD66CTRL/LLN0$DataSet",
             "E016MD66CTRL/LLN0.DataSet",
             MmsRcbDataSetProbeState.ReadSucceeded));
+    }
+
+    [Fact]
+    public void DynamicSourceReason_ExplainsUnboundSourceAsValidBeforeLiveCheck()
+    {
+        var reason = RcbExportEvidencePolicy.SourceReason(
+            configuredDataSetName: string.Empty,
+            dataSetResolved: false,
+            configuredMemberCount: 0,
+            connected: true);
+
+        Assert.Contains("valid for a dynamic RCB", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Check Availability", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

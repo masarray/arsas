@@ -27,22 +27,44 @@ public static class RcbExportEvidencePolicy
     public static int EffectiveMemberCount(int liveMemberCount, int fallbackMemberCount)
         => liveMemberCount > 0 ? liveMemberCount : Math.Max(0, fallbackMemberCount);
 
+    /// <summary>
+    /// True when the source SCL intentionally/legitimately leaves the ReportControl
+    /// datSet association open and a successful live read shows a runtime DataSet binding.
+    /// This is normal dynamic-RCB evidence and must never be presented as configuration
+    /// mismatch merely because the source side is blank.
+    /// </summary>
+    public static bool IsDynamicRuntimeBinding(
+        string? sourceReference,
+        string? liveReference,
+        MmsRcbDataSetProbeState liveProbeState)
+        => liveProbeState == MmsRcbDataSetProbeState.ReadSucceeded &&
+           string.IsNullOrWhiteSpace(NormalizeReference(sourceReference)) &&
+           !string.IsNullOrWhiteSpace(NormalizeReference(liveReference));
+
     public static bool HasSourceLiveBindingConflict(
         string? sourceReference,
         string? liveReference,
         MmsRcbDataSetProbeState liveProbeState)
     {
-        // Only positive live binding evidence may contradict the source SCL. A failed or
-        // unattempted live read is unresolved evidence, not a configuration mismatch.
+        // Only positive live binding evidence may contradict a fixed source binding.
+        // A failed or unattempted live read is unresolved evidence, not a mismatch.
         if (liveProbeState != MmsRcbDataSetProbeState.ReadSucceeded)
             return false;
 
         var source = NormalizeReference(sourceReference);
         var live = NormalizeReference(liveReference);
-        if (source.Length == 0 && live.Length == 0)
+
+        // An unbound source ReportControl is not a promise that the live DatSet must stay
+        // empty. Dynamic RCB workflows are allowed to bind a DataSet at runtime, so blank
+        // source + populated live binding is valid evidence rather than a conflict.
+        if (source.Length == 0)
             return false;
-        if (source.Length == 0 || live.Length == 0)
+
+        // A fixed source binding *is* a contract. A successful live read proving no binding,
+        // or proving a different binding, is therefore a real configuration mismatch.
+        if (live.Length == 0)
             return true;
+
         return !source.Equals(live, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -60,7 +82,12 @@ public static class RcbExportEvidencePolicy
 
         var hasConfiguredBinding = !string.IsNullOrWhiteSpace(configuredDataSetName);
         if (!hasConfiguredBinding)
-            return MmsRcbOperationalAvailability.NoDataSet;
+        {
+            // A blank source datSet is valid for a dynamic RCB. Before a live DatSet read
+            // proves the current runtime association, keep the state unknown/informational
+            // instead of painting the row as an operational NoDataSet failure.
+            return MmsRcbOperationalAvailability.Unknown;
+        }
 
         if (!dataSetResolved)
             return MmsRcbOperationalAvailability.Unknown;
@@ -95,7 +122,11 @@ public static class RcbExportEvidencePolicy
         bool connected)
     {
         if (string.IsNullOrWhiteSpace(configuredDataSetName))
-            return "The source SCL ReportControl has no configured datSet binding.";
+        {
+            return connected
+                ? "The source SCL leaves the ReportControl datSet unbound. This is valid for a dynamic RCB; use Check Availability to read the current live binding."
+                : "The source SCL leaves the ReportControl datSet unbound. This can be a valid dynamic RCB; connect the IED to read the current live binding.";
+        }
 
         if (!dataSetResolved)
             return "The source SCL ReportControl names a DataSet, but that reference does not resolve in the same Logical Node.";
