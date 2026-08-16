@@ -71,7 +71,9 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains("ActiveAcknowledged", source, StringComparison.Ordinal);
         Assert.Contains("ReturnedUnacknowledged", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StateDetail", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StringFormat=Last SOE", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StringFormat=Last SOE {0}", source, StringComparison.Ordinal);
+        Assert.Contains("<Border.ToolTip>", source, StringComparison.Ordinal);
+        Assert.Contains("StringFormat=Last SOE: {0}", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StaticResource LucideBell", source, StringComparison.Ordinal);
     }
 
