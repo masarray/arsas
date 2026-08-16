@@ -33,7 +33,6 @@ public static class ReportProcessValueSafety
 
         var rawIsBits = raw.StartsWith("bits(", StringComparison.OrdinalIgnoreCase);
         var formattedIsBits = formatted.StartsWith("bits(", StringComparison.OrdinalIgnoreCase);
-        var rawIsContainer = IsContainer(raw);
         var formattedIsContainer = IsContainer(formatted);
 
         if (IsBoolean(type))
@@ -59,6 +58,8 @@ public static class ReportProcessValueSafety
             return true;
         }
 
+        // Quality and explicitly typed BIT STRING DataAttributes legitimately use MMS
+        // BIT STRING encoding. Do not mistake those process values for report metadata.
         if (IsNativeBitString(type))
             return true;
 
@@ -73,7 +74,6 @@ public static class ReportProcessValueSafety
         // If metadata names are absent or vendor-specific, do not invent a type.
         // The engine's strict frame mapper remains the primary authority.
         // We only fail closed where ARSAS already has enough signal typing evidence.
-        _ = rawIsContainer;
         return true;
     }
 
@@ -104,7 +104,7 @@ public static class ReportProcessValueSafety
     {
         var normalized = dataType.Trim().ToLowerInvariant().Replace(" ", string.Empty);
         return normalized.Contains("bitstring", StringComparison.Ordinal) ||
-               normalized is "bit-string" or "bits";
+               normalized is "bit-string" or "bits" or "quality";
     }
 
     private static bool IsScalar(string dataType)
@@ -121,6 +121,6 @@ public static class ReportProcessValueSafety
                normalized.Contains("decimal", StringComparison.Ordinal) ||
                normalized.Contains("counter", StringComparison.Ordinal) ||
                normalized.Contains("bcr", StringComparison.Ordinal) ||
-               normalized is "enum" or "enumerated" or "quality" or "timestamp";
+               normalized is "enum" or "enumerated" or "timestamp";
     }
 }
