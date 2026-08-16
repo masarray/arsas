@@ -30,6 +30,8 @@ public sealed class LiveMonitorRegressionAuditTests
         Assert.Contains("ExplorerLiveSearchBox", xaml, StringComparison.Ordinal);
         Assert.Contains("ExplorerLiveSearch_TextChanged", xaml, StringComparison.Ordinal);
         Assert.Contains("ExplorerLiveSearchClear_Click", xaml, StringComparison.Ordinal);
+        var app = File.ReadAllText(FindRepoFile("App.xaml"));
+        Assert.Contains("x:Key=\"LucideSearch\"", app, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding SelectedDevice.Points}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CollectionViewSource.GetDefaultView(device.Points)", code, StringComparison.Ordinal);
     }
