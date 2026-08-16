@@ -38,6 +38,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public bool AwaitingCommandReportEdge { get; set; }
         public bool CommandReportMissLogged { get; set; }
         public bool StaleReportSuppressedLogged { get; set; }
+        public bool ReportValueRejectedLogged { get; set; }
         public int ConsecutiveErrors { get; set; }
     }
 
@@ -912,6 +913,34 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     : state.Value;
                 if (update.HasValue && LooksLikeReferenceEcho(display, update.Reference, point.IecReference))
                     continue;
+
+                if (update.HasValue && !ReportProcessValueSafety.IsSafe(
+                        update.Value,
+                        display,
+                        point.IecDataType,
+                        point.IecReference,
+                        out var rejectionReason))
+                {
+                    // A malformed/misaligned report is still useful as proof that the
+                    // RCB is alive, but its process value is not authoritative. Do not
+                    // mutate state or SOE history; keep MMS verification/fallback active.
+                    state.ReportTrafficSeen = true;
+                    state.LastReportUtc = DateTime.UtcNow;
+                    state.ReportChangeVerified = false;
+                    state.ReportMissLogged = false;
+                    if (!state.ReportValueRejectedLogged)
+                    {
+                        state.ReportValueRejectedLogged = true;
+                        var rawSummary = update.Value ?? "-";
+                        if (rawSummary.Length > 120)
+                            rawSummary = rawSummary[..120] + "…";
+                        Log("WARN", session.Device.Name,
+                            $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} MMS verification/fallback remains authoritative.");
+                    }
+                    continue;
+                }
+                if (update.HasValue)
+                    state.ReportValueRejectedLogged = false;
 
                 var receivedUtc = update.UpdatedAt == default ? DateTime.UtcNow : update.UpdatedAt.UtcDateTime;
                 var hasSourceTimestamp = TryParseReportTimestampUtc(update.ReportTimestamp, out var reportSourceUtc);
