@@ -7,12 +7,12 @@ public static class Iec61850ValueFormatter
 {
     public static string Format(object? value, string dataType, string unit)
     {
-        // Compatibility guard for ARIEC61850 builds that still expose an SPS-like
-        // DataObject report value as one rendered CDC structure instead of the
-        // projected stVal leaf.  Keep this deliberately narrow: stVal must be the
-        // first named field and must be a Boolean.  Other structures remain intact.
-        if (TryExtractStructuredBooleanStVal(value, out var structuredStVal))
-            value = structuredStVal;
+        // Compatibility guard for report engines/IEDs that expose a scalar leaf as
+        // its enclosing CDC structure. Named stVal is authoritative regardless of
+        // scalar type. An indexed first child is collapsed only when signal metadata
+        // already says the selected leaf is numeric (e.g. BCR actVal).
+        if (TryExtractStructuredScalar(value, dataType, out var structuredScalar))
+            value = structuredScalar;
 
         if (IsDbposDataType(dataType) && TryNormalizeDbpos(value, out var dbpos))
             return FormatDbpos(dbpos);
@@ -38,6 +38,7 @@ public static class Iec61850ValueFormatter
                 dt, "yyyy-MM-dd HH:mm:ss.fff"),
             DateTimeOffset dto => global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(
                 dto, "yyyy-MM-dd HH:mm:ss.fff zzz"),
+            string text when TryParseInvariantNumber(text, out var numericText) => AppendUnit(numericText, unit),
             _ => value.ToString() ?? "-"
         };
     }
@@ -65,6 +66,18 @@ public static class Iec61850ValueFormatter
         => dataType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DPC", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DoublePointStatus", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNumericDataType(string dataType)
+    {
+        var normalized = (dataType ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized.Contains("int", StringComparison.Ordinal) ||
+               normalized.Contains("uint", StringComparison.Ordinal) ||
+               normalized.Contains("float", StringComparison.Ordinal) ||
+               normalized.Contains("double", StringComparison.Ordinal) ||
+               normalized.Contains("decimal", StringComparison.Ordinal) ||
+               normalized.Contains("counter", StringComparison.Ordinal) ||
+               normalized.Contains("bcr", StringComparison.Ordinal);
+    }
 
     private static string FormatDbpos(int code) => code switch
     {
@@ -122,17 +135,70 @@ public static class Iec61850ValueFormatter
         }
     }
 
-    private static bool TryExtractStructuredBooleanStVal(object? value, out bool status)
+    private static bool TryExtractStructuredScalar(object? value, string dataType, out object? scalar)
     {
-        status = false;
+        scalar = null;
         if (value is not string text || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var match = Regex.Match(
+        var stVal = Regex.Match(
             text,
-            @"^\s*Structure\(\s*\d+\s*\)\s*\{\s*stVal\s*=\s*(true|false)\b",
+            @"^\s*Structure\(\s*\d+\s*\)\s*\{\s*stVal\s*=\s*([^,}]+)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success && bool.TryParse(match.Groups[1].Value, out status);
+        if (stVal.Success)
+            return TryParseRenderedScalar(stVal.Groups[1].Value, out scalar);
+
+        if (!IsNumericDataType(dataType))
+            return false;
+
+        var indexed = Regex.Match(
+            text,
+            @"^\s*Structure\(\s*\d+\s*\)\s*\{\s*\[0\]\s*=\s*([^,}]+)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return indexed.Success && TryParseRenderedScalar(indexed.Groups[1].Value, out scalar);
+    }
+
+    private static bool TryParseRenderedScalar(string raw, out object? scalar)
+    {
+        scalar = null;
+        var text = raw.Trim();
+        if (bool.TryParse(text, out var boolean))
+        {
+            scalar = boolean;
+            return true;
+        }
+
+        if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer))
+        {
+            scalar = integer;
+            return true;
+        }
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var floating))
+        {
+            scalar = floating;
+            return true;
+        }
+
+        // Keep bit-string text intact so Dbpos decoding can interpret it safely.
+        if (text.StartsWith("bits(", StringComparison.OrdinalIgnoreCase))
+        {
+            scalar = text;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseInvariantNumber(string text, out string formatted)
+    {
+        formatted = string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+            return false;
+        formatted = number.ToString("0.######", CultureInfo.InvariantCulture);
+        return true;
     }
 
     private static bool TryParseBits(string bits, out int code)
