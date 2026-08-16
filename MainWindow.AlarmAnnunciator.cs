@@ -32,7 +32,7 @@ public partial class MainWindow
     public int AnnunciatorActiveCount => AnnunciatorAlarms.Count(item => item.HasLatchedOccurrence && item.CurrentProcessActive);
     public int AnnunciatorUnacknowledgedCount => AnnunciatorAlarms.Count(item => item.CanAcknowledge);
     public bool AnnunciatorHasUnacknowledged => AnnunciatorUnacknowledgedCount > 0;
-    public string AnnunciatorSummaryText => $"{AnnunciatorConfiguredCount} configured • {AnnunciatorActiveCount} active • {AnnunciatorUnacknowledgedCount} unacknowledged";
+    public string AnnunciatorSummaryText => $"{AnnunciatorActiveCount} ACTIVE • {AnnunciatorUnacknowledgedCount} UNACK • {AnnunciatorConfiguredCount} WINDOWS";
     public Visibility AnnunciatorEmptyVisibility => AnnunciatorAlarms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility AnnunciatorContentVisibility => AnnunciatorAlarms.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     public double AnnunciatorBeaconOpacity => AnnunciatorHasUnacknowledged
