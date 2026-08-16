@@ -1,0 +1,33 @@
+name: Temporary modern global search clear patch
+
+on:
+  push:
+    branches:
+      - ui/modern-global-search-clear
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui/modern-global-search-clear
+          fetch-depth: 0
+      - run: python scripts/patch-modern-global-search-clear.py
+      - run: git diff --check
+      - name: Commit patched XAML
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Patch already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SignalSelectionWizardWindow.xaml
+          git commit -m "Use modern Lucide clear control in global search"
+          git push origin HEAD:ui/modern-global-search-clear
