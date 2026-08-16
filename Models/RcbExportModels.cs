@@ -61,14 +61,12 @@ public sealed class RcbExportRow : ObservableObject
     public string Reason { get => _reason; set => Set(ref _reason, value?.Trim() ?? string.Empty); }
     public string Owner { get => _owner; set => Set(ref _owner, value?.Trim() ?? string.Empty); }
 
-    public bool IsSelectable => !HasEvidenceConflict && MemberCount > 0 && Availability is
-        MmsRcbOperationalAvailability.Available or
-        MmsRcbOperationalAvailability.UsedByCaller or
-        MmsRcbOperationalAvailability.Unknown;
+    // Availability/ownership is evidence for the operator, not an export lock.
+    // Every discovered RCB remains selectable so the exported engineering model
+    // can truthfully represent what the IED exposes, including InUse/NoDataSet.
+    public bool IsSelectable => true;
 
-    public bool RequiresConfirmation => !HasEvidenceConflict && Availability is
-        MmsRcbOperationalAvailability.Unknown or
-        MmsRcbOperationalAvailability.UsedByCaller;
+    public bool RequiresConfirmation => HasEvidenceConflict || Availability is not MmsRcbOperationalAvailability.Available;
 
     public string MemberCountText => MemberCount > 0 ? $"{MemberCount:N0} FCDA" : "0 FCDA";
     public string StatusGlyph => Availability switch
@@ -156,7 +154,7 @@ public sealed class RcbExportFilterViewModel : ObservableObject
     public Visibility MockBadgeVisibility => Options.IsMock ? Visibility.Visible : Visibility.Collapsed;
     public string SafetyText => Options.IsMock
         ? "Read-only availability mock — no RCB is reserved or modified"
-        : "Read-only availability check — ARSAS never reserves or modifies an RCB in this window";
+        : "Read-only availability check — status is informational and never hides or locks an RCB from export";
 
     public RcbExportRow? SelectedRow
     {
@@ -170,7 +168,7 @@ public sealed class RcbExportFilterViewModel : ObservableObject
     }
 
     public string AvailabilityCheckedText { get => _availabilityCheckedText; set => Set(ref _availabilityCheckedText, value ?? string.Empty); }
-    public bool CanExport => SelectedRow?.IsSelectable == true;
+    public bool CanExport => SelectedRow != null;
     public string SelectionSummary => SelectedRow == null
         ? "No RCB selected"
         : $"{SelectedRow.Name} • {SelectedRow.ScopeText} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
@@ -189,7 +187,7 @@ public sealed class RcbExportFilterViewModel : ObservableObject
         var previous = SelectedRow?.SelectionIdentity;
         Rows.Clear();
         foreach (var row in SortRows(rows)) Rows.Add(row);
-        var restored = Rows.FirstOrDefault(row => row.IsSelectable && row.SelectionIdentity.Equals(previous, StringComparison.OrdinalIgnoreCase));
+        var restored = Rows.FirstOrDefault(row => row.SelectionIdentity.Equals(previous, StringComparison.OrdinalIgnoreCase));
         SelectOnly(restored);
         Raise(nameof(SelectionSummary)); Raise(nameof(RemovalSummary)); Raise(nameof(CanExport));
     }
