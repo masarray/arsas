@@ -7,6 +7,13 @@ public static class Iec61850ValueFormatter
 {
     public static string Format(object? value, string dataType, string unit)
     {
+        // Compatibility guard for ARIEC61850 builds that still expose an SPS-like
+        // DataObject report value as one rendered CDC structure instead of the
+        // projected stVal leaf.  Keep this deliberately narrow: stVal must be the
+        // first named field and must be a Boolean.  Other structures remain intact.
+        if (TryExtractStructuredBooleanStVal(value, out var structuredStVal))
+            value = structuredStVal;
+
         if (IsDbposDataType(dataType) && TryNormalizeDbpos(value, out var dbpos))
             return FormatDbpos(dbpos);
 
@@ -113,6 +120,19 @@ public static class Iec61850ValueFormatter
             case "invalid": code = 3; return true;
             default: return false;
         }
+    }
+
+    private static bool TryExtractStructuredBooleanStVal(object? value, out bool status)
+    {
+        status = false;
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var match = Regex.Match(
+            text,
+            @"^\s*Structure\(\s*\d+\s*\)\s*\{\s*stVal\s*=\s*(true|false)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success && bool.TryParse(match.Groups[1].Value, out status);
     }
 
     private static bool TryParseBits(string bits, out int code)
