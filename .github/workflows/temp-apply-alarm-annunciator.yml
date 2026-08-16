@@ -28,6 +28,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MainWindow.xaml MainWindow.xaml.cs MainWindow.NavigationLayoutFix.cs Models/MonitorModels.cs
-          git commit -m "Integrate Alarm Annunciator workspace and selection"
+          git add MainWindow.xaml MainWindow.AlarmAnnunciator.cs MainWindow.NavigationLayoutFix.cs
+          git commit -m "Harden Alarm Annunciator availability and icon resources"
           git push origin HEAD:feature/alarm-annunciator
