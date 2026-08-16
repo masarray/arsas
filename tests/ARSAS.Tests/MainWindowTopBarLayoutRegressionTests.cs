@@ -7,25 +7,28 @@ public sealed class MainWindowTopBarLayoutRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("WideNavWidth = 840d", source, StringComparison.Ordinal);
-        Assert.Contains("MediumNavWidth = 720d", source, StringComparison.Ordinal);
-        Assert.Contains("CompactNavWidth = 580d", source, StringComparison.Ordinal);
+        Assert.Contains("WideNavWidth = 990d", source, StringComparison.Ordinal);
+        Assert.Contains("MediumNavWidth = 900d", source, StringComparison.Ordinal);
+        Assert.Contains("CompactNavWidth = 720d", source, StringComparison.Ordinal);
         Assert.Contains("\"IEC 61850 Explorer\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
         Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"Alarm\"", source, StringComparison.Ordinal);
         Assert.Contains("var labels = wide ? FullLabels : CompactLabels", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SelectionPill_IsDerivedFromActualNavCellWidth_NotFixed150Pixels()
+    public void SelectionPill_IsDerivedFromActualSixCellNavWidth_NotFixed150Pixels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("var cellWidth = contentWidth / 5d", source, StringComparison.Ordinal);
-        Assert.Contains("* cellWidth", source, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 6d", source, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 5) * cellWidth", source, StringComparison.Ordinal);
         Assert.Contains("pill.Width = Math.Max(1d, cellWidth - 2d)", source, StringComparison.Ordinal);
         Assert.Contains("FindName(\"WorkflowPillTranslate\") as TranslateTransform", source, StringComparison.Ordinal);
         Assert.Contains("pill.RenderTransform is TransformGroup", source, StringComparison.Ordinal);
         Assert.DoesNotContain("* 150d", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("contentWidth / 5d", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -37,6 +40,7 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         Assert.Contains("tabs.SelectionChanged += MainTabs_SelectionChanged", source, StringComparison.Ordinal);
         Assert.Contains("Button.ClickEvent", source, StringComparison.Ordinal);
         Assert.Contains("OnMainWindowButtonClick", source, StringComparison.Ordinal);
+        Assert.Contains("NavAlarmButton", source, StringComparison.Ordinal);
         Assert.Contains("A repeated click on the already-selected tab", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Loaded", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ContextIdle", source, StringComparison.Ordinal);
