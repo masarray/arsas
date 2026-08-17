@@ -40,6 +40,7 @@ public partial class App : Application
         }
 
         GridUxBehavior.Install();
+        P2InteractionBehavior.Install();
         FaultRecordUxBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
