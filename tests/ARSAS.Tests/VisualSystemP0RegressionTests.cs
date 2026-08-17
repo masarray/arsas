@@ -64,12 +64,26 @@ public sealed class VisualSystemP0RegressionTests
     }
 
     [Fact]
-    public void P0_RemainsPresentationOnly()
+    public void RuntimeNavigation_UsesTheSameP0GeometryAndStableTypography()
+    {
+        var source = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
+
+        Assert.Contains("shell.Width = 900", source, StringComparison.Ordinal);
+        Assert.Contains("shell.CornerRadius = new CornerRadius(14)", source, StringComparison.Ordinal);
+        Assert.Contains("button.FontSize = 12.5", source, StringComparison.Ordinal);
+        Assert.Contains("button.FocusVisualStyle = null", source, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"10\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("shell.Width = 760", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0_KeepsTheReviewedAriecEnginePinUntouched()
     {
         var testDirectory = Path.GetDirectoryName(FindRepoFile("MainWindow.xaml"))!;
         var engineLock = File.ReadAllText(Path.Combine(testDirectory, "engines", "ARIEC61850.lock.json"));
 
-        Assert.Contains("manual-reviewed-immutable-commit", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("becda399b4a3ae34831215fc915798b4f846c1be", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 81", engineLock, StringComparison.Ordinal);
     }
 
     private static string Slice(string source, string start, string end)

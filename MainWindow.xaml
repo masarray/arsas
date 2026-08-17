@@ -884,7 +884,7 @@
                                                      ToolTip="Fast search across all monitored IED signals"/>
                                             <TextBlock Text="Search IED, signal, IEC reference, value, quality or acquisition"
                                                        VerticalAlignment="Center" IsHitTestVisible="False"
-                                                       Style="{StaticResource Caption}" Foreground="#98A2B3">
+                                                       Foreground="#98A2B3">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                         <Setter Property="Foreground" Value="#98A2B3"/>
