@@ -786,6 +786,7 @@ public sealed class Iec61850EventEntry
     public string EventValue => string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
     public string DisplayValue => EventValue;
     public string ValueTone => Iec61850ValueStatePresentation.Classify(EventValue, IecDataType);
+    public string QualityTone => Iec61850QualityPresentation.Classify(Quality);
 
     public string IecTelegram => Iec61850MonitorPoint.StripIedNamePrefix(IecReference, DeviceName);
 

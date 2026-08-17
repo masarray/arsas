@@ -50,6 +50,50 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+
+        <DataTemplate x:Key="EventQualityBadgeTemplate">
+            <Border x:Name="QualityBadge" CornerRadius="8" Padding="7,2" MinWidth="72"
+                    HorizontalAlignment="Left" Background="#F3F6F9" BorderBrush="#D5DEE8" BorderThickness="1">
+                <TextBlock x:Name="QualityText" Text="{Binding Quality}" FontSize="10.4" FontWeight="SemiBold"
+                           Foreground="#617286" TextTrimming="CharacterEllipsis" ToolTip="{Binding Quality}"/>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding QualityTone}" Value="Attention">
+                    <Setter TargetName="QualityBadge" Property="Background" Value="#FFF8E6"/>
+                    <Setter TargetName="QualityBadge" Property="BorderBrush" Value="#F2D28A"/>
+                    <Setter TargetName="QualityText" Property="Foreground" Value="#946200"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding QualityTone}" Value="Bad">
+                    <Setter TargetName="QualityBadge" Property="Background" Value="#FFF1F2"/>
+                    <Setter TargetName="QualityBadge" Property="BorderBrush" Value="#FDA29B"/>
+                    <Setter TargetName="QualityText" Property="Foreground" Value="#B42318"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding QualityTone}" Value="Good">
+                    <Setter TargetName="QualityBadge" Property="Background" Value="#F3F6F9"/>
+                    <Setter TargetName="QualityBadge" Property="BorderBrush" Value="#D5DEE8"/>
+                    <Setter TargetName="QualityText" Property="Foreground" Value="#52677E"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="DiagnosticLevelBadgeTemplate">
+            <Border x:Name="LevelBadge" CornerRadius="8" Padding="7,2" MinWidth="58"
+                    HorizontalAlignment="Left" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1">
+                <TextBlock x:Name="LevelText" Text="{Binding Level}" FontSize="10.2" FontWeight="Bold" Foreground="#45648E"/>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Level}" Value="WARN">
+                    <Setter TargetName="LevelBadge" Property="Background" Value="#FFF8E6"/>
+                    <Setter TargetName="LevelBadge" Property="BorderBrush" Value="#F2D28A"/>
+                    <Setter TargetName="LevelText" Property="Foreground" Value="#946200"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="ERROR">
+                    <Setter TargetName="LevelBadge" Property="Background" Value="#FFF1F2"/>
+                    <Setter TargetName="LevelBadge" Property="BorderBrush" Value="#FDA29B"/>
+                    <Setter TargetName="LevelText" Property="Foreground" Value="#B42318"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid Margin="12">
@@ -973,7 +1017,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="IEC 61850 Sequence of Events" Style="{StaticResource WorkspaceTitle}"/>
-                                <TextBlock Text="SOE edges only • state color is not alarm severity." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
+                                <TextBlock Text="SOE edges • process state and signal quality are shown separately." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
                                 <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>
@@ -991,7 +1035,7 @@
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="190"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="300"/>
                                 <DataGridTemplateColumn Header="Value" Width="150" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="150"/>
+                                <DataGridTemplateColumn Header="Quality" Width="135" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
                             </DataGrid.Columns>
                         </DataGrid>
@@ -1022,8 +1066,8 @@
                                 </Border>
                                 <StackPanel>
                                     <TextBlock Text="Alarm Annunciator" Style="{StaticResource WorkspaceTitle}"/>
-                                    <TextBlock Text="FLASH = UNACK • STEADY = ACK • RTN = RETURNED"
-                                               Style="{StaticResource MicroLabel}" Foreground="#7A8797" Margin="0,2,0,0"/>
+                                    <TextBlock Text="Unacknowledged flashes • acknowledged steady • returned awaits ACK"
+                                               Style="{StaticResource Caption}" Foreground="#667085" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="11" Padding="10,6">
@@ -1067,8 +1111,7 @@
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel>
-                                                    <TextBlock Text="IED ALARMS" FontSize="10" FontWeight="Bold" Foreground="#DCE3EC"/>
-                                                    <TextBlock Text="Select fascia" FontSize="9.2" Foreground="#8794A5" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="IEDs" FontSize="10.8" FontWeight="SemiBold" Foreground="#DCE3EC"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" Text="{Binding AnnunciatorDeviceCount}" FontSize="11" FontWeight="Bold" Foreground="#AFC2DA" VerticalAlignment="Center"/>
                                             </Grid>
@@ -1150,7 +1193,7 @@
                                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                                     <TextBlock Text="{Binding DeviceName}" FontSize="11.8" FontWeight="SemiBold" Foreground="#F3F6FA"
                                                                                TextTrimming="CharacterEllipsis"/>
-                                                                    <TextBlock Text="{Binding StatusText}" FontSize="9.1" Margin="0,2,0,0" TextTrimming="CharacterEllipsis">
+                                                                    <TextBlock Text="{Binding StatusText}" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis">
                                                                         <TextBlock.Style>
                                                                             <Style TargetType="TextBlock">
                                                                                 <Setter Property="Foreground" Value="#8E9BAA"/>
@@ -1184,7 +1227,7 @@
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding SelectedAnnunciatorDevice.DeviceName}" FontSize="14.5" FontWeight="Bold" Foreground="#F8FAFC"/>
-                                                    <TextBlock Text="{Binding SelectedAnnunciatorDevice.StatusText}" FontSize="9.8" Foreground="#9EABB9" Margin="10,1,0,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding SelectedAnnunciatorDevice.StatusText}" FontSize="10.4" Foreground="#9EABB9" Margin="10,1,0,0" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                                 <Button Grid.Column="1" Content="ACK IED" Click="AcknowledgeAllAlarms_Click"
                                                         Style="{StaticResource PrimaryButton}" Padding="11,5" FontSize="10"
@@ -1277,12 +1320,12 @@
                                                                                 </Style.Triggers>
                                                                             </Style>
                                                                         </Border.Style>
-                                                                        <TextBlock Text="{Binding CompactStateText}" FontSize="8.2" FontWeight="Bold" Foreground="#5B4750"/>
+                                                                        <TextBlock Text="{Binding CompactStateText}" FontSize="9.2" FontWeight="Bold" Foreground="#5B4750"/>
                                                                     </Border>
                                                                     <TextBlock Grid.Row="1" Text="{Binding CurrentValue}" FontSize="18" FontWeight="Bold" Foreground="#111827"
                                                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentValue}"/>
                                                                     <Button Grid.Row="1" Grid.Column="1" Content="ACK" Tag="{Binding}" Click="AcknowledgeAlarm_Click"
-                                                                            Padding="7,2" Margin="7,0,0,0" FontSize="8.8" MinHeight="22" VerticalAlignment="Center">
+                                                                            Padding="7,2" Margin="7,0,0,0" FontSize="9.4" MinHeight="22" VerticalAlignment="Center">
                                                                         <Button.Style>
                                                                             <Style TargetType="Button" BasedOn="{StaticResource SoftButton}">
                                                                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -1313,9 +1356,9 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="8"/>
-                        <RowDefinition Height="0.9*" MinHeight="205"/>
+                        <RowDefinition Height="*" MinHeight="260"/>
                         <RowDefinition Height="8"/>
-                        <RowDefinition Height="1.1*" MinHeight="230"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
@@ -1324,18 +1367,12 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="6"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="4"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
+
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="14"/>
-                                    <ColumnDefinition Width="300"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="235"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="6"/>
@@ -1343,7 +1380,6 @@
                                     <ColumnDefinition Width="6"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0"/>
                                     <TextBlock Text="GOOSE Subscriber" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
@@ -1353,44 +1389,22 @@
                                     </Border>
                                 </StackPanel>
 
-                                <ComboBox Grid.Column="2" ItemsSource="{Binding GooseAdapters}" SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
-                                          TextSearch.TextPath="DisplayText" Style="{StaticResource ModernComboBox}" MinHeight="34" Height="34" Padding="10,4"
-                                          IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="{Binding SelectedGooseAdapterDetail}">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                                <Button Grid.Column="4" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
-                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh adapters">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                </Button>
-
-                                <TextBox Grid.Column="6" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
-                                         MinHeight="34" Height="34" Padding="10,4" FontFamily="Cascadia Mono, Consolas" FontSize="10.2"
-                                         IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
-                                <Button Grid.Column="8" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
-                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="{Binding GooseBindingText}">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                </Button>
-
-                                <Button Grid.Column="10" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
-                                        IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
+                                <Button Grid.Column="1" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
+                                        Visibility="{Binding GooseStartVisibility}" IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
                                         <TextBlock Text="Start" Foreground="White"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="12" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
-                                        IsEnabled="{Binding CanStopGooseSubscriber}" Padding="11,6" MinHeight="34">
+                                <Button Grid.Column="3" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
+                                        Visibility="{Binding GooseStopVisibility}" IsEnabled="{Binding CanStopGooseSubscriber}" Padding="11,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
                                         <TextBlock Text="Stop"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="14" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
-                                        Padding="11,6" MinHeight="34" ToolTip="Clear streams">
+                                <Button Grid.Column="5" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
+                                        Visibility="{Binding GooseClearVisibility}" Padding="11,6" MinHeight="34" ToolTip="Clear captured streams">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
                                         <TextBlock Text="Clear"/>
@@ -1400,12 +1414,28 @@
 
                             <Grid Grid.Row="2">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="330"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="10"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Border CornerRadius="9" Padding="8,3" BorderThickness="1">
+                                <ComboBox ItemsSource="{Binding GooseAdapters}" SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                                          TextSearch.TextPath="DisplayText" Style="{StaticResource ModernComboBox}" MinHeight="34" Height="34" Padding="10,4"
+                                          IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="{Binding SelectedGooseAdapterDetail}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis"/></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Grid.Column="2" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
+                                        IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh adapters">
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                </Button>
+
+                                <Border Grid.Column="4" CornerRadius="9" Padding="8,3" BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="#F2F4F7"/>
@@ -1429,11 +1459,35 @@
                                         </TextBlock.Style>
                                     </TextBlock>
                                 </Border>
-                                <TextBlock Grid.Column="2" Text="{Binding GooseStatusText}" FontSize="10.7" Foreground="{StaticResource Muted}"
+                                <TextBlock Grid.Column="6" Text="{Binding GooseStatusText}" FontSize="10.7" Foreground="{StaticResource Muted}"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
-                                <TextBlock Grid.Column="3" Text="{Binding GooseCounterText}" FontSize="10.7" FontWeight="SemiBold" Foreground="#45648E"
+                                <TextBlock Grid.Column="7" Text="{Binding GooseCounterText}" FontSize="10.4" FontWeight="SemiBold" Foreground="#45648E"
                                            VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </Grid>
+
+                            <Expander x:Name="GooseCaptureOptionsExpander" Grid.Row="4" Header="Capture options" IsExpanded="False"
+                                      Foreground="#52677E" FontSize="10.5" FontWeight="SemiBold">
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="330"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="BPF filter" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="1" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
+                                             MinHeight="32" Height="32" Padding="9,4" FontFamily="Cascadia Mono, Consolas" FontSize="10.2"
+                                             IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
+                                    <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
+                                            IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh SCL/live model bindings">
+                                        <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                    </Button>
+                                    <TextBlock Grid.Column="5" Text="{Binding GooseBindingText}" Style="{StaticResource Caption}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
+                                </Grid>
+                            </Expander>
                         </Grid>
                     </Border>
 
@@ -1500,7 +1554,8 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="4" Style="{StaticResource WorkspaceCard}" Padding="9">
+                    <Border Grid.Row="4" Style="{StaticResource WorkspaceCard}" Padding="9" Height="280"
+                            Visibility="{Binding GooseDataSetInspectorVisibility}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1590,14 +1645,11 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Diagnostics &amp; Communication Journal" Style="{StaticResource WorkspaceTitle}"/>
-                                <TextBlock Text="Connection, reporting, fallback and protocol journal." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Protocol and connection journal • WARN and ERROR are called out without tinting the whole row." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Button x:Name="CopyDiagnosticButton"
-                                        Content="Copy Diagnostic"
-                                        Style="{StaticResource PrimaryButton}"
-                                        Margin="0,0,8,0"
-                                        ToolTip="Copy app, engine, network, IED-session, TCP-probe, and recent journal details for support analysis"
+                                <Button x:Name="CopyDiagnosticButton" Content="Copy Diagnostic" Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,8,0" ToolTip="Copy app, engine, network, IED-session, TCP-probe, and recent journal details for support analysis"
                                         Click="CopyDiagnostics_Click"/>
                                 <Button Content="Clear Log" Style="{StaticResource SoftButton}" Click="ClearDiagnostics_Click"/>
                             </StackPanel>
@@ -1608,36 +1660,23 @@
                                   ScrollViewer.CanContentScroll="True">
                             <DataGrid.RowStyle>
                                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding Level}" Value="ERROR">
                                             <Setter Property="BorderBrush" Value="#EF4444"/>
-                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Level}" Value="WARN">
                                             <Setter Property="BorderBrush" Value="#F59E0B"/>
-                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </DataGrid.RowStyle>
-                            <DataGrid.CellStyle>
-                                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Level}" Value="ERROR">
-                                            <Setter Property="Background" Value="#FFF1F2"/>
-                                            <Setter Property="Foreground" Value="#B42318"/>
-                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Level}" Value="WARN">
-                                            <Setter Property="Background" Value="#FFFAEB"/>
-                                            <Setter Property="Foreground" Value="#B54708"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </DataGrid.CellStyle>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Time" Binding="{Binding Time, StringFormat=yyyy-MM-dd HH:mm:ss.fff}" Width="190"/>
-                                <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="90"/>
+                                <DataGridTemplateColumn Header="Level" Width="90" CellTemplate="{StaticResource DiagnosticLevelBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="145"/>
                                 <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
                             </DataGrid.Columns>
@@ -1645,7 +1684,7 @@
                     </DockPanel>
                 </Border>
             </TabItem>
-        </TabControl>
+                </TabControl>
 
         <Border Grid.Row="2" Margin="0,10,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF" BorderThickness="1" CornerRadius="14" Padding="11,7">
             <Grid>
