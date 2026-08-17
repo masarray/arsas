@@ -12,9 +12,10 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Alarm Annunciator controller.
 ///
-/// Trigger authority is the same SOE/Event Log stream shown to the operator. The
-/// annunciator never invents a second IEC 61850 acquisition path. A momentary alarm
-/// edge therefore remains visible even after the process value has returned to normal.
+/// SOE/Event Log remains the occurrence/history authority. Current live point snapshots
+/// are reconciled separately so a restored project immediately shows the physical alarm state
+/// after its initial read without fabricating an SOE entry. A momentary alarm edge remains
+/// latched even after the process value has returned to normal.
 ///
 /// Presentation is grouped by IED. Only the selected IED's alarm windows are rendered;
 /// the IED rail retains independent alarm/unacknowledged indication for every configured
@@ -122,6 +123,25 @@ public partial class MainWindow
 
     private void AlarmRuntime_EventRaised(Iec61850EventEntry entry)
         => _pendingAnnunciatorEvents.Enqueue(entry);
+
+    /// <summary>
+    /// Reconciles the annunciator fascia from the same point snapshot already accepted by
+    /// the Live Monitor. This never creates an Event Log entry and never starts another
+    /// acquisition path; SOE edges remain responsible for occurrence history/latching.
+    /// </summary>
+    private void ReconcileAnnunciatorFromLivePoint(Iec61850MonitorPoint point)
+    {
+        if (!_annunciatorInitialized ||
+            !point.CanUseAsAnnunciator ||
+            !IsAnnunciatorConfigured(point.DeviceId, point.IecReference))
+        {
+            return;
+        }
+
+        var item = EnsureAnnunciatorItem(point);
+        item.InitializeFromPoint(point);
+        RefreshAnnunciatorDeviceGroup(point.DeviceId);
+    }
 
     private void AnnunciatorUiTimer_Tick(object? sender, EventArgs e)
     {
@@ -363,7 +383,7 @@ public partial class MainWindow
             IecTelegram = Iec61850MonitorPoint.StripIedNamePrefix(effectiveReference, device.Name),
             IecDataType = signal?.DataType ?? string.Empty
         };
-        item.MarkUnavailable(device.IsConnected ? "Waiting for live SOE" : "Offline / saved configuration");
+        item.MarkUnavailable(device.IsConnected ? "Waiting for live value" : "Offline / saved configuration");
         AddAnnunciatorItem(item);
         return item;
     }

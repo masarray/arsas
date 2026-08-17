@@ -1715,6 +1715,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
             UpdateCommandFeedbackFromLivePoint(point);
+            ReconcileAnnunciatorFromLivePoint(point);
             if (snapshot.IsReportTraffic)
             {
                 var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));

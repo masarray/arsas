@@ -41,6 +41,7 @@ internal static class GridUxBehavior
         public required ICollectionView View { get; init; }
         public required DispatcherTimer RefreshTimer { get; init; }
         public Dictionary<string, string> Filters { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public string SearchQuery { get; set; } = string.Empty;
     }
 
     private static readonly ConditionalWeakTable<MainWindow, MainWindowState> MainWindows = new();
@@ -477,7 +478,7 @@ internal static class GridUxBehavior
             timer.Stop();
             state.View.Refresh();
         };
-        state.View.Filter = item => FilterGlobalPoint(item, state.Filters);
+        state.View.Filter = item => FilterGlobalPoint(item, state.Filters, state.SearchQuery);
 
         grid.HorizontalAlignment = HorizontalAlignment.Stretch;
         grid.HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -500,8 +501,18 @@ internal static class GridUxBehavior
         foreach (var column in grid.Columns)
         {
             var caption = column.Header?.ToString() ?? string.Empty;
-            column.Header = BuildRapidFilterHeader(state, caption);
+            column.Header = BuildRapidFilterHeader(state, column, caption);
         }
+    }
+
+    internal static void SetGlobalRapidSearch(DataGrid grid, string? query)
+    {
+        if (!GlobalGrids.TryGetValue(grid, out var state))
+            return;
+
+        state.SearchQuery = query?.Trim() ?? string.Empty;
+        state.RefreshTimer.Stop();
+        state.RefreshTimer.Start();
     }
 
     private static void ApplyGlobalColumnStretch(DataGrid grid)
@@ -528,13 +539,20 @@ internal static class GridUxBehavior
         }
     }
 
-    private static FrameworkElement BuildRapidFilterHeader(GlobalRapidFilterState state, string caption)
+    private static FrameworkElement BuildRapidFilterHeader(GlobalRapidFilterState state, DataGridColumn column, string caption)
     {
         var root = new Grid
         {
             Background = Brushes.Transparent,
-            SnapsToDevicePixels = true
+            SnapsToDevicePixels = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinWidth = 0
         };
+        root.SetBinding(FrameworkElement.WidthProperty, new Binding(nameof(DataGridColumn.ActualWidth))
+        {
+            Source = column,
+            Mode = BindingMode.OneWay
+        });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
 
@@ -679,10 +697,31 @@ internal static class GridUxBehavior
 #pragma warning restore CS0618
     }
 
-    private static bool FilterGlobalPoint(object item, IReadOnlyDictionary<string, string> filters)
+    private static bool FilterGlobalPoint(object item, IReadOnlyDictionary<string, string> filters, string? searchQuery)
     {
         if (item is not Iec61850MonitorPoint point)
             return false;
+
+        var globalTokens = Tokenize(searchQuery);
+        if (globalTokens.Length > 0)
+        {
+            var searchable = string.Join(" ", new[]
+            {
+                point.DeviceName,
+                point.SignalName,
+                point.IecTelegram,
+                point.IecReference,
+                point.DisplayValue,
+                point.Quality,
+                point.DeviceTimestamp,
+                point.SourceMode,
+                point.Category,
+                point.IecDataType
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+            if (!globalTokens.All(token => searchable.Contains(token, StringComparison.OrdinalIgnoreCase)))
+                return false;
+        }
 
         foreach (var (key, rawFilter) in filters)
         {
