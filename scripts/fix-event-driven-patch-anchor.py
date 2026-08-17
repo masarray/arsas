@@ -1,9 +1,10 @@
 from pathlib import Path
 p = Path('scripts/patch-event-driven-session-live-monitor.py')
 s = p.read_text(encoding='utf-8')
-old = "    '''                UpdateCommandFeedbackFromLivePoint(point);\\n''',\n    '''                UpdateCommandFeedbackFromLivePoint(point);\\n                ReconcileAnnunciatorFromLivePoint(point);\\n''')"
-new = "    'UpdateCommandFeedbackFromLivePoint(point);',\n    'UpdateCommandFeedbackFromLivePoint(point);\\n            ReconcileAnnunciatorFromLivePoint(point);')"
-if s.count(old) != 1:
-    raise SystemExit(f'expected one helper anchor, got {s.count(old)}')
-p.write_text(s.replace(old, new, 1), encoding='utf-8', newline='\n')
+start_marker = "main_cs = 'MainWindow.xaml.cs'"
+end_marker = "# 2) Live Monitor header"
+start = s.index(start_marker)
+end = s.index(end_marker)
+replacement = '''main_cs = 'MainWindow.xaml.cs'\nreplace_once(\n    main_cs,\n    'UpdateCommandFeedbackFromLivePoint(point);',\n    'UpdateCommandFeedbackFromLivePoint(point);\\n            ReconcileAnnunciatorFromLivePoint(point);')\n\n'''
+p.write_text(s[:start] + replacement + s[end:], encoding='utf-8', newline='\n')
 print('Made MainWindow point-flush anchor indentation-independent.')
