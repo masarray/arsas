@@ -109,7 +109,7 @@ internal static class SasOperationalUiPolicy
         shell.Width = 760;
         shell.Height = 56;
         shell.Padding = new Thickness(5);
-        shell.CornerRadius = new CornerRadius(20);
+        shell.CornerRadius = new CornerRadius(14);
         shell.Background = Brush("#D8E2F0");
         shell.BorderBrush = Brush("#B7C6DA");
         shell.BorderThickness = new Thickness(1);
@@ -139,7 +139,8 @@ internal static class SasOperationalUiPolicy
             button.Padding = new Thickness(10, 0, 10, 0);
             button.BorderThickness = new Thickness(1);
             button.Cursor = Cursors.Hand;
-            button.FontSize = 12.4;
+            button.FontSize = 12.5;
+            button.FocusVisualStyle = null;
             button.PreviewMouseLeftButtonUp -= OnNavigationClick;
             button.PreviewMouseLeftButtonUp += OnNavigationClick;
         }
@@ -217,9 +218,9 @@ internal static class SasOperationalUiPolicy
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="14"/>
+                        CornerRadius="10"/>
                 <Border x:Name="InteractionSurface" Background="Transparent"
-                        BorderBrush="Transparent" BorderThickness="1" CornerRadius="14"
+                        BorderBrush="Transparent" BorderThickness="1" CornerRadius="10"
                         IsHitTestVisible="False"/>
                 <ContentPresenter x:Name="Label" HorizontalAlignment="Center" VerticalAlignment="Center"
                                   Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"

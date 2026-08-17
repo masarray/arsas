@@ -41,7 +41,9 @@ internal static class GridUxBehavior
         public required ICollectionView View { get; init; }
         public required DispatcherTimer RefreshTimer { get; init; }
         public Dictionary<string, string> Filters { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<Grid> HeaderRoots { get; } = new();
         public string SearchQuery { get; set; } = string.Empty;
+        public bool FiltersExpanded { get; set; }
     }
 
     private static readonly ConditionalWeakTable<MainWindow, MainWindowState> MainWindows = new();
@@ -494,9 +496,8 @@ internal static class GridUxBehavior
         headerStyle.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(243, 246, 250))));
         headerStyle.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(220, 227, 236))));
         headerStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 1, 1)));
-        headerStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 74d));
         grid.ColumnHeaderStyle = headerStyle;
-        grid.ColumnHeaderHeight = 74;
+        grid.ColumnHeaderHeight = 34;
 
         foreach (var column in grid.Columns)
         {
@@ -513,6 +514,22 @@ internal static class GridUxBehavior
         state.SearchQuery = query?.Trim() ?? string.Empty;
         state.RefreshTimer.Stop();
         state.RefreshTimer.Start();
+    }
+
+    internal static void SetGlobalRapidFiltersExpanded(DataGrid grid, bool expanded)
+    {
+        if (!GlobalGrids.TryGetValue(grid, out var state))
+            return;
+
+        state.FiltersExpanded = expanded;
+        foreach (var root in state.HeaderRoots)
+        {
+            if (root.RowDefinitions.Count < 2)
+                continue;
+            root.RowDefinitions[1].Height = expanded ? new GridLength(34) : new GridLength(0);
+        }
+        grid.ColumnHeaderHeight = expanded ? 68 : 34;
+        grid.UpdateLayout();
     }
 
     private static void ApplyGlobalColumnStretch(DataGrid grid)
@@ -553,8 +570,8 @@ internal static class GridUxBehavior
             Source = column,
             Mode = BindingMode.OneWay
         });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0) });
 
         var title = new TextBlock
         {
@@ -562,7 +579,7 @@ internal static class GridUxBehavior
             Margin = new Thickness(10, 0, 8, 0),
             Foreground = new SolidColorBrush(Color.FromRgb(52, 64, 84)),
             FontWeight = FontWeights.SemiBold,
-            FontSize = 12.5,
+            FontSize = 12.0,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -572,6 +589,7 @@ internal static class GridUxBehavior
         var filterBox = CreateRapidFilterTextBox(state, caption);
         Grid.SetRow(filterBox, 1);
         root.Children.Add(filterBox);
+        state.HeaderRoots.Add(root);
 
         return root;
     }
@@ -581,9 +599,9 @@ internal static class GridUxBehavior
         var box = new TextBox
         {
             Tag = key,
-            Height = 36,
-            Padding = new Thickness(10, 0, 7, 0),
-            FontSize = 12.5,
+            Height = 34,
+            Padding = new Thickness(9, 0, 7, 0),
+            FontSize = 12.0,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(Color.FromRgb(29, 41, 57)),
             CaretBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
@@ -667,7 +685,7 @@ internal static class GridUxBehavior
         watermark.SetValue(TextBlock.TextProperty, "Filter…");
         watermark.SetValue(FrameworkElement.MarginProperty, new Thickness(10, 0, 7, 0));
         watermark.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(152, 162, 179)));
-        watermark.SetValue(TextBlock.FontSizeProperty, 12.5d);
+        watermark.SetValue(TextBlock.FontSizeProperty, 12.0d);
         watermark.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         watermark.SetValue(UIElement.IsHitTestVisibleProperty, false);
         watermark.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
