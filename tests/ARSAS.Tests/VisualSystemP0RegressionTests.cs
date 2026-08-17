@@ -64,16 +64,20 @@ public sealed class VisualSystemP0RegressionTests
     }
 
     [Fact]
-    public void RuntimeNavigation_UsesTheSameP0GeometryAndStableTypography()
+    public void RuntimeNavigation_UsesStableP0Style_WhileResponsiveFixOwnsFinalWidth()
     {
-        var source = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
+        var runtime = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
+        var responsive = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("shell.Width = 900", source, StringComparison.Ordinal);
-        Assert.Contains("shell.CornerRadius = new CornerRadius(14)", source, StringComparison.Ordinal);
-        Assert.Contains("button.FontSize = 12.5", source, StringComparison.Ordinal);
-        Assert.Contains("button.FocusVisualStyle = null", source, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"10\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("shell.Width = 760", source, StringComparison.Ordinal);
+        Assert.Contains("shell.Width = 760", runtime, StringComparison.Ordinal);
+        Assert.Contains("shell.CornerRadius = new CornerRadius(14)", runtime, StringComparison.Ordinal);
+        Assert.Contains("button.FontSize = 12.5", runtime, StringComparison.Ordinal);
+        Assert.Contains("button.FocusVisualStyle = null", runtime, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"10\"", runtime, StringComparison.Ordinal);
+        Assert.Contains("WideNavWidth = 990d", responsive, StringComparison.Ordinal);
+        Assert.Contains("MediumNavWidth = 900d", responsive, StringComparison.Ordinal);
+        Assert.Contains("CompactNavWidth = 720d", responsive, StringComparison.Ordinal);
+        Assert.Contains("shell.Width = shellWidth", responsive, StringComparison.Ordinal);
     }
 
     [Fact]

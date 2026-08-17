@@ -66,7 +66,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border x:Name="WorkflowNavShell" Width="900" Height="56" HorizontalAlignment="Left"
+            <Border x:Name="WorkflowNavShell" Width="760" Height="56" HorizontalAlignment="Left"
                     Background="#E7ECF5" CornerRadius="14" Padding="5" Effect="{StaticResource SoftShadow}"
                     ClipToBounds="False">
                 <Grid x:Name="WorkflowNavGrid" ClipToBounds="False">

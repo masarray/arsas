@@ -106,7 +106,7 @@ internal static class SasOperationalUiPolicy
         if (window.FindName("WorkflowNavShell") is not Border shell)
             return;
 
-        shell.Width = 900;
+        shell.Width = 760;
         shell.Height = 56;
         shell.Padding = new Thickness(5);
         shell.CornerRadius = new CornerRadius(14);
