@@ -51,7 +51,7 @@ public sealed class ProcessValueStatePresentationTests
         Assert.Contains("#245F9E", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#F3F6F9", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#617286", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("state color is not alarm severity", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("process state and signal quality are shown separately", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Closed/ON/true is red", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Open/OFF/false is green", source, StringComparison.OrdinalIgnoreCase);
     }
