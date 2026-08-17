@@ -17,6 +17,7 @@ jobs:
         with:
           ref: fix/event-driven-rcb-session-live-monitor
           fetch-depth: 0
+      - run: python scripts/fix-event-driven-patch-anchor.py
       - run: python scripts/patch-event-driven-session-live-monitor.py
       - run: git diff --check
       - name: Commit audited regression fix
