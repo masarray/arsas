@@ -1860,16 +1860,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Iec61850MonitorPoint point,
         RuntimePointState state,
         bool reportAssigned)
-    {
-        if (!reportAssigned) return point.PollingIntervalMs;
-        if (state.ReportTrafficSeen)
-        {
-            var minimum = state.ReportChangeVerified ? (IsFastPoint(point) ? 10000 : 30000) : (IsFastPoint(point) ? 5000 : 15000);
-            return Math.Clamp(Math.Max(point.PollingIntervalMs * 15, minimum), minimum, 60000);
-        }
-        var awaitingReportMinimum = IsFastPoint(point) ? 2000 : 5000;
-        return Math.Clamp(Math.Max(point.PollingIntervalMs * 3, awaitingReportMinimum), awaitingReportMinimum, 15000);
-    }
+        => ReportVerificationPollingPolicy.GetIntervalMs(
+            point.PollingIntervalMs,
+            IsFastPoint(point),
+            reportAssigned,
+            state.ReportTrafficSeen,
+            state.ReportChangeVerified);
 
     private static string BuildPlanAcquisitionLabel(ReportControlPlan plan, bool dynamicDataSet)
     {

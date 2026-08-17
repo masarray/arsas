@@ -88,6 +88,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Raise(nameof(ActiveIedSubtitle));
             RaiseWorkspaceCounts();
             TryAutoExpandCommandPanelOnce(_selectedDevice);
+            ApplyExplorerLiveSearchFilter();
             // ctlModel inspection is preloaded independently of the Expander. Avoid
             // changing the row set after the panel's first frame has already painted.
         }
