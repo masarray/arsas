@@ -1,0 +1,30 @@
+name: Temporary event-driven session Live Monitor patch
+
+on:
+  push:
+    branches:
+      - fix/event-driven-rcb-session-live-monitor
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/event-driven-rcb-session-live-monitor
+          fetch-depth: 0
+      - run: python scripts/patch-event-driven-session-live-monitor.py
+      - run: git diff --check
+      - name: Commit audited regression fix
+        shell: bash
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MainWindow.xaml MainWindow.xaml.cs MainWindow.AlarmAnnunciator.cs MainWindow.GlobalLiveSearch.cs GridUxBehavior.cs tests/ARSAS.Tests/EventDrivenSessionLiveMonitorRegressionTests.cs
+          git commit -m "Fix event-driven session state and Live Monitor UX"
+          git push origin HEAD:fix/event-driven-rcb-session-live-monitor
