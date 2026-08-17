@@ -1,0 +1,30 @@
+name: Temporary P0 build guard update
+
+on:
+  push:
+    branches:
+      - polish/p0-visual-system-unification
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: polish/p0-visual-system-unification
+          fetch-depth: 0
+      - run: python scripts/patch-p0-build-guard.py
+      - run: git diff --check
+      - name: Commit updated invariant
+        shell: bash
+        run: |
+          if git diff --quiet -- .github/workflows/build.yml; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/build.yml
+          git commit -m "Align build guard with P0 navbar contract"
+          git push origin HEAD:polish/p0-visual-system-unification
