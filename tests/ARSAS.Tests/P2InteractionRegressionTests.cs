@@ -3,34 +3,59 @@ namespace ARSAS.Tests;
 public sealed class P2InteractionRegressionTests
 {
     [Fact]
-    public void App_InstallsP2InteractionLayer_AfterGridUx()
+    public void App_InstallsSmoothScrollLayer_AfterGridUx()
     {
         var source = File.ReadAllText(FindRepoFile("App.xaml.cs"));
 
         var grid = source.IndexOf("GridUxBehavior.Install();", StringComparison.Ordinal);
         var p2 = source.IndexOf("P2InteractionBehavior.Install();", StringComparison.Ordinal);
 
-        Assert.True(grid >= 0 && p2 > grid, "P2 interaction behavior must install after the existing grid UX layer.");
+        Assert.True(grid >= 0 && p2 > grid, "Smooth scrolling must install after the existing grid UX layer.");
     }
 
     [Fact]
-    public void SmoothScroll_PreservesVirtualization_AndUsesPixelScroll()
+    public void SmoothScroll_DoesNotInstallKeyboardShortcutsOrSearchUi()
     {
         var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
 
-        Assert.Contains("VirtualizingPanel.SetIsVirtualizing(items, true)", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.SetVirtualizationMode(items, VirtualizationMode.Recycling)", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.SetScrollUnit(items, ScrollUnit.Pixel)", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.SetCanContentScroll(items, true)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Keyboard.PreviewKeyDownEvent", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainWindow_PreviewKeyDown", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("P2IedFinder", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExplorerLiveSearchBox", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GlobalLiveSearchBox", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollIntoView", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CollectionViewSource", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmoothScroll_DoesNotMutateVirtualizationAfterLayoutStarts()
+    {
+        var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
+
+        Assert.DoesNotContain("ItemsControl_Loaded", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VirtualizingPanel.SetVirtualizationMode", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VirtualizingPanel.SetIsVirtualizing", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VirtualizingPanel.SetScrollUnit", source, StringComparison.Ordinal);
+        Assert.Contains("ConfigurePixelScrollStylesBeforeWindowCreation", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.ScrollUnitProperty", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollUnit.Pixel", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmoothScroll_UsesAccumulatedRenderRateEasing()
+    {
+        var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
+
+        Assert.Contains("Mouse.PreviewMouseWheelEvent", source, StringComparison.Ordinal);
         Assert.Contains("Interval = TimeSpan.FromMilliseconds(16)", source, StringComparison.Ordinal);
         Assert.Contains("e.Delta / 120d", source, StringComparison.Ordinal);
         Assert.Contains("state.TargetOffset + deltaPixels", source, StringComparison.Ordinal);
         Assert.Contains("remaining * 0.24d", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SetCanContentScroll(items, false)", source, StringComparison.Ordinal);
+        Assert.Contains("viewer.ScrollToVerticalOffset", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SmoothScroll_DoesNotHijackPlatformModifierGestures()
+    public void SmoothScroll_PreservesPlatformOwnedWheelGestures()
     {
         var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
 
@@ -38,54 +63,11 @@ public sealed class P2InteractionRegressionTests
         Assert.Contains("FindAncestor<ScrollBar>(source)", source, StringComparison.Ordinal);
         Assert.Contains("IsDropDownOpen: true", source, StringComparison.Ordinal);
         Assert.Contains("AcceptsReturn: true", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.GetScrollUnit(items) != ScrollUnit.Pixel", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void IedFinder_SearchesOperatorRelevantIdentityFields_AndShowsMatchCount()
-    {
-        var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
-
-        Assert.Contains("P2IedFinder", source, StringComparison.Ordinal);
-        Assert.Contains("Find IED — name, IP, endpoint or status", source, StringComparison.Ordinal);
-        Assert.Contains("device.Name", source, StringComparison.Ordinal);
-        Assert.Contains("device.IpAddress", source, StringComparison.Ordinal);
-        Assert.Contains("device.EndpointText", source, StringComparison.Ordinal);
-        Assert.Contains("device.Status", source, StringComparison.Ordinal);
-        Assert.Contains("device.LogicalDeviceSummary", source, StringComparison.Ordinal);
-        Assert.Contains("count == 1 ? \"1 match\"", source, StringComparison.Ordinal);
-        Assert.Contains("state.IedList.ScrollIntoView", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ExistingLiveSearches_GainResultCount_AndNextPreviousNavigation()
-    {
-        var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
-
-        Assert.Contains("ExplorerLiveSearchBox", source, StringComparison.Ordinal);
-        Assert.Contains("GlobalLiveSearchBox", source, StringComparison.Ordinal);
-        Assert.Contains("GlobalLiveGrid", source, StringComparison.Ordinal);
-        Assert.Contains("SelectedDevice.Points", source, StringComparison.Ordinal);
-        Assert.Contains("Enter next", source, StringComparison.Ordinal);
-        Assert.Contains("Shift+Enter previous", source, StringComparison.Ordinal);
-        Assert.Contains("grid.ScrollIntoView(item)", source, StringComparison.Ordinal);
-        Assert.Contains("row.BringIntoView()", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void KeyboardFastFind_OffersContextSearch_IedSearch_AndFindNext()
-    {
-        var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
-
-        Assert.Contains("e.Key == Key.K", source, StringComparison.Ordinal);
-        Assert.Contains("e.Key == Key.F", source, StringComparison.Ordinal);
-        Assert.Contains("e.Key == Key.F3", source, StringComparison.Ordinal);
-        Assert.Contains("ModifierKeys.Shift", source, StringComparison.Ordinal);
-        Assert.Contains("FocusIedFinder(owner, switchToExplorer: true)", source, StringComparison.Ordinal);
-        Assert.Contains("target.SelectAll()", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void P2InteractionLayer_RemainsPresentationOnly()
+    public void SmoothScrollLayer_RemainsPresentationOnly()
     {
         var source = File.ReadAllText(FindRepoFile("P2InteractionBehavior.cs"));
         var app = File.ReadAllText(FindRepoFile("App.xaml.cs"));
