@@ -851,14 +851,64 @@
                 <Border Style="{StaticResource Card}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Global Multi-IED Live Monitor" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="Every IED keeps its own connection, report subscription, validation reads, and start/stop state."
+                                <TextBlock Text="Every IED keeps its own connection, report subscription, validated reads, and event-driven RCB state."
                                            FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
                             </StackPanel>
-                            <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="15" Padding="10,6">
-                                <TextBlock Text="{Binding MonitoringInsightText}" FontSize="12.4" Foreground="{StaticResource Ink}"/>
+                            <Border Grid.Row="1" Margin="0,10,0,0" Height="40" Background="#F8FAFC"
+                                    BorderBrush="#D7E1EE" BorderThickness="1" CornerRadius="10"
+                                    HorizontalAlignment="Stretch">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="38"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="38"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                    </Viewbox>
+                                    <Grid Grid.Column="1">
+                                        <TextBox x:Name="GlobalLiveSearchBox"
+                                                 TextChanged="GlobalLiveSearch_TextChanged"
+                                                 Background="Transparent" BorderThickness="0" Padding="0"
+                                                 VerticalContentAlignment="Center" FontSize="12.5"
+                                                 Foreground="{StaticResource Ink}" CaretBrush="{StaticResource Accent}"
+                                                 ToolTip="Fast search across all monitored IED signals"/>
+                                        <TextBlock Text="Search all live signals — IED, signal, IEC reference, value, quality, acquisition…"
+                                                   Margin="1,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   FontSize="12.2" Foreground="#98A2B3">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=GlobalLiveSearchBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <Button Grid.Column="2" Click="GlobalLiveSearchClear_Click" Background="Transparent"
+                                            BorderThickness="0" Padding="8" Cursor="Hand" ToolTip="Clear search">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Text, ElementName=GlobalLiveSearchBox}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <Viewbox Width="13" Height="13"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/></Viewbox>
+                                    </Button>
+                                </Grid>
                             </Border>
                         </Grid>
                         <DataGrid ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
