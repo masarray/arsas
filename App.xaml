@@ -189,31 +189,62 @@
             </Setter>
         </Style>
 
-        <!-- Compact P2 typography scale: restrained sizes for dense engineering workstations. -->
+        <!-- P0 workstation typography: five levels only for fast engineering scan paths. -->
+        <Style x:Key="WorkspaceTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        </Style>
+
+        <Style x:Key="WorkspaceSubtitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        </Style>
+
         <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         </Style>
 
         <Style x:Key="BodyText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12.2"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         </Style>
 
         <Style x:Key="Caption" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-            <Setter Property="FontSize" Value="11.8"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         </Style>
 
         <Style x:Key="MicroLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-            <Setter Property="FontSize" Value="10.6"/>
+            <Setter Property="FontSize" Value="10"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        </Style>
+
+        <!-- Main-window workspace surfaces deliberately avoid card shadows. The data is the hierarchy. -->
+        <Style x:Key="WorkspaceCard" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PremiumSurface}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Effect" Value="{x:Null}"/>
+        </Style>
+
+        <Style x:Key="SearchSurface" TargetType="Border">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Background" Value="#F8FAFC"/>
+            <Setter Property="BorderBrush" Value="#D7E1EE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button">
@@ -577,23 +608,31 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid SnapsToDevicePixels="True">
-                            <!-- Transparent hit target only. The visible chrome is the animated sliding pill behind it. -->
-                            <Border Background="Transparent" CornerRadius="18" Margin="2"/>
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            <Border Background="Transparent" CornerRadius="10" Margin="2"/>
+                            <Border x:Name="KeyboardFocusRing" Margin="2" CornerRadius="10"
+                                    BorderBrush="#7EA9EA" BorderThickness="1.5" Opacity="0"
+                                    IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="FontSize" Value="13.45"/>
+                                <Setter Property="Foreground" Value="#344054"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="FontSize" Value="12.55"/>
+                                <Setter Property="Opacity" Value="0.82"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="KeyboardFocusRing" Property="Opacity" Value="1"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
@@ -734,10 +773,10 @@
             <Setter Property="CanUserSortColumns" Value="True"/>
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="CanUserDeleteRows" Value="False"/>
-            <Setter Property="RowHeight" Value="34"/>
+            <Setter Property="RowHeight" Value="32"/>
             <Setter Property="ColumnHeaderHeight" Value="34"/>
             <Setter Property="AlternatingRowBackground" Value="#F5F8FD"/>
-            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontSize" Value="12.2"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
@@ -745,7 +784,8 @@
             <Setter Property="Background" Value="#F1F5F9"/>
             <Setter Property="Foreground" Value="#475467"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="9,0"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="BorderBrush" Value="{StaticResource Line}"/>

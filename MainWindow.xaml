@@ -66,8 +66,8 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border x:Name="WorkflowNavShell" Width="760" Height="56" HorizontalAlignment="Left"
-                    Background="#E7ECF5" CornerRadius="20" Padding="5" Effect="{StaticResource SoftShadow}"
+            <Border x:Name="WorkflowNavShell" Width="900" Height="56" HorizontalAlignment="Left"
+                    Background="#E7ECF5" CornerRadius="14" Padding="5" Effect="{StaticResource SoftShadow}"
                     ClipToBounds="False">
                 <Grid x:Name="WorkflowNavGrid" ClipToBounds="False">
                     <Grid.ColumnDefinitions>
@@ -127,7 +127,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+                    <Border Grid.Column="0" Style="{StaticResource WorkspaceCard}" Padding="10">
                         <DockPanel>
                             <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
@@ -411,7 +411,7 @@
 
                     <Grid Grid.Column="2">
                         <!-- Original premium first-run empty state restored. -->
-                        <Border Style="{StaticResource Card}" Padding="0" Visibility="{Binding EmptyExplorerVisibility}" ClipToBounds="True">
+                        <Border Style="{StaticResource WorkspaceCard}" Padding="0" Visibility="{Binding EmptyExplorerVisibility}" ClipToBounds="True">
                             <Grid>
                                 <Image Source="Assets/gateway-hero.png" Stretch="UniformToFill" Opacity="0.88"/>
                                 <Rectangle Fill="#F8FAFC" Opacity="0.18"/>
@@ -442,7 +442,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <Border Grid.Row="0" Style="{StaticResource Card}" Padding="10">
+                            <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -603,7 +603,7 @@
                                         <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Expander.Header>
-                                <Border Style="{StaticResource Card}" Background="{StaticResource CommandPanelSurface}" Padding="16" BorderBrush="#BFD0E5">
+                                <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="16" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -848,7 +848,7 @@
 
             <!-- GLOBAL MULTI-IED LIVE MONITOR -->
             <TabItem Header="Live Monitor">
-                <Border Style="{StaticResource Card}" Padding="12">
+                <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.RowDefinitions>
@@ -856,60 +856,75 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Global Multi-IED Live Monitor" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="Every IED keeps its own connection, report subscription, validated reads, and event-driven RCB state."
-                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                <TextBlock Text="Global Multi-IED Live Monitor" Style="{StaticResource WorkspaceTitle}"/>
+                                <TextBlock Text="Live values across all monitored IEDs." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
-                            <Border Grid.Row="1" Margin="0,10,0,0" Height="40" Background="#F8FAFC"
-                                    BorderBrush="#D7E1EE" BorderThickness="1" CornerRadius="10"
-                                    HorizontalAlignment="Stretch">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="38"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="38"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
-                                    </Viewbox>
-                                    <Grid Grid.Column="1">
-                                        <TextBox x:Name="GlobalLiveSearchBox"
-                                                 TextChanged="GlobalLiveSearch_TextChanged"
-                                                 Background="Transparent" BorderThickness="0" Padding="0"
-                                                 VerticalContentAlignment="Center" FontSize="12.5"
-                                                 Foreground="{StaticResource Ink}" CaretBrush="{StaticResource Accent}"
-                                                 ToolTip="Fast search across all monitored IED signals"/>
-                                        <TextBlock Text="Search all live signals — IED, signal, IEC reference, value, quality, acquisition…"
-                                                   Margin="1,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
-                                                   FontSize="12.2" Foreground="#98A2B3">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                            <Grid Grid.Row="1" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource SearchSurface}" HorizontalAlignment="Stretch">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="36"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="34"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                        </Viewbox>
+                                        <Grid Grid.Column="1">
+                                            <TextBox x:Name="GlobalLiveSearchBox"
+                                                     TextChanged="GlobalLiveSearch_TextChanged"
+                                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                                     VerticalContentAlignment="Center" FontSize="12"
+                                                     Foreground="{StaticResource Ink}" CaretBrush="{StaticResource Accent}"
+                                                     ToolTip="Fast search across all monitored IED signals"/>
+                                            <TextBlock Text="Search IED, signal, IEC reference, value, quality or acquisition"
+                                                       VerticalAlignment="Center" IsHitTestVisible="False"
+                                                       Style="{StaticResource Caption}" Foreground="#98A2B3">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                        <Setter Property="Foreground" Value="#98A2B3"/>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Text, ElementName=GlobalLiveSearchBox}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <Button Grid.Column="2" Click="GlobalLiveSearchClear_Click" Background="Transparent"
+                                                BorderThickness="0" Padding="7" Cursor="Hand" ToolTip="Clear search" FocusVisualStyle="{x:Null}">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Visible"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Text, ElementName=GlobalLiveSearchBox}" Value="">
-                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                            </Button.Style>
+                                            <Viewbox Width="13" Height="13"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/></Viewbox>
+                                        </Button>
                                     </Grid>
-                                    <Button Grid.Column="2" Click="GlobalLiveSearchClear_Click" Background="Transparent"
-                                            BorderThickness="0" Padding="8" Cursor="Hand" ToolTip="Clear search">
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Text, ElementName=GlobalLiveSearchBox}" Value="">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                        <Viewbox Width="13" Height="13"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/></Viewbox>
-                                    </Button>
-                                </Grid>
-                            </Border>
+                                </Border>
+                                <Button x:Name="GlobalLiveFiltersButton" Grid.Column="2"
+                                        Click="GlobalLiveFilters_Click" Style="{StaticResource SoftButton}"
+                                        Padding="10,6" MinHeight="36" ToolTip="Show or hide per-column filters">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="14" Height="14" Margin="0,0,6,0">
+                                            <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
+                                        </Viewbox>
+                                        <TextBlock x:Name="GlobalLiveFiltersLabel" Text="Filters" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
                         </Grid>
                         <DataGrid x:Name="GlobalLiveGrid" ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="3" EnableRowVirtualization="True" EnableColumnVirtualization="True"
@@ -952,14 +967,13 @@
 
             <!-- EVENT LOG -->
             <TabItem Header="Event Log">
-                <Border Style="{StaticResource Card}" Padding="12">
+                <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="IEC 61850 Sequence of Events" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="SCADA/SAS SOE: state values use ARSAS blue for active and slate for inactive; intermediate/bad states use amber. Color describes state, not alarm severity. Non-events stay out."
-                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                <TextBlock Text="IEC 61850 Sequence of Events" Style="{StaticResource WorkspaceTitle}"/>
+                                <TextBlock Text="SOE edges only • state color is not alarm severity." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
                                 <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>
@@ -987,7 +1001,7 @@
 
             <!-- EVENT-LATCHED ALARM ANNUNCIATOR -->
             <TabItem Header="Alarm Annunciator">
-                <Border Style="{StaticResource Card}" Padding="12">
+                <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -1007,9 +1021,9 @@
                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel>
-                                    <TextBlock Text="Alarm Annunciator" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                    <TextBlock Text="IED FASCIA • FLASH = UNACK • STEADY = ACK • RTN = RETURNED"
-                                               FontSize="9.8" FontWeight="SemiBold" Foreground="#7A8797" Margin="0,2,0,0"/>
+                                    <TextBlock Text="Alarm Annunciator" Style="{StaticResource WorkspaceTitle}"/>
+                                    <TextBlock Text="FLASH = UNACK • STEADY = ACK • RTN = RETURNED"
+                                               Style="{StaticResource MicroLabel}" Foreground="#7A8797" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="11" Padding="10,6">
@@ -1304,7 +1318,7 @@
                         <RowDefinition Height="1.1*" MinHeight="230"/>
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Style="{StaticResource Card}" Padding="10">
+                    <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1332,7 +1346,7 @@
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0"/>
-                                    <TextBlock Text="GOOSE Subscriber" FontSize="14.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="GOOSE Subscriber" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                                     <Border Margin="8,0,0,0" Background="#EEF4FF" BorderBrush="#C9D9F1" BorderThickness="1" CornerRadius="8" Padding="6,2"
                                             ToolTip="Read-only IEC 61850-8-1 Ethernet capture">
                                         <TextBlock Text="READ ONLY" FontSize="8.7" FontWeight="Bold" Foreground="#45648E"/>
@@ -1423,7 +1437,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="9">
+                    <Border Grid.Row="2" Style="{StaticResource WorkspaceCard}" Padding="9">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1486,7 +1500,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="4" Style="{StaticResource Card}" Padding="9">
+                    <Border Grid.Row="4" Style="{StaticResource WorkspaceCard}" Padding="9">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1570,14 +1584,13 @@
 
             <!-- DIAGNOSTICS -->
             <TabItem Header="Diagnostics">
-                <Border Style="{StaticResource Card}" Padding="12">
+                <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Diagnostics &amp; Communication Journal" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="Connection, discovery, IED identity, RCB/DataSet setup, report verification, fallback, reconnect, and protocol faults."
-                                           FontSize="12.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                <TextBlock Text="Diagnostics &amp; Communication Journal" Style="{StaticResource WorkspaceTitle}"/>
+                                <TextBlock Text="Connection, reporting, fallback and protocol journal." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="CopyDiagnosticButton"
