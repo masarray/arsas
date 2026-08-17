@@ -3,7 +3,7 @@ from pathlib import Path
 path = Path('.github/workflows/build.yml')
 text = path.read_text(encoding='utf-8')
 replacements = [
-    ('WorkflowNavShell\\" Width=\\"760\\" Height=\\"56\\"', 'WorkflowNavShell\\" Width=\\"900\\" Height=\\"56\\"'),
+    ('WorkflowNavShell" Width="760" Height="56"', 'WorkflowNavShell" Width="900" Height="56"'),
     ("$sasUi -notmatch 'shell.Width = 760'", "$sasUi -notmatch 'shell.Width = 900'"),
 ]
 for old, new in replacements:
