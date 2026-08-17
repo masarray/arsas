@@ -505,18 +505,14 @@ internal static class GridUxBehavior
         }
     }
 
-    internal static void SetGlobalRapidSearch(MainWindow owner, string? query)
+    internal static void SetGlobalRapidSearch(DataGrid grid, string? query)
     {
-        var normalized = query?.Trim() ?? string.Empty;
-        foreach (var grid in FindVisualChildren<DataGrid>(owner).Where(IsGlobalLiveGrid))
-        {
-            if (!GlobalGrids.TryGetValue(grid, out var state))
-                continue;
+        if (!GlobalGrids.TryGetValue(grid, out var state))
+            return;
 
-            state.SearchQuery = normalized;
-            state.RefreshTimer.Stop();
-            state.RefreshTimer.Start();
-        }
+        state.SearchQuery = query?.Trim() ?? string.Empty;
+        state.RefreshTimer.Stop();
+        state.RefreshTimer.Start();
     }
 
     private static void ApplyGlobalColumnStretch(DataGrid grid)

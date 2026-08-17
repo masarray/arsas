@@ -6,7 +6,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private void GlobalLiveSearch_TextChanged(object sender, TextChangedEventArgs e)
-        => GridUxBehavior.SetGlobalRapidSearch(this, GlobalLiveSearchBox?.Text);
+        => GridUxBehavior.SetGlobalRapidSearch(GlobalLiveGrid, GlobalLiveSearchBox?.Text);
 
     private void GlobalLiveSearchClear_Click(object sender, RoutedEventArgs e)
     {

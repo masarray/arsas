@@ -911,7 +911,7 @@
                                 </Grid>
                             </Border>
                         </Grid>
-                        <DataGrid ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                        <DataGrid x:Name="GlobalLiveGrid" ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="3" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">

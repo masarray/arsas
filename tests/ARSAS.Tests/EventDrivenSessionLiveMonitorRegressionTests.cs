@@ -27,10 +27,11 @@ public sealed class EventDrivenSessionLiveMonitorRegressionTests
         var section = Slice(xaml, "<!-- GLOBAL MULTI-IED LIVE MONITOR -->", "<!-- EVENT LOG -->");
 
         Assert.Contains("GlobalLiveSearchBox", section, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"GlobalLiveGrid\"", section, StringComparison.Ordinal);
         Assert.Contains("GlobalLiveSearch_TextChanged", section, StringComparison.Ordinal);
         Assert.Contains("GlobalLiveSearchClear_Click", section, StringComparison.Ordinal);
         Assert.DoesNotContain("MonitoringInsightText", section, StringComparison.Ordinal);
-        Assert.Contains("SetGlobalRapidSearch", bridge, StringComparison.Ordinal);
+        Assert.Contains("SetGlobalRapidSearch(GlobalLiveGrid", bridge, StringComparison.Ordinal);
         Assert.Contains("SearchQuery", behavior, StringComparison.Ordinal);
         Assert.Contains("FilterGlobalPoint(item, state.Filters, state.SearchQuery)", behavior, StringComparison.Ordinal);
         Assert.Contains("nameof(DataGridColumn.ActualWidth)", behavior, StringComparison.Ordinal);
