@@ -241,7 +241,7 @@ internal static class P2InteractionBehavior
     private static DependencyObject? GetParent(DependencyObject current)
     {
         if (current is ContentElement content)
-            return ContentOperations.GetParent(content) ?? content.Parent;
+            return ContentOperations.GetParent(content) ?? LogicalTreeHelper.GetParent(content);
 
         try
         {
