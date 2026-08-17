@@ -62,7 +62,8 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains("CanUseAsAnnunciator", source, StringComparison.Ordinal);
         Assert.Contains("Click=\"AnnunciatorSelection_Click\"", source, StringComparison.Ordinal);
         Assert.Contains("Header=\"Alarm Annunciator\"", section, StringComparison.Ordinal);
-        Assert.Contains("FLASH = UNACK", section, StringComparison.Ordinal);
+        Assert.Contains("Unacknowledged flashes • acknowledged steady • returned awaits ACK", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("FLASH = UNACK", section, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding CurrentValue}\" FontSize=\"18\"", section, StringComparison.Ordinal);
         Assert.Contains("Click=\"AcknowledgeAlarm_Click\"", section, StringComparison.Ordinal);
         Assert.Contains("Click=\"AcknowledgeAllAlarms_Click\"", section, StringComparison.Ordinal);
