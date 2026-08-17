@@ -1,0 +1,53 @@
+name: Temporary P0 visual system patch
+
+on:
+  push:
+    branches:
+      - polish/p0-visual-system-unification
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: polish/p0-visual-system-unification
+          fetch-depth: 0
+
+      - name: Normalize temporary patch helper
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/patch-p0-visual-system.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('Margin=\\"0,2,0,0\\"/\'', 'Margin=\\"0,2,0,0\\"/>\'')
+          text = text.replace('Style=\\"{StaticResource Caption}\\" Foreground=\\"#98A2B3\\">', 'Foreground=\\"#98A2B3\\">')
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+
+      - name: Apply P0 visual system patch
+        run: python scripts/patch-p0-visual-system.py
+
+      - name: Validate focused diff
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- App.xaml MainWindow.xaml GridUxBehavior.cs MainWindow.GlobalLiveSearch.cs SasOperationalUiPolicy.cs
+
+      - name: Commit production P0 changes
+        shell: bash
+        run: |
+          if git diff --quiet -- App.xaml MainWindow.xaml GridUxBehavior.cs MainWindow.GlobalLiveSearch.cs SasOperationalUiPolicy.cs; then
+            echo "No production changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.xaml MainWindow.xaml GridUxBehavior.cs MainWindow.GlobalLiveSearch.cs SasOperationalUiPolicy.cs
+          git commit -m "Unify P0 workspace visual system"
+          git push origin HEAD:polish/p0-visual-system-unification
