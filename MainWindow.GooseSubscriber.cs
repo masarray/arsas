@@ -55,6 +55,7 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseStream, value)) return;
             Raise(nameof(GooseSelectedStreamText));
             Raise(nameof(GooseNoLeafValuesVisibility));
+            Raise(nameof(GooseDataSetInspectorVisibility));
         }
     }
 
@@ -68,6 +69,8 @@ public partial class MainWindow
             Raise(nameof(CanStopGooseSubscriber));
             Raise(nameof(CanRefreshGooseConfiguration));
             Raise(nameof(GooseCaptureStateText));
+            Raise(nameof(GooseStartVisibility));
+            Raise(nameof(GooseStopVisibility));
         }
     }
 
@@ -101,6 +104,10 @@ public partial class MainWindow
         : $"{SelectedGooseStream.IdentityText} • {SelectedGooseStream.DataSetReference} • {SelectedGooseStream.Leaves.Count:N0} ordered leaf value(s)";
     public Visibility GooseNoStreamsVisibility => GooseStreams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility GooseNoLeafValuesVisibility => SelectedGooseStream?.Leaves.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility GooseDataSetInspectorVisibility => SelectedGooseStream is null ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility GooseStartVisibility => IsGooseCapturing ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility GooseStopVisibility => IsGooseCapturing ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility GooseClearVisibility => GooseStreams.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void InitializeGooseSubscriber()
     {
@@ -204,6 +211,8 @@ public partial class MainWindow
         }
         Raise(nameof(GooseNoStreamsVisibility));
         Raise(nameof(GooseNoLeafValuesVisibility));
+        Raise(nameof(GooseDataSetInspectorVisibility));
+        Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseSelectedStreamText));
     }
@@ -393,6 +402,8 @@ public partial class MainWindow
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseNoStreamsVisibility));
         Raise(nameof(GooseNoLeafValuesVisibility));
+        Raise(nameof(GooseDataSetInspectorVisibility));
+        Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseSelectedStreamText));
     }
 

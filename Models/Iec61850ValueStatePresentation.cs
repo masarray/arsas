@@ -63,3 +63,55 @@ public static class Iec61850ValueStatePresentation
                type.Contains("boolean", StringComparison.Ordinal);
     }
 }
+
+/// <summary>
+/// Presentation-only attention tone for IEC 61850 quality text. Process state remains
+/// independent: this classifier only decides how strongly the Quality column should
+/// call for operator attention.
+/// </summary>
+public static class Iec61850QualityPresentation
+{
+    public const string Good = "Good";
+    public const string Attention = "Attention";
+    public const string Bad = "Bad";
+    public const string Unknown = "Unknown";
+
+    public static string Classify(string? quality)
+    {
+        var text = (quality ?? string.Empty).Trim();
+        if (text.Length == 0 || text == "-" || text.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+            return Unknown;
+
+        var normalized = text.ToLowerInvariant();
+        if (ContainsAny(normalized, "invalid", "bad", "failure", "failed"))
+            return Bad;
+
+        if (ContainsAny(
+                normalized,
+                "questionable",
+                "olddata",
+                "old data",
+                "substituted",
+                "test",
+                "operatorblocked",
+                "operator blocked",
+                "overflow",
+                "outofrange",
+                "out of range",
+                "inaccurate",
+                "oscillatory"))
+        {
+            return Attention;
+        }
+
+        if (normalized.Contains("good", StringComparison.Ordinal))
+            return Good;
+
+        // A non-empty quality string that is not explicitly proven Good still deserves
+        // a contained amber cue rather than being silently presented as healthy.
+        return Attention;
+    }
+
+    private static bool ContainsAny(string source, params string[] needles)
+        => needles.Any(needle => source.Contains(needle, StringComparison.Ordinal));
+}
