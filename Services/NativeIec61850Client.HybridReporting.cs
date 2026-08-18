@@ -497,7 +497,21 @@ public sealed partial class NativeIec61850Client
             .Where(descriptor => PrimaryReferenceCandidates(descriptor)
                 .Contains(reference, StringComparer.OrdinalIgnoreCase))
             .ToArray();
-        return primary.Length > 0 ? primary : matches.ToArray();
+        if (primary.Length > 0)
+            return primary;
+
+        // ARIEC's DataSet semantic binding is exact model evidence, not a heuristic alias.
+        // A parent FCDA/member reference may legitimately resolve to stVal together with q/t.
+        // Prefer the descriptor that ARIEC marked as the primary value for that exact member;
+        // if more than one primary survives, keep the mapping ambiguous and fail closed.
+        var dataSetPrimary = matches
+            .Where(descriptor => descriptor.SemanticRole == Iec61850DataAttributeSemanticRole.PrimaryValue)
+            .Where(descriptor => descriptor.DataSetMemberships.Any(membership =>
+                membership.IsPrimaryValueForMember &&
+                DataSetMemberReferenceCandidates(membership)
+                    .Contains(reference, StringComparer.OrdinalIgnoreCase)))
+            .ToArray();
+        return dataSetPrimary.Length > 0 ? dataSetPrimary : matches.ToArray();
     }
 
     private static string FindPointKeyForAssignment(
@@ -532,6 +546,9 @@ public sealed partial class NativeIec61850Client
         return values
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(LiteralReference)
+            .Concat(descriptor.DataSetMemberships
+                .Where(membership => membership.IsPrimaryValueForMember)
+                .SelectMany(DataSetMemberReferenceCandidates))
             .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -554,6 +571,12 @@ public sealed partial class NativeIec61850Client
 
     private static IEnumerable<string> PrimaryReferenceCandidates(Iec61850SignalDescriptor descriptor)
         => new[] { descriptor.PrimaryValueReference, descriptor.PrimaryValueMmsReference }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(LiteralReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> DataSetMemberReferenceCandidates(Iec61850SignalDataSetMembership membership)
+        => new[] { membership.CanonicalMemberReference, membership.OriginalMemberReference }
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(LiteralReference)
             .Distinct(StringComparer.OrdinalIgnoreCase);
