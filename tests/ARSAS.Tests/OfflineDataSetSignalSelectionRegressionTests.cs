@@ -1,4 +1,5 @@
 using ArIED61850Tester.Services;
+using System.Text.Json;
 
 namespace ARSAS.Tests;
 
@@ -68,12 +69,14 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedReportProjectionEngineWithoutLosingMemberCentricInventory()
+    public void EngineLock_PreservesReportProjectionHistoryAndPinsP61StaticSafetyEngine()
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+        using var document = JsonDocument.Parse(source);
+        var root = document.RootElement;
 
-        Assert.Contains("2a932e183931eb65c775fe01cf8a47bf8a9af458", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 86", source, StringComparison.Ordinal);
+        Assert.Equal("1d052c3919ca1fdf043747d858dab9b6c384e827", root.GetProperty("commit").GetString());
+        Assert.Equal(87, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);
@@ -84,6 +87,7 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
         Assert.Contains("TrgOps", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dynamic-attempt", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("rollback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
