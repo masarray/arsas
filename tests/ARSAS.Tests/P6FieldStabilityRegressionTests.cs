@@ -76,25 +76,20 @@ public sealed class P6FieldStabilityRegressionTests
     }
 
     [Fact]
-    public void StaticFailureRecovery_AlsoHonorsAndCanOpenDynamicCircuitBreaker()
+    public void StaticFailure_IsBaselineIsolatedAndCannotOpenOrUseDynamicCircuit()
     {
         var source = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
-        var guard = source.IndexOf(
-            "DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId",
-            StringComparison.Ordinal);
-        var dynamicAttempt = source.IndexOf(
-            "StartPersistentReportMonitorWithAttemptEvidenceAsync",
-            StringComparison.Ordinal);
-        var openCircuit = source.IndexOf(
-            "DynamicWriteCircuitByDevice[appPlan.RelayId] = failure",
-            StringComparison.Ordinal);
-
-        Assert.True(guard >= 0, "P4 static-recovery path must check the P6 circuit before any dynamic write.");
-        Assert.True(dynamicAttempt > guard, "Circuit-breaker guard must run before dynamic activation.");
-        Assert.True(openCircuit > dynamicAttempt, "A real failed recovery attempt must open the same device circuit.");
-        Assert.Contains("FailureReason = \"DynamicWriteCircuitOpen\"", source, StringComparison.Ordinal);
-        Assert.Contains("PollingFallbackReason = \"DynamicWriteCircuitOpen\"", source, StringComparison.Ordinal);
+        Assert.Contains("baseline static-failure isolation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no dynamic DataSet/RCB write was attempted", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("UsedDynamicDataSet = false", source, StringComparison.Ordinal);
+        Assert.Contains("DynamicAttempted = false", source, StringComparison.Ordinal);
+        Assert.Contains("FailureReason = \"StaticActivationFailed\"", source, StringComparison.Ordinal);
+        Assert.Contains("PollingFallbackReason = \"StaticActivationFailed\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DynamicWriteCircuitByDevice[appPlan.RelayId]", source, StringComparison.Ordinal);
     }
 
     [Fact]
