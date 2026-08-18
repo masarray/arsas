@@ -6,11 +6,13 @@ public sealed class HybridReportDynamicAttemptP4RegressionTests
     public void Planning_ProjectsEngineAttemptEvidenceInsteadOfSilentPolling()
     {
         var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
+        var recovery = Read("Services/NativeIec61850Client.HybridReporting.P4.cs");
         var model = Read("Models/NativeHybridReportAcquisitionModels.cs");
 
         Assert.Contains("MmsHybridDynamicAttemptEvidenceBuilder.Build", bridge, StringComparison.Ordinal);
         Assert.Contains("PointAttemptEvidence = pointAttemptEvidence", bridge, StringComparison.Ordinal);
-        Assert.Contains("CatalogMappingUnavailable", bridge, StringComparison.Ordinal);
+        Assert.Contains("UnmappedAttemptEvidence", bridge, StringComparison.Ordinal);
+        Assert.Contains("CatalogMappingUnavailable", recovery, StringComparison.Ordinal);
         Assert.Contains("FreshReportDiscoveryUnavailable", bridge, StringComparison.Ordinal);
         Assert.Contains("DynamicAttemptDisposition", model, StringComparison.Ordinal);
         Assert.Contains("PollingFallbackReason", model, StringComparison.Ordinal);
