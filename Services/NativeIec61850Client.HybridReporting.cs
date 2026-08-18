@@ -61,6 +61,10 @@ public sealed partial class NativeIec61850Client
                 Summary = $"ARIEC hybrid planning was withheld because the MMS association is not initiated ({_session.State}). All points remain on polling/reconnect safety handling; no missing conclusion was made.",
                 RequestedPointCount = points.Count,
                 PollingPointKeys = points.Select(point => point.PointKey).ToArray(),
+                PointAttemptEvidence = points.Select(point => SkippedAttemptEvidence(
+                    point,
+                    "TransportUnavailable",
+                    "No MMS association exists, so dynamic report configuration cannot be attempted. Polling/reconnect handling is safety-only until association is restored.")).ToArray(),
                 PollingFallbackSignalCount = points.Count
             };
         }
@@ -97,6 +101,7 @@ public sealed partial class NativeIec61850Client
                 CatalogMappedPointCount = 0,
                 PollingPointKeys = points.Select(point => point.PointKey).ToArray(),
                 UnmappedPointKeys = points.Select(point => point.PointKey).ToArray(),
+                PointAttemptEvidence = points.Select(UnmappedAttemptEvidence).ToArray(),
                 PollingFallbackSignalCount = points.Count,
                 Warnings = ["Hybrid report planning was conservatively skipped for unmapped points; this is not signal-absence evidence."]
             };
@@ -117,6 +122,10 @@ public sealed partial class NativeIec61850Client
                 CatalogMappedPointCount = descriptorPoints.Count,
                 PollingPointKeys = points.Select(point => point.PointKey).ToArray(),
                 UnmappedPointKeys = unmapped.Select(point => point.PointKey).ToArray(),
+                PointAttemptEvidence = points.Select(point => SkippedAttemptEvidence(
+                    point,
+                    "FreshReportDiscoveryUnavailable",
+                    "Fresh report inventory/availability evidence was unavailable, so no safe dynamic write was attempted.")).ToArray(),
                 PollingFallbackSignalCount = points.Count
             };
         }
@@ -166,6 +175,7 @@ public sealed partial class NativeIec61850Client
             plannerOptions);
         var enginePlan = capabilityAwarePlan.AcquisitionPlan;
         var associationCapability = capabilityAwarePlan.AssociationCapability;
+        var p4AttemptEvidence = ArMms.MmsHybridDynamicAttemptEvidenceBuilder.Build(capabilityAwarePlan, plannerOptions);
 
         var reportPlans = new List<ReportControlPlan>();
         foreach (var segment in enginePlan.Segments.Where(segment => segment.IsReportBacked))
@@ -222,6 +232,13 @@ public sealed partial class NativeIec61850Client
             .Where(key => !string.IsNullOrWhiteSpace(key))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        var pointAttemptEvidence = p4AttemptEvidence
+            .Select(evidence => ProjectAttemptEvidence(evidence, descriptorPoints))
+            .Where(evidence => !string.IsNullOrWhiteSpace(evidence.PointKey))
+            .Concat(unmapped.Select(UnmappedAttemptEvidence))
+            .GroupBy(evidence => evidence.PointKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
 
         var warnings = capabilityAwarePlan.Warnings
             .Concat(capabilityAwarePlan.Blockers)
@@ -242,6 +259,7 @@ public sealed partial class NativeIec61850Client
             PollingPointKeys = polling,
             UncoveredPointKeys = uncovered,
             UnmappedPointKeys = unmapped.Select(point => point.PointKey).ToArray(),
+            PointAttemptEvidence = pointAttemptEvidence,
             Warnings = warnings,
             RequestedPointCount = points.Count,
             CatalogMappedPointCount = descriptorPoints.Count,
@@ -267,7 +285,9 @@ public sealed partial class NativeIec61850Client
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = "Hybrid report start rejected: the plan is not marked ARIEC-authoritative. No local re-planning was performed."
+                Message = "Hybrid report start rejected: the plan is not marked ARIEC-authoritative. No local re-planning was performed.",
+                DynamicAttemptState = "Skipped",
+                PollingFallbackReason = "PlanNotEngineAuthoritative"
             };
         }
 
@@ -277,7 +297,9 @@ public sealed partial class NativeIec61850Client
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC hybrid report monitor requires an initiated MMS association. Current state: {_session.State}."
+                Message = $"ARIEC hybrid report monitor requires an initiated MMS association. Current state: {_session.State}.",
+                DynamicAttemptState = "Skipped",
+                PollingFallbackReason = "TransportUnavailable"
             };
         }
 
@@ -303,7 +325,9 @@ public sealed partial class NativeIec61850Client
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = "ARIEC-authoritative subscription evidence is no longer present for this plan. ARSAS refused to rebuild the RCB/DataSet plan locally; MMS polling remains the safe fallback."
+                Message = "ARIEC-authoritative subscription evidence is no longer present for this plan. ARSAS refused to rebuild the RCB/DataSet plan locally; MMS polling remains the safe fallback.",
+                DynamicAttemptState = "Skipped",
+                PollingFallbackReason = "AuthoritativeSubscriptionEvidenceMissing"
             };
         }
 
@@ -314,7 +338,9 @@ public sealed partial class NativeIec61850Client
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = LastErrorMessage
+                Message = LastErrorMessage,
+                DynamicAttemptState = "Skipped",
+                PollingFallbackReason = "FreshReportDiscoveryUnavailable"
             };
         }
 
@@ -345,11 +371,19 @@ public sealed partial class NativeIec61850Client
             .ToArray();
         if (selectedSnapshots.Length != 1)
         {
+            var message = $"ARIEC execution revalidation withheld {authoritative.Kind}: expected one fresh availability snapshot for {authoritative.ReportControlReference}, found {selectedSnapshots.Length}.";
+            if (IsStaticHybridKind(authoritative.Kind))
+                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC execution revalidation withheld {authoritative.Kind}: expected one fresh availability snapshot for {authoritative.ReportControlReference}, found {selectedSnapshots.Length}. No RCB/DataSet write was attempted; MMS polling remains active.",
+                Message = $"{message} No RCB/DataSet write was attempted; MMS polling remains active.",
+                DynamicAttempted = false,
+                DynamicAttemptState = "Skipped",
+                FailureReason = "FreshRcbRevalidationFailed",
+                PollingFallbackReason = "FreshRcbEvidenceUnavailable",
                 Warnings = freshAvailability.Warnings
             };
         }
@@ -376,11 +410,19 @@ public sealed partial class NativeIec61850Client
             SameLiteralReference(segment.ReportControlReference, authoritative.ReportControlReference));
         if (revalidatedSegment?.ReportPlan is null)
         {
+            var message = $"ARIEC execution revalidation withheld {authoritative.Kind} on {authoritative.ReportControlReference}: fresh capability-aware engine evidence no longer reproduces the planned report segment.";
+            if (IsStaticHybridKind(authoritative.Kind))
+                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC execution revalidation withheld {authoritative.Kind} on {authoritative.ReportControlReference}: fresh capability-aware engine evidence no longer reproduces the planned report segment. No RCB/DataSet write was attempted; MMS polling remains active.",
+                Message = $"{message} No RCB/DataSet write was attempted; MMS polling remains active.",
+                DynamicAttempted = false,
+                DynamicAttemptState = "Skipped",
+                FailureReason = "FreshCapabilityRevalidationFailed",
+                PollingFallbackReason = "DynamicRevalidationWithheld",
                 Warnings = freshAvailability.Warnings
                     .Concat(revalidatedCapabilityAwarePlan.Warnings)
                     .Concat(revalidatedCapabilityAwarePlan.Blockers)
@@ -392,41 +434,65 @@ public sealed partial class NativeIec61850Client
         var subscription = revalidatedSegment.ReportPlan;
         if (!subscription.IsReady)
         {
+            var message = $"ARIEC authoritative subscription is not ready: {subscription.Summary}";
+            if (IsStaticHybridKind(authoritative.Kind))
+                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC authoritative subscription is not ready: {subscription.Summary}",
+                Message = message,
                 SubscriptionSummary = subscription.Summary,
                 MemberCount = subscription.Members.Count,
+                DynamicAttempted = false,
+                DynamicAttemptState = "Skipped",
+                FailureReason = "SubscriptionNotReady",
+                PollingFallbackReason = "DynamicSubscriptionNotReady",
                 Warnings = subscription.Warnings.Concat(subscription.Blockers).ToArray()
             };
         }
 
         var isDynamic = authoritative.Kind is ArMms.MmsHybridAcquisitionKind.DynamicBrcb or ArMms.MmsHybridAcquisitionKind.DynamicUrcb;
         var coveredReferences = ExtractSubscriptionMemberReferences(subscription.Members);
-        var start = await RunMmsOperationAsync(
-            () => _session.StartPersistentReportMonitorAsync(
+        var attempt = await RunMmsOperationAsync(
+            () => _session.StartPersistentReportMonitorWithAttemptEvidenceAsync(
                 subscription,
                 triggerGeneralInterrogation: true,
                 deleteDynamicDataSetOnStop: isDynamic,
                 discovery.IedDirectory,
                 cancellationToken),
             cancellationToken).ConfigureAwait(false);
+        var start = attempt.StartResult;
+        var attemptWarnings = start.Warnings
+            .Concat(subscription.Warnings)
+            .Concat(attempt.CleanupWarnings)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
-        if (!start.IsSuccess || start.Session is null)
+        if (!attempt.IsSuccess || start.Session is null)
         {
+            var message = $"ARIEC hybrid report activation failed for {plan.DisplayReference}: {start.Message}";
+            if (!isDynamic)
+                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC hybrid report activation failed for {plan.DisplayReference}: {start.Message}",
+                Message = message,
                 SubscriptionSummary = subscription.Summary,
                 MemberCount = subscription.Members.Count,
                 WriteStepCount = start.WriteSteps.Count,
-                UsedDynamicDataSet = isDynamic,
+                UsedDynamicDataSet = true,
+                DynamicAttempted = attempt.DynamicAttempted,
+                DynamicAttemptState = attempt.DynamicAttemptState.ToString(),
+                FailureReason = attempt.FailureReason.ToString(),
+                PollingFallbackReason = attempt.DynamicAttempted ? "DynamicActivationFailed" : "DynamicActivationNotAttempted",
+                CleanupAttempted = attempt.CleanupAttempted,
+                CleanupSucceeded = attempt.CleanupSucceeded,
                 CoveredReferences = coveredReferences,
-                Warnings = start.Warnings.Concat(subscription.Warnings).ToArray()
+                Warnings = attemptWarnings
             };
         }
 
@@ -447,11 +513,14 @@ public sealed partial class NativeIec61850Client
             MemberCount = subscription.Members.Count,
             WriteStepCount = start.WriteSteps.Count,
             UsedDynamicDataSet = isDynamic,
+            DynamicAttempted = attempt.DynamicAttempted,
+            DynamicAttemptState = attempt.DynamicAttemptState.ToString(),
+            FailureReason = string.Empty,
             ReportControlReference = plan.ReportControlReference,
             DataSetReference = plan.DataSetReference,
             AcquisitionLabel = $"ARIEC Hybrid: {authoritative.Kind}",
             CoveredReferences = coveredReferences,
-            Warnings = start.Warnings.Concat(subscription.Warnings).ToArray()
+            Warnings = attemptWarnings
         };
     }
 

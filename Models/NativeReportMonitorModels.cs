@@ -9,6 +9,12 @@ public sealed class NativeReportMonitorStartResult
     public int MemberCount { get; init; }
     public int WriteStepCount { get; init; }
     public bool UsedDynamicDataSet { get; init; }
+    public bool DynamicAttempted { get; init; }
+    public string DynamicAttemptState { get; init; } = string.Empty;
+    public string FailureReason { get; init; } = string.Empty;
+    public string PollingFallbackReason { get; init; } = string.Empty;
+    public bool CleanupAttempted { get; init; }
+    public bool CleanupSucceeded { get; init; } = true;
     public string ReportControlReference { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
     public string AcquisitionLabel { get; init; } = string.Empty;
