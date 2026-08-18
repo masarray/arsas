@@ -18,17 +18,18 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsReviewedP4EngineWithoutRegressingP3CapabilityEvidence()
+    public void EngineLock_PinsP61StaticPreservingAttemptAwareEngine()
     {
         var source = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("2a932e183931eb65c775fe01cf8a47bf8a9af458", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 86", source, StringComparison.Ordinal);
+        Assert.Contains("1d052c3919ca1fdf043747d858dab9b6c384e827", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 87", source, StringComparison.Ordinal);
         Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("TrgOps", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dynamic-attempt", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("rollback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dynamic DataSet/RCB mutation", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)
