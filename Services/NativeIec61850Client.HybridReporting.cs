@@ -546,7 +546,9 @@ public sealed partial class NativeIec61850Client
         return values
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(LiteralReference)
-            .Concat(descriptor.DataSetMemberships.SelectMany(DataSetMemberReferenceCandidates))
+            .Concat(descriptor.DataSetMemberships
+                .Where(membership => membership.IsPrimaryValueForMember)
+                .SelectMany(DataSetMemberReferenceCandidates))
             .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
