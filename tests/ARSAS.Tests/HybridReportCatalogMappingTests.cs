@@ -21,6 +21,60 @@ public sealed class HybridReportCatalogMappingTests
     }
 
     [Fact]
+    public void ExactDataSetMemberReference_ResolvesItsPrimaryValueDescriptor()
+    {
+        const string memberReference = "IEDLD/XCBR1.Pos";
+        const string valueReference = "IEDLD/XCBR1.Pos.stVal";
+        var primary = Descriptor(
+            valueReference,
+            valueReference,
+            Iec61850DataAttributeSemanticRole.PrimaryValue,
+            memberReference,
+            isPrimaryValueForMember: true);
+        var quality = Descriptor(
+            "IEDLD/XCBR1.Pos.q",
+            valueReference,
+            Iec61850DataAttributeSemanticRole.Quality,
+            memberReference,
+            isPrimaryValueForMember: false);
+        var timestamp = Descriptor(
+            "IEDLD/XCBR1.Pos.t",
+            valueReference,
+            Iec61850DataAttributeSemanticRole.Timestamp,
+            memberReference,
+            isPrimaryValueForMember: false);
+        var catalog = new Iec61850SignalCatalogDocument { Signals = [primary, quality, timestamp] };
+
+        var index = NativeIec61850Client.BuildLiteralCatalogIndex(catalog);
+
+        Assert.True(NativeIec61850Client.TryResolveLiteralCatalogSignal(index, memberReference, out var resolved));
+        Assert.Same(primary, resolved);
+    }
+
+    [Fact]
+    public void DuplicatePrimaryDataSetMemberReferences_RemainAmbiguous()
+    {
+        const string memberReference = "IEDLD/GGIO1.Ind";
+        var first = Descriptor(
+            "IEDLD/GGIO1.Ind1.stVal",
+            "IEDLD/GGIO1.Ind1.stVal",
+            Iec61850DataAttributeSemanticRole.PrimaryValue,
+            memberReference,
+            isPrimaryValueForMember: true);
+        var second = Descriptor(
+            "IEDLD/GGIO1.Ind2.stVal",
+            "IEDLD/GGIO1.Ind2.stVal",
+            Iec61850DataAttributeSemanticRole.PrimaryValue,
+            memberReference,
+            isPrimaryValueForMember: true);
+        var catalog = new Iec61850SignalCatalogDocument { Signals = [first, second] };
+
+        var index = NativeIec61850Client.BuildLiteralCatalogIndex(catalog);
+
+        Assert.False(NativeIec61850Client.TryResolveLiteralCatalogSignal(index, memberReference, out _));
+    }
+
+    [Fact]
     public void TrueDuplicateDirectReferences_RemainAmbiguous()
     {
         const string reference = "IEDLD/GGIO1.Ind1.stVal";
@@ -36,13 +90,29 @@ public sealed class HybridReportCatalogMappingTests
     private static Iec61850SignalDescriptor Descriptor(
         string designReference,
         string primaryValueReference,
-        Iec61850DataAttributeSemanticRole role)
+        Iec61850DataAttributeSemanticRole role,
+        string? dataSetMemberReference = null,
+        bool isPrimaryValueForMember = false)
         => new()
         {
             DesignReference = designReference,
             PrimaryValueReference = primaryValueReference,
             SemanticRole = role,
             FunctionalConstraint = "MX",
-            IsStaticDataSetMandatory = true
+            IsStaticDataSetMandatory = true,
+            DataSetMemberships = string.IsNullOrWhiteSpace(dataSetMemberReference)
+                ? Array.Empty<Iec61850SignalDataSetMembership>()
+                :
+                [
+                    new Iec61850SignalDataSetMembership
+                    {
+                        DataSetReference = "IEDLD/LLN0.dsStatic",
+                        MemberIndex = 0,
+                        OriginalMemberReference = dataSetMemberReference,
+                        CanonicalMemberReference = dataSetMemberReference,
+                        FunctionalConstraint = "MX",
+                        IsPrimaryValueForMember = isPrimaryValueForMember
+                    }
+                ]
         };
 }
