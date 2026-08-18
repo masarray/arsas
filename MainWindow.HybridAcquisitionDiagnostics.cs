@@ -16,9 +16,9 @@ public partial class MainWindow
     private TextBlock? _hybridAcquisitionSummaryText;
     private bool _hybridAcquisitionDiagnosticsInstalled;
 
-    protected override void OnInitialized(EventArgs e)
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        base.OnInitialized(e);
+        base.OnSourceInitialized(e);
         Loaded += MainWindow_HybridAcquisitionDiagnosticsLoaded;
         Closed += MainWindow_HybridAcquisitionDiagnosticsClosed;
     }
