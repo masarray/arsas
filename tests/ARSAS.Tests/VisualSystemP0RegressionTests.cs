@@ -86,8 +86,8 @@ public sealed class VisualSystemP0RegressionTests
         var testDirectory = Path.GetDirectoryName(FindRepoFile("MainWindow.xaml"))!;
         var engineLock = File.ReadAllText(Path.Combine(testDirectory, "engines", "ARIEC61850.lock.json"));
 
-        Assert.Contains("becda399b4a3ae34831215fc915798b4f846c1be", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 81", engineLock, StringComparison.Ordinal);
+        Assert.Contains("9ca4ee490a27046d5d2ffdc21f3614b2d7d58725", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 84", engineLock, StringComparison.Ordinal);
     }
 
     private static string Slice(string source, string start, string end)
