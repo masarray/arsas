@@ -18,18 +18,20 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsP61StaticPreservingAttemptAwareEngine()
+    public void EngineLock_PinsP62ProbeEngineWhilePreservingP61StaticSafetyHistory()
     {
         var source = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("1d052c3919ca1fdf043747d858dab9b6c384e827", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 87", source, StringComparison.Ordinal);
-        Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("dynamic-attempt", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("rollback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("d4612fb7fd5d499a70df17110f6191c452340e0c", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 88", source, StringComparison.Ordinal);
+        Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("dynamic DataSet/RCB mutation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("GetNamedVariableListAttributes", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("single-member", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("before any dynamic RCB mutation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cleanup evidence", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)
