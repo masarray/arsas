@@ -159,6 +159,9 @@ public sealed partial class NativeIec61850Client
         };
     }
 
+    private static bool IsStaticHybridKind(ArMms.MmsHybridAcquisitionKind kind)
+        => kind is ArMms.MmsHybridAcquisitionKind.StaticBrcb or ArMms.MmsHybridAcquisitionKind.StaticUrcb;
+
     private static NativeHybridPointAttemptEvidence ProjectAttemptEvidence(
         ArMms.MmsHybridSignalAttemptEvidence evidence,
         IReadOnlyDictionary<Iec61850SignalDescriptor, Iec61850MonitorPoint> descriptorPoints)
@@ -173,13 +176,22 @@ public sealed partial class NativeIec61850Client
         };
 
     private static NativeHybridPointAttemptEvidence UnmappedAttemptEvidence(Iec61850MonitorPoint point)
+        => SkippedAttemptEvidence(
+            point,
+            "CatalogMappingUnavailable",
+            "No unique literal ARIEC catalog mapping exists for this selected point; no dynamic report write is attempted from a guessed IEC reference.");
+
+    private static NativeHybridPointAttemptEvidence SkippedAttemptEvidence(
+        Iec61850MonitorPoint point,
+        string reason,
+        string detail)
         => new()
         {
             PointKey = point.PointKey,
             IecReference = point.IecReference,
             PlannedAcquisitionKind = "MmsPollingFallback",
             DynamicAttemptDisposition = "Skipped",
-            PollingFallbackReason = "CatalogMappingUnavailable",
-            Detail = "No unique literal ARIEC catalog mapping exists for this selected point; no dynamic report write is attempted from a guessed IEC reference."
+            PollingFallbackReason = reason,
+            Detail = detail
         };
 }
