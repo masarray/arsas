@@ -152,13 +152,20 @@ public sealed partial class NativeIec61850Client
             AllowPollingFallback = true,
             RequireExactAvailabilityEvidence = true
         };
-        var enginePlan = ArMms.MmsHybridReportAcquisitionPlanner.Build(
+
+        // P3: the protocol engine owns capability interpretation. ARSAS supplies the
+        // current association evidence and consumes the resulting acquisition plan; it
+        // does not recreate MMS service-bit, RCB ownership, or writability policy locally.
+        var capabilityAwarePlan = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
             catalog,
             descriptorPoints.Keys,
             discovery.ReportInventory,
             availability,
             discovery.IedDirectory,
+            _session.LastNegotiatedCapabilities,
             plannerOptions);
+        var enginePlan = capabilityAwarePlan.AcquisitionPlan;
+        var associationCapability = capabilityAwarePlan.AssociationCapability;
 
         var reportPlans = new List<ReportControlPlan>();
         foreach (var segment in enginePlan.Segments.Where(segment => segment.IsReportBacked))
@@ -216,8 +223,8 @@ public sealed partial class NativeIec61850Client
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var warnings = enginePlan.Warnings
-            .Concat(enginePlan.Blockers)
+        var warnings = capabilityAwarePlan.Warnings
+            .Concat(capabilityAwarePlan.Blockers)
             .Concat(availability.Warnings)
             .Concat(unmapped.Count == 0
                 ? Array.Empty<string>()
@@ -228,9 +235,9 @@ public sealed partial class NativeIec61850Client
         return new NativeHybridReportPlanningResult
         {
             IsAuthoritative = true,
-            Authority = $"ARIEC61850 MmsHybridReportAcquisitionPlanner ({catalogAuthority})",
+            Authority = $"ARIEC61850 capability-aware hybrid acquisition ({catalogAuthority})",
             Status = enginePlan.Status.ToString(),
-            Summary = enginePlan.Summary,
+            Summary = $"{enginePlan.Summary} {associationCapability.Summary}",
             ReportPlans = reportPlans,
             PollingPointKeys = polling,
             UncoveredPointKeys = uncovered,
@@ -313,9 +320,9 @@ public sealed partial class NativeIec61850Client
 
         // Planning is intentionally an intent, not permission to write forever.
         // Re-read the exact selected RCB immediately before execution, then ask the same
-        // ARIEC planner to classify that fresh evidence again. This is especially important
-        // for SCL fast-connect, where the typed catalog may be design-sourced but execution
-        // authority must always be live-sourced.
+        // ARIEC capability-aware planner to classify that fresh association evidence again.
+        // This is especially important for SCL fast-connect, where the typed catalog may be
+        // design-sourced but execution authority must always be live-sourced.
         var callerOwned = _reportMonitorSessions.Values
             .Select(session => session.ReportControl.Reference)
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
@@ -353,13 +360,15 @@ public sealed partial class NativeIec61850Client
             ReportControls = selectedSnapshots,
             Warnings = freshAvailability.Warnings
         };
-        var revalidatedPlan = ArMms.MmsHybridReportAcquisitionPlanner.Build(
+        var revalidatedCapabilityAwarePlan = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
             authoritative.Catalog,
             authoritative.Signals,
             discovery.ReportInventory,
             selectedAvailability,
             discovery.IedDirectory,
+            _session.LastNegotiatedCapabilities,
             authoritative.Options);
+        var revalidatedPlan = revalidatedCapabilityAwarePlan.AcquisitionPlan;
         var revalidatedSegment = revalidatedPlan.Segments.FirstOrDefault(segment =>
             segment.IsReportBacked &&
             segment.ReportPlan is not null &&
@@ -371,10 +380,10 @@ public sealed partial class NativeIec61850Client
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"ARIEC execution revalidation withheld {authoritative.Kind} on {authoritative.ReportControlReference}: fresh engine evidence no longer reproduces the planned report segment. No RCB/DataSet write was attempted; MMS polling remains active.",
+                Message = $"ARIEC execution revalidation withheld {authoritative.Kind} on {authoritative.ReportControlReference}: fresh capability-aware engine evidence no longer reproduces the planned report segment. No RCB/DataSet write was attempted; MMS polling remains active.",
                 Warnings = freshAvailability.Warnings
-                    .Concat(revalidatedPlan.Warnings)
-                    .Concat(revalidatedPlan.Blockers)
+                    .Concat(revalidatedCapabilityAwarePlan.Warnings)
+                    .Concat(revalidatedCapabilityAwarePlan.Blockers)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray()
             };

@@ -72,14 +72,17 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
-        Assert.Contains("9ca4ee490a27046d5d2ffdc21f3614b2d7d58725", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 84", source, StringComparison.Ordinal);
+        Assert.Contains("5149a28d7d8ab5a2126595a6ccaa130c46807dfe", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 85", source, StringComparison.Ordinal);
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("zero OptFlds", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("quarantining unmapped canonical report metadata", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dynamic reporting before MMS polling", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TrgOps", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Owner evidence", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
