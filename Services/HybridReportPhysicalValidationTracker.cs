@@ -19,6 +19,12 @@ internal sealed class HybridReportPhysicalValidationTracker
         public int MemberCount { get; set; }
         public int SetupWriteStepCount { get; set; }
         public bool UsedDynamicDataSet { get; set; }
+        public bool DynamicAttempted { get; set; }
+        public string DynamicAttemptState { get; set; } = string.Empty;
+        public string FailureReason { get; set; } = string.Empty;
+        public string PollingFallbackReason { get; set; } = string.Empty;
+        public bool CleanupAttempted { get; set; }
+        public bool CleanupSucceeded { get; set; } = true;
         public int ReportFrameCount { get; set; }
         public int ReportUpdateCount { get; set; }
         public HashSet<string> ChangeVerifiedPointKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -70,6 +76,12 @@ internal sealed class HybridReportPhysicalValidationTracker
             state.MemberCount = result.MemberCount;
             state.SetupWriteStepCount = result.WriteStepCount;
             state.UsedDynamicDataSet = result.UsedDynamicDataSet;
+            state.DynamicAttempted = result.DynamicAttempted;
+            state.DynamicAttemptState = result.DynamicAttemptState;
+            state.FailureReason = result.FailureReason;
+            state.PollingFallbackReason = result.PollingFallbackReason;
+            state.CleanupAttempted = result.CleanupAttempted;
+            state.CleanupSucceeded = result.CleanupSucceeded;
             foreach (var warning in result.Warnings)
                 AddWarning(warning);
         }
@@ -138,6 +150,12 @@ internal sealed class HybridReportPhysicalValidationTracker
                     MemberCount = state.MemberCount,
                     SetupWriteStepCount = state.SetupWriteStepCount,
                     UsedDynamicDataSet = state.UsedDynamicDataSet,
+                    DynamicAttempted = state.DynamicAttempted,
+                    DynamicAttemptState = state.DynamicAttemptState,
+                    FailureReason = state.FailureReason,
+                    PollingFallbackReason = state.PollingFallbackReason,
+                    CleanupAttempted = state.CleanupAttempted,
+                    CleanupSucceeded = state.CleanupSucceeded,
                     ReportFrameCount = state.ReportFrameCount,
                     ReportUpdateCount = state.ReportUpdateCount,
                     ChangeVerifiedPointCount = state.ChangeVerifiedPointKeys.Count,
@@ -146,6 +164,7 @@ internal sealed class HybridReportPhysicalValidationTracker
                 })
                 .ToArray();
 
+            var attemptEvidence = planning?.PointAttemptEvidence ?? Array.Empty<NativeHybridPointAttemptEvidence>();
             return new HybridReportPhysicalValidationSnapshot
             {
                 CapturedAtUtc = DateTimeOffset.UtcNow,
@@ -158,12 +177,16 @@ internal sealed class HybridReportPhysicalValidationTracker
                 PlannedDynamicUrcbCount = planning?.DynamicUrcbSignalCount ?? 0,
                 ActivatedReportPlanCount = _plans.Values.Count(state => state.ActivationAttempted && state.ActivationSucceeded),
                 FailedActivationCount = _plans.Values.Count(state => state.ActivationAttempted && !state.ActivationSucceeded),
+                DynamicAttemptedCount = _plans.Values.Count(state => state.DynamicAttempted),
+                DynamicAttemptFailedCount = _plans.Values.Count(state => state.DynamicAttempted && !state.ActivationSucceeded),
+                DynamicSkippedPointCount = attemptEvidence.Count(item => item.IsExplicitDynamicSkip),
                 ReportFrameCount = plans.Sum(plan => plan.ReportFrameCount),
                 ReportUpdateCount = plans.Sum(plan => plan.ReportUpdateCount),
                 ChangeVerifiedPointCount = plans.Sum(plan => plan.ChangeVerifiedPointCount),
                 PollingFallbackPointCount = planning?.PollingFallbackSignalCount ?? 0,
                 UncoveredPointCount = planning?.UncoveredSignalCount ?? 0,
                 Plans = plans,
+                PointAttemptEvidence = attemptEvidence,
                 Warnings = _warnings.ToArray()
             };
         }
