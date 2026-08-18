@@ -3,16 +3,22 @@ namespace ARSAS.Tests;
 public sealed class IoTestFatP0RegressionTests
 {
     [Fact]
-    public void FatWorkspace_UsesFastCommissioningPollingWithoutChangingNormalDefault()
+    public void FatWorkspace_UsesFastVerificationCadenceWithoutBypassingReportFirstPlanning()
     {
         var main = Read("MainWindow.IoTesting.cs");
         var planner = Read("Services/Iec61850ReportPlanner.cs");
 
+        // FAT may temporarily tighten MMS verification cadence, but that cadence must not
+        // classify fast status/protection points as polling-only. Report planning remains
+        // static first, then dynamic, with MMS polling reserved for the residual fallback.
         Assert.Contains("private const int IoFatPollingIntervalMs = 250;", main, StringComparison.Ordinal);
         Assert.Contains("_pollingIntervalBeforeIoFat", main, StringComparison.Ordinal);
         Assert.Contains("PollingIntervalMs = Math.Min(PollingIntervalMs, IoFatPollingIntervalMs);", main, StringComparison.Ordinal);
-        Assert.Contains("FastCommissioningPollingThresholdMs = 500", planner, StringComparison.Ordinal);
-        Assert.Contains("!IsFastCommissioningPoint(point)", planner, StringComparison.Ordinal);
+        Assert.Contains("var reportCandidates = all;", planner, StringComparison.Ordinal);
+        Assert.Contains("PollingIntervalMs describes the fallback/verification cadence", planner, StringComparison.Ordinal);
+        Assert.Contains("var dynamicMembers = reportCandidates", planner, StringComparison.Ordinal);
+        Assert.DoesNotContain("FastCommissioningPollingThresholdMs", planner, StringComparison.Ordinal);
+        Assert.DoesNotContain("fastPollingPoints", planner, StringComparison.Ordinal);
     }
 
     [Fact]
