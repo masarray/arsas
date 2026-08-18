@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "becda399b4a3ae34831215fc915798b4f846c1be",
-  "sourcePullRequest": 81,
-  "purpose": "Pins the ARIEC61850 engine used by ARSAS. PR #76 preserves unresolved static DataSet members, PR #77 canonicalizes cross-logical-device SCL references, PR #78 keeps one descriptor per static DataSet member while separating resolved runtime primary leaves from the original FCDA/FCD identity, PR #79 projects generic Boolean status structures to scalar stVal while preserving quality/timestamp, PR #80 normalizes validated DataRef-enabled InformationReport ordering, and PR #81 accepts valid zero OptFlds reports while quarantining unmapped canonical report metadata so OptFlds/inclusion/reason fields can never leak into process values."
+  "commit": "9ca4ee490a27046d5d2ffdc21f3614b2d7d58725",
+  "sourcePullRequest": 84,
+  "purpose": "Pins the ARIEC61850 engine used by ARSAS. PR #76 preserves unresolved static DataSet members, PR #77 canonicalizes cross-logical-device SCL references, PR #78 keeps one descriptor per static DataSet member while separating resolved runtime primary leaves from the original FCDA/FCD identity, PR #79 projects generic Boolean status structures to scalar stVal while preserving quality/timestamp, PR #80 normalizes validated DataRef-enabled InformationReport ordering, PR #81 accepts valid zero OptFlds reports while quarantining unmapped canonical report metadata so OptFlds/inclusion/reason fields can never leak into process values, and PR #84 routes exact PrimaryValue residuals through dynamic reporting before MMS polling while preventing quality/timestamp descriptors from hijacking the primary-value fallback."
 }
