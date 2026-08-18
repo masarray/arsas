@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
@@ -19,6 +20,14 @@ public sealed partial class NativeIec61850Client
         ArMms.MmsHybridReportAcquisitionOptions Options);
 
     private readonly Dictionary<string, AuthoritativeHybridSubscription> _authoritativeHybridSubscriptions =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    // P6 field-stability circuit breaker. Some IEDs advertise Define/DeleteNamedVariableList
+    // but abort the MMS association when a dynamic DataSet write is attempted. One real
+    // failed dynamic activation is stronger evidence than the advertised service bit for
+    // the lifetime of this application process. Static reporting remains eligible; only
+    // further dynamic writes for the same device are suppressed to stop reconnect/write loops.
+    private static readonly ConcurrentDictionary<string, string> DynamicWriteCircuitByDevice =
         new(StringComparer.OrdinalIgnoreCase);
 
     private static LiveIedModelDiscoveryDocument? ResolveHybridPlanningModel(Iec61850MonitorDevice? device)
@@ -77,16 +86,39 @@ public sealed partial class NativeIec61850Client
         var catalogAuthority = device.LiveDiscoveryModel is not null
             ? "live-discovery model"
             : "opened SCL design model";
+
+        // P6: static DataSet membership is protocol evidence and must win before the broad
+        // signal catalog. The member-centric projection preserves the FCDA/FCD identity and
+        // binds it to its resolved primary value leaf. This closes the field regression in
+        // which diagnostics correctly showed 6/6 static members represented while those same
+        // six selected points were excluded as CatalogMappingUnavailable before static RCB
+        // coverage could even be evaluated.
+        var mandatoryStaticSignals = Iec61850DataSetSignalInventoryProjection
+            .GetMandatorySignals(planningModel)
+            .Where(signal => signal.IsStaticDataSetMandatory)
+            .Where(signal => signal.DataSetMemberships.Any(membership => membership.IsPrimaryValueForMember))
+            .ToArray();
+        var staticIndex = BuildLiteralCatalogIndex(mandatoryStaticSignals);
         var index = BuildLiteralCatalogIndex(catalog);
         var descriptorPoints = new Dictionary<Iec61850SignalDescriptor, Iec61850MonitorPoint>();
         var unmapped = new List<Iec61850MonitorPoint>();
+        var staticInventoryMappedCount = 0;
 
         foreach (var point in points.OrderBy(point => point.PointKey, StringComparer.OrdinalIgnoreCase))
         {
-            if (TryResolveLiteralCatalogSignal(index, point.IecReference, out var descriptor))
+            if (TryResolveLiteralCatalogSignal(staticIndex, point.IecReference, out var staticDescriptor))
+            {
+                descriptorPoints.TryAdd(staticDescriptor, point);
+                staticInventoryMappedCount++;
+            }
+            else if (TryResolveLiteralCatalogSignal(index, point.IecReference, out var descriptor))
+            {
                 descriptorPoints.TryAdd(descriptor, point);
+            }
             else
+            {
                 unmapped.Add(point);
+            }
         }
 
         if (descriptorPoints.Count == 0)
@@ -148,12 +180,14 @@ public sealed partial class NativeIec61850Client
                 cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
+        var dynamicWriteCircuitOpen = DynamicWriteCircuitByDevice.TryGetValue(device.DeviceId, out var dynamicCircuitReason);
+        var allowDynamicWrites = device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen;
         var plannerOptions = new ArMms.MmsHybridReportAcquisitionOptions
         {
             AllowStaticBrcb = true,
             AllowStaticUrcb = true,
-            AllowDynamicBrcb = device.AllowDynamicDataSetWrites,
-            AllowDynamicUrcb = device.AllowDynamicDataSetWrites,
+            AllowDynamicBrcb = allowDynamicWrites,
+            AllowDynamicUrcb = allowDynamicWrites,
             // Existing caller-owned RCB reuse needs session aliasing semantics in ARSAS.
             // Until that is explicit, fail closed instead of starting a second monitor
             // against an RCB already owned by this association.
@@ -240,9 +274,22 @@ public sealed partial class NativeIec61850Client
             .Select(group => group.First())
             .ToArray();
 
+        var p6Warnings = new List<string>();
+        if (staticInventoryMappedCount > 0)
+        {
+            p6Warnings.Add(
+                $"P6 static inventory bridge mapped {staticInventoryMappedCount} selected point(s) through ARIEC mandatory DataSet member evidence before broad catalog matching.");
+        }
+        if (dynamicWriteCircuitOpen)
+        {
+            p6Warnings.Add(
+                $"Dynamic DataSet writes are suppressed for this device after a previous real activation failure ({dynamicCircuitReason}). Static reporting remains eligible; residual points stay on bounded MMS polling instead of repeating a destabilizing write.");
+        }
+
         var warnings = capabilityAwarePlan.Warnings
             .Concat(capabilityAwarePlan.Blockers)
             .Concat(availability.Warnings)
+            .Concat(p6Warnings)
             .Concat(unmapped.Count == 0
                 ? Array.Empty<string>()
                 : [$"{unmapped.Count} selected point(s) had no unique literal ARIEC catalog match and remain on bounded MMS polling. No absence conclusion was made."])
@@ -254,7 +301,9 @@ public sealed partial class NativeIec61850Client
             IsAuthoritative = true,
             Authority = $"ARIEC61850 capability-aware hybrid acquisition ({catalogAuthority})",
             Status = enginePlan.Status.ToString(),
-            Summary = $"{enginePlan.Summary} {associationCapability.Summary}",
+            Summary = $"{enginePlan.Summary} {associationCapability.Summary}" +
+                      (staticInventoryMappedCount > 0 ? $" Static inventory bridge={staticInventoryMappedCount}." : string.Empty) +
+                      (dynamicWriteCircuitOpen ? " Dynamic writes circuit-broken after field failure evidence." : string.Empty),
             ReportPlans = reportPlans,
             PollingPointKeys = polling,
             UncoveredPointKeys = uncovered,
@@ -328,6 +377,26 @@ public sealed partial class NativeIec61850Client
                 Message = "ARIEC-authoritative subscription evidence is no longer present for this plan. ARSAS refused to rebuild the RCB/DataSet plan locally; MMS polling remains the safe fallback.",
                 DynamicAttemptState = "Skipped",
                 PollingFallbackReason = "AuthoritativeSubscriptionEvidenceMissing"
+            };
+        }
+
+        var isAuthoritativeDynamic = authoritative.Kind is
+            ArMms.MmsHybridAcquisitionKind.DynamicBrcb or
+            ArMms.MmsHybridAcquisitionKind.DynamicUrcb;
+        if (isAuthoritativeDynamic &&
+            !string.IsNullOrWhiteSpace(plan.RelayId) &&
+            DynamicWriteCircuitByDevice.TryGetValue(plan.RelayId, out var circuitReason))
+        {
+            return new NativeReportMonitorStartResult
+            {
+                IsSuccess = false,
+                PlanId = plan.PlanId,
+                Message = $"P6 dynamic-write circuit breaker withheld {authoritative.Kind} after a previous real activation failure ({circuitReason}). No further dynamic DataSet/RCB write is allowed for this device in this application run; MMS polling remains the bounded fallback.",
+                UsedDynamicDataSet = true,
+                DynamicAttempted = false,
+                DynamicAttemptState = "Skipped",
+                FailureReason = "DynamicWriteCircuitOpen",
+                PollingFallbackReason = "DynamicWriteCircuitOpen"
             };
         }
 
@@ -476,6 +545,14 @@ public sealed partial class NativeIec61850Client
             if (!isDynamic)
                 return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
 
+            if (attempt.DynamicAttempted && !string.IsNullOrWhiteSpace(plan.RelayId))
+            {
+                var reason = attempt.FailureReason.ToString();
+                if (string.IsNullOrWhiteSpace(reason) || reason.Equals("None", StringComparison.OrdinalIgnoreCase))
+                    reason = "DynamicActivationFailed";
+                DynamicWriteCircuitByDevice[plan.RelayId] = reason;
+            }
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
@@ -526,7 +603,11 @@ public sealed partial class NativeIec61850Client
 
     internal static Dictionary<string, Iec61850SignalDescriptor[]> BuildLiteralCatalogIndex(
         Iec61850SignalCatalogDocument catalog)
-        => catalog.Signals
+        => BuildLiteralCatalogIndex(catalog.Signals);
+
+    internal static Dictionary<string, Iec61850SignalDescriptor[]> BuildLiteralCatalogIndex(
+        IEnumerable<Iec61850SignalDescriptor> descriptors)
+        => descriptors
             .SelectMany(descriptor => EngineReferenceCandidates(descriptor)
                 .Select(reference => new { Reference = reference, Descriptor = descriptor }))
             .GroupBy(item => item.Reference, StringComparer.OrdinalIgnoreCase)
