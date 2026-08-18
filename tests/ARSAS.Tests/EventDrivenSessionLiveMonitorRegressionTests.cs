@@ -49,8 +49,10 @@ public sealed class EventDrivenSessionLiveMonitorRegressionTests
         Assert.Contains("AllowDynamicBrcb = device.AllowDynamicDataSetWrites", bridge, StringComparison.Ordinal);
         Assert.Contains("AllowDynamicUrcb = device.AllowDynamicDataSetWrites", bridge, StringComparison.Ordinal);
         Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", bridge, StringComparison.Ordinal);
+        Assert.Contains("MmsHybridDynamicAttemptEvidenceBuilder.Build", bridge, StringComparison.Ordinal);
         Assert.Contains("_session.LastNegotiatedCapabilities", bridge, StringComparison.Ordinal);
-        Assert.Contains("StartPersistentReportMonitorAsync", bridge, StringComparison.Ordinal);
+        Assert.Contains("StartPersistentReportMonitorWithAttemptEvidenceAsync", bridge, StringComparison.Ordinal);
+        Assert.Contains("TryStartDynamicRecoveryAfterStaticFailureP4Async", bridge, StringComparison.Ordinal);
         Assert.Contains("MmsPollingFallback", bridge, StringComparison.Ordinal);
         Assert.Contains("AllowDynamicDataSetWrites { get; set; } = true", models, StringComparison.Ordinal);
     }
