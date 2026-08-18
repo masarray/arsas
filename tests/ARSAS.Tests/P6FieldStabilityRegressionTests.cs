@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -63,6 +64,59 @@ public sealed class P6FieldStabilityRegressionTests
     }
 
     [Fact]
+    public void MixedAuthoritativePlans_ProbationDynamicBeforeStaticWithoutChangingCoverageIdentity()
+    {
+        var staticPlan = new ReportControlPlan
+        {
+            PlanId = "static",
+            IsEngineAuthoritative = true,
+            EngineAcquisitionKind = "StaticBrcb",
+            AllowDynamicDataSetWrites = false,
+            ReportControlReference = "IEDLD0/LLN0.BR.Buffer02"
+        };
+        var dynamicPlan = new ReportControlPlan
+        {
+            PlanId = "dynamic",
+            IsEngineAuthoritative = true,
+            EngineAcquisitionKind = "DynamicUrcb",
+            AllowDynamicDataSetWrites = true,
+            ReportControlReference = "IEDLD0/LLN0.RP.A_URCB01"
+        };
+
+        var ordered = NativeIec61850Client.OrderHybridActivationPlans([staticPlan, dynamicPlan]);
+
+        Assert.Equal(2, ordered.Count);
+        Assert.Same(dynamicPlan, ordered[0]);
+        Assert.Same(staticPlan, ordered[1]);
+        Assert.Equal("StaticBrcb", staticPlan.EngineAcquisitionKind);
+        Assert.Equal("IEDLD0/LLN0.BR.Buffer02", staticPlan.ReportControlReference);
+    }
+
+    [Fact]
+    public void StaticOnlyActivationOrder_RemainsBaselineStable()
+    {
+        var first = new ReportControlPlan
+        {
+            PlanId = "s1",
+            IsEngineAuthoritative = true,
+            EngineAcquisitionKind = "StaticBrcb",
+            AllowDynamicDataSetWrites = false
+        };
+        var second = new ReportControlPlan
+        {
+            PlanId = "s2",
+            IsEngineAuthoritative = true,
+            EngineAcquisitionKind = "StaticUrcb",
+            AllowDynamicDataSetWrites = false
+        };
+
+        var ordered = NativeIec61850Client.OrderHybridActivationPlans([first, second]);
+
+        Assert.Same(first, ordered[0]);
+        Assert.Same(second, ordered[1]);
+    }
+
+    [Fact]
     public void FailedRealDynamicAttempt_OpensProcessLifetimeCircuitBreaker()
     {
         var source = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.cs");
@@ -73,6 +127,7 @@ public sealed class P6FieldStabilityRegressionTests
         Assert.Contains("AllowDynamicBrcb = allowDynamicWrites", source, StringComparison.Ordinal);
         Assert.Contains("AllowDynamicUrcb = allowDynamicWrites", source, StringComparison.Ordinal);
         Assert.Contains("DynamicWriteCircuitOpen", source, StringComparison.Ordinal);
+        Assert.Contains("mixed-plan safety", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
