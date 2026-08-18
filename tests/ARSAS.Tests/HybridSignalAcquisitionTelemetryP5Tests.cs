@@ -86,7 +86,7 @@ public sealed class HybridSignalAcquisitionTelemetryP5Tests
     }
 
     [Fact]
-    public void ExplicitEngineSkip_IsVisibleAsFinalPollingWithExactReason()
+    public void ExplicitEngineSkip_IsVisibleAsFinalPollingWithExactReasonAndSignalIdentity()
     {
         var point = Point("polling", "IEDLD0/MMXU1.A.phsA.cVal.mag.f");
         var evidence = Evidence(
@@ -102,13 +102,17 @@ public sealed class HybridSignalAcquisitionTelemetryP5Tests
             PollingFallbackSignalCount = 1,
             PointAttemptEvidence = [evidence]
         });
+        var device = Device();
+        device.Points.Add(point);
 
-        var snapshot = tracker.Capture(Device());
+        var snapshot = tracker.Capture(device);
         var telemetry = Assert.Single(snapshot.SignalTelemetry);
         Assert.Equal(HybridSignalAcquisitionState.PollingFallback, telemetry.State);
         Assert.Equal("POLLING", telemetry.StateLabel);
         Assert.False(telemetry.DynamicAttempted);
         Assert.Equal("DefineNamedVariableListUnsupported", telemetry.ExactReason);
+        Assert.Equal("polling", telemetry.SignalName);
+        Assert.Equal(point.IecReference, telemetry.IecReference);
         Assert.Equal(1, snapshot.FinalPollingSignalCount);
     }
 
