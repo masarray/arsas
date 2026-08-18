@@ -165,6 +165,8 @@ internal sealed class HybridReportPhysicalValidationTracker
                 .ToArray();
 
             var attemptEvidence = planning?.PointAttemptEvidence ?? Array.Empty<NativeHybridPointAttemptEvidence>();
+            var signalTelemetry = BuildSignalTelemetry(device, planning, attemptEvidence);
+
             return new HybridReportPhysicalValidationSnapshot
             {
                 CapturedAtUtc = DateTimeOffset.UtcNow,
@@ -180,6 +182,11 @@ internal sealed class HybridReportPhysicalValidationTracker
                 DynamicAttemptedCount = _plans.Values.Count(state => state.DynamicAttempted),
                 DynamicAttemptFailedCount = _plans.Values.Count(state => state.DynamicAttempted && !state.ActivationSucceeded),
                 DynamicSkippedPointCount = attemptEvidence.Count(item => item.IsExplicitDynamicSkip),
+                StaticReportSignalCount = signalTelemetry.Count(item => item.State == HybridSignalAcquisitionState.StaticReport),
+                DynamicReportSignalCount = signalTelemetry.Count(item => item.State == HybridSignalAcquisitionState.DynamicReport),
+                DynamicFailedPollingSignalCount = signalTelemetry.Count(item => item.State == HybridSignalAcquisitionState.DynamicFailedPolling),
+                FinalPollingSignalCount = signalTelemetry.Count(item => item.IsFinalPollingFallback),
+                PendingSignalCount = signalTelemetry.Count(item => item.State == HybridSignalAcquisitionState.Pending),
                 ReportFrameCount = plans.Sum(plan => plan.ReportFrameCount),
                 ReportUpdateCount = plans.Sum(plan => plan.ReportUpdateCount),
                 ChangeVerifiedPointCount = plans.Sum(plan => plan.ChangeVerifiedPointCount),
@@ -187,10 +194,133 @@ internal sealed class HybridReportPhysicalValidationTracker
                 UncoveredPointCount = planning?.UncoveredSignalCount ?? 0,
                 Plans = plans,
                 PointAttemptEvidence = attemptEvidence,
+                SignalTelemetry = signalTelemetry,
                 Warnings = _warnings.ToArray()
             };
         }
     }
+
+    private HybridSignalAcquisitionTelemetry[] BuildSignalTelemetry(
+        Iec61850MonitorDevice device,
+        NativeHybridReportPlanningResult? planning,
+        IReadOnlyList<NativeHybridPointAttemptEvidence> attemptEvidence)
+    {
+        if (planning is null)
+            return Array.Empty<HybridSignalAcquisitionTelemetry>();
+
+        var evidenceByPoint = attemptEvidence
+            .Where(item => !string.IsNullOrWhiteSpace(item.PointKey))
+            .GroupBy(item => item.PointKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var planByPoint = _plans.Values
+            .SelectMany(state => state.Plan.Bindings
+                .Where(point => !string.IsNullOrWhiteSpace(point.PointKey))
+                .Select(point => new { point.PointKey, Point = point, State = state }))
+            .GroupBy(item => item.PointKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        // Polling-only signals have no report-plan binding. Preserve their complete runtime
+        // identity from the device point collection so Diagnostics never degrades into an
+        // anonymous PointKey/fallback-reason row.
+        var devicePointsByKey = device.Points
+            .Where(point => !string.IsNullOrWhiteSpace(point.PointKey))
+            .GroupBy(point => point.PointKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var pollingKeys = planning.PollingPointKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var uncoveredKeys = planning.UncoveredPointKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allKeys = evidenceByPoint.Keys
+            .Concat(planByPoint.Keys)
+            .Concat(devicePointsByKey.Keys)
+            .Concat(pollingKeys)
+            .Concat(uncoveredKeys)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return allKeys.Select(key =>
+        {
+            evidenceByPoint.TryGetValue(key, out var evidence);
+            planByPoint.TryGetValue(key, out var planBinding);
+            devicePointsByKey.TryGetValue(key, out var devicePoint);
+            var planState = planBinding?.State;
+            var point = planBinding?.Point ?? devicePoint;
+            var state = ClassifySignalState(
+                planState,
+                evidence,
+                pollingKeys.Contains(key),
+                uncoveredKeys.Contains(key));
+
+            var fallbackReason = FirstNonEmpty(
+                planState?.PollingFallbackReason,
+                evidence?.PollingFallbackReason);
+            var dynamicAttemptState = FirstNonEmpty(
+                planState?.DynamicAttemptState,
+                evidence?.DynamicAttemptDisposition);
+
+            return new HybridSignalAcquisitionTelemetry
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.Name,
+                PointKey = key,
+                SignalName = point?.SignalName ?? string.Empty,
+                IecReference = FirstNonEmpty(point?.IecReference, evidence?.IecReference),
+                State = state,
+                AcquisitionKind = FirstNonEmpty(planState?.Plan.EngineAcquisitionKind, evidence?.PlannedAcquisitionKind),
+                ReportControlReference = planState?.Plan.ReportControlReference ?? string.Empty,
+                DataSetReference = planState?.Plan.DataSetReference ?? string.Empty,
+                DynamicAttempted = planState?.DynamicAttempted == true,
+                DynamicAttemptState = dynamicAttemptState,
+                FailureReason = planState?.FailureReason ?? string.Empty,
+                PollingFallbackReason = fallbackReason,
+                CleanupAttempted = planState?.CleanupAttempted == true,
+                CleanupSucceeded = planState?.CleanupSucceeded ?? true,
+                PlanningDetail = evidence?.Detail ?? string.Empty,
+                RuntimeDetail = planState?.ActivationMessage ?? string.Empty
+            };
+        }).ToArray();
+    }
+
+    private static HybridSignalAcquisitionState ClassifySignalState(
+        PlanState? planState,
+        NativeHybridPointAttemptEvidence? evidence,
+        bool isPolling,
+        bool isUncovered)
+    {
+        if (planState is not null)
+        {
+            var kind = planState.Plan.EngineAcquisitionKind ?? string.Empty;
+            if (planState.ActivationSucceeded)
+            {
+                if (kind.StartsWith("Static", StringComparison.OrdinalIgnoreCase))
+                    return HybridSignalAcquisitionState.StaticReport;
+                if (kind.StartsWith("Dynamic", StringComparison.OrdinalIgnoreCase))
+                    return HybridSignalAcquisitionState.DynamicReport;
+            }
+
+            if (planState.ActivationAttempted)
+                return planState.DynamicAttempted
+                    ? HybridSignalAcquisitionState.DynamicFailedPolling
+                    : HybridSignalAcquisitionState.PollingFallback;
+
+            return HybridSignalAcquisitionState.Pending;
+        }
+
+        if (isUncovered || evidence?.PlannedAcquisitionKind.Equals("Uncovered", StringComparison.OrdinalIgnoreCase) == true)
+            return HybridSignalAcquisitionState.Uncovered;
+        if (isPolling || evidence?.IsExplicitDynamicSkip == true ||
+            evidence?.PlannedAcquisitionKind.Equals("MmsPollingFallback", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return HybridSignalAcquisitionState.PollingFallback;
+        }
+
+        return HybridSignalAcquisitionState.Pending;
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private void AddWarning(string? warning)
     {

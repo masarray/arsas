@@ -50,6 +50,84 @@ public sealed class NativeHybridPointAttemptEvidence
 }
 
 /// <summary>
+/// Final application-visible steady-state acquisition classification for one selected
+/// signal. This does not replace ARIEC planning evidence; it combines that evidence with
+/// the actual activation result so an operator can see why the signal is report-backed or
+/// why MMS polling became the final fallback.
+/// </summary>
+public enum HybridSignalAcquisitionState
+{
+    Pending,
+    StaticReport,
+    DynamicReport,
+    DynamicFailedPolling,
+    PollingFallback,
+    Uncovered
+}
+
+public sealed class HybridSignalAcquisitionTelemetry
+{
+    public string DeviceId { get; init; } = string.Empty;
+    public string DeviceName { get; init; } = string.Empty;
+    public string PointKey { get; init; } = string.Empty;
+    public string SignalName { get; init; } = string.Empty;
+    public string IecReference { get; init; } = string.Empty;
+    public HybridSignalAcquisitionState State { get; init; }
+    public string AcquisitionKind { get; init; } = string.Empty;
+    public string ReportControlReference { get; init; } = string.Empty;
+    public string DataSetReference { get; init; } = string.Empty;
+    public bool DynamicAttempted { get; init; }
+    public string DynamicAttemptState { get; init; } = string.Empty;
+    public string FailureReason { get; init; } = string.Empty;
+    public string PollingFallbackReason { get; init; } = string.Empty;
+    public bool CleanupAttempted { get; init; }
+    public bool CleanupSucceeded { get; init; } = true;
+    public string PlanningDetail { get; init; } = string.Empty;
+    public string RuntimeDetail { get; init; } = string.Empty;
+
+    public bool IsReportBacked => State is HybridSignalAcquisitionState.StaticReport or HybridSignalAcquisitionState.DynamicReport;
+    public bool IsFinalPollingFallback => State is HybridSignalAcquisitionState.DynamicFailedPolling or HybridSignalAcquisitionState.PollingFallback;
+
+    public string StateLabel => State switch
+    {
+        HybridSignalAcquisitionState.StaticReport => "STATIC REPORT",
+        HybridSignalAcquisitionState.DynamicReport => "DYNAMIC REPORT",
+        HybridSignalAcquisitionState.DynamicFailedPolling => "DYNAMIC FAILED → POLLING",
+        HybridSignalAcquisitionState.PollingFallback => "POLLING",
+        HybridSignalAcquisitionState.Uncovered => "UNCOVERED",
+        _ => "PENDING"
+    };
+
+    public string DynamicAttemptLabel => DynamicAttempted
+        ? string.IsNullOrWhiteSpace(DynamicAttemptState) ? "Attempted" : DynamicAttemptState
+        : string.IsNullOrWhiteSpace(DynamicAttemptState) ? "Not required / skipped" : DynamicAttemptState;
+
+    public string CleanupLabel => !CleanupAttempted
+        ? "-"
+        : CleanupSucceeded ? "Rollback OK" : "ROLLBACK FAILED";
+
+    public string ExactReason
+    {
+        get
+        {
+            var parts = new[] { FailureReason, PollingFallbackReason }
+                .Where(value => !string.IsNullOrWhiteSpace(value) && !value.Equals("None", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (parts.Length > 0)
+                return string.Join(" • ", parts);
+            if (IsReportBacked)
+                return "Report active";
+            return State == HybridSignalAcquisitionState.Pending ? "Activation pending" : "-";
+        }
+    }
+
+    public string Detail => string.Join(" | ", new[] { PlanningDetail, RuntimeDetail }
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Distinct(StringComparer.OrdinalIgnoreCase));
+}
+
+/// <summary>
 /// Physical-validation evidence collected by ARSAS after executing an engine-authoritative
 /// report plan against a real IED. Silence is never interpreted as signal absence.
 /// </summary>
@@ -68,6 +146,11 @@ public sealed class HybridReportPhysicalValidationSnapshot
     public int DynamicAttemptedCount { get; init; }
     public int DynamicAttemptFailedCount { get; init; }
     public int DynamicSkippedPointCount { get; init; }
+    public int StaticReportSignalCount { get; init; }
+    public int DynamicReportSignalCount { get; init; }
+    public int DynamicFailedPollingSignalCount { get; init; }
+    public int FinalPollingSignalCount { get; init; }
+    public int PendingSignalCount { get; init; }
     public int ReportFrameCount { get; init; }
     public int ReportUpdateCount { get; init; }
     public int ChangeVerifiedPointCount { get; init; }
@@ -75,6 +158,7 @@ public sealed class HybridReportPhysicalValidationSnapshot
     public int UncoveredPointCount { get; init; }
     public IReadOnlyList<HybridReportPhysicalValidationPlan> Plans { get; init; } = Array.Empty<HybridReportPhysicalValidationPlan>();
     public IReadOnlyList<NativeHybridPointAttemptEvidence> PointAttemptEvidence { get; init; } = Array.Empty<NativeHybridPointAttemptEvidence>();
+    public IReadOnlyList<HybridSignalAcquisitionTelemetry> SignalTelemetry { get; init; } = Array.Empty<HybridSignalAcquisitionTelemetry>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
     public bool HasPhysicalReportEvidence => ReportFrameCount > 0 || ReportUpdateCount > 0;
