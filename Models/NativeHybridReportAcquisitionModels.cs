@@ -15,6 +15,7 @@ public sealed class NativeHybridReportPlanningResult
     public IReadOnlyList<string> PollingPointKeys { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> UncoveredPointKeys { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> UnmappedPointKeys { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<NativeHybridPointAttemptEvidence> PointAttemptEvidence { get; init; } = Array.Empty<NativeHybridPointAttemptEvidence>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public int RequestedPointCount { get; init; }
     public int CatalogMappedPointCount { get; init; }
@@ -26,6 +27,26 @@ public sealed class NativeHybridReportPlanningResult
     public int UncoveredSignalCount { get; init; }
 
     public bool HasReportPlans => ReportPlans.Count > 0;
+}
+
+/// <summary>
+/// Application projection of ARIEC P4 evidence. Planned means the runtime still owes a
+/// real dynamic activation attempt. Skipped means final polling is explainable without a
+/// write attempt because the engine supplied a concrete reason.
+/// </summary>
+public sealed class NativeHybridPointAttemptEvidence
+{
+    public string PointKey { get; init; } = string.Empty;
+    public string IecReference { get; init; } = string.Empty;
+    public string PlannedAcquisitionKind { get; init; } = string.Empty;
+    public string DynamicAttemptDisposition { get; init; } = string.Empty;
+    public string PollingFallbackReason { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+
+    public bool DynamicAttemptRequired => DynamicAttemptDisposition.Equals("Planned", StringComparison.OrdinalIgnoreCase);
+    public bool IsExplicitDynamicSkip => DynamicAttemptDisposition.Equals("Skipped", StringComparison.OrdinalIgnoreCase) &&
+                                         !string.IsNullOrWhiteSpace(PollingFallbackReason) &&
+                                         !PollingFallbackReason.Equals("None", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -44,12 +65,16 @@ public sealed class HybridReportPhysicalValidationSnapshot
     public int PlannedDynamicUrcbCount { get; init; }
     public int ActivatedReportPlanCount { get; init; }
     public int FailedActivationCount { get; init; }
+    public int DynamicAttemptedCount { get; init; }
+    public int DynamicAttemptFailedCount { get; init; }
+    public int DynamicSkippedPointCount { get; init; }
     public int ReportFrameCount { get; init; }
     public int ReportUpdateCount { get; init; }
     public int ChangeVerifiedPointCount { get; init; }
     public int PollingFallbackPointCount { get; init; }
     public int UncoveredPointCount { get; init; }
     public IReadOnlyList<HybridReportPhysicalValidationPlan> Plans { get; init; } = Array.Empty<HybridReportPhysicalValidationPlan>();
+    public IReadOnlyList<NativeHybridPointAttemptEvidence> PointAttemptEvidence { get; init; } = Array.Empty<NativeHybridPointAttemptEvidence>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
     public bool HasPhysicalReportEvidence => ReportFrameCount > 0 || ReportUpdateCount > 0;
@@ -68,6 +93,12 @@ public sealed class HybridReportPhysicalValidationPlan
     public int MemberCount { get; init; }
     public int SetupWriteStepCount { get; init; }
     public bool UsedDynamicDataSet { get; init; }
+    public bool DynamicAttempted { get; init; }
+    public string DynamicAttemptState { get; init; } = string.Empty;
+    public string FailureReason { get; init; } = string.Empty;
+    public string PollingFallbackReason { get; init; } = string.Empty;
+    public bool CleanupAttempted { get; init; }
+    public bool CleanupSucceeded { get; init; } = true;
     public int ReportFrameCount { get; init; }
     public int ReportUpdateCount { get; init; }
     public int ChangeVerifiedPointCount { get; init; }
