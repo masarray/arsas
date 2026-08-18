@@ -7,7 +7,7 @@ public partial class MainWindow
 {
     /// <summary>
     /// P5 per-signal acquisition evidence remains available to diagnostics/export code,
-    /// but P6 intentionally stops rendering it as a continuously refreshed DataGrid.
+    /// but P6 intentionally stops rendering it as a continuously refreshed acquisition table.
     /// The 1.5 s clear/repopulate cycle made the Diagnostics workspace flicker between
     /// pending/empty/failure states during report setup and reconnect, obscuring the
     /// communication journal exactly when an engineer needs it most.
