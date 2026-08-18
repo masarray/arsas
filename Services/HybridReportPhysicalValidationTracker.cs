@@ -220,10 +220,19 @@ internal sealed class HybridReportPhysicalValidationTracker
             .GroupBy(item => item.PointKey, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
+        // Polling-only signals have no report-plan binding. Preserve their complete runtime
+        // identity from the device point collection so Diagnostics never degrades into an
+        // anonymous PointKey/fallback-reason row.
+        var devicePointsByKey = device.Points
+            .Where(point => !string.IsNullOrWhiteSpace(point.PointKey))
+            .GroupBy(point => point.PointKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
         var pollingKeys = planning.PollingPointKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var uncoveredKeys = planning.UncoveredPointKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var allKeys = evidenceByPoint.Keys
             .Concat(planByPoint.Keys)
+            .Concat(devicePointsByKey.Keys)
             .Concat(pollingKeys)
             .Concat(uncoveredKeys)
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -235,8 +244,9 @@ internal sealed class HybridReportPhysicalValidationTracker
         {
             evidenceByPoint.TryGetValue(key, out var evidence);
             planByPoint.TryGetValue(key, out var planBinding);
+            devicePointsByKey.TryGetValue(key, out var devicePoint);
             var planState = planBinding?.State;
-            var point = planBinding?.Point;
+            var point = planBinding?.Point ?? devicePoint;
             var state = ClassifySignalState(
                 planState,
                 evidence,
