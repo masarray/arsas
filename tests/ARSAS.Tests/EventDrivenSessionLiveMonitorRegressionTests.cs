@@ -39,15 +39,17 @@ public sealed class EventDrivenSessionLiveMonitorRegressionTests
     }
 
     [Fact]
-    public void SclMonitoring_UsesAriecHybridStaticAndDynamicReports_BeforeResidualPolling()
+    public void SclMonitoring_UsesAriecHybridStaticAndCircuitBrokenDynamicReports_BeforeResidualPolling()
     {
         var bridge = File.ReadAllText(FindRepoFile(Path.Combine("Services", "NativeIec61850Client.HybridReporting.cs")));
         var models = File.ReadAllText(FindRepoFile(Path.Combine("Models", "MonitorModels.cs")));
 
         Assert.Contains("AllowStaticBrcb = true", bridge, StringComparison.Ordinal);
         Assert.Contains("AllowStaticUrcb = true", bridge, StringComparison.Ordinal);
-        Assert.Contains("AllowDynamicBrcb = device.AllowDynamicDataSetWrites", bridge, StringComparison.Ordinal);
-        Assert.Contains("AllowDynamicUrcb = device.AllowDynamicDataSetWrites", bridge, StringComparison.Ordinal);
+        Assert.Contains("var allowDynamicWrites = device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen", bridge, StringComparison.Ordinal);
+        Assert.Contains("AllowDynamicBrcb = allowDynamicWrites", bridge, StringComparison.Ordinal);
+        Assert.Contains("AllowDynamicUrcb = allowDynamicWrites", bridge, StringComparison.Ordinal);
+        Assert.Contains("DynamicWriteCircuitByDevice", bridge, StringComparison.Ordinal);
         Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", bridge, StringComparison.Ordinal);
         Assert.Contains("MmsHybridDynamicAttemptEvidenceBuilder.Build", bridge, StringComparison.Ordinal);
         Assert.Contains("_session.LastNegotiatedCapabilities", bridge, StringComparison.Ordinal);

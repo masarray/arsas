@@ -20,6 +20,26 @@ public sealed partial class NativeIec61850Client
         string staticFailure,
         CancellationToken cancellationToken)
     {
+        // P6: a previous real dynamic write failure is field evidence that this device must
+        // not receive another temporary DataSet/RCB write in the current application run.
+        // Static reporting remains eligible on every fresh association; only this recovery
+        // path is circuit-broken so reconnect cannot become a dynamic-write retry loop.
+        if (!string.IsNullOrWhiteSpace(appPlan.RelayId) &&
+            DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId, out var circuitReason))
+        {
+            return new NativeReportMonitorStartResult
+            {
+                IsSuccess = false,
+                PlanId = appPlan.PlanId,
+                Message = $"{staticFailure} P6 dynamic recovery is circuit-broken after a previous real activation failure ({circuitReason}); MMS polling is the bounded fallback for this residual signal set.",
+                UsedDynamicDataSet = true,
+                DynamicAttempted = false,
+                DynamicAttemptState = "Skipped",
+                FailureReason = "DynamicWriteCircuitOpen",
+                PollingFallbackReason = "DynamicWriteCircuitOpen"
+            };
+        }
+
         if (!authoritative.Options.AllowDynamicBrcb && !authoritative.Options.AllowDynamicUrcb)
         {
             return new NativeReportMonitorStartResult
@@ -106,6 +126,14 @@ public sealed partial class NativeIec61850Client
 
         if (!attempt.IsSuccess || start.Session is null)
         {
+            if (attempt.DynamicAttempted && !string.IsNullOrWhiteSpace(appPlan.RelayId))
+            {
+                var failure = attempt.FailureReason.ToString();
+                if (string.IsNullOrWhiteSpace(failure) || failure.Equals("None", StringComparison.OrdinalIgnoreCase))
+                    failure = "DynamicRecoveryActivationFailed";
+                DynamicWriteCircuitByDevice[appPlan.RelayId] = failure;
+            }
+
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
