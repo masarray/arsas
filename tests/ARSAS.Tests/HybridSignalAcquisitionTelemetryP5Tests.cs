@@ -117,18 +117,16 @@ public sealed class HybridSignalAcquisitionTelemetryP5Tests
     }
 
     [Fact]
-    public void DiagnosticsPanel_ShowsFinalStateExactReasonAttemptAndCleanupPerSignal()
+    public void DiagnosticsWorkspace_DoesNotContinuouslyRenderAcquisitionEvidenceGrid()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.HybridAcquisitionDiagnostics.cs"));
 
-        Assert.Contains("IEC 61850 signal acquisition evidence", source, StringComparison.Ordinal);
-        Assert.Contains("CaptureHybridReportPhysicalValidation", source, StringComparison.Ordinal);
         Assert.Contains("HybridAcquisitionTelemetry", source, StringComparison.Ordinal);
-        Assert.Contains("Final state", source, StringComparison.Ordinal);
-        Assert.Contains("Dynamic attempt", source, StringComparison.Ordinal);
-        Assert.Contains("Exact reason", source, StringComparison.Ordinal);
-        Assert.Contains("Cleanup", source, StringComparison.Ordinal);
-        Assert.Contains("Dynamic failed→polling", source, StringComparison.Ordinal);
+        Assert.Contains("P6 intentionally stops rendering", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("InstallHybridAcquisitionDiagnosticsPanel", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshHybridAcquisitionTelemetry", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataGrid", source, StringComparison.Ordinal);
     }
 
     private static HybridReportPhysicalValidationTracker Tracker(
