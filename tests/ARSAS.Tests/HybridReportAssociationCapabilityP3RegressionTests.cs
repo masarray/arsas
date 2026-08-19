@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ARSAS.Tests;
 
 public sealed class HybridReportAssociationCapabilityP3RegressionTests
@@ -18,12 +20,16 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsP62BStabilityEngineWhilePreservingP61AndP62EvidenceHistory()
+    public void EngineLock_PreservesP62BStabilityHistoryAcrossLaterReviewedEnginePins()
     {
         var source = Read("engines/ARIEC61850.lock.json");
+        using var document = JsonDocument.Parse(source);
+        var root = document.RootElement;
 
-        Assert.Contains("249fb130e0e18e7a98e07e8894f24610bdb5642e", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 89", source, StringComparison.Ordinal);
+        Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
+        Assert.Equal("main", root.GetProperty("ref").GetString());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 89);
         Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #88", source, StringComparison.OrdinalIgnoreCase);
