@@ -5,18 +5,22 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsExactG1ControlEngine()
+    public void EngineLock_PinsReviewedG2EngineAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("a18e550d07f7bbe4ff7753c180b02615075f6292", json.GetProperty("commit").GetString());
-        Assert.Equal(90, json.GetProperty("sourcePullRequest").GetInt32());
-        Assert.Contains("signed primitive constraints", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("object-access-denied", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("c0e146a6111e67b2bfe85c446bd6cef4933f4b37", json.GetProperty("commit").GetString());
+        Assert.Equal(94, json.GetProperty("sourcePullRequest").GetInt32());
+        var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
+        Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("object-access-denied", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actual correctly mapped InformationReport", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
