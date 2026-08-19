@@ -12,9 +12,10 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("e2c26fc4c081b785c2fe12005ada26ba9580bd61", json.GetProperty("commit").GetString());
+        Assert.Equal("438d14b0dd6dce1b86b9d1c63d6bddd13510b11a", json.GetProperty("commit").GetString());
         Assert.Equal(90, json.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("signed primitive constraints", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -30,23 +31,41 @@ public sealed class G1ControlCorrectnessRegressionTests
     }
 
     [Fact]
-    public void Runtime_EmitsExactWireEvidenceOnlyWhenReturnedByControlStack()
+    public void App_MapsOrderedNativeControlWireSteps()
+    {
+        var model = File.ReadAllText(Path.Combine(RepoRoot(), "Models", "ControlModels.cs"));
+        var client = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "NativeIec61850Client.cs"));
+        Assert.Contains("class Iec61850ControlWireEvidence", model, StringComparison.Ordinal);
+        Assert.Contains("IReadOnlyList<Iec61850ControlWireEvidence> WireSteps", model, StringComparison.Ordinal);
+        Assert.Contains("WireSteps = result.WireSteps.Select", client, StringComparison.Ordinal);
+        Assert.Contains("Action = step.Action.ToString()", client, StringComparison.Ordinal);
+        Assert.Contains("Reference = step.Reference", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Runtime_EmitsOrderedWireStepsAndExactRequestResponseEvidence()
     {
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
+        Assert.Contains("CONTROL_WIRE_STEP:", source, StringComparison.Ordinal);
+        Assert.Contains("order={index + 1}", source, StringComparison.Ordinal);
+        Assert.Contains("action={step.Action}", source, StringComparison.Ordinal);
+        Assert.Contains("reference={step.Reference}", source, StringComparison.Ordinal);
         Assert.Contains("CONTROL_WIRE_REQUEST:", source, StringComparison.Ordinal);
         Assert.Contains("CONTROL_WIRE_RESPONSE:", source, StringComparison.Ordinal);
-        Assert.Contains("MMS request encoded / no response captured", source, StringComparison.Ordinal);
-        Assert.Contains("MMS response received", source, StringComparison.Ordinal);
+        Assert.Contains("ordered MMS control response(s) captured", source, StringComparison.Ordinal);
+        Assert.Contains("Never infer server acceptance from request HEX alone", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MMS command submitted", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void CommandUi_DistinguishesNotSentFromWireEvidence()
+    public void CommandUi_DistinguishesNotSentAndShowsWireSequence()
     {
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "ControlCommandWindow.xaml.cs"));
         Assert.Contains("No MMS control request was sent to the IED", source, StringComparison.Ordinal);
         Assert.Contains("MMS request/response wire evidence was captured", source, StringComparison.Ordinal);
         Assert.Contains("MMS request encoding was captured, but no MMS response was captured", source, StringComparison.Ordinal);
+        Assert.Contains("Wire sequence:", source, StringComparison.Ordinal);
+        Assert.Contains("result.WireSteps.Select(step => step.Action)", source, StringComparison.Ordinal);
     }
 
     [Fact]
