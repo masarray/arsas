@@ -46,7 +46,7 @@ public sealed class Iec61850ControlCommandRequest
     public bool SynchroCheck { get; init; }
     public bool TestMode { get; init; }
     public string Originator { get; init; } = "ARSAS";
-    public string OriginCategory { get; init; } = "Maintenance";
+    public string OriginCategory { get; init; } = "StationControl";
     public int FeedbackTimeoutMs { get; init; } = 12000;
     public int CommandTerminationTimeoutMs { get; init; } = 10000;
 }

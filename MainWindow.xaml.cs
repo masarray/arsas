@@ -1242,7 +1242,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             AddLog("INFO", device.Name,
-                $"MMS command submitted: {signal.ObjectReference}; sequence={claim.Sequence}; value={claim.RequestedValue}.");
+                $"IEC 61850 control execution started: {signal.ObjectReference}; sequence={claim.Sequence}; value={claim.RequestedValue}; wire send is not assumed until native evidence is returned.");
             var result = await _runtime.ExecuteControlAsync(
                 device.DeviceId,
                 new Iec61850ControlCommandRequest
@@ -1255,7 +1255,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     FeedbackTimeoutMs = signal.IsPositionControl ? 12000 :
                         (signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl || signal.IsRaiseLowerControl) ? 15000 : 8000,
                     CommandTerminationTimeoutMs = 10000,
-                    OriginCategory = "Maintenance"
+                    OriginCategory = "StationControl"
                 },
                 _applicationCancellation.Token);
 
@@ -1301,6 +1301,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(result.FeedbackElapsedText) && result.FeedbackElapsedText != "-")
             timing.Add($"feedback {result.FeedbackElapsedText}");
         var suffix = timing.Count == 0 ? string.Empty : $" • {string.Join(" • ", timing)}";
+
+        if (!result.IsSuccess)
+        {
+            var rejectedStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
+            if (rejectedStep != null)
+            {
+                var stage = rejectedStep.Action.Equals("SelectWithValue", StringComparison.OrdinalIgnoreCase) ? "SBOw" : rejectedStep.Action;
+                var operateSent = result.WireSteps.Any(step => step.Action.Equals("Operate", StringComparison.OrdinalIgnoreCase));
+                var stopped = stage.Equals("SBOw", StringComparison.OrdinalIgnoreCase) && !operateSent
+                    ? " • Operate NOT sent"
+                    : string.Empty;
+                var cause = string.IsNullOrWhiteSpace(result.AddCause) ? string.Empty : $" • AddCause={result.AddCause}";
+                return $"IED REJECTED {stage}: {result.Message}{cause}{stopped}{suffix}";
+            }
+        }
+
         return result.IsSuccess
             ? $"{result.Stage}: {result.FeedbackValue}{suffix}"
             : $"{result.Stage}: {result.Message}{suffix}";

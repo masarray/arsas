@@ -1719,7 +1719,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     private static ArControl.Iec61850OriginCategory ParseOriginCategory(string? text)
         => Enum.TryParse<ArControl.Iec61850OriginCategory>(text, true, out var category)
             ? category
-            : ArControl.Iec61850OriginCategory.Maintenance;
+            : ArControl.Iec61850OriginCategory.StationControl;
 
     private static string FormatControlTimeout(TimeSpan? timeout)
         => timeout.HasValue ? $"{timeout.Value.TotalSeconds:0.###} s" : "-";

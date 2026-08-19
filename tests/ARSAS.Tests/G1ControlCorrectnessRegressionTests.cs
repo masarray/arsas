@@ -12,10 +12,11 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("438d14b0dd6dce1b86b9d1c63d6bddd13510b11a", json.GetProperty("commit").GetString());
+        Assert.Equal("a18e550d07f7bbe4ff7753c180b02615075f6292", json.GetProperty("commit").GetString());
         Assert.Equal(90, json.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("signed primitive constraints", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("object-access-denied", json.GetProperty("purpose").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -66,6 +67,32 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("MMS request encoding was captured, but no MMS response was captured", source, StringComparison.Ordinal);
         Assert.Contains("Wire sequence:", source, StringComparison.Ordinal);
         Assert.Contains("result.WireSteps.Select(step => step.Action)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void G11_FieldRejection_IsExplicitAndManualOriginIsStationControl()
+    {
+        var model = File.ReadAllText(Path.Combine(RepoRoot(), "Models", "ControlModels.cs"));
+        var dialog = File.ReadAllText(Path.Combine(RepoRoot(), "ControlCommandWindow.xaml.cs"));
+        var main = File.ReadAllText(Path.Combine(RepoRoot(), "MainWindow.xaml.cs"));
+        var client = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "NativeIec61850Client.cs"));
+        var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
+
+        Assert.Contains("OriginCategory { get; init; } = \"StationControl\"", model, StringComparison.Ordinal);
+        Assert.Contains("OriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("OriginCategory = \"StationControl\"", main, StringComparison.Ordinal);
+        Assert.Contains("Iec61850OriginCategory.StationControl", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("MMS command submitted:", main, StringComparison.Ordinal);
+        Assert.Contains("wire send is not assumed until native evidence is returned", main, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IED REJECTED SBOw", dialog, StringComparison.Ordinal);
+        Assert.Contains("Operate was NOT sent because SBOw selection failed", dialog, StringComparison.Ordinal);
+        Assert.Contains("IED BLOCKED COMMAND BY INTERLOCKING", dialog, StringComparison.Ordinal);
+        Assert.Contains("IED BLOCKED COMMAND BY SYNCHROCHECK", dialog, StringComparison.Ordinal);
+        Assert.Contains("requested control condition/service is not supported", dialog, StringComparison.Ordinal);
+        Assert.Contains("CONTROL_REJECTED_BY_IED:", runtime, StringComparison.Ordinal);
+        Assert.Contains("OperateSent={operateSent}", runtime, StringComparison.Ordinal);
+        Assert.Contains("origin={request.OriginCategory}/{request.Originator}", runtime, StringComparison.Ordinal);
+        Assert.DoesNotContain("RetryControl", runtime, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

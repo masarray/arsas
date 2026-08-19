@@ -486,7 +486,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
 
         Log("INFO", session.Device.Name,
-            $"Control intent accepted: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}.");
+            $"Control intent accepted: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}.");
 
         var clientStopwatch = Stopwatch.StartNew();
         Interlocked.Increment(ref session.ControlCommandActive);
@@ -537,6 +537,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
+
+        var rejectedWireStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
+        if (rejectedWireStep != null)
+        {
+            var rejectedStage = rejectedWireStep.Action.Equals("SelectWithValue", StringComparison.OrdinalIgnoreCase)
+                ? "SBOw"
+                : rejectedWireStep.Action;
+            var operateSent = result.WireSteps.Any(step => step.Action.Equals("Operate", StringComparison.OrdinalIgnoreCase));
+            Log("ERROR", session.Device.Name,
+                $"CONTROL_REJECTED_BY_IED: stage={rejectedStage}; reference={rejectedWireStep.Reference}; reason={result.Message}; controlError={(string.IsNullOrWhiteSpace(result.ControlError) ? "-" : result.ControlError)}; addCause={(string.IsNullOrWhiteSpace(result.AddCause) ? "-" : result.AddCause)}; OperateSent={operateSent}; origin={request.OriginCategory}/{request.Originator}.");
+        }
 
         if (result.WireSteps.Count > 0)
         {
