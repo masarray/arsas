@@ -22,7 +22,7 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     {
         var source = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("9000d3155e742bb0356a595bea4b73e1d817c26a", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("249fb130e0e18e7a98e07e8894f24610bdb5642e", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"sourcePullRequest\": 89", source, StringComparison.Ordinal);
         Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
