@@ -5,7 +5,7 @@ on:
     branches:
       - fix/p6-2-c-smart-reconnect
     paths:
-      - .p6-2-c/smart-reconnect.patch
+      - .p6-2-c/apply.ready
 
 permissions:
   contents: write
@@ -19,14 +19,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply reviewed P6.2-C patch
+      - name: Apply reviewed P6.2-C patch parts
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check .p6-2-c/smart-reconnect.patch
-          git apply .p6-2-c/smart-reconnect.patch
-          rm -f .p6-2-c/smart-reconnect.patch
-          rmdir .p6-2-c 2>/dev/null || true
+          shopt -s nullglob
+          patches=(.p6-2-c/*.patch)
+          if [ ${#patches[@]} -eq 0 ]; then
+            echo "No staged patch files were found."
+            exit 1
+          fi
+          for patch in "${patches[@]}"; do
+            echo "Checking $patch"
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+          rm -rf .p6-2-c
           rm -f .github/workflows/p6-2-c-apply-patch.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
