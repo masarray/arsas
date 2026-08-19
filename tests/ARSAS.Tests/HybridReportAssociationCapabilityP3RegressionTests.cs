@@ -18,20 +18,26 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsP62ProbeEngineWhilePreservingP61StaticSafetyHistory()
+    public void EngineLock_PinsP62BStabilityEngineWhilePreservingP61AndP62EvidenceHistory()
     {
         var source = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("d4612fb7fd5d499a70df17110f6191c452340e0c", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 88", source, StringComparison.Ordinal);
+        Assert.Contains("9000d3155e742bb0356a595bea4b73e1d817c26a", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 89", source, StringComparison.Ordinal);
         Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #88", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("GetNamedVariableListAttributes", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("single-member", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("before any dynamic RCB mutation", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cleanup evidence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #89", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quarantines automatic full dynamic DataSet activation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("successful one-member NVL probation does not guarantee association survival", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instMag/mag", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instCVal/cVal", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)
