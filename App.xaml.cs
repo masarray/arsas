@@ -42,6 +42,10 @@ public partial class App : Application
         GridUxBehavior.Install();
         P2InteractionBehavior.Install();
         FaultRecordUxBehavior.Install();
+        // G2 commissioning remains an explicit engineering action. Ctrl+Shift+Q opens
+        // isolated dynamic-DataSet qualification; it is never invoked by normal startup,
+        // Connect/Play, monitoring, reconnect or report-planner paths.
+        DynamicReportQualificationUiBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
 
