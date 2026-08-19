@@ -486,7 +486,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
 
         Log("INFO", session.Device.Name,
-            $"Control intent accepted: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}.");
+            $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
 
         var clientStopwatch = Stopwatch.StartNew();
         Interlocked.Increment(ref session.ControlCommandActive);

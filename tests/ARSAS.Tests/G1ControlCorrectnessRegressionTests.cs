@@ -90,6 +90,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("IED BLOCKED COMMAND BY SYNCHROCHECK", dialog, StringComparison.Ordinal);
         Assert.Contains("requested control condition/service is not supported", dialog, StringComparison.Ordinal);
         Assert.Contains("CONTROL_REJECTED_BY_IED:", runtime, StringComparison.Ordinal);
+        Assert.Contains("Control execution requested:", runtime, StringComparison.Ordinal);
+        Assert.DoesNotContain("Control intent accepted:", runtime, StringComparison.Ordinal);
         Assert.Contains("OperateSent={operateSent}", runtime, StringComparison.Ordinal);
         Assert.Contains("origin={request.OriginCategory}/{request.Originator}", runtime, StringComparison.Ordinal);
         Assert.DoesNotContain("RetryControl", runtime, StringComparison.OrdinalIgnoreCase);
