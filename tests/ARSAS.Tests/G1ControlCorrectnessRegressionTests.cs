@@ -41,6 +41,15 @@ public sealed class G1ControlCorrectnessRegressionTests
     }
 
     [Fact]
+    public void CommandUi_DistinguishesNotSentFromWireEvidence()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "ControlCommandWindow.xaml.cs"));
+        Assert.Contains("No MMS control request was sent to the IED", source, StringComparison.Ordinal);
+        Assert.Contains("MMS request/response wire evidence was captured", source, StringComparison.Ordinal);
+        Assert.Contains("MMS request encoding was captured, but no MMS response was captured", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void G1_DoesNotReenableDynamicReportingOrChangeReconnectPolicy()
     {
         var engineLock = File.ReadAllText(Path.Combine(RepoRoot(), "engines", "ARIEC61850.lock.json"));
