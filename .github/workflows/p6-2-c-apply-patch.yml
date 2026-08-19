@@ -1,0 +1,35 @@
+name: P6.2-C apply smart reconnect patch
+
+on:
+  push:
+    branches:
+      - fix/p6-2-c-smart-reconnect
+    paths:
+      - .p6-2-c/smart-reconnect.patch
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply reviewed P6.2-C patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check .p6-2-c/smart-reconnect.patch
+          git apply .p6-2-c/smart-reconnect.patch
+          rm -f .p6-2-c/smart-reconnect.patch
+          rmdir .p6-2-c 2>/dev/null || true
+          rm -f .github/workflows/p6-2-c-apply-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(p6.2-c): make MMS recovery bounded and staged"
+          git push origin HEAD:fix/p6-2-c-smart-reconnect
