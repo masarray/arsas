@@ -1,0 +1,79 @@
+diff --git a/Services/Iec61850MonitorRuntime.cs b/Services/Iec61850MonitorRuntime.cs
+index 34eda3f..5c219d0 100644
+--- a/Services/Iec61850MonitorRuntime.cs
++++ b/Services/Iec61850MonitorRuntime.cs
+@@ -1508,7 +1724,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+         session.ConsecutiveSessionErrors = 0;
+         session.ConsecutiveHealthProbeFailures = 0;
+         session.NextReconnectUtc = DateTime.MinValue;
+-        try { await session.Client.DisposeAsync().ConfigureAwait(false); } catch { }
++
++        var staleClient = session.Client;
++        session.Client = new NativeIec61850Client();
++        await DisposeClientForReconnectAsync(
++            staleClient,
++            session.Device.Name,
++            SmartReconnectPolicy.ClientCleanupBudget,
++            CancellationToken.None).ConfigureAwait(false);
+     }
+ 
+     private void RecordSuccessfulIo(DeviceSession session)
+@@ -1534,6 +1757,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+         if (Volatile.Read(ref session.ControlCommandActive) > 0)
+             return;
+         var now = DateTime.UtcNow;
++        if (now < session.RecoveryWarmupUntilUtc)
++            return;
+         if (now < session.NextHealthProbeUtc || now - session.LastSuccessfulIoUtc < TimeSpan.FromMilliseconds(900)) return;
+         session.NextHealthProbeUtc = now.AddSeconds(1);
+         if (string.IsNullOrWhiteSpace(session.HealthProbePointKey) || !session.Points.TryGetValue(session.HealthProbePointKey, out var point))
+@@ -1950,6 +2175,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+         return quality;
+     }
+ 
++    private static bool IsDegradedIecQuality(string? quality)
++    {
++        if (string.IsNullOrWhiteSpace(quality))
++            return false;
++
++        var normalized = quality.Trim().ToLowerInvariant();
++        return normalized.Contains("questionable", StringComparison.Ordinal) ||
++               normalized.Contains("invalid", StringComparison.Ordinal) ||
++               normalized.Contains("reserved", StringComparison.Ordinal);
++    }
++
+     private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
+     {
+         foreach (var key in GetReferenceKeys(point.IecReference))
+@@ -2073,18 +2309,26 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+             .ToList();
+     }
+ 
+-    private static void ResetPollQueue(DeviceSession session)
++    private static void ResetPollQueue(
++        DeviceSession session,
++        bool staggerForRecovery = false)
+     {
+         session.PollQueue.Clear();
+         var nowUtc = DateTime.UtcNow;
++        var index = 0;
+         foreach (var point in session.Points.Values)
+         {
+-            // Every selected point gets an immediate initial read. For report-assigned
+-            // points this supplies value/q/t and verifies that the RCB is not silently
+-            // frozen; after dchg is proven, validation automatically slows down.
++            // Initial startup keeps the legacy immediate-read behavior. After an actual
++            // reconnect, spread the first recovery reads over a small bounded window so
++            // a large selected signal set does not hit a recovering IED with a request burst.
++            var dueUtc = staggerForRecovery
++                ? nowUtc.AddMilliseconds(SmartReconnectPolicy.GetRecoveryStaggerDelayMs(index++))
++                : nowUtc;
+             var state = session.States[point.PointKey];
+-            state.NextPollUtc = nowUtc;
+-            session.PollQueue.Enqueue(point.PointKey, nowUtc.Ticks);
++            state.NextPollUtc = dueUtc;
++            if (staggerForRecovery)
++                state.NextCompanionPollUtc = session.RecoveryWarmupUntilUtc;
++            session.PollQueue.Enqueue(point.PointKey, dueUtc.Ticks);
+         }
+     }
