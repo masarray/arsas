@@ -45,7 +45,7 @@ index 34eda3f..5c219d0 100644
      private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
      {
          foreach (var key in GetReferenceKeys(point.IecReference))
-@@ -2073,18 +2309,26 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+@@ -2073,17 +2309,25 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
              .ToList();
      }
  
