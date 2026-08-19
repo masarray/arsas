@@ -19,20 +19,28 @@ public sealed class HybridReportDynamicAttemptP4RegressionTests
     }
 
     [Fact]
-    public void Activation_UsesAttemptAwareEngineAndRollsStaticFailureIntoDynamicRecovery()
+    public void StaticFailure_IsIsolatedAndNeverStartsDynamicMutation()
     {
         var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
         var recovery = Read("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
+        // The ordinary residual dynamic path is still attempt-aware.
         Assert.Contains("StartPersistentReportMonitorWithAttemptEvidenceAsync", bridge, StringComparison.Ordinal);
         Assert.True(Count(bridge, "TryStartDynamicRecoveryAfterStaticFailureP4Async") >= 4);
-        Assert.Contains("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
-        Assert.Contains("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
-        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
-        Assert.Contains("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
-        Assert.Contains("DynamicActivationFailed", recovery, StringComparison.Ordinal);
-        Assert.Contains("CleanupAttempted = attempt.CleanupAttempted", recovery, StringComparison.Ordinal);
-        Assert.Contains("CleanupSucceeded = attempt.CleanupSucceeded", recovery, StringComparison.Ordinal);
+
+        // P6.1 intentionally keeps the old method name only as a source-compatible,
+        // fail-closed hook. Static failure must never create a new DataSet or write another RCB.
+        Assert.Contains("baseline static-failure isolation", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no dynamic DataSet/RCB write was attempted", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("UsedDynamicDataSet = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("DynamicAttempted = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("FailureReason = \"StaticActivationFailed\"", recovery, StringComparison.Ordinal);
+        Assert.Contains("PollingFallbackReason = \"StaticActivationFailed\"", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("DynamicWriteCircuitByDevice[appPlan.RelayId]", recovery, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -51,12 +59,10 @@ public sealed class HybridReportDynamicAttemptP4RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsP4AttemptAwareEngine()
+    public void EngineLock_PinsAttemptAwareEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("2a932e183931eb65c775fe01cf8a47bf8a9af458", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 86", engineLock, StringComparison.Ordinal);
         Assert.Contains("dynamic-attempt", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("rollback", engineLock, StringComparison.OrdinalIgnoreCase);
     }

@@ -18,17 +18,26 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsReviewedP4EngineWithoutRegressingP3CapabilityEvidence()
+    public void EngineLock_PinsP62BStabilityEngineWhilePreservingP61AndP62EvidenceHistory()
     {
         var source = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("2a932e183931eb65c775fe01cf8a47bf8a9af458", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 86", source, StringComparison.Ordinal);
+        Assert.Contains("249fb130e0e18e7a98e07e8894f24610bdb5642e", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 89", source, StringComparison.Ordinal);
+        Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #88", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("GetNamedVariableListAttributes", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("TrgOps", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("dynamic-attempt", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("rollback", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("single-member", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cleanup evidence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #89", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quarantines automatic full dynamic DataSet activation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("successful one-member NVL probation does not guarantee association survival", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instMag/mag", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instCVal/cVal", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)

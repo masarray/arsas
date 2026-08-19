@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ARSAS.Tests;
 
 public sealed class VisualSystemP0RegressionTests
@@ -81,13 +83,16 @@ public sealed class VisualSystemP0RegressionTests
     }
 
     [Fact]
-    public void P0_KeepsTheReviewedAriecEnginePinUntouched()
+    public void P0_KeepsImmutableAriecEngineLockContractUntouched()
     {
         var testDirectory = Path.GetDirectoryName(FindRepoFile("MainWindow.xaml"))!;
-        var engineLock = File.ReadAllText(Path.Combine(testDirectory, "engines", "ARIEC61850.lock.json"));
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(testDirectory, "engines", "ARIEC61850.lock.json")));
+        var root = document.RootElement;
 
-        Assert.Contains("2a932e183931eb65c775fe01cf8a47bf8a9af458", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 86", engineLock, StringComparison.Ordinal);
+        Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
+        Assert.Equal("main", root.GetProperty("ref").GetString());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() > 0);
     }
 
     private static string Slice(string source, string start, string end)

@@ -253,6 +253,8 @@ public sealed partial class NativeIec61850Client
             reportPlans.Add(appPlan);
         }
 
+        var activationPlans = OrderHybridActivationPlans(reportPlans);
+
         var polling = enginePlan.Assignments
             .Where(assignment => assignment.Kind == ArMms.MmsHybridAcquisitionKind.MmsPollingFallback)
             .Select(assignment => FindPointKeyForAssignment(assignment.SignalReference, descriptorPoints))
@@ -280,6 +282,11 @@ public sealed partial class NativeIec61850Client
             p6Warnings.Add(
                 $"P6 static inventory bridge mapped {staticInventoryMappedCount} selected point(s) through ARIEC mandatory DataSet member evidence before broad catalog matching.");
         }
+        if (activationPlans.Count > 1 && activationPlans[0].AllowDynamicDataSetWrites && activationPlans.Any(plan => !plan.AllowDynamicDataSetWrites))
+        {
+            p6Warnings.Add(
+                "P6.1 mixed-plan safety: dynamic DataSet mutation is probationed before static RCB activation so a relay-aborting dynamic write cannot orphan an already-armed static RCB. Static coverage priority is unchanged.");
+        }
         if (dynamicWriteCircuitOpen)
         {
             p6Warnings.Add(
@@ -304,7 +311,7 @@ public sealed partial class NativeIec61850Client
             Summary = $"{enginePlan.Summary} {associationCapability.Summary}" +
                       (staticInventoryMappedCount > 0 ? $" Static inventory bridge={staticInventoryMappedCount}." : string.Empty) +
                       (dynamicWriteCircuitOpen ? " Dynamic writes circuit-broken after field failure evidence." : string.Empty),
-            ReportPlans = reportPlans,
+            ReportPlans = activationPlans,
             PollingPointKeys = polling,
             UncoveredPointKeys = uncovered,
             UnmappedPointKeys = unmapped.Select(point => point.PointKey).ToArray(),
@@ -319,6 +326,24 @@ public sealed partial class NativeIec61850Client
             PollingFallbackSignalCount = enginePlan.PollingFallbackSignalCount + unmapped.Count,
             UncoveredSignalCount = enginePlan.UncoveredSignalCount
         };
+    }
+
+    internal static IReadOnlyList<ReportControlPlan> OrderHybridActivationPlans(IEnumerable<ReportControlPlan> plans)
+    {
+        var materialized = plans.ToArray();
+        var hasDynamic = materialized.Any(plan => plan.IsEngineAuthoritative && plan.AllowDynamicDataSetWrites);
+        var hasStatic = materialized.Any(plan => plan.IsEngineAuthoritative && !plan.AllowDynamicDataSetWrites);
+        if (!hasDynamic || !hasStatic)
+            return materialized;
+
+        // Coverage precedence remains static -> dynamic -> polling. This ordering controls
+        // only activation side effects. A dynamic DefineNamedVariableList write is the risky
+        // operation on IEDs that abort the association. Run that probation before arming the
+        // already-proven static RCB so a failed dynamic attempt cannot leave that static RCB
+        // transiently enabled/owned and then unavailable to the immediate reconnect.
+        return materialized
+            .OrderByDescending(plan => plan.IsEngineAuthoritative && plan.AllowDynamicDataSetWrites)
+            .ToArray();
     }
 
     public async Task<NativeReportMonitorStartResult> StartHybridReportMonitorAsync(
