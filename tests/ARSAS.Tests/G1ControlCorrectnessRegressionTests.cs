@@ -81,6 +81,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("OriginCategory { get; init; } = \"StationControl\"", model, StringComparison.Ordinal);
         Assert.Contains("OriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
         Assert.Contains("OriginCategory = \"StationControl\"", main, StringComparison.Ordinal);
+        Assert.DoesNotContain("OriginCategory = \"Maintenance\"", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("OriginCategory = \"Maintenance\"", main, StringComparison.Ordinal);
         Assert.Contains("Iec61850OriginCategory.StationControl", client, StringComparison.Ordinal);
         Assert.DoesNotContain("MMS command submitted:", main, StringComparison.Ordinal);
         Assert.Contains("wire send is not assumed until native evidence is returned", main, StringComparison.OrdinalIgnoreCase);
