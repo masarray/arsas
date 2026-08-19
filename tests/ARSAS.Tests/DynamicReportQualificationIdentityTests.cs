@@ -84,20 +84,22 @@ public sealed class DynamicReportQualificationIdentityTests
             new SignalDefinition
             {
                 IsSelected = true,
+                Name = "GGIO1 Ind1 status",
                 ObjectReference = "LD0/GGIO1.Ind1.stVal",
                 FunctionalConstraint = "ST",
                 DataType = firstDataType,
-                LogicalNode = "GGIO1",
-                DataObject = "Ind1"
+                QualityReference = "LD0/GGIO1.Ind1.q",
+                TimestampReference = "LD0/GGIO1.Ind1.t"
             },
             new SignalDefinition
             {
                 IsSelected = false,
+                Name = "MMXU1 frequency",
                 ObjectReference = "LD0/MMXU1.Hz.instMag.f",
                 FunctionalConstraint = "MX",
                 DataType = "FLOAT32",
-                LogicalNode = "MMXU1",
-                DataObject = "Hz"
+                QualityReference = "LD0/MMXU1.Hz.q",
+                TimestampReference = "LD0/MMXU1.Hz.t"
             }
         ];
 }
