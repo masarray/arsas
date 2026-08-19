@@ -15,7 +15,7 @@ public sealed class P62BFieldStabilityRegressionTests
 
         Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
         Assert.Equal("main", root.GetProperty("ref").GetString());
-        Assert.Equal("9000d3155e742bb0356a595bea4b73e1d817c26a", root.GetProperty("commit").GetString());
+        Assert.Equal("249fb130e0e18e7a98e07e8894f24610bdb5642e", root.GetProperty("commit").GetString());
         Assert.Equal(89, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("quarantines automatic full dynamic DataSet activation", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
