@@ -1,0 +1,40 @@
+diff --git a/tests/ARSAS.Tests/HybridReportPhysicalValidationTests.cs b/tests/ARSAS.Tests/HybridReportPhysicalValidationTests.cs
+index 79f3d20..2dc16d6 100644
+--- a/tests/ARSAS.Tests/HybridReportPhysicalValidationTests.cs
++++ b/tests/ARSAS.Tests/HybridReportPhysicalValidationTests.cs
+@@ -243,21 +243,28 @@ public sealed class HybridReportPhysicalValidationTests
+     }
+ 
+     [Fact]
+-    public void Reconnect_ReusesTheSameHybridPlanningPipelineAsInitialSetup()
++    public void Reconnect_RecoversMmsFirst_AndDefersReportRearmToBackgroundPipeline()
+     {
+         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"))
+             .Replace("\r\n", "\n", StringComparison.Ordinal);
+         var reconnectStart = source.IndexOf("private async Task TryReconnectAsync", StringComparison.Ordinal);
+-        var reconnectEnd = source.IndexOf("private async Task ForceReconnectAsync", reconnectStart, StringComparison.Ordinal);
++        var reconnectEnd = source.IndexOf("private static void ResetAssociationReportEvidence", reconnectStart, StringComparison.Ordinal);
+         Assert.True(reconnectStart >= 0 && reconnectEnd > reconnectStart);
+ 
+         var reconnect = source[reconnectStart..reconnectEnd];
+-        Assert.Contains("BuildReportPlansForCurrentAssociationAsync(", reconnect, StringComparison.Ordinal);
++        Assert.Contains("SmartReconnectPolicy.ConnectBudget", reconnect, StringComparison.Ordinal);
+         Assert.Contains("ResetAssociationReportEvidence(session);", reconnect, StringComparison.Ordinal);
+-        Assert.Contains("await StartReportPlansAsync(session, plans", reconnect, StringComparison.Ordinal);
+-        Assert.True(
+-            source.Split("BuildReportPlansForCurrentAssociationAsync(", StringSplitOptions.None).Length - 1 >= 3,
+-            "Initial setup and reconnect must both call the shared hybrid planning pipeline.");
++        Assert.Contains("session.ReportSetupPending =", reconnect, StringComparison.Ordinal);
++        Assert.Contains("ResetPollQueue(session, staggerForRecovery: true);", reconnect, StringComparison.Ordinal);
++        Assert.DoesNotContain("BuildReportPlansForCurrentAssociationAsync(", reconnect, StringComparison.Ordinal);
++        Assert.DoesNotContain("StartReportPlansAsync(session", reconnect, StringComparison.Ordinal);
++
++        var pendingStart = source.IndexOf("private async Task TryStartPendingReportSetupAsync", StringComparison.Ordinal);
++        var pendingEnd = source.IndexOf("private async Task<IReadOnlyList<ReportControlPlan>> BuildReportPlansForCurrentAssociationAsync", pendingStart, StringComparison.Ordinal);
++        Assert.True(pendingStart >= 0 && pendingEnd > pendingStart);
++        var pending = source[pendingStart..pendingEnd];
++        Assert.Contains("BuildReportPlansForCurrentAssociationAsync(", pending, StringComparison.Ordinal);
++        Assert.Contains("StartReportPlansAsync(session, plans", pending, StringComparison.Ordinal);
+ 
+         var resetStart = source.IndexOf("private static void ResetAssociationReportEvidence", StringComparison.Ordinal);
+         var resetEnd = source.IndexOf("private async Task ForceReconnectAsync", resetStart, StringComparison.Ordinal);
