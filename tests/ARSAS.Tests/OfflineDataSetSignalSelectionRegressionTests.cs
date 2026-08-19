@@ -69,14 +69,14 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesReportProjectionHistoryAndPinsP62ProbeEngine()
+    public void EngineLock_PreservesReportProjectionHistoryAndPinsP62BStabilityEngine()
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
         using var document = JsonDocument.Parse(source);
         var root = document.RootElement;
 
-        Assert.Equal("d4612fb7fd5d499a70df17110f6191c452340e0c", root.GetProperty("commit").GetString());
-        Assert.Equal(88, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("9000d3155e742bb0356a595bea4b73e1d817c26a", root.GetProperty("commit").GetString());
+        Assert.Equal(89, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);
@@ -87,11 +87,17 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
         Assert.Contains("rollback", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #87", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("baseline-safe static precedence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #88", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("GetNamedVariableListAttributes", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DeleteNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("single-member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cleanup evidence", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #89", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quarantines automatic full dynamic DataSet activation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instMag/mag", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instCVal/cVal", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
