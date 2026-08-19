@@ -86,7 +86,9 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("Iec61850OriginCategory.StationControl", client, StringComparison.Ordinal);
         Assert.DoesNotContain("MMS command submitted:", main, StringComparison.Ordinal);
         Assert.Contains("wire send is not assumed until native evidence is returned", main, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("IED REJECTED SBOw", dialog, StringComparison.Ordinal);
+        Assert.Contains("rejectedStep.Action.Equals(\"SelectWithValue\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("? \"SBOw\" : rejectedStep.Action", dialog, StringComparison.Ordinal);
+        Assert.Contains("IED REJECTED {rejectedStage}", dialog, StringComparison.Ordinal);
         Assert.Contains("Operate was NOT sent because SBOw selection failed", dialog, StringComparison.Ordinal);
         Assert.Contains("IED BLOCKED COMMAND BY INTERLOCKING", dialog, StringComparison.Ordinal);
         Assert.Contains("IED BLOCKED COMMAND BY SYNCHROCHECK", dialog, StringComparison.Ordinal);
