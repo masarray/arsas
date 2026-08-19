@@ -51,6 +51,16 @@ public sealed class Iec61850ControlCommandRequest
     public int CommandTerminationTimeoutMs { get; init; } = 10000;
 }
 
+public sealed class Iec61850ControlWireEvidence
+{
+    public string Action { get; init; } = string.Empty;
+    public string Reference { get; init; } = string.Empty;
+    public bool RequestAccepted { get; init; }
+    public string RequestHex { get; init; } = string.Empty;
+    public string ResponseHex { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+}
+
 public sealed class Iec61850ControlCommandResult
 {
     public bool IsSuccess { get; init; }
@@ -76,4 +86,5 @@ public sealed class Iec61850ControlCommandResult
     public string TotalElapsedText { get; init; } = "-";
     public string RequestHex { get; init; } = string.Empty;
     public string ResponseHex { get; init; } = string.Empty;
+    public IReadOnlyList<Iec61850ControlWireEvidence> WireSteps { get; init; } = Array.Empty<Iec61850ControlWireEvidence>();
 }

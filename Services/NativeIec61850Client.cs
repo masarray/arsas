@@ -1789,7 +1789,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             FeedbackElapsedText = feedbackElapsed.HasValue ? $"{feedbackElapsed.Value.TotalMilliseconds:0.###} ms" : "-",
             TotalElapsedText = totalElapsed.HasValue ? $"{totalElapsed.Value.TotalMilliseconds:0.###} ms" : $"{result.Elapsed.TotalMilliseconds:0.###} ms",
             RequestHex = result.RequestHex,
-            ResponseHex = result.ResponseHex
+            ResponseHex = result.ResponseHex,
+            WireSteps = result.WireSteps.Select(step => new Iec61850ControlWireEvidence
+            {
+                Action = step.Action.ToString(),
+                Reference = step.Reference,
+                RequestAccepted = step.RequestAccepted,
+                RequestHex = step.RequestHex,
+                ResponseHex = step.ResponseHex,
+                Detail = step.Detail
+            }).ToArray()
         };
 
     private static string InferControlCdc(

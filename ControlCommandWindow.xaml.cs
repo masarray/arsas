@@ -279,6 +279,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             details.Add("MMS request/response wire evidence was captured.");
         else if (!string.IsNullOrWhiteSpace(result.RequestHex))
             details.Add("MMS request encoding was captured, but no MMS response was captured.");
+        if (result.WireSteps.Count > 0)
+            details.Add($"Wire sequence: {string.Join(" → ", result.WireSteps.Select(step => step.Action))}.");
         if (result.CommandTerminationReceived)
             details.Add(result.PositiveTermination ? "Positive CommandTermination received." : "Negative CommandTermination received.");
         if (!string.IsNullOrWhiteSpace(result.ControlError))

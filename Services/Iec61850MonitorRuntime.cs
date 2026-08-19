@@ -509,13 +509,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         var wireState = result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
             ? "NOT SENT TO IED"
-            : !string.IsNullOrWhiteSpace(result.ResponseHex)
-                ? "MMS response received"
-                : !string.IsNullOrWhiteSpace(result.RequestHex)
-                    ? "MMS request encoded / no response captured"
-                    : result.ServiceAccepted
-                        ? "MMS service accepted"
-                        : "no wire evidence returned";
+            : result.WireSteps.Count > 0 && result.WireSteps.All(step => !string.IsNullOrWhiteSpace(step.ResponseHex))
+                ? $"{result.WireSteps.Count} ordered MMS control response(s) captured"
+                : result.WireSteps.Count > 0
+                    ? $"{result.WireSteps.Count} ordered MMS control step(s); incomplete response evidence"
+                    : !string.IsNullOrWhiteSpace(result.ResponseHex)
+                        ? "MMS response received"
+                        : !string.IsNullOrWhiteSpace(result.RequestHex)
+                            ? "MMS request encoded / no response captured"
+                            : result.ServiceAccepted
+                                ? "MMS service accepted"
+                                : "no wire evidence returned";
 
         var protocolEvidence = string.Join("; ", new[]
         {
@@ -534,12 +538,32 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
 
-        if (!string.IsNullOrWhiteSpace(result.RequestHex))
-            Log("INFO", session.Device.Name,
-                $"CONTROL_WIRE_REQUEST: {request.Signal.ObjectReference}; requestHEX={result.RequestHex}");
-        if (!string.IsNullOrWhiteSpace(result.ResponseHex))
-            Log("INFO", session.Device.Name,
-                $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
+        if (result.WireSteps.Count > 0)
+        {
+            for (var index = 0; index < result.WireSteps.Count; index++)
+            {
+                var step = result.WireSteps[index];
+                Log(step.RequestAccepted ? "INFO" : "WARN", session.Device.Name,
+                    $"CONTROL_WIRE_STEP: order={index + 1}; action={step.Action}; reference={step.Reference}; accepted={step.RequestAccepted}; requestCaptured={!string.IsNullOrWhiteSpace(step.RequestHex)}; responseCaptured={!string.IsNullOrWhiteSpace(step.ResponseHex)}; detail={step.Detail}");
+                if (!string.IsNullOrWhiteSpace(step.RequestHex))
+                    Log("INFO", session.Device.Name,
+                        $"CONTROL_WIRE_REQUEST: order={index + 1}; action={step.Action}; reference={step.Reference}; requestHEX={step.RequestHex}");
+                if (!string.IsNullOrWhiteSpace(step.ResponseHex))
+                    Log("INFO", session.Device.Name,
+                        $"CONTROL_WIRE_RESPONSE: order={index + 1}; action={step.Action}; reference={step.Reference}; responseHEX={step.ResponseHex}");
+            }
+        }
+        else
+        {
+            // Compatibility fallback for a local failure or older action result without
+            // ordered service evidence. Never infer server acceptance from request HEX alone.
+            if (!string.IsNullOrWhiteSpace(result.RequestHex))
+                Log("INFO", session.Device.Name,
+                    $"CONTROL_WIRE_REQUEST: {request.Signal.ObjectReference}; requestHEX={result.RequestHex}");
+            if (!string.IsNullOrWhiteSpace(result.ResponseHex))
+                Log("INFO", session.Device.Name,
+                    $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
+        }
 
         return result;
     }
