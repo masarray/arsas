@@ -22,6 +22,9 @@ internal static class DynamicReportQualificationIdentity
             ? $"ied:{canonicalIedName.Trim()}"
             : $"endpoint:{device.IpAddress.Trim()}:{device.Port}";
 
+        // Fingerprint only canonical ARSAS model fields that are already persisted/discovered.
+        // Selection state, display value, report coverage and UI-only text are intentionally
+        // excluded so the same physical model remains compatible across operator selections.
         var signalLines = fullModelSignals
             .Where(signal => !string.IsNullOrWhiteSpace(signal.ObjectReference))
             .Select(signal => string.Join('|',
@@ -29,7 +32,9 @@ internal static class DynamicReportQualificationIdentity
                 signal.FunctionalConstraint?.Trim() ?? string.Empty,
                 signal.DataType?.Trim() ?? string.Empty,
                 signal.LogicalNode?.Trim() ?? string.Empty,
-                signal.DataObject?.Trim() ?? string.Empty))
+                signal.Name?.Trim() ?? string.Empty,
+                signal.QualityReference?.Trim() ?? string.Empty,
+                signal.TimestampReference?.Trim() ?? string.Empty))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(line => line, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -41,8 +46,7 @@ internal static class DynamicReportQualificationIdentity
             .AppendLine("ARIEC61850-G2-ID-v1")
             .AppendLine(canonicalIedName.Trim())
             .AppendLine(device.SclIedName?.Trim() ?? string.Empty)
-            .AppendLine(device.SclSourceSha256?.Trim() ?? string.Empty)
-            .AppendLine(device.SclSourceKind?.Trim() ?? string.Empty);
+            .AppendLine(device.SclSourceSha256?.Trim() ?? string.Empty);
 
         foreach (var line in signalLines)
             fingerprintMaterial.AppendLine(line);
