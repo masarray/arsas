@@ -75,7 +75,7 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
         using var document = JsonDocument.Parse(source);
         var root = document.RootElement;
 
-        Assert.Equal("9000d3155e742bb0356a595bea4b73e1d817c26a", root.GetProperty("commit").GetString());
+        Assert.Equal("249fb130e0e18e7a98e07e8894f24610bdb5642e", root.GetProperty("commit").GetString());
         Assert.Equal(89, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
