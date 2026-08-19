@@ -1,51 +1,53 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.32",
-  "title": "Field-proven Smart Control with safer hybrid reporting",
-  "titleId": "Smart Control teruji lapangan dengan hybrid reporting yang lebih aman",
-  "summary": "ARSAS 1.6.32 consolidates the field-proven IEC 61850 control path and the stabilized monitoring baseline. Smart Control now completes SBOw, Operate, positive CommandTermination and process feedback on the tested SIPROTEC using StationControl origin, while automatic full dynamic DataSet activation remains deliberately quarantined until G2 qualification proves a safe dynamic envelope.",
-  "summaryId": "ARSAS 1.6.32 mengonsolidasikan jalur kontrol IEC 61850 yang telah terbukti di lapangan dan baseline monitoring yang distabilkan. Smart Control kini menyelesaikan SBOw, Operate, CommandTermination positif dan process feedback pada SIPROTEC yang diuji dengan origin StationControl, sementara aktivasi otomatis full dynamic DataSet tetap sengaja dikarantina sampai qualification G2 membuktikan envelope dynamic yang aman.",
+  "version": "1.6.31",
+  "title": "Reconnect-safe live DataSet discovery and hybrid RCB acquisition",
+  "titleId": "Discovery DataSet live dan acquisition RCB hybrid yang aman saat reconnect",
+  "summary": "ARSAS 1.6.31 completes the repaired live reporting pipeline from discovery through reconnect: DataSet members are retained, static and dynamic BRCB/URCB coverage is planned by ARIEC61850, only uncovered signals fall back to MMS polling, and a new MMS association cannot inherit report or command-correlation evidence from the previous connection.",
+  "summaryId": "ARSAS 1.6.31 melengkapi perbaikan pipeline live reporting dari discovery sampai reconnect: member DataSet dipertahankan, coverage static dan dynamic BRCB/URCB direncanakan oleh ARIEC61850, hanya signal yang tidak ter-cover yang fallback ke MMS polling, dan association MMS baru tidak dapat mewarisi evidence report atau korelasi command dari koneksi sebelumnya.",
   "highlights": [
-    "Field-proven SBO Enhanced control now preserves ordered SBOw and Operate wire evidence, positive CommandTermination, and process feedback correlation.",
-    "Manual workstation control uses StationControl origin and retains exact ctlVal, origin, ctlNum, T, Test and Check semantics across SBOw and Operate.",
-    "MMS TypeSpecification primitive-size constraints are decoded with signed semantics, preventing the IEC 61850 two-bit Check field from being misread as 254 bits.",
-    "MMS Write failures expose explicit DataAccessError names and numeric codes instead of collapsing IED rejection evidence into a generic write failure.",
-    "Static BRCB/URCB coverage remains report-first, while unsafe automatic full dynamic DataSet activation stays quarantined and residual points retain bounded MMS verification/fallback.",
-    "Reconnect handling is bounded and staged, with recovery warm-up and delayed report re-arm designed to avoid connection and polling bursts."
+    "Live discovery requests bounded DataSet directories and retains their members, preventing report-capable signals from disappearing between MMS discovery and the application catalog.",
+    "ARSAS executes the ARIEC61850 hybrid plan across static BRCB, static URCB, verified-free dynamic RCB slots, and per-signal MMS polling residuals.",
+    "Dynamic RCB planning supports temporary DataSets whose members reside in logical devices different from the RCB owner, as permitted by the live server model.",
+    "Report catalog matching selects the owning primary-value descriptor even when related quality and timestamp descriptors share the same primary reference.",
+    "Instantaneous magnitude values such as Hz.instMag.f resolve their quality and timestamp companions at Hz.q and Hz.t, while preserving clear operator-facing names.",
+    "Smart reconnect runs the same authoritative hybrid planner as initial monitoring, with fresh RCB availability checks and clean per-association report evidence."
   ],
   "highlightsId": [
-    "Kontrol SBO Enhanced yang telah terbukti di lapangan kini mempertahankan evidence wire SBOw dan Operate secara berurutan, CommandTermination positif, dan korelasi process feedback.",
-    "Kontrol workstation manual menggunakan origin StationControl dan mempertahankan semantik exact ctlVal, origin, ctlNum, T, Test dan Check pada SBOw dan Operate.",
-    "Constraint ukuran primitive MMS TypeSpecification didekode dengan semantik signed sehingga field Check IEC 61850 dua bit tidak lagi terbaca sebagai 254 bit.",
-    "Kegagalan MMS Write menampilkan nama DataAccessError dan kode numerik secara eksplisit sehingga evidence rejection IED tidak lagi hilang menjadi generic write failure.",
-    "Coverage static BRCB/URCB tetap report-first, sementara automatic full dynamic DataSet yang belum aman tetap dikarantina dan residual point mempertahankan MMS verification/fallback yang terbatas.",
-    "Reconnect ditangani secara bounded dan staged, dengan recovery warm-up dan delayed report re-arm untuk menghindari burst koneksi dan polling."
+    "Live discovery meminta directory DataSet secara terbatas dan mempertahankan member-nya, sehingga signal report-capable tidak lagi hilang di antara MMS discovery dan catalog aplikasi.",
+    "ARSAS mengeksekusi hybrid plan ARIEC61850 melalui static BRCB, static URCB, slot dynamic RCB yang terverifikasi free, dan residual MMS polling per signal.",
+    "Perencanaan dynamic RCB mendukung DataSet sementara dengan member pada logical device yang berbeda dari owner RCB, sesuai model live server.",
+    "Pemetaan report catalog memilih descriptor primary value pemiliknya walaupun descriptor quality dan timestamp terkait menggunakan primary reference yang sama.",
+    "Instantaneous magnitude seperti Hz.instMag.f menemukan companion quality dan timestamp pada Hz.q dan Hz.t, sambil mempertahankan nama yang jelas bagi operator.",
+    "Smart reconnect menjalankan authoritative hybrid planner yang sama dengan initial monitoring, termasuk pemeriksaan availability RCB terbaru dan evidence report per-association yang bersih."
   ],
   "improvements": [
-    "The ARSAS main branch is pinned to the exact reviewed ARIEC61850 G1.1 engine commit used by the successful physical control test.",
-    "Report projection remains fail-closed for ambiguous structured payloads; MMS verification stays authoritative when a report value cannot be mapped safely.",
-    "IEC quality evidence is preserved as received from the IED and is never cosmetically forced to Good.",
-    "Release packaging rebuilds the exact main source against the immutable engine lock, then runs regression tests, portable smoke, installer install/uninstall smoke, checksums, SPDX SBOM, provenance and GitHub artifact attestations before publication."
+    "Fresh RCB availability is revalidated before any setup write, and static or dynamic control blocks are reused only when the live evidence still permits it.",
+    "Physical validation evidence distinguishes successful RCB setup from actual report frames and verified process-value changes, avoiding false claims of report delivery.",
+    "Physical-validation mutation and snapshot capture are synchronized so operator diagnostics cannot observe torn counters or collection changes while report frames arrive.",
+    "The release source is gated by the standard ARSAS solution build and regression suite plus portable and Windows installer smoke validation before publication.",
+    "Stable Windows publication produces installer and portable binaries together with SHA-256 checksums, SPDX SBOM, application/engine provenance and GitHub artifact attestations."
   ],
   "improvementsId": [
-    "Branch main ARSAS dikunci ke commit engine ARIEC61850 G1.1 exact yang digunakan pada physical control test yang berhasil.",
-    "Projection report tetap fail-closed untuk structured payload yang ambigu; MMS verification tetap authoritative ketika report value tidak dapat dipetakan dengan aman.",
-    "Evidence IEC quality dipertahankan sesuai yang diterima dari IED dan tidak pernah dipaksa menjadi Good secara kosmetik.",
-    "Packaging release membangun ulang source main exact terhadap immutable engine lock, lalu menjalankan regression test, portable smoke, installer install/uninstall smoke, checksum, SPDX SBOM, provenance dan GitHub artifact attestation sebelum publikasi."
+    "Availability RCB terbaru divalidasi ulang sebelum setup write, dan control block static atau dynamic hanya digunakan ketika evidence live masih mengizinkannya.",
+    "Evidence validasi fisik membedakan setup RCB yang berhasil dari report frame aktual dan perubahan process value yang terverifikasi, sehingga tidak ada klaim palsu mengenai report delivery.",
+    "Mutasi dan snapshot physical validation disinkronisasi agar diagnostic operator tidak melihat counter yang torn atau perubahan collection ketika report frame masuk.",
+    "Source release digate oleh build solution dan regression suite ARSAS standard serta portable dan Windows installer smoke validation sebelum publikasi.",
+    "Publikasi Windows stable menghasilkan binary installer dan portable bersama SHA-256 checksum, SPDX SBOM, provenance aplikasi/engine dan GitHub artifact attestation."
   ],
   "knownLimitations": [
-    "Automatic full dynamic DataSet/RCB activation remains intentionally quarantined. G2 will qualify safe member counts, PDU budget and actual InformationReport delivery before production dynamic reporting is enabled.",
-    "Some vendor-specific structured report payloads still remain raw/fail-closed and therefore continue to rely on MMS verification until projector support is proven.",
-    "Full repeated network-outage acceptance of the staged reconnect policy remains a field-validation item even though the current build passed automated reconnect regressions and normal fast reconnect operation.",
+    "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI, including vendor-specific model exposure and field network conditions.",
+    "A successful RCB setup is intentionally not treated as proof that report frames were received; field validation must confirm frames and value changes for the target IED and network.",
+    "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in evidence views.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "Aktivasi otomatis full dynamic DataSet/RCB tetap sengaja dikarantina. G2 akan mengualifikasi safe member count, PDU budget dan actual InformationReport delivery sebelum production dynamic reporting diaktifkan.",
-    "Sebagian structured report payload vendor-specific masih tetap raw/fail-closed sehingga tetap mengandalkan MMS verification sampai dukungan projector terbukti.",
-    "Acceptance repeated network outage penuh untuk staged reconnect masih menjadi item field validation walaupun build saat ini telah melewati automated reconnect regression dan normal fast reconnect operation.",
+    "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI, termasuk exposure model vendor-specific dan kondisi network di lapangan.",
+    "Setup RCB yang berhasil sengaja tidak dianggap sebagai bukti bahwa report frame telah diterima; validasi lapangan harus mengonfirmasi frame dan perubahan value pada IED dan network target.",
+    "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence view.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait."
@@ -61,11 +63,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.32 IEC 61850 live monitoring and Smart Control workspace",
-    "altId": "Workspace live monitoring dan Smart Control IEC 61850 ARSAS 1.6.32",
-    "caption": "ARSAS 1.6.32 keeps proven static reporting and bounded MMS fallback while field-proven Smart Control preserves exact wire evidence through process feedback.",
-    "captionId": "ARSAS 1.6.32 mempertahankan static reporting yang terbukti dan bounded MMS fallback, sementara Smart Control yang telah terbukti di lapangan mempertahankan exact wire evidence sampai process feedback."
+    "alt": "Representative ARSAS 1.6.31 live values and reconnect-safe IEC 61850 acquisition workspace",
+    "altId": "Representasi workspace live values dan acquisition IEC 61850 ARSAS 1.6.31 yang aman saat reconnect",
+    "caption": "Representative ARSAS live-value workspace for stable release 1.6.31. Acquisition labels identify report delivery only after report frames are received; reconnect resets association-scoped evidence and uncovered signals remain explicit MMS polling residuals.",
+    "captionId": "Representasi workspace live value ARSAS untuk stable release 1.6.31. Label acquisition mengidentifikasi report delivery hanya setelah report frame diterima; reconnect mereset evidence per-association dan signal yang tidak ter-cover tetap ditampilkan sebagai residual MMS polling."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.32"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.31"
 }
