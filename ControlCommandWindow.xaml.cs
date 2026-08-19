@@ -273,6 +273,12 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private static string BuildCommandResultText(Iec61850ControlCommandResult result)
     {
         var details = new List<string> { result.Message };
+        if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase))
+            details.Add("No MMS control request was sent to the IED.");
+        else if (!string.IsNullOrWhiteSpace(result.ResponseHex))
+            details.Add("MMS request/response wire evidence was captured.");
+        else if (!string.IsNullOrWhiteSpace(result.RequestHex))
+            details.Add("MMS request encoding was captured, but no MMS response was captured.");
         if (result.CommandTerminationReceived)
             details.Add(result.PositiveTermination ? "Positive CommandTermination received." : "Negative CommandTermination received.");
         if (!string.IsNullOrWhiteSpace(result.ControlError))

@@ -507,9 +507,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
             ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);
 
+        var wireState = result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
+            ? "NOT SENT TO IED"
+            : !string.IsNullOrWhiteSpace(result.ResponseHex)
+                ? "MMS response received"
+                : !string.IsNullOrWhiteSpace(result.RequestHex)
+                    ? "MMS request encoded / no response captured"
+                    : result.ServiceAccepted
+                        ? "MMS service accepted"
+                        : "no wire evidence returned";
+
         var protocolEvidence = string.Join("; ", new[]
         {
             string.IsNullOrWhiteSpace(result.CompletionState) ? null : $"completion={result.CompletionState}",
+            $"wire={wireState}",
             result.CommandTerminationReceived ? $"termination={(result.PositiveTermination ? "positive" : "negative")}" : null,
             string.IsNullOrWhiteSpace(result.ControlError) ? null : $"controlError={result.ControlError}",
             string.IsNullOrWhiteSpace(result.AddCause) ? null : $"addCause={result.AddCause}",
@@ -522,6 +533,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
+
+        if (!string.IsNullOrWhiteSpace(result.RequestHex))
+            Log("INFO", session.Device.Name,
+                $"CONTROL_WIRE_REQUEST: {request.Signal.ObjectReference}; requestHEX={result.RequestHex}");
+        if (!string.IsNullOrWhiteSpace(result.ResponseHex))
+            Log("INFO", session.Device.Name,
+                $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
+
         return result;
     }
 

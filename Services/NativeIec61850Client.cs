@@ -1229,6 +1229,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         };
 
         ArControl.Iec61850ControlActionResult action;
+        var wireRequestBeforeControl = _session.LastReadRequestHex;
+        var wireResponseBeforeControl = _session.LastReadResponseHex;
         try
         {
             action = await RunMmsOperationAsync(
@@ -1241,11 +1243,23 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         }
         catch (Exception ex)
         {
-            return ControlFailure(
-                "Control exception",
-                $"{ex.GetType().Name}: {ex.Message}",
-                capabilities,
-                expectedValue);
+            var requestChanged = !string.Equals(
+                wireRequestBeforeControl,
+                _session.LastReadRequestHex,
+                StringComparison.Ordinal);
+            var responseChanged = !string.Equals(
+                wireResponseBeforeControl,
+                _session.LastReadResponseHex,
+                StringComparison.Ordinal);
+
+            return requestChanged
+                ? ControlWireUnknownFailure(
+                    ex,
+                    capabilities,
+                    expectedValue,
+                    _session.LastReadRequestHex,
+                    responseChanged ? _session.LastReadResponseHex : string.Empty)
+                : ControlNotSentFailure(ex, capabilities, expectedValue);
         }
 
         if (!action.IsSuccess)
@@ -1879,6 +1893,46 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             SequenceText = capabilities.SequenceText,
             RequestedValue = requestedValue,
             FeedbackValue = capabilities.CurrentValue
+        };
+
+    private static Iec61850ControlCommandResult ControlNotSentFailure(
+        Exception exception,
+        Iec61850ControlCapabilities capabilities,
+        string requestedValue)
+        => new()
+        {
+            IsSuccess = false,
+            ServiceAccepted = false,
+            FeedbackConfirmed = false,
+            CompletionState = "NotSent",
+            Stage = "NOT SENT TO IED",
+            Message = $"Local IEC 61850 control preparation failed before any MMS control request was built or sent. {exception.GetType().Name}: {exception.Message}",
+            ControlModelText = capabilities.ControlModelText,
+            SequenceText = capabilities.SequenceText,
+            RequestedValue = requestedValue,
+            FeedbackValue = capabilities.CurrentValue
+        };
+
+    private static Iec61850ControlCommandResult ControlWireUnknownFailure(
+        Exception exception,
+        Iec61850ControlCapabilities capabilities,
+        string requestedValue,
+        string requestHex,
+        string responseHex)
+        => new()
+        {
+            IsSuccess = false,
+            ServiceAccepted = false,
+            FeedbackConfirmed = false,
+            CompletionState = "WireStateUnknown",
+            Stage = "MMS control transport incomplete",
+            Message = $"An MMS control request was encoded and transport may have started, but the control sequence did not complete. {exception.GetType().Name}: {exception.Message}",
+            ControlModelText = capabilities.ControlModelText,
+            SequenceText = capabilities.SequenceText,
+            RequestedValue = requestedValue,
+            FeedbackValue = capabilities.CurrentValue,
+            RequestHex = requestHex ?? string.Empty,
+            ResponseHex = responseHex ?? string.Empty
         };
 
     public async ValueTask DisposeAsync()
