@@ -38,12 +38,8 @@ public sealed class DynamicReportQualificationIdentityTests
     [Fact]
     public void ModelSignalShapeChange_InvalidatesFingerprint()
     {
-        var original = Signals();
-        var changed = Signals();
-        changed[0].DataType = "FLOAT32";
-
-        var a = DynamicReportQualificationIdentity.Build(Device(), original);
-        var b = DynamicReportQualificationIdentity.Build(Device(), changed);
+        var a = DynamicReportQualificationIdentity.Build(Device(), Signals(firstDataType: "BOOLEAN"));
+        var b = DynamicReportQualificationIdentity.Build(Device(), Signals(firstDataType: "FLOAT32"));
 
         Assert.NotEqual(a.ModelFingerprint, b.ModelFingerprint);
     }
@@ -82,7 +78,7 @@ public sealed class DynamicReportQualificationIdentityTests
             SclSourceSha256 = "aaaaaaaa"
         };
 
-    private static SignalDefinition[] Signals()
+    private static SignalDefinition[] Signals(string firstDataType = "BOOLEAN")
         =>
         [
             new SignalDefinition
@@ -90,7 +86,7 @@ public sealed class DynamicReportQualificationIdentityTests
                 IsSelected = true,
                 ObjectReference = "LD0/GGIO1.Ind1.stVal",
                 FunctionalConstraint = "ST",
-                DataType = "BOOLEAN",
+                DataType = firstDataType,
                 LogicalNode = "GGIO1",
                 DataObject = "Ind1"
             },
