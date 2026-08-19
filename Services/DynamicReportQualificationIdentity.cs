@@ -14,12 +14,16 @@ internal static class DynamicReportQualificationIdentity
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(fullModelSignals);
 
-        var canonicalIedName = FirstNonEmpty(device.SclIedName, device.Name, device.DeviceId);
+        var namedIedIdentity = FirstMeaningfulNamedIdentity(device.SclIedName, device.Name);
+        var canonicalIedName = FirstNonEmpty(namedIedIdentity, device.DeviceId);
         if (string.IsNullOrWhiteSpace(canonicalIedName))
             throw new InvalidOperationException("Dynamic reporting qualification requires a stable IED name or device identity.");
 
-        var stableKey = !string.IsNullOrWhiteSpace(device.SclIedName) || !string.IsNullOrWhiteSpace(device.Name)
-            ? $"ied:{canonicalIedName.Trim()}"
+        // ARSAS model defaults such as "IED" are UI placeholders, not device identity.
+        // When no meaningful configured/discovered name exists, bind persisted evidence to
+        // the explicit endpoint instead of allowing every default-named relay to collide.
+        var stableKey = !string.IsNullOrWhiteSpace(namedIedIdentity)
+            ? $"ied:{namedIedIdentity.Trim()}"
             : $"endpoint:{device.IpAddress.Trim()}:{device.Port}";
 
         // Fingerprint only canonical ARSAS model fields that are already persisted/discovered.
@@ -45,7 +49,7 @@ internal static class DynamicReportQualificationIdentity
         var fingerprintMaterial = new StringBuilder()
             .AppendLine("ARIEC61850-G2-ID-v1")
             .AppendLine(canonicalIedName.Trim())
-            .AppendLine(device.SclIedName?.Trim() ?? string.Empty)
+            .AppendLine(namedIedIdentity)
             .AppendLine(device.SclSourceSha256?.Trim() ?? string.Empty);
 
         foreach (var line in signalLines)
@@ -61,6 +65,19 @@ internal static class DynamicReportQualificationIdentity
             Model = canonicalIedName.Trim(),
             ProfileRevision = device.SclSourceSha256?.Trim() ?? string.Empty
         };
+    }
+
+    private static string FirstMeaningfulNamedIdentity(params string?[] values)
+        => values
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) && !IsPlaceholderIdentity(value))
+            ?.Trim() ?? string.Empty;
+
+    private static bool IsPlaceholderIdentity(string value)
+    {
+        var normalized = value.Trim();
+        return normalized.Equals("IED", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Equals("New IED", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Equals("Device", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FirstNonEmpty(params string?[] values)
