@@ -39,6 +39,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public bool CommandReportMissLogged { get; set; }
         public bool StaleReportSuppressedLogged { get; set; }
         public bool ReportValueRejectedLogged { get; set; }
+        public string LastLoggedDegradedQuality { get; set; } = string.Empty;
         public int ConsecutiveErrors { get; set; }
     }
 
@@ -73,6 +74,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime ReportSetupNotBeforeUtc { get; set; } = DateTime.MinValue;
         public DateTime ReportSetupDeadlineUtc { get; set; } = DateTime.MinValue;
         public DateTime NextReconnectUtc { get; set; } = DateTime.MinValue;
+        public int ConsecutiveReconnectFailures { get; set; }
+        public DateTime RecoveryWarmupUntilUtc { get; set; } = DateTime.MinValue;
         public int ConsecutiveSessionErrors { get; set; }
         public DateTime LastSuccessfulIoUtc { get; set; } = DateTime.UtcNow;
         public DateTime NextHealthProbeUtc { get; set; } = DateTime.MinValue;
@@ -225,7 +228,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 device.IsConnected = false;
                 _sessions.TryRemove(device.DeviceId, out _);
-                await session.Client.DisposeAsync().ConfigureAwait(false);
+                await DisposeClientForReconnectAsync(
+                    session.Client,
+                    device.Name,
+                    SmartReconnectPolicy.ClientCleanupBudget,
+                    CancellationToken.None).ConfigureAwait(false);
             }
             throw;
         }
@@ -283,7 +290,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 2,
                 4));
 
-            await session.Client.ConnectAsync(device.IpAddress, device.Port, cancellationToken).ConfigureAwait(false);
+            await ConnectCachedAssociationWithRetryAsync(session, cancellationToken).ConfigureAwait(false);
             if (!session.Client.IsConnected)
             {
                 device.Status = "Connection failed";
@@ -326,7 +333,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 device.IsConnected = false;
                 _sessions.TryRemove(device.DeviceId, out _);
-                await session.Client.DisposeAsync().ConfigureAwait(false);
+                await DisposeClientForReconnectAsync(
+                    session.Client,
+                    device.Name,
+                    SmartReconnectPolicy.ClientCleanupBudget,
+                    CancellationToken.None).ConfigureAwait(false);
             }
             throw;
         }
@@ -374,6 +385,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportSetupPending = false;
         session.ReportSetupNotBeforeUtc = DateTime.MinValue;
         session.ReportSetupDeadlineUtc = DateTime.MinValue;
+        session.ConsecutiveReconnectFailures = 0;
+        session.RecoveryWarmupUntilUtc = DateTime.MinValue;
         session.ConsecutiveSessionErrors = 0;
         session.LastSuccessfulIoUtc = DateTime.UtcNow;
         session.NextHealthProbeUtc = DateTime.UtcNow.AddSeconds(1);
@@ -789,7 +802,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken).ConfigureAwait(false);
 
         await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
-        ResetPollQueue(session);
+        ResetPollQueue(
+            session,
+            staggerForRecovery: DateTime.UtcNow < session.RecoveryWarmupUntilUtc);
         UpdateDeviceAcquisitionSummary(session);
     }
 
@@ -1185,7 +1200,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             var reportAssigned = session.PointPlanIds.ContainsKey(point.PointKey);
             cancellationToken.ThrowIfCancellationRequested();
             processed++;
-            var nextIntervalMs = GetVerificationPollIntervalMs(point, state, reportAssigned);
+            var nextIntervalMs = SmartReconnectPolicy.ApplyRecoveryPollFloor(
+                GetVerificationPollIntervalMs(point, state, reportAssigned),
+                nowUtc < session.RecoveryWarmupUntilUtc);
             state.NextPollUtc = nowUtc.AddMilliseconds(nextIntervalMs);
             session.PollQueue.Enqueue(point.PointKey, state.NextPollUtc.Ticks);
 
@@ -1228,6 +1245,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 var deviceTimestamp = rich?.HasDeviceTimestamp == true ? rich.DeviceTimestamp : state.DeviceTimestamp;
 
                 if ((rich?.HasQuality != true || rich?.HasDeviceTimestamp != true) &&
+                    nowUtc >= session.RecoveryWarmupUntilUtc &&
                     nowUtc >= state.NextCompanionPollUtc)
                 {
                     state.NextCompanionPollUtc = nowUtc.AddMilliseconds(GetCompanionPollIntervalMs(point));
@@ -1345,6 +1363,19 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var changed = hasProcessValue && hadValue && (trustReportEdge
             ? HasExactSemanticEdge(point, oldValue, display)
             : HasMeaningfulEdge(point, oldValue, display));
+
+        if (qualityChangedForUi && IsDegradedIecQuality(quality) &&
+            !state.LastLoggedDegradedQuality.Equals(quality, StringComparison.OrdinalIgnoreCase))
+        {
+            state.LastLoggedDegradedQuality = quality;
+            Log("INFO", session.Device.Name,
+                $"QUALITY_EVIDENCE: {point.SignalName} ({point.IecReference}) quality={quality}; acquisition={sourceMode}; qRef={(string.IsNullOrWhiteSpace(point.QualityReference) ? "derived companion/report q" : point.QualityReference)}; timestamp={(string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp)}. Quality is preserved from IED evidence and is not converted to Good.");
+        }
+        else if (!IsDegradedIecQuality(quality))
+        {
+            state.LastLoggedDegradedQuality = string.Empty;
+        }
+
         if (hasProcessValue)
         {
             state.HasValue = true;
@@ -1426,58 +1457,243 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         });
     }
 
+    private async Task ConnectCachedAssociationWithRetryAsync(
+        DeviceSession session,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 2;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+            try
+            {
+                await session.Client.ConnectAsync(
+                    session.Device.IpAddress,
+                    session.Device.Port,
+                    timeout.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+                    $"Fast saved-model connect attempt #{attempt} timed out");
+            }
+
+            if (session.Client.IsConnected)
+            {
+                if (attempt > 1)
+                {
+                    Log("INFO", session.Device.Name,
+                        $"Fast saved-model connection recovered automatically on attempt #{attempt}; no manual Play retry was required.");
+                }
+                return;
+            }
+
+            if (attempt >= maxAttempts)
+                return;
+
+            var failure = string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
+                ? $"native state={session.Client.NativeState}"
+                : session.Client.LastErrorMessage;
+            Log("WARN", session.Device.Name,
+                $"Fast saved-model connection attempt #{attempt} did not establish MMS ({failure}). Retrying once after {SmartReconnectPolicy.InitialAssociationRetryDelay.TotalMilliseconds:0} ms.");
+
+            var staleClient = session.Client;
+            session.Client = new NativeIec61850Client();
+            await DisposeClientForReconnectAsync(
+                staleClient,
+                session.Device.Name,
+                SmartReconnectPolicy.ClientCleanupBudget,
+                cancellationToken).ConfigureAwait(false);
+            await Task.Delay(SmartReconnectPolicy.InitialAssociationRetryDelay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private async Task TryReconnectAsync(DeviceSession session, CancellationToken cancellationToken)
     {
-        if (DateTime.UtcNow < session.NextReconnectUtc) return;
-        session.NextReconnectUtc = DateTime.UtcNow.AddSeconds(2);
+        var nowUtc = DateTime.UtcNow;
+        if (nowUtc < session.NextReconnectUtc)
+            return;
+
+        var attempt = session.ConsecutiveReconnectFailures + 1;
+        var reconnectStopwatch = Stopwatch.StartNew();
         MarkSessionOffline(session, $"Reconnecting MMS association to {session.Device.EndpointText}.");
         session.Device.Status = "Reconnecting";
-        Log("WARN", session.Device.Name, "IEC 61850 session is offline. Smart reconnect started.");
-        try { await session.Client.DisposeAsync().ConfigureAwait(false); } catch { }
-        session.Client = new NativeIec61850Client();
-        try { await session.Client.ConnectAsync(session.Device.IpAddress, session.Device.Port, cancellationToken).ConfigureAwait(false); }
-        catch (OperationCanceledException) { throw; }
+        session.Device.Detail = $"Smart reconnect attempt #{attempt}: opening a fresh MMS association.";
+        session.Device.RefreshComputed();
+        Log("WARN", session.Device.Name,
+            $"Smart reconnect attempt #{attempt} started. Transport recovery is bounded independently from report re-arming.");
+
+        var staleClient = session.Client;
+        await DisposeClientForReconnectAsync(
+            staleClient,
+            session.Device.Name,
+            SmartReconnectPolicy.ClientCleanupBudget,
+            cancellationToken).ConfigureAwait(false);
+
+        var replacement = new NativeIec61850Client();
+        session.Client = replacement;
+
+        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        connectTimeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+        try
+        {
+            await replacement.ConnectAsync(
+                session.Device.IpAddress,
+                session.Device.Port,
+                connectTimeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association timed out");
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                $"MMS association exceeded the {SmartReconnectPolicy.ConnectBudget.TotalSeconds:0.#} s reconnect budget.");
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            session.Device.Status = "Reconnect pending";
-            session.Device.Detail = ex.Message;
-            session.Device.RefreshComputed();
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association failed",
+                ex);
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                $"{ex.GetType().Name}: {ex.Message}");
             return;
         }
-        if (!session.Client.IsConnected)
+
+        if (!replacement.IsConnected)
         {
-            session.Device.Status = "Reconnect pending";
-            session.Device.Detail = session.Client.LastErrorMessage;
-            session.Device.RefreshComputed();
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association not established");
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                string.IsNullOrWhiteSpace(replacement.LastErrorMessage)
+                    ? $"Native state={replacement.NativeState}; MMS association was not established."
+                    : replacement.LastErrorMessage);
             return;
         }
+
+        // Connection recovery and report recovery are intentionally separate stages.
+        // Once ACSE/MMS is healthy, resume bounded MMS reads immediately. Static RCB
+        // discovery/re-arming returns to the normal background report pipeline so a
+        // slow vendor RCB read/write can never hold the reconnect state machine hostage.
         session.ActiveReportPlans.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
         session.LastUnroutedReportCount = 0;
-        session.PendingReportPlans = Array.Empty<ReportControlPlan>();
-        session.ReportSetupPending = false;
-        session.ReportSetupNotBeforeUtc = DateTime.MinValue;
-        session.ReportSetupDeadlineUtc = DateTime.MinValue;
         ResetAssociationReportEvidence(session);
+
         var legacyPlans = Iec61850ReportPlanner.BuildPlans(session.Device, session.Points.Values);
-        var plans = await BuildReportPlansForCurrentAssociationAsync(
-            session,
-            legacyPlans,
-            cancellationToken).ConfigureAwait(false);
-        await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
-        ResetPollQueue(session);
-        UpdateDeviceAcquisitionSummary(session);
+        session.PendingReportPlans = legacyPlans;
+        session.ReportSetupPending =
+            replacement.CanUseHybridReportPlanner(session.Device) ||
+            legacyPlans.Count > 0;
+        var associatedUtc = DateTime.UtcNow;
+        session.ReportSetupNotBeforeUtc = associatedUtc.Add(SmartReconnectPolicy.ReportRearmDelay);
+        session.ReportSetupDeadlineUtc = associatedUtc.Add(SmartReconnectPolicy.ReportRearmDeadline);
+        session.RecoveryWarmupUntilUtc = associatedUtc.Add(SmartReconnectPolicy.RecoveryWarmupDuration);
+
+        ResetPollQueue(session, staggerForRecovery: true);
+        session.ConsecutiveReconnectFailures = 0;
+        session.NextReconnectUtc = DateTime.MinValue;
         session.ConsecutiveSessionErrors = 0;
         session.ConsecutiveHealthProbeFailures = 0;
-        session.LastSuccessfulIoUtc = DateTime.UtcNow;
-        session.NextHealthProbeUtc = DateTime.UtcNow.AddSeconds(1);
+        session.LastSuccessfulIoUtc = associatedUtc;
+        session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
         session.Device.IsConnected = true;
         session.Device.Status = "Monitoring";
-        session.Device.Detail = $"MMS reconnected. {session.Points.Count} point(s) resumed.";
+        session.Device.AcquisitionMode = "MMS recovered • static report re-arm pending";
+        session.Device.Detail =
+            $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. " +
+            $"{session.Points.Count} point(s) resumed with staggered MMS recovery; report re-arm continues in the background.";
+        session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+            "Smart reconnect MMS associated; report re-arm deferred");
         session.Device.RefreshComputed();
-        Log("INFO", session.Device.Name, "MMS reconnect successful. Monitoring resumed automatically.");
+
+        Log("INFO", session.Device.Name,
+            $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. " +
+            $"Polling resumed immediately with a {SmartReconnectPolicy.RecoveryWarmupDuration.TotalSeconds:0} s recovery warm-up; static report re-arm is deferred to the background pipeline.");
+    }
+
+    private void ScheduleReconnectRetry(
+        DeviceSession session,
+        int attempt,
+        TimeSpan elapsed,
+        string detail)
+    {
+        session.ConsecutiveReconnectFailures = attempt;
+        var retryDelay = SmartReconnectPolicy.GetRetryDelay(attempt);
+        session.NextReconnectUtc = DateTime.UtcNow.Add(retryDelay);
+        session.Device.IsConnected = false;
+        session.Device.Status = "Reconnect pending";
+        session.Device.AcquisitionMode = "Connection lost • reconnect pending";
+        session.Device.Detail =
+            $"Smart reconnect attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms: {detail} " +
+            $"Retry in {retryDelay.TotalSeconds:0.#} s.";
+        session.Device.RefreshComputed();
+        Log("WARN", session.Device.Name,
+            $"Smart reconnect attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms; retry in {retryDelay.TotalSeconds:0.#} s. {detail}");
+    }
+
+    private async Task DisposeClientForReconnectAsync(
+        NativeIec61850Client client,
+        string deviceName,
+        TimeSpan budget,
+        CancellationToken cancellationToken)
+    {
+        Task disposeTask;
+        try
+        {
+            disposeTask = client.DisposeAsync().AsTask();
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", deviceName,
+                $"Stale MMS client cleanup could not start during reconnect: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        var delayTask = Task.Delay(budget, cancellationToken);
+        var completed = await Task.WhenAny(disposeTask, delayTask).ConfigureAwait(false);
+        if (completed == disposeTask)
+        {
+            try
+            {
+                await disposeTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log("WARN", deviceName,
+                    $"Stale MMS client cleanup completed with {ex.GetType().Name}: {ex.Message}. Reconnect will continue.");
+            }
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Never let a vendor/session cleanup stall the monitor loop. Observe any later
+        // fault while allowing the replacement association to proceed independently.
+        _ = disposeTask.ContinueWith(
+            task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        Log("WARN", deviceName,
+            $"Stale MMS client cleanup exceeded the {budget.TotalMilliseconds:0} ms reconnect budget. A fresh association will proceed without waiting for cleanup.");
     }
 
     private static void ResetAssociationReportEvidence(DeviceSession session)
@@ -1508,7 +1724,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ConsecutiveSessionErrors = 0;
         session.ConsecutiveHealthProbeFailures = 0;
         session.NextReconnectUtc = DateTime.MinValue;
-        try { await session.Client.DisposeAsync().ConfigureAwait(false); } catch { }
+
+        var staleClient = session.Client;
+        session.Client = new NativeIec61850Client();
+        await DisposeClientForReconnectAsync(
+            staleClient,
+            session.Device.Name,
+            SmartReconnectPolicy.ClientCleanupBudget,
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     private void RecordSuccessfulIo(DeviceSession session)
@@ -1534,6 +1757,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (Volatile.Read(ref session.ControlCommandActive) > 0)
             return;
         var now = DateTime.UtcNow;
+        if (now < session.RecoveryWarmupUntilUtc)
+            return;
         if (now < session.NextHealthProbeUtc || now - session.LastSuccessfulIoUtc < TimeSpan.FromMilliseconds(900)) return;
         session.NextHealthProbeUtc = now.AddSeconds(1);
         if (string.IsNullOrWhiteSpace(session.HealthProbePointKey) || !session.Points.TryGetValue(session.HealthProbePointKey, out var point))
@@ -1950,6 +2175,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return quality;
     }
 
+    private static bool IsDegradedIecQuality(string? quality)
+    {
+        if (string.IsNullOrWhiteSpace(quality))
+            return false;
+
+        var normalized = quality.Trim().ToLowerInvariant();
+        return normalized.Contains("questionable", StringComparison.Ordinal) ||
+               normalized.Contains("invalid", StringComparison.Ordinal) ||
+               normalized.Contains("reserved", StringComparison.Ordinal);
+    }
+
     private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
     {
         foreach (var key in GetReferenceKeys(point.IecReference))
@@ -2073,18 +2309,26 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             .ToList();
     }
 
-    private static void ResetPollQueue(DeviceSession session)
+    private static void ResetPollQueue(
+        DeviceSession session,
+        bool staggerForRecovery = false)
     {
         session.PollQueue.Clear();
         var nowUtc = DateTime.UtcNow;
+        var index = 0;
         foreach (var point in session.Points.Values)
         {
-            // Every selected point gets an immediate initial read. For report-assigned
-            // points this supplies value/q/t and verifies that the RCB is not silently
-            // frozen; after dchg is proven, validation automatically slows down.
+            // Initial startup keeps the legacy immediate-read behavior. After an actual
+            // reconnect, spread the first recovery reads over a small bounded window so
+            // a large selected signal set does not hit a recovering IED with a request burst.
+            var dueUtc = staggerForRecovery
+                ? nowUtc.AddMilliseconds(SmartReconnectPolicy.GetRecoveryStaggerDelayMs(index++))
+                : nowUtc;
             var state = session.States[point.PointKey];
-            state.NextPollUtc = nowUtc;
-            session.PollQueue.Enqueue(point.PointKey, nowUtc.Ticks);
+            state.NextPollUtc = dueUtc;
+            if (staggerForRecovery)
+                state.NextCompanionPollUtc = session.RecoveryWarmupUntilUtc;
+            session.PollQueue.Enqueue(point.PointKey, dueUtc.Ticks);
         }
     }
 
