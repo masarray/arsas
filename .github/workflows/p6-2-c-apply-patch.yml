@@ -6,17 +6,26 @@ on:
       - fix/p6-2-c-smart-reconnect
     paths:
       - .p6-2-c/apply.ready
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   apply-patch:
+    if: github.event_name == 'push' || github.head_ref == 'fix/p6-2-c-smart-reconnect'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout source branch
         uses: actions/checkout@v4
         with:
+          ref: fix/p6-2-c-smart-reconnect
           fetch-depth: 0
 
       - name: Apply reviewed P6.2-C patch parts
@@ -26,8 +35,8 @@ jobs:
           shopt -s nullglob
           patches=(.p6-2-c/*.patch)
           if [ ${#patches[@]} -eq 0 ]; then
-            echo "No staged patch files were found."
-            exit 1
+            echo "No staged patch files were found; source branch is already materialized."
+            exit 0
           fi
           for patch in "${patches[@]}"; do
             echo "Checking $patch"
