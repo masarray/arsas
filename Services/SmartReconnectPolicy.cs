@@ -11,8 +11,8 @@ public static class SmartReconnectPolicy
     public static TimeSpan ClientCleanupBudget => TimeSpan.FromMilliseconds(750);
     public static TimeSpan ConnectBudget => TimeSpan.FromSeconds(10);
     public static TimeSpan InitialAssociationRetryDelay => TimeSpan.FromMilliseconds(750);
-    public static TimeSpan ReportRearmDelay => TimeSpan.FromMilliseconds(750);
-    public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(3);
+    public static TimeSpan ReportRearmDelay => TimeSpan.FromSeconds(3);
+    public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(5);
     public static TimeSpan RecoveryWarmupDuration => TimeSpan.FromSeconds(10);
 
     public static TimeSpan GetRetryDelay(int consecutiveFailureCount)
