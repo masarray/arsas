@@ -46,9 +46,19 @@ public sealed class Iec61850ControlCommandRequest
     public bool SynchroCheck { get; init; }
     public bool TestMode { get; init; }
     public string Originator { get; init; } = "ARSAS";
-    public string OriginCategory { get; init; } = "Maintenance";
+    public string OriginCategory { get; init; } = "StationControl";
     public int FeedbackTimeoutMs { get; init; } = 12000;
     public int CommandTerminationTimeoutMs { get; init; } = 10000;
+}
+
+public sealed class Iec61850ControlWireEvidence
+{
+    public string Action { get; init; } = string.Empty;
+    public string Reference { get; init; } = string.Empty;
+    public bool RequestAccepted { get; init; }
+    public string RequestHex { get; init; } = string.Empty;
+    public string ResponseHex { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
 }
 
 public sealed class Iec61850ControlCommandResult
@@ -76,4 +86,5 @@ public sealed class Iec61850ControlCommandResult
     public string TotalElapsedText { get; init; } = "-";
     public string RequestHex { get; init; } = string.Empty;
     public string ResponseHex { get; init; } = string.Empty;
+    public IReadOnlyList<Iec61850ControlWireEvidence> WireSteps { get; init; } = Array.Empty<Iec61850ControlWireEvidence>();
 }

@@ -69,14 +69,16 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesReportProjectionHistoryAndPinsP62BStabilityEngine()
+    public void EngineLock_PreservesReportProjectionAndP62BHistoryAcrossLaterEnginePins()
     {
         var source = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
         using var document = JsonDocument.Parse(source);
         var root = document.RootElement;
 
-        Assert.Equal("249fb130e0e18e7a98e07e8894f24610bdb5642e", root.GetProperty("commit").GetString());
-        Assert.Equal(89, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
+        Assert.Equal("main", root.GetProperty("ref").GetString());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 89);
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);

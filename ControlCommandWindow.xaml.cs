@@ -183,7 +183,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                     TestMode = TestMode,
                     FeedbackTimeoutMs = _signal.IsPositionControl ? 12000 : 8000,
                     CommandTerminationTimeoutMs = 10000,
-                    OriginCategory = "Maintenance"
+                    OriginCategory = "StationControl"
                 },
                 _cancellation.Token);
 
@@ -272,13 +272,41 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private static string BuildCommandResultText(Iec61850ControlCommandResult result)
     {
-        var details = new List<string> { result.Message };
+        var details = new List<string>();
+        var rejectedStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
+        if (rejectedStep != null)
+        {
+            var rejectedStage = rejectedStep.Action.Equals("SelectWithValue", StringComparison.OrdinalIgnoreCase) ? "SBOw" : rejectedStep.Action;
+            details.Add($"IED REJECTED {rejectedStage}: {result.Message}");
+            var operateSent = result.WireSteps.Any(step => step.Action.Equals("Operate", StringComparison.OrdinalIgnoreCase));
+            if (rejectedStage.Equals("SBOw", StringComparison.OrdinalIgnoreCase) && !operateSent)
+            {
+                details.Add("Operate was NOT sent because SBOw selection failed.");
+                details.Add("CommandTermination is not expected because Operate never started.");
+            }
+        }
+        else
+        {
+            details.Add(result.Message);
+        }
+
+        if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase))
+            details.Add("No MMS control request was sent to the IED.");
+        else if (!string.IsNullOrWhiteSpace(result.ResponseHex))
+            details.Add("MMS request/response wire evidence was captured.");
+        else if (!string.IsNullOrWhiteSpace(result.RequestHex))
+            details.Add("MMS request encoding was captured, but no MMS response was captured.");
+        if (result.WireSteps.Count > 0)
+            details.Add($"Wire sequence: {string.Join(" → ", result.WireSteps.Select(step => step.Action))}.");
         if (result.CommandTerminationReceived)
             details.Add(result.PositiveTermination ? "Positive CommandTermination received." : "Negative CommandTermination received.");
         if (!string.IsNullOrWhiteSpace(result.ControlError))
             details.Add($"ControlError: {result.ControlError}.");
         if (!string.IsNullOrWhiteSpace(result.AddCause))
+        {
             details.Add($"AddCause: {result.AddCause}.");
+            details.Add(ExplainAddCause(result.AddCause));
+        }
         if (!string.IsNullOrWhiteSpace(result.LastApplErrorText))
             details.Add(result.LastApplErrorText);
         if (!string.IsNullOrWhiteSpace(result.ElapsedText) && result.ElapsedText != "-")
@@ -289,6 +317,19 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             details.Add($"Total: {result.TotalElapsedText}.");
         return string.Join(" ", details.Where(text => !string.IsNullOrWhiteSpace(text)));
     }
+
+    private static string ExplainAddCause(string addCause)
+        => (addCause ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "blocked-by-interlocking" => "IED BLOCKED COMMAND BY INTERLOCKING.",
+            "blocked-by-synchrocheck" => "IED BLOCKED COMMAND BY SYNCHROCHECK.",
+            "blocked-by-mode" => "IED blocked the command because the active control mode does not permit it.",
+            "blocked-by-process" => "IED blocked the command by process conditions.",
+            "blocked-by-health" => "IED blocked the command because of device/process health conditions.",
+            "no-access-authority" => "IED reports that this client/origin has no control access authority.",
+            "not-supported" => "IED reports that the requested control condition/service is not supported.",
+            _ => string.Empty
+        };
 
     private static bool TryExtractNumber(string? text, out double value)
     {

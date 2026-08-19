@@ -486,7 +486,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
 
         Log("INFO", session.Device.Name,
-            $"Control intent accepted: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}.");
+            $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
 
         var clientStopwatch = Stopwatch.StartNew();
         Interlocked.Increment(ref session.ControlCommandActive);
@@ -507,9 +507,24 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
             ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);
 
+        var wireState = result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
+            ? "NOT SENT TO IED"
+            : result.WireSteps.Count > 0 && result.WireSteps.All(step => !string.IsNullOrWhiteSpace(step.ResponseHex))
+                ? $"{result.WireSteps.Count} ordered MMS control response(s) captured"
+                : result.WireSteps.Count > 0
+                    ? $"{result.WireSteps.Count} ordered MMS control step(s); incomplete response evidence"
+                    : !string.IsNullOrWhiteSpace(result.ResponseHex)
+                        ? "MMS response received"
+                        : !string.IsNullOrWhiteSpace(result.RequestHex)
+                            ? "MMS request encoded / no response captured"
+                            : result.ServiceAccepted
+                                ? "MMS service accepted"
+                                : "no wire evidence returned";
+
         var protocolEvidence = string.Join("; ", new[]
         {
             string.IsNullOrWhiteSpace(result.CompletionState) ? null : $"completion={result.CompletionState}",
+            $"wire={wireState}",
             result.CommandTerminationReceived ? $"termination={(result.PositiveTermination ? "positive" : "negative")}" : null,
             string.IsNullOrWhiteSpace(result.ControlError) ? null : $"controlError={result.ControlError}",
             string.IsNullOrWhiteSpace(result.AddCause) ? null : $"addCause={result.AddCause}",
@@ -522,6 +537,45 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
+
+        var rejectedWireStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
+        if (rejectedWireStep != null)
+        {
+            var rejectedStage = rejectedWireStep.Action.Equals("SelectWithValue", StringComparison.OrdinalIgnoreCase)
+                ? "SBOw"
+                : rejectedWireStep.Action;
+            var operateSent = result.WireSteps.Any(step => step.Action.Equals("Operate", StringComparison.OrdinalIgnoreCase));
+            Log("ERROR", session.Device.Name,
+                $"CONTROL_REJECTED_BY_IED: stage={rejectedStage}; reference={rejectedWireStep.Reference}; reason={result.Message}; controlError={(string.IsNullOrWhiteSpace(result.ControlError) ? "-" : result.ControlError)}; addCause={(string.IsNullOrWhiteSpace(result.AddCause) ? "-" : result.AddCause)}; OperateSent={operateSent}; origin={request.OriginCategory}/{request.Originator}.");
+        }
+
+        if (result.WireSteps.Count > 0)
+        {
+            for (var index = 0; index < result.WireSteps.Count; index++)
+            {
+                var step = result.WireSteps[index];
+                Log(step.RequestAccepted ? "INFO" : "WARN", session.Device.Name,
+                    $"CONTROL_WIRE_STEP: order={index + 1}; action={step.Action}; reference={step.Reference}; accepted={step.RequestAccepted}; requestCaptured={!string.IsNullOrWhiteSpace(step.RequestHex)}; responseCaptured={!string.IsNullOrWhiteSpace(step.ResponseHex)}; detail={step.Detail}");
+                if (!string.IsNullOrWhiteSpace(step.RequestHex))
+                    Log("INFO", session.Device.Name,
+                        $"CONTROL_WIRE_REQUEST: order={index + 1}; action={step.Action}; reference={step.Reference}; requestHEX={step.RequestHex}");
+                if (!string.IsNullOrWhiteSpace(step.ResponseHex))
+                    Log("INFO", session.Device.Name,
+                        $"CONTROL_WIRE_RESPONSE: order={index + 1}; action={step.Action}; reference={step.Reference}; responseHEX={step.ResponseHex}");
+            }
+        }
+        else
+        {
+            // Compatibility fallback for a local failure or older action result without
+            // ordered service evidence. Never infer server acceptance from request HEX alone.
+            if (!string.IsNullOrWhiteSpace(result.RequestHex))
+                Log("INFO", session.Device.Name,
+                    $"CONTROL_WIRE_REQUEST: {request.Signal.ObjectReference}; requestHEX={result.RequestHex}");
+            if (!string.IsNullOrWhiteSpace(result.ResponseHex))
+                Log("INFO", session.Device.Name,
+                    $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
+        }
+
         return result;
     }
 
