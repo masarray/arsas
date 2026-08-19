@@ -7,7 +7,7 @@ namespace ARSAS.Tests;
 public sealed class P62BFieldStabilityRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedP62BEngine()
+    public void EngineLock_PreservesReviewedP62BPolicyAcrossLaterEnginePins()
     {
         var source = ReadRepoFile("engines/ARIEC61850.lock.json");
         using var document = JsonDocument.Parse(source);
@@ -15,9 +15,11 @@ public sealed class P62BFieldStabilityRegressionTests
 
         Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
         Assert.Equal("main", root.GetProperty("ref").GetString());
-        Assert.Equal("249fb130e0e18e7a98e07e8894f24610bdb5642e", root.GetProperty("commit").GetString());
-        Assert.Equal(89, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 89);
+        Assert.Contains("PR #89", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("quarantines automatic full dynamic DataSet activation", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("successful one-member NVL probation does not guarantee association survival", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
     }
 
