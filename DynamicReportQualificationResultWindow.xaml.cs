@@ -4,9 +4,9 @@ using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
-public partial class DynamicReportQualificationResultWindow : Window
+internal partial class DynamicReportQualificationResultWindow : Window
 {
-    public DynamicReportQualificationResultWindow(DynamicReportQualificationCommissioningResult result)
+    internal DynamicReportQualificationResultWindow(DynamicReportQualificationCommissioningResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         InitializeComponent();
