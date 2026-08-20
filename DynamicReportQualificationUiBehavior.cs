@@ -115,8 +115,9 @@ internal static class DynamicReportQualificationUiBehavior
             window,
             $"Run G2.4 one-URCB InformationReport proof for {device.Name} ({device.EndpointText})?\n\n" +
             "ACTIVE COMMISSIONING WRITE WARNING\n\n" +
-            "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, force-read the live URCB DatSet/RptEna/Resv/Owner state, choose exactly ONE proven-free URCB, create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, then request GI only after report routing is registered and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
-            "RptEna/GI acceptance alone is NOT success. ARSAS will then disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, and will advance the profile only when actual report proof AND cleanup both pass.\n\n" +
+            "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, force-read live URCB DatSet/RptEna/Resv/Owner state, and choose exactly ONE proven-empty/free URCB.\n\n" +
+            "For that one URCB only, ARSAS will capture the exact original TrgOps and OptFlds values, temporarily enable dchg+GI and reason-for-inclusion+data-set-name with exact readback, then create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, register report routing, request GI, and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
+            "RptEna/GI acceptance alone is NOT success. After the proof attempt ARSAS will disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, then restore the exact original OptFlds and TrgOps values and verify exact readback. The profile advances only when actual report proof AND all cleanup/restore evidence pass.\n\n" +
             "Production monitoring and automatic production dynamic reporting remain OFF/untouched.\n\n" +
             "Continue?",
             "G2.4 One-URCB InformationReport Proof",
@@ -126,7 +127,7 @@ internal static class DynamicReportQualificationUiBehavior
         if (answer != MessageBoxResult.Yes)
             return;
 
-        window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for forced-live one-URCB proof…";
+        window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for transactional one-URCB proof…";
         var service = new DynamicReportActivationCommissioningServiceV2();
         var result = await service.RunAsync(
             device,
