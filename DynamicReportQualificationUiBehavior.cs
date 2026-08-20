@@ -115,7 +115,7 @@ internal static class DynamicReportQualificationUiBehavior
             window,
             $"Run G2.4 one-URCB InformationReport proof for {device.Name} ({device.EndpointText})?\n\n" +
             "ACTIVE COMMISSIONING WRITE WARNING\n\n" +
-            "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, re-read the live model/RCBs, choose exactly ONE proven-free URCB, create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, request GI, and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
+            "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, force-read the live URCB DatSet/RptEna/Resv/Owner state, choose exactly ONE proven-free URCB, create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, then request GI only after report routing is registered and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
             "RptEna/GI acceptance alone is NOT success. ARSAS will then disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, and will advance the profile only when actual report proof AND cleanup both pass.\n\n" +
             "Production monitoring and automatic production dynamic reporting remain OFF/untouched.\n\n" +
             "Continue?",
@@ -126,8 +126,8 @@ internal static class DynamicReportQualificationUiBehavior
         if (answer != MessageBoxResult.Yes)
             return;
 
-        window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for one-URCB proof…";
-        var service = new DynamicReportActivationCommissioningService();
+        window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for forced-live one-URCB proof…";
+        var service = new DynamicReportActivationCommissioningServiceV2();
         var result = await service.RunAsync(
             device,
             device.Signals.ToArray(),
