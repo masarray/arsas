@@ -25,8 +25,8 @@ internal static class DynamicReportQualificationUiBehavior
     private static async void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not MainWindow window ||
-            e.Key != Key.Q ||
-            Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift))
+            Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
+            (e.Key != Key.Q && e.Key != Key.R))
             return;
 
         e.Handled = true;
@@ -36,8 +36,8 @@ internal static class DynamicReportQualificationUiBehavior
         {
             MessageBox.Show(
                 window,
-                "Select one IEC 61850 IED first. G2 qualification is intentionally scoped to one explicit IED at a time.",
-                "G2 Dynamic Reporting Qualification",
+                "Select one IEC 61850 IED first. G2 commissioning is intentionally scoped to one explicit IED at a time.",
+                "G2 Dynamic Reporting Commissioning",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -47,8 +47,8 @@ internal static class DynamicReportQualificationUiBehavior
         {
             MessageBox.Show(
                 window,
-                "Another G2 qualification operation is already running.",
-                "G2 Dynamic Reporting Qualification",
+                "Another G2 commissioning operation is already running.",
+                "G2 Dynamic Reporting Commissioning",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -56,42 +56,18 @@ internal static class DynamicReportQualificationUiBehavior
 
         try
         {
-            var selectedCount = device.Signals.Count(signal => signal.IsSelected);
-            var answer = MessageBox.Show(
-                window,
-                $"Run G2 dynamic reporting qualification for {device.Name} ({device.EndpointText})?\n\n" +
-                $"Selected signals: {selectedCount}\n\n" +
-                "This is an explicit COMMISSIONING operation. ARSAS will open a separate auxiliary MMS association, validate exact Class-A scalar points by direct MMS read, then temporarily Define/GetAttributes/Delete bounded DataSets using the 1 → 4 → 8 → 16 → 32 ladder.\n\n" +
-                "It will NOT enable an RCB, will NOT write RptEna/GI, will NOT change the production monitoring planner, and will stop if association continuity or cleanup is not proven.\n\n" +
-                "Continue?",
-                "G2 Dynamic Reporting Qualification",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
-                return;
-
-            window.LastStatusText = $"G2 qualification: opening isolated auxiliary MMS association to {device.Name}…";
-            var service = new DynamicReportQualificationCommissioningService();
-            var result = await service.RunAsync(
-                device,
-                device.Signals.ToArray(),
-                CancellationToken.None);
-
-            window.LastStatusText = result.Summary;
-            var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-            {
-                Owner = window
-            };
-            evidenceWindow.ShowDialog();
+            if (e.Key == Key.Q)
+                await RunG23Async(window, device);
+            else
+                await RunG24Async(window, device);
         }
         catch (Exception ex)
         {
-            window.LastStatusText = "G2 qualification failed locally; production monitoring policy was not changed.";
+            window.LastStatusText = "G2 commissioning stopped locally; production monitoring policy was not changed.";
             MessageBox.Show(
                 window,
-                "G2 qualification stopped before any production dynamic-report enablement.\n\n" + ex,
-                "G2 Dynamic Reporting Qualification",
+                "G2 commissioning stopped. Production automatic dynamic reporting remains OFF.\n\n" + ex,
+                "G2 Dynamic Reporting Commissioning",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -99,5 +75,69 @@ internal static class DynamicReportQualificationUiBehavior
         {
             Interlocked.Exchange(ref _qualificationBusy, 0);
         }
+    }
+
+    private static async Task RunG23Async(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var selectedCount = device.Signals.Count(signal => signal.IsSelected);
+        var answer = MessageBox.Show(
+            window,
+            $"Run G2.3 dynamic reporting qualification for {device.Name} ({device.EndpointText})?\n\n" +
+            $"Selected signals: {selectedCount}\n\n" +
+            "This is an explicit COMMISSIONING operation. ARSAS will open a separate auxiliary MMS association, validate exact Class-A scalar points by direct MMS read, then temporarily Define/GetAttributes/Delete bounded DataSets using the 1 → 4 → 8 → 16 → 32 ladder.\n\n" +
+            "It will NOT enable an RCB, will NOT write RptEna/GI, will NOT change the production monitoring planner, and will stop if association continuity or cleanup is not proven.\n\n" +
+            "Continue?",
+            "G2.3 Dynamic Reporting Qualification",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.3 qualification: opening isolated auxiliary MMS association to {device.Name}…";
+        var service = new DynamicReportQualificationCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunG24Async(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run G2.4 one-URCB InformationReport proof for {device.Name} ({device.EndpointText})?\n\n" +
+            "ACTIVE COMMISSIONING WRITE WARNING\n\n" +
+            "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, re-read the live model/RCBs, choose exactly ONE proven-free URCB, create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, request GI, and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
+            "RptEna/GI acceptance alone is NOT success. ARSAS will then disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, and will advance the profile only when actual report proof AND cleanup both pass.\n\n" +
+            "Production monitoring and automatic production dynamic reporting remain OFF/untouched.\n\n" +
+            "Continue?",
+            "G2.4 One-URCB InformationReport Proof",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for one-URCB proof…";
+        var service = new DynamicReportActivationCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
     }
 }
