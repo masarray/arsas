@@ -6,16 +6,20 @@ namespace ArIED61850Tester.Services;
 /// <summary>
 /// G2.4 field-corrected commissioning coordinator.
 ///
-/// The initial G2.4 candidate selected a dynamic URCB from discovery-enriched RCB objects.
-/// Discovery does read DatSet, but the field-proven engine intentionally only marks
-/// DataSetProbeState after the dedicated availability path captures explicit read evidence.
-/// This coordinator therefore performs a read-only availability sweep first and selects
-/// from those forced-live snapshots. Production planning remains untouched.
+/// The first field correction moved URCB selection from discovery-only state to a
+/// forced-live availability sweep. The second physical run then proved 30 empty/free
+/// URCBs but also proved that their current TrgOps/OptFlds do not carry GI/DataSetName.
+/// This coordinator therefore uses the engine's explicit transactional proof-field
+/// lease: capture exact originals, temporarily enable only the self-identifying proof
+/// fields, perform one-URCB report proof, then restore exact originals before profile
+/// advancement. Production planning remains untouched.
 /// </summary>
 internal sealed class DynamicReportActivationCommissioningServiceV2
 {
     private static readonly TimeSpan AuxiliaryAssociationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan InformationReportProofWindow = TimeSpan.FromSeconds(10);
+    private const string TemporaryTriggerOptions = "dchg gi";
+    private const string TemporaryOptionalFields = "reason-for-inclusion data-set-name";
 
     private readonly DynamicReportQualificationProfileStore _profileStore;
 
@@ -216,7 +220,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         if (selectedRcb is null || selectedSnapshot is null)
         {
             return Failed(
-                "No forced-live proven-free URCB satisfies strict G2.4 report identity requirements. No RCB mutation was attempted.",
+                "No forced-live proven-free URCB is eligible for a transactional G2.4 proof-field lease. No RCB mutation was attempted.",
                 evidence,
                 identity,
                 profile,
@@ -225,6 +229,58 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         }
 
         ApplyFreshSnapshot(selectedRcb, selectedSnapshot);
+
+        ArMms.MmsDynamicRcbCommissioningFieldPrepareResult fieldPrepare;
+        try
+        {
+            fieldPrepare = await auxiliary.PrepareDynamicRcbCommissioningFieldsAsync(
+                selectedRcb,
+                TemporaryTriggerOptions,
+                TemporaryOptionalFields,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
+        {
+            evidence.Add($"G2.4 proof-field lease exception: {ex.GetType().Name}: {ex.Message}");
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = false,
+                Summary = "G2.4 could not establish the temporary TrgOps/OptFlds lease. Treat the selected URCB as requiring fresh read-only inspection before retry.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
+        }
+
+        AppendWriteSteps(evidence, "G2.4 proof-field prepare", fieldPrepare.WriteSteps);
+        foreach (var line in fieldPrepare.Evidence)
+            evidence.Add("G2.4 proof-field prepare: " + line);
+        evidence.Add($"G2.4 proof-field prepare result: success={fieldPrepare.IsSuccess}; rollback={fieldPrepare.CleanupSucceeded}; result={fieldPrepare.Message}");
+
+        if (!fieldPrepare.IsSuccess || fieldPrepare.Lease is null)
+        {
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = fieldPrepare.CleanupSucceeded,
+                Summary = fieldPrepare.CleanupSucceeded
+                    ? "G2.4 temporary proof-field preparation failed but exact TrgOps/OptFlds rollback passed. The profile remains EnvelopeQualified."
+                    : "G2.4 temporary proof-field preparation failed and exact rollback was not proven. Inspect the RCB from a fresh association before retry.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
+        }
+
+        var fieldLease = fieldPrepare.Lease;
+        evidence.Add($"G2.4 proof-field lease ACTIVE: rcb={selectedRcb.Reference}; originalTrgOps={fieldLease.OriginalTriggerOptionsText}; originalOptFlds={fieldLease.OriginalOptionalFieldsText}; temporaryTrgOps={TemporaryTriggerOptions}; temporaryOptFlds={TemporaryOptionalFields}");
 
         var dataSetName = "AR_G24_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
         var plan = ArMms.MmsReportSubscriptionPlanner.BuildDynamicPlan(
@@ -245,21 +301,30 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
                 out var planReason))
         {
             evidence.Add("G2.4 plan rejected: " + planReason);
-            return Failed(
-                "The strict one-URCB plan did not preserve the exact qualified member sequence. No RCB mutation was attempted.",
-                evidence,
-                identity,
-                profile,
-                loaded.FilePath,
-                qualifiedReferences,
-                selectedRcb.Reference,
-                plan.DataSetReference);
+            var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "plan-reject").ConfigureAwait(false);
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = fieldRestore,
+                Summary = fieldRestore
+                    ? "The strict one-URCB plan did not preserve the exact qualified member sequence. Temporary proof fields were restored exactly."
+                    : "The strict one-URCB plan was rejected and temporary proof-field restore was not fully proven.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                DataSetReference = plan.DataSetReference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
         }
 
         evidence.Add($"G2.4 plan: rcb={plan.ReportControl!.Reference}; dataset={plan.DataSetReference}; members={plan.DynamicPoints.Count}; mode={plan.Mode}; status={plan.Status}");
 
-        // Re-probe exactly the chosen RCB immediately before the first write. The earlier
-        // sweep is selection evidence; this second read is the final contention/race gate.
+        // Re-probe exactly the chosen RCB after the temporary proof-field lease and
+        // immediately before the first DataSet/RCB production-like write. This proves
+        // both that the URCB is still free and that the temporary GI/DataSetName fields
+        // are actually visible from the IED.
         var oneRcbInventory = new ArMms.MmsReportInventory();
         oneRcbInventory.ReportControls.Add(selectedRcb);
 
@@ -279,33 +344,57 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
         {
             evidence.Add($"G2.4 final URCB revalidation failed: {ex.GetType().Name}: {ex.Message}");
-            return Failed(
-                "Final URCB state could not be re-read immediately before mutation. G2.4 stopped without claiming it.",
-                evidence,
-                identity,
-                profile,
-                loaded.FilePath,
-                qualifiedReferences,
-                selectedRcb.Reference,
-                plan.DataSetReference);
+            var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "final-revalidation-exception").ConfigureAwait(false);
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = fieldRestore,
+                Summary = fieldRestore
+                    ? "Final URCB state could not be re-read before DataSet binding. Temporary proof fields were restored exactly."
+                    : "Final URCB revalidation failed and temporary proof-field restore was not fully proven.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                DataSetReference = plan.DataSetReference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
         }
 
         var freshRcb = finalAvailability.ReportControls.SingleOrDefault();
         if (!DynamicReportActivationCommissioningService.IsFreshUrcbSafeForG24(freshRcb, out var freshReason))
         {
             evidence.Add("G2.4 final URCB rejected: " + freshReason);
-            return Failed(
-                "The selected URCB was not still proven free at the final pre-mutation check. G2.4 stopped without claiming it.",
-                evidence,
-                identity,
-                profile,
-                loaded.FilePath,
-                qualifiedReferences,
-                selectedRcb.Reference,
-                plan.DataSetReference);
+            var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "final-revalidation-reject").ConfigureAwait(false);
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = fieldRestore,
+                Summary = fieldRestore
+                    ? "The selected URCB did not remain strict-proof eligible after temporary field configuration. Exact field restore passed."
+                    : "The selected URCB failed final strict-proof revalidation and exact field restore was not fully proven.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                DataSetReference = plan.DataSetReference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
         }
 
         ApplyFreshSnapshot(plan.ReportControl!, freshRcb!);
+        // The transactional engine direct write/readback is stronger than inconsistent
+        // GetNameList child advertisement. Preserve that proven writability for the
+        // monitor's defensive attribute gate.
+        EnsureAttribute(plan.ReportControl!, "TrgOps");
+        EnsureAttribute(plan.ReportControl!, "OptFlds");
+        plan.ReportControl!.TriggerOptions = TemporaryTriggerOptions;
+        plan.ReportControl.OptionalFields = TemporaryOptionalFields;
+        selectedRcb.TriggerOptions = TemporaryTriggerOptions;
+        selectedRcb.OptionalFields = TemporaryOptionalFields;
+
         evidence.Add($"G2.4 final URCB PASS: {freshRcb!.Reference}; probe={freshRcb.DataSetProbeState}; availability={freshRcb.Availability}; RptEna={TextOrDash(freshRcb.EnabledState)}; Resv={TextOrDash(freshRcb.ReservationState)}; DatSet={TextOrDash(freshRcb.DataSetReference)}; RptID={TextOrDash(freshRcb.ReportId)}; TrgOps={TextOrDash(freshRcb.TriggerOptions)}; OptFlds={TextOrDash(freshRcb.OptionalFields)}");
 
         ArMms.MmsPersistentReportMonitorAttemptResult attempt;
@@ -324,15 +413,22 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
         {
             evidence.Add($"G2.4 activation exception: {ex.GetType().Name}: {ex.Message}");
-            return Failed(
-                "G2.4 activation threw before a persistent monitor session was returned. The profile was not advanced; inspect the IED from a fresh association before retrying.",
-                evidence,
-                identity,
-                profile,
-                loaded.FilePath,
-                qualifiedReferences,
-                selectedRcb.Reference,
-                plan.DataSetReference);
+            var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "activation-exception").ConfigureAwait(false);
+            return new DynamicReportActivationCommissioningResult
+            {
+                IsSuccess = false,
+                CleanupSucceeded = false,
+                Summary = fieldRestore
+                    ? "G2.4 activation threw before a monitor session was returned. Proof fields were restored, but other dynamic mutation cleanup is not proven; inspect the IED from a fresh association."
+                    : "G2.4 activation threw and proof-field restore was not fully proven. Inspect the IED from a fresh association before retry.",
+                Identity = identity,
+                InputProfile = profile,
+                RcbReference = selectedRcb.Reference,
+                DataSetReference = plan.DataSetReference,
+                MemberReferences = qualifiedReferences,
+                ProfilePath = loaded.FilePath,
+                EvidenceLines = evidence
+            };
         }
 
         AppendWriteSteps(evidence, "G2.4 activation", attempt.StartResult.WriteSteps);
@@ -346,13 +442,16 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
                 evidence.Add("G2.4 cleanup warning: " + warning);
             evidence.Add($"G2.4 activation failed: reason={attempt.FailureReason}; dynamicAttempted={attempt.DynamicAttempted}; cleanupAttempted={attempt.CleanupAttempted}; cleanupSucceeded={attempt.CleanupSucceeded}; sessionState={auxiliary.State}; message={attempt.StartResult.Message}");
 
+            var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "failed-start").ConfigureAwait(false);
+            var combinedCleanup = attempt.CleanupSucceeded && fieldRestore;
+
             return new DynamicReportActivationCommissioningResult
             {
                 IsSuccess = false,
-                CleanupSucceeded = attempt.CleanupSucceeded,
-                Summary = attempt.CleanupSucceeded
-                    ? "G2.4 one-URCB activation did not complete. Failed-start rollback was proven; the persisted profile remains EnvelopeQualified."
-                    : "G2.4 activation failed and rollback was not fully proven. Do not retry on the same association; inspect the IED from a fresh commissioning association.",
+                CleanupSucceeded = combinedCleanup,
+                Summary = combinedCleanup
+                    ? "G2.4 one-URCB activation did not complete. Failed-start rollback plus exact TrgOps/OptFlds restore passed; the profile remains EnvelopeQualified."
+                    : "G2.4 activation failed and complete rollback (monitor + proof fields) was not fully proven. Inspect the IED from a fresh association.",
                 Identity = identity,
                 InputProfile = profile,
                 RcbReference = selectedRcb.Reference,
@@ -367,7 +466,8 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         ArMms.MmsDynamicRcbActivationProof? activationProof = null;
         ArMms.MmsDynamicInformationReportProof? informationProof = null;
         var proofException = string.Empty;
-        var cleanupSucceeded = false;
+        var monitorCleanupSucceeded = false;
+        var fieldRestoreSucceeded = false;
 
         try
         {
@@ -463,16 +563,27 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             try
             {
                 var stop = await auxiliary.StopPersistentReportMonitorAsync(session, CancellationToken.None).ConfigureAwait(false);
-                cleanupSucceeded = stop.IsSuccess;
-                AppendWriteSteps(evidence, "G2.4 cleanup", stop.WriteSteps);
-                evidence.Add($"G2.4 cleanup: success={stop.IsSuccess}; sessionState={auxiliary.State}; result={stop.Message}");
+                monitorCleanupSucceeded = stop.IsSuccess;
+                AppendWriteSteps(evidence, "G2.4 monitor cleanup", stop.WriteSteps);
+                evidence.Add($"G2.4 monitor cleanup: success={stop.IsSuccess}; sessionState={auxiliary.State}; result={stop.Message}");
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
             {
-                cleanupSucceeded = false;
-                evidence.Add($"G2.4 cleanup exception: {ex.GetType().Name}: {ex.Message}");
+                monitorCleanupSucceeded = false;
+                evidence.Add($"G2.4 monitor cleanup exception: {ex.GetType().Name}: {ex.Message}");
             }
+
+            // Proof fields are restored only after the monitor has been stopped/disabled
+            // and DatSet/Resv cleanup has been attempted.
+            fieldRestoreSucceeded = await RestoreProofFieldLeaseAsync(
+                auxiliary,
+                fieldLease,
+                evidence,
+                "post-monitor").ConfigureAwait(false);
         }
+
+        var cleanupSucceeded = monitorCleanupSucceeded && fieldRestoreSucceeded;
+        evidence.Add($"G2.4 combined cleanup: monitor={monitorCleanupSucceeded}; proofFields={fieldRestoreSucceeded}; success={cleanupSucceeded}");
 
         if (!cleanupSucceeded)
         {
@@ -480,7 +591,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             {
                 IsSuccess = false,
                 CleanupSucceeded = false,
-                Summary = "G2.4 active proof ended without proven cleanup. The persisted profile was deliberately NOT advanced; use a fresh association to inspect RptEna/DatSet/Resv before any retry.",
+                Summary = "G2.4 active proof ended without complete cleanup proof. Profile was deliberately NOT advanced; inspect RptEna/DatSet/Resv/TrgOps/OptFlds from a fresh association before retry.",
                 Identity = identity,
                 InputProfile = profile,
                 ActivationProof = activationProof,
@@ -500,12 +611,12 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
                 : activationProof?.IsSuccess != true
                     ? "RCB activation evidence was incomplete."
                     : "No strict actual InformationReport proof was obtained.";
-            evidence.Add("G2.4 profile unchanged after safe cleanup: " + why);
+            evidence.Add("G2.4 profile unchanged after complete cleanup: " + why);
             return new DynamicReportActivationCommissioningResult
             {
                 IsSuccess = false,
                 CleanupSucceeded = true,
-                Summary = "G2.4 cleanup passed, but actual strict InformationReport proof did not. The persisted profile remains EnvelopeQualified and production dynamic reporting remains OFF.",
+                Summary = "G2.4 complete cleanup passed, but actual strict InformationReport proof did not. The persisted profile remains EnvelopeQualified and production dynamic reporting remains OFF.",
                 Identity = identity,
                 InputProfile = profile,
                 ActivationProof = activationProof,
@@ -538,7 +649,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             {
                 IsSuccess = false,
                 CleanupSucceeded = true,
-                Summary = "Physical G2.4 activation/report evidence passed and cleanup passed, but the identity-bound profile transition could not be persisted. Production dynamic reporting remains OFF.",
+                Summary = "Physical G2.4 activation/report evidence passed and all cleanup passed, but the identity-bound profile transition could not be persisted. Production dynamic reporting remains OFF.",
                 Identity = identity,
                 InputProfile = profile,
                 ActivationProof = activationProof,
@@ -558,7 +669,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         {
             IsSuccess = true,
             CleanupSucceeded = true,
-            Summary = $"G2.4 PASS: one fresh URCB delivered an actual strictly mapped InformationReport for {qualifiedReferences.Length} qualified member(s), cleanup passed, and the identity-bound profile advanced to {finalProfile.State}. Production automatic dynamic reporting remains OFF.",
+            Summary = $"G2.4 PASS: one fresh URCB delivered an actual strictly mapped InformationReport for {qualifiedReferences.Length} qualified member(s), monitor cleanup plus exact TrgOps/OptFlds restore passed, and the identity-bound profile advanced to {finalProfile.State}. Production automatic dynamic reporting remains OFF.",
             Identity = identity,
             InputProfile = profile,
             SavedProfile = finalProfile,
@@ -593,7 +704,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         var evaluated = urcbSnapshots
             .Select(snapshot =>
             {
-                var safe = DynamicReportActivationCommissioningService.IsFreshUrcbSafeForG24(snapshot, out var why);
+                var safe = IsLeaseableFreeUrcbForG24(snapshot, out var why);
                 return new { Snapshot = snapshot, Safe = safe, Why = why };
             })
             .ToArray();
@@ -604,7 +715,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             .ThenBy(item => item.Snapshot.Reference, StringComparer.OrdinalIgnoreCase)
             .Take(12)
             .Select(item =>
-                $"ref={item.Snapshot.Reference}; safe={item.Safe}; availability={item.Snapshot.Availability}; probe={item.Snapshot.DataSetProbeState}; DatSet={TextOrDash(item.Snapshot.DataSetReference)}; RptEna={TextOrDash(item.Snapshot.EnabledState)}; Resv={TextOrDash(item.Snapshot.ReservationState)}; Owner={TextOrDash(item.Snapshot.Owner)}; RptID={TextOrDash(item.Snapshot.ReportId)}; TrgOps={TextOrDash(item.Snapshot.TriggerOptions)}; OptFlds={TextOrDash(item.Snapshot.OptionalFields)}; reason={item.Why}")
+                $"ref={item.Snapshot.Reference}; leaseable={item.Safe}; availability={item.Snapshot.Availability}; probe={item.Snapshot.DataSetProbeState}; DatSet={TextOrDash(item.Snapshot.DataSetReference)}; RptEna={TextOrDash(item.Snapshot.EnabledState)}; Resv={TextOrDash(item.Snapshot.ReservationState)}; Owner={TextOrDash(item.Snapshot.Owner)}; RptID={TextOrDash(item.Snapshot.ReportId)}; currentTrgOps={TextOrDash(item.Snapshot.TriggerOptions)}; currentOptFlds={TextOrDash(item.Snapshot.OptionalFields)}; reason={item.Why}")
             .ToArray();
 
         var selected = evaluated
@@ -616,7 +727,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         if (selected is null)
         {
             selectedSnapshot = null;
-            reason = $"URCB total={urcbSnapshots.Length}; forced-live empty DatSet={provenEmpty}; strictProofEligible=0. Selection is based on forced live DatSet/RptEna/Resv/Owner/RptID/TrgOps/OptFlds evidence, not discovery-only probe flags.";
+            reason = $"URCB total={urcbSnapshots.Length}; forced-live empty DatSet={provenEmpty}; transactionalLeaseEligible=0. Selection requires a proven-empty/free URCB and usable RptID; current GI/DataSetName bits may be temporarily leased only after exact original capture.";
             return null;
         }
 
@@ -624,13 +735,65 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         if (candidate is null)
         {
             selectedSnapshot = null;
-            reason = $"Forced-live URCB {selected.Snapshot.Reference} passed safety gates but could not be mapped back to the exact discovered RCB identity.";
+            reason = $"Forced-live URCB {selected.Snapshot.Reference} passed lease gates but could not be mapped back to the exact discovered RCB identity.";
             return null;
         }
 
         selectedSnapshot = selected.Snapshot;
-        reason = $"selected={candidate.Reference}; sameLD={candidate.Domain.Equals(preferredLogicalDevice, StringComparison.OrdinalIgnoreCase)}; forcedLiveProbe={selected.Snapshot.DataSetProbeState}; availability={selected.Snapshot.Availability}; RptID={TextOrDash(selected.Snapshot.ReportId)}; TrgOps={TextOrDash(selected.Snapshot.TriggerOptions)}; OptFlds={TextOrDash(selected.Snapshot.OptionalFields)}";
+        reason = $"selected={candidate.Reference}; sameLD={candidate.Domain.Equals(preferredLogicalDevice, StringComparison.OrdinalIgnoreCase)}; forcedLiveProbe={selected.Snapshot.DataSetProbeState}; availability={selected.Snapshot.Availability}; RptID={TextOrDash(selected.Snapshot.ReportId)}; currentTrgOps={TextOrDash(selected.Snapshot.TriggerOptions)}; currentOptFlds={TextOrDash(selected.Snapshot.OptionalFields)}; transactionalProofFields=true";
         return candidate;
+    }
+
+    internal static bool IsLeaseableFreeUrcbForG24(ArMms.MmsRcbAvailabilitySnapshot snapshot, out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (snapshot.Buffered)
+        {
+            reason = "G2.4 first proof permits URCB only.";
+            return false;
+        }
+
+        if (snapshot.DataSetProbeState != ArMms.MmsRcbDataSetProbeState.ReadSucceeded ||
+            !string.IsNullOrWhiteSpace(snapshot.DataSetReference))
+        {
+            reason = "Live DatSet must be positively read and empty before any temporary proof-field mutation.";
+            return false;
+        }
+
+        if (ParseBool(snapshot.EnabledState) != false)
+        {
+            reason = $"RptEna is not explicit false: {TextOrDash(snapshot.EnabledState)}";
+            return false;
+        }
+
+        if (snapshot.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase) &&
+            ParseBool(snapshot.ReservationState) != false)
+        {
+            reason = $"URCB Resv is not explicit false: {TextOrDash(snapshot.ReservationState)}";
+            return false;
+        }
+
+        if (ParseUnsigned(snapshot.ReservationTimeSeconds) is > 0)
+        {
+            reason = $"Reservation time is positive: {snapshot.ReservationTimeSeconds}";
+            return false;
+        }
+
+        if (HasOwner(snapshot.Owner))
+        {
+            reason = $"URCB Owner is non-empty: {snapshot.Owner}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshot.ReportId))
+        {
+            reason = "RptID is empty, so an actual report cannot be tied to this exact URCB safely.";
+            return false;
+        }
+
+        reason = $"Live URCB is empty/free with usable RptID. Current TrgOps={TextOrDash(snapshot.TriggerOptions)} and OptFlds={TextOrDash(snapshot.OptionalFields)} may be temporarily configured only through an exact capture/write/readback/restore lease.";
+        return true;
     }
 
     private static void ApplyFreshSnapshot(ArMms.MmsReportControlCandidate target, ArMms.MmsRcbAvailabilitySnapshot source)
@@ -649,6 +812,36 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         target.ReservationTimeSeconds = source.ReservationTimeSeconds;
         target.Owner = source.Owner;
         target.Attributes = source.Attributes.ToList();
+    }
+
+    private static void EnsureAttribute(ArMms.MmsReportControlCandidate target, string attribute)
+    {
+        if (!target.Attributes.Contains(attribute, StringComparer.OrdinalIgnoreCase))
+            target.Attributes.Add(attribute);
+    }
+
+    private static async Task<bool> RestoreProofFieldLeaseAsync(
+        ArMms.MmsClientSession auxiliary,
+        ArMms.MmsDynamicRcbCommissioningFieldLease fieldLease,
+        ICollection<string> evidence,
+        string label)
+    {
+        try
+        {
+            var restore = await auxiliary.RestoreDynamicRcbCommissioningFieldsAsync(
+                fieldLease,
+                CancellationToken.None).ConfigureAwait(false);
+            AppendWriteSteps(evidence, $"G2.4 proof-field restore/{label}", restore.WriteSteps);
+            foreach (var line in restore.Evidence)
+                evidence.Add($"G2.4 proof-field restore/{label}: {line}");
+            evidence.Add($"G2.4 proof-field restore/{label}: success={restore.IsSuccess}; result={restore.Message}");
+            return restore.IsSuccess;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
+        {
+            evidence.Add($"G2.4 proof-field restore/{label} exception: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
     }
 
     private static bool SuccessfulStep(IEnumerable<ArMms.MmsReportAttributeWriteStep> steps, string attribute)
@@ -679,6 +872,24 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         if (text is "0" or "00" || text.Equals("no", StringComparison.OrdinalIgnoreCase) || text.Equals("off", StringComparison.OrdinalIgnoreCase))
             return false;
         return null;
+    }
+
+    private static ulong? ParseUnsigned(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return ulong.TryParse(text, out var parsed) ? parsed : null;
+    }
+
+    private static bool HasOwner(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0 || text == "-" || text == "[]" || text.Equals("null", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var compact = text.Replace("0x", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace(":", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+        return compact.Length > 0 && compact.Any(character => character != '0');
     }
 
     private static void AppendWriteSteps(
