@@ -12,11 +12,11 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("7b2161bc88f199a99e7a92ed97abf18357dd4edf", json.GetProperty("commit").GetString());
+        Assert.Equal("26c85400a4da230c4429e6302847f230385b6687", json.GetProperty("commit").GetString());
         Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // P1 may advance the engine pin only while the field-proven G1/G2.3/P0 ancestry
+        // G2.4 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
         // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
@@ -33,6 +33,10 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("P1 adds a dedicated one-URCB OptFlds-only", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("canonical target 061800", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("never writing TrgOps, DatSet, Resv, RptEna, GI", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact local TCP address", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("C0A851F0", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
