@@ -24,6 +24,7 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
         Assert.Equal("LD0/LLN0.RP01", selected!.Reference);
         Assert.Equal(ArMms.MmsRcbDataSetProbeState.ReadSucceeded, snapshot!.DataSetProbeState);
         Assert.Contains("forcedLiveProbe=ReadSucceeded", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("transactionalProofFields=true", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -33,8 +34,7 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
         var availability = Availability(Snapshot(
             "LD0/LLN0.RP01",
             "LD0",
-            ArMms.MmsRcbDataSetProbeState.ReadFailed,
-            "dchg gi"));
+            probeState: ArMms.MmsRcbDataSetProbeState.ReadFailed));
 
         var selected = DynamicReportActivationCommissioningServiceV2.SelectQualifiedUrcbFromFreshAvailability(
             availability,
@@ -46,7 +46,7 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
 
         Assert.Null(selected);
         Assert.Null(snapshot);
-        Assert.Contains("strictProofEligible=0", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("transactionalLeaseEligible=0", reason, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(diagnostics, line => line.Contains("probe=ReadFailed", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -73,26 +73,62 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
     }
 
     [Fact]
-    public void FreshSelection_ExplainsMissingGiOnOtherwiseEmptyUrcb()
+    public void FreshSelection_FieldObserved0204_060000_IsLeaseEligible()
     {
         var inventory = Inventory(Candidate("LD0/LLN0.RP01"));
         var availability = Availability(Snapshot(
             "LD0/LLN0.RP01",
             "LD0",
-            ArMms.MmsRcbDataSetProbeState.ReadSucceeded,
-            "dchg"));
+            triggerOptions: "0204",
+            optionalFields: "060000"));
 
         var selected = DynamicReportActivationCommissioningServiceV2.SelectQualifiedUrcbFromFreshAvailability(
             availability,
             inventory,
             "LD0",
-            out _,
+            out var snapshot,
             out var reason,
             out var diagnostics);
 
-        Assert.Null(selected);
-        Assert.Contains("forced-live empty DatSet=1", reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(diagnostics, line => line.Contains("strict G2.4 report identity fields", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(selected);
+        Assert.NotNull(snapshot);
+        Assert.Equal("0204", snapshot!.TriggerOptions);
+        Assert.Equal("060000", snapshot.OptionalFields);
+        Assert.Contains("transactionalProofFields=true", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(diagnostics, line => line.Contains("leaseable=True", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void LeaseGate_RejectsMissingRptId()
+    {
+        var snapshot = Snapshot("LD0/LLN0.RP01", "LD0", reportId: string.Empty);
+
+        var safe = DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(snapshot, out var reason);
+
+        Assert.False(safe);
+        Assert.Contains("RptID is empty", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LeaseGate_RejectsReservedUrcb()
+    {
+        var snapshot = Snapshot("LD0/LLN0.RP01", "LD0", reservationState: "true");
+
+        var safe = DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(snapshot, out var reason);
+
+        Assert.False(safe);
+        Assert.Contains("Resv is not explicit false", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LeaseGate_RejectsNonEmptyOwner()
+    {
+        var snapshot = Snapshot("LD0/LLN0.RP01", "LD0", owner: "01020304");
+
+        var safe = DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(snapshot, out var reason);
+
+        Assert.False(safe);
+        Assert.Contains("Owner is non-empty", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ArMms.MmsReportInventory Inventory(params ArMms.MmsReportControlCandidate[] candidates)
@@ -120,8 +156,8 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
             DataSetReference = string.Empty,
             DataSetProbeState = ArMms.MmsRcbDataSetProbeState.NotAttempted,
             ReportId = "RPT-01",
-            TriggerOptions = "dchg gi",
-            OptionalFields = "data-set-name reason-for-inclusion",
+            TriggerOptions = "0204",
+            OptionalFields = "060000",
             EnabledState = "false",
             ReservationState = "false",
             ReservationTimeSeconds = "0",
@@ -134,7 +170,11 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
         string reference,
         string domain,
         ArMms.MmsRcbDataSetProbeState probeState = ArMms.MmsRcbDataSetProbeState.ReadSucceeded,
-        string triggerOptions = "dchg gi")
+        string triggerOptions = "0204",
+        string optionalFields = "060000",
+        string reportId = "RPT-01",
+        string reservationState = "false",
+        string owner = "")
         => new()
         {
             Reference = reference,
@@ -147,13 +187,13 @@ public sealed class DynamicReportActivationCommissioningServiceV2Tests
             DataSetProbeMessage = probeState == ArMms.MmsRcbDataSetProbeState.ReadSucceeded
                 ? "DatSet item: OK"
                 : "DatSet read rejected",
-            ReportId = "RPT-01",
+            ReportId = reportId,
             TriggerOptions = triggerOptions,
-            OptionalFields = "data-set-name reason-for-inclusion",
+            OptionalFields = optionalFields,
             EnabledState = "false",
-            ReservationState = "false",
+            ReservationState = reservationState,
             ReservationTimeSeconds = "0",
-            Owner = string.Empty,
+            Owner = owner,
             Availability = probeState == ArMms.MmsRcbDataSetProbeState.ReadSucceeded
                 ? ArMms.MmsRcbOperationalAvailability.NoDataSet
                 : ArMms.MmsRcbOperationalAvailability.Unknown,
