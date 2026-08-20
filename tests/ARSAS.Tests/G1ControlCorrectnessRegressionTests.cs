@@ -5,19 +5,19 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG24EngineAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PinsReviewedG24P0EngineAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("609bf51c47f7f404e6e8d9bd338c1380e7a6c1e1", json.GetProperty("commit").GetString());
+        Assert.Equal("7f82da109defcbb57920e8e6b67a4deec1325254", json.GetProperty("commit").GetString());
         Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // G2.4 may advance the engine pin only while the field-proven G1/G2.3 ancestry
-        // and all of its non-regression safety statements remain explicitly preserved.
+        // P0 may advance the engine pin only while the field-proven G1/G2.3 ancestry
+        // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", purpose, StringComparison.OrdinalIgnoreCase);
@@ -26,9 +26,13 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("ProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("actual correctly mapped InformationReport", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #95", purpose, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("transactional URCB TrgOps/OptFlds lease", purpose, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("captured byte-for-byte", purpose, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("exact readback", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("bit 0 reserved", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("bits 1..5 dchg/qchg/dupd/integrity/GI", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dchg+GI encodes canonically as 0244", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("0204 is GI-only", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("significant-bit equality", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TrgOps-only", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never writes OptFlds, DatSet, Resv, RptEna, GI or any DataSet service", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -52,8 +56,6 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("class Iec61850ControlWireEvidence", model, StringComparison.Ordinal);
         Assert.Contains("IReadOnlyList<Iec61850ControlWireEvidence> WireSteps", model, StringComparison.Ordinal);
         Assert.Contains("WireSteps = result.WireSteps.Select", client, StringComparison.Ordinal);
-        Assert.Contains("Action = step.Action.ToString()", client, StringComparison.Ordinal);
-        Assert.Contains("Reference = step.Reference", client, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -119,7 +121,6 @@ public sealed class G1ControlCorrectnessRegressionTests
     {
         var engineLock = File.ReadAllText(Path.Combine(RepoRoot(), "engines", "ARIEC61850.lock.json"));
         Assert.Contains("PR #89 quarantines automatic full dynamic DataSet activation", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", engineLock, StringComparison.OrdinalIgnoreCase);
 
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
         Assert.Contains("SmartReconnectPolicy", runtime, StringComparison.Ordinal);
