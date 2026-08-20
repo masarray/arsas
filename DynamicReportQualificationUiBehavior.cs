@@ -26,7 +26,7 @@ internal static class DynamicReportQualificationUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T))
+            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O))
             return;
 
         e.Handled = true;
@@ -60,6 +60,8 @@ internal static class DynamicReportQualificationUiBehavior
                 await RunG23Async(window, device);
             else if (e.Key == Key.T)
                 await RunP0TriggerProbeAsync(window, device);
+            else if (e.Key == Key.O)
+                await RunP1OptionalFieldsProbeAsync(window, device);
             else
                 await RunG24Async(window, device);
         }
@@ -130,6 +132,38 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"P0: opening isolated auxiliary MMS association to {device.Name} for one-URCB TrgOps micro-probe…";
         var service = new DynamicReportTriggerOptionsProbeCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunP1OptionalFieldsProbeAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run P1 isolated OptFlds micro-probe for {device.Name} ({device.EndpointText})?\n\n" +
+            "ACTIVE COMMISSIONING WRITE WARNING — OptFlds ONLY\n\n" +
+            "ARSAS will open a separate auxiliary MMS association, force-read live URCB state, choose exactly ONE proven-empty/free URCB, capture its original OptFlds, then temporarily request only reason-for-inclusion + data-set-name (canonical raw target 061800).\n\n" +
+            "It will immediately read back the significant OptFlds bits, then restore the exact captured original OptFlds value in a finally path and verify the significant bits again. Raw BER differences are retained separately, including padding-only differences.\n\n" +
+            "This P1 action does NOT write TrgOps, DatSet, Resv, RptEna or GI, does NOT create/delete a DataSet, does NOT start a report monitor, and does NOT advance the G2 profile. Production dynamic reporting remains OFF.\n\n" +
+            "Continue?",
+            "P1 Isolated OptFlds Micro-Probe",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"P1: opening isolated auxiliary MMS association to {device.Name} for one-URCB OptFlds micro-probe…";
+        var service = new DynamicReportOptionalFieldsProbeCommissioningService();
         var result = await service.RunAsync(
             device,
             device.Signals.ToArray(),
