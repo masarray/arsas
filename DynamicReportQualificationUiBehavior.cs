@@ -26,7 +26,7 @@ internal static class DynamicReportQualificationUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O))
+            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O && e.Key != Key.C))
             return;
 
         e.Handled = true;
@@ -62,6 +62,8 @@ internal static class DynamicReportQualificationUiBehavior
                 await RunP0TriggerProbeAsync(window, device);
             else if (e.Key == Key.O)
                 await RunP1OptionalFieldsProbeAsync(window, device);
+            else if (e.Key == Key.C)
+                await RunG24CleanupClosureAsync(window, device);
             else
                 await RunG24Async(window, device);
         }
@@ -164,6 +166,38 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"P1: opening isolated auxiliary MMS association to {device.Name} for one-URCB OptFlds micro-probe…";
         var service = new DynamicReportOptionalFieldsProbeCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunG24CleanupClosureAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run G2.4-C fresh-association cleanup closure for {device.Name} ({device.EndpointText})?\n\n" +
+            "READ-ONLY PHYSICAL MERGE GATE\n\n" +
+            "ARSAS will open a NEW auxiliary MMS association and re-read the exact InformationReport-proven URCB plus the exact temporary G2.4 DataSet identity stored in the profile.\n\n" +
+            "PASS requires fresh evidence that RptEna=false, DatSet is empty, Resv=false, Owner is empty, the temporary DataSet is absent from NamedVariableList discovery and has no readable directory, and the fresh association remains healthy. Current TrgOps/OptFlds are captured as corroborating read-only evidence.\n\n" +
+            "This G2.4-C action performs ZERO MMS writes: no RptEna, Resv, DatSet, TrgOps, OptFlds, GI, DefineNamedVariableList, DeleteNamedVariableList, report monitor, profile save, or production-policy change.\n\n" +
+            "Continue?",
+            "G2.4-C Fresh Association Cleanup Closure",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.4-C: opening fresh read-only auxiliary MMS association to {device.Name}…";
+        var service = new DynamicReportCleanupClosureCommissioningService();
         var result = await service.RunAsync(
             device,
             device.Signals.ToArray(),
