@@ -12,7 +12,7 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("f3f5dfda6713b3113fec5f58fb36a10537fd38ee", json.GetProperty("commit").GetString());
+        Assert.Equal("7b2161bc88f199a99e7a92ed97abf18357dd4edf", json.GetProperty("commit").GetString());
         Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
