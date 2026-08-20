@@ -23,6 +23,27 @@ internal partial class DynamicReportQualificationResultWindow : Window
             SetPassBadge();
     }
 
+    internal DynamicReportQualificationResultWindow(DynamicReportTriggerOptionsProbeCommissioningResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        InitializeComponent();
+
+        Title = "P0 Isolated TrgOps Micro-Probe Evidence";
+        HeaderText.Text = "P0 Isolated TrgOps Micro-Probe";
+        SummaryText.Text = result.Summary;
+        StateText.Text = result.IsSuccess
+            ? "P0 TrgOps Proven"
+            : result.IsBlocked
+                ? "Blocked"
+                : result.CleanupSucceeded
+                    ? "Not proven / restored"
+                    : "Restore unproven";
+        EvidenceTextBox.Text = BuildP0Evidence(result);
+
+        if (result.IsSuccess)
+            SetPassBadge();
+    }
+
     internal DynamicReportQualificationResultWindow(DynamicReportActivationCommissioningResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -114,6 +135,63 @@ internal partial class DynamicReportQualificationResultWindow : Window
         builder.AppendLine("SAFETY STATE");
         builder.AppendLine("EnvelopeQualified != RcbActivationProven != InformationReportProven != ProductionEligible");
         builder.AppendLine("No automatic production dynamic RCB/URCB activation is enabled by this commissioning action.");
+        return builder.ToString();
+    }
+
+    private static string BuildP0Evidence(DynamicReportTriggerOptionsProbeCommissioningResult result)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("ARSAS P0 ISOLATED TRGOPS MICRO-PROBE EVIDENCE");
+        builder.AppendLine(new string('=', 62));
+        builder.AppendLine($"Result: {result.Summary}");
+        builder.AppendLine($"Blocked: {result.IsBlocked}");
+        builder.AppendLine($"P0 success: {result.IsSuccess}");
+        builder.AppendLine($"Restore proven: {result.CleanupSucceeded}");
+
+        if (result.Identity is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("IED IDENTITY");
+            builder.AppendLine($"Stable identity: {result.Identity.StableIdentityKey}");
+            builder.AppendLine($"Model fingerprint: {result.Identity.ModelFingerprint}");
+            builder.AppendLine($"Model: {result.Identity.Model}");
+            builder.AppendLine($"Firmware: {result.Identity.FirmwareRevision}");
+            builder.AppendLine($"Profile revision: {result.Identity.ProfileRevision}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("P0 TARGET");
+        builder.AppendLine($"Input profile state: {result.InputProfile?.State.ToString() ?? "-"}");
+        builder.AppendLine($"URCB: {TextOrDash(result.RcbReference)}");
+        builder.AppendLine("Requested trigger options: dchg + GI");
+        builder.AppendLine("Correct canonical TrgOps raw target: 0244");
+
+        if (result.Probe is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("TRGOPS READ / WRITE / RESTORE");
+            builder.AppendLine($"Original raw: {TextOrDash(result.Probe.OriginalRaw)}");
+            builder.AppendLine($"Requested raw: {TextOrDash(result.Probe.RequestedRaw)}");
+            builder.AppendLine($"Readback raw: {TextOrDash(result.Probe.ReadbackRaw)}");
+            builder.AppendLine($"Restore readback raw: {TextOrDash(result.Probe.RestoreReadbackRaw)}");
+            builder.AppendLine($"Requested semantic match: {result.Probe.RequestedComparison?.IsSemanticMatch.ToString() ?? "-"}");
+            builder.AppendLine($"Requested raw exact: {result.Probe.RequestedComparison?.IsRawExact.ToString() ?? "-"}");
+            builder.AppendLine($"Requested padding-only diff: {result.Probe.RequestedComparison?.PaddingOnlyDifference.ToString() ?? "-"}");
+            builder.AppendLine($"Restore semantic match: {result.Probe.RestoreComparison?.IsSemanticMatch.ToString() ?? "-"}");
+            builder.AppendLine($"Restore raw exact: {result.Probe.RestoreComparison?.IsRawExact.ToString() ?? "-"}");
+            builder.AppendLine($"Restore padding-only diff: {result.Probe.RestoreComparison?.PaddingOnlyDifference.ToString() ?? "-"}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("WIRE / SAFETY EVIDENCE");
+        foreach (var line in result.EvidenceLines)
+            builder.AppendLine(line);
+
+        builder.AppendLine();
+        builder.AppendLine("SAFETY STATE");
+        builder.AppendLine("P0 writes TrgOps only on one forced-live proven-free URCB and immediately restores it.");
+        builder.AppendLine("No OptFlds, DatSet, Resv, RptEna, GI or dynamic DataSet service is used by P0.");
+        builder.AppendLine("P0 does not advance the G2 profile and production automatic dynamic reporting remains OFF.");
         return builder.ToString();
     }
 
