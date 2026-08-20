@@ -56,6 +56,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("class Iec61850ControlWireEvidence", model, StringComparison.Ordinal);
         Assert.Contains("IReadOnlyList<Iec61850ControlWireEvidence> WireSteps", model, StringComparison.Ordinal);
         Assert.Contains("WireSteps = result.WireSteps.Select", client, StringComparison.Ordinal);
+        Assert.Contains("Action = step.Action.ToString()", client, StringComparison.Ordinal);
+        Assert.Contains("Reference = step.Reference", client, StringComparison.Ordinal);
     }
 
     [Fact]
