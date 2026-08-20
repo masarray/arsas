@@ -26,7 +26,7 @@ internal static class DynamicReportQualificationUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.Q && e.Key != Key.R))
+            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T))
             return;
 
         e.Handled = true;
@@ -58,6 +58,8 @@ internal static class DynamicReportQualificationUiBehavior
         {
             if (e.Key == Key.Q)
                 await RunG23Async(window, device);
+            else if (e.Key == Key.T)
+                await RunP0TriggerProbeAsync(window, device);
             else
                 await RunG24Async(window, device);
         }
@@ -109,6 +111,38 @@ internal static class DynamicReportQualificationUiBehavior
         evidenceWindow.ShowDialog();
     }
 
+    private static async Task RunP0TriggerProbeAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run P0 isolated TrgOps micro-probe for {device.Name} ({device.EndpointText})?\n\n" +
+            "ACTIVE COMMISSIONING WRITE WARNING — TrgOps ONLY\n\n" +
+            "ARSAS will open a separate auxiliary MMS association, force-read live URCB state, choose exactly ONE proven-empty/free URCB, capture its original TrgOps, then write corrected IEC dchg+GI TrgOps using the reserved-bit mapping (canonical raw target 0244).\n\n" +
+            "It will immediately read back the significant TrgOps bits, then restore the exact captured original TrgOps value in a finally path and verify the significant bits again. Raw BER differences are retained as evidence, including padding-only differences.\n\n" +
+            "This P0 action does NOT write OptFlds, DatSet, Resv, RptEna or GI, does NOT create/delete a DataSet, does NOT start a report monitor, and does NOT advance the G2 profile. Production dynamic reporting remains OFF.\n\n" +
+            "Continue?",
+            "P0 Isolated TrgOps Micro-Probe",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"P0: opening isolated auxiliary MMS association to {device.Name} for one-URCB TrgOps micro-probe…";
+        var service = new DynamicReportTriggerOptionsProbeCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
+    }
+
     private static async Task RunG24Async(MainWindow window, Models.Iec61850MonitorDevice device)
     {
         var answer = MessageBox.Show(
@@ -116,8 +150,8 @@ internal static class DynamicReportQualificationUiBehavior
             $"Run G2.4 one-URCB InformationReport proof for {device.Name} ({device.EndpointText})?\n\n" +
             "ACTIVE COMMISSIONING WRITE WARNING\n\n" +
             "ARSAS will use the identity-bound G2.3 EnvelopeQualified profile, open a separate auxiliary MMS association, force-read live URCB DatSet/RptEna/Resv/Owner state, and choose exactly ONE proven-empty/free URCB.\n\n" +
-            "For that one URCB only, ARSAS will capture the exact original TrgOps and OptFlds values, temporarily enable dchg+GI and reason-for-inclusion+data-set-name with exact readback, then create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, register report routing, request GI, and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
-            "RptEna/GI acceptance alone is NOT success. After the proof attempt ARSAS will disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, then restore the exact original OptFlds and TrgOps values and verify exact readback. The profile advances only when actual report proof AND all cleanup/restore evidence pass.\n\n" +
+            "For that one URCB only, ARSAS will capture the original TrgOps and OptFlds values, temporarily enable dchg+GI and reason-for-inclusion+data-set-name with IEC significant-bit readback, then create ONE temporary dynamic DataSet with no more than 8 already-qualified members, bind it, reserve the URCB when supported, write RptEna=true, register report routing, request GI, and wait for an ACTUAL strictly mapped InformationReport.\n\n" +
+            "RptEna/GI acceptance alone is NOT success. After the proof attempt ARSAS will disable the URCB, restore its prior DatSet binding, delete the temporary DataSet, release reservation, then restore the captured original OptFlds and TrgOps values and verify IEC significant-bit readback. Raw BER evidence is retained separately. The profile advances only when actual report proof AND all cleanup/restore evidence pass.\n\n" +
             "Production monitoring and automatic production dynamic reporting remain OFF/untouched.\n\n" +
             "Continue?",
             "G2.4 One-URCB InformationReport Proof",
