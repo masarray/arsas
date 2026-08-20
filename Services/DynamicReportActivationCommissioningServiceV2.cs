@@ -124,7 +124,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
                 profile);
         }
 
-        evidence.Add($"G2.4 auxiliary association ready: state={auxiliary.State}; handshake={TextOrDash(auxiliary.LastHandshakeMessage)}");
+        evidence.Add($"G2.4 auxiliary association ready: state={auxiliary.State}; localTcpAddress={TextOrDash(auxiliary.LocalTcpAddress)}; handshake={TextOrDash(auxiliary.LastHandshakeMessage)}");
 
         ArMms.MmsDiscoveryResult discovery;
         try
@@ -359,7 +359,8 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         }
 
         var freshRcb = finalAvailability.ReportControls.SingleOrDefault();
-        if (!IsPostLeaseUrcbSafeForG24(freshRcb, out var freshReason))
+        evidence.Add($"G2.4 post-lease ownership evidence: availability={freshRcb?.Availability}; Resv={TextOrDash(freshRcb?.ReservationState)}; Owner={TextOrDash(freshRcb?.Owner)}; localTcpAddress={TextOrDash(auxiliary.LocalTcpAddress)}");
+        if (!IsPostLeaseUrcbSafeForG24(freshRcb, auxiliary.LocalTcpAddress, out var freshReason))
         {
             evidence.Add("G2.4 final URCB rejected: " + freshReason);
             var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "final-revalidation-reject").ConfigureAwait(false);
@@ -391,7 +392,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         selectedRcb.TriggerOptions = TemporaryTriggerOptions;
         selectedRcb.OptionalFields = TemporaryOptionalFields;
 
-        evidence.Add($"G2.4 final URCB PASS: {freshRcb!.Reference}; probe={freshRcb.DataSetProbeState}; availability={freshRcb.Availability}; RptEna={TextOrDash(freshRcb.EnabledState)}; Resv={TextOrDash(freshRcb.ReservationState)}; DatSet={TextOrDash(freshRcb.DataSetReference)}; RptID={TextOrDash(freshRcb.ReportId)}; TrgOps={TextOrDash(freshRcb.TriggerOptions)}; OptFlds={TextOrDash(freshRcb.OptionalFields)}");
+        evidence.Add($"G2.4 final URCB PASS: {freshRcb!.Reference}; probe={freshRcb.DataSetProbeState}; availability={freshRcb.Availability}; RptEna={TextOrDash(freshRcb.EnabledState)}; Resv={TextOrDash(freshRcb.ReservationState)}; Owner={TextOrDash(freshRcb.Owner)}; localTcpAddress={TextOrDash(auxiliary.LocalTcpAddress)}; DatSet={TextOrDash(freshRcb.DataSetReference)}; RptID={TextOrDash(freshRcb.ReportId)}; TrgOps={TextOrDash(freshRcb.TriggerOptions)}; OptFlds={TextOrDash(freshRcb.OptionalFields)}");
 
         ArMms.MmsPersistentReportMonitorAttemptResult attempt;
         try
@@ -808,7 +809,10 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         };
     }
 
-    internal static bool IsPostLeaseUrcbSafeForG24(ArMms.MmsRcbAvailabilitySnapshot? snapshot, out string reason)
+    internal static bool IsPostLeaseUrcbSafeForG24(
+        ArMms.MmsRcbAvailabilitySnapshot? snapshot,
+        string localTcpAddress,
+        out string reason)
     {
         if (snapshot is null)
         {
@@ -854,9 +858,11 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             return false;
         }
 
-        if (HasOwner(snapshot.Owner))
+        var ownerEvidence = "Owner is empty/not exposed; exact caller-owned RCB identity remains the ownership evidence.";
+        if (HasOwner(snapshot.Owner) &&
+            !ArMms.MmsRcbOwnerIdentity.MatchesLocalTcpAddress(snapshot.Owner, localTcpAddress, out ownerEvidence))
         {
-            reason = $"Post-lease URCB Owner is non-empty and cannot be tied exactly to this client: {snapshot.Owner}";
+            reason = "Post-lease URCB Owner does not match the active G2.4 MMS association: " + ownerEvidence;
             return false;
         }
 
@@ -866,7 +872,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             return false;
         }
 
-        reason = $"Post-lease URCB is caller-owned on this association, DatSet remains empty, RptEna=false, Resv={TextOrDash(snapshot.ReservationState)} is accepted only under UsedByCaller, Owner is empty, and strict report identity fields are present.";
+        reason = $"Post-lease URCB is caller-owned on this association, DatSet remains empty, RptEna=false, Resv={TextOrDash(snapshot.ReservationState)} is accepted only under UsedByCaller, {ownerEvidence}, and strict report identity fields are present.";
         return true;
     }
 
