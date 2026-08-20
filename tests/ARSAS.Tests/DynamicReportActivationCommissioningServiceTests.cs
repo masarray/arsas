@@ -138,7 +138,7 @@ public sealed class DynamicReportActivationCommissioningServiceTests
         var reference = "LD0/GGIO1$ST$Ind1$stVal";
         var point = Point("LD0", "GGIO1$ST$Ind1$stVal", "GGIO1", "ST", "Ind1.stVal");
         var member = Member(point);
-        var quarantined = Frame("R1", "LD0/LLN0.AR_G24_TEST", [member], [0]) withDecoder("rejected-unmapped");
+        var quarantined = WithDecoder(Frame("R1", "LD0/LLN0.AR_G24_TEST", [member], [0]), "rejected-unmapped");
         var failed = new ArMms.MmsReportFrame
         {
             Header = new ArMms.MmsReportHeader { ReportId = "R1", DataSetReference = "LD0/LLN0.AR_G24_TEST" },
@@ -254,7 +254,7 @@ public sealed class DynamicReportActivationCommissioningServiceTests
             }).ToArray()
         };
 
-    private static ArMms.MmsReportFrame withDecoder(this ArMms.MmsReportFrame source, string decoder)
+    private static ArMms.MmsReportFrame WithDecoder(ArMms.MmsReportFrame source, string decoder)
         => new()
         {
             ReceivedAt = source.ReceivedAt,
