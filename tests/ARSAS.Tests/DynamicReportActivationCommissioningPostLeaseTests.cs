@@ -19,7 +19,29 @@ public sealed class DynamicReportActivationCommissioningPostLeaseTests
     }
 
     [Fact]
-    public void PostLeaseGate_AcceptsSameAssociationAutoReservation()
+    public void PostLeaseGate_AcceptsSameAssociationAutoReservation_WhenOwnerMatchesLocalEndpoint()
+    {
+        var snapshot = Snapshot(
+            reservationState: "true",
+            availability: ArMms.MmsRcbOperationalAvailability.UsedByCaller,
+            triggerOptions: "0244",
+            optionalFields: "061800",
+            owner: "C0A851F0");
+
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.240",
+            out var reason);
+
+        Assert.True(safe, reason);
+        Assert.Contains("caller-owned", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Resv=true", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("192.168.81.240", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("matches", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PostLeaseGate_AcceptsUsedByCaller_WhenOwnerIsNotExposed()
     {
         var snapshot = Snapshot(
             reservationState: "true",
@@ -27,11 +49,13 @@ public sealed class DynamicReportActivationCommissioningPostLeaseTests
             triggerOptions: "0244",
             optionalFields: "061800");
 
-        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(snapshot, out var reason);
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.240",
+            out var reason);
 
         Assert.True(safe, reason);
-        Assert.Contains("caller-owned", reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Resv=true", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Owner is empty/not exposed", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -41,9 +65,13 @@ public sealed class DynamicReportActivationCommissioningPostLeaseTests
             reservationState: "true",
             availability: ArMms.MmsRcbOperationalAvailability.InUse,
             triggerOptions: "0244",
-            optionalFields: "061800");
+            optionalFields: "061800",
+            owner: "C0A851F0");
 
-        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(snapshot, out var reason);
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.240",
+            out var reason);
 
         Assert.False(safe);
         Assert.Contains("ownership is not proven", reason, StringComparison.OrdinalIgnoreCase);
@@ -56,28 +84,54 @@ public sealed class DynamicReportActivationCommissioningPostLeaseTests
             reservationState: "true",
             availability: ArMms.MmsRcbOperationalAvailability.UsedByCaller,
             triggerOptions: "0204",
-            optionalFields: "060000");
+            optionalFields: "060000",
+            owner: "C0A851F0");
 
-        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(snapshot, out var reason);
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.240",
+            out var reason);
 
         Assert.False(safe);
         Assert.Contains("strict G2.4 report identity fields", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void PostLeaseGate_RejectsNonEmptyOwnerEvenWhenMarkedCallerOwned()
+    public void PostLeaseGate_RejectsOwnerThatDoesNotMatchLocalEndpoint()
     {
         var snapshot = Snapshot(
             reservationState: "true",
             availability: ArMms.MmsRcbOperationalAvailability.UsedByCaller,
             triggerOptions: "0244",
             optionalFields: "061800",
-            owner: "01020304");
+            owner: "C0A851F0");
 
-        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(snapshot, out var reason);
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.241",
+            out var reason);
 
         Assert.False(safe);
-        Assert.Contains("Owner is non-empty", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not match", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PostLeaseGate_RejectsUnknownNonEmptyOwnerEncoding()
+    {
+        var snapshot = Snapshot(
+            reservationState: "true",
+            availability: ArMms.MmsRcbOperationalAvailability.UsedByCaller,
+            triggerOptions: "0244",
+            optionalFields: "061800",
+            owner: "010203");
+
+        var safe = DynamicReportActivationCommissioningServiceV2.IsPostLeaseUrcbSafeForG24(
+            snapshot,
+            "192.168.81.240",
+            out var reason);
+
+        Assert.False(safe);
+        Assert.Contains("not a supported", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ArMms.MmsRcbAvailabilitySnapshot Snapshot(
