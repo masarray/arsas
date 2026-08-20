@@ -322,9 +322,9 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         evidence.Add($"G2.4 plan: rcb={plan.ReportControl!.Reference}; dataset={plan.DataSetReference}; members={plan.DynamicPoints.Count}; mode={plan.Mode}; status={plan.Status}");
 
         // Re-probe exactly the chosen RCB after the temporary proof-field lease and
-        // immediately before the first DataSet/RCB production-like write. This proves
-        // both that the URCB is still free and that the temporary GI/DataSetName fields
-        // are actually visible from the IED.
+        // immediately before the first DataSet/RCB production-like write. The proof-field
+        // writes can auto-reserve an Edition 2.1 URCB on this same auxiliary association,
+        // so the exact selected RCB is marked caller-owned for this one post-lease read.
         var oneRcbInventory = new ArMms.MmsReportInventory();
         oneRcbInventory.ReportControls.Add(selectedRcb);
 
@@ -334,11 +334,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
             finalAvailability = await auxiliary.CheckReportControlAvailabilityAsync(
                 oneRcbInventory,
                 discovery.IedDirectory,
-                new ArMms.MmsRcbAvailabilityOptions
-                {
-                    MaxReportControls = 1,
-                    ReadDataSetDirectories = false
-                },
+                BuildPostLeaseAvailabilityOptions(selectedRcb.Reference),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
@@ -363,7 +359,7 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
         }
 
         var freshRcb = finalAvailability.ReportControls.SingleOrDefault();
-        if (!DynamicReportActivationCommissioningService.IsFreshUrcbSafeForG24(freshRcb, out var freshReason))
+        if (!IsPostLeaseUrcbSafeForG24(freshRcb, out var freshReason))
         {
             evidence.Add("G2.4 final URCB rejected: " + freshReason);
             var fieldRestore = await RestoreProofFieldLeaseAsync(auxiliary, fieldLease, evidence, "final-revalidation-reject").ConfigureAwait(false);
@@ -794,6 +790,94 @@ internal sealed class DynamicReportActivationCommissioningServiceV2
 
         reason = $"Live URCB is empty/free with usable RptID. Current TrgOps={TextOrDash(snapshot.TriggerOptions)} and OptFlds={TextOrDash(snapshot.OptionalFields)} may be temporarily configured only through an exact capture/write/readback/restore lease.";
         return true;
+    }
+
+    internal static ArMms.MmsRcbAvailabilityOptions BuildPostLeaseAvailabilityOptions(string selectedRcbReference)
+    {
+        if (string.IsNullOrWhiteSpace(selectedRcbReference))
+            throw new ArgumentException("Selected RCB reference is required for caller-owned post-lease revalidation.", nameof(selectedRcbReference));
+
+        return new ArMms.MmsRcbAvailabilityOptions
+        {
+            MaxReportControls = 1,
+            ReadDataSetDirectories = false,
+            CallerOwnedRcbReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                selectedRcbReference
+            }
+        };
+    }
+
+    internal static bool IsPostLeaseUrcbSafeForG24(ArMms.MmsRcbAvailabilitySnapshot? snapshot, out string reason)
+    {
+        if (snapshot is null)
+        {
+            reason = "Selected URCB was missing from the caller-owned post-lease availability read.";
+            return false;
+        }
+
+        if (snapshot.Buffered)
+        {
+            reason = "G2.4 first proof permits URCB only; the post-lease candidate is buffered.";
+            return false;
+        }
+
+        if (snapshot.DataSetProbeState != ArMms.MmsRcbDataSetProbeState.ReadSucceeded ||
+            !string.IsNullOrWhiteSpace(snapshot.DataSetReference))
+        {
+            reason = "Post-lease live DatSet must still be positively read and empty before DataSet activation.";
+            return false;
+        }
+
+        if (ParseBool(snapshot.EnabledState) != false)
+        {
+            reason = $"Post-lease RptEna is not explicit false: {TextOrDash(snapshot.EnabledState)}";
+            return false;
+        }
+
+        if (snapshot.Availability != ArMms.MmsRcbOperationalAvailability.UsedByCaller)
+        {
+            reason = $"Post-lease URCB ownership is not proven to belong to this G2.4 association: availability={snapshot.Availability}; Resv={TextOrDash(snapshot.ReservationState)}";
+            return false;
+        }
+
+        if (snapshot.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase) &&
+            ParseBool(snapshot.ReservationState) is null)
+        {
+            reason = $"Post-lease URCB Resv is not explicitly readable: {TextOrDash(snapshot.ReservationState)}";
+            return false;
+        }
+
+        if (ParseUnsigned(snapshot.ReservationTimeSeconds) is > 0)
+        {
+            reason = $"Post-lease reservation time is positive: {snapshot.ReservationTimeSeconds}";
+            return false;
+        }
+
+        if (HasOwner(snapshot.Owner))
+        {
+            reason = $"Post-lease URCB Owner is non-empty and cannot be tied exactly to this client: {snapshot.Owner}";
+            return false;
+        }
+
+        if (!HasStrictReportIdentityFields(snapshot))
+        {
+            reason = "Post-lease URCB no longer has strict G2.4 report identity fields (RptID + GI TrgOps + data-set-name OptFlds).";
+            return false;
+        }
+
+        reason = $"Post-lease URCB is caller-owned on this association, DatSet remains empty, RptEna=false, Resv={TextOrDash(snapshot.ReservationState)} is accepted only under UsedByCaller, Owner is empty, and strict report identity fields are present.";
+        return true;
+    }
+
+    private static bool HasStrictReportIdentityFields(ArMms.MmsRcbAvailabilitySnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.ReportId))
+            return false;
+
+        var triggers = ArMms.MmsReportControlFieldCodec.DecodeTriggerOptions(snapshot.TriggerOptions);
+        var fields = ArMms.MmsReportControlFieldCodec.DecodeOptionalFields(snapshot.OptionalFields);
+        return triggers.GeneralInterrogation && fields.DataSetName;
     }
 
     private static void ApplyFreshSnapshot(ArMms.MmsReportControlCandidate target, ArMms.MmsRcbAvailabilitySnapshot source)
