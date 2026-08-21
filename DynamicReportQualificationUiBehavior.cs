@@ -26,7 +26,7 @@ internal static class DynamicReportQualificationUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O && e.Key != Key.C && e.Key != Key.D))
+            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O && e.Key != Key.C && e.Key != Key.D && e.Key != Key.E))
             return;
 
         e.Handled = true;
@@ -66,6 +66,8 @@ internal static class DynamicReportQualificationUiBehavior
                 await RunG24CleanupClosureAsync(window, device);
             else if (e.Key == Key.D)
                 await RunG25ASpontaneousDataChangeAsync(window, device);
+            else if (e.Key == Key.E)
+                await RunG25A2StimulusEligibilityAsync(window, device);
             else
                 await RunG24Async(window, device);
         }
@@ -180,6 +182,33 @@ internal static class DynamicReportQualificationUiBehavior
         window.LastStatusText = $"G2.4-C: opening fresh read-only auxiliary MMS association to {device.Name}…";
         var service = new DynamicReportCleanupClosureCommissioningService();
         var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunG25A2StimulusEligibilityAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run G2.5-A2 read-only stimulus eligibility discovery for {device.Name} ({device.EndpointText})?\n\n" +
+            "READ-ONLY PHYSICAL DIAGNOSTIC — NO RCB / NO DATASET / NO GI\n\n" +
+            "ARSAS will open ONE isolated read-only MMS association, discover and rank a bounded set of ST/stVal status candidates, and capture their baseline values. Priority is given to the live ControlStatusReference, XCBR/CSWI/XSWI Pos.stVal, breaker command-received status, and related GGIO status points.\n\n" +
+            "IMPORTANT: do NOT operate anything while discovery/baseline is running. WAIT until the status explicitly shows 'G2.5-A2 READY — READ ONLY'. Only then perform ONE normal safe OPEN/CLOSE or equivalent physical stimulus. Do not repeat the stimulus.\n\n" +
+            "A2 samples a fast lane of at most 8 candidates plus a bounded secondary lane. After the first observed transition it samples for a short settle period to classify the candidate as persistent/latched or momentary/pulse-like.\n\n" +
+            "This A2 action performs ZERO RCB/DataSet mutation: no RptEna, Resv, DatSet, TrgOps, OptFlds, GI, Define/DeleteNamedVariableList, report monitor, profile save, or ProductionEligible change. A2 PASS only identifies which MMS point physically responds; it does NOT prove dchg reporting.\n\n" +
+            "Continue?",
+            "G2.5-A2 Stimulus Eligibility Discovery",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.5-A2: discovering bounded read-only stimulus candidates on {device.Name}; DO NOT stimulate yet…";
+        var progress = new Progress<string>(text => window.LastStatusText = text);
+        var service = new DynamicReportStimulusEligibilityDiscoveryService();
+        var result = await service.RunAsync(device, device.Signals.ToArray(), progress, CancellationToken.None);
         window.LastStatusText = result.Summary;
         var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
