@@ -110,12 +110,24 @@ public sealed class DynamicReportShadowVerificationServiceTests
         Assert.False(mismatch.IsSuccess);
         Assert.Equal(1, mismatch.MismatchCount);
 
+        var twoGoodReports = new[]
+        {
+            Report(1, 0, "LD0/A", "true", t0, ["data-change"]),
+            Report(2, 1, "LD0/B", "false", t0.AddSeconds(5), ["data-change"])
+        };
+        var twoGoodReads = new[]
+        {
+            Read(1, 0, "LD0/A", "true", t0.AddMilliseconds(50)),
+            Read(2, 1, "LD0/B", "false", t0.AddSeconds(5.1))
+        };
+
         var tooFew = DynamicReportShadowVerificationService.EvaluateSeries(
             PassedPrerequisite(),
-            reports.Take(2).ToArray(),
-            reads.Take(2).ToArray());
+            twoGoodReports,
+            twoGoodReads);
         Assert.False(tooFew.IsSuccess);
         Assert.Equal(2, tooFew.AgreementCount);
+        Assert.Equal(0, tooFew.MismatchCount);
     }
 
     [Fact]
