@@ -83,7 +83,8 @@ public sealed class DynamicReportStimulusWitnessCommissioningServiceTests
         Assert.Contains("triggerGeneralInterrogation: false", core, StringComparison.Ordinal);
         Assert.DoesNotContain("triggerGeneralInterrogation: true", core, StringComparison.Ordinal);
         Assert.Contains("G2.5-A1 spontaneous dchg + independent stimulus witness", ui, StringComparison.Ordinal);
-        Assert.Contains("DO NOT stimulate yet", ui, StringComparison.Ordinal);
+        Assert.Contains("DO NOT stimulate on that message", ui, StringComparison.Ordinal);
+        Assert.Contains("WAIT until", ui, StringComparison.Ordinal);
         Assert.Contains("G2.5-A1 WITNESS READY", ui, StringComparison.Ordinal);
         Assert.Contains("DynamicReportStimulusWitnessCommissioningService", ui, StringComparison.Ordinal);
 
