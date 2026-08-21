@@ -37,11 +37,11 @@ public sealed class DynamicReportSpontaneousDataChangeCommissioningServiceTests
     }
 
     [Theory]
-    [InlineData("0244")] // dchg + GI
-    [InlineData("0248")] // dchg + integrity
-    [InlineData("0260")] // dchg + qchg
-    [InlineData("0250")] // dchg + dupd
-    [InlineData("0204")] // GI only
+    [InlineData("0244")]
+    [InlineData("0248")]
+    [InlineData("0260")]
+    [InlineData("0250")]
+    [InlineData("0204")]
     public void PostLeaseGate_RejectsAnyNonDchgOnlyTriggerShape(string trgOps)
     {
         var ok = DynamicReportSpontaneousDataChangeCommissioningService.IsPostLeaseUrcbSafeForDchg(
@@ -78,12 +78,7 @@ public sealed class DynamicReportSpontaneousDataChangeCommissioningServiceTests
     {
         var refs = Refs();
         var members = Members();
-        var frame = Frame(
-            "R1",
-            "LD0/LLN0.AR_G25A_TEST",
-            [members[1]],
-            [1],
-            ["data-change"]);
+        var frame = Frame("R1", "LD0/LLN0.AR_G25A_TEST", [members[1]], [1], ["data-change"]);
 
         var result = DynamicReportSpontaneousDataChangeCommissioningService.ValidateSpontaneousDataChangeFrame(
             frame,
@@ -102,12 +97,7 @@ public sealed class DynamicReportSpontaneousDataChangeCommissioningServiceTests
     {
         var refs = Refs();
         var members = Members();
-        var frame = Frame(
-            "R1",
-            "LD0/LLN0.AR_G25A_TEST",
-            [members[0], members[2]],
-            [0, 2],
-            ["data-change"]);
+        var frame = Frame("R1", "LD0/LLN0.AR_G25A_TEST", [members[0], members[2]], [0, 2], ["data-change"]);
 
         var result = DynamicReportSpontaneousDataChangeCommissioningService.ValidateSpontaneousDataChangeFrame(
             frame,
@@ -203,6 +193,7 @@ public sealed class DynamicReportSpontaneousDataChangeCommissioningServiceTests
         Assert.Contains("e.Key != Key.D", ui, StringComparison.Ordinal);
         Assert.Contains("RunG25ASpontaneousDataChangeAsync", ui, StringComparison.Ordinal);
         Assert.Contains("G2.5-A ARMED — NO GI", ui, StringComparison.Ordinal);
+        Assert.Contains("G2.5-A1 WITNESS READY", ui, StringComparison.Ordinal);
         Assert.Contains("Do NOT manually edit any RCB or DataSet", ui, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicBrcb = true", runtime, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicUrcb = true", runtime, StringComparison.Ordinal);
