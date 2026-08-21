@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using ArIED61850Tester.Services;
 
@@ -20,6 +21,37 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
             Keyboard.PreviewKeyDownEvent,
             new KeyEventHandler(OnPreviewKeyDown),
             handledEventsToo: true);
+
+        // Observer-only bridge for the dedicated ControlCommandWindow path. WPF class
+        // handlers execute before the window's existing SendCommand_Click instance
+        // handler. We only publish immutable intent context; the control handler and
+        // its ExecuteControlAsync/SBOw/Operate sequence remain untouched.
+        EventManager.RegisterClassHandler(
+            typeof(Button),
+            Button.ClickEvent,
+            new RoutedEventHandler(OnAnyButtonClick),
+            handledEventsToo: true);
+    }
+
+    private static void OnAnyButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || Window.GetWindow(button) is not ControlCommandWindow commandWindow)
+            return;
+
+        var label = button.Content?.ToString()?.Trim() ?? string.Empty;
+        if (!label.Equals("Send Command", StringComparison.OrdinalIgnoreCase) &&
+            !label.Equals("Send Test", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (!commandWindow.CanSend)
+            return;
+
+        DynamicReportCommandIntentObservation.Publish(new DynamicReportObservedCommandIntent(
+            commandWindow.A21WitnessDevice,
+            commandWindow.A21WitnessSignal,
+            commandWindow.SelectedValue,
+            "ControlCommandWindow.RoutedButtonClick",
+            DateTimeOffset.UtcNow));
     }
 
     private static async void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -59,9 +91,9 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
                 window,
                 $"Arm G2.5-A2.1 command-bound high-speed stimulus witness for {device.Name} ({device.EndpointText})?\n\n" +
                 "READ-ONLY WITNESS + ONE EXISTING ARSAS CONTROL COMMAND\n\n" +
-                "A2.1 opens one isolated read-only MMS association, discovers live status points, and captures a PRE-COMMAND baseline from resolved ControlStatusReference feedback plus bounded related status points.\n\n" +
-                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE from the normal ARSAS Command Panel. Do NOT use an external/manual stimulus for this phase.\n\n" +
-                "A2.1 identifies the exact SignalDefinition whose existing ControlCommandBusy state becomes true, then immediately narrows read-only sampling to at most six points around that exact ControlStatusReference. The normal SBO/Operate/control path is NOT modified, delayed, wrapped or re-issued by A2.1.\n\n" +
+                "A2.1 V2 opens one isolated read-only MMS association and captures a PRE-COMMAND baseline. It can observe BOTH the fast Command Panel and the dedicated Control Command dialog without changing either control transaction.\n\n" +
+                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE using the normal ARSAS control UI you normally use. Do NOT use an external/manual stimulus for this phase.\n\n" +
+                "The observer then narrows read-only sampling to at most six points around the exact ControlStatusReference. Existing ExecuteControlAsync, SBOw, Operate and CommandTermination behavior is NOT modified, delayed, wrapped or re-issued.\n\n" +
                 "Once 'G2.5-A2.1 COMMAND CAPTURED' appears, do not issue another command. If a transition is seen, A2.1 samples briefly to classify persistent/latched versus momentary/pulse behavior.\n\n" +
                 "The witness does not access/mutate RCB or DataSet state, does not send GI, does not save/advance the qualification profile, and production dynamic reporting remains OFF. Do not run another G2 hotkey while A2.1 is armed.\n\n" +
                 "Continue?",
@@ -72,9 +104,9 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
             if (answer != MessageBoxResult.Yes)
                 return;
 
-            window.LastStatusText = $"G2.5-A2.1: opening isolated read-only MMS witness for {device.Name} and preparing pre-command baseline…";
+            window.LastStatusText = $"G2.5-A2.1 V2: opening isolated read-only MMS witness for {device.Name} and preparing pre-command baseline…";
             var progress = new Progress<string>(text => window.LastStatusText = text);
-            var service = new DynamicReportCommandBoundStimulusWitnessService();
+            var service = new DynamicReportCommandBoundStimulusWitnessServiceV2();
             var result = await service.RunAsync(device, device.Signals.ToArray(), progress, CancellationToken.None);
             window.LastStatusText = result.Summary;
             var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
@@ -82,10 +114,10 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
         }
         catch (Exception ex)
         {
-            window.LastStatusText = "G2.5-A2.1 stopped locally; production dynamic reporting remains OFF.";
+            window.LastStatusText = "G2.5-A2.1 V2 stopped locally; production dynamic reporting remains OFF.";
             MessageBox.Show(
                 window,
-                "G2.5-A2.1 stopped. The witness did not change production reporting policy.\n\n" + ex,
+                "G2.5-A2.1 V2 stopped. The witness did not change production reporting policy.\n\n" + ex,
                 "G2.5-A2.1 Command-Bound Witness",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
