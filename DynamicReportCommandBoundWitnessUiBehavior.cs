@@ -92,7 +92,7 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
                 $"Arm G2.5-A2.1 command-bound high-speed stimulus witness for {device.Name} ({device.EndpointText})?\n\n" +
                 "READ-ONLY WITNESS + ONE EXISTING ARSAS CONTROL COMMAND\n\n" +
                 "A2.1 V2 opens one isolated read-only MMS association and captures a PRE-COMMAND baseline. It can observe BOTH the fast Command Panel and the dedicated Control Command dialog without changing either control transaction.\n\n" +
-                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE using the normal ARSAS control UI you normally use. Do NOT use an external/manual stimulus for this phase.\n\n" +
+                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE using the normal ARSAS Command Panel or dedicated Control Command dialog you normally use. Do NOT use an external/manual stimulus for this phase.\n\n" +
                 "The observer then narrows read-only sampling to at most six points around the exact ControlStatusReference. Existing ExecuteControlAsync, SBOw, Operate and CommandTermination behavior is NOT modified, delayed, wrapped or re-issued.\n\n" +
                 "Once 'G2.5-A2.1 COMMAND CAPTURED' appears, do not issue another command. If a transition is seen, A2.1 samples briefly to classify persistent/latched versus momentary/pulse behavior.\n\n" +
                 "The witness does not access/mutate RCB or DataSet state, does not send GI, does not save/advance the qualification profile, and production dynamic reporting remains OFF. Do not run another G2 hotkey while A2.1 is armed.\n\n" +
