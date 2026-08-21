@@ -36,16 +36,6 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningResult
     public IReadOnlyList<string> EvidenceLines { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>
-/// G2.5-A explicit commissioning gate for one spontaneous dchg InformationReport.
-///
-/// This gate consumes only an identity-compatible InformationReportProven profile,
-/// reuses the exact G2.4-proven URCB and exact eight-member set, enables dchg ONLY,
-/// never requests GI, and waits for a real spontaneous process/status change. It does
-/// not change the persisted profile or production monitoring policy. PASS also requires
-/// monitor cleanup, exact proof-field restore, and a second fresh-association read-only
-/// cleanup closure.
-/// </summary>
 internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
 {
     private static readonly TimeSpan AuxiliaryAssociationTimeout = TimeSpan.FromSeconds(10);
@@ -84,7 +74,6 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         }
 
         evidence.Add($"G2.5-A identity stableKey={identity.StableIdentityKey}; fingerprint={identity.ModelFingerprint}; profileRevision={TextOrDash(identity.ProfileRevision)}");
-
         var loaded = await _profileStore.LoadAsync(identity, cancellationToken).ConfigureAwait(false);
         evidence.Add($"G2.5-A persisted profile: exists={loaded.Exists}; valid={loaded.IsValid}; reason={loaded.Reason}");
         if (!loaded.IsValid || loaded.Profile is null)
@@ -116,23 +105,24 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         evidence.Add($"G2.5-A profile gate: state={profile.State}; rcb={rcbReference}; members={qualifiedReferences.Length}; temporaryTrgOps={TemporaryTriggerOptions}; expectedTrgOpsRaw={ExpectedCanonicalTriggerRaw}; temporaryOptFlds={TemporaryOptionalFields}; expectedOptFldsRaw={ExpectedCanonicalOptionalFieldsRaw}");
         evidence.Add("G2.5-A exact members: " + string.Join(" | ", qualifiedReferences));
         evidence.Add("G2.5-A trigger contract: dchg ONLY. GI=false, integrity=false, qchg=false, dupd=false. No GI request is sent at monitor start or receive time.");
-        evidence.Add("G2.5-A profile contract: the persisted InformationReportProven profile is READ ONLY and will not be saved, downgraded, or advanced by this gate.");
+        evidence.Add("G2.5-A profile contract: persisted InformationReportProven is READ ONLY; this action never saves, downgrades, advances, or marks ProductionEligible.");
 
         var auxiliary = new ArMms.MmsClientSession();
         ArMms.MmsDynamicRcbCommissioningFieldLease? fieldLease = null;
         ArMms.MmsPersistentReportMonitorSession? monitorSession = null;
         ArMms.MmsReportSubscriptionPlan? plan = null;
-        ArMms.MmsReportControlCandidate? selectedRcb = null;
         var activationProven = false;
         var spontaneousProven = false;
         var associationHealthyAfterReport = false;
-        var monitorCleanup = false;
-        var fieldRestore = false;
+        var monitorCleanup = true;
+        var fieldRestore = true;
+        var freshClosure = true;
+        var dynamicAttempted = false;
         var includedIndexes = Array.Empty<int>();
         var includedMembers = Array.Empty<string>();
         var includedReasons = Array.Empty<string>();
         var reportId = string.Empty;
-        var activationAttempted = false;
+        var failureSummary = string.Empty;
 
         try
         {
@@ -155,24 +145,20 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                     out var exactReason))
             {
                 evidence.Add("G2.5-A exact member revalidation failed: " + exactReason);
-                return Failed("The exact G2.4-proven member set no longer maps to the live model. No RCB mutation was attempted.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
+                return FailedBeforeMutation("The exact G2.4-proven member set no longer maps to the live model.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
             }
 
             foreach (var point in exactPoints)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 var read = await auxiliary.ReadSingleVariableAsync(point.ToObjectReference(), cancellationToken).ConfigureAwait(false);
                 evidence.Add($"G2.5-A direct-read {point.MmsReference}: success={read.IsSuccess}; result={read.Message}");
                 if (!read.IsSuccess || !auxiliary.IsMmsInitiated)
-                    return Failed("An exact G2.4-proven member failed fresh direct MMS validation. No RCB mutation was attempted.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
+                    return FailedBeforeMutation("An exact G2.4-proven member failed fresh direct MMS validation.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
             }
 
-            selectedRcb = discovery.ReportInventory.ReportControls.FirstOrDefault(candidate => SameReference(candidate.Reference, rcbReference));
+            var selectedRcb = discovery.ReportInventory.ReportControls.FirstOrDefault(candidate => SameReference(candidate.Reference, rcbReference));
             if (selectedRcb is null || selectedRcb.Buffered)
-            {
-                evidence.Add("G2.5-A exact URCB lookup failed or resolved to a buffered RCB.");
-                return Failed("The exact G2.4-proven URCB is not available in fresh discovery. No mutation was attempted.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
-            }
+                return FailedBeforeMutation("The exact G2.4-proven URCB is absent or no longer an URCB.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
 
             var oneRcb = new ArMms.MmsReportInventory();
             oneRcb.ReportControls.Add(selectedRcb);
@@ -186,15 +172,16 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             if (preLeaseSnapshot is not null)
                 evidence.Add($"G2.5-A pre-lease URCB: availability={preLeaseSnapshot.Availability}; probe={preLeaseSnapshot.DataSetProbeState}; DatSet={TextOrDash(preLeaseSnapshot.DataSetReference)}; RptEna={TextOrDash(preLeaseSnapshot.EnabledState)}; Resv={TextOrDash(preLeaseSnapshot.ReservationState)}; Owner={TextOrDash(preLeaseSnapshot.Owner)}; RptID={TextOrDash(preLeaseSnapshot.ReportId)}; TrgOps={TextOrDash(preLeaseSnapshot.TriggerOptions)}; OptFlds={TextOrDash(preLeaseSnapshot.OptionalFields)}");
 
-            if (preLeaseSnapshot is null ||
-                !DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(preLeaseSnapshot, out var preLeaseReason))
+            var preLeaseReason = "snapshot missing";
+            var preLeaseSafe = preLeaseSnapshot is not null &&
+                               DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(preLeaseSnapshot, out preLeaseReason);
+            if (!preLeaseSafe)
             {
-                evidence.Add("G2.5-A pre-lease URCB rejected: " + (preLeaseSnapshot is null ? "snapshot missing" : preLeaseReason));
-                return Failed("The exact G2.4-proven URCB is not freshly proven free. No proof-field mutation was attempted.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
+                evidence.Add("G2.5-A pre-lease URCB rejected: " + preLeaseReason);
+                return FailedBeforeMutation("The exact G2.4-proven URCB is not freshly proven free.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences);
             }
 
-            ApplyFreshSnapshot(selectedRcb, preLeaseSnapshot);
-
+            ApplyFreshSnapshot(selectedRcb, preLeaseSnapshot!);
             var fieldPrepare = await auxiliary.PrepareDynamicRcbCommissioningFieldsAsync(
                 selectedRcb,
                 TemporaryTriggerOptions,
@@ -209,54 +196,46 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             {
                 return new DynamicReportSpontaneousDataChangeCommissioningResult
                 {
-                    IsSuccess = false,
                     Summary = fieldPrepare.CleanupSucceeded
-                        ? "G2.5-A dchg-only proof-field preparation failed, but exact rollback passed. The InformationReportProven profile is unchanged."
-                        : "G2.5-A proof-field preparation failed and rollback was not fully proven. Inspect the URCB from a fresh association before retry.",
+                        ? "G2.5-A dchg-only proof-field preparation failed, but engine rollback passed. Profile unchanged."
+                        : "G2.5-A proof-field preparation failed and rollback was not fully proven. Fresh inspection is required before retry.",
                     Identity = identity,
                     InputProfile = profile,
                     RcbReference = rcbReference,
                     MemberReferences = qualifiedReferences,
                     ProofFieldRestoreSucceeded = fieldPrepare.CleanupSucceeded,
                     ProfilePath = loaded.FilePath,
-                    EvidenceLines = evidence
+                    EvidenceLines = evidence.ToArray()
                 };
             }
 
             fieldLease = fieldPrepare.Lease;
             evidence.Add($"G2.5-A proof-field lease ACTIVE: originalTrgOps={fieldLease.OriginalTriggerOptionsText}; originalOptFlds={fieldLease.OriginalOptionalFieldsText}; temporaryTrgOps=dchg-only/{ExpectedCanonicalTriggerRaw}; temporaryOptFlds=reason+dataset/{ExpectedCanonicalOptionalFieldsRaw}; GI=false");
 
-            var dataSetName = "AR_G25A_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
             plan = ArMms.MmsReportSubscriptionPlanner.BuildDynamicPlan(
                 discovery.ReportInventory,
                 discovery.IedDirectory,
                 exactPoints.Select(point => point.UserReference),
                 preferredLogicalDevice: selectedRcb.Domain,
                 preferredRcbReference: selectedRcb.Reference,
-                dataSetName: dataSetName,
+                dataSetName: "AR_G25A_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
                 strictRcb: true,
                 allowUrCbFallback: true,
                 allowPollingFallback: false);
 
             if (!DynamicReportActivationCommissioningService.ValidatePlanAgainstEnvelope(plan, selectedRcb.Reference, qualifiedReferences, out var planReason))
-            {
-                evidence.Add("G2.5-A plan rejected: " + planReason);
-                return Failed("The G2.5-A strict plan did not preserve the exact G2.4-proven one-URCB/member identity.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences, plan.DataSetReference);
-            }
+                throw Abort("Strict G2.5-A plan rejected: " + planReason);
             evidence.Add($"G2.5-A plan: rcb={plan.ReportControl!.Reference}; dataset={plan.DataSetReference}; members={plan.DynamicPoints.Count}; mode={plan.Mode}; GI=false");
 
-            var finalAvailability = await auxiliary.CheckReportControlAvailabilityAsync(
+            var postLeaseAvailability = await auxiliary.CheckReportControlAvailabilityAsync(
                 oneRcb,
                 discovery.IedDirectory,
                 DynamicReportActivationCommissioningServiceV2.BuildPostLeaseAvailabilityOptions(selectedRcb.Reference),
                 cancellationToken).ConfigureAwait(false);
-            var postLeaseSnapshot = finalAvailability.ReportControls.SingleOrDefault();
+            var postLeaseSnapshot = postLeaseAvailability.ReportControls.SingleOrDefault();
             evidence.Add($"G2.5-A post-lease ownership: availability={postLeaseSnapshot?.Availability}; Resv={TextOrDash(postLeaseSnapshot?.ReservationState)}; Owner={TextOrDash(postLeaseSnapshot?.Owner)}; localTcpAddress={TextOrDash(auxiliary.LocalTcpAddress)}; TrgOps={TextOrDash(postLeaseSnapshot?.TriggerOptions)}; OptFlds={TextOrDash(postLeaseSnapshot?.OptionalFields)}");
             if (!IsPostLeaseUrcbSafeForDchg(postLeaseSnapshot, auxiliary.LocalTcpAddress, out var postLeaseReason))
-            {
-                evidence.Add("G2.5-A post-lease URCB rejected: " + postLeaseReason);
-                return Failed("The exact URCB did not retain strict dchg-only caller-owned state after the proof-field lease.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences, plan.DataSetReference);
-            }
+                throw Abort("Post-lease dchg-only URCB gate failed: " + postLeaseReason);
 
             ApplyFreshSnapshot(plan.ReportControl!, postLeaseSnapshot!);
             EnsureAttribute(plan.ReportControl!, "TrgOps");
@@ -267,7 +246,8 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             selectedRcb.OptionalFields = TemporaryOptionalFields;
             reportId = postLeaseSnapshot!.ReportId;
 
-            activationAttempted = true;
+            dynamicAttempted = true;
+            monitorCleanup = false;
             var attempt = await auxiliary.StartPersistentReportMonitorWithAttemptEvidenceAsync(
                 plan,
                 triggerGeneralInterrogation: false,
@@ -284,8 +264,7 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                 foreach (var warning in attempt.CleanupWarnings)
                     evidence.Add("G2.5-A failed-start cleanup warning: " + warning);
                 monitorCleanup = attempt.CleanupSucceeded;
-                evidence.Add($"G2.5-A activation failed: cleanup={attempt.CleanupSucceeded}; reason={attempt.FailureReason}; result={attempt.StartResult.Message}");
-                return Failed("G2.5-A could not arm the dchg-only monitor. Existing failed-start cleanup evidence is retained; the profile is unchanged.", evidence, identity, profile, loaded.FilePath, rcbReference, qualifiedReferences, plan.DataSetReference, monitorCleanup);
+                throw Abort($"Monitor activation failed: {attempt.FailureReason}; {attempt.StartResult.Message}");
             }
 
             monitorSession = attempt.StartResult.Session;
@@ -303,46 +282,51 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                                  ParseBool(afterEnable.EnabledState) == true;
             activationProven = exactReadback && bindingAccepted && rptEnaAccepted && auxiliary.IsMmsInitiated;
             evidence.Add($"G2.5-A activation proof: success={activationProven}; datasetReadback={exactReadback}; binding={bindingAccepted}; RptEna={rptEnaAccepted}; associationHealthy={auxiliary.IsMmsInitiated}; GIrequested=false");
+            if (!activationProven)
+                throw Abort("Activation evidence is incomplete; spontaneous receive will not be treated as proof.");
 
-            if (activationProven)
+            progress?.Report($"G2.5-A ARMED — NO GI. Within {SpontaneousProofWindow.TotalSeconds:0}s, cause ONE normal physical/status change affecting one of the 8 proven points. Do not edit any RCB/DataSet manually.");
+            evidence.Add($"G2.5-A ARMED: report routing is active; GI=false. Waiting up to {SpontaneousProofWindow.TotalSeconds:0}s for a real spontaneous data-change report.");
+
+            var receive = await auxiliary.ReceivePersistentReportMonitorSliceAsync(
+                monitorSession,
+                SpontaneousProofWindow,
+                pollDirectory: null,
+                pollReferences: null,
+                pollInterval: null,
+                triggerGeneralInterrogation: false,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            AppendWriteSteps(evidence, "G2.5-A receive", receive.WriteSteps);
+            evidence.Add($"G2.5-A receive: reports={receive.Reports.Count}; unrouted={auxiliary.UnroutedPersistentReportCount}; route={TextOrDash(auxiliary.LastReceiveRoutingSummary)}; GIrequested=false; result={receive.Message}");
+
+            foreach (var frame in receive.Reports)
             {
-                progress?.Report($"G2.5-A ARMED — NO GI. Within {SpontaneousProofWindow.TotalSeconds:0}s, cause ONE normal physical/status change affecting one of the 8 proven points. Do not edit any RCB/DataSet manually.");
-                evidence.Add($"G2.5-A ARMED: monitor is enabled and routed; GI=false. Waiting up to {SpontaneousProofWindow.TotalSeconds:0}s for a spontaneous data-change report caused by a normal field/process change.");
+                var validation = ValidateSpontaneousDataChangeFrame(frame, reportId, plan.DataSetReference, qualifiedReferences);
+                evidence.Add($"G2.5-A report candidate: rptId={TextOrDash(frame.Header.ReportId)}; dataset={TextOrDash(frame.Header.DataSetReference)}; decoder={frame.DecoderMode}; values={frame.Values.Count}; included=[{string.Join(",", frame.IncludedDataSetIndexes)}]; valid={validation.IsSuccess}; reasons=[{string.Join(",", validation.Reasons)}]; reason={validation.Reason}");
+                if (!validation.IsSuccess)
+                    continue;
 
-                var receive = await auxiliary.ReceivePersistentReportMonitorSliceAsync(
-                    monitorSession,
-                    SpontaneousProofWindow,
-                    pollDirectory: null,
-                    pollReferences: null,
-                    pollInterval: null,
-                    triggerGeneralInterrogation: false,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-                AppendWriteSteps(evidence, "G2.5-A receive", receive.WriteSteps);
-                evidence.Add($"G2.5-A receive: reports={receive.Reports.Count}; unrouted={auxiliary.UnroutedPersistentReportCount}; route={TextOrDash(auxiliary.LastReceiveRoutingSummary)}; GIrequested=false; result={receive.Message}");
-
-                foreach (var frame in receive.Reports)
-                {
-                    var validation = ValidateSpontaneousDataChangeFrame(frame, reportId, plan.DataSetReference, qualifiedReferences);
-                    evidence.Add($"G2.5-A report candidate: rptId={TextOrDash(frame.Header.ReportId)}; dataset={TextOrDash(frame.Header.DataSetReference)}; decoder={frame.DecoderMode}; values={frame.Values.Count}; included=[{string.Join(",", frame.IncludedDataSetIndexes)}]; valid={validation.IsSuccess}; reasons=[{string.Join(",", validation.Reasons)}]; reason={validation.Reason}");
-                    if (!validation.IsSuccess)
-                        continue;
-
-                    spontaneousProven = true;
-                    associationHealthyAfterReport = auxiliary.IsMmsInitiated;
-                    includedIndexes = validation.IncludedIndexes.ToArray();
-                    includedMembers = validation.IncludedMemberReferences.ToArray();
-                    includedReasons = validation.Reasons.ToArray();
-                    evidence.Add($"G2.5-A spontaneous dchg proof: success={spontaneousProven && associationHealthyAfterReport}; kind=DataChange; actual=true; identity=true; mappedIncludedMembers={includedIndexes.Length}; associationHealthy={associationHealthyAfterReport}; GIrequested=false");
-                    break;
-                }
-
-                if (!spontaneousProven)
-                    evidence.Add("G2.5-A spontaneous dchg proof: success=false; no received frame proved exact RptID + DataSet + valid included member mapping with data-change reason only. RptEna acceptance or unrelated reports are not success.");
+                spontaneousProven = true;
+                associationHealthyAfterReport = auxiliary.IsMmsInitiated;
+                includedIndexes = validation.IncludedIndexes.ToArray();
+                includedMembers = validation.IncludedMemberReferences.ToArray();
+                includedReasons = validation.Reasons.ToArray();
+                evidence.Add($"G2.5-A spontaneous dchg proof: success={spontaneousProven && associationHealthyAfterReport}; kind=DataChange; actual=true; identity=true; mappedIncludedMembers={includedIndexes.Length}; associationHealthy={associationHealthyAfterReport}; GIrequested=false");
+                break;
             }
+
+            if (!spontaneousProven)
+                failureSummary = "No received frame proved exact spontaneous dchg semantics within the bounded window.";
+        }
+        catch (G25AbortException ex)
+        {
+            failureSummary = ex.Message;
+            evidence.Add("G2.5-A aborted fail-closed: " + ex.Message);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException or TimeoutException)
         {
-            evidence.Add($"G2.5-A exception: {ex.GetType().Name}: {ex.Message}");
+            failureSummary = $"{ex.GetType().Name}: {ex.Message}";
+            evidence.Add("G2.5-A exception: " + failureSummary);
         }
         finally
         {
@@ -361,13 +345,10 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                     evidence.Add($"G2.5-A monitor cleanup exception: {ex.GetType().Name}: {ex.Message}");
                 }
             }
-            else if (!activationAttempted)
-            {
-                monitorCleanup = true;
-            }
 
             if (fieldLease is not null)
             {
+                fieldRestore = false;
                 try
                 {
                     var restore = await auxiliary.RestoreDynamicRcbCommissioningFieldsAsync(fieldLease, CancellationToken.None).ConfigureAwait(false);
@@ -379,20 +360,14 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
                 {
-                    fieldRestore = false;
                     evidence.Add($"G2.5-A proof-field restore exception: {ex.GetType().Name}: {ex.Message}");
                 }
-            }
-            else
-            {
-                fieldRestore = true;
             }
 
             await auxiliary.DisposeAsync().ConfigureAwait(false);
         }
 
-        var freshClosure = false;
-        if (plan is not null && activationAttempted)
+        if (plan is not null && fieldLease is not null)
         {
             freshClosure = await ProveFreshCleanupClosureAsync(
                 device,
@@ -401,18 +376,13 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
                 evidence,
                 CancellationToken.None).ConfigureAwait(false);
         }
-        else
-        {
-            freshClosure = monitorCleanup && fieldRestore;
-        }
 
-        var success = activationProven &&
-                      spontaneousProven &&
-                      associationHealthyAfterReport &&
-                      monitorCleanup &&
-                      fieldRestore &&
-                      freshClosure;
+        if (dynamicAttempted && monitorSession is null && !monitorCleanup)
+            evidence.Add("G2.5-A cleanup note: failed-start cleanup did not prove complete monitor rollback; fresh closure result is authoritative for final release state.");
+
+        var success = activationProven && spontaneousProven && associationHealthyAfterReport && monitorCleanup && fieldRestore && freshClosure;
         evidence.Add($"G2.5-A combined result: activation={activationProven}; spontaneousDchg={spontaneousProven}; reportAssociationHealthy={associationHealthyAfterReport}; monitorCleanup={monitorCleanup}; proofFieldRestore={fieldRestore}; freshCleanupClosure={freshClosure}; success={success}");
+        if (!string.IsNullOrWhiteSpace(failureSummary)) evidence.Add("G2.5-A failure reason: " + failureSummary);
         evidence.Add("G2.5-A safety: persisted profile remains InformationReportProven. Production automatic dynamic reporting remains OFF; this gate cannot set ProductionEligible.");
 
         return new DynamicReportSpontaneousDataChangeCommissioningResult
@@ -426,7 +396,7 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             AssociationHealthyAfterReport = associationHealthyAfterReport,
             Summary = success
                 ? $"G2.5-A PASS: exact G2.4-proven URCB delivered a spontaneous data-change InformationReport without GI for {includedIndexes.Length} included member(s), and monitor/proof-field/fresh-association cleanup all passed. Profile remains InformationReportProven; production dynamic reporting remains OFF."
-                : "G2.5-A did not prove the complete spontaneous dchg gate. Cleanup evidence is shown below; the persisted InformationReportProven profile is unchanged and production dynamic reporting remains OFF.",
+                : "G2.5-A did not prove the complete spontaneous dchg gate. Cleanup evidence is retained; the InformationReportProven profile is unchanged and production dynamic reporting remains OFF.",
             Identity = identity,
             InputProfile = profile,
             RcbReference = rcbReference,
@@ -437,52 +407,19 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             IncludedMemberReferences = includedMembers,
             Reasons = includedReasons,
             ProfilePath = loaded.FilePath,
-            EvidenceLines = evidence
+            EvidenceLines = evidence.ToArray()
         };
     }
 
-    internal static bool IsPostLeaseUrcbSafeForDchg(
-        ArMms.MmsRcbAvailabilitySnapshot? snapshot,
-        string localTcpAddress,
-        out string reason)
+    internal static bool IsPostLeaseUrcbSafeForDchg(ArMms.MmsRcbAvailabilitySnapshot? snapshot, string localTcpAddress, out string reason)
     {
-        if (snapshot is null)
-        {
-            reason = "Selected URCB is missing from post-lease readback.";
-            return false;
-        }
-        if (snapshot.Buffered)
-        {
-            reason = "G2.5-A permits URCB only.";
-            return false;
-        }
-        if (snapshot.DataSetProbeState != ArMms.MmsRcbDataSetProbeState.ReadSucceeded || !string.IsNullOrWhiteSpace(snapshot.DataSetReference))
-        {
-            reason = "Post-lease DatSet must still be positively read and empty.";
-            return false;
-        }
-        if (ParseBool(snapshot.EnabledState) != false)
-        {
-            reason = $"Post-lease RptEna is not explicit false: {TextOrDash(snapshot.EnabledState)}";
-            return false;
-        }
-        if (snapshot.Availability != ArMms.MmsRcbOperationalAvailability.UsedByCaller)
-        {
-            reason = $"Post-lease ownership is not UsedByCaller: {snapshot.Availability}.";
-            return false;
-        }
-        if (ParseUnsigned(snapshot.ReservationTimeSeconds) is > 0)
-        {
-            reason = $"Post-lease reservation time is positive: {snapshot.ReservationTimeSeconds}.";
-            return false;
-        }
-
-        if (HasOwner(snapshot.Owner) &&
-            !ArMms.MmsRcbOwnerIdentity.MatchesLocalTcpAddress(snapshot.Owner, localTcpAddress, out var ownerReason))
-        {
-            reason = "Post-lease Owner does not match the active G2.5-A MMS association: " + ownerReason;
-            return false;
-        }
+        if (snapshot is null) { reason = "Selected URCB is missing from post-lease readback."; return false; }
+        if (snapshot.Buffered) { reason = "G2.5-A permits URCB only."; return false; }
+        if (snapshot.DataSetProbeState != ArMms.MmsRcbDataSetProbeState.ReadSucceeded || !string.IsNullOrWhiteSpace(snapshot.DataSetReference)) { reason = "Post-lease DatSet must still be positively read and empty."; return false; }
+        if (ParseBool(snapshot.EnabledState) != false) { reason = $"Post-lease RptEna is not explicit false: {TextOrDash(snapshot.EnabledState)}"; return false; }
+        if (snapshot.Availability != ArMms.MmsRcbOperationalAvailability.UsedByCaller) { reason = $"Post-lease ownership is not UsedByCaller: {snapshot.Availability}."; return false; }
+        if (ParseUnsigned(snapshot.ReservationTimeSeconds) is > 0) { reason = $"Post-lease reservation time is positive: {snapshot.ReservationTimeSeconds}."; return false; }
+        if (HasOwner(snapshot.Owner) && !ArMms.MmsRcbOwnerIdentity.MatchesLocalTcpAddress(snapshot.Owner, localTcpAddress, out var ownerReason)) { reason = "Post-lease Owner does not match the active G2.5-A MMS association: " + ownerReason; return false; }
 
         var triggers = ArMms.MmsReportControlFieldCodec.DecodeTriggerOptions(snapshot.TriggerOptions);
         if (!triggers.DataChange || triggers.GeneralInterrogation || triggers.Integrity || triggers.QualityChange || triggers.DataUpdate)
@@ -492,37 +429,21 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         }
 
         var fields = ArMms.MmsReportControlFieldCodec.DecodeOptionalFields(snapshot.OptionalFields);
-        if (!fields.ReasonForInclusion || !fields.DataSetName || string.IsNullOrWhiteSpace(snapshot.ReportId))
-        {
-            reason = $"Strict report identity fields missing: RptID={TextOrDash(snapshot.ReportId)}, reason={fields.ReasonForInclusion}, dataSetName={fields.DataSetName}.";
-            return false;
-        }
-
+        if (!fields.ReasonForInclusion || !fields.DataSetName || string.IsNullOrWhiteSpace(snapshot.ReportId)) { reason = $"Strict report identity fields missing: RptID={TextOrDash(snapshot.ReportId)}, reason={fields.ReasonForInclusion}, dataSetName={fields.DataSetName}."; return false; }
         reason = "Caller-owned post-lease URCB is strict dchg-only with GI/integrity/qchg/dupd disabled and reason-for-inclusion + DataSet-name enabled.";
         return true;
     }
 
-    internal static DynamicReportSpontaneousDataChangeValidation ValidateSpontaneousDataChangeFrame(
-        ArMms.MmsReportFrame frame,
-        string expectedReportId,
-        string expectedDataSetReference,
-        IReadOnlyList<string> qualifiedReferences)
+    internal static DynamicReportSpontaneousDataChangeValidation ValidateSpontaneousDataChangeFrame(ArMms.MmsReportFrame frame, string expectedReportId, string expectedDataSetReference, IReadOnlyList<string> qualifiedReferences)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(qualifiedReferences);
-
-        if (frame.DecoderMode.Equals("rejected-unmapped", StringComparison.OrdinalIgnoreCase))
-            return Invalid("Report decoder quarantined the frame as unmapped.");
-        if (string.IsNullOrWhiteSpace(expectedReportId) || !frame.Header.ReportId.Trim().Equals(expectedReportId.Trim(), StringComparison.OrdinalIgnoreCase))
-            return Invalid($"RptID mismatch. expected={TextOrDash(expectedReportId)}, actual={TextOrDash(frame.Header.ReportId)}");
-        if (string.IsNullOrWhiteSpace(frame.Header.DataSetReference) || !SameReference(frame.Header.DataSetReference, expectedDataSetReference))
-            return Invalid($"DataSet mismatch. expected={expectedDataSetReference}, actual={TextOrDash(frame.Header.DataSetReference)}");
-        if (qualifiedReferences.Count == 0 || frame.Values.Count == 0)
-            return Invalid("Spontaneous dchg proof requires at least one included successful DataSet member.");
-        if (frame.IncludedDataSetIndexes.Count != frame.Values.Count)
-            return Invalid($"Included-index/value count mismatch: indexes={frame.IncludedDataSetIndexes.Count}, values={frame.Values.Count}.");
-        if (frame.IncludedDataSetIndexes.Distinct().Count() != frame.IncludedDataSetIndexes.Count)
-            return Invalid("Included DataSet indexes contain duplicates.");
+        if (frame.DecoderMode.Equals("rejected-unmapped", StringComparison.OrdinalIgnoreCase)) return Invalid("Report decoder quarantined the frame as unmapped.");
+        if (!string.Equals(frame.Header.ReportId?.Trim(), expectedReportId?.Trim(), StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(expectedReportId)) return Invalid($"RptID mismatch. expected={TextOrDash(expectedReportId)}, actual={TextOrDash(frame.Header.ReportId)}");
+        if (string.IsNullOrWhiteSpace(frame.Header.DataSetReference) || !SameReference(frame.Header.DataSetReference, expectedDataSetReference)) return Invalid($"DataSet mismatch. expected={expectedDataSetReference}, actual={TextOrDash(frame.Header.DataSetReference)}");
+        if (qualifiedReferences.Count == 0 || frame.Values.Count == 0) return Invalid("Spontaneous dchg proof requires at least one included successful DataSet member.");
+        if (frame.IncludedDataSetIndexes.Count != frame.Values.Count) return Invalid($"Included-index/value count mismatch: indexes={frame.IncludedDataSetIndexes.Count}, values={frame.Values.Count}.");
+        if (frame.IncludedDataSetIndexes.Distinct().Count() != frame.IncludedDataSetIndexes.Count) return Invalid("Included DataSet indexes contain duplicates.");
 
         var included = new List<int>();
         var members = new List<string>();
@@ -531,36 +452,15 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         {
             var value = frame.Values[offset];
             var dataSetIndex = frame.IncludedDataSetIndexes[offset];
-            if (dataSetIndex < 0 || dataSetIndex >= qualifiedReferences.Count)
-                return Invalid($"Included DataSet index {dataSetIndex} is outside 0..{qualifiedReferences.Count - 1}.");
-            if (value.Index != dataSetIndex)
-                return Invalid($"Mapped value index mismatch at offset {offset}: included={dataSetIndex}, value.Index={value.Index}.");
-            if (value.Member is null || !SameReference(value.Member.MmsReference, qualifiedReferences[dataSetIndex]))
-                return Invalid($"Mapped member mismatch at DataSet index {dataSetIndex}: expected={qualifiedReferences[dataSetIndex]}, actual={value.Member?.MmsReference ?? "<null>"}.");
-            if (value.Value is null || value.FailureCode.HasValue)
-                return Invalid($"Included member {qualifiedReferences[dataSetIndex]} has no successful process value (failure={value.FailureCode?.ToString() ?? "none"}).");
-            if (!string.IsNullOrWhiteSpace(value.DataReference) &&
-                !SameReference(value.DataReference, qualifiedReferences[dataSetIndex]) &&
-                !SameReference(value.DataReference, value.Member.UserReference))
-            {
-                return Invalid($"DataRef mismatch at DataSet index {dataSetIndex}: actual={value.DataReference}.");
-            }
+            if (dataSetIndex < 0 || dataSetIndex >= qualifiedReferences.Count) return Invalid($"Included DataSet index {dataSetIndex} is outside 0..{qualifiedReferences.Count - 1}.");
+            if (value.Index != dataSetIndex) return Invalid($"Mapped value index mismatch at offset {offset}: included={dataSetIndex}, value.Index={value.Index}.");
+            if (value.Member is null || !SameReference(value.Member.MmsReference, qualifiedReferences[dataSetIndex])) return Invalid($"Mapped member mismatch at DataSet index {dataSetIndex}: expected={qualifiedReferences[dataSetIndex]}, actual={value.Member?.MmsReference ?? "<null>"}.");
+            if (value.Value is null || value.FailureCode.HasValue) return Invalid($"Included member {qualifiedReferences[dataSetIndex]} has no successful process value (failure={value.FailureCode?.ToString() ?? "none"}).");
+            if (!string.IsNullOrWhiteSpace(value.DataReference) && !SameReference(value.DataReference, qualifiedReferences[dataSetIndex]) && !SameReference(value.DataReference, value.Member.UserReference)) return Invalid($"DataRef mismatch at DataSet index {dataSetIndex}: actual={value.DataReference}.");
 
-            var valueReasons = value.ReasonForInclusion
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Select(item => item.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (!valueReasons.Contains("data-change", StringComparer.OrdinalIgnoreCase))
-                return Invalid($"Included member {qualifiedReferences[dataSetIndex]} does not carry reason-for-inclusion=data-change; reasons={TextOrDash(string.Join(",", valueReasons))}.");
-            if (valueReasons.Any(item =>
-                    item.Equals("general-interrogation", StringComparison.OrdinalIgnoreCase) ||
-                    item.Equals("integrity", StringComparison.OrdinalIgnoreCase) ||
-                    item.Equals("quality-change", StringComparison.OrdinalIgnoreCase) ||
-                    item.Equals("data-update", StringComparison.OrdinalIgnoreCase)))
-            {
-                return Invalid($"Included member {qualifiedReferences[dataSetIndex]} carries a non-dchg reason under a dchg-only lease: {string.Join(",", valueReasons)}.");
-            }
+            var valueReasons = value.ReasonForInclusion.Where(item => !string.IsNullOrWhiteSpace(item)).Select(item => item.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (!valueReasons.Contains("data-change", StringComparer.OrdinalIgnoreCase)) return Invalid($"Included member {qualifiedReferences[dataSetIndex]} does not carry reason-for-inclusion=data-change; reasons={TextOrDash(string.Join(",", valueReasons))}.");
+            if (valueReasons.Any(item => item.Equals("general-interrogation", StringComparison.OrdinalIgnoreCase) || item.Equals("integrity", StringComparison.OrdinalIgnoreCase) || item.Equals("quality-change", StringComparison.OrdinalIgnoreCase) || item.Equals("data-update", StringComparison.OrdinalIgnoreCase))) return Invalid($"Included member {qualifiedReferences[dataSetIndex]} carries a non-dchg reason under a dchg-only lease: {string.Join(",", valueReasons)}.");
 
             included.Add(dataSetIndex);
             members.Add(qualifiedReferences[dataSetIndex]);
@@ -577,59 +477,27 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         };
     }
 
-    private async Task<bool> ProveFreshCleanupClosureAsync(
-        Iec61850MonitorDevice device,
-        string rcbReference,
-        string temporaryDataSetReference,
-        ICollection<string> evidence,
-        CancellationToken cancellationToken)
+    private async Task<bool> ProveFreshCleanupClosureAsync(Iec61850MonitorDevice device, string rcbReference, string temporaryDataSetReference, ICollection<string> evidence, CancellationToken cancellationToken)
     {
         await using var fresh = new ArMms.MmsClientSession();
         try
         {
             await fresh.ConnectAsync(device.IpAddress, device.Port, AuxiliaryAssociationTimeout, cancellationToken).ConfigureAwait(false);
             evidence.Add($"G2.5-A fresh cleanup association ready: state={fresh.State}; localTcpAddress={TextOrDash(fresh.LocalTcpAddress)}");
-            var discovery = await fresh.DiscoverAsync(
-                probeReportAttributes: true,
-                maxReportAttributeProbes: 64,
-                cancellationToken: cancellationToken,
-                readDataSetDirectories: false,
-                maxDataSetDirectoryReads: 0).ConfigureAwait(false);
-
+            var discovery = await fresh.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: 64, cancellationToken: cancellationToken, readDataSetDirectories: false, maxDataSetDirectoryReads: 0).ConfigureAwait(false);
             var rcb = discovery.ReportInventory.ReportControls.FirstOrDefault(candidate => SameReference(candidate.Reference, rcbReference));
-            if (rcb is null)
-            {
-                evidence.Add("G2.5-A fresh cleanup: exact URCB not found.");
-                return false;
-            }
-
+            if (rcb is null) { evidence.Add("G2.5-A fresh cleanup: exact URCB not found."); return false; }
             var oneRcb = new ArMms.MmsReportInventory();
             oneRcb.ReportControls.Add(rcb);
-            var availability = await fresh.CheckReportControlAvailabilityAsync(
-                oneRcb,
-                discovery.IedDirectory,
-                new ArMms.MmsRcbAvailabilityOptions { MaxReportControls = 1, ReadDataSetDirectories = false },
-                cancellationToken).ConfigureAwait(false);
+            var availability = await fresh.CheckReportControlAvailabilityAsync(oneRcb, discovery.IedDirectory, new ArMms.MmsRcbAvailabilityOptions { MaxReportControls = 1, ReadDataSetDirectories = false }, cancellationToken).ConfigureAwait(false);
             var snapshot = availability.ReportControls.SingleOrDefault();
-            if (snapshot is not null)
-                evidence.Add($"G2.5-A fresh cleanup URCB: availability={snapshot.Availability}; probe={snapshot.DataSetProbeState}; DatSet={TextOrDash(snapshot.DataSetReference)}; RptEna={TextOrDash(snapshot.EnabledState)}; Resv={TextOrDash(snapshot.ReservationState)}; Owner={TextOrDash(snapshot.Owner)}; TrgOps={TextOrDash(snapshot.TriggerOptions)}; OptFlds={TextOrDash(snapshot.OptionalFields)}");
-
-            var nameAbsent = DynamicReportCleanupClosureCommissioningService.IsTemporaryDataSetAbsentFromNameList(
-                discovery.Snapshot,
-                temporaryDataSetReference,
-                out var nameReason);
+            if (snapshot is not null) evidence.Add($"G2.5-A fresh cleanup URCB: availability={snapshot.Availability}; probe={snapshot.DataSetProbeState}; DatSet={TextOrDash(snapshot.DataSetReference)}; RptEna={TextOrDash(snapshot.EnabledState)}; Resv={TextOrDash(snapshot.ReservationState)}; Owner={TextOrDash(snapshot.Owner)}; TrgOps={TextOrDash(snapshot.TriggerOptions)}; OptFlds={TextOrDash(snapshot.OptionalFields)}");
+            var nameAbsent = DynamicReportCleanupClosureCommissioningService.IsTemporaryDataSetAbsentFromNameList(discovery.Snapshot, temporaryDataSetReference, out var nameReason);
             evidence.Add("G2.5-A fresh cleanup namespace: " + nameReason);
-
             var directory = await fresh.GetDataSetDirectoryAsync(temporaryDataSetReference, discovery.IedDirectory, cancellationToken).ConfigureAwait(false);
             var directoryAbsent = !directory.IsSuccess;
             evidence.Add($"G2.5-A fresh cleanup DataSet directory: absent={directoryAbsent}; success={directory.IsSuccess}; members={directory.Members.Count}; result={directory.Message}");
-
-            var closed = DynamicReportCleanupClosureCommissioningService.IsFreshCleanupClosed(
-                snapshot,
-                nameAbsent,
-                directoryAbsent,
-                fresh.IsMmsInitiated,
-                out var closureReason);
+            var closed = DynamicReportCleanupClosureCommissioningService.IsFreshCleanupClosed(snapshot, nameAbsent, directoryAbsent, fresh.IsMmsInitiated, out var closureReason);
             evidence.Add("G2.5-A fresh cleanup evaluation: " + closureReason);
             return closed;
         }
@@ -640,119 +508,33 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         }
     }
 
+    private static G25AbortException Abort(string message) => new(message);
+    private sealed class G25AbortException : Exception { public G25AbortException(string message) : base(message) { } }
+
     private static void ApplyFreshSnapshot(ArMms.MmsReportControlCandidate target, ArMms.MmsRcbAvailabilitySnapshot source)
     {
-        target.DataSetReference = source.DataSetReference;
-        target.DataSetProbeState = source.DataSetProbeState;
-        target.DataSetProbeMessage = source.DataSetProbeMessage;
-        target.ReportId = source.ReportId;
-        target.ConfRev = source.ConfRev;
-        target.BufferTimeMs = source.BufferTimeMs;
-        target.IntegrityPeriodMs = source.IntegrityPeriodMs;
-        target.TriggerOptions = source.TriggerOptions;
-        target.OptionalFields = source.OptionalFields;
-        target.EnabledState = source.EnabledState;
-        target.ReservationState = source.ReservationState;
-        target.ReservationTimeSeconds = source.ReservationTimeSeconds;
-        target.Owner = source.Owner;
-        target.Attributes = source.Attributes.ToList();
+        target.DataSetReference = source.DataSetReference; target.DataSetProbeState = source.DataSetProbeState; target.DataSetProbeMessage = source.DataSetProbeMessage;
+        target.ReportId = source.ReportId; target.ConfRev = source.ConfRev; target.BufferTimeMs = source.BufferTimeMs; target.IntegrityPeriodMs = source.IntegrityPeriodMs;
+        target.TriggerOptions = source.TriggerOptions; target.OptionalFields = source.OptionalFields; target.EnabledState = source.EnabledState; target.ReservationState = source.ReservationState;
+        target.ReservationTimeSeconds = source.ReservationTimeSeconds; target.Owner = source.Owner; target.Attributes = source.Attributes.ToList();
     }
 
-    private static void EnsureAttribute(ArMms.MmsReportControlCandidate target, string attribute)
-    {
-        if (!target.Attributes.Contains(attribute, StringComparer.OrdinalIgnoreCase))
-            target.Attributes.Add(attribute);
-    }
+    private static void EnsureAttribute(ArMms.MmsReportControlCandidate target, string attribute) { if (!target.Attributes.Contains(attribute, StringComparer.OrdinalIgnoreCase)) target.Attributes.Add(attribute); }
+    private static bool SuccessfulStep(IEnumerable<ArMms.MmsReportAttributeWriteStep> steps, string attribute) => steps.Any(step => step.Attempted && step.IsSuccess && step.Attribute.Equals(attribute, StringComparison.OrdinalIgnoreCase));
+    private static void AppendWriteSteps(ICollection<string> evidence, string label, IEnumerable<ArMms.MmsReportAttributeWriteStep> steps) { foreach (var step in steps) evidence.Add($"{label} write: attribute={step.Attribute}; reference={step.Reference}; attempted={step.Attempted}; success={step.IsSuccess}; result={step.Message}"); }
+    private static DynamicReportSpontaneousDataChangeValidation Invalid(string reason) => new() { IsSuccess = false, Reason = reason };
+    private static bool ExactSequenceEquals(IEnumerable<string> expected, IEnumerable<string> actual) { var left = expected.ToArray(); var right = actual.ToArray(); return left.Length == right.Length && left.Select(NormalizeReference).SequenceEqual(right.Select(NormalizeReference), StringComparer.OrdinalIgnoreCase); }
+    private static bool SameReference(string? left, string? right) => NormalizeReference(left).Equals(NormalizeReference(right), StringComparison.OrdinalIgnoreCase);
+    private static string NormalizeReference(string? reference) => (reference ?? string.Empty).Trim().Replace('$', '.');
+    private static bool? ParseBool(string? value) { var text = (value ?? string.Empty).Trim(); if (text.Length == 0 || text == "-") return null; if (bool.TryParse(text, out var parsed)) return parsed; if (text is "1" or "01" || text.Equals("yes", StringComparison.OrdinalIgnoreCase) || text.Equals("on", StringComparison.OrdinalIgnoreCase)) return true; if (text is "0" or "00" || text.Equals("no", StringComparison.OrdinalIgnoreCase) || text.Equals("off", StringComparison.OrdinalIgnoreCase)) return false; return null; }
+    private static ulong? ParseUnsigned(string? value) => ulong.TryParse((value ?? string.Empty).Trim(), out var parsed) ? parsed : null;
+    private static bool HasOwner(string? value) { var text = (value ?? string.Empty).Trim(); if (text.Length == 0 || text == "-" || text == "[]" || text.Equals("null", StringComparison.OrdinalIgnoreCase)) return false; var compact = text.Replace("0x", string.Empty, StringComparison.OrdinalIgnoreCase).Replace(":", string.Empty, StringComparison.Ordinal).Replace("-", string.Empty, StringComparison.Ordinal).Replace(" ", string.Empty, StringComparison.Ordinal); return compact.Length > 0 && compact.Any(character => character != '0'); }
 
-    private static bool SuccessfulStep(IEnumerable<ArMms.MmsReportAttributeWriteStep> steps, string attribute)
-        => steps.Any(step => step.Attempted && step.IsSuccess && step.Attribute.Equals(attribute, StringComparison.OrdinalIgnoreCase));
+    private static DynamicReportSpontaneousDataChangeCommissioningResult Blocked(string summary, IReadOnlyList<string> evidence, ArMms.MmsDynamicReportIedIdentity? identity = null, string profilePath = "", ArMms.MmsDynamicReportQualificationProfile? profile = null)
+        => new() { IsBlocked = true, Summary = summary, Identity = identity, InputProfile = profile, ProfilePath = profilePath, EvidenceLines = evidence.ToArray() };
 
-    private static void AppendWriteSteps(ICollection<string> evidence, string label, IEnumerable<ArMms.MmsReportAttributeWriteStep> steps)
-    {
-        foreach (var step in steps)
-            evidence.Add($"{label} write: attribute={step.Attribute}; reference={step.Reference}; attempted={step.Attempted}; success={step.IsSuccess}; result={step.Message}");
-    }
+    private static DynamicReportSpontaneousDataChangeCommissioningResult FailedBeforeMutation(string summary, IReadOnlyList<string> evidence, ArMms.MmsDynamicReportIedIdentity identity, ArMms.MmsDynamicReportQualificationProfile profile, string profilePath, string rcbReference, IReadOnlyList<string> memberReferences)
+        => new() { Summary = summary + " No RCB/DataSet mutation was attempted.", Identity = identity, InputProfile = profile, RcbReference = rcbReference, MemberReferences = memberReferences.ToArray(), MonitorCleanupSucceeded = true, ProofFieldRestoreSucceeded = true, FreshCleanupClosureSucceeded = true, ProfilePath = profilePath, EvidenceLines = evidence.ToArray() };
 
-    private static DynamicReportSpontaneousDataChangeValidation Invalid(string reason)
-        => new() { IsSuccess = false, Reason = reason };
-
-    private static bool ExactSequenceEquals(IEnumerable<string> expected, IEnumerable<string> actual)
-    {
-        var left = expected.ToArray();
-        var right = actual.ToArray();
-        return left.Length == right.Length && left.Select(NormalizeReference).SequenceEqual(right.Select(NormalizeReference), StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static bool SameReference(string? left, string? right)
-        => NormalizeReference(left).Equals(NormalizeReference(right), StringComparison.OrdinalIgnoreCase);
-
-    private static string NormalizeReference(string? reference)
-        => (reference ?? string.Empty).Trim().Replace('$', '.');
-
-    private static bool? ParseBool(string? value)
-    {
-        var text = (value ?? string.Empty).Trim();
-        if (text.Length == 0 || text == "-") return null;
-        if (bool.TryParse(text, out var parsed)) return parsed;
-        if (text is "1" or "01" || text.Equals("yes", StringComparison.OrdinalIgnoreCase) || text.Equals("on", StringComparison.OrdinalIgnoreCase)) return true;
-        if (text is "0" or "00" || text.Equals("no", StringComparison.OrdinalIgnoreCase) || text.Equals("off", StringComparison.OrdinalIgnoreCase)) return false;
-        return null;
-    }
-
-    private static ulong? ParseUnsigned(string? value)
-        => ulong.TryParse((value ?? string.Empty).Trim(), out var parsed) ? parsed : null;
-
-    private static bool HasOwner(string? value)
-    {
-        var text = (value ?? string.Empty).Trim();
-        if (text.Length == 0 || text == "-" || text == "[]" || text.Equals("null", StringComparison.OrdinalIgnoreCase)) return false;
-        var compact = text.Replace("0x", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace(":", string.Empty, StringComparison.Ordinal)
-            .Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(" ", string.Empty, StringComparison.Ordinal);
-        return compact.Length > 0 && compact.Any(character => character != '0');
-    }
-
-    private static DynamicReportSpontaneousDataChangeCommissioningResult Blocked(
-        string summary,
-        IReadOnlyList<string> evidence,
-        ArMms.MmsDynamicReportIedIdentity? identity = null,
-        string profilePath = "",
-        ArMms.MmsDynamicReportQualificationProfile? profile = null)
-        => new()
-        {
-            IsBlocked = true,
-            Summary = summary,
-            Identity = identity,
-            InputProfile = profile,
-            ProfilePath = profilePath,
-            EvidenceLines = evidence.ToArray()
-        };
-
-    private static DynamicReportSpontaneousDataChangeCommissioningResult Failed(
-        string summary,
-        IReadOnlyList<string> evidence,
-        ArMms.MmsDynamicReportIedIdentity identity,
-        ArMms.MmsDynamicReportQualificationProfile profile,
-        string profilePath,
-        string rcbReference,
-        IReadOnlyList<string> memberReferences,
-        string dataSetReference = "",
-        bool monitorCleanupSucceeded = false)
-        => new()
-        {
-            IsSuccess = false,
-            Summary = summary,
-            Identity = identity,
-            InputProfile = profile,
-            RcbReference = rcbReference,
-            DataSetReference = dataSetReference,
-            MemberReferences = memberReferences.ToArray(),
-            MonitorCleanupSucceeded = monitorCleanupSucceeded,
-            ProfilePath = profilePath,
-            EvidenceLines = evidence.ToArray()
-        };
-
-    private static string TextOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    private static string TextOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 }
