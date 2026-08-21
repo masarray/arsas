@@ -46,6 +46,7 @@ public partial class App : Application
         // isolated dynamic-DataSet qualification; it is never invoked by normal startup,
         // Connect/Play, monitoring, reconnect or report-planner paths.
         DynamicReportQualificationUiBehavior.Install();
+        DynamicReportCommandBoundWitnessUiBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
 
