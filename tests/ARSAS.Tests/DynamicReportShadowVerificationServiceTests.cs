@@ -17,25 +17,14 @@ public sealed class DynamicReportShadowVerificationServiceTests
     {
         Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(null, out _));
 
-        var noStimulus = PassedPrerequisite() withChanges(p =>
-        {
-            p.StimulusWitnessProven = false;
-            p.Witness = new DynamicReportStimulusWitnessResult { ChangeObserved = false };
-        });
-        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(noStimulus, out _));
+        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(
+            BuildPrerequisite(stimulusWitnessProven: false, changeObserved: false), out _));
 
-        var noCorrelation = PassedPrerequisite() withChanges(p =>
-        {
-            p.ReportCorrelationProven = false;
-            p.CorrelatedIndexes = Array.Empty<int>();
-        });
-        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(noCorrelation, out _));
+        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(
+            BuildPrerequisite(reportCorrelationProven: false, correlatedIndexes: Array.Empty<int>()), out _));
 
-        var badCleanup = PassedPrerequisite() withChanges(p =>
-        {
-            p.CoreResult = PassedCore() withChanges(core => core.FreshCleanupClosureSucceeded = false);
-        });
-        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(badCleanup, out _));
+        Assert.False(DynamicReportShadowVerificationService.IsPrerequisiteAccepted(
+            BuildPrerequisite(freshCleanupClosureSucceeded: false), out _));
     }
 
     [Theory]
@@ -152,42 +141,52 @@ public sealed class DynamicReportShadowVerificationServiceTests
     }
 
     private static DynamicReportStimulusWitnessCommissioningResult PassedPrerequisite()
+        => BuildPrerequisite();
+
+    private static DynamicReportStimulusWitnessCommissioningResult BuildPrerequisite(
+        bool stimulusWitnessProven = true,
+        bool changeObserved = true,
+        bool reportCorrelationProven = true,
+        IReadOnlyList<int>? correlatedIndexes = null,
+        bool freshCleanupClosureSucceeded = true)
         => new()
         {
-            IsSuccess = true,
-            StimulusWitnessProven = true,
-            ReportCorrelationProven = true,
-            CorrelatedIndexes = [1],
-            CoreResult = PassedCore(),
+            IsSuccess = stimulusWitnessProven && changeObserved && reportCorrelationProven && freshCleanupClosureSucceeded,
+            StimulusWitnessProven = stimulusWitnessProven,
+            ReportCorrelationProven = reportCorrelationProven,
+            CorrelatedIndexes = correlatedIndexes ?? [1],
+            CoreResult = PassedCore(freshCleanupClosureSucceeded),
             Witness = new DynamicReportStimulusWitnessResult
             {
-                ChangeObserved = true,
+                ChangeObserved = changeObserved,
                 BaselineCaptured = true,
                 AssociationHealthy = true,
-                Transitions =
-                [
-                    new DynamicReportStimulusWitnessTransition
-                    {
-                        Index = 1,
-                        MemberReference = "LD0/B",
-                        BeforeValue = "false",
-                        AfterValue = "true",
-                        ObservedAtUtc = DateTimeOffset.UtcNow
-                    }
-                ]
+                Transitions = changeObserved
+                    ?
+                    [
+                        new DynamicReportStimulusWitnessTransition
+                        {
+                            Index = 1,
+                            MemberReference = "LD0/B",
+                            BeforeValue = "false",
+                            AfterValue = "true",
+                            ObservedAtUtc = DateTimeOffset.UtcNow
+                        }
+                    ]
+                    : Array.Empty<DynamicReportStimulusWitnessTransition>()
             }
         };
 
-    private static DynamicReportSpontaneousDataChangeCommissioningResult PassedCore()
+    private static DynamicReportSpontaneousDataChangeCommissioningResult PassedCore(bool freshCleanupClosureSucceeded = true)
         => new()
         {
-            IsSuccess = true,
+            IsSuccess = freshCleanupClosureSucceeded,
             ActivationProven = true,
             SpontaneousDataChangeProven = true,
             AssociationHealthyAfterReport = true,
             MonitorCleanupSucceeded = true,
             ProofFieldRestoreSucceeded = true,
-            FreshCleanupClosureSucceeded = true,
+            FreshCleanupClosureSucceeded = freshCleanupClosureSucceeded,
             IncludedIndexes = [1],
             IncludedMemberReferences = ["LD0/B"],
             Reasons = ["data-change"]
@@ -225,12 +224,6 @@ public sealed class DynamicReportShadowVerificationServiceTests
             DirectReadValue = value,
             ReadObservedAtUtc = at
         };
-
-    private static T withChanges<T>(this T value, Action<T> change) where T : class
-    {
-        change(value);
-        return value;
-    }
 
     private static string RepoRoot()
     {
