@@ -217,23 +217,24 @@ internal static class DynamicReportQualificationUiBehavior
     {
         var answer = MessageBox.Show(
             window,
-            $"Run G2.5-A spontaneous dchg proof for {device.Name} ({device.EndpointText})?\n\n" +
-            "ACTIVE COMMISSIONING — ONE URCB / NO GI\n\n" +
-            "ARSAS will use the stored InformationReportProven profile and EXACT G2.4-proven URCB + 8-member set. It will capture original report-control fields, temporarily set TrgOps to dchg ONLY (canonical 0240), request reason-for-inclusion + data-set-name (061800), create one temporary DataSet, enable the URCB, and arm report routing.\n\n" +
-            "ARSAS WILL NOT SEND GI. After the status bar says 'G2.5-A ARMED — NO GI', cause ONE normal physical/process status change that affects one of the 8 proven points. You may use an already-tested normal OPEN/CLOSE operation if it naturally changes one of those status points, or another safe field stimulus. Do NOT manually edit any RCB or DataSet.\n\n" +
-            "PASS requires an ACTUAL spontaneous InformationReport with exact RptID/DataSet, valid included member mapping, and reason-for-inclusion=data-change. GI/integrity/quality-change/data-update reports are explicitly rejected as G2.5-A proof.\n\n" +
-            "After the bounded wait, ARSAS disables/cleans the monitor, restores exact proof fields, closes the association, then opens a NEW read-only association and requires DatSet empty, RptEna=false, Resv=false, Owner empty and temporary DataSet absent. The persisted InformationReportProven profile is NOT modified and production dynamic reporting remains OFF.\n\n" +
+            $"Run G2.5-A1 spontaneous dchg + independent stimulus witness for {device.Name} ({device.EndpointText})?\n\n" +
+            "ACTIVE COMMISSIONING — ONE URCB / NO GI + READ-ONLY WITNESS\n\n" +
+            "The core path is unchanged G2.5-A: exact G2.4-proven URCB + 8-member set, temporary TrgOps=dchg ONLY (0240), reason-for-inclusion + data-set-name (061800), one temporary DataSet, RptEna=true, NO GI, and strict spontaneous data-change report validation.\n\n" +
+            "G2.5-A1 adds a SECOND MMS association that is READ ONLY. It resolves and samples only the same 8 proven process/status members. It does NOT read/write RCB attributes, does NOT Define/Delete a DataSet, and does NOT send GI.\n\n" +
+            "IMPORTANT OPERATOR SEQUENCE: when the status first says 'G2.5-A ARMED — NO GI', DO NOT stimulate yet. Wait for the second status 'G2.5-A1 WITNESS READY'. Only then cause ONE normal safe physical/process status change affecting one of the 8 proven points. Do NOT manually edit any RCB or DataSet.\n\n" +
+            "The witness records baseline -> changed values and DataSet indexes. If no report arrives, the evidence will now distinguish 'stimulus did not touch the envelope' from 'qualified member changed but no dchg report arrived'. If a report arrives, G2.5-A1 correlates the witnessed changed index with the report included index.\n\n" +
+            "The existing G2.5-A cleanup/restore/fresh-association closure remains mandatory. The persisted InformationReportProven profile is NOT modified and production dynamic reporting remains OFF.\n\n" +
             "Continue?",
-            "G2.5-A Spontaneous dchg Proof",
+            "G2.5-A1 Stimulus Witness",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes)
             return;
 
-        window.LastStatusText = $"G2.5-A: preparing exact G2.4-proven URCB on an isolated auxiliary association to {device.Name}…";
+        window.LastStatusText = $"G2.5-A1: preparing dchg-only report path plus independent read-only witness for {device.Name}…";
         var progress = new Progress<string>(text => window.LastStatusText = text);
-        var service = new DynamicReportSpontaneousDataChangeCommissioningService();
+        var service = new DynamicReportStimulusWitnessCommissioningService();
         var result = await service.RunAsync(
             device,
             device.Signals.ToArray(),
