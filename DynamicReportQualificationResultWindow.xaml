@@ -2,7 +2,7 @@
         x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="G2 Dynamic Reporting Qualification Evidence"
+        Title="G2 Dynamic Reporting Commissioning Evidence"
         Width="980" Height="720" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         Background="#F4F7FB"
@@ -23,12 +23,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="G2 Dynamic Reporting Qualification" FontSize="19" FontWeight="SemiBold" Foreground="#1F2937"/>
+                    <TextBlock x:Name="HeaderText" Text="G2 Dynamic Reporting Commissioning" FontSize="19" FontWeight="SemiBold" Foreground="#1F2937"/>
                     <TextBlock x:Name="SummaryText" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12.5" Foreground="#536275"/>
                 </StackPanel>
                 <Border Grid.Column="1" x:Name="StateBadge" Margin="14,0,0,0" Padding="10,5" CornerRadius="9"
                         Background="#FFF8E6" BorderBrush="#F2D28A" BorderThickness="1" VerticalAlignment="Top">
-                    <TextBlock x:Name="StateText" Text="Qualification" FontSize="11" FontWeight="Bold" Foreground="#946200"/>
+                    <TextBlock x:Name="StateText" Text="Commissioning" FontSize="11" FontWeight="Bold" Foreground="#946200"/>
                 </Border>
             </Grid>
         </Border>
@@ -52,7 +52,7 @@
                 <ColumnDefinition Width="8"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Production dynamic reporting remains OFF unless later G2 gates explicitly prove RCB activation, actual InformationReport delivery, and G2.6 regressions."
+            <TextBlock Text="Production dynamic reporting remains OFF unless later G2 gates explicitly prove controlled scale-out and all G2.6 physical regressions."
                        TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" Foreground="#667085"/>
             <Button Grid.Column="1" Content="Copy Evidence" Click="CopyEvidence_Click" Padding="14,7"/>
             <Button Grid.Column="3" Content="Close" Click="Close_Click" Padding="18,7" IsDefault="True"/>

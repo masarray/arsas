@@ -5,22 +5,39 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG2EngineAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PinsReviewedG24P1EngineAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("c0e146a6111e67b2bfe85c446bd6cef4933f4b37", json.GetProperty("commit").GetString());
-        Assert.Equal(94, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("26c85400a4da230c4429e6302847f230385b6687", json.GetProperty("commit").GetString());
+        Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
+
+        // G2.4 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
+        // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("object-access-denied", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #94 adds identity-bound qualification profiles", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("actual correctly mapped InformationReport", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #95", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("bit 0 reserved", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("bits 1..5 dchg/qchg/dupd/integrity/GI", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dchg+GI encodes canonically as 0244", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TrgOps-only micro-probe", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1 adds a dedicated one-URCB OptFlds-only", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("canonical target 061800", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never writing TrgOps, DatSet, Resv, RptEna, GI", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact local TCP address", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("C0A851F0", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
