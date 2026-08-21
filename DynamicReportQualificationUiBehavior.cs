@@ -104,16 +104,9 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"G2.3 qualification: opening isolated auxiliary MMS association to {device.Name}…";
         var service = new DynamicReportQualificationCommissioningService();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 
@@ -136,16 +129,9 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"P0: opening isolated auxiliary MMS association to {device.Name} for one-URCB TrgOps micro-probe…";
         var service = new DynamicReportTriggerOptionsProbeCommissioningService();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 
@@ -168,16 +154,9 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"P1: opening isolated auxiliary MMS association to {device.Name} for one-URCB OptFlds micro-probe…";
         var service = new DynamicReportOptionalFieldsProbeCommissioningService();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 
@@ -200,16 +179,9 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"G2.4-C: opening fresh read-only auxiliary MMS association to {device.Name}…";
         var service = new DynamicReportCleanupClosureCommissioningService();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 
@@ -221,8 +193,8 @@ internal static class DynamicReportQualificationUiBehavior
             "ACTIVE COMMISSIONING — ONE URCB / NO GI + READ-ONLY WITNESS\n\n" +
             "The core path is unchanged G2.5-A: exact G2.4-proven URCB + 8-member set, temporary TrgOps=dchg ONLY (0240), reason-for-inclusion + data-set-name (061800), one temporary DataSet, RptEna=true, NO GI, and strict spontaneous data-change report validation.\n\n" +
             "G2.5-A1 adds a SECOND MMS association that is READ ONLY. It resolves and samples only the same 8 proven process/status members. It does NOT read/write RCB attributes, does NOT Define/Delete a DataSet, and does NOT send GI.\n\n" +
-            "IMPORTANT OPERATOR SEQUENCE: when the status first says 'G2.5-A ARMED — NO GI', DO NOT stimulate yet. Wait for the second status 'G2.5-A1 WITNESS READY'. Only then cause ONE normal safe physical/process status change affecting one of the 8 proven points. Do NOT manually edit any RCB or DataSet.\n\n" +
-            "The witness records baseline -> changed values and DataSet indexes. If no report arrives, the evidence will now distinguish 'stimulus did not touch the envelope' from 'qualified member changed but no dchg report arrived'. If a report arrives, G2.5-A1 correlates the witnessed changed index with the report included index.\n\n" +
+            "IMPORTANT: the status may briefly show 'G2.5-A ARMED — NO GI'. DO NOT stimulate on that message. WAIT until the status changes to 'G2.5-A1 WITNESS READY'. Only then cause ONE normal safe physical/process status change affecting one of the 8 proven points. Do NOT manually edit any RCB or DataSet.\n\n" +
+            "The witness records baseline -> changed values and DataSet indexes. If no report arrives, evidence distinguishes 'stimulus did not touch the envelope' from 'qualified member changed but no dchg report arrived'. If a report arrives, G2.5-A1 correlates the witnessed changed index with the report included index.\n\n" +
             "The existing G2.5-A cleanup/restore/fresh-association closure remains mandatory. The persisted InformationReportProven profile is NOT modified and production dynamic reporting remains OFF.\n\n" +
             "Continue?",
             "G2.5-A1 Stimulus Witness",
@@ -235,17 +207,9 @@ internal static class DynamicReportQualificationUiBehavior
         window.LastStatusText = $"G2.5-A1: preparing dchg-only report path plus independent read-only witness for {device.Name}…";
         var progress = new Progress<string>(text => window.LastStatusText = text);
         var service = new DynamicReportStimulusWitnessCommissioningService();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            progress,
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), progress, CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 
@@ -269,16 +233,9 @@ internal static class DynamicReportQualificationUiBehavior
 
         window.LastStatusText = $"G2.4: opening isolated auxiliary MMS association to {device.Name} for transactional one-URCB proof…";
         var service = new DynamicReportActivationCommissioningServiceV2();
-        var result = await service.RunAsync(
-            device,
-            device.Signals.ToArray(),
-            CancellationToken.None);
-
+        var result = await service.RunAsync(device, device.Signals.ToArray(), CancellationToken.None);
         window.LastStatusText = result.Summary;
-        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
-        {
-            Owner = window
-        };
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
     }
 }
