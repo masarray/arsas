@@ -51,9 +51,9 @@ internal partial class DynamicReportQualificationResultWindow
         builder.AppendLine($"Input profile state: {result.InputProfile?.State.ToString() ?? "-"}");
         builder.AppendLine($"Pre-command baseline captured: {result.BaselineCaptured}");
         builder.AppendLine($"Command captured: {result.CommandCaptured}");
-        builder.AppendLine($"Command signal: {TextOrDash(result.CommandSignalReference)}");
-        builder.AppendLine($"ControlStatusReference: {TextOrDash(result.ControlStatusReference)}");
-        builder.AppendLine($"Control model: {TextOrDash(result.ControlModelText)}");
+        builder.AppendLine($"Command signal: {G25A21TextOrDash(result.CommandSignalReference)}");
+        builder.AppendLine($"ControlStatusReference: {G25A21TextOrDash(result.ControlStatusReference)}");
+        builder.AppendLine($"Control model: {G25A21TextOrDash(result.ControlModelText)}");
         builder.AppendLine($"Pre-command baseline points: {result.PreCommandBaselineCount}");
         builder.AppendLine($"Focused candidates: {result.FocusCandidateCount}");
         builder.AppendLine($"Sample cycles: {result.SampleCycles}");
@@ -76,7 +76,7 @@ internal partial class DynamicReportQualificationResultWindow
                 builder.AppendLine($"     Kind: {candidate.Kind}");
                 builder.AppendLine($"     Baseline -> final: {candidate.BaselineValue} -> {candidate.FinalValue}");
                 builder.AppendLine($"     Transitions: {candidate.TransitionCount}");
-                builder.AppendLine($"     Observed active/pulse duration ms: {FormatDuration(candidate.ObservedActiveMilliseconds)}");
+                builder.AppendLine($"     Observed active/pulse duration ms: {G25A21FormatDuration(candidate.ObservedActiveMilliseconds)}");
                 foreach (var transition in candidate.Transitions)
                     builder.AppendLine($"       {transition.ObservedAtUtc:O} | {transition.BeforeValue} -> {transition.AfterValue}");
             }
@@ -104,11 +104,11 @@ internal partial class DynamicReportQualificationResultWindow
         return builder.ToString();
     }
 
-    private static string FormatDuration(double? milliseconds)
+    private static string G25A21FormatDuration(double? milliseconds)
         => milliseconds.HasValue
             ? milliseconds.Value.ToString("0.0", CultureInfo.InvariantCulture)
             : "-";
 
-    private static string TextOrDash(string? value)
+    private static string G25A21TextOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 }
