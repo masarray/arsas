@@ -26,7 +26,7 @@ internal static class DynamicReportQualificationUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O && e.Key != Key.C))
+            (e.Key != Key.Q && e.Key != Key.R && e.Key != Key.T && e.Key != Key.O && e.Key != Key.C && e.Key != Key.D))
             return;
 
         e.Handled = true;
@@ -64,6 +64,8 @@ internal static class DynamicReportQualificationUiBehavior
                 await RunP1OptionalFieldsProbeAsync(window, device);
             else if (e.Key == Key.C)
                 await RunG24CleanupClosureAsync(window, device);
+            else if (e.Key == Key.D)
+                await RunG25ASpontaneousDataChangeAsync(window, device);
             else
                 await RunG24Async(window, device);
         }
@@ -201,6 +203,41 @@ internal static class DynamicReportQualificationUiBehavior
         var result = await service.RunAsync(
             device,
             device.Signals.ToArray(),
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result)
+        {
+            Owner = window
+        };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunG25ASpontaneousDataChangeAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Run G2.5-A spontaneous dchg proof for {device.Name} ({device.EndpointText})?\n\n" +
+            "ACTIVE COMMISSIONING — ONE URCB / NO GI\n\n" +
+            "ARSAS will use the stored InformationReportProven profile and EXACT G2.4-proven URCB + 8-member set. It will capture original report-control fields, temporarily set TrgOps to dchg ONLY (canonical 0240), request reason-for-inclusion + data-set-name (061800), create one temporary DataSet, enable the URCB, and arm report routing.\n\n" +
+            "ARSAS WILL NOT SEND GI. After the status bar says 'G2.5-A ARMED — NO GI', cause ONE normal physical/process status change that affects one of the 8 proven points. You may use an already-tested normal OPEN/CLOSE operation if it naturally changes one of those status points, or another safe field stimulus. Do NOT manually edit any RCB or DataSet.\n\n" +
+            "PASS requires an ACTUAL spontaneous InformationReport with exact RptID/DataSet, valid included member mapping, and reason-for-inclusion=data-change. GI/integrity/quality-change/data-update reports are explicitly rejected as G2.5-A proof.\n\n" +
+            "After the bounded wait, ARSAS disables/cleans the monitor, restores exact proof fields, closes the association, then opens a NEW read-only association and requires DatSet empty, RptEna=false, Resv=false, Owner empty and temporary DataSet absent. The persisted InformationReportProven profile is NOT modified and production dynamic reporting remains OFF.\n\n" +
+            "Continue?",
+            "G2.5-A Spontaneous dchg Proof",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.5-A: preparing exact G2.4-proven URCB on an isolated auxiliary association to {device.Name}…";
+        var progress = new Progress<string>(text => window.LastStatusText = text);
+        var service = new DynamicReportSpontaneousDataChangeCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            progress,
             CancellationToken.None);
 
         window.LastStatusText = result.Summary;
