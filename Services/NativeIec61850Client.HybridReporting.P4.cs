@@ -28,7 +28,7 @@ public sealed partial class NativeIec61850Client
         ArMms.MmsRcbAvailabilityResult freshAvailability,
         string staticFailure,
         CancellationToken cancellationToken,
-        bool staticCleanupProven = true)
+        bool staticCleanupProven = false)
     {
         ArgumentNullException.ThrowIfNull(appPlan);
         ArgumentNullException.ThrowIfNull(authoritative);
@@ -52,11 +52,20 @@ public sealed partial class NativeIec61850Client
         if (!IsStaticHybridKind(authoritative.Kind))
             return Fallback("StaticRecoveryNotApplicable", "the failed authoritative segment is not static.");
 
-        if (!staticCleanupProven)
+        // The current StartHybridReportMonitorAsync call sites distinguish pre-write
+        // revalidation failures from the one post-write activation failure through this
+        // stable diagnostic prefix. Pre-write failures have nothing to roll back. A real
+        // activation failure, however, MUST carry explicit CleanupSucceeded evidence before
+        // this method is allowed to mutate an alternate RCB. Until the caller supplies that
+        // evidence, fail closed rather than assuming cleanup from a return code/message.
+        var staticMutationWasAttempted = staticFailure.Contains(
+            "hybrid report activation failed",
+            StringComparison.OrdinalIgnoreCase);
+        if (staticMutationWasAttempted && !staticCleanupProven)
         {
             return Fallback(
                 "StaticCleanupUnproven",
-                "the failed static activation mutated report state and rollback/cleanup was not proven; a second RCB mutation is forbidden on this association.");
+                "the failed static activation reached the mutation path and rollback/cleanup was not explicitly proven; a second RCB mutation is forbidden on this association.");
         }
 
         if (!_session.IsMmsInitiated)
