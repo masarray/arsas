@@ -27,7 +27,7 @@ public sealed class DynamicReportCommandIntentObservationTests
     }
 
     [Fact]
-    public void Ui_ObservesDedicatedControlWindowBeforeExistingHandler_AndUsesV2()
+    public void Ui_RetainsDedicatedDialogFallback_AndUsesV3Authority()
     {
         var root = FindRepositoryRoot();
         var ui = File.ReadAllText(Path.Combine(root, "DynamicReportCommandBoundWitnessUiBehavior.cs"));
@@ -39,11 +39,12 @@ public sealed class DynamicReportCommandIntentObservationTests
         Assert.Contains("Send Test", ui, StringComparison.Ordinal);
         Assert.Contains("commandWindow.CanSend", ui, StringComparison.Ordinal);
         Assert.Contains("DynamicReportCommandIntentObservation.Publish", ui, StringComparison.Ordinal);
-        Assert.Contains("DynamicReportCommandBoundStimulusWitnessServiceV2", ui, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportCommandBoundStimulusWitnessServiceV3", ui, StringComparison.Ordinal);
+        Assert.Contains("window.A21WitnessRuntime", ui, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void V2_ListensToBothControlUiPaths_AndRemainsReadOnly()
+    public void V2_ListensToBothLegacyControlUiPaths_AndRemainsReadOnly()
     {
         var root = FindRepositoryRoot();
         var source = File.ReadAllText(Path.Combine(root, "Services", "DynamicReportCommandBoundStimulusWitnessServiceV2.cs"));
