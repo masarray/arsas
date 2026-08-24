@@ -19,28 +19,54 @@ public sealed class HybridReportDynamicAttemptP4RegressionTests
     }
 
     [Fact]
-    public void StaticFailure_IsIsolatedAndNeverStartsDynamicMutation()
+    public void StaticFailure_GetsGuardedAlternateDynamicRecoveryBeforePolling()
     {
         var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
         var recovery = Read("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
-        // The ordinary residual dynamic path is still attempt-aware.
         Assert.Contains("StartPersistentReportMonitorWithAttemptEvidenceAsync", bridge, StringComparison.Ordinal);
         Assert.True(Count(bridge, "TryStartDynamicRecoveryAfterStaticFailureP4Async") >= 4);
 
-        // P6.1 intentionally keeps the old method name only as a source-compatible,
-        // fail-closed hook. Static failure must never create a new DataSet or write another RCB.
-        Assert.Contains("baseline static-failure isolation", recovery, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no dynamic DataSet/RCB write was attempted", recovery, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("UsedDynamicDataSet = false", recovery, StringComparison.Ordinal);
-        Assert.Contains("DynamicAttempted = false", recovery, StringComparison.Ordinal);
-        Assert.Contains("FailureReason = \"StaticActivationFailed\"", recovery, StringComparison.Ordinal);
-        Assert.Contains("PollingFallbackReason = \"StaticActivationFailed\"", recovery, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
-        Assert.DoesNotContain("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        // G2.6 may recover a failed static segment, but only through the ARIEC planner and
+        // a different RCB with fresh availability evidence. P4 never writes an RCB directly.
+        Assert.Contains("alternateSnapshots", recovery, StringComparison.Ordinal);
+        Assert.Contains("!SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference)", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowDynamicBrcb = authoritative.Options.AllowDynamicBrcb", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowDynamicUrcb = authoritative.Options.AllowDynamicUrcb", recovery, StringComparison.Ordinal);
+        Assert.Contains("RequireExactAvailabilityEvidence = true", recovery, StringComparison.Ordinal);
+        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        Assert.Contains("_authoritativeHybridSubscriptions[appPlan.PlanId]", recovery, StringComparison.Ordinal);
+        Assert.Contains("return await StartHybridReportMonitorAsync(appPlan", recovery, StringComparison.Ordinal);
         Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
-        Assert.DoesNotContain("DynamicWriteCircuitByDevice[appPlan.RelayId]", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("DefineNamedVariableList", recovery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void StaticPostMutationRecovery_RequiresProvenCleanup()
+    {
+        var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
+        var recovery = Read("Services/NativeIec61850Client.HybridReporting.P4.cs");
+
+        Assert.Contains("bool staticCleanupProven = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("staticMutationWasAttempted", recovery, StringComparison.Ordinal);
+        Assert.Contains("StaticCleanupUnproven", recovery, StringComparison.Ordinal);
+        Assert.Contains("a second RCB mutation is forbidden", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("staticCleanupProven: attempt.CleanupSucceeded", bridge, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DynamicRecovery_RetainsCircuitBreakerAndPlanIdentity()
+    {
+        var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
+        var recovery = Read("Services/NativeIec61850Client.HybridReporting.P4.cs");
+
+        Assert.Contains("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", recovery, StringComparison.Ordinal);
+        Assert.Contains("DynamicWriteCircuitOpen", recovery, StringComparison.Ordinal);
+        Assert.Contains("appPlan.EngineAcquisitionKind = dynamicSegment.Kind.ToString()", recovery, StringComparison.Ordinal);
+        Assert.Contains("_authoritativeHybridSubscriptions[appPlan.PlanId]", recovery, StringComparison.Ordinal);
+        Assert.Contains("DynamicWriteCircuitByDevice[plan.RelayId] = reason", bridge, StringComparison.Ordinal);
     }
 
     [Fact]
