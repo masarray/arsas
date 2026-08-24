@@ -78,7 +78,7 @@ That run closed the original P1 physical command -> qualified transition -> dchg
 
 ## Final fail-closed correlation hardening before merge
 
-Before merge, two additional false-positive paths were closed on merge-candidate head `d9a8f83b06b025b954c486ad467581df2347a387`.
+Before merge, two additional false-positive paths were closed in the final code candidate beginning at `d9a8f83b06b025b954c486ad467581df2347a387`.
 
 ### Native control acceptance is mandatory
 
@@ -115,7 +115,7 @@ A final-head A3 PASS requires all of the following in the same bounded armed win
 
 ## Final CI validation
 
-Merge-candidate head: `d9a8f83b06b025b954c486ad467581df2347a387`.
+The code hardening candidate `d9a8f83b06b025b954c486ad467581df2347a387` completed:
 
 - Build ARSAS #1422: PASS;
 - full solution build: PASS, 0 errors;
@@ -125,6 +125,8 @@ Merge-candidate head: `d9a8f83b06b025b954c486ad467581df2347a387`.
 - IO List validation #365: PASS;
 - SV evidence validation #534: PASS;
 - immutable ARIEC61850 engine: `main` @ `aa2ddfb47af5f3b806858553568792fbc21a64f1`.
+
+Subsequent commits are documentation-only acceptance-record cleanup and must not change the P1 runtime safety contract.
 
 ## Production boundary and next phase
 
