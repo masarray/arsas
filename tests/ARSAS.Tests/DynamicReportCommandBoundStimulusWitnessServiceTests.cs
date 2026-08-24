@@ -116,7 +116,8 @@ public sealed class DynamicReportCommandBoundStimulusWitnessServiceTests
 
         Assert.Contains("Key.F", ui, StringComparison.Ordinal);
         Assert.Contains("READY — ISSUE ONE ARSAS COMMAND", ui, StringComparison.Ordinal);
-        Assert.Contains("normal ARSAS Command Panel", ui, StringComparison.Ordinal);
+        Assert.Contains("normal ARSAS control UI", ui, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportCommandBoundStimulusWitnessServiceV3", ui, StringComparison.Ordinal);
         Assert.Contains("DynamicReportCommandBoundWitnessUiBehavior.Install();", app, StringComparison.Ordinal);
         Assert.DoesNotContain("Key.F", existing, StringComparison.Ordinal);
     }
