@@ -5,18 +5,18 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG24P1EngineAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PinsReviewedG26ProductionConsumerAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("26c85400a4da230c4429e6302847f230385b6687", json.GetProperty("commit").GetString());
-        Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("aa2ddfb47af5f3b806858553568792fbc21a64f1", json.GetProperty("commit").GetString());
+        Assert.Equal(97, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // G2.4 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
+        // G2.6 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
         // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
@@ -37,7 +37,14 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("C0A851F0", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", purpose, StringComparison.OrdinalIgnoreCase);
+
+        // PR #97 adds the production consumer but remains strictly fail-closed unless the
+        // persisted identity is ProductionEligible and exact RCB/member evidence matches.
+        Assert.Contains("PR #97", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("identity-compatible ProductionEligible profile", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact InformationReport-proven RCB/member evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("current field profile remains InformationReportProven", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production automatic dynamic reporting remains OFF", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -127,6 +134,7 @@ public sealed class G1ControlCorrectnessRegressionTests
     {
         var engineLock = File.ReadAllText(Path.Combine(RepoRoot(), "engines", "ARIEC61850.lock.json"));
         Assert.Contains("PR #89 quarantines automatic full dynamic DataSet activation", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production automatic dynamic reporting remains OFF", engineLock, StringComparison.OrdinalIgnoreCase);
 
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
         Assert.Contains("SmartReconnectPolicy", runtime, StringComparison.Ordinal);
