@@ -568,7 +568,14 @@ public sealed partial class NativeIec61850Client
         {
             var message = $"ARIEC hybrid report activation failed for {plan.DisplayReference}: {start.Message}";
             if (!isDynamic)
-                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(plan, authoritative, discovery, freshAvailability, message, cancellationToken).ConfigureAwait(false);
+                return await TryStartDynamicRecoveryAfterStaticFailureP4Async(
+                    plan,
+                    authoritative,
+                    discovery,
+                    freshAvailability,
+                    message,
+                    cancellationToken,
+                    staticCleanupProven: attempt.CleanupSucceeded).ConfigureAwait(false);
 
             if (attempt.DynamicAttempted && !string.IsNullOrWhiteSpace(plan.RelayId))
             {
