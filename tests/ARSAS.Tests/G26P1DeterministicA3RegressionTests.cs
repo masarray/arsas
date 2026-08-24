@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class G26P1DeterministicA3RegressionTests
 {
     [Fact]
-    public void A3_ObservesExistingRuntimeCommand_AndNeverExecutesControlItself()
+    public void A3_CoreStillObservesRuntimeCommand_AndNeverExecutesControlItself()
     {
         var source = Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs");
 
@@ -64,24 +64,87 @@ public sealed class G26P1DeterministicA3RegressionTests
     public void A3_CannotAdvanceProductionEligibility()
     {
         var source = Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs");
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
         var evidenceWindow = Read("DynamicReportQualificationResultWindow.G26P1A3.cs");
 
         Assert.DoesNotContain("MarkProductionEligible", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveAsync(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MarkProductionEligible", auto, StringComparison.Ordinal);
         Assert.Contains("profile remains InformationReportProven", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("A3 command-bound dchg PASS != ProductionEligible", evidenceWindow, StringComparison.Ordinal);
         Assert.Contains("Production automatic dynamic reporting remains OFF", evidenceWindow, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A3_HasSeparateExplicitHotkeyFromA21Witness()
+    public void A3_HasSeparateExplicitHotkeyFromA21Witness_AndUsesQ0AutoCoordinator()
     {
         var ui = Read("DynamicReportCommandBoundWitnessUiBehavior.cs");
 
         Assert.Contains("(e.Key != Key.F && e.Key != Key.A)", ui, StringComparison.Ordinal);
         Assert.Contains("var a3 = e.Key == Key.A", ui, StringComparison.Ordinal);
-        Assert.Contains("DynamicReportCommandBoundDataChangeCommissioningService", ui, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportQ0TargetLockedAutoA3CommissioningService", ui, StringComparison.Ordinal);
         Assert.Contains("G2.6-P1 A3 READY", Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Arm G2.6-P1 deterministic A3", ui, StringComparison.Ordinal);
+        Assert.DoesNotContain("G2.6-P1 Transactional Recovery\"", ui, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Q0AutoA3_IsHardBoundToExactFieldIdentityControlStatusAndOpenStimulus()
+    {
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
+
+        Assert.Contains("ExpectedStableIdentity = \"ied:AA1C1F08R4\"", auto, StringComparison.Ordinal);
+        Assert.Contains("sha256:50c691318c6d6a16b68b121ac48627c26e6e32b937836d559dca1b9eb559f0d9", auto, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TargetControlReference = \"AA1C1F08R4Q0/CSWI1.Pos\"", auto, StringComparison.Ordinal);
+        Assert.Contains("TargetStatusReference = \"AA1C1F08R4Q0/CSWI1.Pos.stVal\"", auto, StringComparison.Ordinal);
+        Assert.Contains("AutoStimulusValue = \"Open\"", auto, StringComparison.Ordinal);
+        Assert.Contains("CurrentState.Equals(\"Closed\"", auto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Q0AutoA3_UsesExistingRuntimeControlPathExactlyOnceWithoutToggleRetryOrClose()
+    {
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
+
+        Assert.Contains("Interlocked.CompareExchange(ref autoDispatchStarted, 1, 0)", auto, StringComparison.Ordinal);
+        Assert.Contains("runtime.ExecuteControlAsync(device.DeviceId, request, cancellationToken)", auto, StringComparison.Ordinal);
+        Assert.Contains("InterlockCheck = true", auto, StringComparison.Ordinal);
+        Assert.Contains("SynchroCheck = false", auto, StringComparison.Ordinal);
+        Assert.Contains("TestMode = false", auto, StringComparison.Ordinal);
+        Assert.Contains("retry=false", auto, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No CLOSE/toggle/restore command is allowed", auto, StringComparison.Ordinal);
+        Assert.DoesNotContain("ValueText = \"Close\"", auto, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, CountOccurrences(auto, "runtime.ExecuteControlAsync("));
+    }
+
+    [Fact]
+    public void Q0AutoA3_RechecksClosedStateAfterFinalA3ReadyBeforeDispatch()
+    {
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
+
+        var readyIntercept = auto.IndexOf("ReadyMarker", StringComparison.Ordinal);
+        var dispatch = auto.IndexOf("DispatchOneShotOpenAsync", readyIntercept, StringComparison.Ordinal);
+        var readyRecheck = auto.IndexOf("A3 READY recheck", dispatch, StringComparison.Ordinal);
+        var execute = auto.IndexOf("runtime.ExecuteControlAsync", dispatch, StringComparison.Ordinal);
+
+        Assert.True(readyIntercept >= 0);
+        Assert.True(dispatch > readyIntercept);
+        Assert.True(readyRecheck > dispatch);
+        Assert.True(execute > readyRecheck);
+    }
+
+    [Fact]
+    public void Q0AutoA3_TargetScopesRecoveryOnPrivateSignalClonesWithoutChangingIdentityEvidence()
+    {
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
+        var identity = Read("Services/DynamicReportQualificationIdentity.cs");
+
+        Assert.Contains("MemberwiseClone", auto, StringComparison.Ordinal);
+        Assert.Contains("CreateTargetScopedRecoveryModel", auto, StringComparison.Ordinal);
+        Assert.Contains("statusSetter.Invoke(clone, [string.Empty])", auto, StringComparison.Ordinal);
+        Assert.Contains("scopedCommands.Length != 1", auto, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportQualificationIdentity.Build(device, recoverySignals)", auto, StringComparison.Ordinal);
+        Assert.DoesNotContain("ControlStatusReference", identity, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,6 +157,18 @@ public sealed class G26P1DeterministicA3RegressionTests
         Assert.Contains("PR #97", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("production automatic dynamic reporting remains OFF", engineLock, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+        return count;
     }
 
     private static string Read(string relativePath)
