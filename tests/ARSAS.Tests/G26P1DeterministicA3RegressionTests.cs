@@ -141,7 +141,8 @@ public sealed class G26P1DeterministicA3RegressionTests
 
         Assert.Contains("MemberwiseClone", auto, StringComparison.Ordinal);
         Assert.Contains("CreateTargetScopedRecoveryModel", auto, StringComparison.Ordinal);
-        Assert.Contains("statusSetter.Invoke(clone, [string.Empty])", auto, StringComparison.Ordinal);
+        Assert.Contains("backingField.SetValue(clone, string.Empty)", auto, StringComparison.Ordinal);
+        Assert.Contains("statusSetter!.Invoke(clone, [string.Empty])", auto, StringComparison.Ordinal);
         Assert.Contains("scopedCommands.Length != 1", auto, StringComparison.Ordinal);
         Assert.Contains("DynamicReportQualificationIdentity.Build(device, recoverySignals)", auto, StringComparison.Ordinal);
         Assert.DoesNotContain("ControlStatusReference", identity, StringComparison.Ordinal);
