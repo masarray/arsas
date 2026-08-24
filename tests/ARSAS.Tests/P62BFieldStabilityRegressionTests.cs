@@ -88,13 +88,24 @@ public sealed class P62BFieldStabilityRegressionTests
     }
 
     [Fact]
-    public void P61StaticFailureIsolation_RemainsIntact()
+    public void G26SmartRecovery_DoesNotRegressP62BMutationQuarantine()
     {
-        var source = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
+        var bridge = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.cs");
+        var recovery = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
-        Assert.Contains("no dynamic DataSet/RCB write was attempted", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("DefineNamedVariableList", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", source, StringComparison.Ordinal);
+        // P4 is still not a wire writer. It can only ask the capability-aware planner for
+        // an alternate target, replace the authoritative plan, then re-enter the normal
+        // StartHybrid path where fresh availability and the dynamic circuit are enforced.
+        Assert.DoesNotContain("DefineNamedVariableList", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
+        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        Assert.Contains("StartHybridReportMonitorAsync(appPlan", recovery, StringComparison.Ordinal);
+        Assert.Contains("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", recovery, StringComparison.Ordinal);
+
+        // Post-mutation static recovery is gated by the engine's actual rollback result.
+        Assert.Contains("StaticCleanupUnproven", recovery, StringComparison.Ordinal);
+        Assert.Contains("staticCleanupProven: attempt.CleanupSucceeded", bridge, StringComparison.Ordinal);
+        Assert.Contains("!SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference)", recovery, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)
