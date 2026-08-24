@@ -63,13 +63,13 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
         e.Handled = true;
         var device = window.SelectedDevice;
         var a3 = e.Key == Key.A;
-        var title = a3 ? "G2.6-P1 Deterministic A3" : "G2.5-A2.1 Command-Bound Witness";
+        var title = a3 ? "G2.6-P1 Q0 Target-Locked Auto A3" : "G2.5-A2.1 Command-Bound Witness";
         if (device is null)
         {
             MessageBox.Show(
                 window,
                 a3
-                    ? "Select one IEC 61850 IED first. Deterministic A3 is intentionally bound to one explicit IED, its exact persisted G2.4 envelope, and one explicit existing ARSAS command."
+                    ? "Select the qualified AA1C1F08R4 IEC 61850 IED first. Q0 Auto A3 is hard-bound to the exact proven field identity and AA1C1F08R4Q0/CSWI1.Pos."
                     : "Select one IEC 61850 IED first. G2.5-A2.1 is intentionally bound to one explicit IED and one explicit ARSAS command.",
                 title,
                 MessageBoxButton.OK,
@@ -98,12 +98,12 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
         catch (Exception ex)
         {
             window.LastStatusText = a3
-                ? "G2.6-P1 A3 stopped locally; persisted qualification and production reporting policy remain fail-closed."
+                ? "G2.6-P1 Q0 Auto A3 stopped fail-closed. No retry/CLOSE/toggle is issued; ProductionEligible remains OFF."
                 : "G2.5-A2.1 V3 stopped locally; production dynamic reporting remains OFF.";
             MessageBox.Show(
                 window,
                 (a3
-                    ? "G2.6-P1 deterministic A3/recovery stopped. Any recovery mutation is staging-only until full proof and atomic replacement; A3 cleanup remains owned by the core G2.5-A transaction. Neither path can mark ProductionEligible.\n\n"
+                    ? "G2.6-P1 Q0 target-locked Auto A3 stopped. Ctrl+Shift+A is the explicit commissioning action, but the one-shot OPEN is dispatched only after exact identity, Q0 status, Closed-state, command-focus, dchg-arm and final-baseline gates close. A blocked/ambiguous command is never retried and no CLOSE/toggle/auto-restore is issued. Recovery remains transactional and A3 cleanup remains mandatory. ProductionEligible stays OFF.\n\n"
                     : "G2.5-A2.1 V3 stopped. The witness did not change production reporting policy.\n\n") + ex,
                 title,
                 MessageBoxButton.OK,
@@ -150,120 +150,25 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
 
     private static async Task RunDeterministicA3Async(MainWindow window, Models.Iec61850MonitorDevice device)
     {
-        var answer = MessageBox.Show(
-            window,
-            $"Arm G2.6-P1 deterministic A3 command-bound dchg proof for {device.Name} ({device.EndpointText})?\n\n" +
-            "ONE G2.4-PROVEN URCB + DCHG ONLY + ONE EXISTING ARSAS COMMAND\n\n" +
-            "A3 first performs a READ-ONLY command-focus assessment. If the existing InformationReportProven envelope already intersects an ARSAS control status chain, it proceeds normally. If field evidence shows the envelope cannot witness any command, ARSAS will OFFER a separate transactional command-focus requalification before A3; it will never silently downgrade or overwrite the proven profile.\n\n" +
-            "The A3 core report transaction temporarily configures ONLY the exact InformationReport-proven URCB with dchg enabled, GI/integrity/qchg/dupd disabled, and reason-for-inclusion + DataSet-name enabled. It creates one bounded temporary DataSet and performs mandatory monitor/field/fresh-association cleanup.\n\n" +
-            "After the status shows 'G2.6-P1 A3 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN/CLOSE using the normal ARSAS control UI. A3 observes the existing runtime 'Control execution requested:' diagnostic; it does NOT call, wrap, delay, duplicate or re-issue ExecuteControlAsync/SBOw/Operate.\n\n" +
-            "PASS requires the post-command read-only witness to see a transition on a qualified command-focus member AND the dchg InformationReport to include the same exact DataSet index, followed by complete cleanup.\n\n" +
-            "A3 never advances ProductionEligible. Production automatic dynamic reporting remains OFF after this test. Do not run another G2 hotkey while A3/recovery is armed.\n\n" +
-            "Continue?",
-            "G2.6-P1 Deterministic A3",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
-        if (answer != MessageBoxResult.Yes)
-            return;
+        // Ctrl+Shift+A itself is the explicit commissioning action. There are deliberately
+        // no modal arm/recovery/command dialogs in the successful path: the coordinator is
+        // hard-bound to the already-proven field identity and Q0 CSWI1.Pos, performs all
+        // read-only/transactional gates first, and dispatches one OPEN only after the A3
+        // final baseline is ready. Any failed gate sends zero commands.
+        window.LastStatusText =
+            $"G2.6-P1 Q0 AUTO starting for {device.Name}: exact target {DynamicReportQ0TargetLockedAutoA3CommissioningService.TargetControlReference}; one-shot OPEN only from Closed; no retry/CLOSE/toggle/auto-restore…";
 
-        var signals = device.Signals.ToArray();
-        var recovery = new DynamicReportCommandFocusRequalificationCommissioningService();
-        window.LastStatusText = $"G2.6-P1 A3: READ-ONLY assessment of exact InformationReportProven envelope vs ARSAS command status for {device.Name}…";
-        var assessment = await recovery.AssessAsync(device, signals, CancellationToken.None);
-        if (!assessment.IsSuccess)
-        {
-            window.LastStatusText = assessment.Summary;
-            MessageBox.Show(
-                window,
-                assessment.Summary + FormatEvidence(assessment.EvidenceLines),
-                "G2.6-P1 A3 Preflight Blocked",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        if (assessment.RequiresRequalification)
-        {
-            var recoverAnswer = MessageBox.Show(
-                window,
-                "FIELD-DISCOVERED COMMAND-FOCUS RECOVERY IS REQUIRED\n\n" +
-                assessment.Summary + "\n\n" +
-                "If you continue, ARSAS will:\n" +
-                "• issue ZERO control commands; do not press OPEN/CLOSE during recovery;\n" +
-                "• discover/direct-read exact ControlStatusReference + A2.1 CSWI/XCBR focus points;\n" +
-                "• qualify a temporary dynamic DataSet in a PRIVATE staging profile store;\n" +
-                "• prove one-URCB G2.4 activation + an actual InformationReport;\n" +
-                "• prove fresh-association RCB/DataSet cleanup closure;\n" +
-                "• keep the current InformationReportProven live profile untouched on ANY failure;\n" +
-                "• only after every stage passes, atomically replace the live profile with the new InformationReportProven command-focus profile;\n" +
-                "• automatically re-arm A3 afterward.\n\n" +
-                "ProductionEligible remains OFF. The recovery does not prove spontaneous dchg; that remains the one-command A3 test after the exact READY marker.\n\n" +
-                "Run transactional command-focus recovery now?",
-                "G2.6-P1 Transactional Recovery",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-            if (recoverAnswer != MessageBoxResult.Yes)
-            {
-                window.LastStatusText = "G2.6-P1 A3 stopped before recovery. Existing InformationReportProven profile remains unchanged; production dynamic reporting remains OFF.";
-                return;
-            }
-
-            var recoveryProgress = new Progress<string>(text => window.LastStatusText = text);
-            var recoveryResult = await recovery.RunAsync(
-                device,
-                signals,
-                recoveryProgress,
-                CancellationToken.None);
-            if (!recoveryResult.IsSuccess || !recoveryResult.LiveProfileReplaced || !recoveryResult.FreshCleanupClosureSucceeded)
-            {
-                window.LastStatusText = recoveryResult.Summary;
-                MessageBox.Show(
-                    window,
-                    recoveryResult.Summary + FormatEvidence(recoveryResult.EvidenceLines),
-                    "G2.6-P1 Recovery Did Not Close",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
-            window.LastStatusText = "G2.6-P1 recovery PASS. Re-running READ-ONLY command-focus assessment before automatic A3 arm…";
-            var postRecovery = await recovery.AssessAsync(device, signals, CancellationToken.None);
-            if (!postRecovery.IsSuccess || postRecovery.RequiresRequalification)
-            {
-                window.LastStatusText = "G2.6-P1 recovery persisted, but the independent post-recovery A3 eligibility assessment did not close. Do NOT command.";
-                MessageBox.Show(
-                    window,
-                    window.LastStatusText + "\n\n" + postRecovery.Summary + FormatEvidence(postRecovery.EvidenceLines),
-                    "G2.6-P1 Post-Recovery Gate Blocked",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-        }
-
-        window.LastStatusText = $"G2.6-P1 A3: command-focus gate passed; preparing exact dchg-only report transaction for {device.Name}. DO NOT command until the exact A3 READY marker appears…";
         var progress = new Progress<string>(text => window.LastStatusText = text);
-        var service = new DynamicReportCommandBoundDataChangeCommissioningService();
+        var service = new DynamicReportQ0TargetLockedAutoA3CommissioningService();
         var result = await service.RunAsync(
             window.A21WitnessRuntime,
             device,
-            signals,
+            device.Signals.ToArray(),
             progress,
             CancellationToken.None);
+
         window.LastStatusText = result.Summary;
         var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
         evidenceWindow.ShowDialog();
-    }
-
-    private static string FormatEvidence(IReadOnlyList<string> evidence)
-    {
-        if (evidence.Count == 0)
-            return string.Empty;
-
-        var lines = evidence.Take(18).ToArray();
-        var suffix = evidence.Count > lines.Length ? $"\n… ({evidence.Count - lines.Length} more evidence lines omitted)" : string.Empty;
-        return "\n\nEvidence:\n" + string.Join("\n", lines) + suffix;
     }
 }
