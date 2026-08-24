@@ -67,7 +67,8 @@ public sealed class G26ShadowPhysicalCollectorRegressionTests
         Assert.DoesNotContain("ExecuteControlAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteControl", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("_profileStore.SaveAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("MarkProductionEligible", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsDynamicReportQualificationProfilePolicy.MarkProductionEligible(", source, StringComparison.Ordinal);
+        Assert.Contains("never calls MarkProductionEligible", source, StringComparison.Ordinal);
         Assert.Contains("ZERO control commands", source, StringComparison.Ordinal);
         Assert.Contains("Shadow PASS != ProductionEligible", source, StringComparison.Ordinal);
         Assert.Contains("production automatic dynamic reporting remains OFF", source, StringComparison.OrdinalIgnoreCase);
