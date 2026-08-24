@@ -5,15 +5,15 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG26ShadowEvaluatorAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PinsStrictG26ShadowProductionEvidenceAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("ffd33bc44f7b8650e7de0e62e87568b1eca6b5fa", json.GetProperty("commit").GetString());
-        Assert.Equal(98, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f", json.GetProperty("commit").GetString());
+        Assert.Equal(99, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
         // G2.6 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
@@ -38,14 +38,18 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
 
-        // PR #97 adds the production consumer and PR #98 adds only an evidence evaluator.
-        // Neither weakens the persisted ProductionEligible gate or exact proven RCB/member use.
+        // PR #97 adds the production consumer, PR #98 adds the pure shadow evaluator,
+        // and PR #99 hardens only the production-facing q/t evidence boundary.
         Assert.Contains("PR #97", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible profile", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exact InformationReport-proven RCB/member evidence", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #98", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("never mutates a profile", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #99", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actually observed paired report/poll quality evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actually observed paired report/poll device timestamp evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("absence of q/t evidence cannot become a production PASS", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("current field profile remains InformationReportProven", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("production automatic dynamic reporting remains OFF", purpose, StringComparison.OrdinalIgnoreCase);
     }
