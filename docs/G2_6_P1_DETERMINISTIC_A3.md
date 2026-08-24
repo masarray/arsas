@@ -2,24 +2,19 @@
 
 ## Goal
 
-Close the field A3 proof with one exact, already-proven ARSAS control path and remove both sources of physical-test ambiguity discovered during P1:
+Close the field A3 proof with one exact, already-proven ARSAS control path and remove the sources of physical-test ambiguity discovered during P1.
 
-1. generic command-focus recovery selected the first eight alphabetically ordered control-status members and excluded the intended Q0 control;
-2. manual READY → operator click timing could expire without any command being captured.
+The field-bounded P1 chain is:
 
-The field-bounded P1 chain is now:
-
-`AA1C1F08R4Q0/CSWI1.Pos one-shot OPEN -> qualified Q0 MMS status transition -> Dynamic URCB InformationReport(reason=data-change) on the same DataSet index -> cleanup`
+`AA1C1F08R4Q0/CSWI1.Pos one-shot OPEN -> accepted native MMS control -> qualified Q0 MMS status transition -> post-command Dynamic URCB InformationReport(reason=data-change) on the same exact DataSet index -> cleanup`
 
 This is a commissioning proof only. It does **not** mark the IED `ProductionEligible` and it does **not** enable production automatic dynamic reporting.
 
 ## Entry point
 
-Select the qualified field IED in ARSAS, then press:
+Select the qualified field IED in ARSAS, then press `Ctrl + Shift + A`.
 
-`Ctrl + Shift + A`
-
-For this P1 field build, the hotkey itself is the explicit commissioning action. There is no successful-path arm dialog, recovery dialog, or manual command dialog. The older A2.1 read-only/manual command witness remains separately available on `Ctrl + Shift + F`.
+For this P1 field build, the hotkey itself is the explicit commissioning action. The older A2.1 read-only/manual command witness remains separately available on `Ctrl + Shift + F`.
 
 ## Exact field lock
 
@@ -34,58 +29,25 @@ Auto A3 is deliberately bounded to all of the following exact values:
 - synchrocheck: disabled;
 - test mode: disabled.
 
-The coordinator never converts the current state into a toggle. `Open`, intermediate, unknown, wrong identity, wrong status mapping, busy control, or a non-operational control model all block command dispatch. There is no automatic CLOSE, retry, opposite command, or restore command.
+The coordinator never converts current state into a toggle. `Open`, intermediate, unknown, wrong identity, wrong status mapping, busy control, or a non-operational control model all block dispatch. There is no automatic CLOSE, retry, opposite command, or restore command.
 
-## Preflight gates
+## Preflight and target-scoped recovery
 
-Before the report path is allowed to mutate an RCB, P1 requires:
+Before the report path is allowed to mutate an RCB, P1 requires exact identity/fingerprint, exact Q0 control/status mapping, operational readiness, exact `Closed` state, identity-compatible `InformationReportProven`, successful persisted G2.4 activation/report proof, live resolution of the persisted member sequence, Q0 command-focus intersection, and no control command already busy.
 
-1. the connected model resolves to the exact field identity and model fingerprint above;
-2. the exact Q0 control object exists and exposes the exact `ControlStatusReference` above;
-3. the existing ARSAS control inspector reports the exact target operationally ready;
-4. the exact target state is `Closed` before recovery/report arming;
-5. the persisted profile is identity-compatible and exactly `InformationReportProven`;
-6. the G2.4 RCB activation proof and InformationReport proof are successful;
-7. the exact G2.4 member sequence still resolves on the live IED;
-8. the Q0 A2.1 status/focus chain intersects the exact G2.4-proven DataSet member sequence;
-9. no control command is already busy.
+If Q0 is missing from the persisted G2.4 member envelope, P1 reuses transactional recovery on a **private target-scoped clone** of the discovered signal model. Live `SignalDefinition` instances are not modified. Non-Q0 command focus is suppressed only on private clones, identity-significant fields remain unchanged and are revalidated, qualification runs in a staging profile store, G2.4 V2 proves activation + actual InformationReport, G2.4-C proves fresh cleanup, optimistic concurrency prevents overwriting newer evidence, and the live profile is replaced only after all staging gates pass. Recovery itself issues zero control commands and cannot mark `ProductionEligible`.
 
-The control state is checked again after any recovery and once more after the A3 final witness baseline is ready. The one-shot OPEN is dispatched only if that final READY-time inspection still says exactly `Closed`.
+## Armed transaction and one-shot control
 
-## Field-discovered Q0 command-focus recovery
-
-Physical P1 testing proved that the IED could already be `InformationReportProven` while the exact proven member envelope contained command statuses for DSQZ/ESQZ objects but not the intended `AA1C1F08R4Q0/CSWI1.Pos.stVal`. The previous generic recovery sorted all ARSAS commands by object reference and the eight-member cap was exhausted before Q0 was reached.
-
-P1 now reuses the transactional recovery with a **private target-scoped clone of the discovered signal model**:
-
-1. the normal live `SignalDefinition` instances are never modified;
-2. every signal is privately shallow-cloned;
-3. only on those private clones, non-Q0 `ControlStatusReference` values are suppressed;
-4. identity-significant fields are unchanged, and P1 explicitly recomputes the identity/fingerprint and requires it to be exactly equal to the original model;
-5. recovery therefore sees exactly one command focus: `AA1C1F08R4Q0/CSWI1.Pos`;
-6. the existing A2.1 focus-chain logic adds the exact Q0 status plus corroborating CSWI/XCBR status candidates when the live IED exposes them;
-7. dynamic NamedVariableList qualification runs in the private staging profile store;
-8. existing G2.4 V2 proves one-URCB activation + an actual InformationReport against staging;
-9. G2.4-C proves fresh-association RCB/DataSet cleanup closure;
-10. optimistic concurrency still prevents overwriting newer live evidence;
-11. only after every stage closes may the live profile be atomically replaced `InformationReportProven -> InformationReportProven`.
-
-Any failure before final replacement leaves the previous live profile authoritative. Recovery itself issues **zero control commands** and cannot mark `ProductionEligible`.
-
-## Armed transaction
-
-The existing `DynamicReportSpontaneousDataChangeCommissioningService` and `DynamicReportCommandBoundDataChangeCommissioningService` remain authoritative for the report/witness proof:
+The existing `DynamicReportSpontaneousDataChangeCommissioningService` and `DynamicReportCommandBoundDataChangeCommissioningService` remain authoritative for the dchg-only report/witness proof:
 
 - one exact InformationReport-proven URCB;
 - one bounded temporary dynamic DataSet;
 - `TrgOps`: dchg only;
-- GI disabled;
-- integrity disabled;
-- qchg disabled;
-- dupd disabled;
+- GI/integrity/qchg/dupd disabled;
 - `OptFlds`: reason-for-inclusion + DataSet-name;
 - exact RptID/DataSet/member/reason validation;
-- a separate read-only MMS witness association;
+- separate read-only MMS witness association;
 - final pre-command exact member baseline;
 - exact command-bound high-speed transition sampling;
 - exact DataSet-index correlation;
@@ -93,71 +55,79 @@ The existing `DynamicReportSpontaneousDataChangeCommissioningService` and `Dynam
 - TrgOps/OptFlds restoration;
 - fresh-association cleanup closure.
 
-The core A3 service still does not execute a control command. It remains an observer of the established runtime diagnostic and the physical status/report evidence.
+The core A3 service still does not execute a control command. The Q0 coordinator removes only the operator timing race. At READY it performs one final control inspection and, only if Q0 is still exactly operationally ready and `Closed`, calls the already-existing `Iec61850MonitorRuntime.ExecuteControlAsync(...)` once with `Open`. No new MMS control implementation is introduced. There is no retry, CLOSE, toggle/opposite command, or automatic restore.
 
-## One-shot auto stimulus
+## Physical field acceptance — PASS, 2026-08-24
 
-The new `DynamicReportQ0TargetLockedAutoA3CommissioningService` removes only the operator timing race.
+The physical acceptance run was executed on implementation head `4eedc1449b15ddc24f048040805cef4e508a6dd9` and produced the following operator-captured evidence:
 
-When the core A3 reports its final READY marker after the report path is armed and the read-only final baseline is captured, the coordinator immediately performs one final control inspection. If and only if the target is still exactly operationally ready and `Closed`, it constructs one normal `Iec61850ControlCommandRequest` and calls the already-existing:
+- exact command: `AA1C1F08R4Q0/CSWI1.Pos -> Open`;
+- command intent observed at `2026-08-24T10:21:37.0572634+00:00`;
+- `AA1C1F08R4Q0/XCBR1.Pos.stVal` transitioned `bits(80) -> bits(40)` about `470.638 ms` after command;
+- `AA1C1F08R4Q0/CSWI1.Pos.stVal` transitioned `bits(80) -> bits(40)` about `491.29 ms` after command;
+- spontaneous InformationReport was proven with `reason=data-change`;
+- report included exact DataSet indexes `[0,1]`;
+- command-bound changed indexes were `[0,1]`;
+- correlated indexes were `[0,1]`;
+- report monitor cleanup passed;
+- TrgOps/OptFlds restoration passed;
+- fresh-association cleanup closure passed;
+- report association remained healthy.
 
-`Iec61850MonitorRuntime.ExecuteControlAsync(...)`
+That run closed the original P1 physical command -> qualified transition -> dchg InformationReport -> same exact DataSet index -> cleanup contract.
 
-No new MMS control implementation is introduced. The normal runtime remains responsible for the existing SBO/SBOw/Operate/CommandTermination sequence and wire evidence. Its existing diagnostic:
+## Final fail-closed correlation hardening before merge
 
-`Control execution requested:`
+Before merge, two additional false-positive paths were closed on merge-candidate head `d9a8f83b06b025b954c486ad467581df2347a387`.
 
-is emitted before native control execution and is therefore consumed by the already-armed A3 witness exactly as before.
+### Native control acceptance is mandatory
 
-The dispatch policy is deliberately one-shot:
+`Control execution requested:` is command intent only. It cannot independently satisfy PASS because it is emitted before native control execution completes.
 
-- maximum automatic dispatch count: 1;
-- requested value: `Open`;
-- retry: false;
-- automatic CLOSE: false;
-- automatic opposite command: false;
-- automatic restore: false.
+P1 now also requires a later successful native-control diagnostic from the **same existing runtime control path**, for the same exact object and requested value, with MMS response/wire evidence. `NotSent`, rejected, no-response, and otherwise unproven native control fail closed. No second SBO/SBOw/Operate implementation was introduced.
 
-If the READY-time state inspection fails, the A3 coordinator cancels the wait fail-closed rather than waiting for or synthesizing a command. If an already-dispatched physical command later returns ambiguous/error evidence, P1 does not retry it; runtime wire evidence plus physical transition/report evidence remain authoritative.
+### Report reception must follow the command
 
-## PASS contract
+The selected valid dchg frame preserves `MmsReportFrame.ReceivedAt` as `ReportReceivedAtUtc`. P1 now requires:
 
-A3 PASS still requires all of the following in the same bounded armed window:
+`ReportReceivedAtUtc > CommandObservedAtUtc`
 
-1. core dchg-only activation is proven;
-2. the exact runtime request for `AA1C1F08R4Q0/CSWI1.Pos -> Open` is captured after the final read-only baseline is ready;
-3. at least one qualified Q0 command-focus MMS member changes after that command;
-4. a valid spontaneous InformationReport is received with reason-for-inclusion `data-change`;
-5. the report includes at least one **same exact DataSet index** as the post-command qualified transition;
-6. report monitor cleanup succeeds;
-7. temporary proof fields are restored;
-8. fresh-association cleanup closure succeeds.
+before command/report correlation may pass. A valid unrelated dchg frame received before the command can no longer be combined with a later same-index MMS transition to create a false PASS.
 
-The evidence window remains authoritative for command object/request, transition member/index/before/after values, report included indexes/reasons, correlated indexes, and cleanup state.
+These changes only make acceptance stricter; they do not broaden command authority or production eligibility. The original physical run predates these extra software gates, so it is recorded as physical acceptance of the original P1 contract, not falsely described as a physical rerun of the final hardening head.
 
-## Failure localization
+## Final PASS contract
 
-The combined proof now separates these useful failure classes:
+A final-head A3 PASS requires all of the following in the same bounded armed window:
 
-- exact identity/fingerprint mismatch -> auto control impossible, zero commands;
-- Q0 object/status mismatch -> auto control impossible, zero commands;
-- Q0 not `Closed` / not operationally ready -> auto control impossible, zero commands;
-- target-scoped recovery cannot preserve model fingerprint -> recovery/control blocked;
-- recovery DataSet qualification fails -> Q0 NamedVariableList capability problem; old profile remains untouched;
-- staged G2.4 fails -> RCB activation or actual InformationReport problem; old profile remains untouched;
-- staged G2.4-C fails -> fresh cleanup closure problem; old profile remains untouched;
-- concurrency gate fails -> newer profile evidence exists; recovery refuses overwrite;
-- report path never arms -> zero auto commands;
-- READY-time reinspection fails -> zero auto commands and no retry;
-- exact Q0 command captured but no qualified transition -> physical/control feedback problem;
-- Q0 transition occurs but no dchg report -> report emission/receive-path problem;
-- dchg report arrives but includes different indexes -> report/member correlation problem;
-- report succeeds but cleanup fails -> production remains ineligible.
+1. exact identity-compatible `InformationReportProven` profile;
+2. exact Q0 command-focus intersection with the persisted G2.4 member sequence;
+3. exact dchg-only URCB activation with no GI;
+4. exact ARSAS Q0 command intent after the final read-only baseline;
+5. successful native MMS control result/wire evidence for that exact request;
+6. post-command transition on a qualified command-focus member;
+7. valid spontaneous `reason=data-change` InformationReport;
+8. selected report receive time strictly after the captured command time;
+9. at least one same exact DataSet index between command-bound transition and report;
+10. report monitor cleanup PASS;
+11. TrgOps/OptFlds restore PASS;
+12. fresh-association cleanup closure PASS.
 
-## Production boundary
+## Final CI validation
 
-A3 success is intentionally weaker than production eligibility.
+Merge-candidate head: `d9a8f83b06b025b954c486ad467581df2347a387`.
 
-The recovery path may atomically replace one `InformationReportProven` profile with another `InformationReportProven` profile after stronger Q0-focused staging evidence, but neither recovery nor Auto A3 can advance to `ProductionEligible`. The core A3 remains read-only with respect to persisted profile state. Smart Auto production authorization therefore stays fail-closed until later shadow verification and the complete G2.6 regression acceptance explicitly advance the profile.
+- Build ARSAS #1422: PASS;
+- full solution build: PASS, 0 errors;
+- ARSAS regression suite: **583/583 PASS**, 0 failed, 0 skipped;
+- portable single EXE publish + smoke test: PASS;
+- Windows installer #372: PASS;
+- IO List validation #365: PASS;
+- SV evidence validation #534: PASS;
+- immutable ARIEC61850 engine: `main` @ `aa2ddfb47af5f3b806858553568792fbc21a64f1`.
 
-The ARIEC engine pinned by P1 already contains the P0 production consumer (PR #97), but that consumer remains fail-closed for the current field IED while the profile is below `ProductionEligible`.
+## Production boundary and next phase
+
+P1 success remains intentionally weaker than production eligibility. The persisted state remains `InformationReportProven`; `ProductionEligible` and production automatic dynamic reporting remain OFF.
+
+P1 is stacked onto `g2.6-smart-dynamic-rcb`, so its merge target is that Smart Dynamic branch rather than `main`. After P1 merge, the next engineering gate is Smart Dynamic shadow verification: dynamic reporting operates under controlled observation while MMS polling remains the reconciliation/reference path. Only later shadow/regression acceptance may authorize a production eligibility transition.
