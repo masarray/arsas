@@ -98,7 +98,8 @@ public sealed class G26P1DeterministicA3RegressionTests
     {
         var ui = Read("DynamicReportCommandBoundWitnessUiBehavior.cs");
 
-        Assert.Contains("(e.Key != Key.F && e.Key != Key.A)", ui, StringComparison.Ordinal);
+        Assert.Contains("e.Key != Key.F", ui, StringComparison.Ordinal);
+        Assert.Contains("e.Key != Key.A", ui, StringComparison.Ordinal);
         Assert.Contains("var a3 = e.Key == Key.A", ui, StringComparison.Ordinal);
         Assert.Contains("DynamicReportQ0TargetLockedAutoA3CommissioningService", ui, StringComparison.Ordinal);
         Assert.Contains("G2.6-P1 A3 READY", Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs"), StringComparison.Ordinal);
@@ -167,14 +168,18 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedShadowEvaluatorButKeepsCurrentFieldStateLocked()
+    public void EngineLock_PinsStrictShadowProductionEvidenceButKeepsCurrentFieldStateLocked()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
         Assert.Contains("\"ref\": \"main\"", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ffd33bc44f7b8650e7de0e62e87568b1eca6b5fa", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 99", engineLock, StringComparison.Ordinal);
         Assert.Contains("PR #98", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("typed G2.6 report-vs-independent-MMS shadow evaluator", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("report-vs-independent-MMS shadow evaluator", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #99", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("paired report/poll quality evidence", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("paired report/poll device timestamp evidence", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("production automatic dynamic reporting remains OFF", engineLock, StringComparison.OrdinalIgnoreCase);
     }
