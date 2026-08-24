@@ -22,10 +22,9 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
             new KeyEventHandler(OnPreviewKeyDown),
             handledEventsToo: true);
 
-        // Observer-only bridge for the dedicated ControlCommandWindow path. WPF class
-        // handlers execute before the window's existing SendCommand_Click instance
-        // handler. We only publish immutable intent context; the control handler and
-        // its ExecuteControlAsync/SBOw/Operate sequence remain untouched.
+        // Legacy observer-only fallback for the dedicated ControlCommandWindow path.
+        // V3 command authority is the already-existing runtime Diagnostic event; this
+        // routed observer is retained only as non-authoritative fallback evidence.
         EventManager.RegisterClassHandler(
             typeof(Button),
             Button.ClickEvent,
@@ -89,36 +88,41 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
         {
             var answer = MessageBox.Show(
                 window,
-                $"Arm G2.5-A2.1 command-bound high-speed stimulus witness for {device.Name} ({device.EndpointText})?\n\n" +
-                "READ-ONLY WITNESS + ONE EXISTING ARSAS CONTROL COMMAND\n\n" +
-                "A2.1 V2 opens one isolated read-only MMS association and captures a PRE-COMMAND baseline. It can observe BOTH the fast Command Panel and the dedicated Control Command dialog without changing either control transaction.\n\n" +
-                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE using the normal ARSAS Command Panel or dedicated Control Command dialog you normally use. Do NOT use an external/manual stimulus for this phase.\n\n" +
-                "The observer then narrows read-only sampling to at most six points around the exact ControlStatusReference. Existing ExecuteControlAsync, SBOw, Operate and CommandTermination behavior is NOT modified, delayed, wrapped or re-issued.\n\n" +
+                $"Arm G2.5-A2.1 V3 command-bound high-speed stimulus witness for {device.Name} ({device.EndpointText})?\n\n" +
+                "READ-ONLY MMS WITNESS + ONE EXISTING ARSAS CONTROL COMMAND\n\n" +
+                "V3 captures the exact command from the ALREADY-EXISTING Iec61850MonitorRuntime Diagnostic event 'Control execution requested:' that is emitted before native control execution. It does not add a hook to the SBOw/Operate transaction.\n\n" +
+                "After the status shows 'G2.5-A2.1 READY — ISSUE ONE ARSAS COMMAND', issue exactly ONE already-proven safe OPEN or CLOSE using the normal ARSAS control UI you normally use. Do NOT use an external/manual stimulus for this phase.\n\n" +
+                "Once the runtime diagnostic identifies the exact control object, the isolated MMS witness narrows read-only sampling to at most six points around the exact ControlStatusReference. Existing ExecuteControlAsync, SBOw, Operate and CommandTermination behavior is NOT modified, delayed, wrapped or re-issued.\n\n" +
                 "Once 'G2.5-A2.1 COMMAND CAPTURED' appears, do not issue another command. If a transition is seen, A2.1 samples briefly to classify persistent/latched versus momentary/pulse behavior.\n\n" +
                 "The witness does not access/mutate RCB or DataSet state, does not send GI, does not save/advance the qualification profile, and production dynamic reporting remains OFF. Do not run another G2 hotkey while A2.1 is armed.\n\n" +
                 "Continue?",
-                "G2.5-A2.1 Command-Bound High-Speed Witness",
+                "G2.5-A2.1 V3 Runtime-Diagnostic Witness",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes)
                 return;
 
-            window.LastStatusText = $"G2.5-A2.1 V2: opening isolated read-only MMS witness for {device.Name} and preparing pre-command baseline…";
+            window.LastStatusText = $"G2.5-A2.1 V3: opening isolated read-only MMS witness for {device.Name} and preparing pre-command baseline…";
             var progress = new Progress<string>(text => window.LastStatusText = text);
-            var service = new DynamicReportCommandBoundStimulusWitnessServiceV2();
-            var result = await service.RunAsync(device, device.Signals.ToArray(), progress, CancellationToken.None);
+            var service = new DynamicReportCommandBoundStimulusWitnessServiceV3();
+            var result = await service.RunAsync(
+                window.A21WitnessRuntime,
+                device,
+                device.Signals.ToArray(),
+                progress,
+                CancellationToken.None);
             window.LastStatusText = result.Summary;
             var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
             evidenceWindow.ShowDialog();
         }
         catch (Exception ex)
         {
-            window.LastStatusText = "G2.5-A2.1 V2 stopped locally; production dynamic reporting remains OFF.";
+            window.LastStatusText = "G2.5-A2.1 V3 stopped locally; production dynamic reporting remains OFF.";
             MessageBox.Show(
                 window,
-                "G2.5-A2.1 V2 stopped. The witness did not change production reporting policy.\n\n" + ex,
-                "G2.5-A2.1 Command-Bound Witness",
+                "G2.5-A2.1 V3 stopped. The witness did not change production reporting policy.\n\n" + ex,
+                "G2.5-A2.1 V3 Runtime-Diagnostic Witness",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
