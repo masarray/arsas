@@ -314,8 +314,9 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
                     new ArMms.MmsRcbAvailabilityOptions { MaxReportControls = 1, ReadDataSetDirectories = false },
                     cancellationToken).ConfigureAwait(false);
                 var preLease = preLeaseAvailability.ReportControls.SingleOrDefault();
-                var free = preLease is not null && DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(preLease, out var freeReason);
-                evidence.Add($"{label} pre-lease exact URCB: free={free}; reason={(preLease is null ? "snapshot missing" : freeReason)}");
+                var freeReason = "snapshot missing";
+                var free = preLease is not null && DynamicReportActivationCommissioningServiceV2.IsLeaseableFreeUrcbForG24(preLease, out freeReason);
+                evidence.Add($"{label} pre-lease exact URCB: free={free}; reason={freeReason}");
                 if (!free || preLease is null)
                     return ShadowPhaseResult.Fail(cleanupSucceeded: true);
 
@@ -414,7 +415,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
                 progress?.Report($"{readyMarker} — report is strict dchg-only and independent MMS polling is already active. Cause exactly ONE approved safe change affecting the proven member envelope. No automatic command is issued.");
                 evidence.Add($"{readyMarker}: waiting up to {ReportWindow.TotalSeconds:0}s; GI=false; independentPoll=true; autoControl=false");
 
-                ArMms.MmsPersistentReportMonitorSliceResult receive;
+                ArMms.MmsPersistentReportMonitorReceiveResult receive;
                 try
                 {
                     receive = await reportSession.ReceivePersistentReportMonitorSliceAsync(
