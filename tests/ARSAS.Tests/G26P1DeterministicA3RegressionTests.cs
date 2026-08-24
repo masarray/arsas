@@ -44,6 +44,24 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
+    public void A3_PassRequiresSuccessfulNativeControlEvidence_AndReportStrictlyAfterCommand()
+    {
+        var wrapper = Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs");
+        var core = Read("Services/DynamicReportSpontaneousDataChangeCommissioningService.cs");
+
+        Assert.Contains("IsAcceptedNativeControlResultDiagnostic", wrapper, StringComparison.Ordinal);
+        Assert.Contains("nativeCommandAcceptance", wrapper, StringComparison.Ordinal);
+        Assert.Contains("nativeControlAccepted &&", wrapper, StringComparison.Ordinal);
+        Assert.Contains("Request intent alone cannot prove command acceptance", wrapper, StringComparison.Ordinal);
+        Assert.Contains("coreResult.ReportReceivedAtUtc.Value > witnessResult.CommandObservedAtUtc.Value", wrapper, StringComparison.Ordinal);
+        Assert.Contains("reportAfterCommand &&", wrapper, StringComparison.Ordinal);
+        Assert.Contains("Pre-command report traffic cannot satisfy command-bound A3", wrapper, StringComparison.Ordinal);
+        Assert.Contains("public DateTimeOffset? ReportReceivedAtUtc", core, StringComparison.Ordinal);
+        Assert.Contains("receivedAt={frame.ReceivedAt:O}", core, StringComparison.Ordinal);
+        Assert.Contains("reportReceivedAtUtc = frame.ReceivedAt", core, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A3_ReusesStrictDchgOnlyCoreAndMandatoryCleanup()
     {
         var wrapper = Read("Services/DynamicReportCommandBoundDataChangeCommissioningService.cs");
