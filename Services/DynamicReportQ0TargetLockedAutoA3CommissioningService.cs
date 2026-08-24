@@ -191,7 +191,7 @@ internal sealed class DynamicReportQ0TargetLockedAutoA3CommissioningService
         return result;
     }
 
-    private static async Task DispatchOneShotOpenAsync(
+    private static async Task<Iec61850ControlCommandResult> DispatchOneShotOpenAsync(
         Iec61850MonitorRuntime runtime,
         Iec61850MonitorDevice device,
         SignalDefinition target,
@@ -210,13 +210,14 @@ internal sealed class DynamicReportQ0TargetLockedAutoA3CommissioningService
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException or TimeoutException)
         {
             failBeforeDispatch(ex);
-            return;
+            throw new InvalidOperationException("Q0 READY-time control inspection failed; no control command was sent.", ex);
         }
 
         if (target.ControlCommandBusy)
         {
-            failBeforeDispatch(new InvalidOperationException($"Exact A3 target {TargetControlReference} became busy at READY. No control command was sent."));
-            return;
+            var ex = new InvalidOperationException($"Exact A3 target {TargetControlReference} became busy at READY. No control command was sent.");
+            failBeforeDispatch(ex);
+            throw ex;
         }
 
         var request = new Iec61850ControlCommandRequest
@@ -238,7 +239,7 @@ internal sealed class DynamicReportQ0TargetLockedAutoA3CommissioningService
         // "Control execution requested:" diagnostic is emitted synchronously before the
         // native ARIEC control await, so the armed A3 witness captures the exact request.
         // No separate SBO/SBOw/Operate implementation exists here.
-        await runtime.ExecuteControlAsync(device.DeviceId, request, cancellationToken).ConfigureAwait(false);
+        return await runtime.ExecuteControlAsync(device.DeviceId, request, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task RequireClosedOperationalTargetAsync(
