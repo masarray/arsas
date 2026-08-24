@@ -126,7 +126,7 @@ The code hardening candidate `d9a8f83b06b025b954c486ad467581df2347a387` complete
 - SV evidence validation #534: PASS;
 - immutable ARIEC61850 engine: `main` @ `aa2ddfb47af5f3b806858553568792fbc21a64f1`.
 
-Subsequent commits are documentation-only acceptance-record cleanup and must not change the P1 runtime safety contract.
+Commits after that candidate only freeze this documentation acceptance record; they do not change the P1 runtime safety contract.
 
 ## Production boundary and next phase
 
