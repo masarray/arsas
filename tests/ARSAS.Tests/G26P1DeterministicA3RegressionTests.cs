@@ -50,8 +50,9 @@ public sealed class G26P1DeterministicA3RegressionTests
         var core = Read("Services/DynamicReportSpontaneousDataChangeCommissioningService.cs");
 
         Assert.Contains("DynamicReportSpontaneousDataChangeCommissioningService", wrapper, StringComparison.Ordinal);
-        Assert.Contains("TriggerOptionsDataChange", core, StringComparison.Ordinal);
-        Assert.Contains("OptionalFieldsReasonForInclusionAndDataSetName", core, StringComparison.Ordinal);
+        Assert.Contains("internal const string TemporaryTriggerOptions = \"dchg\"", core, StringComparison.Ordinal);
+        Assert.Contains("internal const string TemporaryOptionalFields = \"reason-for-inclusion data-set-name\"", core, StringComparison.Ordinal);
+        Assert.Contains("GI=false, integrity=false, qchg=false, dupd=false", core, StringComparison.Ordinal);
         Assert.Contains("triggerGeneralInterrogation: false", core, StringComparison.Ordinal);
         Assert.Contains("SpontaneousReportHasForbiddenReason", core, StringComparison.Ordinal);
         Assert.Contains("MonitorCleanupSucceeded", core, StringComparison.Ordinal);
