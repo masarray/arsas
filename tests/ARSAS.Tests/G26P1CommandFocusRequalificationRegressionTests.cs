@@ -64,23 +64,28 @@ public sealed class G26P1CommandFocusRequalificationRegressionTests
     }
 
     [Fact]
-    public void A3Ui_OffersRecoveryOnlyAfterReadOnlyAssessment_ThenReassessesBeforeAutomaticArm()
+    public void Q0AutoCoordinator_AssessesThenRecoversThenReassessesBeforeA3Arm()
     {
+        var auto = Read("Services/DynamicReportQ0TargetLockedAutoA3CommissioningService.cs");
         var ui = Read("DynamicReportCommandBoundWitnessUiBehavior.cs");
 
-        var assess = ui.IndexOf("recovery.AssessAsync", StringComparison.Ordinal);
-        var offer = ui.IndexOf("Run transactional command-focus recovery now?", StringComparison.Ordinal);
-        var run = ui.IndexOf("recovery.RunAsync", StringComparison.Ordinal);
-        var post = ui.IndexOf("postRecovery = await recovery.AssessAsync", StringComparison.Ordinal);
-        var a3 = ui.IndexOf("new DynamicReportCommandBoundDataChangeCommissioningService", StringComparison.Ordinal);
+        var assess = auto.IndexOf("var assessment = await recovery.AssessAsync", StringComparison.Ordinal);
+        var requiresRecovery = auto.IndexOf("if (assessment.RequiresRequalification)", StringComparison.Ordinal);
+        var run = auto.IndexOf("var recoveryResult = await recovery.RunAsync", StringComparison.Ordinal);
+        var post = auto.IndexOf("var postRecovery = await recovery.AssessAsync", StringComparison.Ordinal);
+        var preArm = auto.IndexOf("post-recovery pre-arm", StringComparison.Ordinal);
+        var a3 = auto.IndexOf("new DynamicReportCommandBoundDataChangeCommissioningService", StringComparison.Ordinal);
 
         Assert.True(assess >= 0);
-        Assert.True(offer > assess);
-        Assert.True(run > offer);
+        Assert.True(requiresRecovery > assess);
+        Assert.True(run > requiresRecovery);
         Assert.True(post > run);
-        Assert.True(a3 > post);
-        Assert.Contains("DO NOT command until the exact A3 READY marker appears", ui, StringComparison.Ordinal);
-        Assert.Contains("keep the current InformationReportProven live profile untouched on ANY failure", ui, StringComparison.Ordinal);
+        Assert.True(preArm > post);
+        Assert.True(a3 > preArm);
+        Assert.Contains("ZERO control commands are permitted during recovery", auto, StringComparison.Ordinal);
+        Assert.Contains("The previous live profile remains authoritative and no control command was sent", auto, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportQ0TargetLockedAutoA3CommissioningService", ui, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run transactional command-focus recovery now?", ui, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
