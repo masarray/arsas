@@ -36,6 +36,9 @@ internal sealed class DynamicReportCommandBoundA3CommissioningResult
     public bool IsSuccess { get; init; }
     public bool IsBlocked { get; init; }
     public bool CommandBoundReportCorrelationProven { get; init; }
+    public bool NativeControlAcceptanceProven { get; init; }
+    public bool ReportAfterCommandProven { get; init; }
+    public DateTimeOffset? NativeControlAcceptedAtUtc { get; init; }
     public IReadOnlyList<int> CorrelatedIndexes { get; init; } = Array.Empty<int>();
     public IReadOnlyList<string> CorrelatedMemberReferences { get; init; } = Array.Empty<string>();
     public DynamicReportSpontaneousDataChangeCommissioningResult CoreResult { get; init; } = new();
@@ -57,16 +60,17 @@ internal sealed record DynamicReportCommandBoundA3EligibleTarget(
 /// A second isolated MMS association is read-only and is used only to prove that the exact
 /// pre-existing ARSAS control command caused a transition on a member that belongs to the
 /// exact G2.4-proven DataSet envelope. The command itself remains owned by the existing
-/// Iec61850MonitorRuntime control path; this service only observes its already-existing
-/// "Control execution requested:" Diagnostic entry and never calls ExecuteControlAsync.
+/// Iec61850MonitorRuntime control path; this service observes the runtime request plus the
+/// later successful native-control diagnostic and never calls ExecuteControlAsync.
 ///
 /// PASS therefore requires all of the following in one bounded armed window:
 /// - exact InformationReportProven identity/profile and G2.4 RCB/member sequence;
 /// - at least one ARSAS control object whose A2.1 focus chain intersects that exact sequence;
 /// - core dchg-only activation/report/cleanup success with GI disabled;
 /// - one exact runtime-observed ARSAS command after the witness baseline is ready;
+/// - later successful native control-result/wire evidence for that exact request;
 /// - a post-command MMS transition on a qualified command-focus member;
-/// - the dchg InformationReport includes the same DataSet index.
+/// - the dchg InformationReport was received strictly after the captured command and includes the same DataSet index.
 ///
 /// This service never saves or advances the qualification profile and cannot set
 /// ProductionEligible. Production automatic dynamic reporting remains a later gate.
@@ -76,6 +80,7 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
     internal const string ReadyMarker = "G2.6-P1 A3 READY — ISSUE ONE ARSAS COMMAND";
     internal const string CommandCapturedMarker = "G2.6-P1 A3 COMMAND CAPTURED";
     internal const string TransitionMarker = "G2.6-P1 A3 COMMAND-BOUND TRANSITION";
+    internal const string NativeAcceptedMarker = "G2.6-P1 A3 NATIVE CONTROL ACCEPTED";
     internal static readonly TimeSpan AuxiliaryAssociationTimeout = TimeSpan.FromSeconds(10);
     internal static readonly TimeSpan CommandWaitWindow = TimeSpan.FromSeconds(45);
     internal static readonly TimeSpan CommandTransitionWindow = TimeSpan.FromSeconds(5);
@@ -103,9 +108,9 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
 
         var evidence = new List<string>
         {
-            "G2.6-P1 A3 contract: exact existing ARSAS command -> read-only command-bound qualified-member transition -> dchg InformationReport on the same DataSet index -> mandatory G2.5-A cleanup.",
-            "G2.6-P1 A3 control safety: this service never calls ExecuteControlAsync and never writes SBO/SBOw/Operate/Cancel; command authority remains the existing Iec61850MonitorRuntime path.",
-            "G2.6-P1 A3 report safety: core path is strict dchg-only with GI=false, integrity=false, qchg=false and dupd=false. The read-only witness performs no RCB/DataSet operation.",
+            "G2.6-P1 A3 contract: exact existing ARSAS command -> accepted native MMS control result -> read-only command-bound qualified-member transition -> post-command dchg InformationReport on the same DataSet index -> mandatory G2.5-A cleanup.",
+            "G2.6-P1 A3 control safety: this service never calls ExecuteControlAsync and never writes SBO/SBOw/Operate/Cancel; command authority remains the existing Iec61850MonitorRuntime path. Request diagnostics alone cannot prove PASS.",
+            "G2.6-P1 A3 report safety: core path is strict dchg-only with GI=false, integrity=false, qchg=false and dupd=false. The selected valid report receive timestamp must be strictly after the captured command time.",
             "G2.6-P1 A3 profile safety: persisted InformationReportProven evidence is read-only; this service cannot save, advance or mark ProductionEligible."
         };
 
@@ -196,22 +201,31 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
 
         var armed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var commandCapture = new TaskCompletionSource<DynamicReportObservedCommandIntent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var nativeCommandAcceptance = new TaskCompletionSource<DateTimeOffset>(TaskCreationOptions.RunContinuationsAsynchronously);
         var witnessReady = 0;
 
         void RuntimeDiagnosticHandler(DiagnosticEntry entry)
         {
-            if (Volatile.Read(ref witnessReady) != 1)
-                return;
-            if (!DynamicReportCommandBoundStimulusWitnessServiceV3.TryBuildRuntimeIntent(
+            if (Volatile.Read(ref witnessReady) == 1 &&
+                DynamicReportCommandBoundStimulusWitnessServiceV3.TryBuildRuntimeIntent(
                     entry,
                     device,
                     fullModelSignals,
-                    out var intent) || intent is null)
+                    out var intent) && intent is not null &&
+                eligibleTargets.Any(target => ReferenceEquals(target.Signal, intent.Signal) ||
+                                              SameReference(target.Signal.ObjectReference, intent.Signal.ObjectReference)))
+            {
+                commandCapture.TrySetResult(intent);
+            }
+
+            if (!commandCapture.Task.IsCompletedSuccessfully)
                 return;
-            if (!eligibleTargets.Any(target => ReferenceEquals(target.Signal, intent.Signal) ||
-                                               SameReference(target.Signal.ObjectReference, intent.Signal.ObjectReference)))
+
+            var captured = commandCapture.Task.Result;
+            if (!IsAcceptedNativeControlResultDiagnostic(entry, captured))
                 return;
-            commandCapture.TrySetResult(intent);
+
+            nativeCommandAcceptance.TrySetResult(ToUtc(entry.Time));
         }
 
         runtime.Diagnostic += RuntimeDiagnosticHandler;
@@ -274,6 +288,18 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
         evidence.AddRange(coreResult.EvidenceLines.Select(line => "CORE/" + line));
         evidence.AddRange(witnessResult.EvidenceLines.Select(line => "WITNESS/" + line));
 
+        var nativeControlAccepted = nativeCommandAcceptance.Task.IsCompletedSuccessfully;
+        var nativeAcceptedAtUtc = nativeControlAccepted ? nativeCommandAcceptance.Task.Result : (DateTimeOffset?)null;
+        if (nativeControlAccepted)
+            evidence.Add($"{NativeAcceptedMarker}: object={witnessResult.CommandSignalReference}; requested={witnessResult.RequestedValue}; acceptedAt={nativeAcceptedAtUtc:O}; source=Iec61850MonitorRuntime successful native-control diagnostic.");
+        else if (witnessResult.CommandCaptured)
+            evidence.Add("G2.6-P1 A3 native control acceptance: NOT PROVEN. A request diagnostic alone is insufficient; rejected/NotSent/ambiguous control cannot satisfy PASS.");
+
+        var reportAfterCommand = witnessResult.CommandObservedAtUtc.HasValue &&
+                                 coreResult.ReportReceivedAtUtc.HasValue &&
+                                 coreResult.ReportReceivedAtUtc.Value > witnessResult.CommandObservedAtUtc.Value;
+        evidence.Add($"G2.6-P1 A3 report ordering: commandAt={witnessResult.CommandObservedAtUtc?.ToString("O") ?? "-"}; reportReceivedAt={coreResult.ReportReceivedAtUtc?.ToString("O") ?? "-"}; strictlyAfterCommand={reportAfterCommand}.");
+
         var changedIndexes = witnessResult.Transitions
             .Select(transition => transition.Index)
             .Distinct()
@@ -287,14 +313,16 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
 
         var correlation = coreResult.SpontaneousDataChangeProven &&
                           witnessResult.CommandCaptured &&
+                          nativeControlAccepted &&
                           witnessResult.CommandBoundTransitionProven &&
+                          reportAfterCommand &&
                           correlatedIndexes.Length > 0;
         var success = coreResult.IsSuccess && correlation;
 
         string diagnosis;
         if (success)
         {
-            diagnosis = $"G2.6-P1 A3 PASS: exact ARSAS command {witnessResult.CommandSignalReference} produced a command-bound transition and the dchg InformationReport included the same exact DataSet index(es) [{string.Join(",", correlatedIndexes)}]; monitor/proof-field/fresh-association cleanup all passed.";
+            diagnosis = $"G2.6-P1 A3 PASS: exact ARSAS command {witnessResult.CommandSignalReference} had successful native control evidence, produced a command-bound transition, and a later dchg InformationReport included the same exact DataSet index(es) [{string.Join(",", correlatedIndexes)}]; monitor/proof-field/fresh-association cleanup all passed.";
         }
         else if (!coreResult.ActivationProven)
         {
@@ -304,24 +332,32 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
         {
             diagnosis = "A3 report path armed, but no eligible existing ARSAS command was captured after the read-only baseline became ready.";
         }
+        else if (!nativeControlAccepted)
+        {
+            diagnosis = "A3 captured a control request, but successful native MMS control-result evidence for that exact request was not observed. Request intent alone cannot prove command acceptance.";
+        }
         else if (!witnessResult.CommandBoundTransitionProven)
         {
-            diagnosis = "A3 captured the exact ARSAS command, but no qualified command-focus member changed in the bounded high-speed witness window.";
+            diagnosis = "A3 captured and natively accepted the exact ARSAS command, but no qualified command-focus member changed in the bounded high-speed witness window.";
         }
         else if (!coreResult.SpontaneousDataChangeProven)
         {
-            diagnosis = $"A3 captured the command and witnessed qualified DataSet index(es) [{string.Join(",", changedIndexes)}] change, but no valid dchg InformationReport arrived. This isolates the remaining fault to dchg/report emission or receive-path evidence.";
+            diagnosis = $"A3 captured an accepted command and witnessed qualified DataSet index(es) [{string.Join(",", changedIndexes)}] change, but no valid dchg InformationReport arrived. This isolates the remaining fault to dchg/report emission or receive-path evidence.";
+        }
+        else if (!reportAfterCommand)
+        {
+            diagnosis = $"A3 received a valid dchg report at {coreResult.ReportReceivedAtUtc?.ToString("O") ?? "<unknown>"}, but it was not received strictly after the captured command at {witnessResult.CommandObservedAtUtc?.ToString("O") ?? "<unknown>"}. Pre-command report traffic cannot satisfy command-bound A3.";
         }
         else if (correlatedIndexes.Length == 0)
         {
-            diagnosis = $"A3 received a valid dchg report, but its included indexes [{string.Join(",", coreResult.IncludedIndexes)}] did not match command-bound changed indexes [{string.Join(",", changedIndexes)}].";
+            diagnosis = $"A3 received a valid post-command dchg report, but its included indexes [{string.Join(",", coreResult.IncludedIndexes)}] did not match command-bound changed indexes [{string.Join(",", changedIndexes)}].";
         }
         else
         {
             diagnosis = "A3 command/report correlation did not close every required gate.";
         }
 
-        evidence.Add($"G2.6-P1 A3 combined: coreSuccess={coreResult.IsSuccess}; activation={coreResult.ActivationProven}; dchg={coreResult.SpontaneousDataChangeProven}; cleanup={coreResult.MonitorCleanupSucceeded}/{coreResult.ProofFieldRestoreSucceeded}/{coreResult.FreshCleanupClosureSucceeded}; command={witnessResult.CommandCaptured}; commandTransition={witnessResult.CommandBoundTransitionProven}; changed=[{string.Join(",", changedIndexes)}]; reportIncluded=[{string.Join(",", coreResult.IncludedIndexes)}]; correlated=[{string.Join(",", correlatedIndexes)}]; success={success}");
+        evidence.Add($"G2.6-P1 A3 combined: coreSuccess={coreResult.IsSuccess}; activation={coreResult.ActivationProven}; dchg={coreResult.SpontaneousDataChangeProven}; cleanup={coreResult.MonitorCleanupSucceeded}/{coreResult.ProofFieldRestoreSucceeded}/{coreResult.FreshCleanupClosureSucceeded}; command={witnessResult.CommandCaptured}; nativeAccepted={nativeControlAccepted}; commandTransition={witnessResult.CommandBoundTransitionProven}; reportAfterCommand={reportAfterCommand}; changed=[{string.Join(",", changedIndexes)}]; reportIncluded=[{string.Join(",", coreResult.IncludedIndexes)}]; correlated=[{string.Join(",", correlatedIndexes)}]; success={success}");
         evidence.Add("G2.6-P1 A3 diagnosis: " + diagnosis);
         evidence.Add("G2.6-P1 A3 state: profile remains InformationReportProven. Production automatic dynamic reporting remains OFF; shadow/regression acceptance is still required before ProductionEligible.");
 
@@ -329,6 +365,9 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
         {
             IsSuccess = success,
             CommandBoundReportCorrelationProven = correlation,
+            NativeControlAcceptanceProven = nativeControlAccepted,
+            ReportAfterCommandProven = reportAfterCommand,
+            NativeControlAcceptedAtUtc = nativeAcceptedAtUtc,
             CorrelatedIndexes = correlatedIndexes,
             CorrelatedMemberReferences = correlatedMembers,
             CoreResult = coreResult,
@@ -395,6 +434,39 @@ internal sealed class DynamicReportCommandBoundDataChangeCommissioningService
             .Distinct()
             .OrderBy(index => index)
             .ToArray();
+    }
+
+    private static bool IsAcceptedNativeControlResultDiagnostic(
+        DiagnosticEntry entry,
+        DynamicReportObservedCommandIntent command)
+    {
+        if (!entry.Level.Equals("INFO", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var message = entry.Message ?? string.Empty;
+        if (!message.StartsWith("Control ", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!message.Contains($": {command.Signal.ObjectReference};", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!message.Contains($"requested={command.RequestedValue};", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!message.Contains("wire=", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (message.Contains("NOT SENT TO IED", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("no response captured", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("no wire evidence returned", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
+    }
+
+    private static DateTimeOffset ToUtc(DateTime value)
+    {
+        if (value.Kind == DateTimeKind.Utc)
+            return new DateTimeOffset(value);
+        if (value.Kind == DateTimeKind.Local)
+            return new DateTimeOffset(value).ToUniversalTime();
+        return new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)).ToUniversalTime();
     }
 
     private static async Task<DynamicReportCommandBoundA3WitnessResult> RunCommandWitnessAsync(
