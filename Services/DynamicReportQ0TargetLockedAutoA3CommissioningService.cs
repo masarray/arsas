@@ -298,10 +298,13 @@ internal sealed class DynamicReportQ0TargetLockedAutoA3CommissioningService
                 !SameUserReference(clone.ObjectReference, TargetControlReference) &&
                 !string.IsNullOrWhiteSpace(clone.ControlStatusReference))
             {
-                if (statusSetter is not null)
-                    statusSetter.Invoke(clone, [string.Empty]);
+                // Prefer direct private backing-field mutation on the private clone. A
+                // MemberwiseClone can carry event delegates; invoking a notifying setter
+                // could otherwise wake observers that belong to the live signal instance.
+                if (backingField is not null)
+                    backingField.SetValue(clone, string.Empty);
                 else
-                    backingField!.SetValue(clone, string.Empty);
+                    statusSetter!.Invoke(clone, [string.Empty]);
             }
 
             clones[index] = clone;
