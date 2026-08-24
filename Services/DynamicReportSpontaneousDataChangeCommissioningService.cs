@@ -22,6 +22,7 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningResult
     public bool ProofFieldRestoreSucceeded { get; init; }
     public bool FreshCleanupClosureSucceeded { get; init; }
     public bool AssociationHealthyAfterReport { get; init; }
+    public DateTimeOffset? ReportReceivedAtUtc { get; init; }
     public string Summary { get; init; } = string.Empty;
     public ArMms.MmsDynamicReportIedIdentity? Identity { get; init; }
     public ArMms.MmsDynamicReportQualificationProfile? InputProfile { get; init; }
@@ -121,6 +122,7 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
         var includedIndexes = Array.Empty<int>();
         var includedMembers = Array.Empty<string>();
         var includedReasons = Array.Empty<string>();
+        DateTimeOffset? reportReceivedAtUtc = null;
         var reportId = string.Empty;
         var failureSummary = string.Empty;
 
@@ -302,16 +304,17 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             foreach (var frame in receive.Reports)
             {
                 var validation = ValidateSpontaneousDataChangeFrame(frame, reportId, plan.DataSetReference, qualifiedReferences);
-                evidence.Add($"G2.5-A report candidate: rptId={TextOrDash(frame.Header.ReportId)}; dataset={TextOrDash(frame.Header.DataSetReference)}; decoder={frame.DecoderMode}; values={frame.Values.Count}; included=[{string.Join(",", frame.IncludedDataSetIndexes)}]; valid={validation.IsSuccess}; reasons=[{string.Join(",", validation.Reasons)}]; reason={validation.Reason}");
+                evidence.Add($"G2.5-A report candidate: receivedAt={frame.ReceivedAt:O}; rptId={TextOrDash(frame.Header.ReportId)}; dataset={TextOrDash(frame.Header.DataSetReference)}; decoder={frame.DecoderMode}; values={frame.Values.Count}; included=[{string.Join(",", frame.IncludedDataSetIndexes)}]; valid={validation.IsSuccess}; reasons=[{string.Join(",", validation.Reasons)}]; reason={validation.Reason}");
                 if (!validation.IsSuccess)
                     continue;
 
                 spontaneousProven = true;
                 associationHealthyAfterReport = auxiliary.IsMmsInitiated;
+                reportReceivedAtUtc = frame.ReceivedAt;
                 includedIndexes = validation.IncludedIndexes.ToArray();
                 includedMembers = validation.IncludedMemberReferences.ToArray();
                 includedReasons = validation.Reasons.ToArray();
-                evidence.Add($"G2.5-A spontaneous dchg proof: success={spontaneousProven && associationHealthyAfterReport}; kind=DataChange; actual=true; identity=true; mappedIncludedMembers={includedIndexes.Length}; associationHealthy={associationHealthyAfterReport}; GIrequested=false");
+                evidence.Add($"G2.5-A spontaneous dchg proof: success={spontaneousProven && associationHealthyAfterReport}; receivedAt={reportReceivedAtUtc:O}; kind=DataChange; actual=true; identity=true; mappedIncludedMembers={includedIndexes.Length}; associationHealthy={associationHealthyAfterReport}; GIrequested=false");
                 break;
             }
 
@@ -394,6 +397,7 @@ internal sealed class DynamicReportSpontaneousDataChangeCommissioningService
             ProofFieldRestoreSucceeded = fieldRestore,
             FreshCleanupClosureSucceeded = freshClosure,
             AssociationHealthyAfterReport = associationHealthyAfterReport,
+            ReportReceivedAtUtc = reportReceivedAtUtc,
             Summary = success
                 ? $"G2.5-A PASS: exact G2.4-proven URCB delivered a spontaneous data-change InformationReport without GI for {includedIndexes.Length} included member(s), and monitor/proof-field/fresh-association cleanup all passed. Profile remains InformationReportProven; production dynamic reporting remains OFF."
                 : "G2.5-A did not prove the complete spontaneous dchg gate. Cleanup evidence is retained; the InformationReportProven profile is unchanged and production dynamic reporting remains OFF.",
