@@ -54,7 +54,7 @@ public sealed class G26P1DeterministicA3RegressionTests
         Assert.Contains("internal const string TemporaryOptionalFields = \"reason-for-inclusion data-set-name\"", core, StringComparison.Ordinal);
         Assert.Contains("GI=false, integrity=false, qchg=false, dupd=false", core, StringComparison.Ordinal);
         Assert.Contains("triggerGeneralInterrogation: false", core, StringComparison.Ordinal);
-        Assert.Contains("SpontaneousReportHasForbiddenReason", core, StringComparison.Ordinal);
+        Assert.Contains("carries a non-dchg reason under a dchg-only lease", core, StringComparison.Ordinal);
         Assert.Contains("MonitorCleanupSucceeded", core, StringComparison.Ordinal);
         Assert.Contains("ProofFieldRestoreSucceeded", core, StringComparison.Ordinal);
         Assert.Contains("FreshCleanupClosureSucceeded", core, StringComparison.Ordinal);
