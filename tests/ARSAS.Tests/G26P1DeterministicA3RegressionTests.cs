@@ -84,11 +84,12 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsProductionConsumerButKeepsCurrentFieldStateLocked()
+    public void EngineLock_PinsMergedProductionConsumerButKeepsCurrentFieldStateLocked()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("a2b2265af54afd87b98aadcf63e302725c97d347", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"ref\": \"main\"", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aa2ddfb47af5f3b806858553568792fbc21a64f1", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #97", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("production automatic dynamic reporting remains OFF", engineLock, StringComparison.OrdinalIgnoreCase);
