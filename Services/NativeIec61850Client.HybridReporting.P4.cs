@@ -7,41 +7,152 @@ namespace ArIED61850Tester.Services;
 public sealed partial class NativeIec61850Client
 {
     /// <summary>
-    /// P6.1 baseline-safety compatibility hook.
+    /// G2.6 Smart Auto recovery for a static report segment that cannot be activated.
     ///
-    /// P4 originally converted a failed static activation into a brand-new dynamic
-    /// DataSet/RCB write attempt. That changed the proven pre-P0 failure semantics and made
-    /// one static problem capable of mutating another RCB or destabilizing the association.
-    /// Static failure is now isolated again: no dynamic DataSet is created, no alternate RCB
-    /// is written, and bounded MMS polling remains the fallback for the affected signal set.
+    /// Recovery is deliberately narrower than the original P4 experiment:
+    /// - the failed static RCB is excluded from the recovery availability evidence;
+    /// - static RCBs are disabled in the recovery planner, so only an alternate dynamic
+    ///   BRCB/URCB can be selected;
+    /// - a post-mutation static failure may recover only after rollback/cleanup is proven;
+    /// - ARIEC capability + exact availability evidence remains authoritative;
+    /// - StartHybridReportMonitorAsync performs another fresh discovery/revalidation before
+    ///   any dynamic DataSet/RCB write and retains the process-lifetime dynamic-write circuit;
+    /// - the original PlanId is preserved so runtime routing/coverage ownership does not fork.
     ///
-    /// The method name is retained temporarily so existing call-sites stay source-compatible;
-    /// its behavior is deliberately fail-closed and side-effect free.
+    /// If any gate is not satisfied, bounded MMS polling remains the final fallback.
     /// </summary>
-    private Task<NativeReportMonitorStartResult> TryStartDynamicRecoveryAfterStaticFailureP4Async(
+    private async Task<NativeReportMonitorStartResult> TryStartDynamicRecoveryAfterStaticFailureP4Async(
         ReportControlPlan appPlan,
         AuthoritativeHybridSubscription authoritative,
         ArMms.MmsDiscoveryResult discovery,
         ArMms.MmsRcbAvailabilityResult freshAvailability,
         string staticFailure,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool staticCleanupProven = true)
     {
-        _ = authoritative;
-        _ = discovery;
-        _ = freshAvailability;
-        _ = cancellationToken;
+        ArgumentNullException.ThrowIfNull(appPlan);
+        ArgumentNullException.ThrowIfNull(authoritative);
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(freshAvailability);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(new NativeReportMonitorStartResult
+        NativeReportMonitorStartResult Fallback(string reason, string detail) => new()
         {
             IsSuccess = false,
             PlanId = appPlan.PlanId,
-            Message = $"{staticFailure} P6.1 preserved baseline static-failure isolation: no dynamic DataSet/RCB write was attempted; bounded MMS polling remains active for this affected signal set.",
+            Message = $"{staticFailure} Smart Auto dynamic recovery withheld: {detail} Bounded MMS polling remains active for this affected signal set.",
             UsedDynamicDataSet = false,
             DynamicAttempted = false,
             DynamicAttemptState = "Skipped",
-            FailureReason = "StaticActivationFailed",
-            PollingFallbackReason = "StaticActivationFailed"
-        });
+            FailureReason = reason,
+            PollingFallbackReason = reason,
+            Warnings = freshAvailability.Warnings
+        };
+
+        if (!IsStaticHybridKind(authoritative.Kind))
+            return Fallback("StaticRecoveryNotApplicable", "the failed authoritative segment is not static.");
+
+        if (!staticCleanupProven)
+        {
+            return Fallback(
+                "StaticCleanupUnproven",
+                "the failed static activation mutated report state and rollback/cleanup was not proven; a second RCB mutation is forbidden on this association.");
+        }
+
+        if (!_session.IsMmsInitiated)
+            return Fallback("TransportUnavailable", $"the MMS association is no longer initiated ({_session.State}).");
+
+        if (!authoritative.Options.AllowDynamicBrcb && !authoritative.Options.AllowDynamicUrcb)
+            return Fallback("DynamicRecoveryDisabled", "dynamic BRCB/URCB acquisition is disabled by the current Smart Auto policy.");
+
+        if (!string.IsNullOrWhiteSpace(appPlan.RelayId) &&
+            DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId, out var circuitReason))
+        {
+            return Fallback(
+                "DynamicWriteCircuitOpen",
+                $"the device dynamic-write circuit is already open after real field failure evidence ({circuitReason}).");
+        }
+
+        // Never turn the RCB that just failed static activation into a dynamic target.
+        // Recovery must use a distinct, freshly classified RCB so a bad/busy/static object
+        // cannot be immediately mutated under a different acquisition label.
+        var alternateSnapshots = freshAvailability.ReportControls
+            .Where(snapshot => !SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference))
+            .ToArray();
+        if (alternateSnapshots.Length == 0)
+        {
+            return Fallback(
+                "NoAlternateRcbEvidence",
+                $"no alternate RCB has fresh availability evidence after excluding {authoritative.ReportControlReference}.");
+        }
+
+        var alternateAvailability = new ArMms.MmsRcbAvailabilityResult
+        {
+            CheckedAtUtc = freshAvailability.CheckedAtUtc,
+            ReportControls = alternateSnapshots,
+            Warnings = freshAvailability.Warnings
+        };
+
+        var recoveryOptions = new ArMms.MmsHybridReportAcquisitionOptions
+        {
+            AllowStaticBrcb = false,
+            AllowStaticUrcb = false,
+            AllowDynamicBrcb = authoritative.Options.AllowDynamicBrcb,
+            AllowDynamicUrcb = authoritative.Options.AllowDynamicUrcb,
+            AllowCallerOwnedReports = false,
+            AllowPollingFallback = true,
+            RequireExactAvailabilityEvidence = true
+        };
+
+        var recoveryCapability = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
+            authoritative.Catalog,
+            authoritative.Signals,
+            discovery.ReportInventory,
+            alternateAvailability,
+            discovery.IedDirectory,
+            _session.LastNegotiatedCapabilities,
+            recoveryOptions);
+
+        var dynamicSegment = recoveryCapability.AcquisitionPlan.Segments.FirstOrDefault(segment =>
+            segment.IsReportBacked &&
+            segment.ReportPlan is not null &&
+            segment.Kind is ArMms.MmsHybridAcquisitionKind.DynamicBrcb or ArMms.MmsHybridAcquisitionKind.DynamicUrcb);
+
+        if (dynamicSegment?.ReportPlan is null)
+        {
+            var blocker = recoveryCapability.Blockers.FirstOrDefault();
+            var warning = recoveryCapability.Warnings.FirstOrDefault();
+            var detail = !string.IsNullOrWhiteSpace(blocker)
+                ? blocker
+                : !string.IsNullOrWhiteSpace(warning)
+                    ? warning
+                    : "ARIEC found no exact alternate dynamic report segment for the affected signals.";
+            return Fallback("NoDynamicRecoverySegment", detail);
+        }
+
+        // Preserve the runtime plan identity while replacing only its acquisition target.
+        // Runtime dictionaries, report slice routing and PointPlanIds therefore continue to
+        // refer to one plan even though Smart Auto escalated static -> dynamic.
+        appPlan.ReportControlReference = dynamicSegment.ReportControlReference;
+        appPlan.DataSetReference = dynamicSegment.DataSetReference;
+        appPlan.Mode = $"ARIEC Hybrid • {dynamicSegment.Kind} • static recovery";
+        appPlan.AllowDynamicDataSetWrites = true;
+        appPlan.Buffered = dynamicSegment.Kind == ArMms.MmsHybridAcquisitionKind.DynamicBrcb;
+        appPlan.Status = $"{dynamicSegment.Kind} recovery planned";
+        appPlan.IsEngineAuthoritative = true;
+        appPlan.EngineAcquisitionKind = dynamicSegment.Kind.ToString();
+
+        _authoritativeHybridSubscriptions[appPlan.PlanId] = new AuthoritativeHybridSubscription(
+            dynamicSegment.Kind,
+            dynamicSegment.ReportControlReference,
+            authoritative.Catalog,
+            dynamicSegment.Signals.ToArray(),
+            recoveryOptions);
+
+        // This recursive entry is safe: the authoritative subscription is now dynamic, so
+        // any subsequent failure cannot re-enter static recovery. It also gives the dynamic
+        // target a fresh discovery + exact availability revalidation immediately before write.
+        return await StartHybridReportMonitorAsync(appPlan, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool IsStaticHybridKind(ArMms.MmsHybridAcquisitionKind kind)
