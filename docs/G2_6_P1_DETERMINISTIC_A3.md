@@ -27,13 +27,38 @@ Before the report path is allowed to mutate an RCB, P1 requires:
 5. the A2.1 status/focus chain for that command intersects the exact G2.4-proven DataSet member sequence;
 6. no control command is already busy.
 
-If the command/status chain does not intersect the qualified DataSet, A3 stops **before** the core report transaction is started. The operator is told to re-qualify an envelope containing the relevant CSWI/XCBR status instead of spending a breaker operation on an unprovable stimulus.
+The first pass is read-only. If the existing InformationReport-proven envelope already contains a command-focus member, A3 proceeds normally.
+
+## Field-discovered command-focus recovery
+
+Physical P1 testing found an important valid state that the original implementation did not recover from: the IED can already be `InformationReportProven` while its exact proven member envelope contains no CSWI/XCBR status that can witness an ARSAS command. The old instruction to “re-qualify an envelope” was a dead end because normal G2.3 intentionally refuses to downgrade an advanced profile.
+
+P1 now handles that state with an explicit **transactional staging recovery**. It is offered only after the read-only assessment proves that the existing envelope has zero command-focus intersection.
+
+The recovery contract is:
+
+1. keep the current live `InformationReportProven` profile untouched;
+2. discover exact live `ControlStatusReference` points and the same bounded A2.1 CSWI/XCBR/XSWI focus chain;
+3. direct-read validate those points;
+4. run explicit dynamic NamedVariableList qualification in a private temporary profile-store root;
+5. create only a staged `EnvelopeQualified` profile;
+6. run the existing G2.4 V2 one-URCB activation + actual InformationReport proof against that staging store;
+7. run G2.4-C on a fresh read-only association and require full RCB/DataSet cleanup closure;
+8. require the final exact G2.4 member sequence still to contain at least one exact command-status member;
+9. re-read the live profile and abort if its evidence changed concurrently;
+10. only then atomically replace the live profile with the staged `InformationReportProven` profile.
+
+Any failure before step 10 leaves the previous live profile authoritative. The normal profile store already persists by temporary-file + atomic move, so a completed replacement cannot expose a partially serialized profile.
+
+Recovery issues **zero control commands**. The operator must not press OPEN/CLOSE while recovery is running. It also cannot call `MarkProductionEligible`; the resulting state is exactly `InformationReportProven`.
+
+After recovery succeeds, ARSAS performs an independent read-only command-focus assessment again. Only if that assessment closes does it automatically continue into A3. The operator still waits for the exact A3 READY marker before issuing the one physical command.
 
 ## Armed transaction
 
 The existing `DynamicReportSpontaneousDataChangeCommissioningService` remains authoritative for the report transaction:
 
-- one exact G2.4-proven URCB;
+- one exact InformationReport-proven URCB;
 - one bounded temporary dynamic DataSet;
 - `TrgOps`: dchg only;
 - GI disabled;
@@ -52,7 +77,7 @@ A separate auxiliary MMS association is strictly read-only. It captures the fina
 
 P1 does not call or wrap `ExecuteControlAsync`.
 
-The operator issues exactly one already-proven safe OPEN/CLOSE through the normal ARSAS control UI after this status appears:
+The operator issues exactly one already-proven safe OPEN/CLOSE through the normal ARSAS control UI **only after** this status appears:
 
 `G2.6-P1 A3 READY — ISSUE ONE ARSAS COMMAND`
 
@@ -81,6 +106,11 @@ The evidence window records the command object/request, transition member/index/
 
 The combined proof separates several useful failure classes:
 
+- read-only assessment cannot resolve the old exact envelope -> model/profile identity problem;
+- recovery DataSet qualification fails -> command-focus member / NamedVariableList capability problem; old profile remains untouched;
+- staged G2.4 fails -> RCB activation or actual InformationReport problem; old profile remains untouched;
+- staged G2.4-C fails -> fresh cleanup closure problem; old profile remains untouched;
+- concurrency gate fails -> another qualification action changed the live evidence; recovery refuses to overwrite it;
 - report path never arms -> activation/configuration problem;
 - command is not captured -> ARSAS stimulus/capture problem;
 - command captured but no qualified transition -> wrong/non-changing qualified member or physical/control feedback problem;
@@ -92,6 +122,6 @@ The combined proof separates several useful failure classes:
 
 A3 success is intentionally weaker than production eligibility.
 
-P1 never calls `MarkProductionEligible`, never saves a promoted qualification profile, and never changes Smart Auto policy. After A3, the persisted field state remains `InformationReportProven` until later shadow verification and the complete G2.6 regression acceptance explicitly advance it.
+The recovery path may atomically replace one `InformationReportProven` profile with another `InformationReportProven` profile after stronger command-focus staging evidence, but neither recovery nor A3 can advance to `ProductionEligible`. A3 itself remains read-only with respect to persisted profile state. Smart Auto production authorization therefore stays fail-closed until later shadow verification and the complete G2.6 regression acceptance explicitly advance the profile.
 
 The ARIEC engine pinned by P1 already contains the P0 production consumer (PR #97), but that consumer remains fail-closed for the current field IED while the profile is below `ProductionEligible`.
