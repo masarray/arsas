@@ -57,20 +57,27 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
     {
         if (sender is not MainWindow window ||
             Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift) ||
-            (e.Key != Key.F && e.Key != Key.A))
+            (e.Key != Key.F && e.Key != Key.A && e.Key != Key.S))
             return;
 
         e.Handled = true;
         var device = window.SelectedDevice;
         var a3 = e.Key == Key.A;
-        var title = a3 ? "G2.6-P1 Q0 Target-Locked Auto A3" : "G2.5-A2.1 Command-Bound Witness";
+        var shadow = e.Key == Key.S;
+        var title = shadow
+            ? "G2.6 Physical Shadow Verification"
+            : a3
+                ? "G2.6-P1 Q0 Target-Locked Auto A3"
+                : "G2.5-A2.1 Command-Bound Witness";
         if (device is null)
         {
             MessageBox.Show(
                 window,
-                a3
-                    ? "Select the qualified AA1C1F08R4 IEC 61850 IED first. Q0 Auto A3 is hard-bound to the exact proven field identity and AA1C1F08R4Q0/CSWI1.Pos."
-                    : "Select one IEC 61850 IED first. G2.5-A2.1 is intentionally bound to one explicit IED and one explicit ARSAS command.",
+                shadow
+                    ? "Select the exact identity-compatible InformationReportProven IEC 61850 IED first. G2.6 shadow is bound to the persisted proven RCB/member envelope and will not guess another target."
+                    : a3
+                        ? "Select the qualified AA1C1F08R4 IEC 61850 IED first. Q0 Auto A3 is hard-bound to the exact proven field identity and AA1C1F08R4Q0/CSWI1.Pos."
+                        : "Select one IEC 61850 IED first. G2.5-A2.1 is intentionally bound to one explicit IED and one explicit ARSAS command.",
                 title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -81,7 +88,7 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
         {
             MessageBox.Show(
                 window,
-                "A command-bound G2 commissioning witness is already armed/running.",
+                "A G2 commissioning witness/shadow action is already armed or running.",
                 title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -90,21 +97,27 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
 
         try
         {
-            if (a3)
+            if (shadow)
+                await RunPhysicalShadowAsync(window, device);
+            else if (a3)
                 await RunDeterministicA3Async(window, device);
             else
                 await RunA21Async(window, device);
         }
         catch (Exception ex)
         {
-            window.LastStatusText = a3
-                ? "G2.6-P1 Q0 Auto A3 stopped fail-closed. No retry/CLOSE/toggle is issued; ProductionEligible remains OFF."
-                : "G2.5-A2.1 V3 stopped locally; production dynamic reporting remains OFF.";
+            window.LastStatusText = shadow
+                ? "G2.6 physical shadow stopped fail-closed. Cleanup evidence is retained; profile remains InformationReportProven and ProductionEligible remains OFF."
+                : a3
+                    ? "G2.6-P1 Q0 Auto A3 stopped fail-closed. No retry/CLOSE/toggle is issued; ProductionEligible remains OFF."
+                    : "G2.5-A2.1 V3 stopped locally; production dynamic reporting remains OFF.";
             MessageBox.Show(
                 window,
-                (a3
-                    ? "G2.6-P1 Q0 target-locked Auto A3 stopped. Ctrl+Shift+A is the explicit commissioning action, but the one-shot OPEN is dispatched only after exact identity, Q0 status, Closed-state, command-focus, dchg-arm and final-baseline gates close. A blocked/ambiguous command is never retried and no CLOSE/toggle/auto-restore is issued. Recovery remains transactional and A3 cleanup remains mandatory. ProductionEligible stays OFF.\n\n"
-                    : "G2.5-A2.1 V3 stopped. The witness did not change production reporting policy.\n\n") + ex,
+                (shadow
+                    ? "G2.6 physical shadow stopped. The collector issues zero automatic control commands and cannot promote the profile. Inspect cleanup/reconnect evidence before retry. Production automatic dynamic reporting remains OFF.\n\n"
+                    : a3
+                        ? "G2.6-P1 Q0 target-locked Auto A3 stopped. Ctrl+Shift+A is the explicit commissioning action, but the one-shot OPEN is dispatched only after exact identity, Q0 status, Closed-state, command-focus, dchg-arm and final-baseline gates close. A blocked/ambiguous command is never retried and no CLOSE/toggle/auto-restore is issued. Recovery remains transactional and A3 cleanup remains mandatory. ProductionEligible stays OFF.\n\n"
+                        : "G2.5-A2.1 V3 stopped. The witness did not change production reporting policy.\n\n") + ex,
                 title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -165,6 +178,41 @@ internal static class DynamicReportCommandBoundWitnessUiBehavior
             device,
             device.Signals.ToArray(),
             progress,
+            CancellationToken.None);
+
+        window.LastStatusText = result.Summary;
+        var evidenceWindow = new DynamicReportQualificationResultWindow(result) { Owner = window };
+        evidenceWindow.ShowDialog();
+    }
+
+    private static async Task RunPhysicalShadowAsync(MainWindow window, Models.Iec61850MonitorDevice device)
+    {
+        var answer = MessageBox.Show(
+            window,
+            $"Start G2.6 physical shadow verification for {device.Name} ({device.EndpointText})?\n\n" +
+            "TWO PHYSICAL PHASES + ONE DELIBERATE RECONNECT\n\n" +
+            "The collector will use the exact persisted InformationReportProven URCB/member envelope. Each phase opens an independent READ-ONLY MMS polling association plus one transactional dchg-only report association.\n\n" +
+            "When the status shows 'G2.6 SHADOW PHASE 1 READY — CAUSE ONE SAFE CHANGE', cause exactly ONE already-approved safe process/status change affecting the proven envelope. After cleanup, the collector deliberately reconnects both paths and will show a second READY marker for one more safe change.\n\n" +
+            "Ctrl+Shift+S issues ZERO automatic control commands. It sends no GI, never edits the persisted qualification profile, never marks ProductionEligible, and retains mandatory monitor/proof-field/fresh-association cleanup.\n\n" +
+            "Quality/timestamp evidence is never invented. If the scalar report envelope does not physically carry paired q/t, the strict PR #99 shadow gate will remain BLOCKED/FAIL and that field finding is intentional.\n\n" +
+            "Independent Smart Control/static-report regressions are NOT assumed by this action, so even a shadow PASS is not an automatic production promotion.\n\n" +
+            "Continue?",
+            "G2.6 Physical Shadow Verification",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        window.LastStatusText = $"G2.6 physical shadow starting for {device.Name}: validating exact profile, opening read-only polling reference and transactional dchg report path…";
+        var progress = new Progress<string>(text => window.LastStatusText = text);
+        var service = new DynamicReportShadowVerificationCommissioningService();
+        var result = await service.RunAsync(
+            device,
+            device.Signals.ToArray(),
+            progress,
+            controlRegressionPassed: false,
+            staticReportingRegressionPassed: false,
             CancellationToken.None);
 
         window.LastStatusText = result.Summary;
