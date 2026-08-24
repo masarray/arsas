@@ -57,9 +57,10 @@ internal sealed class DynamicReportShadowVerificationAcceptanceService
 
         var lines = new List<string>
         {
-            "G2.6 shadow acceptance contract: exact InformationReportProven identity/member envelope -> typed report-vs-independent-MMS shadow -> candidate production acceptance only.",
+            "G2.6 shadow acceptance contract: exact InformationReportProven identity/member envelope -> typed report-vs-independent-MMS shadow -> strict candidate production acceptance only.",
             "G2.6 shadow safety: this service performs no MMS network I/O, no RCB/DataSet write, no profile save, and never calls MarkProductionEligible.",
-            "G2.6 production safety: Shadow PASS != ProductionEligible; production automatic dynamic reporting remains OFF until a separate explicit promotion gate closes."
+            "G2.6 production safety: Shadow PASS != ProductionEligible; production automatic dynamic reporting remains OFF until a separate explicit promotion gate closes.",
+            "G2.6 strict q/t safety: production quality acceptance requires actually observed paired report/poll quality AND device-timestamp evidence; missing evidence is never synthesized or treated as PASS."
         };
 
         ArMms.MmsDynamicReportIedIdentity identity;
@@ -136,21 +137,25 @@ internal sealed class DynamicReportShadowVerificationAcceptanceService
             };
         }
 
-        var acceptance = ArMms.MmsDynamicReportShadowVerificationPolicy.BuildProductionAcceptance(
+        var pairedQualityEvidence = ArMms.MmsDynamicReportShadowProductionAcceptancePolicy.HasPairedQualityEvidence(evidence);
+        var pairedTimestampEvidence = ArMms.MmsDynamicReportShadowProductionAcceptancePolicy.HasPairedTimestampEvidence(evidence);
+        lines.Add($"G2.6 strict observed evidence: pairedQuality={pairedQualityEvidence}; pairedDeviceTimestamp={pairedTimestampEvidence}; absenceCannotPass=true");
+
+        var acceptance = ArMms.MmsDynamicReportShadowProductionAcceptancePolicy.BuildStrict(
             evidence,
             shadow,
             controlRegressionPassed,
             staticReportingRegressionPassed);
 
-        lines.Add($"G2.6 acceptance candidate: control={acceptance.ControlRegressionPassed}; staticReporting={acceptance.StaticReportingRegressionPassed}; dynamicInformationReport={acceptance.DynamicInformationReportRegressionPassed}; pollingAuthority={acceptance.PollingAuthorityGuardPassed}; reconnect={acceptance.ReconnectRegressionPassed}; quality={acceptance.QualityRegressionPassed}; noMutationLoop={acceptance.NoRepeatedMutationLoopPassed}; allPassed={acceptance.AllPassed}");
+        lines.Add($"G2.6 strict acceptance candidate: control={acceptance.ControlRegressionPassed}; staticReporting={acceptance.StaticReportingRegressionPassed}; dynamicInformationReport={acceptance.DynamicInformationReportRegressionPassed}; pollingAuthority={acceptance.PollingAuthorityGuardPassed}; reconnect={acceptance.ReconnectRegressionPassed}; quality={acceptance.QualityRegressionPassed}; noMutationLoop={acceptance.NoRepeatedMutationLoopPassed}; allPassed={acceptance.AllPassed}");
         lines.Add("G2.6 state boundary: candidate was NOT persisted and MarkProductionEligible was NOT called. Shadow PASS != ProductionEligible.");
 
         return new DynamicReportShadowVerificationAcceptanceResult
         {
             IsSuccess = shadow.IsSuccess && acceptance.AllPassed,
             Summary = acceptance.AllPassed
-                ? "G2.6 shadow and independent control/static regression inputs form a complete production-acceptance candidate. Profile is intentionally unchanged at InformationReportProven; explicit promotion remains a separate step."
-                : "G2.6 shadow passed, but independent control/static regression acceptance is incomplete. Profile remains InformationReportProven; ProductionEligible is OFF.",
+                ? "G2.6 strict shadow plus independent control/static regression inputs form a complete production-acceptance candidate. Profile is intentionally unchanged at InformationReportProven; explicit promotion remains a separate step."
+                : "G2.6 shadow passed, but strict observed q/t and/or independent control/static regression acceptance is incomplete. Profile remains InformationReportProven; ProductionEligible is OFF.",
             Shadow = shadow,
             ProductionAcceptanceCandidate = acceptance,
             InputProfile = profile,
