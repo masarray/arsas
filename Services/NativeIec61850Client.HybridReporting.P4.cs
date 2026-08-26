@@ -13,6 +13,8 @@ public sealed partial class NativeIec61850Client
     /// - the failed static RCB is excluded from the recovery availability evidence;
     /// - static RCBs are disabled in the recovery planner, so only an alternate dynamic
     ///   BRCB/URCB can be selected;
+    /// - InformationReportProven guarded-runtime authority is preserved by the original
+    ///   PlanId, so recovery may select only the exact already-proven dynamic RCB/member set;
     /// - a post-mutation static failure may recover only after rollback/cleanup is proven;
     /// - ARIEC capability + exact availability evidence remains authoritative;
     /// - StartHybridReportMonitorAsync performs another fresh discovery/revalidation before
@@ -113,14 +115,19 @@ public sealed partial class NativeIec61850Client
             RequireExactAvailabilityEvidence = true
         };
 
-        var recoveryCapability = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
+        // Preserve the same InformationReportProven context carried by this PlanId. Without
+        // it the normal ProductionEligible-only planner would re-quarantine dynamic recovery;
+        // with it ARIEC still restricts recovery to the exact proven RCB/member envelope.
+        TryGetGuardedRuntimeContext(appPlan.PlanId, out var guardedRuntimeContext);
+        var recoveryCapability = BuildCapabilityPlanWithGuardedRuntime(
             authoritative.Catalog,
             authoritative.Signals,
             discovery.ReportInventory,
             alternateAvailability,
             discovery.IedDirectory,
             _session.LastNegotiatedCapabilities,
-            recoveryOptions);
+            recoveryOptions,
+            guardedRuntimeContext);
 
         var dynamicSegment = recoveryCapability.AcquisitionPlan.Segments.FirstOrDefault(segment =>
             segment.IsReportBacked &&
@@ -140,11 +147,12 @@ public sealed partial class NativeIec61850Client
         }
 
         // Preserve the runtime plan identity while replacing only its acquisition target.
-        // Runtime dictionaries, report slice routing and PointPlanIds therefore continue to
-        // refer to one plan even though Smart Auto escalated static -> dynamic.
+        // Runtime dictionaries, guarded qualification authority, report slice routing and
+        // PointPlanIds therefore continue to refer to one plan even though Smart Auto
+        // escalated static -> dynamic.
         appPlan.ReportControlReference = dynamicSegment.ReportControlReference;
         appPlan.DataSetReference = dynamicSegment.DataSetReference;
-        appPlan.Mode = $"ARIEC Hybrid • {dynamicSegment.Kind} • static recovery";
+        appPlan.Mode = $"ARIEC Smart Dynamic • {dynamicSegment.Kind} • static recovery";
         appPlan.AllowDynamicDataSetWrites = true;
         appPlan.Buffered = dynamicSegment.Kind == ArMms.MmsHybridAcquisitionKind.DynamicBrcb;
         appPlan.Status = $"{dynamicSegment.Kind} recovery planned";
