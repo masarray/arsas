@@ -28,11 +28,11 @@ internal sealed class DynamicReportShadowVerificationCommissioningResult
 /// deliberate teardown/reconnect between them. It never issues a control command, never
 /// writes the qualification profile and never calls MarkProductionEligible.
 ///
-/// Quality/timestamp evidence is accepted only when it is physically carried by the
-/// received InformationReport and projected by ARIEC. This first collector deliberately
-/// does NOT copy polling metadata into the report side or synthesize missing q/t. The
-/// strict PR #99 acceptance policy therefore remains fail-closed if the currently proven
-/// scalar DataSet envelope does not physically carry paired q/t evidence.
+/// Report quality/timestamp evidence is accepted only when it is physically carried by the
+/// received InformationReport and projected by ARIEC. Poll quality/timestamp evidence is
+/// independently read from exact live q/t companion objects on the isolated read-only MMS
+/// polling association. Neither side borrows metadata from the other, and host receive/read
+/// time is never substituted for an IEC 61850 device timestamp.
 /// </summary>
 internal sealed class DynamicReportShadowVerificationCommissioningService
 {
@@ -70,7 +70,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
             "G2.6 physical shadow contract: exact persisted InformationReportProven envelope + transactional one-URCB dchg reporting + independent read-only MMS polling + deliberate reconnect.",
             "G2.6 physical shadow command safety: this collector issues ZERO control commands. The operator must cause exactly one already-approved safe process/status change only after each READY marker.",
             "G2.6 physical shadow profile safety: no profile save, no downgrade, no promotion, no MarkProductionEligible. Production automatic dynamic reporting remains OFF.",
-            "G2.6 physical shadow q/t safety: missing report-side quality/timestamp evidence is never inferred from polling, report receive time, TimeOfEntry, or any companion read."
+            "G2.6 physical shadow q/t safety: report q/t is accepted only from the InformationReport; poll q/t is read independently from exact live q/t companions. Missing metadata stays missing; TimeOfEntry/read time is never a device-timestamp fallback."
         };
 
         ArMms.MmsDynamicReportIedIdentity identity;
@@ -168,6 +168,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
         var collected = recorder.BuildEvidence(DateTimeOffset.UtcNow);
         lines.Add($"G2.6 physical evidence collected: reports={collected.ReportObservations.Count}; polls={collected.PollObservations.Count}; reconnect={collected.SuccessfulReconnects}/{collected.ReconnectAttempts}; reportResubscriptions={collected.ReportResubscriptionsAfterReconnect}; pollRecoveries={collected.PollReferenceRecoveriesAfterReconnect}; dynamicAttempts={collected.DynamicActivationAttempts}");
         lines.Add($"G2.6 observed report metadata: qualityObservations={collected.ReportObservations.Count(item => !string.IsNullOrWhiteSpace(item.Quality))}; timestampObservations={collected.ReportObservations.Count(item => item.DeviceTimestampUtc.HasValue)}. Missing q/t remains missing by design.");
+        lines.Add($"G2.6 observed independent poll metadata: qualityObservations={collected.PollObservations.Count(item => !string.IsNullOrWhiteSpace(item.Quality))}; timestampObservations={collected.PollObservations.Count(item => item.DeviceTimestampUtc.HasValue)}. Missing q/t remains missing by design.");
 
         var acceptance = await _acceptanceService.EvaluateAsync(
             device,
@@ -253,6 +254,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
 
             pollReferenceRecovered = await CapturePollCycleAsync(
                 pollSession,
+                pollDiscovery.IedDirectory,
                 pollPoints,
                 qualifiedReferences,
                 recorder,
@@ -404,6 +406,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
                 using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var pollTask = PollLoopAsync(
                     pollSession,
+                    pollDiscovery.IedDirectory,
                     pollPoints,
                     qualifiedReferences,
                     recorder,
@@ -520,6 +523,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
 
     private static async Task<bool> CapturePollCycleAsync(
         ArMms.MmsClientSession session,
+        ArMms.MmsIedModelDirectory directory,
         IReadOnlyList<ArMms.MmsFcResolvedPoint> points,
         IReadOnlyList<string> qualifiedReferences,
         DynamicReportShadowEvidenceRecorder recorder,
@@ -533,6 +537,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
         for (var index = 0; index < points.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var readAtUtc = DateTimeOffset.UtcNow;
             var read = await session.ReadSingleVariableAsync(points[index].ToObjectReference(), cancellationToken).ConfigureAwait(false);
             if (!read.IsSuccess || read.Value is null || !session.IsMmsInitiated)
             {
@@ -540,16 +545,20 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
                 return false;
             }
 
-            // Deliberately record only metadata physically returned by this exact value read.
-            // Separate q/t companion reads are not merged into this process observation in P2;
-            // otherwise absence on the report side could be accidentally hidden.
+            var companion = await DynamicReportShadowPollingCompanionReader.ReadAsync(
+                session,
+                directory,
+                points[index],
+                cancellationToken).ConfigureAwait(false);
+
             recorder.RecordPoll(
                 index,
                 qualifiedReferences[index],
                 ArMms.MmsDataValueRenderer.ToCompactString(read.Value),
-                quality: null,
-                deviceTimestampUtc: null,
-                readAtUtc: DateTimeOffset.UtcNow);
+                companion.Quality,
+                companion.DeviceTimestampUtc,
+                readAtUtc);
+            evidence.Add($"{label}: read success index={index}; ref={qualifiedReferences[index]}; q={(string.IsNullOrWhiteSpace(companion.Quality) ? "missing" : "observed")}; t={(companion.DeviceTimestampUtc.HasValue ? "observed" : "missing")}; qAttempt={companion.QualityReadAttempted}; tAttempt={companion.TimestampReadAttempted}; qRef={TextOrDash(companion.QualityReference)}; tRef={TextOrDash(companion.TimestampReference)}");
         }
 
         return true;
@@ -557,6 +566,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
 
     private static async Task PollLoopAsync(
         ArMms.MmsClientSession session,
+        ArMms.MmsIedModelDirectory directory,
         IReadOnlyList<ArMms.MmsFcResolvedPoint> points,
         IReadOnlyList<string> qualifiedReferences,
         DynamicReportShadowEvidenceRecorder recorder,
@@ -572,6 +582,7 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
             for (var index = 0; index < points.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var readAtUtc = DateTimeOffset.UtcNow;
                 var read = await session.ReadSingleVariableAsync(points[index].ToObjectReference(), cancellationToken).ConfigureAwait(false);
                 if (!read.IsSuccess || read.Value is null)
                 {
@@ -579,13 +590,19 @@ internal sealed class DynamicReportShadowVerificationCommissioningService
                     continue;
                 }
 
+                var companion = await DynamicReportShadowPollingCompanionReader.ReadAsync(
+                    session,
+                    directory,
+                    points[index],
+                    cancellationToken).ConfigureAwait(false);
+
                 recorder.RecordPoll(
                     index,
                     qualifiedReferences[index],
                     ArMms.MmsDataValueRenderer.ToCompactString(read.Value),
-                    quality: null,
-                    deviceTimestampUtc: null,
-                    readAtUtc: DateTimeOffset.UtcNow);
+                    companion.Quality,
+                    companion.DeviceTimestampUtc,
+                    readAtUtc);
             }
 
             await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
