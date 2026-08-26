@@ -46,6 +46,7 @@ public sealed partial class NativeIec61850Client
         cancellationToken.ThrowIfCancellationRequested();
 
         _authoritativeHybridSubscriptions.Clear();
+        _guardedRuntimeContexts.Clear();
 
         var planningModel = ResolveHybridPlanningModel(device);
         if (planningModel is null)
@@ -196,17 +197,29 @@ public sealed partial class NativeIec61850Client
             RequireExactAvailabilityEvidence = true
         };
 
-        // P3: the protocol engine owns capability interpretation. ARSAS supplies the
-        // current association evidence and consumes the resulting acquisition plan; it
-        // does not recreate MMS service-bit, RCB ownership, or writability policy locally.
-        var capabilityAwarePlan = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
+        // G2.6 runtime boundary: certification and operation are separate. A valid,
+        // identity-compatible InformationReportProven data-change profile may authorize
+        // guarded dynamic monitoring only on its exact proven RCB/member envelope. The
+        // profile is read-only here; no ProductionEligible state is synthesized or saved.
+        var guardedRuntime = allowDynamicWrites
+            ? await TryLoadGuardedRuntimeContextAsync(device, cancellationToken).ConfigureAwait(false)
+            : new GuardedRuntimeContextLoadResult(
+                null,
+                dynamicWriteCircuitOpen
+                    ? $"Dynamic writes are circuit-broken after field failure evidence ({dynamicCircuitReason})."
+                    : "Dynamic DataSet writes are disabled for this device.");
+
+        // P3/G2.6: ARIEC remains the protocol/planning authority. ARSAS supplies the
+        // current association plus optional exact persisted proof and consumes the result.
+        var capabilityAwarePlan = BuildCapabilityPlanWithGuardedRuntime(
             catalog,
             descriptorPoints.Keys,
             discovery.ReportInventory,
             availability,
             discovery.IedDirectory,
             _session.LastNegotiatedCapabilities,
-            plannerOptions);
+            plannerOptions,
+            guardedRuntime.Context);
         var enginePlan = capabilityAwarePlan.AcquisitionPlan;
         var associationCapability = capabilityAwarePlan.AssociationCapability;
         var p4AttemptEvidence = ArMms.MmsHybridDynamicAttemptEvidenceBuilder.Build(capabilityAwarePlan, plannerOptions);
@@ -250,6 +263,8 @@ public sealed partial class NativeIec61850Client
                 catalog,
                 segment.Signals.ToArray(),
                 plannerOptions);
+            if (guardedRuntime.Context is not null)
+                _guardedRuntimeContexts[appPlan.PlanId] = guardedRuntime.Context;
             reportPlans.Add(appPlan);
         }
 
@@ -282,6 +297,15 @@ public sealed partial class NativeIec61850Client
             p6Warnings.Add(
                 $"P6 static inventory bridge mapped {staticInventoryMappedCount} selected point(s) through ARIEC mandatory DataSet member evidence before broad catalog matching.");
         }
+        if (guardedRuntime.IsAuthorizedCandidate)
+        {
+            p6Warnings.Add(
+                "G2.6 Smart Dynamic RCB guarded runtime is authorized from identity-compatible InformationReportProven data-change evidence. Only the exact proven RCB/member envelope may be mutated; ProductionEligible certification remains separate.");
+        }
+        else if (device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen)
+        {
+            p6Warnings.Add($"G2.6 Smart Dynamic RCB guarded runtime is not available: {guardedRuntime.Reason}");
+        }
         if (activationPlans.Count > 1 && activationPlans[0].AllowDynamicDataSetWrites && activationPlans.Any(plan => !plan.AllowDynamicDataSetWrites))
         {
             p6Warnings.Add(
@@ -309,6 +333,7 @@ public sealed partial class NativeIec61850Client
             Authority = $"ARIEC61850 capability-aware hybrid acquisition ({catalogAuthority})",
             Status = enginePlan.Status.ToString(),
             Summary = $"{enginePlan.Summary} {associationCapability.Summary}" +
+                      (guardedRuntime.IsAuthorizedCandidate ? " Guarded Smart Dynamic runtime=InformationReportProven exact envelope." : string.Empty) +
                       (staticInventoryMappedCount > 0 ? $" Static inventory bridge={staticInventoryMappedCount}." : string.Empty) +
                       (dynamicWriteCircuitOpen ? " Dynamic writes circuit-broken after field failure evidence." : string.Empty),
             ReportPlans = activationPlans,
@@ -440,9 +465,9 @@ public sealed partial class NativeIec61850Client
 
         // Planning is intentionally an intent, not permission to write forever.
         // Re-read the exact selected RCB immediately before execution, then ask the same
-        // ARIEC capability-aware planner to classify that fresh association evidence again.
-        // This is especially important for SCL fast-connect, where the typed catalog may be
-        // design-sourced but execution authority must always be live-sourced.
+        // ARIEC planner family to classify that fresh association evidence again. Guarded
+        // InformationReportProven authority, when present, is carried by PlanId so the
+        // execution gate cannot silently broaden or lose the exact proven envelope.
         var callerOwned = _reportMonitorSessions.Values
             .Select(session => session.ReportControl.Reference)
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
@@ -488,14 +513,16 @@ public sealed partial class NativeIec61850Client
             ReportControls = selectedSnapshots,
             Warnings = freshAvailability.Warnings
         };
-        var revalidatedCapabilityAwarePlan = ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
+        TryGetGuardedRuntimeContext(plan.PlanId, out var guardedRuntimeContext);
+        var revalidatedCapabilityAwarePlan = BuildCapabilityPlanWithGuardedRuntime(
             authoritative.Catalog,
             authoritative.Signals,
             discovery.ReportInventory,
             selectedAvailability,
             discovery.IedDirectory,
             _session.LastNegotiatedCapabilities,
-            authoritative.Options);
+            authoritative.Options,
+            guardedRuntimeContext);
         var revalidatedPlan = revalidatedCapabilityAwarePlan.AcquisitionPlan;
         var revalidatedSegment = revalidatedPlan.Segments.FirstOrDefault(segment =>
             segment.IsReportBacked &&
@@ -627,7 +654,9 @@ public sealed partial class NativeIec61850Client
             FailureReason = string.Empty,
             ReportControlReference = plan.ReportControlReference,
             DataSetReference = plan.DataSetReference,
-            AcquisitionLabel = $"ARIEC Hybrid: {authoritative.Kind}",
+            AcquisitionLabel = isDynamic && guardedRuntimeContext is not null
+                ? $"ARIEC Smart Dynamic: {authoritative.Kind} • InformationReportProven"
+                : $"ARIEC Hybrid: {authoritative.Kind}",
             CoveredReferences = coveredReferences,
             Warnings = attemptWarnings
         };
