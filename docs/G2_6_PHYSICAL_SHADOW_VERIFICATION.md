@@ -32,6 +32,9 @@ Each phase uses two independent MMS associations:
 2. **Reference association**
    - read-only direct MMS reads;
    - exact same proven member sequence;
+   - exact live `q` and `t` companion objects are read independently when they exist and resolve under the same functional constraint;
+   - at most one `q` read and one `t` read are attempted per successful primary-value observation;
+   - companion values are decoded with the ARIEC IEC 61850 quality/timestamp decoders;
    - no RCB/DataSet access or mutation;
    - bounded 250 ms polling while the report phase is armed.
 
@@ -65,6 +68,7 @@ The collector records:
 - independent polling values;
 - exact report sequence number when supplied;
 - report-carried quality/timestamp only when ARIEC physically projects those fields from the received InformationReport;
+- polling quality/timestamp only when exact live companion objects can be resolved, read and decoded on the isolated polling association;
 - reconnect attempts and successes;
 - report re-subscription after reconnect;
 - polling-reference recovery after reconnect;
@@ -75,15 +79,28 @@ The collector records:
 
 The currently proven field envelope may contain scalar primary members such as `CSWI1.Pos.stVal`.
 
-A scalar report member does not automatically prove that its data-object quality and timestamp were transported in the same InformationReport. Therefore this phase deliberately does **not**:
+For the independent polling authority, ARSAS derives only bounded known IEC data-object sibling paths. For example:
+
+`AA1C1F08R4Q0/CSWI1.Pos.stVal`
+
+maps to the independently discovered/read companions:
+
+- `AA1C1F08R4Q0/CSWI1.Pos.q`
+- `AA1C1F08R4Q0/CSWI1.Pos.t`
+
+These companions are accepted only when the live MMS directory resolves the exact reference under the same functional constraint. A read failure, missing object or decoder failure remains missing evidence.
+
+A scalar report member still does not automatically prove that its data-object quality and timestamp were transported in the same InformationReport. Therefore this phase deliberately does **not**:
 
 - copy polling quality into a report observation;
 - copy polling timestamps into a report observation;
+- copy report quality/timestamp into the polling observation;
+- treat polling host read time as the IEC data-object timestamp;
 - treat report receive time as the IEC data-object timestamp;
 - treat report header `TimeOfEntry` as the member's device timestamp;
-- invent missing q/t from companion reads.
+- invent missing q/t when either independent side does not physically supply them.
 
-ARSAS now pins ARIEC61850 PR #99 (`1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f`). The strict production-facing acceptance policy requires actually observed paired report/poll quality evidence and actually observed paired report/poll device timestamp evidence. If the physical report envelope does not carry them, the gate remains fail-closed. That result is useful field evidence, not a software failure to be bypassed.
+ARSAS pins ARIEC61850 PR #99 (`1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f`). The strict production-facing acceptance policy requires actually observed paired report/poll quality evidence and actually observed paired report/poll device timestamp evidence. Independent polling companion reads close the polling-side evidence gap, but they do not weaken the report-side requirement: if the physical InformationReport does not transport q/t, the strict gate remains fail-closed. That result is useful field evidence, not a software failure to be bypassed.
 
 ## Acceptance layers
 
