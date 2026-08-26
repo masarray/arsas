@@ -1,3 +1,4 @@
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
 
