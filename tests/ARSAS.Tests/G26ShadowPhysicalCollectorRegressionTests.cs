@@ -33,17 +33,55 @@ public sealed class G26ShadowPhysicalCollectorRegressionTests
     }
 
     [Fact]
-    public void Collector_DoesNotSynthesizeQualityTimestampOrUseHeaderTimeAsDeviceTimestamp()
+    public void Collector_KeepsReportMetadataPhysicalAndNeverUsesHeaderTimeAsDeviceTimestamp()
     {
         var source = Read("Services/DynamicReportShadowVerificationCommissioningService.cs");
 
-        Assert.Contains("missing report-side quality/timestamp evidence is never inferred", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Report quality/timestamp evidence is accepted only when it is physically carried", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MmsReportValueProjector.Project(frame)", source, StringComparison.Ordinal);
         Assert.Contains("projected?.HasQuality == true", source, StringComparison.Ordinal);
         Assert.Contains("projected?.HasTimestamp == true", source, StringComparison.Ordinal);
-        Assert.Contains("quality: null", source, StringComparison.Ordinal);
-        Assert.Contains("deviceTimestampUtc: null", source, StringComparison.Ordinal);
         Assert.DoesNotContain("frame.Header.TimeOfEntry", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Collector_ReadsPollQualityAndTimestampFromExactIndependentCompanions()
+    {
+        var source = Read("Services/DynamicReportShadowVerificationCommissioningService.cs");
+        var helper = Read("Services/DynamicReportShadowPollingCompanionReader.cs");
+
+        Assert.Contains("DynamicReportShadowPollingCompanionReader.ReadAsync", source, StringComparison.Ordinal);
+        Assert.Contains("pollDiscovery.IedDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("companion.Quality", source, StringComparison.Ordinal);
+        Assert.Contains("companion.DeviceTimestampUtc", source, StringComparison.Ordinal);
+
+        Assert.Contains(".stVal", helper, StringComparison.Ordinal);
+        Assert.Contains("qualityReference = dataObjectReference + \".q\"", helper, StringComparison.Ordinal);
+        Assert.Contains("timestampReference = dataObjectReference + \".t\"", helper, StringComparison.Ordinal);
+        Assert.Contains("directory.TryFindByMmsReference", helper, StringComparison.Ordinal);
+        Assert.Contains("Iec61850QualityDecoder.Decode(read.Value)", helper, StringComparison.Ordinal);
+        Assert.Contains("Iec61850TimestampDecoder.Decode(read.Value)", helper, StringComparison.Ordinal);
+        Assert.Contains("ReadSingleVariableAsync(qualityPoint.ToObjectReference()", helper, StringComparison.Ordinal);
+        Assert.Contains("ReadSingleVariableAsync(timestampPoint.ToObjectReference()", helper, StringComparison.Ordinal);
+        Assert.Contains("utcTime.Value.ToUniversalTime()", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("DateTimeOffset.UtcNow", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeOfEntry", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsReportValueProjector", helper, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PollCompanionReader_IsBoundedReadOnlyAndFailClosed()
+    {
+        var helper = Read("Services/DynamicReportShadowPollingCompanionReader.cs");
+
+        Assert.Contains("at most one q read plus one t read", helper, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quality = null", helper, StringComparison.Ordinal);
+        Assert.Contains("DateTimeOffset? deviceTimestampUtc = null", helper, StringComparison.Ordinal);
+        Assert.Contains("if (decoded.IsDecoded)", helper, StringComparison.Ordinal);
+        Assert.Contains("if (decoded.IsDecoded && TryFindUtcTime", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteControl", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("RecordReport", helper, StringComparison.Ordinal);
     }
 
     [Fact]
