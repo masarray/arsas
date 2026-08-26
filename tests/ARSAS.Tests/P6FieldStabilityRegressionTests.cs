@@ -137,13 +137,15 @@ public sealed class P6FieldStabilityRegressionTests
         var recovery = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
         // Recovery cannot reuse the failed static RCB and cannot write directly from the
-        // compatibility layer. ARIEC must plan an alternate dynamic target from fresh data.
+        // compatibility layer. The same PlanId-bound ARIEC guarded/capability planner must
+        // select the only exact proven alternate dynamic target from fresh evidence.
         Assert.Contains("alternateSnapshots", recovery, StringComparison.Ordinal);
         Assert.Contains("!SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference)", recovery, StringComparison.Ordinal);
         Assert.Contains("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
         Assert.Contains("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
         Assert.Contains("RequireExactAvailabilityEvidence = true", recovery, StringComparison.Ordinal);
-        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        Assert.Contains("TryGetGuardedRuntimeContext(appPlan.PlanId", recovery, StringComparison.Ordinal);
+        Assert.Contains("BuildCapabilityPlanWithGuardedRuntime", recovery, StringComparison.Ordinal);
         Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
         Assert.DoesNotContain("DefineNamedVariableList", recovery, StringComparison.OrdinalIgnoreCase);
 

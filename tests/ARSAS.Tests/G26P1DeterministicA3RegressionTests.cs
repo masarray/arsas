@@ -168,20 +168,22 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsStrictShadowProductionEvidenceButKeepsCurrentFieldStateLocked()
+    public void EngineLock_PreservesStrictShadowEvidenceAndAddsSeparateGuardedRuntimeBoundary()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
         Assert.Contains("\"ref\": \"main\"", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 99", engineLock, StringComparison.Ordinal);
+        Assert.Contains("c899b05f18ba2bd4c82ebff6879e4748036e0d90", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 100", engineLock, StringComparison.Ordinal);
         Assert.Contains("PR #98", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll quality evidence", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll device timestamp evidence", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #100", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
-        Assert.Contains("production automatic dynamic reporting remains OFF", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not call MarkProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int CountOccurrences(string source, string value)

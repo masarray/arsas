@@ -93,12 +93,13 @@ public sealed class P62BFieldStabilityRegressionTests
         var bridge = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.cs");
         var recovery = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
-        // P4 is still not a wire writer. It can only ask the capability-aware planner for
-        // an alternate target, replace the authoritative plan, then re-enter the normal
-        // StartHybrid path where fresh availability and the dynamic circuit are enforced.
+        // P4 is still not a wire writer. It can only ask the guarded/capability planner for
+        // the PlanId-bound proven target, replace the authoritative plan, then re-enter the
+        // normal StartHybrid path where fresh availability and the dynamic circuit are enforced.
         Assert.DoesNotContain("DefineNamedVariableList", recovery, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
-        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", recovery, StringComparison.Ordinal);
+        Assert.Contains("TryGetGuardedRuntimeContext(appPlan.PlanId", recovery, StringComparison.Ordinal);
+        Assert.Contains("BuildCapabilityPlanWithGuardedRuntime", recovery, StringComparison.Ordinal);
         Assert.Contains("StartHybridReportMonitorAsync(appPlan", recovery, StringComparison.Ordinal);
         Assert.Contains("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", recovery, StringComparison.Ordinal);
 

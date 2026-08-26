@@ -8,15 +8,18 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
     public void HybridPlanning_UsesAssociationCapabilityForInitialPlanAndFreshRevalidation()
     {
         var source = Read("Services/NativeIec61850Client.HybridReporting.cs");
+        var guarded = Read("Services/NativeIec61850Client.HybridReporting.GuardedRuntime.cs");
 
-        const string call = "ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(";
-        Assert.Equal(2, Count(source, call));
+        Assert.True(Count(source, "BuildCapabilityPlanWithGuardedRuntime(") >= 2);
+        Assert.Contains("ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(", guarded, StringComparison.Ordinal);
+        Assert.Contains("ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(", guarded, StringComparison.Ordinal);
         Assert.True(Count(source, "_session.LastNegotiatedCapabilities") >= 2);
         Assert.Contains("var enginePlan = capabilityAwarePlan.AcquisitionPlan;", source, StringComparison.Ordinal);
         Assert.Contains("var associationCapability = capabilityAwarePlan.AssociationCapability;", source, StringComparison.Ordinal);
         Assert.Contains("Summary = $\"{enginePlan.Summary} {associationCapability.Summary}\"", source, StringComparison.Ordinal);
         Assert.Contains("var revalidatedPlan = revalidatedCapabilityAwarePlan.AcquisitionPlan;", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ArMms.MmsHybridReportAcquisitionPlanner.Build(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ArMms.MmsHybridReportAcquisitionPlanner.Build(", guarded, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -44,6 +47,8 @@ public sealed class HybridReportAssociationCapabilityP3RegressionTests
         Assert.Contains("instMag/mag", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("instCVal/cVal", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #100", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact proven dynamic RCB/member envelope", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)

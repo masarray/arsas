@@ -49,6 +49,7 @@ public sealed class FieldRegressionFixTests
     public void SclFastConnect_UsesTypedDesignModelForHybridCatalog_ButKeepsFreshLiveRcbValidation()
     {
         var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.HybridReporting.cs"));
+        var guarded = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.HybridReporting.GuardedRuntime.cs"));
 
         Assert.Contains(
             "device?.LiveDiscoveryModel ?? device?.SclWorkspace?.DesignModel",
@@ -60,7 +61,9 @@ public sealed class FieldRegressionFixTests
         Assert.Contains("CheckReportControlAvailabilityAsync", source, StringComparison.Ordinal);
         Assert.Contains("RequireExactAvailabilityEvidence = true", source, StringComparison.Ordinal);
         Assert.Contains("fresh capability-aware engine evidence", source, StringComparison.Ordinal);
-        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", source, StringComparison.Ordinal);
+        Assert.Contains("BuildCapabilityPlanWithGuardedRuntime", source, StringComparison.Ordinal);
+        Assert.Contains("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "CanUseHybridReportPlanner(Iec61850MonitorDevice device)\n        => device?.LiveDiscoveryModel is not null",
             source,

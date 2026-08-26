@@ -71,19 +71,22 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedPr99MainAndKeepsProductionOff()
+    public void EngineLock_PreservesPr99StrictCertificationAndPinsPr100GuardedRuntime()
     {
         var lockFile = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("1efad9a2cdb6b4452b13687bbcd8c7ec41a9e53f", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 99", lockFile, StringComparison.Ordinal);
+        Assert.Contains("c899b05f18ba2bd4c82ebff6879e4748036e0d90", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 100", lockFile, StringComparison.Ordinal);
         Assert.Contains("PR #98", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll quality evidence", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll device timestamp evidence", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("current field profile remains InformationReportProven", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("production automatic dynamic reporting remains OFF", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("absence of q/t evidence cannot become a production PASS", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #100", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("InformationReportProven", lockFile, StringComparison.Ordinal);
+        Assert.Contains("does not call MarkProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible as a separate certification boundary", lockFile, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Read(string relativePath)
