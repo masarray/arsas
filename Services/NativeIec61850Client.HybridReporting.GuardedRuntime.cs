@@ -47,21 +47,51 @@ public sealed partial class NativeIec61850Client
             }
 
             if (load.Profile.RcbActivationProof?.IsSuccess != true ||
-                load.Profile.InformationReportProof?.IsSuccess != true ||
-                load.Profile.InformationReportProof.Kind != ArMms.MmsDynamicInformationReportKind.DataChange)
+                load.Profile.InformationReportProof?.IsSuccess != true)
             {
                 return new GuardedRuntimeContextLoadResult(
                     null,
-                    "Stored dynamic qualification evidence does not contain a successful data-change InformationReport chain; guarded Smart Dynamic runtime remains withheld.");
+                    "Stored dynamic qualification evidence does not contain a successful activation + actual InformationReport chain; guarded Smart Dynamic runtime remains withheld.");
+            }
+
+            var sourceContext = new ArMms.MmsDynamicReportGuardedRuntimePlanningContext
+            {
+                Profile = load.Profile,
+                CurrentIdentity = identity
+            };
+
+            if (load.Profile.InformationReportProof.Kind == ArMms.MmsDynamicInformationReportKind.DataChange)
+            {
+                return new GuardedRuntimeContextLoadResult(
+                    sourceContext,
+                    "Smart Dynamic RCB guarded runtime candidate loaded from identity-compatible InformationReportProven data-change evidence. ProductionEligible certification remains separate.");
+            }
+
+            if (!DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve(
+                    identity,
+                    load.Profile,
+                    out var legacyEvidence,
+                    out var registryReason) || legacyEvidence is null)
+            {
+                return new GuardedRuntimeContextLoadResult(
+                    null,
+                    $"Stored InformationReport kind is {load.Profile.InformationReportProof.Kind}; guarded Smart Dynamic runtime remains withheld. {registryReason}");
+            }
+
+            if (!ArMms.MmsGuardedDynamicReportLegacyCompatibilityPolicy.TryBuildCompatibleContext(
+                    sourceContext,
+                    legacyEvidence,
+                    out var compatibleContext,
+                    out var compatibilityReason))
+            {
+                return new GuardedRuntimeContextLoadResult(
+                    null,
+                    "P1.5 legacy compatibility evidence was present but ARIEC rejected the exact compatibility view: " + compatibilityReason);
             }
 
             return new GuardedRuntimeContextLoadResult(
-                new ArMms.MmsDynamicReportGuardedRuntimePlanningContext
-                {
-                    Profile = load.Profile,
-                    CurrentIdentity = identity
-                },
-                "Smart Dynamic RCB guarded runtime candidate loaded from identity-compatible InformationReportProven data-change evidence. ProductionEligible certification remains separate.");
+                compatibleContext,
+                $"Smart Dynamic RCB guarded runtime candidate loaded through P1.5 legacy compatibility. {registryReason} {compatibilityReason}");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
