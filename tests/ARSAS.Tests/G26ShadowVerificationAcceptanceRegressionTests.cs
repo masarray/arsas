@@ -71,12 +71,12 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesPr99StrictCertificationAndPinsPr101P15Compatibility()
+    public void EngineLock_PreservesStrictCertificationAndPinsPr102P15bSubsetCompatibility()
     {
         var lockFile = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("e7cf12ea3c9b8e62f82d42dcf73d43b28a709378", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 101", lockFile, StringComparison.Ordinal);
+        Assert.Contains("0965f67fe912355b3b29fc8123872a68d4064b04", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 102", lockFile, StringComparison.Ordinal);
         Assert.Contains("PR #98", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", lockFile, StringComparison.OrdinalIgnoreCase);
@@ -85,7 +85,9 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
         Assert.Contains("absence of q/t evidence cannot become a production PASS", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #100", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #101", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("P1.5 legacy compatibility adapter", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #102", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1.5b", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact ordered subset", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", lockFile, StringComparison.Ordinal);
         Assert.Contains("does not call MarkProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", lockFile, StringComparison.OrdinalIgnoreCase);
