@@ -76,14 +76,15 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedGuardedRuntimeEngine()
+    public void EngineLock_PinsMergedP15CompatibilityEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("\"commit\": \"c899b05f18ba2bd4c82ebff6879e4748036e0d90\"", engineLock, StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 100", engineLock, StringComparison.Ordinal);
-        Assert.Contains("guarded runtime planner", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"commit\": \"e7cf12ea3c9b8e62f82d42dcf73d43b28a709378\"", engineLock, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 101", engineLock, StringComparison.Ordinal);
+        Assert.Contains("legacy compatibility adapter", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
+        Assert.Contains("never authorizes ProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)
