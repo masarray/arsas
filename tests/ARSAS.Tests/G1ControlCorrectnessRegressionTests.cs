@@ -12,8 +12,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("c899b05f18ba2bd4c82ebff6879e4748036e0d90", json.GetProperty("commit").GetString());
-        Assert.Equal(100, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("e7cf12ea3c9b8e62f82d42dcf73d43b28a709378", json.GetProperty("commit").GetString());
+        Assert.Equal(101, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
         // G2.6 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
@@ -39,7 +39,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
 
         // PR #97 adds the ProductionEligible consumer, PR #98/#99 preserve strict
-        // certification evidence, and PR #100 adds a separate guarded runtime boundary.
+        // certification evidence, PR #100 adds guarded runtime, and PR #101 closes only
+        // the exact reviewed legacy-profile compatibility seam without changing G1.
         Assert.Contains("PR #97", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible profile", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exact InformationReport-proven RCB/member evidence", purpose, StringComparison.OrdinalIgnoreCase);
@@ -55,6 +56,10 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("at most one exact proven dynamic RCB/member envelope", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not call MarkProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1.5 legacy compatibility adapter", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never broadens RCB/member scope", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never authorizes ProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -145,6 +150,7 @@ public sealed class G1ControlCorrectnessRegressionTests
         var engineLock = File.ReadAllText(Path.Combine(RepoRoot(), "engines", "ARIEC61850.lock.json"));
         Assert.Contains("PR #89 quarantines automatic full dynamic DataSet activation", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #100", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
 
         // G1 control remains independent from the G2.6 report acquisition bridge.
