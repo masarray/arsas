@@ -78,20 +78,23 @@ public sealed partial class NativeIec61850Client
                     $"Stored InformationReport kind is {load.Profile.InformationReportProof.Kind}; guarded Smart Dynamic runtime remains withheld. {registryReason}");
             }
 
-            if (!ArMms.MmsGuardedDynamicReportLegacyCompatibilityPolicy.TryBuildCompatibleContext(
+            if (!ArMms.MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate(
                     sourceContext,
                     legacyEvidence,
-                    out var compatibleContext,
                     out var compatibilityReason))
             {
                 return new GuardedRuntimeContextLoadResult(
                     null,
-                    "P1.5 legacy compatibility evidence was present but ARIEC rejected the exact compatibility view: " + compatibilityReason);
+                    "P1.5b legacy subset compatibility evidence was present but ARIEC rejected the exact subset scope: " + compatibilityReason);
             }
 
+            // P1.5b deliberately returns the original persisted-profile context unchanged.
+            // The BuildCapabilityPlanWithGuardedRuntime dispatcher resolves the same exact
+            // reviewed subset evidence again and routes legacy GI-classified profiles through
+            // ARIEC's subset-scoped planner. No in-memory DataChange rewrite is performed.
             return new GuardedRuntimeContextLoadResult(
-                compatibleContext,
-                $"Smart Dynamic RCB guarded runtime candidate loaded through P1.5 legacy compatibility. {registryReason} {compatibilityReason}");
+                sourceContext,
+                $"Smart Dynamic RCB guarded runtime candidate loaded through P1.5b subset compatibility. {registryReason} {compatibilityReason}");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -110,16 +113,23 @@ public sealed partial class NativeIec61850Client
         AR.Iec61850.Acse.AcseMmsNegotiatedCapabilities? negotiatedCapabilities,
         ArMms.MmsHybridReportAcquisitionOptions options,
         ArMms.MmsDynamicReportGuardedRuntimePlanningContext? guardedContext)
-        => guardedContext is null
-            ? ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
+    {
+        if (guardedContext is null)
+        {
+            return ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
                 catalog,
                 requestedSignals,
                 inventory,
                 availability,
                 liveDirectory,
                 negotiatedCapabilities,
-                options)
-            : ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(
+                options);
+        }
+
+        // Native stored DataChange profiles continue through the original guarded planner.
+        if (guardedContext.Profile.InformationReportProof?.Kind == ArMms.MmsDynamicInformationReportKind.DataChange)
+        {
+            return ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(
                 catalog,
                 requestedSignals,
                 inventory,
@@ -128,6 +138,40 @@ public sealed partial class NativeIec61850Client
                 negotiatedCapabilities,
                 options,
                 guardedContext);
+        }
+
+        // P1.5b: do not mutate the broader legacy GI-classified profile. Resolve the exact
+        // reviewed physical dchg subset again at every planning/revalidation call and let
+        // ARIEC authorize only that subset. If this exact manifest no longer matches, the
+        // original guarded planner below sees the GI kind and fails closed to static/polling.
+        if (DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve(
+                guardedContext.CurrentIdentity,
+                guardedContext.Profile,
+                out var legacyEvidence,
+                out _) && legacyEvidence is not null)
+        {
+            return ArMms.MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build(
+                catalog,
+                requestedSignals,
+                inventory,
+                availability,
+                liveDirectory,
+                negotiatedCapabilities,
+                options,
+                guardedContext,
+                legacyEvidence);
+        }
+
+        return ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(
+            catalog,
+            requestedSignals,
+            inventory,
+            availability,
+            liveDirectory,
+            negotiatedCapabilities,
+            options,
+            guardedContext);
+    }
 
     private bool TryGetGuardedRuntimeContext(
         string planId,
