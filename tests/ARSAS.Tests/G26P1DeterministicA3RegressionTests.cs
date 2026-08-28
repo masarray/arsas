@@ -168,22 +168,25 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesStrictShadowEvidenceAndAddsSeparateGuardedRuntimeBoundary()
+    public void EngineLock_PreservesStrictShadowEvidenceAndAddsSeparateP15GuardedRuntimeBoundary()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
         Assert.Contains("\"ref\": \"main\"", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("c899b05f18ba2bd4c82ebff6879e4748036e0d90", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 100", engineLock, StringComparison.Ordinal);
+        Assert.Contains("e7cf12ea3c9b8e62f82d42dcf73d43b28a709378", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 101", engineLock, StringComparison.Ordinal);
         Assert.Contains("PR #98", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll quality evidence", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("paired report/poll device timestamp evidence", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #100", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1.5 legacy compatibility adapter", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("does not call MarkProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never authorizes ProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int CountOccurrences(string source, string value)
