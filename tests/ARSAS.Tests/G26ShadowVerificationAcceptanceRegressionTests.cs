@@ -71,12 +71,12 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesPr99StrictCertificationAndPinsPr100GuardedRuntime()
+    public void EngineLock_PreservesPr99StrictCertificationAndPinsPr101P15Compatibility()
     {
         var lockFile = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("c899b05f18ba2bd4c82ebff6879e4748036e0d90", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 100", lockFile, StringComparison.Ordinal);
+        Assert.Contains("e7cf12ea3c9b8e62f82d42dcf73d43b28a709378", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 101", lockFile, StringComparison.Ordinal);
         Assert.Contains("PR #98", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", lockFile, StringComparison.OrdinalIgnoreCase);
@@ -84,9 +84,12 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
         Assert.Contains("paired report/poll device timestamp evidence", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("absence of q/t evidence cannot become a production PASS", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #100", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1.5 legacy compatibility adapter", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", lockFile, StringComparison.Ordinal);
         Assert.Contains("does not call MarkProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never authorizes ProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Read(string relativePath)
