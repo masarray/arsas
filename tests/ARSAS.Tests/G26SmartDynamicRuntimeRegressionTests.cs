@@ -24,6 +24,8 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
 
         Assert.Contains("MmsGuardedDynamicReportRuntimePlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.True(Count(bridge, "BuildCapabilityPlanWithGuardedRuntime(") >= 2);
         Assert.Contains("_guardedRuntimeContexts[appPlan.PlanId] = guardedRuntime.Context", bridge, StringComparison.Ordinal);
         Assert.Contains("TryGetGuardedRuntimeContext(plan.PlanId", bridge, StringComparison.Ordinal);
@@ -44,6 +46,7 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.DoesNotContain("SaveAsync(", bridge, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveAsync(", recovery, StringComparison.Ordinal);
         Assert.Contains("ProductionEligible certification remains separate", guarded, StringComparison.Ordinal);
+        Assert.Contains("No in-memory DataChange rewrite is performed", guarded, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -76,13 +79,14 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedP15CompatibilityEngine()
+    public void EngineLock_PinsMergedP15bSubsetCompatibilityEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("\"commit\": \"e7cf12ea3c9b8e62f82d42dcf73d43b28a709378\"", engineLock, StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 101", engineLock, StringComparison.Ordinal);
-        Assert.Contains("legacy compatibility adapter", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"commit\": \"0965f67fe912355b3b29fc8123872a68d4064b04\"", engineLock, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 102", engineLock, StringComparison.Ordinal);
+        Assert.Contains("P1.5b", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact ordered subset", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("never authorizes ProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
     }
