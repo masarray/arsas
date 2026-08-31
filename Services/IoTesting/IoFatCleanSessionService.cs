@@ -73,10 +73,8 @@ public static class IoFatCleanSessionService
                 runtime.CurrentSource = "Clean retest · awaiting live baseline";
                 runtime.CurrentIedTimestamp = "—";
 
-                // Completed rows restored from a previous snapshot are automatically
-                // disabled by the continuation workflow. A deliberate project-wide clean
-                // retest re-enables every import-ready FAT row.
-                point.TestEnabled = point.ImportReady;
+                // Selection belongs to the operator. A clean evidence reset may clear
+                // runtime/evidence state, but it must not enable or disable a FAT row.
                 resetPointCount++;
             }
         }
