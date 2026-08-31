@@ -71,7 +71,8 @@ public sealed class IoTestFatP0RegressionTests
         Assert.Contains("runtime.OnEvidence = null", service, StringComparison.Ordinal);
         Assert.Contains("runtime.OffEvidence = null", service, StringComparison.Ordinal);
         Assert.Contains("runtime.CurrentIedTimestamp = \"—\"", service, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = point.ImportReady", service, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled =", service, StringComparison.Ordinal);
+        Assert.Contains("Selection belongs to the operator", service, StringComparison.Ordinal);
         Assert.Contains("storage.SaveNow()", service, StringComparison.Ordinal);
         Assert.Contains("New Clean FAT", ui, StringComparison.Ordinal);
         Assert.Contains("Session.ResetForCleanRetest()", ui, StringComparison.Ordinal);
