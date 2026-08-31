@@ -104,7 +104,8 @@ public static class IoTestWorkspaceBootstrapService
             localProjectsRoot,
             evidenceRoot,
             cancellationToken).ConfigureAwait(false);
-        ExcludeCompletedFromNextSession(opened.Project);
+        // Package import restores the operator's persisted selection exactly as saved.
+        // Completed evidence is not authority to enable/disable a FAT row.
         opened.Workspace.SaveNow();
         return new IoTestWorkspaceLaunchResult(
             opened.Project,
@@ -142,6 +143,7 @@ public static class IoTestWorkspaceBootstrapService
             if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
                 continue;
 
+            // Persisted TestEnabled is operator-authored state and is restored verbatim.
             if (saved.TryGetProperty("testEnabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 point.TestEnabled = enabled.GetBoolean();
             if (!saved.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
@@ -162,13 +164,11 @@ public static class IoTestWorkspaceBootstrapService
             {
                 point.Runtime.State = savedState;
                 point.Runtime.StatusReason = OptionalString(runtime, "statusReason", "Restored completed result");
-                point.TestEnabled = false;
             }
             else if (point.Runtime.OnEvidence != null && point.Runtime.OffEvidence == null)
             {
                 point.Runtime.State = IoTestPointState.Review;
                 point.Runtime.StatusReason = "Progress was restored after the live session ended; OFF continuity after saved ON evidence cannot be proven.";
-                point.TestEnabled = false;
             }
             else
             {
@@ -199,15 +199,6 @@ public static class IoTestWorkspaceBootstrapService
             ied.LatestComtradeCapturedAtUtc = OptionalDateTimeOffset(saved, "latestComtradeCapturedAtUtc");
             ied.LatestComtradeFileCount = OptionalInt(saved, "latestComtradeFileCount", 0);
             ied.LatestComtradeKnownSizeBytes = OptionalLong(saved, "latestComtradeKnownSizeBytes", 0L);
-        }
-    }
-
-    private static void ExcludeCompletedFromNextSession(IoTestProject project)
-    {
-        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
-        {
-            if (point.Runtime.IsComplete)
-                point.TestEnabled = false;
         }
     }
 
