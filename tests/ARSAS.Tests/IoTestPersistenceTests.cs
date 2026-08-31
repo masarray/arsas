@@ -43,7 +43,7 @@ public sealed class IoTestPersistenceTests
             Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
             Assert.NotNull(point.Runtime.OnEvidence);
             Assert.NotNull(point.Runtime.OffEvidence);
-            Assert.False(point.TestEnabled);
+            Assert.True(point.TestEnabled);
             Assert.True(File.Exists(restored.Workspace.SnapshotPath));
         }
     }
@@ -81,7 +81,7 @@ public sealed class IoTestPersistenceTests
             Assert.Equal(IoTestPointState.Review, point.Runtime.State);
             Assert.NotNull(point.Runtime.OnEvidence);
             Assert.Null(point.Runtime.OffEvidence);
-            Assert.False(point.TestEnabled);
+            Assert.True(point.TestEnabled);
             Assert.Contains("continuity", point.Runtime.StatusReason, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -197,7 +197,7 @@ public sealed class IoTestPersistenceTests
         {
             var point = imported.Project.Ieds[0].TestPoints[0];
             Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
-            Assert.False(point.TestEnabled);
+            Assert.True(point.TestEnabled);
             Assert.True(File.Exists(imported.Workspace.SourceWorkbookPath));
             Assert.True(File.Exists(imported.Workspace.SnapshotPath));
         }
