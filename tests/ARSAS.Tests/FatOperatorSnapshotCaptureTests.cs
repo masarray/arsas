@@ -69,7 +69,7 @@ public sealed class FatOperatorSnapshotCaptureTests
     [Fact]
     public void AutomaticDigitalSignal_CannotBeManuallySnapshotted()
     {
-        var signal = AnalogSignal() withCaptureModeNotSupported();
+        var signal = DigitalSignal();
 
         Assert.Throws<InvalidOperationException>(() =>
             FatOperatorSnapshotCaptureService.Capture(
@@ -78,7 +78,7 @@ public sealed class FatOperatorSnapshotCaptureTests
                 Observation("true", 1)));
     }
 
-    private static FatVerificationSignal withCaptureModeNotSupported()
+    private static FatVerificationSignal DigitalSignal()
         => new()
         {
             SignalId = "fat-digital",
