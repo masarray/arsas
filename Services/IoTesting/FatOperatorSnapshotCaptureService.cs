@@ -9,7 +9,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// </summary>
 public static class FatOperatorSnapshotCaptureService
 {
-    public static FatValueEvidence Capture(
+    public static FatValueEvidence CreateEvidence(
         FatVerificationSignal signal,
         FatValueSlot slot,
         FatLiveValueObservation observation)
@@ -36,7 +36,7 @@ public static class FatOperatorSnapshotCaptureService
                 $"FAT signal '{signal.SignalName}' does not have a readable live value to capture.");
         }
 
-        var evidence = new FatValueEvidence(
+        return new FatValueEvidence(
             Guid.NewGuid(),
             slot,
             FatEvidenceCaptureKind.OperatorSnapshot,
@@ -47,10 +47,14 @@ public static class FatOperatorSnapshotCaptureService
             string.IsNullOrWhiteSpace(observation.AcquisitionSource) ? "Unknown" : observation.AcquisitionSource.Trim(),
             observation.Sequence,
             observation.ConnectionGeneration);
+    }
 
-        // This intentionally replaces only the current Value 1/Value 2 evidence pointer.
-        // The session/journal adapter remains responsible for appending every capture to
-        // immutable historical evidence before this service is wired into the public UI.
+    public static FatValueEvidence Capture(
+        FatVerificationSignal signal,
+        FatValueSlot slot,
+        FatLiveValueObservation observation)
+    {
+        var evidence = CreateEvidence(signal, slot, observation);
         signal.SetCurrentEvidence(evidence);
         return evidence;
     }
