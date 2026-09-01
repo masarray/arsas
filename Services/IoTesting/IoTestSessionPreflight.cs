@@ -31,7 +31,9 @@ public static class IoTestSessionPreflight
                         ? point.ObjectReference
                         : point.LiveSignalReference),
                 StringComparer.OrdinalIgnoreCase)
-            .Where(group => !string.IsNullOrWhiteSpace(group.Key) && group.Count() > 1)
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key) &&
+                            group.Count() > 1 &&
+                            !IsDistinctSclDataSetMembershipFanOut(group))
             .ToList();
         if (duplicateReferences.Count > 0)
         {
@@ -43,5 +45,33 @@ public static class IoTestSessionPreflight
 
         return IoTestSessionActionResult.Success(
             $"{enabledReady.Count} included signal(s) passed FAT session preflight.");
+    }
+
+    private static bool IsDistinctSclDataSetMembershipFanOut(IEnumerable<IoTestPointPlan> points)
+    {
+        var rows = points.ToList();
+        if (rows.Count < 2 || rows.Any(point => !IoTestSignalSelectionService.IsSclDataSetAuthority(point)))
+            return false;
+
+        // Static membership identity is source + DataSet + member index/reference. Runtime
+        // leaf identity is deliberately excluded: distinct FCDA/FCD memberships are allowed
+        // to share one engine-proven primary leaf and must remain separate FAT rows.
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var point in rows)
+        {
+            if (string.IsNullOrWhiteSpace(point.SignalAddress) ||
+                string.IsNullOrWhiteSpace(point.DataSetName) ||
+                point.SourceRow <= 0 ||
+                string.IsNullOrWhiteSpace(point.SourceIecReference))
+            {
+                return false;
+            }
+
+            var identity = $"{point.SignalAddress.Trim()}|{point.DataSetName.Trim()}|{point.SourceRow}|{point.SourceIecReference.Trim()}";
+            if (!identities.Add(identity))
+                return false;
+        }
+
+        return identities.Count == rows.Count;
     }
 }
