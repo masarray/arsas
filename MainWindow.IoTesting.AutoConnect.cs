@@ -238,13 +238,30 @@ public partial class MainWindow
                     device);
             }
 
-            if (!selection.Succeeded)
+            var unresolvedSelectionPoints = selection.MissingPoints
+                .Concat(selection.AmbiguousPoints)
+                .Distinct()
+                .ToList();
+            var mayProceedWithPartialSclSelection =
+                hasSclRuntimeAuthority &&
+                selection.Matches.Count > 0 &&
+                unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsSclDataSetAuthority);
+
+            if (!selection.Succeeded && !mayProceedWithPartialSclSelection)
             {
                 _ioTestLiveBindingService.BindIed(ied, Devices);
                 return IoTestSessionActionResult.Failure(
                     hasSclRuntimeAuthority
                         ? $"ARSAS could not bind the imported SCL FAT scope safely without guessing. {selection.Message} Full live discovery was not repeated."
                         : $"ARSAS could not prepare the imported FAT scope safely. {selection.Message}");
+            }
+
+            foreach (var unresolved in unresolvedSelectionPoints)
+            {
+                unresolved.ApplyLiveBinding(
+                    IoTestLiveBindingState.NotEvaluated,
+                    "Static DataSet membership remains selected, but no unique runtime point is safe to bind yet. Other live FAT rows remain usable.",
+                    device.DeviceId);
             }
 
             var selectionChanged = false;
@@ -282,12 +299,13 @@ public partial class MainWindow
             RaiseWorkspaceCounts();
 
             _ioTestLiveBindingService.BindIed(ied, Devices);
-            var allRequestedPointsLive = requestedPoints.All(point =>
-                point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
             var fatPollingNotActive = device.IsMonitoring &&
                                       device.Points.Any(point => point.PollingIntervalMs > 500);
 
-            if (device.IsMonitoring && (selectionChanged || !allRequestedPointsLive || fatPollingNotActive))
+            // P5.3: unresolved selected rows are not a reason to tear down an otherwise
+            // healthy monitor. Restart only when the selected live model changed or the FAT
+            // polling cadence itself needs correction.
+            if (device.IsMonitoring && (selectionChanged || fatPollingNotActive))
             {
                 ReportProgress("Refreshing FAT acquisition · deterministic fast digital polling");
                 await StopDeviceMonitorAsync(device);
@@ -316,14 +334,13 @@ public partial class MainWindow
             var binding = _ioTestLiveBindingService.BindIed(ied, Devices);
             var liveCount = requestedPoints.Count(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
-            if (liveCount != requestedPoints.Count)
+            if (liveCount == 0)
             {
                 var unresolved = requestedPoints
-                    .Where(point => point.LiveBindingState != IoTestLiveBindingState.LivePointReady)
                     .Take(4)
                     .Select(point => $"{point.TestPointId} ({point.ObjectReference})");
                 return IoTestSessionActionResult.Failure(
-                    $"{ied.IedName} is connected and monitoring, but only {liveCount}/{requestedPoints.Count} imported signal(s) became live. Unresolved: {string.Join(", ", unresolved)}.");
+                    $"{ied.IedName} is connected and monitoring, but none of the {requestedPoints.Count} requested FAT signal(s) has a unique live monitor point. Unresolved: {string.Join(", ", unresolved)}.");
             }
 
             SaveSignalSelectionMemory(device);
@@ -331,17 +348,21 @@ public partial class MainWindow
                 ? "imported SCL model"
                 : usedSavedModel ? "saved model" : "live model";
             var acquisitionText = acquisition.PollingCount == 0
-                ? $"report-backed {acquisition.ReportCount}/{requestedPoints.Count}"
+                ? $"report-backed {acquisition.ReportCount}/{liveCount}"
                 : $"fast MMS {acquisition.PollingCount} · report-backed {acquisition.ReportCount}";
             var timeSyncText = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device) == null
                 ? " · time-sync fallback ready"
                 : " · time-sync status armed";
-            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}";
+            var unresolvedCount = requestedPoints.Count - liveCount;
+            var partialText = unresolvedCount == 0
+                ? string.Empty
+                : $" · {unresolvedCount} selected row(s) waiting for safe live binding";
+            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}{partialText}";
             SetStatus(message);
             AddLog(
-                "INFO",
+                unresolvedCount == 0 ? "INFO" : "WARN",
                 "IO Testing",
-                $"{message}. FAT acquisition prioritizes deterministic fast MMS for digital commissioning points; normal engineering monitoring retains report-first behavior. No process control commands are enabled. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
+                $"{message}. Live rows are usable immediately; unresolved rows stay operator-selected and visible but are excluded from the active evidence scope until a unique live point exists. No checkbox or FAT disposition is changed by the engine. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
@@ -466,8 +487,10 @@ public partial class MainWindow
                 announced = true;
             }
 
-            var liveImageReady = requestedPoints.All(HasUsableFatLiveValue);
-            if (last.LiveCount == requestedPoints.Count && liveImageReady && last.UnknownCount == 0)
+            var livePoints = requestedPoints
+                .Where(point => point.LiveBindingState == IoTestLiveBindingState.LivePointReady)
+                .ToList();
+            if (livePoints.Count > 0 && livePoints.All(HasUsableFatLiveValue))
                 break;
         }
 
