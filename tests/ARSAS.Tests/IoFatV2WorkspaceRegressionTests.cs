@@ -109,12 +109,12 @@ public sealed class IoFatV2WorkspaceRegressionTests
             projectsA,
             evidenceA,
             Session);
-        var package = Path.Combine(root, "fat-v2.arsas-iofat");
+        var package = Path.Combine(root, "fat-v2.arsas");
         using (opened.Session)
         using (opened.Workspace)
         {
             opened.Workspace.SaveNow();
-            await opened.Workspace.ExportPackageAsync(package);
+            await IoFatProjectPackageService.ExportAsync(opened.Workspace, opened.Session, package);
         }
 
         var reopened = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
