@@ -27,7 +27,7 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("all still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("every still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.True(Count(bridge, "BuildCapabilityPlanWithGuardedRuntime(") >= 2);
         Assert.Contains("_guardedRuntimeContexts[appPlan.PlanId] = guardedRuntime.Context", bridge, StringComparison.Ordinal);
