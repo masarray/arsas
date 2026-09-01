@@ -46,6 +46,7 @@ public sealed class IoTestSessionControllerTests
 
         Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
         Assert.Equal(IoTestSessionState.Running, controller.State);
+        Assert.True(controller.Stop().Succeeded);
         var journal = File.ReadAllText(controller.JournalPath);
         Assert.Contains("\"eventType\":\"baseline_state\"", journal, StringComparison.Ordinal);
     }
