@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
@@ -9,6 +10,12 @@ public sealed partial class NativeIec61850Client
     private readonly Dictionary<string, ArMms.MmsDynamicReportGuardedRuntimePlanningContext> _guardedRuntimeContexts =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // P1.7 keeps the native per-IED cleanup witness separate from the qualification profile.
+    // The engine policy revalidates this evidence every time a plan (including isolated
+    // execution revalidation) is built, so a DataChange profile by itself is never enough.
+    private readonly ConcurrentDictionary<string, ArMms.MmsDynamicReportNativeFieldCapabilityEvidence> _nativeFieldCapabilityEvidence =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private sealed record GuardedRuntimeContextLoadResult(
         ArMms.MmsDynamicReportGuardedRuntimePlanningContext? Context,
         string Reason)
@@ -16,7 +23,7 @@ public sealed partial class NativeIec61850Client
         public bool IsAuthorizedCandidate => Context is not null;
     }
 
-    private static async Task<GuardedRuntimeContextLoadResult> TryLoadGuardedRuntimeContextAsync(
+    private async Task<GuardedRuntimeContextLoadResult> TryLoadGuardedRuntimeContextAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
     {
@@ -26,6 +33,8 @@ public sealed partial class NativeIec61850Client
         try
         {
             var identity = DynamicReportQualificationIdentity.Build(device, device.Signals.ToArray());
+            _nativeFieldCapabilityEvidence.TryRemove(identity.StableIdentityKey, out _);
+
             var load = await new DynamicReportQualificationProfileStore()
                 .LoadAsync(identity, cancellationToken)
                 .ConfigureAwait(false);
@@ -62,9 +71,30 @@ public sealed partial class NativeIec61850Client
 
             if (load.Profile.InformationReportProof.Kind == ArMms.MmsDynamicInformationReportKind.DataChange)
             {
+                var nativeLoad = await new DynamicReportNativeFieldCapabilityWitnessStore()
+                    .LoadAsync(identity, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!nativeLoad.IsValid || nativeLoad.Evidence is null)
+                {
+                    return new GuardedRuntimeContextLoadResult(
+                        null,
+                        "P1.7 native DataChange profile is present but general Dynamic RCB runtime remains withheld: " + nativeLoad.Reason);
+                }
+
+                if (!ArMms.MmsGuardedDynamicReportNativeFieldCapabilityPolicy.TryValidate(
+                        sourceContext,
+                        nativeLoad.Evidence,
+                        out var nativeReason))
+                {
+                    return new GuardedRuntimeContextLoadResult(
+                        null,
+                        "P1.7 native field-capability witness was present but ARIEC rejected its exact identity/profile/activation/report/cleanup binding: " + nativeReason);
+                }
+
+                _nativeFieldCapabilityEvidence[identity.StableIdentityKey] = nativeLoad.Evidence;
                 return new GuardedRuntimeContextLoadResult(
                     sourceContext,
-                    "Smart Dynamic RCB guarded runtime candidate loaded from identity-compatible InformationReportProven data-change evidence. ProductionEligible certification remains separate.");
+                    "Smart Dynamic RCB P1.7 native per-IED field-capability runtime candidate loaded. Physical dchg + cleanup proves the dynamic reporting mechanism, not permanent member scope. ProductionEligible certification remains separate. " + nativeReason);
             }
 
             if (!DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve(
@@ -78,10 +108,9 @@ public sealed partial class NativeIec61850Client
                     $"Stored InformationReport kind is {load.Profile.InformationReportProof.Kind}; guarded Smart Dynamic runtime remains withheld. {registryReason}");
             }
 
-            // P1.6 load-time authorization must use the same field-capability policy that
-            // owns normal planning. Today that policy deliberately includes the strict
-            // legacy subset binding checks, but calling the P1.6 policy here prevents ARSAS
-            // from silently drifting if ARIEC later strengthens field-capability invariants.
+            // P1.6 legacy load-time authorization uses the same field-capability policy that
+            // owns normal planning. This retained path exists only for the reviewed historical
+            // AA1C1F08R4 GI-classified profile + later Q0/A3 physical dchg witness.
             if (!ArMms.MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate(
                     sourceContext,
                     legacyEvidence,
@@ -92,14 +121,9 @@ public sealed partial class NativeIec61850Client
                     "P1.6 field-capability witness was present but ARIEC rejected its exact identity/profile/witness/cleanup binding: " + compatibilityReason);
             }
 
-            // P1.6 keeps the original persisted profile unchanged. The reviewed Q0/A3
-            // NO-GI dchg subset proves that dynamic DataSet + URCB reporting works for this
-            // exact identity/profile/association contract; it is capability evidence, not a
-            // permanent member whitelist. Every planning and execution revalidation resolves
-            // the exact witness again before general dynamic coverage is allowed.
             return new GuardedRuntimeContextLoadResult(
                 sourceContext,
-                $"Smart Dynamic RCB P1.6 field-capability runtime candidate loaded. Q0/A3 proves capability, not member scope. {registryReason} {compatibilityReason}");
+                $"Smart Dynamic RCB P1.6 legacy field-capability runtime candidate loaded. Q0/A3 proves capability, not member scope. {registryReason} {compatibilityReason}");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -109,7 +133,7 @@ public sealed partial class NativeIec61850Client
         }
     }
 
-    private static ArMms.MmsCapabilityAwareHybridReportAcquisitionPlan BuildCapabilityPlanWithGuardedRuntime(
+    private ArMms.MmsCapabilityAwareHybridReportAcquisitionPlan BuildCapabilityPlanWithGuardedRuntime(
         Iec61850SignalCatalogDocument catalog,
         IEnumerable<Iec61850SignalDescriptor> requestedSignals,
         ArMms.MmsReportInventory inventory,
@@ -131,28 +155,43 @@ public sealed partial class NativeIec61850Client
                 options);
         }
 
-        // Native stored DataChange profiles continue through the original exact-evidence
-        // guarded planner. P1.6 generalization is intentionally tied to the separately
-        // reviewed field-capability witness below rather than assuming every DataChange
-        // profile proves arbitrary-member dynamic mutation safety.
+        // P1.7 native path. A DataChange profile no longer falls through to the historical
+        // one-envelope guarded planner. General Dynamic RCB coverage is allowed only when the
+        // separately persisted per-IED dchg + cleanup witness is loaded, and the ARIEC planner
+        // itself revalidates that exact binding plus fresh live members/RCB availability.
         if (guardedContext.Profile.InformationReportProof?.Kind == ArMms.MmsDynamicInformationReportKind.DataChange)
         {
-            return ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(
+            if (_nativeFieldCapabilityEvidence.TryGetValue(
+                    guardedContext.CurrentIdentity.StableIdentityKey,
+                    out var nativeEvidence))
+            {
+                return ArMms.MmsGuardedDynamicReportNativeFieldCapabilityStableRuntimePlanner.Build(
+                    catalog,
+                    requestedSignals,
+                    inventory,
+                    availability,
+                    liveDirectory,
+                    negotiatedCapabilities,
+                    options,
+                    guardedContext,
+                    nativeEvidence);
+            }
+
+            // Defensive fail-closed fallback. In normal flow TryLoadGuardedRuntimeContextAsync
+            // never returns a native DataChange context without the matching witness.
+            return ArMms.MmsCapabilityAwareHybridReportAcquisitionPlanner.Build(
                 catalog,
                 requestedSignals,
                 inventory,
                 availability,
                 liveDirectory,
                 negotiatedCapabilities,
-                options,
-                guardedContext);
+                options);
         }
 
-        // P1.6: resolve the exact physical Q0/A3 dchg witness again at every planning and
-        // execution-revalidation call. Once that exact capability evidence matches, static
-        // coverage keeps precedence and ARIEC may create bounded dynamic DataSets across
-        // freshly verified free RCBs for every still-uncovered exact-resolved selected signal.
-        // Stable per-RCB DataSet identities keep multi-RCB isolated revalidation collision-free.
+        // P1.6 historical path: resolve the exact physical Q0/A3 dchg witness again at every
+        // planning/execution-revalidation call, then allow general member coverage on fresh
+        // verified-free RCBs with deterministic per-RCB temporary DataSet identities.
         if (DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve(
                 guardedContext.CurrentIdentity,
                 guardedContext.Profile,
