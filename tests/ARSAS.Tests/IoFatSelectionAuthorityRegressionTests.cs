@@ -10,7 +10,7 @@ public sealed class IoFatSelectionAuthorityRegressionTests
         Assert.DoesNotContain("ExcludeCompletedFromNextSession", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled = enabled.GetBoolean();", source, StringComparison.Ordinal);
-        Assert.Contains("Persisted TestEnabled is operator-authored state", source, StringComparison.Ordinal);
+        Assert.Contains("TestEnabled and FAT disposition are both operator-authored", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public sealed class IoFatSelectionAuthorityRegressionTests
 
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
-        Assert.Contains("operator selection", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
         Assert.Contains("Session.Start(selectedIed, captureScope)", source, StringComparison.Ordinal);
     }
 
