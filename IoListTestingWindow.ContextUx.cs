@@ -217,7 +217,7 @@ public partial class IoListTestingWindow
 
             await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, targetIed);
             if (ReferenceEquals(SelectedIed, targetIed))
-                PreparationStatusText = $"{targetIed.IedName} live · ready for FAT evidence";
+                PreparationStatusText = preparation.Message;
             Storage?.ScheduleSave();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
@@ -291,14 +291,31 @@ public partial class IoListTestingWindow
                 await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, selectedIed);
             }
 
-            var result = Session.Start(selectedIed, captureScope);
+            // Operator selection remains authoritative. A selected static DataSet row that
+            // has no unique live point stays checked/included and visible, but it cannot be
+            // allowed to manufacture evidence. Arm only the currently proven live subset.
+            var liveCaptureScope = captureScope
+                .Where(point => point.LiveBindingState == IoTestLiveBindingState.LivePointReady)
+                .ToList();
+            if (liveCaptureScope.Count == 0)
+            {
+                var noLive = IoTestSessionActionResult.Failure(
+                    $"{selectedIed.IedName} is monitoring, but none of the {captureScope.Count} operator-selected FAT row(s) has a unique live point yet.");
+                PreparationStatusText = noLive.Message;
+                ShowActionResult(noLive, "FAT evidence session could not start");
+                return;
+            }
+
+            var waitingCount = captureScope.Count - liveCaptureScope.Count;
+            var result = Session.Start(selectedIed, liveCaptureScope);
             ShowActionResult(result, "FAT evidence session could not start");
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
             if (result.Succeeded)
             {
-                PreparationStatusText =
-                    $"{selectedIed.IedName} live · automatic rows track transitions · operator-snapshot rows expose ✓ Value 1 / Value 2 capture · session remains active until Stop";
+                PreparationStatusText = waitingCount == 0
+                    ? $"{selectedIed.IedName} live · automatic rows track transitions · operator-snapshot rows expose ✓ Value 1 / Value 2 capture · session remains active until Stop"
+                    : $"{selectedIed.IedName} FAT active on {liveCaptureScope.Count}/{captureScope.Count} live selected row(s) · {waitingCount} selected row(s) remain waiting for safe live binding · checkbox/disposition unchanged";
                 Storage?.ScheduleSave();
             }
             else
