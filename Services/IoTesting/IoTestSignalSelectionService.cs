@@ -28,6 +28,8 @@ public sealed record IoTestSignalSelectionResult(
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
+    internal const string SclDataSetAuthorityBindingStatus = "SCL_DATASET_AUTHORITY";
+
     private static readonly Regex ProtectionCodeRegex = new(
         @"\((?<code>\d{2,3}[A-Z]{0,3})(?:\s*-\s*[^)]*)?\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -85,6 +87,12 @@ public sealed class IoTestSignalSelectionService
         // workbook row order and lets a weak legacy row use already-proven sibling
         // assignments as elimination evidence. No candidate is ever selected by text
         // similarity: it must still be the one unique best IEC object left.
+        //
+        // SCL FAT rows are different from legacy workbook rows: their identity is the
+        // engine-authoritative static DataSet membership, not a unique runtime leaf. Two
+        // distinct memberships may legally resolve to the same primary DataAttribute, so
+        // those authority rows are allowed to fan out from one proven live signal. The
+        // signal is still recorded as used so a legacy workbook row cannot silently share it.
         var madeProgress = true;
         while (madeProgress && unresolved.Count > 0)
         {
@@ -94,8 +102,9 @@ public sealed class IoTestSignalSelectionService
                          .ThenBy(item => item.Candidates.Count)
                          .ToArray())
             {
+                var mayShareDataSetSignal = IsSclDataSetAuthority(candidateSet.Point);
                 var candidates = candidateSet.Candidates
-                    .Where(signal => !usedSignals.Contains(signal))
+                    .Where(signal => mayShareDataSetSignal || !usedSignals.Contains(signal))
                     .ToList();
 
                 if (candidateSet.BestScore <= IoTestReferenceMatcher.PartialObjectScore && candidates.Count > 1)
@@ -105,9 +114,10 @@ public sealed class IoTestSignalSelectionService
                     continue;
 
                 var signal = candidates[0];
-                if (!usedSignals.Add(signal))
+                if (!mayShareDataSetSignal && !usedSignals.Add(signal))
                     continue;
 
+                usedSignals.Add(signal);
                 matches.Add(new IoTestSignalMatch(
                     candidateSet.Point,
                     signal,
@@ -141,8 +151,11 @@ public sealed class IoTestSignalSelectionService
             matches,
             missing,
             ambiguous,
-            $"Resolved {matches.Count} enabled IO-list signal(s) to unique discovered model points.{smartText}");
+            $"Resolved {matches.Count} enabled FAT signal(s) to discovered model points.{smartText}");
     }
+
+    internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
+        => point.BindingStatus.Equals(SclDataSetAuthorityBindingStatus, StringComparison.OrdinalIgnoreCase);
 
     private static List<SignalDefinition> NarrowByProtectionIdentity(
         IoTestPointPlan point,
