@@ -24,7 +24,7 @@ public partial class MainWindow
 
     private void InstallFatV2Launcher()
     {
-        if (_ioListTestingLauncherCard?.Child is not StackPanel content)
+        if (_ioListTestingLauncherCard is not Border { Child: StackPanel content })
             return;
         if (content.Children.OfType<Button>().Any(button => Equals(button.Tag, "FatV2SclLauncher")))
             return;
