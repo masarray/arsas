@@ -38,8 +38,12 @@ public sealed class IoFatP53PartialLiveRegressionTests
         {
             TestPointId = "waiting-structured-member",
             IedName = "IED1",
+            IpAddress = "192.0.2.10",
             SignalName = "A phsA",
             ObjectReference = "IED1LD0/MMXU1.A.phsA",
+            FunctionalConstraint = "MX",
+            ExpectedOnText = "Value 1",
+            ExpectedOffText = "Value 2",
             TestEnabled = true,
             ImportReady = true
         };
