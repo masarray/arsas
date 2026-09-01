@@ -85,16 +85,17 @@ public sealed partial class NativeIec61850Client
             {
                 return new GuardedRuntimeContextLoadResult(
                     null,
-                    "P1.5b legacy subset compatibility evidence was present but ARIEC rejected the exact subset scope: " + compatibilityReason);
+                    "P1.6 field-capability witness was present but ARIEC rejected its identity/RCB/member/cleanup evidence: " + compatibilityReason);
             }
 
-            // P1.5b deliberately returns the original persisted-profile context unchanged.
-            // The BuildCapabilityPlanWithGuardedRuntime dispatcher resolves the same exact
-            // reviewed subset evidence again and routes legacy GI-classified profiles through
-            // ARIEC's subset-scoped planner. No in-memory DataChange rewrite is performed.
+            // P1.6 keeps the original persisted profile unchanged. The reviewed Q0/A3
+            // NO-GI dchg subset proves that dynamic DataSet + URCB reporting works for this
+            // exact identity/profile/association contract; it is capability evidence, not a
+            // permanent member whitelist. Every planning and execution revalidation resolves
+            // the exact witness again before general dynamic coverage is allowed.
             return new GuardedRuntimeContextLoadResult(
                 sourceContext,
-                $"Smart Dynamic RCB guarded runtime candidate loaded through P1.5b subset compatibility. {registryReason} {compatibilityReason}");
+                $"Smart Dynamic RCB P1.6 field-capability runtime candidate loaded. Q0/A3 proves capability, not member scope. {registryReason} {compatibilityReason}");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -126,7 +127,10 @@ public sealed partial class NativeIec61850Client
                 options);
         }
 
-        // Native stored DataChange profiles continue through the original guarded planner.
+        // Native stored DataChange profiles continue through the original exact-evidence
+        // guarded planner. P1.6 generalization is intentionally tied to the separately
+        // reviewed field-capability witness below rather than assuming every DataChange
+        // profile proves arbitrary-member dynamic mutation safety.
         if (guardedContext.Profile.InformationReportProof?.Kind == ArMms.MmsDynamicInformationReportKind.DataChange)
         {
             return ArMms.MmsGuardedDynamicReportRuntimePlanner.Build(
@@ -140,17 +144,18 @@ public sealed partial class NativeIec61850Client
                 guardedContext);
         }
 
-        // P1.5b: do not mutate the broader legacy GI-classified profile. Resolve the exact
-        // reviewed physical dchg subset again at every planning/revalidation call and let
-        // ARIEC authorize only that subset. If this exact manifest no longer matches, the
-        // original guarded planner below sees the GI kind and fails closed to static/polling.
+        // P1.6: resolve the exact physical Q0/A3 dchg witness again at every planning and
+        // execution-revalidation call. Once that exact capability evidence matches, static
+        // coverage keeps precedence and ARIEC may create bounded dynamic DataSets across
+        // freshly verified free RCBs for every still-uncovered exact-resolved selected signal.
+        // Stable per-RCB DataSet identities keep multi-RCB isolated revalidation collision-free.
         if (DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve(
                 guardedContext.CurrentIdentity,
                 guardedContext.Profile,
                 out var legacyEvidence,
                 out _) && legacyEvidence is not null)
         {
-            return ArMms.MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build(
+            return ArMms.MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build(
                 catalog,
                 requestedSignals,
                 inventory,
