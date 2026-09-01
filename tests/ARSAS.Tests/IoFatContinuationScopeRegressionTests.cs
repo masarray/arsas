@@ -3,34 +3,33 @@ namespace ARSAS.Tests;
 public sealed class IoFatContinuationScopeRegressionTests
 {
     [Fact]
-    public void CompletedRows_AreExcludedBeforePreflightPreparationAndSessionStart()
+    public void SelectedRows_AreCarriedExplicitlyWithoutMutatingOperatorSelection()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        var disableIndex = source.IndexOf(
-            "foreach (var point in protectedPoints)\n            point.TestEnabled = false;",
-            StringComparison.Ordinal);
         var preflightIndex = source.IndexOf(
             "IoTestSessionPreflight.Validate(selectedIed)",
             StringComparison.Ordinal);
+        var scopeIndex = source.IndexOf(
+            "var captureScope = selectedIed.TestPoints",
+            StringComparison.Ordinal);
         var preparationIndex = source.IndexOf(
-            "PrepareIoTestIedForFatAsync(",
+            "progress,\n                    captureScope);",
             StringComparison.Ordinal);
         var sessionStartIndex = source.IndexOf(
-            "Session.Start(selectedIed)",
-            StringComparison.Ordinal);
-        var restoreIndex = source.LastIndexOf(
-            "foreach (var point in protectedPoints)\n                point.TestEnabled = true;",
+            "Session.Start(selectedIed, captureScope)",
             StringComparison.Ordinal);
 
-        Assert.True(disableIndex >= 0, "Completed evidence rows must be disabled for continuation scope.");
-        Assert.True(preflightIndex > disableIndex, "Protected rows must be excluded before preflight.");
-        Assert.True(preparationIndex > preflightIndex, "Protected rows must remain excluded during live preparation.");
-        Assert.True(sessionStartIndex > preparationIndex, "Protected rows must remain excluded through Session.Start.");
-        Assert.True(restoreIndex > sessionStartIndex, "Original TestEnabled flags must be restored only after the workflow ends.");
-        Assert.Contains("outer finally", source, StringComparison.Ordinal);
-        Assert.Contains("otherwise-valid", source, StringComparison.Ordinal);
+        Assert.True(preflightIndex >= 0, "The real operator selection must be validated before capture scope creation.");
+        Assert.True(scopeIndex > preflightIndex, "Capture scope must be created only after preflight succeeds.");
+        Assert.True(preparationIndex > scopeIndex, "The same explicit scope must be used for live preparation.");
+        Assert.True(sessionStartIndex > preparationIndex, "The same explicit scope must reach Session.Start.");
+        Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("protectedPoints", source, StringComparison.Ordinal);
+        Assert.Contains("No temporary checkbox mutation", source, StringComparison.Ordinal);
+        Assert.Contains("complete newer cycles replace current evidence atomically", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
