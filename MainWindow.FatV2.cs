@@ -12,23 +12,13 @@ public partial class MainWindow
 {
     private FatVerificationWindow? _fatV2Window;
 
-    static MainWindow()
+    private void ScheduleFatV2LauncherInstall()
     {
         // P4 remains additive to the proven workbook FAT path. Install the SCL FAT command
         // after the existing first-run card has been constructed instead of rewriting the
         // legacy launcher or its session lifecycle.
-        EventManager.RegisterClassHandler(
-            typeof(MainWindow),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(MainWindow_FatV2Loaded));
-    }
-
-    private static void MainWindow_FatV2Loaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not MainWindow window)
-            return;
-        window.Dispatcher.BeginInvoke(
-            new Action(window.InstallFatV2Launcher),
+        Dispatcher.BeginInvoke(
+            new Action(InstallFatV2Launcher),
             DispatcherPriority.Background);
     }
 
