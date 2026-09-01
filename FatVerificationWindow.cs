@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -10,11 +12,13 @@ namespace ArIED61850Tester;
 
 /// <summary>
 /// Additive FAT v2 workspace. It deliberately does not reuse the legacy ON/OFF grid because
-/// analog and fallback DataSet members must retain generic Value 1 / Value 2 semantics.
+/// digital, analog, and fallback DataSet members all retain generic Value 1 / Value 2 semantics.
 /// </summary>
 public sealed class FatVerificationWindow : Window
 {
     private readonly FatSclWorkspaceLaunchResult _launch;
+    private readonly FatLiveCaptureCoordinator _capture;
+    private readonly Dictionary<string, FatVerificationRow> _rowsById;
     private readonly TextBox _searchBox = new();
     private readonly TextBlock _summary = new();
     private readonly Button _removedButton = new();
@@ -23,15 +27,62 @@ public sealed class FatVerificationWindow : Window
     public FatVerificationWindow(FatSclWorkspaceLaunchResult launch)
     {
         _launch = launch ?? throw new ArgumentNullException(nameof(launch));
+        _capture = new FatLiveCaptureCoordinator(launch.Project);
+        _rowsById = launch.Project.Signals.ToDictionary(
+            signal => signal.SignalId,
+            signal => new FatVerificationRow(signal, _capture, ShowCaptureError),
+            StringComparer.OrdinalIgnoreCase);
+
         Title = "ARSAS FAT v2 — DataSet Verification";
-        Width = 1320;
-        Height = 780;
-        MinWidth = 980;
-        MinHeight = 600;
+        Width = 1440;
+        Height = 800;
+        MinWidth = 1040;
+        MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Brush("#F4F7FB");
         Content = BuildLayout();
         RefreshRows();
+    }
+
+    public long EvidenceHistoryCount => _capture.History.Count;
+
+    /// <summary>
+    /// Receives the existing monitor-runtime image. No second polling loop is created for FAT.
+    /// Exact runtime reference plus IED identity controls fan-out to static membership rows.
+    /// </summary>
+    public void ApplyLiveObservation(
+        string runtimeReference,
+        IEnumerable<string> iedAliases,
+        string previousRawValue,
+        bool isValueEdge,
+        FatLiveValueObservation observation)
+    {
+        var aliases = iedAliases?.ToArray() ?? Array.Empty<string>();
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => ApplyLiveObservation(
+                runtimeReference,
+                aliases,
+                previousRawValue,
+                isValueEdge,
+                observation)));
+            return;
+        }
+
+        var matched = _capture.Observe(
+            runtimeReference,
+            aliases,
+            previousRawValue,
+            isValueEdge,
+            observation);
+        foreach (var signal in matched)
+        {
+            if (_rowsById.TryGetValue(signal.SignalId, out var row))
+                row.Refresh();
+        }
+
+        if (matched.Count > 0)
+            RefreshSummary();
     }
 
     private UIElement BuildLayout()
@@ -91,7 +142,7 @@ public sealed class FatVerificationWindow : Window
         _searchBox.HorizontalAlignment = HorizontalAlignment.Left;
         _searchBox.VerticalContentAlignment = VerticalAlignment.Center;
         _searchBox.Padding = new Thickness(10, 0, 10, 0);
-        _searchBox.ToolTip = "Search IED, DataSet, signal, FC, or type";
+        _searchBox.ToolTip = "Search IED, DataSet, signal, FC, type, or current value";
         _searchBox.TextChanged += (_, _) => RefreshRows();
         Grid.SetColumn(_searchBox, 0);
         toolbar.Children.Add(_searchBox);
@@ -118,17 +169,26 @@ public sealed class FatVerificationWindow : Window
         _grid.Background = Brushes.White;
         _grid.RowBackground = Brushes.White;
         _grid.AlternatingRowBackground = Brush("#FAFCFF");
-        _grid.RowHeight = 34;
+        _grid.RowHeight = 36;
         _grid.ColumnHeaderHeight = 36;
         _grid.PreviewMouseRightButtonDown += Grid_PreviewMouseRightButtonDown;
-        _grid.Columns.Add(TextColumn("IED", nameof(FatVerificationSignal.IedName), 125));
-        _grid.Columns.Add(TextColumn("DataSet", nameof(FatVerificationSignal.DataSetReference), 210));
-        _grid.Columns.Add(TextColumn("#", nameof(FatVerificationSignal.DataSetMemberIndex), 45));
-        _grid.Columns.Add(TextColumn("Signal", nameof(FatVerificationSignal.StaticMemberReference), 315));
-        _grid.Columns.Add(TextColumn("FC", nameof(FatVerificationSignal.FunctionalConstraint), 55));
-        _grid.Columns.Add(TextColumn("Kind", nameof(FatVerificationSignal.SignalKind), 85));
-        _grid.Columns.Add(TextColumn("Value 1", "Value1Evidence.RawValue", 150));
-        _grid.Columns.Add(TextColumn("Value 2", "Value2Evidence.RawValue", 150));
+        _grid.Columns.Add(TextColumn("IED", nameof(FatVerificationRow.IedName), 115));
+        _grid.Columns.Add(TextColumn("DataSet", nameof(FatVerificationRow.DataSetReference), 190));
+        _grid.Columns.Add(TextColumn("#", nameof(FatVerificationRow.DataSetMemberIndex), 42));
+        _grid.Columns.Add(TextColumn("Signal", nameof(FatVerificationRow.StaticMemberReference), 300));
+        _grid.Columns.Add(TextColumn("FC", nameof(FatVerificationRow.FunctionalConstraint), 48));
+        _grid.Columns.Add(TextColumn("Kind", nameof(FatVerificationRow.SignalKind), 75));
+        _grid.Columns.Add(TextColumn("Current", nameof(FatVerificationRow.CurrentValue), 120));
+        _grid.Columns.Add(EvidenceColumn(
+            "Value 1",
+            nameof(FatVerificationRow.Value1Display),
+            nameof(FatVerificationRow.CaptureValue1Command),
+            155));
+        _grid.Columns.Add(EvidenceColumn(
+            "Value 2",
+            nameof(FatVerificationRow.Value2Display),
+            nameof(FatVerificationRow.CaptureValue2Command),
+            155));
         var remove = new MenuItem { Header = "Remove from FAT" };
         remove.Click += RemoveSelected_Click;
         _grid.ContextMenu = new ContextMenu { Items = { remove } };
@@ -146,29 +206,78 @@ public sealed class FatVerificationWindow : Window
             Width = new DataGridLength(width)
         };
 
+    private static DataGridTemplateColumn EvidenceColumn(
+        string header,
+        string valuePath,
+        string commandPath,
+        double width)
+    {
+        var panel = new FrameworkElementFactory(typeof(StackPanel));
+        panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        panel.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+        var value = new FrameworkElementFactory(typeof(TextBlock));
+        value.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        value.SetValue(TextBlock.MinWidthProperty, 84d);
+        value.SetBinding(TextBlock.TextProperty, new Binding(valuePath));
+        panel.AppendChild(value);
+
+        var capture = new FrameworkElementFactory(typeof(Button));
+        capture.SetValue(ContentControl.ContentProperty, "✓");
+        capture.SetValue(FrameworkElement.WidthProperty, 28d);
+        capture.SetValue(FrameworkElement.HeightProperty, 24d);
+        capture.SetValue(FrameworkElement.MarginProperty, new Thickness(5, 0, 0, 0));
+        capture.SetValue(FrameworkElement.ToolTipProperty, $"Capture current live reading as {header}");
+        capture.SetBinding(Button.CommandProperty, new Binding(commandPath));
+        capture.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(FatVerificationRow.ManualCaptureVisibility)));
+        panel.AppendChild(capture);
+
+        return new DataGridTemplateColumn
+        {
+            Header = header,
+            Width = new DataGridLength(width),
+            CellTemplate = new DataTemplate { VisualTree = panel }
+        };
+    }
+
     private void RefreshRows()
     {
+        foreach (var row in _rowsById.Values)
+            row.Refresh();
+
         var query = _searchBox.Text.Trim();
-        IEnumerable<FatVerificationSignal> rows = _launch.Project.IncludedSignals;
+        IEnumerable<FatVerificationRow> rows = _rowsById.Values
+            .Where(row => row.Signal.IsIncludedInFat);
         if (query.Length > 0)
         {
-            rows = rows.Where(signal =>
-                Contains(signal.IedName, query) ||
-                Contains(signal.AccessPointName, query) ||
-                Contains(signal.DataSetReference, query) ||
-                Contains(signal.StaticMemberReference, query) ||
-                Contains(signal.RuntimeReference, query) ||
-                Contains(signal.FunctionalConstraint, query) ||
-                Contains(signal.DataType, query) ||
-                Contains(signal.SignalKind.ToString(), query));
+            rows = rows.Where(row =>
+                Contains(row.IedName, query) ||
+                Contains(row.AccessPointName, query) ||
+                Contains(row.DataSetReference, query) ||
+                Contains(row.StaticMemberReference, query) ||
+                Contains(row.RuntimeReference, query) ||
+                Contains(row.FunctionalConstraint, query) ||
+                Contains(row.DataType, query) ||
+                Contains(row.SignalKind.ToString(), query) ||
+                Contains(row.CurrentValue, query));
         }
 
-        _grid.ItemsSource = rows.ToArray();
+        _grid.ItemsSource = rows
+            .OrderBy(row => row.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(row => row.DataSetMemberIndex)
+            .ToArray();
+        RefreshSummary();
+    }
+
+    private void RefreshSummary()
+    {
         var all = _launch.Project.Signals;
+        var live = all.Count(signal => _capture.GetLatestObservation(signal.SignalId) != null);
         _summary.Text = $"{_launch.Project.IncludedSignals.Count} included · {_launch.Project.RemovedSignals.Count} removed · " +
                         $"{all.Count(signal => signal.SignalKind == FatSignalKind.Discrete)} digital · " +
                         $"{all.Count(signal => signal.SignalKind == FatSignalKind.Analog)} analog · " +
-                        $"{all.Count(signal => signal.SignalKind == FatSignalKind.Other)} other";
+                        $"{all.Count(signal => signal.SignalKind == FatSignalKind.Other)} other · " +
+                        $"{live} live · {_capture.History.Count} evidence history";
         _summary.FontSize = 12.5;
         _summary.Foreground = Brush("#64748B");
         _removedButton.Content = $"Removed Signals ({_launch.Project.RemovedSignals.Count})";
@@ -176,9 +285,10 @@ public sealed class FatVerificationWindow : Window
 
     private void RemoveSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (_grid.SelectedItem is not FatVerificationSignal signal)
+        if (_grid.SelectedItem is not FatVerificationRow row)
             return;
-        _launch.Project.RemoveSignal(signal.SignalId);
+        _launch.Project.RemoveSignal(row.Signal.SignalId);
+        row.Refresh();
         RefreshRows();
     }
 
@@ -187,6 +297,16 @@ public sealed class FatVerificationWindow : Window
         var dialog = new FatRemovedSignalsWindow(_launch.Project) { Owner = this };
         dialog.ShowDialog();
         RefreshRows();
+    }
+
+    private void ShowCaptureError(string message)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            "FAT capture unavailable",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private void Grid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -212,6 +332,100 @@ public sealed class FatVerificationWindow : Window
 
     private static Brush Brush(string value)
         => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
+
+    private sealed class FatVerificationRow : INotifyPropertyChanged
+    {
+        private readonly FatLiveCaptureCoordinator _capture;
+        private readonly Action<string> _showError;
+        private readonly RelayCommand _captureValue1;
+        private readonly RelayCommand _captureValue2;
+
+        public FatVerificationRow(
+            FatVerificationSignal signal,
+            FatLiveCaptureCoordinator capture,
+            Action<string> showError)
+        {
+            Signal = signal;
+            _capture = capture;
+            _showError = showError;
+            _captureValue1 = new RelayCommand(
+                () => Capture(FatValueSlot.Value1),
+                CanCapture);
+            _captureValue2 = new RelayCommand(
+                () => Capture(FatValueSlot.Value2),
+                CanCapture);
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public FatVerificationSignal Signal { get; }
+        public string IedName => Signal.IedName;
+        public string AccessPointName => Signal.AccessPointName;
+        public string DataSetReference => Signal.DataSetReference;
+        public int DataSetMemberIndex => Signal.DataSetMemberIndex;
+        public string StaticMemberReference => Signal.StaticMemberReference;
+        public string RuntimeReference => Signal.RuntimeReference;
+        public string FunctionalConstraint => Signal.FunctionalConstraint;
+        public string DataType => Signal.DataType;
+        public FatSignalKind SignalKind => Signal.SignalKind;
+        public string CurrentValue => _capture.GetLatestObservation(Signal.SignalId)?.RawValue ?? "—";
+        public string Value1Display => Signal.Value1Evidence?.RawValue ?? "—";
+        public string Value2Display => Signal.Value2Evidence?.RawValue ?? "—";
+        public Visibility ManualCaptureVisibility =>
+            Signal.CaptureMode == FatCaptureMode.OperatorSnapshot
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        public ICommand CaptureValue1Command => _captureValue1;
+        public ICommand CaptureValue2Command => _captureValue2;
+
+        public void Refresh()
+        {
+            Raise(nameof(CurrentValue));
+            Raise(nameof(Value1Display));
+            Raise(nameof(Value2Display));
+            Raise(nameof(ManualCaptureVisibility));
+            _captureValue1.RaiseCanExecuteChanged();
+            _captureValue2.RaiseCanExecuteChanged();
+        }
+
+        private bool CanCapture()
+            => Signal.IsIncludedInFat &&
+               Signal.CaptureMode == FatCaptureMode.OperatorSnapshot &&
+               _capture.GetLatestObservation(Signal.SignalId) != null;
+
+        private void Capture(FatValueSlot slot)
+        {
+            try
+            {
+                _capture.CaptureOperatorSnapshot(Signal.SignalId, slot);
+                Refresh();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
+            {
+                _showError(ex.Message);
+            }
+        }
+
+        private void Raise([CallerMemberName] string? propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private sealed class RelayCommand : ICommand
+    {
+        private readonly Action _execute;
+        private readonly Func<bool> _canExecute;
+
+        public RelayCommand(Action execute, Func<bool> canExecute)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute ?? throw new ArgumentNullException(nameof(canExecute));
+        }
+
+        public event EventHandler? CanExecuteChanged;
+        public bool CanExecute(object? parameter) => _canExecute();
+        public void Execute(object? parameter) => _execute();
+        public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
 }
 
 internal sealed class FatRemovedSignalsWindow : Window
