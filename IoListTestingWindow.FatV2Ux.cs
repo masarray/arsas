@@ -70,6 +70,10 @@ public partial class IoListTestingWindow
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
         });
+        enabledFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("DataContext.CanEditPlan")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
         enabledFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         enabledFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         grid.Columns.Add(new DataGridTemplateColumn
