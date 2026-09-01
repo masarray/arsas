@@ -155,12 +155,12 @@ public sealed class G26P1DeterministicA3RegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesStrictShadowEvidenceAndAddsP16FieldCapabilityRuntimeBoundary()
+    public void EngineLock_PreservesStrictShadowEvidenceAndAddsP16P17FieldCapabilityRuntimeBoundary()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
         Assert.Contains("\"ref\": \"main\"", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 105", engineLock, StringComparison.Ordinal);
+        Assert.Contains("c979206988ebcbaf79e62b784895e19547184369", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 107", engineLock, StringComparison.Ordinal);
         Assert.Contains("PR #98", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", engineLock, StringComparison.OrdinalIgnoreCase);
@@ -173,9 +173,12 @@ public sealed class G26P1DeterministicA3RegressionTests
         Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("capability evidence rather than permanent member scope", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("native per-IED field-capability authorization", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("does not call MarkProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int CountOccurrences(string source, string value)
