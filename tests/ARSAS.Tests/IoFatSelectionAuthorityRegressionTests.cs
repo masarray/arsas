@@ -5,8 +5,7 @@ public sealed class IoFatSelectionAuthorityRegressionTests
     [Fact]
     public void SnapshotAndPackageRestore_DoNotAutoDisableCompletedRows()
     {
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestWorkspaceBootstrapService.cs"))
-            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var source = Read("Services/IoTesting/IoTestWorkspaceBootstrapService.cs");
 
         Assert.DoesNotContain("ExcludeCompletedFromNextSession", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
@@ -17,14 +16,27 @@ public sealed class IoFatSelectionAuthorityRegressionTests
     [Fact]
     public void CleanRetest_ClearsEvidenceButNeverChangesOperatorSelection()
     {
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatCleanSessionService.cs"))
-            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var source = Read("Services/IoTesting/IoFatCleanSessionService.cs");
 
         Assert.DoesNotContain("point.TestEnabled =", source, StringComparison.Ordinal);
         Assert.Contains("runtime.OnEvidence = null;", source, StringComparison.Ordinal);
         Assert.Contains("runtime.OffEvidence = null;", source, StringComparison.Ordinal);
         Assert.Contains("Selection belongs to the operator", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void StartAndContinuation_NeverRewriteCheckboxState()
+    {
+        var source = Read("IoListTestingWindow.ContextUx.cs");
+
+        Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
+        Assert.Contains("operator selection", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Session.Start(selectedIed, captureScope)", source, StringComparison.Ordinal);
+    }
+
+    private static string Read(string relativePath)
+        => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 
     private static string FindRepoFile(string relativePath)
     {
