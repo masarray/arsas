@@ -7,7 +7,7 @@ namespace ARSAS.Tests;
 public sealed class IoTestSessionControllerTests
 {
     [Fact]
-    public void LiveOffOnOffSequence_CompletesSessionAndPersistsEvidence()
+    public void LiveOffOnOffSequence_KeepsCaptureRunningUntilOperatorStopAndPersistsEvidence()
     {
         var fixture = CreateFixture();
         using var controller = fixture.Controller;
@@ -18,16 +18,22 @@ public sealed class IoTestSessionControllerTests
 
         Assert.True(started.Succeeded, started.Message);
         Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
-        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
         Assert.NotNull(fixture.Point.Runtime.OnEvidence);
         Assert.NotNull(fixture.Point.Runtime.OffEvidence);
+        Assert.Contains("Capture remains running", controller.StatusText, StringComparison.OrdinalIgnoreCase);
+
+        var stopped = controller.Stop();
+
+        Assert.True(stopped.Succeeded, stopped.Message);
+        Assert.Equal(IoTestSessionState.Stopped, controller.State);
         var verification = IoTestEvidenceJournal.Verify(controller.JournalPath);
         Assert.True(verification.IsValid, verification.Error);
         Assert.True(verification.RecordCount >= 5);
     }
 
     [Fact]
-    public void InitiallyOn_RecordsOffBaselineBeforeNewOnOffPass()
+    public void InitiallyOn_RecordsOffBaselineBeforeNewOnOffPassAndRemainsRunning()
     {
         var fixture = CreateFixture();
         fixture.LivePoint.Value = "True";
@@ -39,13 +45,13 @@ public sealed class IoTestSessionControllerTests
         controller.Enqueue(Event(fixture, "True", "False", 3));
 
         Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
-        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
         var journal = File.ReadAllText(controller.JournalPath);
         Assert.Contains("\"eventType\":\"baseline_state\"", journal, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ResumeAfterOnEvidence_ForcesReviewBecausePausedEdgesCouldBeMissed()
+    public void ResumeAfterOnEvidence_ForcesReviewBecausePausedEdgesCouldBeMissedButCaptureRemainsRunning()
     {
         var fixture = CreateFixture();
         using var controller = fixture.Controller;
@@ -59,7 +65,7 @@ public sealed class IoTestSessionControllerTests
 
         Assert.True(resumed.Succeeded, resumed.Message);
         Assert.Equal(IoTestPointState.Review, fixture.Point.Runtime.State);
-        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
         Assert.Contains("continuity cannot be proven", fixture.Point.Runtime.StatusReason, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -95,7 +101,83 @@ public sealed class IoTestSessionControllerTests
 
         Assert.True(resumed.Succeeded, resumed.Message);
         Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
-        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
+    }
+
+    [Fact]
+    public void CompletedEvidence_IsPreservedAtStartAndReplacedOnlyAfterNewCompleteCycle()
+    {
+        var fixture = CreateFixture();
+        var evaluator = new IoTestTransitionEvaluator();
+        evaluator.StartAttempt(fixture.Point, Observation(false, 20));
+        evaluator.Observe(fixture.Point, Observation(true, 21));
+        evaluator.Observe(fixture.Point, Observation(false, 22));
+        var oldOn = fixture.Point.Runtime.OnEvidence!.EvidenceId;
+        var oldOff = fixture.Point.Runtime.OffEvidence!.EvidenceId;
+        using var controller = fixture.Controller;
+
+        var started = controller.Start(fixture.Ied, new[] { fixture.Point });
+
+        Assert.True(started.Succeeded, started.Message);
+        Assert.Equal(oldOn, fixture.Point.Runtime.OnEvidence!.EvidenceId);
+        Assert.Equal(oldOff, fixture.Point.Runtime.OffEvidence!.EvidenceId);
+        Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
+
+        controller.Enqueue(Event(fixture, "False", "True", 23));
+        Assert.Equal(oldOn, fixture.Point.Runtime.OnEvidence!.EvidenceId);
+        Assert.Equal(oldOff, fixture.Point.Runtime.OffEvidence!.EvidenceId);
+
+        controller.Enqueue(Event(fixture, "True", "False", 24));
+
+        Assert.NotEqual(oldOn, fixture.Point.Runtime.OnEvidence!.EvidenceId);
+        Assert.NotEqual(oldOff, fixture.Point.Runtime.OffEvidence!.EvidenceId);
+        Assert.Equal(23, fixture.Point.Runtime.OnEvidence.Sequence);
+        Assert.Equal(24, fixture.Point.Runtime.OffEvidence.Sequence);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
+    }
+
+    [Fact]
+    public void RepeatedCycles_ReplaceCurrentEvidenceWhileJournalRetainsEveryCycle()
+    {
+        var fixture = CreateFixture();
+        using var controller = fixture.Controller;
+        controller.Start(fixture.Ied);
+
+        controller.Enqueue(Event(fixture, "False", "True", 1));
+        controller.Enqueue(Event(fixture, "True", "False", 2));
+        var firstOn = fixture.Point.Runtime.OnEvidence!.EvidenceId;
+        var firstOff = fixture.Point.Runtime.OffEvidence!.EvidenceId;
+
+        controller.Enqueue(Event(fixture, "False", "True", 3));
+        controller.Enqueue(Event(fixture, "True", "False", 4));
+
+        Assert.NotEqual(firstOn, fixture.Point.Runtime.OnEvidence!.EvidenceId);
+        Assert.NotEqual(firstOff, fixture.Point.Runtime.OffEvidence!.EvidenceId);
+        Assert.Equal(3, fixture.Point.Runtime.OnEvidence.Sequence);
+        Assert.Equal(4, fixture.Point.Runtime.OffEvidence.Sequence);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
+
+        controller.Stop();
+        var journal = File.ReadAllText(controller.JournalPath);
+        Assert.Equal(2, CountOccurrences(journal, "\"eventType\":\"on_evidence\""));
+        Assert.Equal(2, CountOccurrences(journal, "\"eventType\":\"off_evidence\""));
+        Assert.DoesNotContain("\"eventType\":\"session_completed\"", journal, StringComparison.Ordinal);
+        Assert.Contains("\"eventType\":\"session_stopped\"", journal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExplicitCaptureScope_RejectsUncheckedPointRatherThanOverridingOperatorAuthority()
+    {
+        var fixture = CreateFixture();
+        fixture.Point.TestEnabled = false;
+        using var controller = fixture.Controller;
+
+        var result = controller.Start(fixture.Ied, new[] { fixture.Point });
+
+        Assert.False(result.Succeeded);
+        Assert.False(fixture.Point.TestEnabled);
+        Assert.Equal(IoTestSessionState.Idle, controller.State);
+        Assert.Contains("operator-selected", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -228,6 +310,33 @@ public sealed class IoTestSessionControllerTests
         SourceMode = "BRCB",
         Reason = "data-change"
     };
+
+    private static IoTestObservation Observation(bool state, long sequence)
+    {
+        var timestamp = new DateTimeOffset(2026, 7, 28, 8, 0, 0, TimeSpan.Zero)
+            .AddMilliseconds(sequence * 100);
+        return new IoTestObservation(
+            state,
+            state ? "True" : "False",
+            timestamp,
+            timestamp.AddMilliseconds(-3),
+            "Good",
+            "BRCB",
+            sequence,
+            1);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+        return count;
+    }
 
     private sealed record Fixture(
         IoTestProject Project,
