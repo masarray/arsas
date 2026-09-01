@@ -142,8 +142,19 @@ internal sealed class DynamicReportPerIedFieldCapabilityBootstrapService
                 loaded.FilePath);
         }
 
+        var physicalWitnessMembers = loaded.Profile.RcbActivationProof?.MemberReferences
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToArray() ?? Array.Empty<string>();
+        if (physicalWitnessMembers.Length == 0)
+        {
+            return Failed(
+                "G2.5-target",
+                "InformationReportProven profile has no exact activation member sequence for the physical dchg witness.",
+                loaded.FilePath);
+        }
+
         progress?.Report(
-            $"G2.7 P1.7 [{identity.StableIdentityKey}] stage 3/3: InformationReportProven ready. Waiting for one actual spontaneous dchg. When G2.5 says READY, cause exactly ONE already-approved safe process/status change on a member in the proven envelope…");
+            $"G2.7 P1.7 [{identity.StableIdentityKey}] stage 3/3: InformationReportProven ready. Exact physical dchg witness members ({physicalWitnessMembers.Length}) = {string.Join(" | ", physicalWitnessMembers)}. When G2.5 says ARMED, cause exactly ONE already-approved safe process/status change affecting one of THESE members…");
 
         var native = await new DynamicReportNativeFieldCapabilityPersistenceService(_profileStore, _witnessStore)
             .RunAsync(device, fullModelSignals, progress, cancellationToken)
