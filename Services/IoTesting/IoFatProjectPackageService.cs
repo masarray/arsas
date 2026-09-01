@@ -250,8 +250,8 @@ public static class IoFatProjectPackageService
             foreach (var source in sources)
             {
                 var descriptor = IoFatSourceIdentity.Normalize(source.Descriptor);
-                var entry = RequiredEntry(archive, source.Entry);
-                var bytes = await ReadEntryAsync(entry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+                var bundleEntry = RequiredEntry(archive, source.Entry);
+                var bytes = await ReadEntryAsync(bundleEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
                 VerifyHash(bytes, descriptor.Sha256, $"FAT source '{descriptor.FileName}'");
                 if (descriptor.Length > 0 && descriptor.Length != bytes.LongLength)
                     throw new InvalidDataException($"FAT source '{descriptor.FileName}' length does not match the project manifest.");
@@ -274,8 +274,8 @@ public static class IoFatProjectPackageService
         {
             throw new InvalidDataException("The ARSAS project contains no FAT source bundle.");
         }
-        var entry = RequiredEntry(archive, legacyEntry.GetString()!);
-        var bytesLegacy = await ReadEntryAsync(entry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+        var legacySourceEntry = RequiredEntry(archive, legacyEntry.GetString()!);
+        var bytesLegacy = await ReadEntryAsync(legacySourceEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
         VerifyHash(bytesLegacy, legacyHash.GetString()!, "legacy source workbook");
     }
 
@@ -300,8 +300,8 @@ public static class IoFatProjectPackageService
             return;
         if (string.IsNullOrWhiteSpace(entryName) || string.IsNullOrWhiteSpace(expectedHash))
             throw new InvalidDataException($"The ARSAS project {label} manifest is incomplete.");
-        var entry = RequiredEntry(archive, entryName);
-        var bytes = await ReadEntryAsync(entry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+        var manifestArtifactEntry = RequiredEntry(archive, entryName);
+        var bytes = await ReadEntryAsync(manifestArtifactEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
         VerifyHash(bytes, expectedHash, label);
     }
 
