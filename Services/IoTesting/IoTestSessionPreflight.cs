@@ -38,7 +38,7 @@ public static class IoTestSessionPreflight
             var first = duplicateReferences[0];
             var ids = string.Join(", ", first.Select(point => point.TestPointId));
             return IoTestSessionActionResult.Failure(
-                $"One live IEC 61850 reference is assigned to multiple included test points ({ids}). Resolve the duplicate mapping before FAT so one edge cannot produce multiple results.");
+                $"One live IEC 61850 reference is assigned to multiple enabled test points in the included FAT scope ({ids}). Resolve the duplicate mapping before FAT so one edge cannot produce multiple results.");
         }
 
         return IoTestSessionActionResult.Success(
