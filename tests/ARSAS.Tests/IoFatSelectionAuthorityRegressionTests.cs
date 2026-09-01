@@ -25,14 +25,16 @@ public sealed class IoFatSelectionAuthorityRegressionTests
     }
 
     [Fact]
-    public void StartAndContinuation_NeverRewriteCheckboxState()
+    public void StartAndContinuation_NeverRewriteCheckboxStateAndArmOnlyLiveRows()
     {
         var source = Read("IoListTestingWindow.ContextUx.cs");
 
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
-        Assert.Contains("Session.Start(selectedIed, captureScope)", source, StringComparison.Ordinal);
+        Assert.Contains("point.LiveBindingState == IoTestLiveBindingState.LivePointReady", source, StringComparison.Ordinal);
+        Assert.Contains("Session.Start(selectedIed, liveCaptureScope)", source, StringComparison.Ordinal);
+        Assert.Contains("checkbox/disposition unchanged", source, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
