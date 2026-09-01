@@ -29,14 +29,28 @@ public static class FatOperatorSnapshotCaptureService
                 $"FAT signal '{signal.SignalName}' uses {signal.CaptureMode} capture and cannot be manually snapshotted.");
         }
 
+        var evidence = CreateEvidence(slot, observation);
+        signal.SetCurrentEvidence(evidence);
+        return evidence;
+    }
+
+    /// <summary>
+    /// Creates an immutable capture record without mutating a current evidence pointer.
+    /// Session controllers use this so the append-only journal can be durably written
+    /// before the replaceable Value 1 / Value 2 pointer is promoted.
+    /// </summary>
+    public static FatValueEvidence CreateEvidence(
+        FatValueSlot slot,
+        FatLiveValueObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
         if (string.IsNullOrWhiteSpace(observation.RawValue) ||
             observation.RawValue.Trim() is "-" or "—")
         {
-            throw new InvalidOperationException(
-                $"FAT signal '{signal.SignalName}' does not have a readable live value to capture.");
+            throw new InvalidOperationException("The FAT signal does not have a readable live value to capture.");
         }
 
-        var evidence = new FatValueEvidence(
+        return new FatValueEvidence(
             Guid.NewGuid(),
             slot,
             FatEvidenceCaptureKind.OperatorSnapshot,
@@ -47,11 +61,5 @@ public static class FatOperatorSnapshotCaptureService
             string.IsNullOrWhiteSpace(observation.AcquisitionSource) ? "Unknown" : observation.AcquisitionSource.Trim(),
             observation.Sequence,
             observation.ConnectionGeneration);
-
-        // This intentionally replaces only the current Value 1/Value 2 evidence pointer.
-        // The session/journal adapter remains responsible for appending every capture to
-        // immutable historical evidence before this service is wired into the public UI.
-        signal.SetCurrentEvidence(evidence);
-        return evidence;
     }
 }
