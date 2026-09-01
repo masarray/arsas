@@ -44,9 +44,6 @@ public static class IoTestWorkspaceBootstrapService
         ArgumentNullException.ThrowIfNull(sourceInputs);
         ArgumentNullException.ThrowIfNull(sessionFactory);
 
-        // Establish exact source identity before choosing the local project directory.
-        // For a single legacy workbook, ProjectStorageFingerprint intentionally remains
-        // the historical workbook SHA so existing local snapshots stay discoverable.
         var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
         IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
@@ -126,8 +123,6 @@ public static class IoTestWorkspaceBootstrapService
             localProjectsRoot,
             evidenceRoot,
             cancellationToken).ConfigureAwait(false);
-        // Package import restores the operator's persisted selection exactly as saved.
-        // Completed evidence is not authority to enable/disable a FAT row.
         opened.Workspace.SaveNow();
         return new IoTestWorkspaceLaunchResult(
             opened.Project,
@@ -165,21 +160,37 @@ public static class IoTestWorkspaceBootstrapService
             if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
                 continue;
 
-            // Persisted TestEnabled is operator-authored state and is restored verbatim.
+            // TestEnabled and FAT disposition are both operator-authored and are restored
+            // independently. Restoring/removing a FAT row must never rewrite its checkbox.
             if (saved.TryGetProperty("testEnabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 point.TestEnabled = enabled.GetBoolean();
+            point.RestoreFatDisposition(OptionalEnum(saved, "fatDisposition", FatSignalDisposition.Included));
+
             if (!saved.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
                 continue;
 
             point.Runtime.Attempt = OptionalInt(runtime, "attempt", 0);
             point.Runtime.OnEvidence = OptionalEvidence(runtime, "onEvidence");
             point.Runtime.OffEvidence = OptionalEvidence(runtime, "offEvidence");
+            point.Runtime.Value1Evidence = OptionalFatEvidence(runtime, "value1Evidence");
+            point.Runtime.Value2Evidence = OptionalFatEvidence(runtime, "value2Evidence");
             point.Runtime.LastObservedState = null;
             point.Runtime.LastSequence = -1;
             point.Runtime.ConnectionGeneration = -1;
             point.Runtime.CurrentValue = "-";
             point.Runtime.CurrentQuality = "Unknown";
             point.Runtime.CurrentSource = "Restored · live baseline required";
+
+            if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+            {
+                point.Runtime.State = IoTestPointState.NotStarted;
+                point.Runtime.StatusReason = point.IsFatEvidenceComplete
+                    ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
+                    : point.Runtime.Value1Evidence is not null || point.Runtime.Value2Evidence is not null
+                        ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
+                        : "Progress restored; reconnect live acquisition before operator snapshot capture.";
+                continue;
+            }
 
             var savedState = OptionalState(runtime, "state", IoTestPointState.NotStarted);
             if (savedState is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
@@ -208,8 +219,6 @@ public static class IoTestWorkspaceBootstrapService
         if (!string.IsNullOrWhiteSpace(savedSet))
             return savedSet.Equals(expectedSet, StringComparison.OrdinalIgnoreCase);
 
-        // Snapshots written before P3 only had workbook SHA. Preserve exact compatibility
-        // for those snapshots instead of forcing their identity through the new set hash.
         var legacyWorkbookSha = OptionalString(savedProject, "sourceWorkbookSha256", string.Empty);
         return !string.IsNullOrWhiteSpace(legacyWorkbookSha) &&
                legacyWorkbookSha.Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase);
@@ -225,8 +234,6 @@ public static class IoTestWorkspaceBootstrapService
             if (saved.ValueKind != JsonValueKind.Object)
                 continue;
 
-            // These fields are optional so snapshots written before COMTRADE FAT evidence
-            // was introduced remain fully readable.
             ied.LatestComtradeFiles = OptionalString(saved, "latestComtradeFiles", string.Empty);
             ied.LatestComtradeRemotePath = OptionalString(saved, "latestComtradeRemotePath", string.Empty);
             ied.LatestComtradeCompleteness = OptionalString(saved, "latestComtradeCompleteness", string.Empty);
@@ -245,25 +252,30 @@ public static class IoTestWorkspaceBootstrapService
         return element.Deserialize<IoTestTransitionEvidence>(JsonOptions);
     }
 
+    private static FatValueEvidence? OptionalFatEvidence(JsonElement runtime, string property)
+    {
+        if (!runtime.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null)
+            return null;
+        return element.Deserialize<FatValueEvidence>(JsonOptions);
+    }
+
+    private static TEnum OptionalEnum<TEnum>(JsonElement parent, string property, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        if (!parent.TryGetProperty(property, out var value))
+            return fallback;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && Enum.IsDefined(typeof(TEnum), number))
+            return (TEnum)Enum.ToObject(typeof(TEnum), number);
+        if (value.ValueKind == JsonValueKind.String && Enum.TryParse<TEnum>(value.GetString(), ignoreCase: true, out var parsed))
+            return parsed;
+        return fallback;
+    }
+
     private static IoTestPointState OptionalState(
         JsonElement parent,
         string property,
         IoTestPointState fallback)
-    {
-        if (!parent.TryGetProperty(property, out var value))
-            return fallback;
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) &&
-            Enum.IsDefined(typeof(IoTestPointState), number))
-        {
-            return (IoTestPointState)number;
-        }
-        if (value.ValueKind == JsonValueKind.String &&
-            Enum.TryParse<IoTestPointState>(value.GetString(), ignoreCase: true, out var parsed))
-        {
-            return parsed;
-        }
-        return fallback;
-    }
+        => OptionalEnum(parent, property, fallback);
 
     private static JsonElement RequiredObject(JsonElement parent, string property)
     {
