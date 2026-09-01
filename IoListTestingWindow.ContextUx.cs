@@ -43,17 +43,17 @@ public partial class IoListTestingWindow
             }
 
             var enabled = EnabledPoints(SelectedIed);
-            var allPassed = enabled.Count > 0 && enabled.All(point => point.Runtime.State == IoTestPointState.Passed);
-            var hasCompleted = enabled.Any(point => point.Runtime.IsComplete);
+            var allComplete = enabled.Count > 0 && enabled.All(point => point.IsFatEvidenceComplete);
+            var hasCompleted = enabled.Any(point => point.IsFatEvidenceComplete);
 
             if (SelectedIed.IsLiveMonitoring)
             {
-                if (allPassed)
+                if (allComplete)
                     return "Retest FAT";
                 return hasCompleted ? "Continue FAT" : "Start FAT";
             }
 
-            if (allPassed)
+            if (allComplete)
                 return "Reconnect / Retest";
             return hasCompleted ? "Connect & Continue IED" : "Connect & Start IED";
         }
@@ -73,14 +73,14 @@ public partial class IoListTestingWindow
                 return Session.StatusText;
 
             var enabled = EnabledPoints(SelectedIed);
-            var complete = enabled.Count(point => point.Runtime.IsComplete);
-            var passed = enabled.Count(point => point.Runtime.State == IoTestPointState.Passed);
-
-            if (enabled.Count > 0 && passed == enabled.Count)
-                return $"{SelectedIed.IedName} complete · all {enabled.Count} selected points PASS · Start FAT can capture a newer cycle without clearing current evidence.";
+            var complete = enabled.Count(point => point.IsFatEvidenceComplete);
+            if (enabled.Count > 0 && complete == enabled.Count)
+            {
+                return $"{SelectedIed.IedName} current Value 1 / Value 2 evidence complete for all {enabled.Count} selected signal(s). Start FAT can capture newer evidence without clearing current evidence.";
+            }
 
             if (complete > 0)
-                return $"{SelectedIed.IedName} selected · {complete}/{enabled.Count} current results complete · selected rows remain eligible for newer evidence.";
+                return $"{SelectedIed.IedName} selected · {complete}/{enabled.Count} current Value 1 / Value 2 evidence complete · included selected rows remain eligible for recapture.";
 
             return $"{SelectedIed.IedName} selected · {SelectedIed.LiveStatusText}";
         }
@@ -94,18 +94,24 @@ public partial class IoListTestingWindow
                 return "0 / 0 complete";
 
             var enabled = EnabledPoints(SelectedIed);
-            var complete = enabled.Count(point => point.Runtime.IsComplete);
-            var passed = enabled.Count(point => point.Runtime.State == IoTestPointState.Passed);
-            var review = enabled.Count(point => point.Runtime.State == IoTestPointState.Review);
-            var failed = enabled.Count(point => point.Runtime.State == IoTestPointState.Failed);
-            return $"{complete} / {enabled.Count} complete · {passed} PASS · {review} review · {failed} fail";
+            var complete = enabled.Count(point => point.IsFatEvidenceComplete);
+            var passed = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.AutomaticTransition &&
+                point.Runtime.State == IoTestPointState.Passed);
+            var review = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.AutomaticTransition &&
+                point.Runtime.State == IoTestPointState.Review);
+            var manual = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.OperatorSnapshot &&
+                point.IsFatEvidenceComplete);
+            return $"{complete} / {enabled.Count} complete · {passed} digital PASS · {review} review · {manual} snapshot complete";
         }
     }
 
     public int SelectedEvidenceCount =>
-        (SelectedIed?.TestPoints.Sum(point =>
-            (point.Runtime.OnEvidence == null ? 0 : 1) +
-            (point.Runtime.OffEvidence == null ? 0 : 1)) ?? 0) +
+        (SelectedIed?.TestPoints.Sum(point => point.CaptureMode == FatCaptureMode.AutomaticTransition
+            ? (point.Runtime.OnEvidence == null ? 0 : 1) + (point.Runtime.OffEvidence == null ? 0 : 1)
+            : (point.Runtime.Value1Evidence == null ? 0 : 1) + (point.Runtime.Value2Evidence == null ? 0 : 1)) ?? 0) +
         SelectedSupplementalEvidenceCount;
 
     private bool IsSelectedSessionIed =>
@@ -117,6 +123,7 @@ public partial class IoListTestingWindow
             new Action(() =>
             {
                 InstallSelectedIedContext();
+                InstallFatV2WorkspaceUx();
                 InstallSupplementalEvidenceControls();
                 RefreshSupplementalEvidenceControls();
             }),
@@ -155,11 +162,6 @@ public partial class IoListTestingWindow
         _printPreviewToggle.ToolTip = "Toggle the selected IED between signal evidence and native print preview";
     }
 
-    /// <summary>
-    /// Card-local connection action. Several different IED cards can run this method at
-    /// once; each device owns its own MainWindow connection workflow and model progress.
-    /// Evidence capture remains a separate, single-active session selected by Start FAT.
-    /// </summary>
     private async void ConnectIed_Click(object sender, RoutedEventArgs e)
     {
         var targetIed = (sender as FrameworkElement)?.DataContext as IoTestIedPlan;
@@ -167,19 +169,16 @@ public partial class IoListTestingWindow
             return;
 
         var enabledReady = targetIed.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
+            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
         if (enabledReady.Count == 0)
         {
             ShowActionResult(
-                IoTestSessionActionResult.Failure("No import-ready operator-selected signal is enabled for this IED."),
+                IoTestSessionActionResult.Failure("No import-ready operator-selected signal is enabled in the active FAT scope for this IED."),
                 "IED connection scope is not ready");
             return;
         }
 
-        // Operator selection is the authority. Completed rows remain in the connection
-        // scope because a checked row is intentionally eligible for newer evidence.
-        // The engine never rewrites TestEnabled to manufacture a smaller continuation.
         IReadOnlyCollection<IoTestPointPlan> connectionScope = enabledReady;
 
         if (ReferenceEquals(SelectedIed, targetIed))
@@ -253,9 +252,6 @@ public partial class IoListTestingWindow
             return;
         }
 
-        // Preflight sees the real operator selection. No temporary checkbox mutation is
-        // permitted anywhere in this workflow. After preflight succeeds, the exact ready
-        // selection is carried explicitly through preparation and Session.Start.
         var preflight = IoTestSessionPreflight.Validate(selectedIed);
         if (!preflight.Succeeded)
         {
@@ -264,7 +260,7 @@ public partial class IoListTestingWindow
         }
 
         var captureScope = selectedIed.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
+            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
 
         try
@@ -302,7 +298,7 @@ public partial class IoListTestingWindow
             if (result.Succeeded)
             {
                 PreparationStatusText =
-                    $"{selectedIed.IedName} live · capture remains active until Stop · complete newer cycles replace current evidence atomically";
+                    $"{selectedIed.IedName} live · automatic rows track transitions · operator-snapshot rows expose ✓ Value 1 / Value 2 capture · session remains active until Stop";
                 Storage?.ScheduleSave();
             }
             else
@@ -342,17 +338,25 @@ public partial class IoListTestingWindow
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(SelectedIed) or nameof(IsPreparingIed) or nameof(PreparationStatusText))
+        {
             RaiseSelectedIedContextProperties();
+            if (e.PropertyName == nameof(SelectedIed))
+                Dispatcher.BeginInvoke(new Action(RefreshFatV2WorkspaceUx), DispatcherPriority.DataBind);
+        }
     }
 
     private void ContextSession_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => RaiseSelectedIedContextProperties();
+    {
+        RaiseSelectedIedContextProperties();
+        RefreshFatV2WorkspaceUx();
+    }
 
     private void ContextIed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
             RaisePreparationProperties();
 
+        RefreshFatV2WorkspaceUx();
         if (!ReferenceEquals(sender, SelectedIed))
             return;
 
@@ -385,7 +389,7 @@ public partial class IoListTestingWindow
     }
 
     private static List<IoTestPointPlan> EnabledPoints(IoTestIedPlan ied)
-        => ied.TestPoints.Where(point => point.TestEnabled).ToList();
+        => ied.TestPoints.Where(point => point.IsIncludedInFat && point.TestEnabled).ToList();
 }
 
 public sealed class IoFatAllPassedVisibilityConverter : IMultiValueConverter
