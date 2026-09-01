@@ -21,6 +21,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
     private readonly Action<Action> _dispatch;
     private readonly Func<IoTestProject, IoTestIedPlan, Guid, DateTimeOffset, IIoTestEvidenceJournal> _journalFactory;
     private readonly IoTestTransitionEvaluator _evaluator;
+    private readonly IoTestRollingCaptureCoordinator _captureCoordinator;
     private readonly ConcurrentQueue<QueuedSnapshot> _pendingSnapshots = new();
     private readonly Dictionary<string, List<IoTestPointPlan>> _activePointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _activeLivePoints = new(StringComparer.OrdinalIgnoreCase);
@@ -55,6 +56,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
         ArgumentException.ThrowIfNullOrWhiteSpace(journalRootDirectory);
         _evaluator = evaluator ?? new IoTestTransitionEvaluator();
+        _captureCoordinator = new IoTestRollingCaptureCoordinator(_evaluator);
         _journalFactory = journalFactory ?? ((testProject, ied, sessionId, startedAt) =>
             IoTestEvidenceJournal.Create(journalRootDirectory, testProject, ied, sessionId, startedAt));
     }
@@ -103,6 +105,11 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
     }
 
     public IoTestSessionActionResult Start(IoTestIedPlan? ied)
+        => Start(ied, captureScope: null);
+
+    public IoTestSessionActionResult Start(
+        IoTestIedPlan? ied,
+        IReadOnlyCollection<IoTestPointPlan>? captureScope)
     {
         ThrowIfDisposed();
         if (ied == null)
@@ -116,21 +123,42 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!device.IsConnected || !device.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ied.IedName} must be connected and monitoring before FAT evidence can start.");
 
-        var expectedPoints = ied.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
-            .ToList();
-        if (expectedPoints.Count == 0)
-            return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
+        List<IoTestPointPlan> expectedPoints;
+        if (captureScope == null)
+        {
+            expectedPoints = ied.TestPoints
+                .Where(point => point.TestEnabled && point.ImportReady)
+                .ToList();
+        }
+        else
+        {
+            var knownPoints = new HashSet<IoTestPointPlan>(ied.TestPoints);
+            var invalidScope = captureScope
+                .Where(point => !knownPoints.Contains(point) || !point.TestEnabled || !point.ImportReady)
+                .Distinct()
+                .ToList();
+            if (invalidScope.Count > 0)
+            {
+                return IoTestSessionActionResult.Failure(
+                    "The requested FAT capture scope contains a row that is not part of this IED, is not operator-selected, or is not import-ready.");
+            }
 
-        var bindings = BuildSessionBindings(ied, device);
+            expectedPoints = captureScope.Distinct().ToList();
+        }
+
+        if (expectedPoints.Count == 0)
+            return IoTestSessionActionResult.Failure("No import-ready operator-selected signal is available in the requested FAT capture scope.");
+
+        var bindings = BuildSessionBindings(expectedPoints, device);
         if (bindings.Count != expectedPoints.Count)
         {
             var missing = expectedPoints.Count - bindings.Count;
             return IoTestSessionActionResult.Failure(
-                $"{missing} of {expectedPoints.Count} enabled IO-list signal(s) do not have one unique live monitor point. Resolve their binding or disable them before starting FAT.");
+                $"{missing} of {expectedPoints.Count} requested FAT signal(s) do not have one unique live monitor point. Resolve their binding or change the operator selection before starting FAT.");
         }
 
         CleanupSessionResources(disposeJournal: true);
+        _captureCoordinator.Clear();
         SessionId = Guid.NewGuid();
         StartedAtUtc = DateTimeOffset.UtcNow;
         CompletedAtUtc = null;
@@ -162,17 +190,18 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             JournalIntegrityText = "Evidence journal open · hash chain initialized";
 
             // Establish all baselines first, then persist the startup records with one
-            // durable flush. Hash chaining is unchanged, but a 100-point FAT no longer
-            // performs 101 synchronous fsync operations on the UI thread.
+            // durable flush. Completed/current evidence is not cleared here: rolling
+            // capture stages a newer cycle and promotes it only when ON and OFF are both
+            // complete. The append-only journal still records every candidate transition.
             var startupEntries = new List<IoTestJournalEntry>(bindings.Count + 1)
             {
-                SessionEvent("session_started", "FAT session started with a live baseline for every enabled bound point.")
+                SessionEvent("session_started", $"FAT session started with an explicit capture scope of {bindings.Count} operator-selected point(s).")
             };
             foreach (var binding in bindings)
             {
                 var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
-                _evaluator.StartAttempt(binding.Point, observation);
-                startupEntries.Add(PointEvent("baseline", binding.Point, observation, null, binding.Point.Runtime.StatusReason));
+                var evaluation = _captureCoordinator.Start(binding.Point, observation);
+                startupEntries.Add(PointEvent("baseline", binding.Point, observation, evaluation.Evidence, evaluation.Reason));
             }
             AppendBatchRequired(startupEntries);
         }
@@ -186,8 +215,9 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         }
 
         State = IoTestSessionState.Running;
-        StatusText = $"FAT session running for {ied.IedName}. Waiting for OFF → ON → OFF transitions.";
+        StatusText = $"FAT capture running for {ied.IedName}. Selected points stay armed for newer OFF -> ON -> OFF evidence until Stop.";
         RaiseProgress();
+        UpdateRunningCompletionStatus();
         return IoTestSessionActionResult.Success(StatusText);
     }
 
@@ -213,9 +243,10 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!_activeDevice.IsConnected || !_activeDevice.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} is not connected and monitoring yet.");
 
-        var refreshedBindings = BuildSessionBindings(ActiveIed, _activeDevice)
-            .Where(binding => _sessionPointIds.Contains(binding.Point.TestPointId))
+        var sessionPoints = ActiveIed.TestPoints
+            .Where(point => _sessionPointIds.Contains(point.TestPointId))
             .ToList();
+        var refreshedBindings = BuildSessionBindings(sessionPoints, _activeDevice);
         if (refreshedBindings.Count != _sessionPointIds.Count)
             return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} does not yet have all {_sessionPointIds.Count} session points live after reconnect.");
 
@@ -237,15 +268,15 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         foreach (var binding in refreshedBindings)
         {
             var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
-            var evaluation = _evaluator.Observe(binding.Point, observation);
+            var evaluation = _captureCoordinator.Observe(binding.Point, observation);
             if (!AppendOrFault(PointEvent("resume_baseline", binding.Point, observation, evaluation.Evidence, evaluation.Reason)))
                 return IoTestSessionActionResult.Failure(StatusText);
         }
 
         State = IoTestSessionState.Running;
-        StatusText = $"FAT session resumed for {ActiveIed.IedName}.";
+        StatusText = $"FAT capture resumed for {ActiveIed.IedName}; current evidence is preserved until a complete newer cycle is captured.";
         RaiseProgress();
-        CompleteIfAllPointsFinished();
+        UpdateRunningCompletionStatus();
         return IoTestSessionActionResult.Success(StatusText);
     }
 
@@ -382,7 +413,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
                 snapshot.SourceMode,
                 snapshot.Sequence,
                 _connectionGeneration);
-            var evaluation = _evaluator.Observe(point, observation);
+            var evaluation = _captureCoordinator.Observe(point, observation);
 
             if (evaluation.Evidence != null)
             {
@@ -421,29 +452,27 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         }
 
         RaiseProgress();
-        CompleteIfAllPointsFinished();
+        UpdateRunningCompletionStatus();
     }
 
-    private void CompleteIfAllPointsFinished()
+    private void UpdateRunningCompletionStatus()
     {
         if (State != IoTestSessionState.Running || ActiveIed == null || _sessionPointIds.Count == 0)
             return;
-        var allComplete = ActiveIed.TestPoints
+
+        var scoped = ActiveIed.TestPoints
             .Where(point => _sessionPointIds.Contains(point.TestPointId))
-            .All(point => point.Runtime.IsComplete);
-        if (!allComplete)
+            .ToList();
+        var complete = scoped.Count(point => point.Runtime.IsComplete);
+        if (complete != scoped.Count)
             return;
 
-        var passed = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Passed);
-        var review = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Review);
-        if (!AppendOrFault(SessionEvent("session_completed", $"All {_sessionPointIds.Count} session points completed: {passed} PASS, {review} review.")))
-            return;
-        CompletedAtUtc = DateTimeOffset.UtcNow;
-        State = IoTestSessionState.Completed;
-        StatusText = $"{ActiveIed.IedName} completed: {passed} PASS, {review} review.";
-        CleanupSessionResources(disposeJournal: true, keepActiveIed: true);
-        VerifySealedJournal();
-        RaiseProgress();
+        var passed = scoped.Count(point => point.Runtime.State == IoTestPointState.Passed);
+        var review = scoped.Count(point => point.Runtime.State == IoTestPointState.Review);
+        var failed = scoped.Count(point => point.Runtime.State == IoTestPointState.Failed);
+        StatusText =
+            $"{ActiveIed.IedName} current evidence complete: {passed} PASS, {review} review, {failed} fail. " +
+            "Capture remains running; selected points stay armed for newer evidence until operator Stop.";
     }
 
     private void ActiveDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -468,10 +497,12 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         AppendOrFault(SessionEvent("session_interrupted", StatusText));
     }
 
-    private List<SessionBinding> BuildSessionBindings(IoTestIedPlan ied, Iec61850MonitorDevice device)
+    private static List<SessionBinding> BuildSessionBindings(
+        IReadOnlyCollection<IoTestPointPlan> captureScope,
+        Iec61850MonitorDevice device)
     {
         var result = new List<SessionBinding>();
-        foreach (var point in ied.TestPoints.Where(point => point.TestEnabled && point.ImportReady && point.IsLiveBound))
+        foreach (var point in captureScope.Where(point => point.IsLiveBound))
         {
             var expected = IoTestLiveBindingService.NormalizeReference(
                 string.IsNullOrWhiteSpace(point.LiveSignalReference) ? point.ObjectReference : point.LiveSignalReference);
@@ -658,6 +689,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _activeDevice = null;
         _activePointIndex.Clear();
         _activeLivePoints.Clear();
+        _captureCoordinator.Clear();
         while (_pendingSnapshots.TryDequeue(out _)) { }
         if (disposeJournal)
         {
