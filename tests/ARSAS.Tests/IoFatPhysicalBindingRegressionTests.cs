@@ -135,6 +135,8 @@ public sealed class IoFatPhysicalBindingRegressionTests
         SignalAddress = "source-physical",
         DataSetName = dataSet,
         SourceRow = memberRow,
+        ExpectedOnText = "Value 1",
+        ExpectedOffText = "Value 2",
         ImportReady = true,
         TestEnabled = true,
         BindingStatus = IoTestSignalSelectionService.SclDataSetAuthorityBindingStatus
