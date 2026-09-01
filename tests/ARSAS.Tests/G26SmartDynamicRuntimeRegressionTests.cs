@@ -52,7 +52,8 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.DoesNotContain("SaveAsync(", bridge, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveAsync(", recovery, StringComparison.Ordinal);
         Assert.Contains("ProductionEligible certification remains separate", guarded, StringComparison.Ordinal);
-        Assert.Contains("sidecar witness separate from the qualification profile", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cleanup witness separate from the qualification profile", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DataChange profile by itself is never enough", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
