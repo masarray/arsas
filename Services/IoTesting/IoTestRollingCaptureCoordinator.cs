@@ -57,6 +57,12 @@ public sealed class IoTestRollingCaptureCoordinator
         if (!_slots.TryGetValue(point, out var slot))
             return _evaluator.Observe(point, observation);
 
+        if (slot.AttemptNeedsIncrement)
+        {
+            point.Runtime.Attempt++;
+            slot.AttemptNeedsIncrement = false;
+        }
+
         var evaluation = _evaluator.Observe(slot.Shadow, observation);
         ApplyLiveObservation(point.Runtime, slot.Shadow.Runtime, observation);
 
@@ -116,7 +122,7 @@ public sealed class IoTestRollingCaptureCoordinator
     {
         slot.Shadow = CreateShadow(point);
         _evaluator.StartAttempt(slot.Shadow, baseline);
-        point.Runtime.Attempt++;
+        slot.AttemptNeedsIncrement = true;
         point.Runtime.LastObservedState = slot.Shadow.Runtime.LastObservedState;
         point.Runtime.LastSequence = slot.Shadow.Runtime.LastSequence;
         point.Runtime.ConnectionGeneration = slot.Shadow.Runtime.ConnectionGeneration;
@@ -187,5 +193,6 @@ public sealed class IoTestRollingCaptureCoordinator
 
         public IoTestPointPlan Shadow { get; set; }
         public bool HasCurrentEvidence { get; set; }
+        public bool AttemptNeedsIncrement { get; set; }
     }
 }
