@@ -7,7 +7,7 @@ namespace ARSAS.Tests;
 public sealed class IoTestSessionPointUpdateTests
 {
     [Fact]
-    public void GoodQualityPointUpdate_RecoversRejectedInitialBaseline()
+    public void GoodQualityPointUpdate_RecoversRejectedInitialBaselineAndKeepsCaptureRunning()
     {
         var point = new IoTestPointPlan
         {
@@ -78,7 +78,8 @@ public sealed class IoTestSessionPointUpdateTests
 
         Assert.True(started.Succeeded, started.Message);
         Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
-        Assert.Equal(IoTestSessionState.Completed, controller.State);
+        Assert.Equal(IoTestSessionState.Running, controller.State);
+        Assert.Contains("Capture remains running", controller.StatusText, StringComparison.OrdinalIgnoreCase);
         var journal = File.ReadAllText(controller.JournalPath);
         Assert.Contains("waiting for good-quality baseline", journal, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"eventType\":\"baseline_state\"", journal, StringComparison.Ordinal);
