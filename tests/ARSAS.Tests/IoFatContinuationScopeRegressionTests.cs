@@ -28,8 +28,8 @@ public sealed class IoFatContinuationScopeRegressionTests
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
         Assert.DoesNotContain("protectedPoints", source, StringComparison.Ordinal);
-        Assert.Contains("No temporary checkbox mutation", source, StringComparison.Ordinal);
-        Assert.Contains("complete newer cycles replace current evidence atomically", source, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
+        Assert.Contains("operator-snapshot rows expose ✓ Value 1 / Value 2 capture", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
