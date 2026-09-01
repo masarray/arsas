@@ -9,7 +9,7 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
 
         Assert.Contains("Q0/A3 proves capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
-        Assert.Contains("all still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("every still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
     }
 
