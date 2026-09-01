@@ -12,11 +12,11 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("4d7a896c606194c5533322bf975a2c9c57da7c64", json.GetProperty("commit").GetString());
-        Assert.Equal(105, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("c979206988ebcbaf79e62b784895e19547184369", json.GetProperty("commit").GetString());
+        Assert.Equal(107, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // G2.6 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
+        // G2.7 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
         // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
@@ -38,7 +38,7 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
 
-        // Production/certification ancestry remains explicit while P1.6 restores the original
+        // Production/certification ancestry remains explicit while P1.6/P1.7 preserve the
         // field-capability Smart Auto contract and stable multi-RCB temporary DataSet identity.
         Assert.Contains("PR #97", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible profile", purpose, StringComparison.OrdinalIgnoreCase);
@@ -63,6 +63,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("all still-uncovered exact-resolved selected signals", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("native per-IED field-capability authorization", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -157,9 +159,10 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("PR #102", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
 
-        // G1 control remains independent from the G2.6 report acquisition bridge.
+        // G1 control remains independent from the G2.7 report acquisition bridge.
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
         Assert.Contains("SmartReconnectPolicy", runtime, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicBrcb = true", runtime, StringComparison.Ordinal);
