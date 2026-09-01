@@ -49,14 +49,10 @@ public sealed record IoTestJournalEntry
     public string Verdict { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
 
-    // FAT v2 generic capture metadata. Nullable defaults preserve verification of older
-    // digital-only evidence journals byte-for-byte through the same hash-chain model.
-    public FatValueSlot? ValueSlot { get; init; }
-    public FatEvidenceCaptureKind? CaptureKind { get; init; }
-
-    // Supplemental FAT evidence (COMTRADE, time synchronization, and future
-    // device-level evidence) lives in the same hash-chained journal format as signal
-    // transitions. Empty defaults preserve backward compatibility with older journals.
+    // Supplemental FAT evidence (COMTRADE, time synchronization, generic FAT value
+    // snapshots, and future device-level evidence) lives in the same hash-chained
+    // journal shape as existing signal transitions. Keeping this schema unchanged is
+    // required so historical journals remain verifiable byte-for-byte.
     public string EvidenceKind { get; init; } = string.Empty;
     public string ArtifactName { get; init; } = string.Empty;
     public string ArtifactPath { get; init; } = string.Empty;
