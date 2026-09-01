@@ -496,9 +496,22 @@ public sealed class IoTestProject
     public IoFatDocumentControl DocumentControl { get; init; } = new();
     public List<IoTestIedPlan> Ieds { get; init; } = new();
 
+    [JsonInclude]
+    public List<IoFatSourceDescriptor> Sources { get; private set; } = new();
+
+    [JsonInclude]
+    public string SourceSetSha256 { get; private set; } = string.Empty;
+
     public int SignalCount => Ieds.Sum(ied => ied.TestPoints.Count);
     public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.ImportReady));
     public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsLiveBound));
+
+    public void SetSources(IEnumerable<IoFatSourceDescriptor> sources, string sourceSetSha256)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        Sources = sources.ToList();
+        SourceSetSha256 = sourceSetSha256?.Trim().ToLowerInvariant() ?? string.Empty;
+    }
 
     public void InitializeRuntimeNotifications()
     {
