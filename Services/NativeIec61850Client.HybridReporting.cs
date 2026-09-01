@@ -198,9 +198,10 @@ public sealed partial class NativeIec61850Client
         };
 
         // G2.6 runtime boundary: certification and operation are separate. A valid,
-        // identity-compatible InformationReportProven data-change profile may authorize
-        // guarded dynamic monitoring only on its exact proven RCB/member envelope. The
-        // profile is read-only here; no ProductionEligible state is synthesized or saved.
+        // identity-compatible InformationReportProven profile plus the exact reviewed
+        // physical field-capability witness may authorize general Dynamic RCB coverage for
+        // fresh exact-resolved residual signals. The persisted profile is read-only here;
+        // no ProductionEligible state is synthesized or saved.
         var guardedRuntime = allowDynamicWrites
             ? await TryLoadGuardedRuntimeContextAsync(device, cancellationToken).ConfigureAwait(false)
             : new GuardedRuntimeContextLoadResult(
@@ -299,8 +300,22 @@ public sealed partial class NativeIec61850Client
         }
         if (guardedRuntime.IsAuthorizedCandidate)
         {
+            var dynamicSegments = enginePlan.Segments
+                .Where(segment => segment.Kind is ArMms.MmsHybridAcquisitionKind.DynamicBrcb or ArMms.MmsHybridAcquisitionKind.DynamicUrcb)
+                .Where(segment => segment.IsReportBacked && segment.ReportPlan is not null)
+                .ToArray();
+            var dynamicSignalCount = enginePlan.DynamicBrcbSignalCount + enginePlan.DynamicUrcbSignalCount;
+            var pollingResidualCount = enginePlan.PollingFallbackSignalCount + unmapped.Count;
+
             p6Warnings.Add(
-                "G2.6 Smart Dynamic RCB guarded runtime is authorized from identity-compatible InformationReportProven data-change evidence. Only the exact proven RCB/member envelope may be mutated; ProductionEligible certification remains separate.");
+                $"G2.6 P1.6 field-capability runtime authorized from the exact physical witness. Dynamic groups={dynamicSegments.Length}; dynamic signals={dynamicSignalCount}; MMS fallback={pollingResidualCount}. Q0/A3 is capability proof, not a permanent member whitelist; ProductionEligible certification remains separate.");
+
+            for (var index = 0; index < dynamicSegments.Length; index++)
+            {
+                var segment = dynamicSegments[index];
+                p6Warnings.Add(
+                    $"G2.6 P1.6 dynamic group {index + 1}/{dynamicSegments.Length}: kind={segment.Kind}; RCB={segment.ReportControlReference}; DataSet={segment.DataSetReference}; members={segment.Signals.Count}.");
+            }
         }
         else if (device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen)
         {
@@ -333,7 +348,7 @@ public sealed partial class NativeIec61850Client
             Authority = $"ARIEC61850 capability-aware hybrid acquisition ({catalogAuthority})",
             Status = enginePlan.Status.ToString(),
             Summary = $"{enginePlan.Summary} {associationCapability.Summary}" +
-                      (guardedRuntime.IsAuthorizedCandidate ? " Guarded Smart Dynamic runtime=InformationReportProven exact envelope." : string.Empty) +
+                      (guardedRuntime.IsAuthorizedCandidate ? " Guarded Smart Dynamic runtime=P1.6 field-capability witness; fresh exact-resolved residuals may use bounded Dynamic RCB groups." : string.Empty) +
                       (staticInventoryMappedCount > 0 ? $" Static inventory bridge={staticInventoryMappedCount}." : string.Empty) +
                       (dynamicWriteCircuitOpen ? " Dynamic writes circuit-broken after field failure evidence." : string.Empty),
             ReportPlans = activationPlans,
@@ -467,7 +482,8 @@ public sealed partial class NativeIec61850Client
         // Re-read the exact selected RCB immediately before execution, then ask the same
         // ARIEC planner family to classify that fresh association evidence again. Guarded
         // InformationReportProven authority, when present, is carried by PlanId so the
-        // execution gate cannot silently broaden or lose the exact proven envelope.
+        // execution gate cannot silently lose the exact witness authorization or switch
+        // away from the P1.6 planner policy used during initial planning.
         var callerOwned = _reportMonitorSessions.Values
             .Select(session => session.ReportControl.Reference)
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
