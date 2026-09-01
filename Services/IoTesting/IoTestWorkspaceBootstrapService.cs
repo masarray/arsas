@@ -17,16 +17,38 @@ public static class IoTestWorkspaceBootstrapService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public static async Task<IoTestWorkspaceLaunchResult> OpenWorkbookAsync(
+    public static Task<IoTestWorkspaceLaunchResult> OpenWorkbookAsync(
         IoTestProject importedProject,
         string workbookPath,
         string localProjectsRoot,
         string evidenceRoot,
         Func<IoTestProject, string, IoTestSessionController> sessionFactory,
         CancellationToken cancellationToken = default)
+        => OpenSourcesAsync(
+            importedProject,
+            new[] { new IoFatSourceInput(workbookPath, IoFatSourceKinds.Workbook) },
+            localProjectsRoot,
+            evidenceRoot,
+            sessionFactory,
+            cancellationToken);
+
+    public static async Task<IoTestWorkspaceLaunchResult> OpenSourcesAsync(
+        IoTestProject importedProject,
+        IReadOnlyCollection<IoFatSourceInput> sourceInputs,
+        string localProjectsRoot,
+        string evidenceRoot,
+        Func<IoTestProject, string, IoTestSessionController> sessionFactory,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(importedProject);
+        ArgumentNullException.ThrowIfNull(sourceInputs);
         ArgumentNullException.ThrowIfNull(sessionFactory);
+
+        // Establish exact source identity before choosing the local project directory.
+        // For a single legacy workbook, ProjectStorageFingerprint intentionally remains
+        // the historical workbook SHA so existing local snapshots stay discoverable.
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
         var snapshotPath = Path.Combine(localDirectory, "project.snapshot.json");
@@ -56,10 +78,10 @@ public static class IoTestWorkspaceBootstrapService
             var session = sessionFactory(importedProject, evidenceRoot);
             try
             {
-                var opened = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+                var opened = await IoTestWorkspacePersistence.OpenSourcesAsync(
                     importedProject,
                     session,
-                    workbookPath,
+                    sourceInputs,
                     localProjectsRoot,
                     evidenceRoot,
                     cancellationToken).ConfigureAwait(false);
@@ -126,9 +148,9 @@ public static class IoTestWorkspaceBootstrapService
         var savedProject = RequiredObject(root, "project");
         if (!RequiredString(savedProject, "projectId").Equals(project.ProjectId, StringComparison.OrdinalIgnoreCase) ||
             !RequiredString(savedProject, "schemaVersion").Equals(project.SchemaVersion, StringComparison.OrdinalIgnoreCase) ||
-            !RequiredString(savedProject, "sourceWorkbookSha256").Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase))
+            !SnapshotSourceMatches(savedProject, project))
         {
-            throw new InvalidDataException("The local snapshot belongs to a different workbook or schema.");
+            throw new InvalidDataException("The local snapshot belongs to a different FAT source set or schema.");
         }
 
         var savedIeds = RequiredArray(savedProject, "ieds").EnumerateArray().ToArray();
@@ -177,6 +199,20 @@ public static class IoTestWorkspaceBootstrapService
             }
         }
         project.InitializeRuntimeNotifications();
+    }
+
+    private static bool SnapshotSourceMatches(JsonElement savedProject, IoTestProject project)
+    {
+        var expectedSet = IoFatSourceIdentity.ProjectSourceFingerprint(project);
+        var savedSet = OptionalString(savedProject, "sourceSetSha256", string.Empty);
+        if (!string.IsNullOrWhiteSpace(savedSet))
+            return savedSet.Equals(expectedSet, StringComparison.OrdinalIgnoreCase);
+
+        // Snapshots written before P3 only had workbook SHA. Preserve exact compatibility
+        // for those snapshots instead of forcing their identity through the new set hash.
+        var legacyWorkbookSha = OptionalString(savedProject, "sourceWorkbookSha256", string.Empty);
+        return !string.IsNullOrWhiteSpace(legacyWorkbookSha) &&
+               legacyWorkbookSha.Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RestoreIedLevelEvidence(IoTestProject project, IReadOnlyList<JsonElement> savedIeds)
@@ -274,9 +310,10 @@ public static class IoTestWorkspaceBootstrapService
 
     private static string ProjectDirectory(string root, IoTestProject project)
     {
-        var hash = string.IsNullOrWhiteSpace(project.SourceWorkbookSha256)
+        var fingerprint = IoFatSourceIdentity.ProjectStorageFingerprint(project);
+        var hash = string.IsNullOrWhiteSpace(fingerprint)
             ? "nohash"
-            : project.SourceWorkbookSha256[..Math.Min(12, project.SourceWorkbookSha256.Length)];
+            : fingerprint[..Math.Min(12, fingerprint.Length)];
         return Path.Combine(root, $"{Sanitize(project.ProjectId)}_{hash}");
     }
 
