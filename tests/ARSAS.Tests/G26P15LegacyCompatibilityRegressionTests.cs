@@ -12,8 +12,8 @@ public sealed class G26P15LegacyCompatibilityRegressionTests
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("InformationReportProof.Kind == ArMms.MmsDynamicInformationReportKind.DataChange", guarded, StringComparison.Ordinal);
-        Assert.Contains("original persisted profile unchanged", guarded, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("capability evidence, not a", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("historical AA1C1F08R4", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Q0/A3 proves capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exact identity/profile/witness/cleanup binding", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("TryBuildCompatibleContext", guarded, StringComparison.Ordinal);
