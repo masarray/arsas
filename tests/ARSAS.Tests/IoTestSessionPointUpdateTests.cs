@@ -80,6 +80,7 @@ public sealed class IoTestSessionPointUpdateTests
         Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
         Assert.Equal(IoTestSessionState.Running, controller.State);
         Assert.Contains("Capture remains running", controller.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(controller.Stop().Succeeded);
         var journal = File.ReadAllText(controller.JournalPath);
         Assert.Contains("waiting for good-quality baseline", journal, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"eventType\":\"baseline_state\"", journal, StringComparison.Ordinal);
