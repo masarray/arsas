@@ -23,17 +23,18 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingLauncher_UsesArsasProjectAndNativePdfWording()
+    public void IoTestingLauncher_UsesSclDataSetAndArsasProjectWording()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
 
         Assert.Contains("InstallFirstRunTestingChoices", source, StringComparison.Ordinal);
         Assert.Contains("GENERAL IEC 61850 TESTING", source, StringComparison.Ordinal);
-        Assert.Contains("FAT / IO LIST TESTING", source, StringComparison.Ordinal);
+        Assert.Contains("FAT / DATASET VERIFICATION", source, StringComparison.Ordinal);
+        Assert.Contains("Open SCL for FAT", source, StringComparison.Ordinal);
         Assert.Contains("Open IO List Workbook", source, StringComparison.Ordinal);
         Assert.Contains("Open ARSAS Project", source, StringComparison.Ordinal);
         Assert.Contains("IoFatProjectPackageService.OpenDialogFilter", source, StringComparison.Ordinal);
-        Assert.Contains("native PDF report", source, StringComparison.Ordinal);
+        Assert.Contains("Value 1 / Value 2 evidence", source, StringComparison.Ordinal);
         Assert.DoesNotContain("printable browser report", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("actionPanel.Children.Insert", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InstallIoListTestingLauncher", source, StringComparison.Ordinal);
@@ -91,11 +92,12 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("PrepareIoTestIedForFatAsync", contextSource, StringComparison.Ordinal);
         Assert.Contains("var selectedIed = SelectedIed", contextSource, StringComparison.Ordinal);
         Assert.Contains("var captureScope = selectedIed.TestPoints", contextSource, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextSource, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
         Assert.Contains("Session.Start(selectedIed, captureScope)", contextSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Retest completed evidence?", contextSource, StringComparison.Ordinal);
-        Assert.Contains("complete newer cycles replace current evidence atomically", contextSource, StringComparison.Ordinal);
+        Assert.Contains("operator-snapshot rows expose ✓ Value 1 / Value 2 capture", contextSource, StringComparison.Ordinal);
     }
 
     [Fact]
