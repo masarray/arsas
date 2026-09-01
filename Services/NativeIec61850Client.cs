@@ -64,6 +64,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         _liveModel = null;
         _reportMonitorSessions.Clear();
         _reportMonitorCoverage.Clear();
+        ResetSemanticReportProjectionContext();
         Interlocked.Exchange(ref _engineCompatibilityWarningIssued, 0);
         DetectedIdentity = new Iec61850DeviceIdentity();
         _host = ipAddress?.Trim() ?? string.Empty;
@@ -490,7 +491,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 ReceivedAt = report.ReceivedAt
             });
 
-            var projection = ArMms.MmsReportValueProjector.Project(report);
+            var projection = ProjectReportValue(report);
             warnings.AddRange(projection.Warnings);
             updates.AddRange(projection.Updates.Select(update => new NativeReportValueUpdate
             {
