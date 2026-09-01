@@ -1,0 +1,247 @@
+using ArIED61850Tester.Models.IoTesting;
+
+namespace ArIED61850Tester.Services.IoTesting;
+
+/// <summary>
+/// Native report layout for SCL-backed FAT v2. The legacy workbook executive layout stays
+/// unchanged so existing customer handovers remain stable; SCL projects use generic
+/// Value 1 / Value 2 terminology and never present operator-snapshot completion as PASS.
+/// </summary>
+internal static class IoFatV2ReportLayoutEngine
+{
+    public const double PageWidth = 842d;
+    public const double PageHeight = 595d;
+
+    private const double Margin = 30d;
+    private const double ContentTop = 488d;
+    private const double ContentBottom = 54d;
+    private const double RowHeight = 34d;
+
+    private static readonly IoFatReportColor Navy = Color("0F172A");
+    private static readonly IoFatReportColor Blue = Color("2563EB");
+    private static readonly IoFatReportColor SoftBlue = Color("EFF6FF");
+    private static readonly IoFatReportColor Border = Color("DCE5F0");
+    private static readonly IoFatReportColor Ink = Color("243146");
+    private static readonly IoFatReportColor Muted = Color("64748B");
+    private static readonly IoFatReportColor White = Color("FFFFFF");
+    private static readonly IoFatReportColor Pass = Color("15803D");
+    private static readonly IoFatReportColor Attention = Color("B45309");
+    private static readonly IoFatReportColor Fail = Color("B91C1C");
+
+    private static readonly double[] Widths = [24d, 142d, 205d, 72d, 125d, 125d, 89d];
+
+    public static IoFatReportLayoutPlan Build(IoTestProject project, DateTimeOffset created, bool draft = false)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        var pages = new List<List<IoFatReportCommand>>();
+        var page = NewPage(pages, project, created, draft);
+        var y = ContentTop;
+
+        foreach (var ied in project.Ieds)
+        {
+            var points = ied.TestPoints.Where(point => point.IsIncludedInFat).ToArray();
+            Ensure(ref page, ref y, pages, project, created, draft, 56d);
+            DrawIedHeader(page, ied, points, ref y);
+            DrawTableHeader(page, ref y);
+
+            var row = 0;
+            foreach (var point in points)
+            {
+                row++;
+                if (y - RowHeight < ContentBottom)
+                {
+                    page = NewPage(pages, project, created, draft);
+                    y = ContentTop;
+                    DrawIedHeader(page, ied, points, ref y, continued: true);
+                    DrawTableHeader(page, ref y);
+                }
+                DrawPointRow(page, point, row, ref y);
+            }
+            y -= 12d;
+        }
+
+        if (project.Ieds.Count == 0)
+        {
+            page.Add(new IoFatReportTextCommand(Margin, y - 18d, 600d, "No FAT IED is present in this project.", IoFatReportFontKind.Bold, 9d, Attention));
+        }
+
+        for (var index = 0; index < pages.Count; index++)
+        {
+            pages[index].Add(new IoFatReportLineCommand(Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d));
+            pages[index].Add(new IoFatReportTextCommand(Margin, 24d, 560d,
+                $"Source-set SHA-256 {Short(project.SourceSetSha256, 32)}  |  Generated {created:yyyy-MM-dd HH:mm:ss zzz}",
+                IoFatReportFontKind.Regular, 6.0d, Muted));
+            pages[index].Add(new IoFatReportTextCommand(PageWidth - Margin - 100d, 24d, 100d,
+                $"Page {index + 1} / {pages.Count}", IoFatReportFontKind.Regular, 6.0d, Muted));
+        }
+
+        return new IoFatReportLayoutPlan(
+            project.ProjectId,
+            created,
+            draft,
+            pages.Select((commands, index) =>
+                new IoFatReportPagePlan(index + 1, PageWidth, PageHeight, commands.ToArray())).ToArray());
+    }
+
+    private static List<IoFatReportCommand> NewPage(
+        List<List<IoFatReportCommand>> pages,
+        IoTestProject project,
+        DateTimeOffset created,
+        bool draft)
+    {
+        var page = new List<IoFatReportCommand>();
+        pages.Add(page);
+        page.Add(new IoFatReportTextCommand(Margin, 566d, 520d,
+            Clean(project.ProjectName), IoFatReportFontKind.Bold, 7.2d, Muted));
+        page.Add(new IoFatReportTextCommand(Margin, 544d, 520d,
+            "IEC 61850 FAT Evidence Report", IoFatReportFontKind.Bold, 16.8d, Navy));
+        page.Add(new IoFatReportTextCommand(Margin, 524d, 560d,
+            "Static DataSet verification · generic Value 1 / Value 2 evidence · source identity preserved",
+            IoFatReportFontKind.Regular, 7.8d, Muted));
+        page.Add(new IoFatReportRectCommand(PageWidth - Margin - 190d, 568d, 190d, 54d, 4d, SoftBlue, Border, 0.7d));
+        page.Add(new IoFatReportTextCommand(PageWidth - Margin - 178d, 550d, 166d,
+            draft ? "PREVIEW" : "AS TESTED", IoFatReportFontKind.Bold, 7.2d, Blue));
+        page.Add(new IoFatReportTextCommand(PageWidth - Margin - 178d, 534d, 166d,
+            $"{project.IncludedSignalCount} included · {project.RemovedSignalCount} removed",
+            IoFatReportFontKind.Regular, 6.4d, Ink));
+        page.Add(new IoFatReportLineCommand(Margin, 504d, PageWidth - Margin, 504d, Border, 0.8d));
+        return page;
+    }
+
+    private static void Ensure(
+        ref List<IoFatReportCommand> page,
+        ref double y,
+        List<List<IoFatReportCommand>> pages,
+        IoTestProject project,
+        DateTimeOffset created,
+        bool draft,
+        double height)
+    {
+        if (y - height >= ContentBottom)
+            return;
+        page = NewPage(pages, project, created, draft);
+        y = ContentTop;
+    }
+
+    private static void DrawIedHeader(
+        List<IoFatReportCommand> page,
+        IoTestIedPlan ied,
+        IReadOnlyCollection<IoTestPointPlan> points,
+        ref double y,
+        bool continued = false)
+    {
+        var complete = points.Count(point => point.IsFatEvidenceComplete);
+        var digitalPass = points.Count(point =>
+            point.CaptureMode == FatCaptureMode.AutomaticTransition &&
+            point.Runtime.State == IoTestPointState.Passed);
+        var manualComplete = points.Count(point =>
+            point.CaptureMode == FatCaptureMode.OperatorSnapshot && point.IsFatEvidenceComplete);
+        var title = continued ? $"{ied.IedName} (continued)" : ied.IedName;
+        page.Add(new IoFatReportRectCommand(Margin, y, 4d, 38d, 0d, Blue, Blue, 0d));
+        page.Add(new IoFatReportTextCommand(Margin + 14d, y - 14d, 380d, Clean(title), IoFatReportFontKind.Bold, 10.2d, Navy));
+        page.Add(new IoFatReportTextCommand(Margin + 14d, y - 29d, 420d,
+            string.IsNullOrWhiteSpace(ied.IpAddress) ? "Offline SCL scope · endpoint not bound" : Clean(ied.IpAddress),
+            IoFatReportFontKind.Regular, 6.5d, Muted));
+        page.Add(new IoFatReportTextCommand(PageWidth - Margin - 300d, y - 28d, 290d,
+            $"{complete}/{points.Count} complete · {digitalPass} digital PASS · {manualComplete} snapshot complete",
+            IoFatReportFontKind.Bold, 6.5d, complete == points.Count && points.Count > 0 ? Pass : Attention));
+        y -= 46d;
+    }
+
+    private static void DrawTableHeader(List<IoFatReportCommand> page, ref double y)
+    {
+        var headers = new[] { "#", "Signal", "IEC 61850 reference", "Type", "Value 1", "Value 2", "Result" };
+        var x = Margin;
+        const double height = 22d;
+        for (var index = 0; index < headers.Length; index++)
+        {
+            page.Add(new IoFatReportRectCommand(x, y, Widths[index], height, 0d, SoftBlue, Border, 0.45d));
+            page.Add(new IoFatReportTextCommand(x + 5d, y - 14.5d, Widths[index] - 10d,
+                headers[index], IoFatReportFontKind.Bold, 5.8d, Blue));
+            x += Widths[index];
+        }
+        y -= height;
+    }
+
+    private static void DrawPointRow(
+        List<IoFatReportCommand> page,
+        IoTestPointPlan point,
+        int rowNumber,
+        ref double y)
+    {
+        var cells = new[]
+        {
+            rowNumber.ToString(),
+            Short(point.SignalName, 32),
+            Short(point.ReportIecReference, 48),
+            point.SignalKind.ToString(),
+            ValueCell(point, FatValueSlot.Value1),
+            ValueCell(point, FatValueSlot.Value2),
+            point.CaptureMode == FatCaptureMode.OperatorSnapshot
+                ? (point.IsFatEvidenceComplete ? "COMPLETE" : "PENDING")
+                : point.Runtime.State switch
+                {
+                    IoTestPointState.Passed => "PASS",
+                    IoTestPointState.Review => "REVIEW",
+                    IoTestPointState.Failed => "FAILED",
+                    _ => "PENDING"
+                }
+        };
+        var resultColor = point.CaptureMode == FatCaptureMode.OperatorSnapshot
+            ? (point.IsFatEvidenceComplete ? Pass : Muted)
+            : point.Runtime.State switch
+            {
+                IoTestPointState.Passed => Pass,
+                IoTestPointState.Review => Attention,
+                IoTestPointState.Failed => Fail,
+                _ => Muted
+            };
+
+        var x = Margin;
+        for (var index = 0; index < cells.Length; index++)
+        {
+            page.Add(new IoFatReportRectCommand(x, y, Widths[index], RowHeight, 0d, White, Border, 0.35d));
+            var color = index == cells.Length - 1 ? resultColor : Ink;
+            var font = index is 0 or 2 ? IoFatReportFontKind.Mono : index is 1 or 6 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular;
+            page.Add(new IoFatReportTextCommand(x + 5d, y - 13d, Widths[index] - 10d, cells[index], font, 5.8d, color));
+            if (index is 4 or 5)
+            {
+                var stamp = ValueTimestamp(point, index == 4 ? FatValueSlot.Value1 : FatValueSlot.Value2);
+                page.Add(new IoFatReportTextCommand(x + 5d, y - 26d, Widths[index] - 10d, stamp, IoFatReportFontKind.Mono, 5.1d, Muted));
+            }
+            x += Widths[index];
+        }
+        y -= RowHeight;
+    }
+
+    private static string ValueCell(IoTestPointPlan point, FatValueSlot slot)
+        => Short(slot == FatValueSlot.Value1 ? point.Value1Text : point.Value2Text, 25);
+
+    private static string ValueTimestamp(IoTestPointPlan point, FatValueSlot slot)
+    {
+        var text = slot == FatValueSlot.Value1 ? point.Value1RelayTimestampText : point.Value2RelayTimestampText;
+        return string.IsNullOrWhiteSpace(text) || text == "—" ? "IED time: -" : "IED " + Short(text, 28);
+    }
+
+    private static string Clean(string? value)
+    {
+        var normalized = (value ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length == 0 ? "-" : normalized;
+    }
+
+    private static string Short(string? value, int maximum)
+    {
+        var clean = Clean(value);
+        return clean.Length <= maximum ? clean : clean[..Math.Max(1, maximum - 1)] + "…";
+    }
+
+    private static string Short(string? value, int maximum, string fallback)
+    {
+        var clean = Clean(value);
+        if (clean == "-")
+            return fallback;
+        return clean.Length <= maximum ? clean : clean[..Math.Max(1, maximum - 1)] + "…";
+    }
+
+    private static IoFatReportColor Color(string hex) => IoFatReportColor.FromHex(hex);
+}
