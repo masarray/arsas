@@ -65,15 +65,7 @@ public sealed class IoTestSignalSelectionService
                 .Where(signal => IsEligible(signal, point))
                 .Select(signal => new ScoredSignal(
                     signal,
-                    importedReferences.Count == 0
-                        ? 0
-                        : importedReferences.Max(reference => IoTestReferenceMatcher.Score(
-                            reference,
-                            signal.ObjectReference,
-                            ied.IedName,
-                            device.Name,
-                            device.SclIedName,
-                            point.LogicalNode))))
+                    BestSignalScore(point, signal, importedReferences, ied, device)))
                 .Where(item => item.Score > 0)
                 .ToList();
 
@@ -167,6 +159,39 @@ public sealed class IoTestSignalSelectionService
             point.BindingStatus,
             SclDataSetAuthorityBindingStatus,
             StringComparison.OrdinalIgnoreCase);
+
+    private static int BestSignalScore(
+        IoTestPointPlan point,
+        SignalDefinition signal,
+        IReadOnlyCollection<string> importedReferences,
+        IoTestIedPlan ied,
+        Iec61850MonitorDevice device)
+    {
+        if (importedReferences.Count == 0)
+            return 0;
+
+        // ARIEC deliberately keeps static FCDA/FCD membership identity in
+        // DisplayReference while ObjectReference may remain the resolved runtime leaf.
+        // SCL-backed FAT rows therefore compare against both engine-owned identities.
+        // Legacy workbook rows keep the old ObjectReference-only contract.
+        var observedReferences = IsSclDataSetAuthority(point)
+            ? new[] { signal.ObjectReference, signal.DisplayReference }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : new[] { signal.ObjectReference };
+
+        return importedReferences
+            .SelectMany(imported => observedReferences.Select(observed => IoTestReferenceMatcher.Score(
+                imported,
+                observed,
+                ied.IedName,
+                device.Name,
+                device.SclIedName,
+                point.LogicalNode)))
+            .DefaultIfEmpty(0)
+            .Max();
+    }
 
     private static List<SignalDefinition> NarrowByProtectionIdentity(
         IoTestPointPlan point,
