@@ -1,0 +1,117 @@
+using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services.IoTesting;
+
+namespace ARSAS.Tests;
+
+public sealed class IoFatV2ReportRegressionTests
+{
+    [Fact]
+    public void SclReport_UsesGenericValueColumnsAndExcludesRemovedRows()
+    {
+        var manual = Point("MANUAL", "Phase current A", FatSignalKind.Analog, FatCaptureMode.OperatorSnapshot);
+        manual.Runtime.Value1Evidence = Evidence(FatValueSlot.Value1, "12.34");
+        manual.Runtime.Value2Evidence = Evidence(FatValueSlot.Value2, "18.90");
+
+        var removed = Point("REMOVED", "Removed current B", FatSignalKind.Analog, FatCaptureMode.OperatorSnapshot);
+        removed.RemoveFromFat();
+        var project = Project(manual, removed);
+
+        var layout = IoFatPdfReportService.BuildLayout(
+            project,
+            new DateTimeOffset(2026, 9, 1, 4, 0, 0, TimeSpan.Zero));
+        var text = string.Join("\n", layout.Pages
+            .SelectMany(page => page.Commands)
+            .OfType<IoFatReportTextCommand>()
+            .Select(command => command.Text));
+
+        Assert.Contains("Value 1", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Value 2", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("12.34", text, StringComparison.Ordinal);
+        Assert.Contains("18.90", text, StringComparison.Ordinal);
+        Assert.Contains("COMPLETE", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("TRUE IED timestamp", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FALSE IED timestamp", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Removed current B", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SclReport_OperatorSnapshotCompletion_IsNotPresentedAsPass()
+    {
+        var manual = Point("MANUAL", "Voltage", FatSignalKind.Analog, FatCaptureMode.OperatorSnapshot);
+        manual.Runtime.Value1Evidence = Evidence(FatValueSlot.Value1, "110.0");
+        manual.Runtime.Value2Evidence = Evidence(FatValueSlot.Value2, "115.0");
+        var layout = IoFatV2ReportLayoutEngine.Build(Project(manual), DateTimeOffset.UtcNow);
+        var texts = layout.Pages.SelectMany(page => page.Commands)
+            .OfType<IoFatReportTextCommand>()
+            .Select(command => command.Text)
+            .ToArray();
+
+        Assert.Contains("COMPLETE", texts);
+        Assert.DoesNotContain("PASS", texts.Where(text => text == "PASS"));
+    }
+
+    [Fact]
+    public void SclNativePdf_GeneratesPdfFromGenericLayout()
+    {
+        var manual = Point("MANUAL", "Current", FatSignalKind.Analog, FatCaptureMode.OperatorSnapshot);
+        manual.Runtime.Value1Evidence = Evidence(FatValueSlot.Value1, "1.00");
+        manual.Runtime.Value2Evidence = Evidence(FatValueSlot.Value2, "2.00");
+
+        var bytes = IoFatPdfReportService.Generate(Project(manual));
+
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytes, 0, 5));
+    }
+
+    private static IoTestProject Project(params IoTestPointPlan[] points)
+        => new()
+        {
+            ProjectId = "P5-REPORT",
+            SchemaVersion = "ARSAS-FAT-SCL-1.0",
+            ProjectName = "P5 report",
+            Ieds =
+            {
+                new IoTestIedPlan
+                {
+                    IedName = "IED-P5",
+                    IpAddress = string.Empty,
+                    TestPoints = points.ToList()
+                }
+            }
+        };
+
+    private static IoTestPointPlan Point(
+        string id,
+        string name,
+        FatSignalKind kind,
+        FatCaptureMode capture)
+        => new()
+        {
+            TestPointId = id,
+            IedName = "IED-P5",
+            IpAddress = string.Empty,
+            SignalName = name,
+            ObjectReference = $"IED-P5MEAS/MMXU1.{id}.mag.f",
+            FunctionalConstraint = "MX",
+            ExpectedOnText = "Value 1",
+            ExpectedOffText = "Value 2",
+            DataType = "FLOAT32",
+            SignalKind = kind,
+            CaptureMode = capture,
+            ImportReady = true,
+            BindingStatus = "SCL_DATASET_AUTHORITY"
+        };
+
+    private static FatValueEvidence Evidence(FatValueSlot slot, string raw)
+        => new(
+            Guid.NewGuid(),
+            slot,
+            FatEvidenceCaptureKind.OperatorSnapshot,
+            raw,
+            new DateTimeOffset(2026, 9, 1, 3, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 9, 1, 2, 59, 59, 997, TimeSpan.Zero),
+            "Good",
+            "BRCB",
+            slot == FatValueSlot.Value1 ? 1 : 2,
+            1);
+}
