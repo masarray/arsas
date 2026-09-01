@@ -178,7 +178,7 @@ public sealed class IoTestSessionControllerTests
         Assert.False(result.Succeeded);
         Assert.False(fixture.Point.TestEnabled);
         Assert.Equal(IoTestSessionState.Idle, controller.State);
-        Assert.Contains("operator-selected", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not selected", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public sealed class IoTestSessionControllerTests
         {
             DeviceId = device.DeviceId,
             DeviceName = device.Name,
-            IpAddress = device.IpAddress,
+            IpAddress = ied.IpAddress,
             SignalName = point.SignalName,
             IecReference = point.ObjectReference,
             FunctionalConstraint = "ST",
