@@ -14,7 +14,7 @@ public sealed class G26P15LegacyCompatibilityRegressionTests
         Assert.Contains("InformationReportProof.Kind == ArMms.MmsDynamicInformationReportKind.DataChange", guarded, StringComparison.Ordinal);
         Assert.Contains("original persisted profile unchanged", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("capability evidence, not a", guarded, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("strict legacy subset binding checks", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact identity/profile/witness/cleanup binding", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("TryBuildCompatibleContext", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("InformationReportProof = load.Profile.InformationReportProof with", guarded, StringComparison.Ordinal);
