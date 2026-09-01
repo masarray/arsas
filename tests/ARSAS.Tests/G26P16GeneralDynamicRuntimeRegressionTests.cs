@@ -19,7 +19,9 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
         var guarded = Read("Services/NativeIec61850Client.HybridReporting.GuardedRuntime.cs");
 
         Assert.True(Count(guarded, "DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve") >= 2);
-        Assert.Contains("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.Contains("same field-capability policy that", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("freshly verified free RCBs", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
