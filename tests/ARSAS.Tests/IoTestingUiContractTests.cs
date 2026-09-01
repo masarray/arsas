@@ -65,7 +65,7 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndProtectsCompletedEvidence()
+    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndPreservesOperatorSelection()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -90,11 +90,12 @@ public sealed class IoTestingUiContractTests
         var contextSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
         Assert.Contains("PrepareIoTestIedForFatAsync", contextSource, StringComparison.Ordinal);
         Assert.Contains("var selectedIed = SelectedIed", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.Runtime.IsComplete", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
-        Assert.Contains("Session.Start(selectedIed)", contextSource, StringComparison.Ordinal);
-        Assert.Contains("Retest completed evidence?", contextSource, StringComparison.Ordinal);
+        Assert.Contains("var captureScope = selectedIed.TestPoints", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
+        Assert.Contains("Session.Start(selectedIed, captureScope)", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Retest completed evidence?", contextSource, StringComparison.Ordinal);
+        Assert.Contains("complete newer cycles replace current evidence atomically", contextSource, StringComparison.Ordinal);
     }
 
     [Fact]
