@@ -9,7 +9,7 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
 
         Assert.Contains("Q0/A3 proves capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
-        Assert.Contains("every still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("general member coverage", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
     }
 
@@ -22,7 +22,7 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("same field-capability policy that", guarded, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("freshly verified free RCBs", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fresh verified-free RCBs", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -42,17 +42,19 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
     }
 
     [Fact]
-    public void P16_EngineLockPinsGeneralRuntimeAndStableMultiRcbIdentity()
+    public void P16_EngineLockRetainsGeneralRuntimeAndStableMultiRcbIdentityLineage()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 105", engineLock, StringComparison.Ordinal);
+        Assert.Contains("c979206988ebcbaf79e62b784895e19547184369", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 107", engineLock, StringComparison.Ordinal);
         Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("all still-uncovered exact-resolved selected signals", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MMS polling only for genuine residuals", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
