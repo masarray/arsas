@@ -15,39 +15,64 @@ public sealed record IoFatPackageSource(
     public IoFatSourceDescriptor Descriptor => new(SourceId, Kind, FileName, Sha256, Length);
 }
 
+public sealed record IoFatDescribedSource(
+    IoFatSourceDescriptor Source,
+    string OriginalPath);
+
 public static class IoFatSourceWorkspaceService
 {
+    public static async Task<IReadOnlyList<IoFatDescribedSource>> DescribeAsync(
+        IReadOnlyCollection<IoFatSourceInput> inputs,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (inputs.Count == 0)
+            throw new InvalidDataException("A FAT workspace must contain at least one source file.");
+
+        var described = new List<IoFatDescribedSource>(inputs.Count);
+        foreach (var input in inputs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            described.Add(new IoFatDescribedSource(
+                await IoFatSourceIdentity.DescribeAsync(input, cancellationToken).ConfigureAwait(false),
+                input.FilePath));
+        }
+        return described;
+    }
+
     public static async Task<IReadOnlyList<IoFatWorkspaceSource>> StageAsync(
         IoTestProject project,
         IReadOnlyCollection<IoFatSourceInput> inputs,
         string sourceDirectory,
         CancellationToken cancellationToken = default)
+        => await StageDescribedAsync(
+            project,
+            await DescribeAsync(inputs, cancellationToken).ConfigureAwait(false),
+            sourceDirectory,
+            cancellationToken).ConfigureAwait(false);
+
+    public static async Task<IReadOnlyList<IoFatWorkspaceSource>> StageDescribedAsync(
+        IoTestProject project,
+        IReadOnlyCollection<IoFatDescribedSource> described,
+        string sourceDirectory,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(inputs);
+        ArgumentNullException.ThrowIfNull(described);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
-        if (inputs.Count == 0)
+        if (described.Count == 0)
             throw new InvalidDataException("A FAT workspace must contain at least one source file.");
 
-        var described = new List<(IoFatSourceDescriptor Descriptor, string OriginalPath)>();
-        foreach (var input in inputs)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            described.Add((
-                await IoFatSourceIdentity.DescribeAsync(input, cancellationToken).ConfigureAwait(false),
-                input.FilePath));
-        }
-
-        IoFatSourceIdentity.AttachOrValidate(project, described.Select(item => item.Descriptor).ToArray());
+        IoFatSourceIdentity.AttachOrValidate(project, described.Select(item => item.Source).ToArray());
         Directory.CreateDirectory(sourceDirectory);
         var staged = new List<IoFatWorkspaceSource>(described.Count);
-        foreach (var item in described.OrderBy(item => item.Descriptor.SourceId, StringComparer.Ordinal))
+        foreach (var item in described.OrderBy(item => item.Source.SourceId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var packageEntry = IoFatSourceIdentity.BuildPackageEntry(item.Descriptor);
+            var packageEntry = IoFatSourceIdentity.BuildPackageEntry(item.Source);
             var localPath = Path.Combine(sourceDirectory, Path.GetFileName(packageEntry));
-            await CopyVerifiedAsync(item.OriginalPath, localPath, item.Descriptor.Sha256, cancellationToken).ConfigureAwait(false);
-            staged.Add(new IoFatWorkspaceSource(item.Descriptor, localPath, packageEntry));
+            await CopyVerifiedAsync(item.OriginalPath, localPath, item.Source.Sha256, cancellationToken).ConfigureAwait(false);
+            staged.Add(new IoFatWorkspaceSource(item.Source, localPath, packageEntry));
         }
         return staged;
     }
