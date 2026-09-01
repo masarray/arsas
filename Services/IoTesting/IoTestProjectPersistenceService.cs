@@ -468,7 +468,16 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                         point.Runtime.Attempt,
                         point.Runtime.CurrentValue,
                         point.Runtime.CurrentQuality,
-                        point.Runtime.CurrentSource))).ToList())
+                        point.Runtime.CurrentSource)
+                    {
+                        Value1Evidence = point.Runtime.Value1Evidence,
+                        Value2Evidence = point.Runtime.Value2Evidence
+                    }))
+                {
+                    SignalKind = point.SignalKind,
+                    CaptureMode = point.CaptureMode,
+                    FatDisposition = point.FatDisposition
+                }).ToList())
             {
                 LatestComtradeFiles = ied.LatestComtradeFiles,
                 LatestComtradeRemotePath = ied.LatestComtradeRemotePath,
@@ -570,16 +579,21 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             DataAttribute = data.DataAttribute,
             SourceSheet = data.SourceSheet,
             SourceRow = data.SourceRow,
+            SignalKind = data.SignalKind,
+            CaptureMode = data.CaptureMode,
             TestEnabled = data.TestEnabled,
             ImportReady = data.ImportReady,
             BindingStatus = data.BindingStatus,
             BindingEvidence = data.BindingEvidence
         };
+        point.RestoreFatDisposition(data.FatDisposition);
 
         var runtime = point.Runtime;
         runtime.Attempt = data.Runtime.Attempt;
         runtime.OnEvidence = data.Runtime.OnEvidence;
         runtime.OffEvidence = data.Runtime.OffEvidence;
+        runtime.Value1Evidence = data.Runtime.Value1Evidence;
+        runtime.Value2Evidence = data.Runtime.Value2Evidence;
         runtime.CurrentValue = "-";
         runtime.CurrentQuality = "Unknown";
         runtime.CurrentSource = "Restored · live baseline required";
@@ -587,7 +601,16 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         runtime.LastSequence = -1;
         runtime.ConnectionGeneration = -1;
 
-        if (data.Runtime.State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
+        if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+        {
+            runtime.State = IoTestPointState.NotStarted;
+            runtime.StatusReason = point.IsFatEvidenceComplete
+                ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
+                : runtime.Value1Evidence is not null || runtime.Value2Evidence is not null
+                    ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
+                    : "Progress restored; reconnect live acquisition before operator snapshot capture.";
+        }
+        else if (data.Runtime.State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
         {
             runtime.State = data.Runtime.State;
             runtime.StatusReason = data.Runtime.StatusReason;
@@ -609,18 +632,20 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     {
         var totalPassed = project.Ieds.Sum(ied => ied.PassedCount);
         var totalReview = project.Ieds.Sum(ied => ied.ReviewCount);
+        var totalComplete = project.Ieds.Sum(ied => ied.CompleteCount);
         var builder = new StringBuilder();
         builder.Append("<!doctype html><html><head><meta charset=\"utf-8\"><title>")
-            .Append(Html(project.ProjectName)).Append(" - IO FAT Report</title><style>")
+            .Append(Html(project.ProjectName)).Append(" - FAT Report</title><style>")
             .Append("body{font-family:Segoe UI,Arial,sans-serif;color:#172033;margin:28px}h1{margin:0;color:#2458b8}h2{margin-top:30px;border-bottom:2px solid #dbe6f6;padding-bottom:6px}.meta{background:#f5f8fd;border:1px solid #dbe6f6;border-radius:10px;padding:14px;margin:16px 0}.summary{display:flex;gap:12px;flex-wrap:wrap}.pill{border:1px solid #dbe6f6;border-radius:16px;padding:7px 12px;background:#fff}.file-evidence{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin:8px 0 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #cdd8e8;padding:6px;vertical-align:top}th{background:#eaf1fb;text-align:left}.pass{color:#08783f;font-weight:700}.review,.failed{color:#a75800;font-weight:700}.pending{color:#667085}@media print{body{margin:8mm}.ied{page-break-before:always}.ied:first-of-type{page-break-before:auto}.no-print{display:none}}@page{size:A4 landscape;margin:8mm}</style></head><body>");
-        builder.Append("<h1>ARSAS IO List FAT Evidence Report</h1><div class=\"meta\"><b>Project:</b> ").Append(Html(project.ProjectName))
+        builder.Append("<h1>ARSAS IEC 61850 FAT Evidence Report</h1><div class=\"meta\"><b>Project:</b> ").Append(Html(project.ProjectName))
             .Append("<br><b>Project ID:</b> ").Append(Html(project.ProjectId))
             .Append("<br><b>FAT sources:</b> ").Append(Html(SourceSummary(project)))
             .Append("<br><b>Source-set SHA-256:</b> ").Append(Html(IoFatSourceIdentity.ProjectSourceFingerprint(project)))
             .Append("<br><b>Generated:</b> ").Append(Html(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))).Append("</div>");
         builder.Append("<div class=\"summary\"><span class=\"pill\">IED: ").Append(project.Ieds.Count)
-            .Append("</span><span class=\"pill\">Signals: ").Append(project.SignalCount)
-            .Append("</span><span class=\"pill pass\">PASS: ").Append(totalPassed)
+            .Append("</span><span class=\"pill\">Included signals: ").Append(project.IncludedSignalCount)
+            .Append("</span><span class=\"pill\">Complete: ").Append(totalComplete)
+            .Append("</span><span class=\"pill pass\">Digital PASS: ").Append(totalPassed)
             .Append("</span><span class=\"pill review\">Review: ").Append(totalReview).Append("</span></div>");
 
         foreach (var ied in project.Ieds)
@@ -639,20 +664,33 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                     .Append("</div>");
             }
 
-            builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Expected ON/OFF</th><th>ON evidence</th><th>OFF evidence</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
+            builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Type / capture</th><th>Value 1</th><th>Value 2</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
             var index = 0;
-            foreach (var point in ied.TestPoints)
+            foreach (var point in ied.TestPoints.Where(point => point.IsIncludedInFat))
             {
                 index++;
-                builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ObjectReference)).Append("</td><td>")
-                    .Append(Html($"{point.ExpectedOnText} ({point.ExpectedOnRaw}) / {point.ExpectedOffText} ({point.ExpectedOffRaw})"))
-                    .Append("</td><td>").Append(EvidenceHtml(point.Runtime.OnEvidence)).Append("</td><td>").Append(EvidenceHtml(point.Runtime.OffEvidence)).Append("</td><td class=\"")
-                    .Append(ResultClass(point.Runtime.State)).Append("\">").Append(Html(point.Runtime.State.ToString())).Append("</td><td>").Append(Html(point.Runtime.StatusReason)).Append("</td></tr>");
+                builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ReportIecReference)).Append("</td><td>")
+                    .Append(Html($"{point.SignalKind} / {point.CaptureMode}"))
+                    .Append("</td><td>").Append(GenericEvidenceHtml(point, FatValueSlot.Value1)).Append("</td><td>").Append(GenericEvidenceHtml(point, FatValueSlot.Value2)).Append("</td><td class=\"")
+                    .Append(point.CaptureMode == FatCaptureMode.OperatorSnapshot && point.IsFatEvidenceComplete ? "pass" : ResultClass(point.Runtime.State)).Append("\">")
+                    .Append(Html(point.FatResultText)).Append("</td><td>").Append(Html(point.Runtime.StatusReason)).Append("</td></tr>");
             }
             builder.Append("</tbody></table></section>");
         }
         builder.Append("<p class=\"no-print\">Open this file in a browser and choose Print → Save as PDF.</p></body></html>");
         return builder.ToString();
+    }
+
+    private static string GenericEvidenceHtml(IoTestPointPlan point, FatValueSlot slot)
+    {
+        if (point.CaptureMode == FatCaptureMode.AutomaticTransition)
+        {
+            var evidence = slot == FatValueSlot.Value1 ? point.Runtime.OnEvidence : point.Runtime.OffEvidence;
+            return EvidenceHtml(evidence);
+        }
+
+        var snapshot = slot == FatValueSlot.Value1 ? point.Runtime.Value1Evidence : point.Runtime.Value2Evidence;
+        return EvidenceHtml(snapshot);
     }
 
     private static string EvidenceHtml(IoTestTransitionEvidence? evidence)
@@ -662,6 +700,16 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         var iedTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff zzz", "not supplied");
         var arsasTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.CapturedAt, "yyyy-MM-dd HH:mm:ss.fff zzz");
         return Html($"IED {iedTime}\nARSAS {arsasTime}\n{evidence.RawValue} · {evidence.Quality} · {evidence.AcquisitionSource}\n{evidence.Verdict}")
+            .Replace("\n", "<br>", StringComparison.Ordinal);
+    }
+
+    private static string EvidenceHtml(FatValueEvidence? evidence)
+    {
+        if (evidence == null)
+            return "<span class=\"pending\">—</span>";
+        var iedTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff zzz", "not supplied");
+        var arsasTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.CapturedAt, "yyyy-MM-dd HH:mm:ss.fff zzz");
+        return Html($"IED {iedTime}\nARSAS {arsasTime}\n{evidence.RawValue} · {evidence.Quality} · {evidence.AcquisitionSource}\n{evidence.CaptureKind}")
             .Replace("\n", "<br>", StringComparison.Ordinal);
     }
 
@@ -868,7 +916,12 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         bool ImportReady,
         string BindingStatus,
         string BindingEvidence,
-        IoTestRuntimeData Runtime);
+        IoTestRuntimeData Runtime)
+    {
+        public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
+        public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
+        public FatSignalDisposition FatDisposition { get; init; } = FatSignalDisposition.Included;
+    }
 
     private sealed record IoTestRuntimeData(
         IoTestPointState State,
@@ -881,7 +934,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         int Attempt,
         string CurrentValue,
         string CurrentQuality,
-        string CurrentSource);
+        string CurrentSource)
+    {
+        public FatValueEvidence? Value1Evidence { get; init; }
+        public FatValueEvidence? Value2Evidence { get; init; }
+    }
 
     private sealed record IoTestPackageManifest(
         string PackageVersion,
