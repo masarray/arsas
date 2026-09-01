@@ -3,16 +3,18 @@ namespace ARSAS.Tests;
 public sealed class G26P15LegacyCompatibilityRegressionTests
 {
     [Fact]
-    public void GuardedRuntime_UsesTypedSubsetCompatibilityAsP16CapabilityWitnessWithoutRewritingStoredReportKind()
+    public void GuardedRuntime_UsesLegacySubsetEvidenceThroughP16FieldCapabilityPolicyWithoutRewritingStoredReportKind()
     {
         var guarded = Read("Services/NativeIec61850Client.HybridReporting.GuardedRuntime.cs");
 
         Assert.Contains("DynamicReportGuardedLegacyCompatibilityEvidenceRegistry.TryResolve", guarded, StringComparison.Ordinal);
-        Assert.Contains("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("InformationReportProof.Kind == ArMms.MmsDynamicInformationReportKind.DataChange", guarded, StringComparison.Ordinal);
         Assert.Contains("original persisted profile unchanged", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("capability evidence, not a", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("strict legacy subset binding checks", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("TryBuildCompatibleContext", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("InformationReportProof = load.Profile.InformationReportProof with", guarded, StringComparison.Ordinal);
