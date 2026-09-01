@@ -20,8 +20,11 @@ public partial class MainWindow
 
     private static void MainWindowAuthorityLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is MainWindow window)
-            window.AttachSclLiveModelAuthorityTracking();
+        if (sender is not MainWindow window)
+            return;
+
+        window.AttachSclLiveModelAuthorityTracking();
+        window.ScheduleFatV2LauncherInstall();
     }
 
     private void AttachSclLiveModelAuthorityTracking()
