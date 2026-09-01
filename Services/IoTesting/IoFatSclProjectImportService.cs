@@ -32,6 +32,8 @@ public sealed class IoFatSclProjectImportService
     };
 
     private readonly SclWorkspaceService _workspaceService;
+    private readonly object _runtimeWorkspaceGate = new();
+    private IReadOnlyList<SclIedWorkspace> _runtimeWorkspaces = Array.Empty<SclIedWorkspace>();
 
     public IoFatSclProjectImportService()
         : this(new SclWorkspaceService())
@@ -43,12 +45,35 @@ public sealed class IoFatSclProjectImportService
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
     }
 
+    internal bool TryGetRuntimeWorkspace(
+        string? iedName,
+        string? ipAddress,
+        out SclIedWorkspace? workspace)
+    {
+        var name = (iedName ?? string.Empty).Trim();
+        var ip = (ipAddress ?? string.Empty).Trim();
+        lock (_runtimeWorkspaceGate)
+        {
+            var named = _runtimeWorkspaces
+                .Where(candidate => candidate.IedName.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            workspace = named.FirstOrDefault(candidate =>
+                !string.IsNullOrWhiteSpace(ip) &&
+                candidate.PreferredEndpoint?.HasUsableAddress == true &&
+                candidate.PreferredEndpoint.IpAddress.Equals(ip, StringComparison.OrdinalIgnoreCase));
+            if (workspace is null && named.Length == 1)
+                workspace = named[0];
+            return workspace is not null;
+        }
+    }
+
     public async Task<IoFatSclProjectImportResult> ImportAsync(
         IReadOnlyCollection<string> sclPaths,
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sclPaths);
+        SetRuntimeWorkspaces(Array.Empty<SclIedWorkspace>());
         var requestedPaths = sclPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(Path.GetFullPath)
@@ -189,12 +214,25 @@ public sealed class IoFatSclProjectImportService
                 "SCL FAT project row count does not equal the complete ARIEC static DataSet membership count.");
         }
 
+        // Keep the exact engine-owned workspaces alive for the current FAT run. AutoConnect
+        // can attach these already-parsed models to the IED and perform a fast MMS association
+        // instead of repeating a network-wide Smart Scan that SCL-backed FAT does not need.
+        SetRuntimeWorkspaces(loadedSources
+            .SelectMany(source => source.Document.Ieds)
+            .ToArray());
+
         return new IoFatSclProjectImportResult(
             project,
             verificationProject,
             sourceDescriptors,
             loadedSources.Select(source => source.Input).ToArray(),
             findings);
+    }
+
+    private void SetRuntimeWorkspaces(IReadOnlyList<SclIedWorkspace> workspaces)
+    {
+        lock (_runtimeWorkspaceGate)
+            _runtimeWorkspaces = workspaces;
     }
 
     private static List<IoTestIedPlan> BuildIedPlans(
