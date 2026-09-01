@@ -18,14 +18,17 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
     }
 
     [Fact]
-    public void InitialPlanningAndExecutionRevalidation_UseSameGuardedPlannerFamily()
+    public void InitialPlanningAndExecutionRevalidation_UseP16FieldCapabilityPlanner()
     {
         var guarded = Read("Services/NativeIec61850Client.HybridReporting.GuardedRuntime.cs");
         var bridge = Read("Services/NativeIec61850Client.HybridReporting.cs");
 
         Assert.Contains("MmsGuardedDynamicReportRuntimePlanner.Build", guarded, StringComparison.Ordinal);
-        Assert.Contains("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
+        Assert.Contains("capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("all still-uncovered exact-resolved selected signal", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.True(Count(bridge, "BuildCapabilityPlanWithGuardedRuntime(") >= 2);
         Assert.Contains("_guardedRuntimeContexts[appPlan.PlanId] = guardedRuntime.Context", bridge, StringComparison.Ordinal);
         Assert.Contains("TryGetGuardedRuntimeContext(plan.PlanId", bridge, StringComparison.Ordinal);
@@ -46,7 +49,7 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.DoesNotContain("SaveAsync(", bridge, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveAsync(", recovery, StringComparison.Ordinal);
         Assert.Contains("ProductionEligible certification remains separate", guarded, StringComparison.Ordinal);
-        Assert.Contains("No in-memory DataChange rewrite is performed", guarded, StringComparison.Ordinal);
+        Assert.Contains("original persisted profile unchanged", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -79,16 +82,19 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PinsMergedP15bSubsetCompatibilityEngine()
+    public void EngineLock_PinsMergedP16StableGeneralDynamicEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("\"commit\": \"0965f67fe912355b3b29fc8123872a68d4064b04\"", engineLock, StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 102", engineLock, StringComparison.Ordinal);
-        Assert.Contains("P1.5b", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("exact ordered subset", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"commit\": \"4d7a896c606194c5533322bf975a2c9c57da7c64\"", engineLock, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 105", engineLock, StringComparison.Ordinal);
+        Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capability evidence rather than permanent member scope", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("all still-uncovered exact-resolved selected signals", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
-        Assert.Contains("never authorizes ProductionEligible", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string source, string value)
