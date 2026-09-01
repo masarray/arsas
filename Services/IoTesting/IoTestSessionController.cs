@@ -346,7 +346,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         ThrowIfDisposed();
         if (State != IoTestSessionState.Running || ActiveIed == null)
             return IoTestSessionActionResult.Failure("Start the IED FAT session before capturing Value 1 or Value 2.");
-        if (point == null || !ReferenceEquals(ActiveIed, ActiveIed.TestPoints.Contains(point) ? ActiveIed : null))
+        if (point == null || !ActiveIed.TestPoints.Contains(point))
             return IoTestSessionActionResult.Failure("The selected FAT row is not part of the active IED session.");
         if (!_sessionPointIds.Contains(point.TestPointId))
             return IoTestSessionActionResult.Failure("The selected FAT row is not part of the active capture scope.");
@@ -729,8 +729,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         ConnectionGeneration = evidence.ConnectionGeneration,
         Verdict = "Accepted",
         Reason = $"Operator captured {evidence.Slot} from the current live IEC 61850 value.",
-        ValueSlot = evidence.Slot,
-        CaptureKind = evidence.CaptureKind
+        EvidenceKind = "fat-value-snapshot"
     };
 
     private void AppendRequired(IoTestJournalEntry entry)
