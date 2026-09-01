@@ -47,6 +47,9 @@ public partial class App : Application
         // Connect/Play, monitoring, reconnect or report-planner paths.
         DynamicReportQualificationUiBehavior.Install();
         DynamicReportCommandBoundWitnessUiBehavior.Install();
+        // P1.7 is a separate zero-control entry point. Ctrl+Shift+B qualifies the exact
+        // selected IED through G2.3 -> G2.4 -> G2.5 and never runs automatically.
+        DynamicReportPerIedBootstrapUiBehavior.Install();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
 
