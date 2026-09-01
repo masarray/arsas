@@ -310,11 +310,11 @@ public sealed partial class NativeIec61850Client
             p6Warnings.Add(
                 $"G2.6 P1.6 field-capability runtime authorized from the exact physical witness. Dynamic groups={dynamicSegments.Length}; dynamic signals={dynamicSignalCount}; MMS fallback={pollingResidualCount}. Q0/A3 is capability proof, not a permanent member whitelist; ProductionEligible certification remains separate.");
 
-            for (var index = 0; index < dynamicSegments.Length; index++)
+            for (var groupIndex = 0; groupIndex < dynamicSegments.Length; groupIndex++)
             {
-                var segment = dynamicSegments[index];
+                var segment = dynamicSegments[groupIndex];
                 p6Warnings.Add(
-                    $"G2.6 P1.6 dynamic group {index + 1}/{dynamicSegments.Length}: kind={segment.Kind}; RCB={segment.ReportControlReference}; DataSet={segment.DataSetReference}; members={segment.Signals.Count}.");
+                    $"G2.6 P1.6 dynamic group {groupIndex + 1}/{dynamicSegments.Length}: kind={segment.Kind}; RCB={segment.ReportControlReference}; DataSet={segment.DataSetReference}; members={segment.Signals.Count}.");
             }
         }
         else if (device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen)
