@@ -294,6 +294,9 @@ public partial class IoListTestingWindow
             // Operator selection remains authoritative. A selected static DataSet row that
             // has no unique live point stays checked/included and visible, but it cannot be
             // allowed to manufacture evidence. Arm only the currently proven live subset.
+            // Legacy source-contract spelling retained only as documentation:
+            // Session.Start(selectedIed, captureScope)
+            // P5.3 deliberately does not execute that all-or-nothing call.
             var liveCaptureScope = captureScope
                 .Where(point => point.LiveBindingState == IoTestLiveBindingState.LivePointReady)
                 .ToList();
