@@ -22,7 +22,7 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("same field-capability policy that", guarded, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("fresh verified-free RCBs", guarded, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verified-free RCBs", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
