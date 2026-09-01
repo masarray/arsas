@@ -128,9 +128,6 @@ public sealed class IoFatSclProjectImportService
         }
         else
         {
-            // This existing adapter enforces one row per ARIEC static DataSet membership,
-            // rejects competing engineering authorities for the same IED/AP, and never
-            // deduplicates two memberships merely because they resolve to one runtime leaf.
             verificationProject = FatSclWorkspaceImportService.Import(workspaceSources).Project;
         }
 
@@ -216,8 +213,6 @@ public sealed class IoFatSclProjectImportService
                 if (!sourceByWorkspace.TryGetValue(authorityKey, out var authority) ||
                     !authority.Descriptor.SourceId.Equals(source.Descriptor.SourceId, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Exact-content duplicate workspaces are collapsed by the authoritative
-                    // aggregation layer; only the chosen source authority receives rows.
                     continue;
                 }
 
@@ -274,6 +269,8 @@ public sealed class IoFatSclProjectImportService
                 : "Operator Value 1 / Value 2 snapshot capture",
             SourceSheet = source.Descriptor.FileName,
             SourceRow = signal.DataSetMemberIndex + 1,
+            SignalKind = signal.SignalKind,
+            CaptureMode = signal.CaptureMode,
             TestEnabled = true,
             ImportReady = true,
             BindingStatus = "SCL_DATASET_AUTHORITY",
