@@ -16,6 +16,7 @@ public partial class MainWindow
 {
     private const int IoFatPollingIntervalMs = 250;
     private readonly IoListExcelImportService _ioListExcelImportService = new();
+    private readonly IoFatSclProjectImportService _ioFatSclProjectImportService = new();
     private readonly IoTestLiveBindingService _ioTestLiveBindingService = new();
     private FrameworkElement? _ioListTestingLauncherCard;
     private IoTestSessionController? _activeIoTestSessionController;
@@ -47,9 +48,6 @@ public partial class MainWindow
         if (emptyState?.Child is not Grid heroGrid)
             return;
 
-        // The hero can contain visual-only Borders (for example P2IndustrialHeroTint).
-        // Launcher discovery must identify the operational card by content contract rather
-        // than asserting that the visual tree contains exactly one Border.
         var generalTestingCard = heroGrid.Children
             .OfType<Border>()
             .FirstOrDefault(border =>
@@ -144,14 +142,14 @@ public partial class MainWindow
         var content = new StackPanel();
         content.Children.Add(new TextBlock
         {
-            Text = "FAT / IO LIST TESTING",
+            Text = "FAT / DATASET VERIFICATION",
             Style = TryFindResource("MicroLabel") as Style,
             Foreground = TryFindResource("Accent") as Brush,
             Margin = new Thickness(0, 0, 0, 6)
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Run or continue FAT from an IO List",
+            Text = "Run FAT directly from SCL",
             FontSize = 24,
             FontWeight = FontWeights.SemiBold,
             Foreground = TryFindResource("Ink") as Brush,
@@ -159,18 +157,25 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Import the ARSAS Excel template for a new project, or open a portable .arsas project to continue saved progress from another laptop.",
+            Text = "Select one or multiple CID / ICD / IID / SCD / SSD files. Every static DataSet member becomes FAT scope. Excel import remains available for legacy IO-list projects.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13.4,
             Foreground = TryFindResource("Muted") as Brush,
             Margin = new Thickness(0, 10, 0, 18)
         });
         content.Children.Add(CreateLauncherButton(
-            "Open IO List Workbook",
+            "Open SCL for FAT",
             "LucideFileInput",
             "PrimaryButton",
-            OpenIoListTesting_Click,
+            OpenSclFatTesting_Click,
             Brushes.White,
+            new Thickness(0, 0, 0, 8)));
+        content.Children.Add(CreateLauncherButton(
+            "Open IO List Workbook",
+            "LucideFileInput",
+            "SoftButton",
+            OpenIoListTesting_Click,
+            null,
             new Thickness(0, 0, 0, 8)));
         content.Children.Add(CreateLauncherButton(
             "Open ARSAS Project",
@@ -181,7 +186,7 @@ public partial class MainWindow
             new Thickness(0, 0, 0, 10)));
         content.Children.Add(new TextBlock
         {
-            Text = "Autosave · portable continuation · verified evidence · native PDF report",
+            Text = "Static DataSet authority · Value 1 / Value 2 evidence · autosave · portable continuation",
             Style = TryFindResource("Caption") as Style,
             TextWrapping = TextWrapping.Wrap
         });
@@ -238,6 +243,68 @@ public partial class MainWindow
 
     private static Brush BrushFromHex(string value)
         => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
+
+    private async void OpenSclFatTesting_Click(object sender, RoutedEventArgs e)
+    {
+        if (_loadedIoFatWindow is { IsLoaded: true })
+        {
+            QueueIoFatWorkspaceReplacement(() => OpenSclFatTesting_Click(sender, e));
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open IEC 61850 SCL for FAT",
+            Filter = "IEC 61850 SCL (*.scd;*.cid;*.icd;*.iid;*.ssd)|*.scd;*.cid;*.icd;*.iid;*.ssd|XML SCL (*.xml)|*.xml|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        SetStatus($"Building FAT scope from {dialog.FileNames.Length} SCL source(s)…");
+        try
+        {
+            var import = await _ioFatSclProjectImportService.ImportAsync(
+                dialog.FileNames,
+                cancellationToken: _applicationCancellation.Token);
+            if (import.Project.SignalCount == 0)
+            {
+                var details = string.Join(
+                    Environment.NewLine,
+                    import.Findings.Take(12).Select(finding => $"• {finding.Code}: {finding.Message}"));
+                SetStatus("SCL FAT import contains no static DataSet members.");
+                MessageBox.Show(
+                    this,
+                    "The selected SCL source(s) contain no static DataSet members. ARSAS did not fabricate FAT rows.\n\n" + details,
+                    "No FAT DataSet scope",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            var launch = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
+                import.Project,
+                import.SourceInputs,
+                IoTestingProjectsRoot(),
+                IoTestingEvidenceRoot(),
+                CreateIoTestSession,
+                _applicationCancellation.Token);
+            var warningCount = import.Findings.Count(finding =>
+                finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+                finding.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ||
+                finding.Severity.Equals("Error", StringComparison.OrdinalIgnoreCase));
+            await ShowIoTestingWorkspaceAsync(launch, warningCount);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("SCL FAT import cancelled.");
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            ShowIoTestingFailure(ex, "SCL FAT import failed");
+        }
+    }
 
     private async void OpenIoListTesting_Click(object sender, RoutedEventArgs e)
     {
@@ -348,7 +415,7 @@ public partial class MainWindow
         var binding = _ioTestLiveBindingService.Bind(launch.Project, Devices);
         var restoredText = launch.RestoredProgress ? "saved progress restored" : "new project";
         SetStatus(
-            $"IO List ready: {launch.Project.Ieds.Count} IED, {launch.Project.SignalCount} SDI, " +
+            $"FAT ready: {launch.Project.Ieds.Count} IED, {launch.Project.IncludedSignalCount} included point(s), " +
             $"{binding.SignalBoundCount} live-bound, {restoredText}, {importWarningCount + launch.Warnings.Count} warning(s).");
 
         if (launch.Warnings.Count > 0)
@@ -356,14 +423,11 @@ public partial class MainWindow
             MessageBox.Show(
                 this,
                 string.Join(Environment.NewLine, launch.Warnings.Take(12).Select(warning => $"• {warning}")),
-                "IO FAT workspace warnings",
+                "FAT workspace warnings",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
 
-        // FAT is a commissioning workflow: discrete IO must feel immediate even when
-        // report configuration is incomplete. The previous engineering poll interval is
-        // restored when the FAT window closes so normal Live Monitor behavior is unchanged.
         _pollingIntervalBeforeIoFat ??= PollingIntervalMs;
         PollingIntervalMs = Math.Min(PollingIntervalMs, IoFatPollingIntervalMs);
 
@@ -416,10 +480,6 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        // A newly observed edge must reach the FAT evidence evaluator before normal UI
-        // background work, preserving the immediate TRUE-edge behavior from #150. When
-        // the bounded drain reschedules itself from inside the current callback, lower the
-        // continuation to Background so Render/Input are not starved by a large snapshot burst.
         var priority = Volatile.Read(ref _ioFatEvidenceDrainDispatchActive) == 0
             ? DispatcherPriority.DataBind
             : DispatcherPriority.Background;
