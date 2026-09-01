@@ -26,6 +26,22 @@ public sealed class G26P16GeneralDynamicRuntimeRegressionTests
     }
 
     [Fact]
+    public void P16_PlanningDiagnosticsExposeGeneralDynamicGroupsForFieldEvidence()
+    {
+        var runtime = Read("Services/NativeIec61850Client.HybridReporting.cs");
+
+        Assert.Contains("Dynamic groups=", runtime, StringComparison.Ordinal);
+        Assert.Contains("dynamic signals=", runtime, StringComparison.Ordinal);
+        Assert.Contains("MMS fallback=", runtime, StringComparison.Ordinal);
+        Assert.Contains("Q0/A3 is capability proof, not a permanent member whitelist", runtime, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("P1.6 dynamic group", runtime, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DataSet={segment.DataSetReference}", runtime, StringComparison.Ordinal);
+        Assert.Contains("members={segment.Signals.Count}", runtime, StringComparison.Ordinal);
+        Assert.DoesNotContain("Only the exact proven RCB/member envelope may be mutated", runtime, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("runtime=InformationReportProven exact envelope", runtime, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void P16_EngineLockPinsGeneralRuntimeAndStableMultiRcbIdentity()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
