@@ -78,14 +78,18 @@ public sealed partial class NativeIec61850Client
                     $"Stored InformationReport kind is {load.Profile.InformationReportProof.Kind}; guarded Smart Dynamic runtime remains withheld. {registryReason}");
             }
 
-            if (!ArMms.MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate(
+            // P1.6 load-time authorization must use the same field-capability policy that
+            // owns normal planning. Today that policy deliberately includes the strict
+            // legacy subset binding checks, but calling the P1.6 policy here prevents ARSAS
+            // from silently drifting if ARIEC later strengthens field-capability invariants.
+            if (!ArMms.MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate(
                     sourceContext,
                     legacyEvidence,
                     out var compatibilityReason))
             {
                 return new GuardedRuntimeContextLoadResult(
                     null,
-                    "P1.6 field-capability witness was present but ARIEC rejected its identity/RCB/member/cleanup evidence: " + compatibilityReason);
+                    "P1.6 field-capability witness was present but ARIEC rejected its exact identity/profile/witness/cleanup binding: " + compatibilityReason);
             }
 
             // P1.6 keeps the original persisted profile unchanged. The reviewed Q0/A3
