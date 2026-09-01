@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
@@ -40,6 +41,13 @@ public sealed class IoTestSignalSelectionService
     {
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
+
+        // Physical FAT can start from an already-connected Engineering Workspace whose
+        // presentation inventory is intentionally narrower than the static DataSet scope.
+        // Restore ARIEC-owned mandatory DataSet descriptors before local matching so FAT
+        // never mistakes presentation pruning for protocol absence. This performs no IEC
+        // semantic inference in ARSAS; the engine remains the sole membership authority.
+        Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
 
         var requested = ied.TestPoints
             .Where(point => point.TestEnabled && point.ImportReady)
@@ -155,7 +163,10 @@ public sealed class IoTestSignalSelectionService
     }
 
     internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
-        => point.BindingStatus.Equals(SclDataSetAuthorityBindingStatus, StringComparison.OrdinalIgnoreCase);
+        => string.Equals(
+            point.BindingStatus,
+            SclDataSetAuthorityBindingStatus,
+            StringComparison.OrdinalIgnoreCase);
 
     private static List<SignalDefinition> NarrowByProtectionIdentity(
         IoTestPointPlan point,
