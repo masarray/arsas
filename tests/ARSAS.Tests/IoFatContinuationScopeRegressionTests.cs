@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatContinuationScopeRegressionTests
 {
     [Fact]
-    public void SelectedRows_AreCarriedExplicitlyWithoutMutatingOperatorSelection()
+    public void SelectedRows_ArePreparedExplicitlyAndOnlyLiveSubsetIsArmedWithoutMutatingOperatorSelection()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -17,19 +17,27 @@ public sealed class IoFatContinuationScopeRegressionTests
         var preparationIndex = source.IndexOf(
             "progress,\n                    captureScope);",
             StringComparison.Ordinal);
+        var liveScopeIndex = source.IndexOf(
+            "var liveCaptureScope = captureScope",
+            StringComparison.Ordinal);
+        var liveReadyIndex = source.IndexOf(
+            "point.LiveBindingState == IoTestLiveBindingState.LivePointReady",
+            StringComparison.Ordinal);
         var sessionStartIndex = source.IndexOf(
-            "Session.Start(selectedIed, captureScope)",
+            "Session.Start(selectedIed, liveCaptureScope)",
             StringComparison.Ordinal);
 
         Assert.True(preflightIndex >= 0, "The real operator selection must be validated before capture scope creation.");
         Assert.True(scopeIndex > preflightIndex, "Capture scope must be created only after preflight succeeds.");
-        Assert.True(preparationIndex > scopeIndex, "The same explicit scope must be used for live preparation.");
-        Assert.True(sessionStartIndex > preparationIndex, "The same explicit scope must reach Session.Start.");
+        Assert.True(preparationIndex > scopeIndex, "The complete operator-selected scope must be used for live preparation.");
+        Assert.True(liveScopeIndex > preparationIndex, "Live evidence scope must be derived only after preparation has produced binding evidence.");
+        Assert.True(liveReadyIndex >= liveScopeIndex, "Active evidence scope must require LivePointReady rows.");
+        Assert.True(sessionStartIndex > liveScopeIndex, "Only the proven live subset may reach Session.Start.");
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
         Assert.DoesNotContain("protectedPoints", source, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
-        Assert.Contains("operator-snapshot rows expose ✓ Value 1 / Value 2 capture", source, StringComparison.Ordinal);
+        Assert.Contains("checkbox/disposition unchanged", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
