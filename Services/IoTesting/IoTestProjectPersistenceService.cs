@@ -822,7 +822,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
-            File.Move(temporary, fullDestination: destination, true);
+            File.Move(temporary, destination, true);
         }
         finally
         {
