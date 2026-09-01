@@ -106,12 +106,16 @@ public static class FatDataSetSignalProjectionService
 
     internal static FatSignalKind Classify(string? functionalConstraint, string? dataType)
     {
-        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        // Functional constraint describes service/semantic grouping, not the value domain.
+        // In particular MX may legally carry enumerated or structured values. Treating every
+        // MX member as numeric would silently opt such members into analog semantics. Capture
+        // policy is therefore conservative and driven by the ARIEC-resolved basic/MMS type.
+        _ = functionalConstraint;
         var type = (dataType ?? string.Empty).Trim().ToUpperInvariant();
 
-        if (fc == "MX" ||
-            type.Contains("FLOAT", StringComparison.Ordinal) ||
+        if (type.Contains("FLOAT", StringComparison.Ordinal) ||
             type.Contains("DOUBLE", StringComparison.Ordinal) ||
+            type.Contains("REAL", StringComparison.Ordinal) ||
             type.Contains("ANALOG", StringComparison.Ordinal))
         {
             return FatSignalKind.Analog;
@@ -121,13 +125,15 @@ public static class FatDataSetSignalProjectionService
             type.Contains("BOOL", StringComparison.Ordinal) ||
             type.Contains("DBPOS", StringComparison.Ordinal) ||
             type.Contains("DOUBLE-POINT", StringComparison.Ordinal) ||
-            type.Contains("DOUBLE POINT", StringComparison.Ordinal))
+            type.Contains("DOUBLE POINT", StringComparison.Ordinal) ||
+            type.Contains("SINGLE-POINT", StringComparison.Ordinal) ||
+            type.Contains("SINGLE POINT", StringComparison.Ordinal))
         {
             return FatSignalKind.Discrete;
         }
 
-        // ST is intentionally not assumed to be boolean by itself. Enumerated/integer ST
-        // values need an explicit discrete semantic before automatic two-state capture.
+        // Integer/enumerated/bit-string/structured values remain required FAT rows, but use
+        // operator snapshot capture until a stronger two-state/numeric semantic is proven.
         return FatSignalKind.Other;
     }
 
