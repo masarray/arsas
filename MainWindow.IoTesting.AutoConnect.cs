@@ -1,5 +1,6 @@
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services;
 using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
@@ -30,7 +31,7 @@ public partial class MainWindow
             .Distinct()
             .ToList();
         if (requestedPoints.Count == 0)
-            return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
+            return IoTestSessionActionResult.Failure("No import-ready FAT signal is enabled for this IED.");
 
         void ReportProgress(string message)
         {
@@ -42,19 +43,19 @@ public partial class MainWindow
         var device = ResolveIoTestDevice(ied.LiveDeviceId)
                      ?? ResolveIoTestDevice(ied.IpAddress)
                      ?? ResolveIoTestDevice(ied.IedName);
-        var createdFromWorkbook = device == null;
+        var createdForFat = device == null;
         if (device == null)
         {
             device = new Iec61850MonitorDevice
             {
                 Name = ied.IedName,
                 SclIedName = ied.IedName,
-                IdentitySource = "IO List workbook",
+                IdentitySource = "FAT import",
                 IpAddress = ied.IpAddress,
                 Port = 102,
                 AllowDynamicDataSetWrites = true,
-                Status = "IO FAT ready to connect",
-                Detail = "Connect will discover the live model and arm report-first acquisition for this IED's imported FAT scope."
+                Status = "FAT ready to connect",
+                Detail = "Connect will use imported SCL authority when available; legacy workbook scope falls back to live discovery."
             };
             Devices.Add(device);
             RaiseWorkspaceCounts();
@@ -72,7 +73,7 @@ public partial class MainWindow
             {
                 ied.SetPreparationState(false, "Endpoint mismatch");
                 return IoTestSessionActionResult.Failure(
-                    $"The loaded {ied.IedName} workspace is connected to {device.IpAddress}, but the IO list requires {ied.IpAddress}. Stop that engineering session or correct the workbook endpoint before FAT.");
+                    $"The loaded {ied.IedName} workspace is connected to {device.IpAddress}, but FAT requires {ied.IpAddress}. Stop that engineering session or correct the source endpoint before FAT.");
             }
 
             device.IpAddress = ied.IpAddress;
@@ -84,6 +85,12 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(device.SclIedName))
             device.SclIedName = ied.IedName;
 
+        // P5.2: a direct SCL FAT import has already been parsed by ARIEC. Attach that exact
+        // workspace before any network action and project its reusable signal model. The
+        // connection path can then perform only TCP/ACSE/MMS association; Re-scan remains
+        // the explicit engineering action for full live discovery/comparison.
+        var hasSclRuntimeAuthority = AttachIoFatSclRuntimeAuthority(ied, device);
+
         // Monitoring-only toward the process: no control commands are executed. FAT uses
         // deterministic fast MMS acquisition for digital commissioning points while the
         // normal engineering workspace keeps report-first behavior for ordinary intervals.
@@ -94,9 +101,22 @@ public partial class MainWindow
             var usedSavedModel = false;
             if (!device.IsConnected)
             {
+                var canUsePreparedScl = hasSclRuntimeAuthority && device.HasSclDesignModel && device.Signals.Count > 0;
                 var canUseSavedModel = device.HasDiscoveryCache && device.Signals.Count > 0;
                 var connected = false;
-                if (canUseSavedModel)
+                if (canUsePreparedScl)
+                {
+                    ReportProgress($"Fast SCL association {ied.IedName} · imported model already available");
+                    connected = await ConnectIoFatUsingPreparedSclAsync(device);
+                    usedSavedModel = connected;
+                    if (!connected)
+                    {
+                        _ioTestLiveBindingService.BindIed(ied, Devices);
+                        return IoTestSessionActionResult.Failure(
+                            $"ARSAS could not associate with {ied.IedName} at {ied.IpAddress}:102 using the imported SCL model. Full discovery was intentionally not started; use Diagnostics or Re-scan if live-model verification is required.");
+                    }
+                }
+                else if (canUseSavedModel)
                 {
                     ReportProgress($"Fast reconnect {ied.IedName} · saved endpoint and discovery model");
                     connected = await ConnectUsingSavedModelAsync(device, selectDevice: false);
@@ -123,6 +143,13 @@ public partial class MainWindow
             }
             else if (device.Signals.Count == 0)
             {
+                if (hasSclRuntimeAuthority)
+                {
+                    _ioTestLiveBindingService.BindIed(ied, Devices);
+                    return IoTestSessionActionResult.Failure(
+                        $"{ied.IedName} is connected, but the imported SCL authority produced no reusable signal model. ARSAS did not start an implicit full discovery.");
+                }
+
                 ReportProgress($"{ied.IedName} connected · discovering live model");
                 await StopDeviceConnectionAsync(device);
                 if (!await ConnectAndConfigureDeviceAsync(device, openWizard: false, selectDevice: false))
@@ -137,9 +164,9 @@ public partial class MainWindow
             }
 
             // Reconciliation belongs to the connection/discovery lifecycle, before local
-            // FAT row selection. P1.2 remains probe:null inside the cache; P1.3 can later
-            // replace only that producer with the engine-owned connected facade.
-            ReportProgress("Reconciling SCL design with authoritative live model");
+            // FAT row selection. SCL-backed fast association keeps the design authority
+            // intact; absence is never inferred merely because full live discovery was skipped.
+            ReportProgress("Reconciling FAT source with authoritative IED model");
             await IoTestReconciliationCache.RefreshAsync(device, _applicationCancellation.Token);
 
             // Never let a runtime anchor from an earlier model silently decide a fresh
@@ -153,7 +180,7 @@ public partial class MainWindow
                     device.DeviceId);
             }
 
-            ReportProgress($"Matching {requestedPoints.Count} workbook signal(s)");
+            ReportProgress($"Matching {requestedPoints.Count} FAT signal(s)");
             var selection = _ioTestSignalSelectionService.Resolve(
                 new IoTestIedPlan
                 {
@@ -166,9 +193,15 @@ public partial class MainWindow
                     TestPoints = requestedPoints
                 },
                 device);
-            if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery)
+
+            // Legacy workbook rows may still request one fresh discovery when a saved live
+            // model is stale. An SCL-backed FAT row already has engine-owned static DataSet
+            // authority; a local match miss must not trigger a 50-second rediscovery loop.
+            var hasBlockingNonSclMiss = selection.MissingPoints.Any(point =>
+                !IoTestSignalSelectionService.IsSclDataSetAuthority(point));
+            if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery && hasBlockingNonSclMiss)
             {
-                ReportProgress("Refreshing live model once · saved model missed workbook points");
+                ReportProgress("Refreshing live model once · saved model missed legacy FAT points");
                 if (device.IsMonitoring)
                     await StopDeviceMonitorAsync(device);
                 if (device.IsConnected)
@@ -181,7 +214,7 @@ public partial class MainWindow
                 }
 
                 usedSavedModel = false;
-                ReportProgress("Reconciling refreshed live model with SCL design");
+                ReportProgress("Reconciling refreshed live model with FAT source");
                 await IoTestReconciliationCache.RefreshAsync(device, _applicationCancellation.Token);
 
                 foreach (var point in requestedPoints)
@@ -209,22 +242,24 @@ public partial class MainWindow
             {
                 _ioTestLiveBindingService.BindIed(ied, Devices);
                 return IoTestSessionActionResult.Failure(
-                    $"ARSAS could not prepare the imported FAT scope safely. {selection.Message}");
+                    hasSclRuntimeAuthority
+                        ? $"ARSAS could not bind the imported SCL FAT scope safely without guessing. {selection.Message} Full live discovery was not repeated."
+                        : $"ARSAS could not prepare the imported FAT scope safely. {selection.Message}");
             }
 
             var selectionChanged = false;
             foreach (var match in selection.Matches)
             {
                 // Preserve the unique reference proven by the preparation pass. This is
-                // essential for legacy weak rows such as `.Op.general`: the live-binding
-                // phase must follow the proven exact model object rather than re-guess it.
+                // essential for legacy weak rows and for SCL static membership rows whose
+                // DisplayReference can differ from the resolved runtime ObjectReference.
                 match.TestPoint.ApplyLiveBinding(
                     match.UsedNormalizedIedPrefix
                         ? IoTestLiveBindingState.BoundNormalized
                         : IoTestLiveBindingState.BoundExact,
                     match.UsedNormalizedIedPrefix
                         ? "FAT preparation resolved one unique canonical IEC 61850 model reference."
-                        : "FAT preparation matched the exact imported IEC 61850 model reference.",
+                        : "FAT preparation matched an exact engine-owned IEC 61850 model identity.",
                     device.DeviceId,
                     match.Signal.ObjectReference);
 
@@ -292,7 +327,9 @@ public partial class MainWindow
             }
 
             SaveSignalSelectionMemory(device);
-            var modelText = usedSavedModel ? "saved model" : "live model";
+            var modelText = hasSclRuntimeAuthority
+                ? "imported SCL model"
+                : usedSavedModel ? "saved model" : "live model";
             var acquisitionText = acquisition.PollingCount == 0
                 ? $"report-backed {acquisition.ReportCount}/{requestedPoints.Count}"
                 : $"fast MMS {acquisition.PollingCount} · report-backed {acquisition.ReportCount}";
@@ -302,7 +339,7 @@ public partial class MainWindow
             var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}";
             SetStatus(message);
             AddLog(
-                acquisition.PollingCount == 0 ? "INFO" : "INFO",
+                "INFO",
                 "IO Testing",
                 $"{message}. FAT acquisition prioritizes deterministic fast MMS for digital commissioning points; normal engineering monitoring retains report-first behavior. No process control commands are enabled. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
@@ -324,8 +361,65 @@ public partial class MainWindow
         finally
         {
             ied.SetPreparationState(false, ied.LiveStatusText);
-            if (createdFromWorkbook)
+            if (createdForFat)
                 RaiseWorkspaceCounts();
+        }
+    }
+
+    private bool AttachIoFatSclRuntimeAuthority(
+        IoTestIedPlan ied,
+        Iec61850MonitorDevice device)
+    {
+        if (!_ioFatSclProjectImportService.TryGetRuntimeWorkspace(
+                ied.IedName,
+                ied.IpAddress,
+                out var workspace) || workspace is null)
+        {
+            return false;
+        }
+
+        device.SclWorkspace = workspace;
+        device.SclIedName = workspace.IedName;
+        device.SclAccessPointName = workspace.AccessPointName;
+        device.IdentitySource = "FAT SCL · ARIEC workspace";
+
+        if (!device.HasDiscoveryCache)
+        {
+            var projected = SclWorkspaceSignalMapper.BuildSignals(workspace);
+            device.Signals.Clear();
+            device.Signals.AddRange(projected);
+        }
+        else
+        {
+            // An existing Engineering Workspace keeps its richer live model. Merge only
+            // engine-authoritative static DataSet inventory; never replace discovered rows.
+            Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(
+                device.Signals,
+                workspace.DesignModel);
+        }
+
+        device.RecountSelectedSignals();
+        device.RefreshComputed();
+        return device.Signals.Count > 0;
+    }
+
+    private async Task<bool> ConnectIoFatUsingPreparedSclAsync(Iec61850MonitorDevice device)
+    {
+        // ConnectUsingSavedModelAsync and the runtime predate the SCL fast-connect UI and
+        // use HasDiscoveryCache as their reusable-model gate. Bridge that gate only for the
+        // duration of this association. The flag is restored immediately so provenance
+        // remains truthful: this device still owns an SCL design model, not a live scan.
+        var hadDiscoveryCache = device.HasDiscoveryCache;
+        try
+        {
+            if (!hadDiscoveryCache)
+                device.HasDiscoveryCache = true;
+            return await ConnectUsingSavedModelAsync(device, selectDevice: false);
+        }
+        finally
+        {
+            device.HasDiscoveryCache = hadDiscoveryCache;
+            device.RefreshComputed();
         }
     }
 
