@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 using Microsoft.Win32;
 
@@ -101,8 +104,8 @@ public partial class MainWindow
                 IoTestingProjectsRoot(),
                 _applicationCancellation.Token);
 
-            var digital = launch.Project.Signals.Count(signal => signal.SignalKind == Models.IoTesting.FatSignalKind.Discrete);
-            var analog = launch.Project.Signals.Count(signal => signal.SignalKind == Models.IoTesting.FatSignalKind.Analog);
+            var digital = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Discrete);
+            var analog = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Analog);
             var other = launch.Project.Signals.Count - digital - analog;
             var status =
                 $"FAT v2 ready: {launch.Project.Signals.Count} static DataSet membership(s) from {launch.SourceFiles.Count} SCL source(s) — " +
@@ -112,11 +115,18 @@ public partial class MainWindow
 
             var window = new FatVerificationWindow(launch) { Owner = this };
             _fatV2Window = window;
-            window.Closed += (_, _) =>
+            _runtime.PointUpdated += Runtime_FatV2PointUpdated;
+            SeedFatV2LiveValues(window);
+
+            void WindowClosed(object? _, EventArgs __)
             {
+                window.Closed -= WindowClosed;
+                _runtime.PointUpdated -= Runtime_FatV2PointUpdated;
                 if (ReferenceEquals(_fatV2Window, window))
                     _fatV2Window = null;
-            };
+            }
+
+            window.Closed += WindowClosed;
             window.Show();
         }
         catch (OperationCanceledException)
@@ -135,5 +145,84 @@ public partial class MainWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    private void Runtime_FatV2PointUpdated(Iec61850PointSnapshot snapshot)
+    {
+        var window = _fatV2Window;
+        if (window == null)
+            return;
+
+        var device = Devices.FirstOrDefault(item =>
+            item.DeviceId.Equals(snapshot.Point.DeviceId, StringComparison.OrdinalIgnoreCase));
+        window.ApplyLiveObservation(
+            snapshot.Point.IecReference,
+            FatV2IedAliases(snapshot.Point.DeviceName, device),
+            snapshot.PreviousValue,
+            snapshot.IsValueEdge,
+            new FatLiveValueObservation(
+                snapshot.Value,
+                DateTimeOffset.UtcNow,
+                ParseFatV2IedTimestamp(snapshot.DeviceTimestamp),
+                snapshot.Quality,
+                snapshot.SourceMode,
+                snapshot.Sequence,
+                1));
+    }
+
+    private void SeedFatV2LiveValues(FatVerificationWindow window)
+    {
+        foreach (var device in Devices)
+        {
+            foreach (var point in device.Points)
+            {
+                window.ApplyLiveObservation(
+                    point.IecReference,
+                    FatV2IedAliases(point.DeviceName, device),
+                    point.Value,
+                    isValueEdge: false,
+                    new FatLiveValueObservation(
+                        point.Value,
+                        DateTimeOffset.UtcNow,
+                        ParseFatV2IedTimestamp(point.DeviceTimestamp),
+                        point.Quality,
+                        point.SourceMode,
+                        point.Sequence,
+                        1));
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> FatV2IedAliases(
+        string runtimeDeviceName,
+        Iec61850MonitorDevice? device)
+    {
+        var aliases = new[]
+        {
+            runtimeDeviceName,
+            device?.Name,
+            device?.SclIedName,
+            device?.SclWorkspace?.IedName,
+            device?.LiveDiscoveryModel?.IedName
+        };
+        return aliases
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static DateTimeOffset? ParseFatV2IedTimestamp(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0 || text is "-" or "—")
+            return null;
+        return DateTimeOffset.TryParse(
+            text,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
     }
 }
