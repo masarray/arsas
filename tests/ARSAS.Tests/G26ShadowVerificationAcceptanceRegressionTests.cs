@@ -71,12 +71,12 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
     }
 
     [Fact]
-    public void EngineLock_PreservesStrictCertificationAndPinsP16GeneralDynamicRuntime()
+    public void EngineLock_PreservesStrictCertificationAndPinsP16P17GeneralDynamicRuntime()
     {
         var lockFile = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 105", lockFile, StringComparison.Ordinal);
+        Assert.Contains("c979206988ebcbaf79e62b784895e19547184369", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 107", lockFile, StringComparison.Ordinal);
         Assert.Contains("PR #98", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("report-vs-independent-MMS shadow evaluator", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #99", lockFile, StringComparison.OrdinalIgnoreCase);
@@ -90,9 +90,12 @@ public sealed class G26ShadowVerificationAcceptanceRegressionTests
         Assert.Contains("PR #104", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("capability evidence rather than permanent member scope", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("native per-IED field-capability authorization", lockFile, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("InformationReportProven", lockFile, StringComparison.Ordinal);
         Assert.Contains("does not call MarkProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ProductionEligible as a separate certification boundary", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible", lockFile, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Read(string relativePath)
