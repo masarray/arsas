@@ -15,6 +15,24 @@ public partial class IoListTestingWindow
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
 
+    // P0.3: plan ownership is per IED. Another IED may be preparing or may own the
+    // single active evidence session without freezing the selected IED's checkbox scope.
+    // Only the IED whose connection/session is consuming that scope is immutable.
+    public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);
+
+    private bool CanEditIedPlan(IoTestIedPlan ied)
+        => !ied.IsPreparing &&
+           (!Session.IsSessionActive || !ReferenceEquals(Session.ActiveIed, ied));
+
+    private bool CanEditPointPlan(IoTestPointPlan point)
+    {
+        var owner = Project.Ieds.FirstOrDefault(ied => ied.TestPoints.Contains(point));
+        return owner is not null && CanEditIedPlan(owner);
+    }
+
+    private bool CanRestoreAnyRemovedSignal => Project.Ieds.Any(ied =>
+        CanEditIedPlan(ied) && ied.TestPoints.Any(point => !point.IsIncludedInFat));
+
     private void InstallFatV2WorkspaceUx()
     {
         if (!_fatV2UxInstalled)
@@ -37,6 +55,11 @@ public partial class IoListTestingWindow
 
     private void RefreshFatV2WorkspaceUx(bool refreshRows = false)
     {
+        // Selected/session/preparation notifications all converge here through the selected
+        // IED context refresh. Re-evaluate the per-IED edit contract without touching rows.
+        Raise(nameof(SelectedCanEditPlan));
+        Raise(nameof(CanRestoreAnyRemovedSignal));
+
         if (_fatSignalsGrid != null)
         {
             var view = CollectionViewSource.GetDefaultView(_fatSignalsGrid.ItemsSource);
@@ -55,7 +78,7 @@ public partial class IoListTestingWindow
             _removedSignalsButton.Content = Project.RemovedSignalCount == 0
                 ? "Removed Signals"
                 : $"Removed Signals ({Project.RemovedSignalCount})";
-            _removedSignalsButton.IsEnabled = CanEditPlan && Project.RemovedSignalCount > 0;
+            _removedSignalsButton.IsEnabled = CanRestoreAnyRemovedSignal && Project.RemovedSignalCount > 0;
         }
 
         Raise(nameof(ProjectSummary));
@@ -74,7 +97,7 @@ public partial class IoListTestingWindow
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
         });
-        enabledFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("DataContext.CanEditPlan")
+        enabledFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("DataContext.SelectedCanEditPlan")
         {
             RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
         });
@@ -253,12 +276,12 @@ public partial class IoListTestingWindow
     {
         if (_fatSignalsGrid?.SelectedItem is not IoTestPointPlan point)
             return;
-        if (!CanEditPlan)
+        if (!CanEditPointPlan(point))
         {
             MessageBox.Show(
                 this,
-                "Stop the active FAT session or connection preparation before changing FAT scope.",
-                "FAT scope is locked",
+                "This IED's FAT scope is locked while its connection preparation or evidence session is active. Other IEDs remain editable.",
+                "IED FAT scope is locked",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -294,10 +317,18 @@ public partial class IoListTestingWindow
 
     private void RemovedSignals_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanEditPlan)
+        if (!CanRestoreAnyRemovedSignal)
+        {
+            MessageBox.Show(
+                this,
+                "Removed signals currently belong only to an IED whose connection preparation or FAT evidence session owns an immutable scope.",
+                "Removed Signals are locked",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
+        }
 
-        var window = new RemovedFatSignalsWindow(Project) { Owner = this };
+        var window = new RemovedFatSignalsWindow(Project, CanEditPointPlan) { Owner = this };
         if (window.ShowDialog() != true || window.RestoredCount == 0)
             return;
 
