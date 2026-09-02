@@ -69,12 +69,10 @@ public static class Iec61850DataSetSignalInventoryService
         {
             var inventoryReference = InventoryReference(descriptor);
 
-            // A structured DataSet can expose siblings such as ThdA.phsA/phsB/phsC
-            // while every descriptor also carries the same parent DesignReference (ThdA).
-            // Parent/design aliases are therefore NOT identity keys. Using them here can
-            // silently collapse several physical DataSet members into the first sibling,
-            // leaving the remaining FAT rows without a unique live signal. Match only the
-            // exact static membership or the engine-resolved primary scalar leaf.
+            // Structured DataSet members may share parent/report/MMS container aliases.
+            // Those aliases are evidence, not identity. A FAT inventory merge may reuse an
+            // existing signal only when the exact static IEC member or exact resolved scalar
+            // IEC reference already exists. Otherwise create a distinct mandatory signal.
             var identityReferences = EngineIdentityReferenceCandidates(descriptor).ToArray();
             var current = identityReferences
                 .Select(reference => existing.TryGetValue(reference, out var signal) ? signal : null)
@@ -261,14 +259,13 @@ public static class Iec61850DataSetSignalInventoryService
                 membership.OriginalMemberReference
             });
 
-        // PrimaryValueReference is the resolved scalar identity. PrimaryValueMmsReference
-        // is its literal MMS-form twin used by live discovery. Do not add DesignReference,
-        // ObservedReference or other parent aliases here: for structured CDCs they can be
-        // intentionally shared by several phase members and are evidence, not identity.
+        // Only IEC object-reference identity is safe here. MMS-form references, effective
+        // references and observed aliases may identify the same structured container for
+        // several scalar descendants. They must never collapse phase siblings during FAT
+        // SCL/cache merge.
         var resolvedPrimaryReferences = new[]
         {
-            descriptor.PrimaryValueReference,
-            descriptor.PrimaryValueMmsReference
+            descriptor.PrimaryValueReference
         };
 
         return membershipReferences
