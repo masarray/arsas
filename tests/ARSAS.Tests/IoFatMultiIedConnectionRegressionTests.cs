@@ -67,6 +67,56 @@ public sealed class IoFatMultiIedConnectionRegressionTests
     }
 
     [Fact]
+    public void MultipleIeds_CanRetainIndependentConnectedMonitoringState()
+    {
+        var a = Ied("IED_A", "192.168.81.10", Point("P-A", "IED_A", "192.168.81.10", "IED_ALD0/GGIO1.Ind1.stVal"));
+        var b = Ied("IED_B", "192.168.81.11", Point("P-B", "IED_B", "192.168.81.11", "IED_BLD0/GGIO1.Ind2.stVal"));
+
+        a.ApplyLiveDeviceBinding("device-a", "Monitoring · fast MMS", true, true);
+        b.ApplyLiveDeviceBinding("device-b", "Monitoring · report", true, true);
+
+        Assert.True(a.IsLiveConnected);
+        Assert.True(a.IsLiveMonitoring);
+        Assert.Equal("device-a", a.LiveDeviceId);
+        Assert.True(b.IsLiveConnected);
+        Assert.True(b.IsLiveMonitoring);
+        Assert.Equal("device-b", b.LiveDeviceId);
+    }
+
+    [Fact]
+    public void P1_ConnectAndAcquisitionDoNotUseTestCheckboxAsAuthority()
+    {
+        var autoConnect = ReadRepoFile("MainWindow.IoTesting.AutoConnect.cs");
+        var contextUx = ReadRepoFile("IoListTestingWindow.ContextUx.cs");
+        var monitor = ReadRepoFile("MainWindow.IoTesting.MultiIedMonitor.cs");
+
+        Assert.Contains("requestedPointsOverride is null || point.TestEnabled", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("point.ImportReady", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("var acquisitionSignals = selection.Matches", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("StartIoFatDeviceMonitorAsync(device, acquisitionSignals)", autoConnect, StringComparison.Ordinal);
+
+        // Connect passes no operator checkbox subset. Start FAT still creates captureScope,
+        // but its preparation also uses the full IED acquisition scope; only Session.Start
+        // receives the selected live evidence rows.
+        Assert.DoesNotContain("var enabledReady = targetIed.TestPoints", contextUx, StringComparison.Ordinal);
+        Assert.Contains("private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync", contextUx, StringComparison.Ordinal);
+        Assert.Contains("Project,\n            targetIed,\n            progress);", contextUx, StringComparison.Ordinal);
+        Assert.Contains("var captureScope = selectedIed.TestPoints", contextUx, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextUx, StringComparison.Ordinal);
+        Assert.Contains("var result = Session.Start(selectedIed, liveCaptureScope);", contextUx, StringComparison.Ordinal);
+
+        // Runtime StartMonitoringAsync still expects IsSelected. P1 therefore uses a
+        // device-local temporary bulk arm, then restores the real Engineering/TEST state.
+        Assert.Contains("device.BeginBulkSignalSelection();", monitor, StringComparison.Ordinal);
+        Assert.Contains("signal.IsSelected = acquisitionSet.Contains(signal);", monitor, StringComparison.Ordinal);
+        Assert.Contains("signal.IsSelected = wasSelected;", monitor, StringComparison.Ordinal);
+        Assert.Contains("device.EndBulkSignalSelection();", monitor, StringComparison.Ordinal);
+        Assert.Contains("_runtime.StartMonitoringAsync", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveSignalSelectionMemory(device)", monitor, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void P1_SourceContract_UsesPerIedPreparationWithoutWeakeningEvidenceIsolation()
     {
         var autoConnect = ReadRepoFile("MainWindow.IoTesting.AutoConnect.cs");
@@ -79,6 +129,9 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("_ioTestLiveBindingService.BindIed(ied, Devices)", autoConnect, StringComparison.Ordinal);
         Assert.DoesNotContain("_ioTestLiveBindingService.Bind(project, Devices)", autoConnect, StringComparison.Ordinal);
         Assert.Contains("requestedPointsOverride", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("selectDevice: false", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("other IED monitors remain active", autoConnect, StringComparison.Ordinal);
+        Assert.DoesNotContain("Session.IsSessionActive", autoConnect, StringComparison.Ordinal);
         Assert.Contains("private async void ConnectIed_Click", contextUx, StringComparison.Ordinal);
         Assert.Contains("targetIed.IsPreparing", contextUx, StringComparison.Ordinal);
         Assert.Contains("SelectedIed.IsPreparing", contextUx, StringComparison.Ordinal);
