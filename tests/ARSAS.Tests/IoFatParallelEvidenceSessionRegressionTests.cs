@@ -53,6 +53,7 @@ public sealed class IoFatParallelEvidenceSessionRegressionTests
         var stopA = sessions.Stop("IED A complete");
         Assert.True(stopA.Succeeded, stopA.Message);
         Assert.False(sessions.IsSessionActive);
+        Assert.False(sessions.HasActiveSessions);
         Assert.Equal(0, sessions.ActiveSessionCount);
 
         var evidenceFiles = Directory.GetFiles(fixture.Root, "*.evidence.jsonl", SearchOption.AllDirectories);
@@ -75,25 +76,32 @@ public sealed class IoFatParallelEvidenceSessionRegressionTests
         sessions.SelectContext(fixture.IedA);
         Assert.True(sessions.Start(fixture.IedA, new[] { fixture.PointA }).Succeeded);
         Assert.True(sessions.IsSessionActive);
+        Assert.True(sessions.HasActiveSessions);
         Assert.True(sessions.IsSelectedSessionActive);
         Assert.False(sessions.CanEditPlan);
         Assert.False(sessions.CanStart);
 
         sessions.SelectContext(fixture.IedB);
 
-        Assert.True(sessions.IsSessionActive); // A is still running globally.
+        // IsSessionActive is selected-context state for existing UI bindings. The global
+        // close/export safety boundary remains HasActiveSessions/ActiveSessionCount.
+        Assert.False(sessions.IsSessionActive);
+        Assert.True(sessions.HasActiveSessions); // A is still running globally.
         Assert.False(sessions.IsSelectedSessionActive);
         Assert.True(sessions.CanEditPlan);
         Assert.True(sessions.CanStart);
         Assert.Null(sessions.ActiveIed);
 
         Assert.True(sessions.Start(fixture.IedB, new[] { fixture.PointB }).Succeeded);
+        Assert.True(sessions.IsSessionActive);
+        Assert.True(sessions.HasActiveSessions);
         Assert.True(sessions.IsSelectedSessionActive);
         Assert.False(sessions.CanEditPlan);
         Assert.Equal(2, sessions.ActiveSessionCount);
 
         Assert.True(sessions.StopAll("test cleanup").Succeeded);
         Assert.False(sessions.IsSessionActive);
+        Assert.False(sessions.HasActiveSessions);
     }
 
     private static void RouteEvent(
