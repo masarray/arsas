@@ -1,0 +1,180 @@
+name: Publish FAT v2 user preview
+
+on:
+  push:
+    branches:
+      - release/fat-v2-preview-1.6.33
+    paths:
+      - ".release/fat-v2-preview.json"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-preview:
+    name: Publish exact tested FAT v2 preview binaries
+    runs-on: ubuntu-latest
+    env:
+      VERSION: "1.6.33"
+      TAG: "v1.6.33-fat-v2-preview.1"
+      SOURCE_SHA: "254bc9175b016c81978618fac115298067c0e72d"
+      INSTALLER_ARTIFACT_ID: "9843641604"
+      PORTABLE_ARTIFACT_ID: "9843671318"
+
+    steps:
+      - name: Checkout preview publication request
+        uses: actions/checkout@v4
+
+      - name: Verify publication request and exact tested artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          request = json.loads(Path('.release/fat-v2-preview.json').read_text())
+          expected = {
+              'version': os.environ['VERSION'],
+              'tag': os.environ['TAG'],
+              'sourceSha': os.environ['SOURCE_SHA'],
+              'installerArtifactId': int(os.environ['INSTALLER_ARTIFACT_ID']),
+              'portableArtifactId': int(os.environ['PORTABLE_ARTIFACT_ID']),
+          }
+          for key, value in expected.items():
+              if request.get(key) != value:
+                  raise SystemExit(f'Preview request mismatch for {key}: {request.get(key)!r} != {value!r}')
+          PY
+
+          for id in "$INSTALLER_ARTIFACT_ID" "$PORTABLE_ARTIFACT_ID"; do
+            meta="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id")"
+            test "$(jq -r '.expired' <<<"$meta")" = "false"
+            test "$(jq -r '.workflow_run.head_sha' <<<"$meta")" = "$SOURCE_SHA"
+          done
+
+      - name: Download exact green installer and portable artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preview/installer preview/portable preview/assets
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INSTALLER_ARTIFACT_ID/zip" > preview/installer.zip
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$PORTABLE_ARTIFACT_ID/zip" > preview/portable.zip
+          unzip -q preview/installer.zip -d preview/installer
+          unzip -q preview/portable.zip -d preview/portable
+
+          installer="$(find preview/installer -type f -name "ARSAS-$VERSION-win-x64-setup.exe" -print -quit)"
+          portable="$(find preview/portable -type f -name "ARSAS-$VERSION-win-x64-portable.exe" -print -quit)"
+          test -n "$installer" && test -s "$installer"
+          test -n "$portable" && test -s "$portable"
+
+          cp "$installer" "preview/assets/ARSAS-$VERSION-FAT-v2-Preview1-Setup.exe"
+          cp "$portable" "preview/assets/ARSAS-$VERSION-FAT-v2-Preview1-Portable.exe"
+
+          (
+            cd preview/assets
+            sha256sum "ARSAS-$VERSION-FAT-v2-Preview1-Setup.exe" "ARSAS-$VERSION-FAT-v2-Preview1-Portable.exe" > SHA256SUMS.txt
+          )
+
+      - name: Write preview provenance and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > preview/assets/PREVIEW-PROVENANCE.json <<JSON
+          {
+            "schemaVersion": 1,
+            "product": "ARSAS",
+            "channel": "FAT v2 user preview",
+            "version": "$VERSION",
+            "tag": "$TAG",
+            "sourceCommit": "$SOURCE_SHA",
+            "installerArtifactId": $INSTALLER_ARTIFACT_ID,
+            "portableArtifactId": $PORTABLE_ARTIFACT_ID,
+            "installerValidationRun": 33622737746,
+            "applicationValidationRun": 33622737754
+          }
+          JSON
+
+          cat > preview/release-notes.md <<'MD'
+          # ARSAS 1.6.33 — FAT v2 User Preview 1
+
+          This pre-release is published so users can exercise the current direct-SCL FAT revision before it is promoted to a stable release.
+
+          ## What to try
+
+          - Open an SCL/CID workspace and use authoritative static DataSet membership as the FAT inventory.
+          - Connect IEDs and exercise the current multi-IED workflow without changing another IED's FAT scope.
+          - Verify TEST selection, Remove from FAT, Removed Signals restore, and preserved Value 1 / Value 2 evidence.
+          - Exercise the latest structured report projection fixes for model-backed scalar descendants.
+          - Report any reproducible field mismatch with the SCL/CID, IED model, and exact FAT row involved.
+
+          ## Validation status
+
+          The binaries attached here are the exact artifacts produced from source commit `254bc9175b016c81978618fac115298067c0e72d` after the current software gates passed. The full application regression completed 614/614 tests, the focused IO/FAT regression completed 192/192 tests, the Windows installer smoke test passed, and the portable executable smoke test passed.
+
+          ## Preview warning
+
+          This is a **pre-release**, not the stable channel. Controlled physical IED retest is still requested before the FAT revision is promoted as stable. Existing stable downloads remain the recommended choice for users who do not need to evaluate this revision.
+
+          SHA-256 checksums and preview provenance are included with the binaries.
+          MD
+
+      - name: Publish or refresh GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            "preview/assets/ARSAS-$VERSION-FAT-v2-Preview1-Setup.exe"
+            "preview/assets/ARSAS-$VERSION-FAT-v2-Preview1-Portable.exe"
+            "preview/assets/SHA256SUMS.txt"
+            "preview/assets/PREVIEW-PROVENANCE.json"
+          )
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "ARSAS $VERSION FAT v2 User Preview 1" \
+              --notes-file preview/release-notes.md \
+              --prerelease
+          else
+            gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --title "ARSAS $VERSION FAT v2 User Preview 1" \
+              --notes-file preview/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify published preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,assets > preview/release.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          release = json.loads(Path('preview/release.json').read_text())
+          expected = {
+              'ARSAS-1.6.33-FAT-v2-Preview1-Setup.exe',
+              'ARSAS-1.6.33-FAT-v2-Preview1-Portable.exe',
+              'SHA256SUMS.txt',
+              'PREVIEW-PROVENANCE.json',
+          }
+          names = {asset['name'] for asset in release.get('assets', []) if asset.get('size', 0) > 0}
+          if release.get('isDraft'):
+              raise SystemExit('Preview release is unexpectedly a draft')
+          if not release.get('isPrerelease'):
+              raise SystemExit('Preview release is not marked as pre-release')
+          missing = sorted(expected - names)
+          if missing:
+              raise SystemExit('Preview release is missing assets: ' + ', '.join(missing))
+          PY
