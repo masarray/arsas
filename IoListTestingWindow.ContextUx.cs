@@ -169,19 +169,10 @@ public partial class IoListTestingWindow
         if (targetIed == null || targetIed.IsPreparing)
             return;
 
-        var enabledReady = targetIed.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
-            .ToList();
-        if (enabledReady.Count == 0)
-        {
-            ShowActionResult(
-                IoTestSessionActionResult.Failure("No import-ready operator-selected signal is enabled in the active FAT scope for this IED."),
-                "IED connection scope is not ready");
-            return;
-        }
-
-        IReadOnlyCollection<IoTestPointPlan> connectionScope = enabledReady;
-
+        // P1: Connect owns endpoint/MMS/live-acquisition state, never FAT evidence
+        // selection. The preparation path receives no checkbox scope here and therefore
+        // acquires every included import-ready static member for this IED. TEST remains
+        // authoritative only when Start FAT builds its explicit captureScope below.
         if (ReferenceEquals(SelectedIed, targetIed))
             PreparationStatusText = $"Connecting {targetIed.IedName} · {targetIed.IpAddress}:102";
         RaisePreparationProperties();
@@ -203,8 +194,7 @@ public partial class IoListTestingWindow
             var preparation = await PrepareIndependentIedConnectionAsync(
                 engineeringWindow,
                 targetIed,
-                progress,
-                connectionScope);
+                progress);
 
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
@@ -348,13 +338,11 @@ public partial class IoListTestingWindow
     private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync(
         MainWindow engineeringWindow,
         IoTestIedPlan targetIed,
-        IProgress<string> progress,
-        IReadOnlyCollection<IoTestPointPlan> connectionScope)
+        IProgress<string> progress)
         => engineeringWindow.PrepareIoTestIedForFatAsync(
             Project,
             targetIed,
-            progress,
-            connectionScope);
+            progress);
 
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
