@@ -73,7 +73,12 @@ public static class IoFatEngineeringSelectionBridge
         if (signal is null)
             return false;
 
-        var selected = point.TestEnabled && point.IsIncludedInFat;
+        // P0.2: TestEnabled is the shared selection state. FAT disposition is deliberately
+        // orthogonal: Remove from FAT must not silently unselect the Engineering signal, and
+        // Restore must not silently reselect it. This preserves the checkbox exactly across
+        // Removed Signals while the dedicated restore action remains the only disposition
+        // authority.
+        var selected = point.TestEnabled;
         if (signal.IsSelected == selected)
             return false;
 
