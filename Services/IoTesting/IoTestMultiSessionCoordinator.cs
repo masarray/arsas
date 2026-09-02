@@ -52,8 +52,14 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
     }
 
     public int ActiveSessionCount => ControllerSnapshot().Count(controller => controller.IsSessionActive);
-    public bool IsSessionActive => ActiveSessionCount > 0;
+    public bool HasActiveSessions => ActiveSessionCount > 0;
+
+    // Session-facing properties are deliberately selected-context projections. This keeps
+    // existing FAT UI bindings intuitive: when IED A is running and the operator selects
+    // IED B, B still shows Start FAT and remains editable. Workspace-close/export code uses
+    // HasActiveSessions/ActiveSessionCount for the global safety boundary.
     public bool IsSelectedSessionActive => SelectedController?.IsSessionActive == true;
+    public bool IsSessionActive => IsSelectedSessionActive;
     public bool CanStart => _selectedIed != null && !IsSelectedSessionActive;
     public bool CanPause => SelectedController?.CanPause == true;
     public bool CanResume => SelectedController?.CanResume == true;
@@ -298,6 +304,7 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
     {
         Raise(nameof(SelectedIed));
         Raise(nameof(ActiveSessionCount));
+        Raise(nameof(HasActiveSessions));
         Raise(nameof(IsSessionActive));
         Raise(nameof(IsSelectedSessionActive));
         Raise(nameof(CanStart));
