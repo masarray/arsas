@@ -66,6 +66,38 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
+    public void IoTestingWindow_AllowsAddingAnIedDuringAnActiveEvidenceSession()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var addButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => (string?)button.Attribute("Click") == "AddFatIedFromScl_Click");
+
+        Assert.Equal("{Binding CanAddFatIed}", (string?)addButton.Attribute("IsEnabled"));
+
+        var window = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
+        var addFlow = File.ReadAllText(FindRepoFile("IoListTestingWindow.AddIed.cs"));
+        Assert.Contains("public bool CanAddFatIed => !IsPreparingIed && !_isAddingFatIeds", window, StringComparison.Ordinal);
+        Assert.Contains("if (!CanAddFatIed", addFlow, StringComparison.Ordinal);
+        Assert.Contains("SetAddingFatIeds(true)", addFlow, StringComparison.Ordinal);
+        Assert.Contains("SetAddingFatIeds(false)", addFlow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsExecutableAndProcessDeclareTheArsasTaskbarIconIdentity()
+    {
+        var project = File.ReadAllText(FindRepoFile("ArIED61850Tester.csproj"));
+        var app = File.ReadAllText(FindRepoFile("App.xaml.cs"));
+        var identity = File.ReadAllText(FindRepoFile("App.WindowsIdentity.cs"));
+
+        Assert.Contains("<ApplicationIcon>Assets\\app-icon.ico</ApplicationIcon>", project, StringComparison.Ordinal);
+        Assert.Contains("WindowsApplicationIdentity.Apply();", app, StringComparison.Ordinal);
+        Assert.Contains("SetCurrentProcessExplicitAppUserModelID", identity, StringComparison.Ordinal);
+        Assert.True(File.Exists(FindRepoFile("Assets/app-icon.ico")));
+    }
+
+    [Fact]
     public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndPreservesOperatorSelection()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
@@ -136,9 +168,9 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
         Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
         Assert.Contains("deterministic fast MMS", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("first live FAT image", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
-        Assert.Contains("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
+        Assert.Contains("Return control to FAT immediately", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromSeconds(10)", source, StringComparison.Ordinal);

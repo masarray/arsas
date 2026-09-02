@@ -19,6 +19,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        WindowsApplicationIdentity.Apply();
         base.OnStartup(e);
 
         // P2 installs one calm industrial visual system before StartupUri materializes.

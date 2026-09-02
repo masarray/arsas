@@ -22,7 +22,13 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
     private readonly Func<IoTestProject, IoTestIedPlan, Guid, DateTimeOffset, IIoTestEvidenceJournal> _journalFactory;
     private readonly IoTestTransitionEvaluator _evaluator;
     private readonly IoTestRollingCaptureCoordinator _captureCoordinator;
-    private readonly ConcurrentQueue<QueuedSnapshot> _pendingSnapshots = new();
+    // Only the newest observation per live point is needed by the UI transition
+    // evaluator. Coalescing prevents a fast report/poll stream from building an
+    // unbounded dispatcher backlog while the operator scrolls the FAT grid.
+    private readonly ConcurrentDictionary<string, QueuedSnapshot> _pendingSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    // Actual transitions are never coalesced: FAT evidence must retain a fast
+    // OFF→ON→OFF sequence even when all three samples arrive in one UI frame.
+    private readonly ConcurrentQueue<QueuedSnapshot> _pendingEdgeSnapshots = new();
     private readonly Dictionary<string, List<IoTestPointPlan>> _activePointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _activeLivePoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _sessionPointIds = new(StringComparer.OrdinalIgnoreCase);
@@ -170,7 +176,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _activePointIndex.Clear();
         _activeLivePoints.Clear();
         _sessionPointIds.Clear();
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
 
         foreach (var binding in bindings)
         {
@@ -237,7 +243,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             return IoTestSessionActionResult.Failure("No running FAT session is available to pause.");
 
         State = IoTestSessionState.Paused;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
         StatusText = reason;
         if (!AppendOrFault(SessionEvent("session_paused", reason)))
             return IoTestSessionActionResult.Failure(StatusText);
@@ -270,7 +276,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         }
 
         _connectionGeneration++;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
         if (!AppendOrFault(SessionEvent("session_resumed", "Session resumed after rebinding current live points; current values are treated as a new baseline image.")))
             return IoTestSessionActionResult.Failure(StatusText);
 
@@ -399,7 +405,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             !entry.DeviceId.Equals(activeDevice.DeviceId, StringComparison.OrdinalIgnoreCase))
             return;
 
-        _pendingSnapshots.Enqueue(new QueuedSnapshot(
+        var queued = new QueuedSnapshot(
             entry.DeviceId,
             entry.IecReference,
             entry.OldValue,
@@ -409,7 +415,24 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             entry.SourceMode,
             entry.Reason,
             entry.Sequence,
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow);
+        var pendingKey = PointKey(entry.DeviceId, entry.IecReference);
+        var preservesTransitionEvidence =
+            _activePointIndex.TryGetValue(pendingKey, out var mappedPoints) &&
+            mappedPoints.Any(point => point.CaptureMode == FatCaptureMode.AutomaticTransition);
+        if (preservesTransitionEvidence &&
+            !Iec61850MonitorPoint.AreSemanticallyEquivalent(entry.OldValue, entry.NewValue))
+        {
+            _pendingSnapshots.TryRemove(pendingKey, out _);
+            _pendingEdgeSnapshots.Enqueue(queued);
+        }
+        else
+        {
+            _pendingSnapshots.AddOrUpdate(
+                pendingKey,
+                queued,
+                (_, current) => queued.Sequence >= current.Sequence ? queued : current);
+        }
         ScheduleDrain();
     }
 
@@ -421,7 +444,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             Stop("Workspace closed; FAT session stopped.");
         _disposed = true;
         CleanupSessionResources(disposeJournal: true);
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
     }
 
     private void ScheduleDrain()
@@ -446,9 +469,15 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         try
         {
             while (processed < MaxSnapshotsPerDrain &&
-                   stopwatch.ElapsedMilliseconds < DrainBudgetMilliseconds &&
-                   _pendingSnapshots.TryDequeue(out var snapshot))
+                   stopwatch.ElapsedMilliseconds < DrainBudgetMilliseconds)
             {
+                QueuedSnapshot? snapshot;
+                if (!_pendingEdgeSnapshots.TryDequeue(out snapshot))
+                {
+                    var pendingKey = _pendingSnapshots.Keys.FirstOrDefault();
+                    if (pendingKey == null || !_pendingSnapshots.TryRemove(pendingKey, out snapshot))
+                        break;
+                }
                 ProcessSnapshot(snapshot);
                 processed++;
                 if (State != IoTestSessionState.Running)
@@ -458,9 +487,15 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         finally
         {
             Interlocked.Exchange(ref _drainScheduled, 0);
-            if (!_pendingSnapshots.IsEmpty && State == IoTestSessionState.Running)
+            if ((!_pendingEdgeSnapshots.IsEmpty || !_pendingSnapshots.IsEmpty) && State == IoTestSessionState.Running)
                 ScheduleDrain();
         }
+    }
+
+    private void ClearPendingSnapshots()
+    {
+        _pendingSnapshots.Clear();
+        while (_pendingEdgeSnapshots.TryDequeue(out _)) { }
     }
 
     private void ProcessSnapshot(QueuedSnapshot snapshot)
@@ -472,6 +507,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!_activePointIndex.TryGetValue(key, out var points))
             return;
 
+        var progressChanged = false;
         foreach (var point in points.Distinct())
         {
             if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
@@ -499,6 +535,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
                 snapshot.Sequence,
                 _connectionGeneration);
             var evaluation = _captureCoordinator.Observe(point, observation);
+            progressChanged |= evaluation.StateChanged || evaluation.Evidence != null;
 
             if (evaluation.Evidence != null)
             {
@@ -536,8 +573,11 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             }
         }
 
-        RaiseProgress();
-        UpdateRunningCompletionStatus();
+        if (progressChanged)
+        {
+            RaiseProgress();
+            UpdateRunningCompletionStatus();
+        }
     }
 
     private void UpdateRunningCompletionStatus()
@@ -579,7 +619,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             return;
 
         State = IoTestSessionState.Interrupted;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
         StatusText = $"{ActiveIed.IedName} monitoring was interrupted ({capturedStatus}). Reconnect the IED, then Resume to establish a new baseline.";
         AppendOrFault(SessionEvent("session_interrupted", StatusText));
     }
@@ -808,7 +848,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _activePointIndex.Clear();
         _activeLivePoints.Clear();
         _captureCoordinator.Clear();
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
         if (disposeJournal)
         {
             _journal?.Dispose();

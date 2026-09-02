@@ -912,6 +912,8 @@ public class SignalDefinition : ObservableObject
             return false;
 
         return IsRuntimeValueLeaf(r, dataType) ||
+               IsThreePhaseMeasurementAggregate(r) ||
+               IsDemandEnergyAggregate(r) ||
                (string.Equals(category, "Position", StringComparison.OrdinalIgnoreCase) && r.EndsWith(".stval")) ||
                (string.Equals(category, "Protection", StringComparison.OrdinalIgnoreCase) && r.EndsWith(".general"));
     }
@@ -965,7 +967,14 @@ public class SignalDefinition : ObservableObject
         if (string.Equals(dataType, "Timestamp", StringComparison.OrdinalIgnoreCase)) return true;
 
         var r = NormalizeRef(reference);
-        return IsStatisticsOrHarmonicNoise(r) ||
+        // THD/TDD phase magnitudes are process measurements, not protocol noise.  The
+        // broad harmonic filter exists to keep complete harmonic spectra and statistic
+        // internals out of the ordinary signal list, but it used to hide even an exact
+        // MHAI ThdA/ThdPPV ...cVal.mag.f leaf.  That made a checked THD row disappear at
+        // the SignalDefinition -> live monitor boundary.  Keep only numeric terminal
+        // leaves and the explicitly supported three-phase aggregate exempt; q/t companions
+        // and configuration fields remain non-publishable.
+        return (!IsOperatorMeasurementException(r, dataType) && IsStatisticsOrHarmonicNoise(r)) ||
                r.EndsWith(".q") ||
                r.EndsWith(".t") ||
                r.EndsWith(".tm") ||
@@ -992,6 +1001,66 @@ public class SignalDefinition : ObservableObject
                r.Contains(".vendor") ||
                r.Contains(".swrev") ||
                r.Contains(".configrev");
+    }
+
+    private static bool IsPowerQualityMagnitude(string normalizedReference, string dataType)
+    {
+        var r = NormalizeRef(normalizedReference);
+        if (!r.Contains(".thd", StringComparison.OrdinalIgnoreCase) &&
+            !r.Contains(".tdd", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!r.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase) &&
+            !r.EndsWith(".instmag.f", StringComparison.OrdinalIgnoreCase) &&
+            !r.EndsWith(".cval.mag.f", StringComparison.OrdinalIgnoreCase) &&
+            !r.EndsWith(".instcval.mag.f", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var type = (dataType ?? string.Empty).Trim();
+        return type.Length == 0 ||
+               type.Contains("float", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("double", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("real", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOperatorMeasurementException(string normalizedReference, string dataType)
+        => IsPowerQualityMagnitude(normalizedReference, dataType) ||
+           IsDemandEnergyMagnitude(normalizedReference, dataType) ||
+           IsThreePhaseMeasurementAggregate(normalizedReference) ||
+           IsDemandEnergyAggregate(normalizedReference);
+
+    private static bool IsDemandEnergyMagnitude(string normalizedReference, string dataType)
+    {
+        var r = NormalizeRef(normalizedReference);
+        if (!r.Contains(".dmdwh", StringComparison.OrdinalIgnoreCase) ||
+            (!r.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase) &&
+             !r.EndsWith(".instmag.f", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var type = (dataType ?? string.Empty).Trim();
+        return type.Length == 0 ||
+               type.Contains("float", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("double", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("real", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsThreePhaseMeasurementAggregate(string? reference)
+    {
+        var r = NormalizeRef(reference ?? string.Empty).TrimEnd('.');
+        return r.EndsWith(".thda", StringComparison.OrdinalIgnoreCase) ||
+               r.EndsWith(".thdppv", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsDemandEnergyAggregate(string? reference)
+    {
+        var r = NormalizeRef(reference ?? string.Empty).TrimEnd('.');
+        return r.EndsWith(".dmdwhmv", StringComparison.OrdinalIgnoreCase);
     }
 
 

@@ -11,6 +11,7 @@ public partial class IoListTestingWindow
 {
     private DataGrid? _fatSignalsGrid;
     private Button? _removedSignalsButton;
+    private ICollectionView? _fatSignalsView;
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
 
@@ -31,19 +32,22 @@ public partial class IoListTestingWindow
             _fatV2UxInstalled = true;
         }
 
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
     }
 
-    private void RefreshFatV2WorkspaceUx()
+    private void RefreshFatV2WorkspaceUx(bool refreshRows = false)
     {
         if (_fatSignalsGrid != null)
         {
             var view = CollectionViewSource.GetDefaultView(_fatSignalsGrid.ItemsSource);
-            if (view != null)
+            if (view != null && !ReferenceEquals(view, _fatSignalsView))
             {
+                _fatSignalsView = view;
                 view.Filter = item => item is IoTestPointPlan point && point.IsIncludedInFat;
-                view.Refresh();
+                refreshRows = true;
             }
+            if (refreshRows)
+                view?.Refresh();
         }
 
         if (_removedSignalsButton != null)
@@ -262,7 +266,7 @@ public partial class IoListTestingWindow
 
         point.RemoveFromFat();
         Storage?.ScheduleSave();
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
         RaiseSelectedIedContextProperties();
     }
 
@@ -298,7 +302,7 @@ public partial class IoListTestingWindow
             return;
 
         Storage?.ScheduleSave();
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
         RaiseSelectedIedContextProperties();
     }
 

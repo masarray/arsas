@@ -12,6 +12,7 @@ namespace ArIED61850Tester;
 public partial class IoListTestingWindow
 {
     private bool _selectedIedContextInstalled;
+    private bool _contextRefreshScheduled;
 
     public bool SelectedCanStartWorkflow =>
         SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
@@ -361,14 +362,15 @@ public partial class IoListTestingWindow
         {
             RaiseSelectedIedContextProperties();
             if (e.PropertyName == nameof(SelectedIed))
-                Dispatcher.BeginInvoke(new Action(RefreshFatV2WorkspaceUx), DispatcherPriority.DataBind);
+                Dispatcher.BeginInvoke(
+                    new Action(() => RefreshFatV2WorkspaceUx(refreshRows: true)),
+                    DispatcherPriority.Background);
         }
     }
 
     private void ContextSession_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        RaiseSelectedIedContextProperties();
-        RefreshFatV2WorkspaceUx();
+        ScheduleContextRefresh();
     }
 
     private void ContextIed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -376,12 +378,24 @@ public partial class IoListTestingWindow
         if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
             RaisePreparationProperties();
 
-        RefreshFatV2WorkspaceUx();
-        if (!ReferenceEquals(sender, SelectedIed))
-            return;
+        ScheduleContextRefresh();
+    }
 
-        Raise(nameof(SelectedIedSummary));
-        RaiseSelectedIedContextProperties();
+    private void ScheduleContextRefresh()
+    {
+        if (_contextRefreshScheduled)
+            return;
+        _contextRefreshScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _contextRefreshScheduled = false;
+            // Session/runtime notifications update summaries and visible cells through
+            // normal bindings. Re-filtering the complete collection for every live
+            // value used to interrupt scrolling and swallow Capture clicks.
+            RefreshFatV2WorkspaceUx();
+            Raise(nameof(SelectedIedSummary));
+            RaiseSelectedIedContextProperties();
+        }), DispatcherPriority.Background);
     }
 
     private void RaiseSelectedIedContextProperties()

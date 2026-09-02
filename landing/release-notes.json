@@ -1,56 +1,52 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.31",
-  "title": "Reconnect-safe live DataSet discovery and hybrid RCB acquisition",
-  "titleId": "Discovery DataSet live dan acquisition RCB hybrid yang aman saat reconnect",
-  "summary": "ARSAS 1.6.31 completes the repaired live reporting pipeline from discovery through reconnect: DataSet members are retained, static and dynamic BRCB/URCB coverage is planned by ARIEC61850, only uncovered signals fall back to MMS polling, and a new MMS association cannot inherit report or command-correlation evidence from the previous connection.",
-  "summaryId": "ARSAS 1.6.31 melengkapi perbaikan pipeline live reporting dari discovery sampai reconnect: member DataSet dipertahankan, coverage static dan dynamic BRCB/URCB direncanakan oleh ARIEC61850, hanya signal yang tidak ter-cover yang fallback ke MMS polling, dan association MMS baru tidak dapat mewarisi evidence report atau korelasi command dari koneksi sebelumnya.",
+  "version": "1.6.33",
+  "title": "Fast, unified and responsive IEC 61850 FAT workspace",
+  "titleId": "Workspace IEC 61850 FAT yang cepat, terpadu, dan responsif",
+  "summary": "ARSAS 1.6.33 unifies Engineering and FAT around the imported SCL model, shortens direct-SCL connection readiness, projects structured THD and demand-energy values correctly, and keeps operator input responsive during continuous live acquisition.",
+  "summaryId": "ARSAS 1.6.33 menyatukan Engineering dan FAT pada model SCL yang diimpor, mempercepat kesiapan koneksi direct-SCL, memproyeksikan THD terstruktur dan demand-energy dengan benar, serta menjaga input operator tetap responsif saat akuisisi live terus berjalan.",
   "highlights": [
-    "Live discovery requests bounded DataSet directories and retains their members, preventing report-capable signals from disappearing between MMS discovery and the application catalog.",
-    "ARSAS executes the ARIEC61850 hybrid plan across static BRCB, static URCB, verified-free dynamic RCB slots, and per-signal MMS polling residuals.",
-    "Dynamic RCB planning supports temporary DataSets whose members reside in logical devices different from the RCB owner, as permitted by the live server model.",
-    "Report catalog matching selects the owning primary-value descriptor even when related quality and timestamp descriptors share the same primary reference.",
-    "Instantaneous magnitude values such as Hz.instMag.f resolve their quality and timestamp companions at Hz.q and Hz.t, while preserving clear operator-facing names.",
-    "Smart reconnect runs the same authoritative hybrid planner as initial monitoring, with fresh RCB availability checks and clean per-association report evidence."
+    "Direct-SCL FAT connection reuses the imported model and reaches monitoring after the MMS association and bounded point setup without a discovery-from-zero or legacy settle delay.",
+    "Engineering and FAT share SCL signal identity and operator selection; switching workspace no longer creates an isolated signal universe.",
+    "Additional CID, SCD, ICD or IID sources can be added to an existing FAT project, including while another IED evidence session remains active.",
+    "Structured ThdA and ThdPPV parent values preserve their phase A/B/C or AB/BC/CA members, while DmdWhMV uses the exact MMS value authority exposed by the relay.",
+    "Windows taskbar grouping uses the embedded ARSAS icon and a stable explicit application identity."
   ],
   "highlightsId": [
-    "Live discovery meminta directory DataSet secara terbatas dan mempertahankan member-nya, sehingga signal report-capable tidak lagi hilang di antara MMS discovery dan catalog aplikasi.",
-    "ARSAS mengeksekusi hybrid plan ARIEC61850 melalui static BRCB, static URCB, slot dynamic RCB yang terverifikasi free, dan residual MMS polling per signal.",
-    "Perencanaan dynamic RCB mendukung DataSet sementara dengan member pada logical device yang berbeda dari owner RCB, sesuai model live server.",
-    "Pemetaan report catalog memilih descriptor primary value pemiliknya walaupun descriptor quality dan timestamp terkait menggunakan primary reference yang sama.",
-    "Instantaneous magnitude seperti Hz.instMag.f menemukan companion quality dan timestamp pada Hz.q dan Hz.t, sambil mempertahankan nama yang jelas bagi operator.",
-    "Smart reconnect menjalankan authoritative hybrid planner yang sama dengan initial monitoring, termasuk pemeriksaan availability RCB terbaru dan evidence report per-association yang bersih."
+    "Koneksi FAT direct-SCL menggunakan kembali model hasil import dan masuk ke monitoring setelah association MMS serta bounded point setup tanpa discovery dari nol atau legacy settle delay.",
+    "Engineering dan FAT berbagi identitas serta pilihan signal SCL; perpindahan workspace tidak lagi membentuk signal universe yang terpisah.",
+    "Source CID, SCD, ICD, atau IID tambahan dapat dimasukkan ke project FAT yang sedang digunakan, termasuk ketika evidence session IED lain masih aktif.",
+    "Parent value ThdA dan ThdPPV terstruktur mempertahankan member phase A/B/C atau AB/BC/CA, sedangkan DmdWhMV menggunakan exact MMS value authority yang diberikan relay.",
+    "Grouping taskbar Windows menggunakan icon ARSAS yang tertanam dan explicit application identity yang stabil."
   ],
   "improvements": [
-    "Fresh RCB availability is revalidated before any setup write, and static or dynamic control blocks are reused only when the live evidence still permits it.",
-    "Physical validation evidence distinguishes successful RCB setup from actual report frames and verified process-value changes, avoiding false claims of report delivery.",
-    "Physical-validation mutation and snapshot capture are synchronized so operator diagnostics cannot observe torn counters or collection changes while report frames arrive.",
-    "The release source is gated by the standard ARSAS solution build and regression suite plus portable and Windows installer smoke validation before publication.",
-    "Stable Windows publication produces installer and portable binaries together with SHA-256 checksums, SPDX SBOM, application/engine provenance and GitHub artifact attestations."
+    "Live FAT observations are coalesced in bounded dispatcher batches below mouse and keyboard input priority, while the dedicated digital-edge queue remains lossless.",
+    "Steady telemetry updates only visible value cells; it no longer re-filters the entire DataGrid or resets autosave for every poll.",
+    "Capture progress and workspace summaries update only when evidence or test state actually changes.",
+    "Adding an IED synchronizes only the new endpoints, leaving the active IED's capture map and evidence scope immutable.",
+    "The Windows release remains gated by the full ARSAS regression suite, portable smoke validation, checksums, SPDX SBOM, provenance and GitHub attestations."
   ],
   "improvementsId": [
-    "Availability RCB terbaru divalidasi ulang sebelum setup write, dan control block static atau dynamic hanya digunakan ketika evidence live masih mengizinkannya.",
-    "Evidence validasi fisik membedakan setup RCB yang berhasil dari report frame aktual dan perubahan process value yang terverifikasi, sehingga tidak ada klaim palsu mengenai report delivery.",
-    "Mutasi dan snapshot physical validation disinkronisasi agar diagnostic operator tidak melihat counter yang torn atau perubahan collection ketika report frame masuk.",
-    "Source release digate oleh build solution dan regression suite ARSAS standard serta portable dan Windows installer smoke validation sebelum publikasi.",
-    "Publikasi Windows stable menghasilkan binary installer dan portable bersama SHA-256 checksum, SPDX SBOM, provenance aplikasi/engine dan GitHub artifact attestation."
+    "Observasi live FAT di-coalesce dalam bounded dispatcher batch di bawah prioritas input mouse dan keyboard, sementara queue digital-edge khusus tetap lossless.",
+    "Telemetry steady hanya mengubah cell value yang terlihat; seluruh DataGrid tidak lagi di-filter ulang dan timer autosave tidak lagi di-reset pada setiap poll.",
+    "Progress capture dan ringkasan workspace hanya diperbarui ketika evidence atau test state benar-benar berubah.",
+    "Penambahan IED hanya menyinkronkan endpoint baru sehingga capture map dan evidence scope IED aktif tetap immutable.",
+    "Release Windows tetap digate oleh regression suite ARSAS lengkap, portable smoke validation, checksum, SPDX SBOM, provenance, dan GitHub attestation."
   ],
   "knownLimitations": [
-    "Physical relay validation remains necessary for device-specific engineering behavior that cannot be reproduced by CI, including vendor-specific model exposure and field network conditions.",
-    "A successful RCB setup is intentionally not treated as proof that report frames were received; field validation must confirm frames and value changes for the target IED and network.",
-    "The three-digit FAT timestamp display intentionally rounds the decoded timestamp to the nearest millisecond; full decoded precision remains available in evidence views.",
+    "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
+    "Adding an SCL source does not automatically start or switch the active FAT evidence session; the operator selects and starts each IED explicitly.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "Validasi relay fisik tetap diperlukan untuk perilaku engineering spesifik perangkat yang tidak dapat direproduksi oleh CI, termasuk exposure model vendor-specific dan kondisi network di lapangan.",
-    "Setup RCB yang berhasil sengaja tidak dianggap sebagai bukti bahwa report frame telah diterima; validasi lapangan harus mengonfirmasi frame dan perubahan value pada IED dan network target.",
-    "Display timestamp FAT tiga digit secara sengaja membulatkan decoded timestamp ke millisecond terdekat; full decoded precision tetap tersedia pada evidence view.",
+    "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
+    "Penambahan source SCL tidak otomatis memulai atau memindahkan evidence session FAT aktif; operator memilih dan memulai setiap IED secara eksplisit.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
-    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai dan visibility traffic multicast terkait."
+    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -63,11 +59,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "Representative ARSAS 1.6.31 live values and reconnect-safe IEC 61850 acquisition workspace",
-    "altId": "Representasi workspace live values dan acquisition IEC 61850 ARSAS 1.6.31 yang aman saat reconnect",
-    "caption": "Representative ARSAS live-value workspace for stable release 1.6.31. Acquisition labels identify report delivery only after report frames are received; reconnect resets association-scoped evidence and uncovered signals remain explicit MMS polling residuals.",
-    "captionId": "Representasi workspace live value ARSAS untuk stable release 1.6.31. Label acquisition mengidentifikasi report delivery hanya setelah report frame diterima; reconnect mereset evidence per-association dan signal yang tidak ter-cover tetap ditampilkan sebagai residual MMS polling."
+    "alt": "ARSAS 1.6.33 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.33",
+    "caption": "ARSAS 1.6.33 shares imported SCL signal identity between Engineering and FAT while bounded background refresh keeps operator interaction responsive.",
+    "captionId": "ARSAS 1.6.33 berbagi identitas signal SCL antara Engineering dan FAT sementara bounded background refresh menjaga interaksi operator tetap responsif."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.31"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.33"
 }

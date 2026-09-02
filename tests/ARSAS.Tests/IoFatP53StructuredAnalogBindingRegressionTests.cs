@@ -32,6 +32,7 @@ public sealed class IoFatP53StructuredAnalogBindingRegressionTests
         Assert.Equal(staticMember, signal.DisplayReference);
         Assert.Equal(runtimeLeaf, signal.ObjectReference);
         Assert.Equal("MX", signal.FunctionalConstraint);
+        Assert.True(signal.CanPublishAsSignal);
         Assert.Contains("mandatory static DataSet member", signal.Source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("primary leaf unresolved", signal.Source, StringComparison.OrdinalIgnoreCase);
     }

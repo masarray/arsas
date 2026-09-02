@@ -111,11 +111,11 @@ public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
         Assert.Equal(runtimeLeaf, membershipSignal.ObjectReference);
         Assert.Equal(dataSet, membershipSignal.DataSetReference);
 
-        // P5.4 field regression: the generic curated-HMI THD row may remain classified as
-        // harmonic/statistics noise, but an explicit static DataSet member that ARIEC has
-        // resolved to one scalar leaf is authoritative FAT scope and must cross the exact
-        // SignalDefinition -> monitor-point runtime gate.
-        Assert.False(genericScalar.CanPublishToRuntime);
+        // A checked Engineering THD phase magnitude and the explicit static DataSet
+        // membership row must both cross the SignalDefinition -> monitor-point runtime
+        // gate. Harmonic spectra/configuration stay filtered; this exact FLOAT32 process
+        // value is the operator-visible live measurement.
+        Assert.True(genericScalar.CanPublishToRuntime);
         Assert.True(membershipSignal.IsExplicitDataSetRuntimeValue);
         Assert.True(membershipSignal.CanPublishAsSignal);
         Assert.True(membershipSignal.CanPublishToRuntime);
@@ -132,7 +132,9 @@ public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
             Source = "ARIEC static DataSet parent"
         };
         Assert.False(structuredParent.IsExplicitDataSetRuntimeValue);
-        Assert.False(structuredParent.CanPublishToRuntime);
+        // The object-level DataSet row is also a live composite value (phsA/B/C).
+        // It remains distinct from a scalar member but must not stay Unknown in FAT.
+        Assert.True(structuredParent.CanPublishToRuntime);
 
         var point = new IoTestPointPlan
         {

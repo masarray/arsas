@@ -118,7 +118,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _uiFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(100)
+            // Five UI projections per second leave dispatcher capacity for smooth grid
+            // scrolling while the acquisition/evidence pipelines retain full fidelity.
+            Interval = TimeSpan.FromMilliseconds(200)
         };
         _uiFlushTimer.Tick += UiFlushTimer_Tick;
 
@@ -900,6 +902,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return false;
             }
 
+            SynchronizeAllEngineeringSelectionsToFat(device);
             SaveSignalSelectionMemory(device);
             device.RefreshComputed();
             RebuildControlFeedbackIndex(device);
@@ -1721,6 +1724,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var point = snapshot.Point;
             if (snapshot.Sequence < point.Sequence)
                 continue;
+            var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
             var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
@@ -1730,8 +1734,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
-            UpdateCommandFeedbackFromLivePoint(point);
-            ReconcileAnnunciatorFromLivePoint(point);
+            if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
+            {
+                UpdateCommandFeedbackFromLivePoint(point);
+                ReconcileAnnunciatorFromLivePoint(point);
+            }
             if (snapshot.IsReportTraffic)
             {
                 var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));
@@ -1827,6 +1834,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (owner.IsBulkSignalSelectionUpdate)
                 return;
             owner.ApplySignalSelectionChange(changedSignal, changedSignal.IsSelected);
+            SynchronizeEngineeringSelectionToFat(changedSignal, owner);
         }
         RaiseWorkspaceCounts();
     }

@@ -11,6 +11,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 {
     private IoTestIedPlan? _selectedIed;
     private string _preparationStatusText = string.Empty;
+    private bool _isAddingFatIeds;
 
     public IoListTestingWindow()
         : this(CreateEmptyProject(), CreateEmptyController(), null)
@@ -82,6 +83,19 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     // FAT scope, or while the evidence controller owns a session.
     public bool CanEditPlan =>
         !IsPreparingIed && Session.CanEditPlan;
+
+    // Importing another SCL source does not mutate the capture scope owned by the
+    // active evidence session. Keep it available while FAT is running, but serialize
+    // it with connection preparation so model imports cannot race endpoint setup.
+    public bool CanAddFatIed => !IsPreparingIed && !_isAddingFatIeds;
+
+    private void SetAddingFatIeds(bool value)
+    {
+        if (_isAddingFatIeds == value)
+            return;
+        _isAddingFatIeds = value;
+        Raise(nameof(CanAddFatIed));
+    }
 
     public string StartWorkflowText =>
         SelectedIed?.IsPreparing == true ? $"Connecting {SelectedIed.IedName}…" : "Connect & Start IED";
@@ -422,6 +436,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         Raise(nameof(CanStartWorkflow));
         Raise(nameof(CanSelectIed));
         Raise(nameof(CanEditPlan));
+        Raise(nameof(CanAddFatIed));
         Raise(nameof(StartWorkflowText));
         Raise(nameof(FooterStatusText));
     }

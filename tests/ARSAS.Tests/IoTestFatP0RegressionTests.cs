@@ -26,8 +26,8 @@ public sealed class IoTestFatP0RegressionTests
     {
         var source = Read("MainWindow.IoTesting.AutoConnect.cs");
 
-        Assert.Contains("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
-        Assert.Contains("Waiting for first live FAT image", source, StringComparison.Ordinal);
+        Assert.Contains("Return control to FAT immediately", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.Contains("fast MMS verification", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromSeconds(10)", source, StringComparison.Ordinal);
@@ -48,15 +48,12 @@ public sealed class IoTestFatP0RegressionTests
         Assert.Contains("AppendBatch(IEnumerable<IoTestJournalEntry> entries)", journal, StringComparison.Ordinal);
         Assert.Contains("FlushDurable();", journal, StringComparison.Ordinal);
 
-        // Preserve #150's immediate TRUE-edge scheduling while retaining P0's bounded
-        // drain/yield behavior for bursts. The first dispatch is DataBind; a reschedule
-        // requested while that drain is active is intentionally demoted to Background.
+        // Every bounded drain yields to operator input. Edge samples remain in the
+        // dedicated lossless queue, so responsiveness does not weaken FAT evidence.
         Assert.Contains("DispatchIoFatEvidence", main, StringComparison.Ordinal);
-        Assert.Contains("Volatile.Read(ref _ioFatEvidenceDrainDispatchActive) == 0", main, StringComparison.Ordinal);
-        Assert.Contains("DispatcherPriority.DataBind", main, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Background", main, StringComparison.Ordinal);
-        Assert.Contains("Interlocked.Increment(ref _ioFatEvidenceDrainDispatchActive)", main, StringComparison.Ordinal);
-        Assert.Contains("Interlocked.Decrement(ref _ioFatEvidenceDrainDispatchActive)", main, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherPriority.DataBind", main, StringComparison.Ordinal);
+        Assert.Contains("_pendingEdgeSnapshots", controller, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -76,6 +73,19 @@ public sealed class IoTestFatP0RegressionTests
         Assert.Contains("storage.SaveNow()", service, StringComparison.Ordinal);
         Assert.Contains("New Clean FAT", ui, StringComparison.Ordinal);
         Assert.Contains("Session.ResetForCleanRetest()", ui, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FatUiRefresh_DoesNotRefilterOrAutosaveForEveryLiveSample()
+    {
+        var ux = Read("IoListTestingWindow.FatV2Ux.cs");
+        var persistence = Read("Services/IoTesting/IoTestProjectPersistenceService.cs");
+        var controller = Read("Services/IoTesting/IoTestSessionController.cs");
+
+        Assert.Contains("RefreshFatV2WorkspaceUx(bool refreshRows = false)", ux, StringComparison.Ordinal);
+        Assert.Contains("if (refreshRows)", ux, StringComparison.Ordinal);
+        Assert.Contains("nameof(IoTestPointRuntime.CurrentValue)", persistence, StringComparison.Ordinal);
+        Assert.Contains("if (progressChanged)", controller, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
