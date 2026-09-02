@@ -1,0 +1,10 @@
+{
+  "version": "1.6.33",
+  "tag": "v1.6.33-fat-v2-preview.1",
+  "sourceSha": "254bc9175b016c81978618fac115298067c0e72d",
+  "installerArtifactId": 9843641604,
+  "portableArtifactId": 9843671318,
+  "installerValidationRun": 33622737746,
+  "applicationValidationRun": 33622737754,
+  "channel": "fat-v2-user-preview"
+}
