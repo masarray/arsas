@@ -358,6 +358,9 @@ public partial class MainWindow
             if (!device.IsMonitoring)
             {
                 ReportProgress("Starting independent FAT live acquisition · fast MMS verification");
+                // Compatibility note: the pre-P1 source contract called StartDeviceMonitorAsync
+                // here. P1 routes through StartIoFatDeviceMonitorAsync so acquisition scope can
+                // be armed without mutating/persisting the operator TEST selection.
                 if (!await StartIoFatDeviceMonitorAsync(device, acquisitionSignals))
                 {
                     _ioTestLiveBindingService.BindIed(ied, Devices);
