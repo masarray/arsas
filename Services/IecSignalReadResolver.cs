@@ -134,7 +134,11 @@ public static class IecSignalReadResolver
                 ReadReference = read.Leaf.Reference,
                 Projection = "schema-safe-demand-energy-exact-leaf-read"
             };
-            return new ResolvedIecSignalRead(rich, signal.ObjectReference);
+
+            // The runtime keeps the FAT identity on the parent point, but uses this exact
+            // effective leaf to derive low-rate q/t companion references. Returning the
+            // parent here would incorrectly derive XPRE_MMTR1.q instead of DmdWhMV.q.
+            return new ResolvedIecSignalRead(rich, read.Leaf.Reference);
         }
 
         return null;
