@@ -92,17 +92,18 @@ public static class IoFatEngineeringSelectionBridge
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
 
+        // P0.2: Engineering selection shares the operator checkbox state, not FAT
+        // disposition authority. A row explicitly removed from FAT must stay in Removed
+        // Signals when Engineering is toggled off/on. Only the dedicated Removed Signals
+        // restore action may change ExcludedByOperator back to Included. This also means a
+        // later restore preserves the latest operator checkbox state without resurrecting
+        // evidence scope as a side effect of workspace navigation.
         var changed = false;
         foreach (var point in ied.TestPoints.Where(IoTestSignalSelectionService.IsSclDataSetAuthority))
         {
             if (!ReferenceEquals(FindSignal(point, device), signal))
                 continue;
 
-            if (selected && !point.IsIncludedInFat)
-            {
-                point.RestoreToFat();
-                changed = true;
-            }
             if (point.TestEnabled != selected)
             {
                 point.TestEnabled = selected;
