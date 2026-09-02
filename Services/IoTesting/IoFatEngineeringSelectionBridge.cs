@@ -18,30 +18,41 @@ public static class IoFatEngineeringSelectionBridge
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
 
+        // P0.1: raw SCL import is a fresh FAT selection authority. Every included static
+        // DataSet membership starts checked even when the same Engineering device already
+        // carries an older/narrower selection, or a matching local snapshot previously
+        // stored an unchecked state. Explicit ARSAS project/package continuation restores
+        // operator selection through the persistence path and does not call this initializer.
+        //
+        // The third parameter is intentionally retained for source compatibility with the
+        // existing synchronization caller. It no longer permits Engineering state to
+        // uncheck a newly imported direct-SCL FAT row.
+        _ = preserveExistingEngineeringSelection;
+
         var changed = 0;
         foreach (var point in ied.TestPoints.Where(IoTestSignalSelectionService.IsSclDataSetAuthority))
         {
+            // Keep Removed Signals disposition independent. A row that is part of the active
+            // fresh-import scope defaults checked; restoring/removing a row remains an
+            // operator-authored FAT disposition action.
+            if (point.IsIncludedInFat && !point.TestEnabled)
+            {
+                point.TestEnabled = true;
+                changed++;
+            }
+
             var signal = FindSignal(point, device);
             if (signal is null)
                 continue;
 
-            if (preserveExistingEngineeringSelection)
+            // Fresh direct-SCL FAT owns the initial checkbox state. Push that state into the
+            // shared Engineering catalog instead of allowing an older Engineering selection
+            // to narrow the newly imported static DataSet scope.
+            var selected = point.TestEnabled && point.IsIncludedInFat;
+            if (signal.IsSelected != selected)
             {
-                var enabled = signal.IsSelected && point.IsIncludedInFat;
-                if (point.TestEnabled != enabled)
-                {
-                    point.TestEnabled = enabled;
-                    changed++;
-                }
-            }
-            else
-            {
-                var selected = point.TestEnabled && point.IsIncludedInFat;
-                if (signal.IsSelected != selected)
-                {
-                    signal.IsSelected = selected;
-                    changed++;
-                }
+                signal.IsSelected = selected;
+                changed++;
             }
         }
 
