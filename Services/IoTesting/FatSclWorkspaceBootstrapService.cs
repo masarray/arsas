@@ -104,12 +104,18 @@ public sealed class FatSclWorkspaceBootstrapService
             Path.Combine(workspaceDirectory, "source"),
             cancellationToken).ConfigureAwait(false);
 
-        return new FatSclWorkspaceLaunchResult(
+        var launch = new FatSclWorkspaceLaunchResult(
             import.Project,
             stagedSources,
             sourceSetSha256,
             import.SourceFingerprint,
             workspaceDirectory);
+
+        // Restore only operator disposition and current evidence after the authoritative
+        // DataSet projection has been recreated from the immutable SCL sources. A stale or
+        // mismatched snapshot therefore fails closed instead of becoming engineering truth.
+        FatVerificationPersistenceService.RestoreIfPresent(launch);
+        return launch;
     }
 
     private static async Task<IReadOnlyList<IoFatWorkspaceSource>> StageImmutableSourcesAsync(
