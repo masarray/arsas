@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using ArIED61850Tester.Services.IoTesting;
 using Microsoft.Win32;
 
 namespace ArIED61850Tester;
@@ -21,19 +22,38 @@ public partial class IoListTestingWindow
         if (dialog.ShowDialog(this) != true)
             return;
 
+        var result = await ImportAdditionalSclSourcesAsync(engineeringWindow, dialog.FileNames);
+        if (!result.Succeeded)
+            ShowActionResult(result, "IED could not be added");
+    }
+
+    internal async Task<IoTestSessionActionResult> ImportAdditionalSclSourcesAsync(
+        MainWindow engineeringWindow,
+        IReadOnlyCollection<string> sclPaths)
+    {
+        ArgumentNullException.ThrowIfNull(engineeringWindow);
+        ArgumentNullException.ThrowIfNull(sclPaths);
+        if (_isAddingFatIeds)
+            return IoTestSessionActionResult.Failure("Another SCL append is already being prepared for this FAT workspace.");
+
         SetAddingFatIeds(true);
-        PreparationStatusText = $"Importing {dialog.FileNames.Length} SCL source(s) into the current FAT workspace…";
+        PreparationStatusText = $"Importing {sclPaths.Count} SCL source(s) into the current FAT workspace…";
         try
         {
-            var result = await engineeringWindow.AddSclIedsToLoadedFatAsync(this, dialog.FileNames);
+            var result = await engineeringWindow.AppendSclIedsToLoadedFatAsync(this, sclPaths);
             PreparationStatusText = result.Message;
-            if (!result.Succeeded)
-                ShowActionResult(result, "IED could not be added");
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            const string message = "SCL append was cancelled.";
+            PreparationStatusText = message;
+            return IoTestSessionActionResult.Failure(message);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
             PreparationStatusText = ex.Message;
-            MessageBox.Show(this, ex.Message, "Add FAT IED failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            return IoTestSessionActionResult.Failure(ex.Message);
         }
         finally
         {
