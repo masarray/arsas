@@ -7,11 +7,22 @@ public sealed class IoFatV2UiLockRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
 
-        Assert.Contains("DataContext.SelectedCanEditPlan", source, StringComparison.Ordinal);
         Assert.DoesNotContain("DataContext.CanEditPlan", source, StringComparison.Ordinal);
         Assert.Contains("public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);", source, StringComparison.Ordinal);
         Assert.Contains("!ied.IsPreparing", source, StringComparison.Ordinal);
         Assert.Contains("!Session.IsSessionActive || !ReferenceEquals(Session.ActiveIed, ied)", source, StringComparison.Ordinal);
+
+        // The TEST checkbox binds directly to the selected IED and session owner so the
+        // owning IED locks synchronously; another IED remains editable without waiting for
+        // a dispatcher-level window-property refresh.
+        Assert.Contains("var editability = new MultiBinding", source, StringComparison.Ordinal);
+        Assert.Contains("DataContext.SelectedIed", source, StringComparison.Ordinal);
+        Assert.Contains("DataContext.Session.ActiveIed", source, StringComparison.Ordinal);
+        Assert.Contains("DataContext.Session.IsSessionActive", source, StringComparison.Ordinal);
+        Assert.Contains("DataContext.SelectedIed.IsPreparing", source, StringComparison.Ordinal);
+        Assert.Contains("IoFatSelectedIedPlanEditabilityConverter", source, StringComparison.Ordinal);
+        Assert.Contains("!ReferenceEquals(activeIed, selectedIed)", source, StringComparison.Ordinal);
+
         Assert.Contains("if (!CanEditPointPlan(point))", source, StringComparison.Ordinal);
         Assert.Contains("point.RemoveFromFat();", source, StringComparison.Ordinal);
 
