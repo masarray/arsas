@@ -191,12 +191,23 @@ public partial class MainWindow
 
         var importScl = new MenuItem
         {
-            Header = _loadedIoFatWindow == null
-                ? "Import SCL / CID files"
-                : "Import another SCL / CID file set"
+            Header = _loadedIoFatWindow is { IsLoaded: true }
+                ? "Add SCL / CID to loaded FAT workspace"
+                : "Import SCL / CID files"
         };
-        importScl.Click += (_, _) => QueueIoFatWorkspaceReplacement(
-            () => OpenSclFatTesting_Click(this, new RoutedEventArgs()));
+        importScl.Click += (_, _) =>
+        {
+            if (_loadedIoFatWindow is { IsLoaded: true } loaded)
+            {
+                // P0.4: SCL is additive while a FAT workspace is loaded. Existing IED
+                // connections/session evidence stay alive; replacement is reserved for
+                // explicit workbook/project open flows below.
+                _ = OpenSclForLoadedFatAppendAsync(loaded);
+                return;
+            }
+
+            OpenSclFatTesting_Click(this, new RoutedEventArgs());
+        };
 
         var importWorkbook = new MenuItem
         {
