@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 using Microsoft.Win32;
 
