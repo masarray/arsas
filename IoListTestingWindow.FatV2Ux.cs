@@ -17,14 +17,12 @@ public partial class IoListTestingWindow
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
     private readonly IoFatSelectedIedPlanEditabilityConverter _fatPlanEditabilityConverter = new();
 
-    // P0.3: plan ownership is per IED. Another IED may be preparing or may own the
-    // single active evidence session without freezing the selected IED's checkbox scope.
-    // Only the IED whose connection/session is consuming that scope is immutable.
+    // P0.3/P2: plan ownership is per IED. Connection preparation and evidence sessions
+    // lock only the owning IED; sibling IEDs remain independently editable.
     public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);
 
     private bool CanEditIedPlan(IoTestIedPlan ied)
-        => !ied.IsPreparing &&
-           (!Session.IsSessionActive || !ReferenceEquals(Session.ActiveIed, ied));
+        => !ied.IsPreparing && !Session.IsIedSessionActive(ied);
 
     private bool CanEditPointPlan(IoTestPointPlan point)
     {
