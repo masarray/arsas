@@ -112,7 +112,9 @@ public sealed class SemanticReportProductionWiringRegressionTests
             [
                 new MmsReportValue
                 {
-                    Index = 0,
+                    // Deliberately differs from the authoritative static DataSet member index (0).
+                    // A sparse InformationReport value position must not defeat an exact IEC member reference.
+                    Index = 17,
                     Member = new MmsDataSetDirectoryMember
                     {
                         UserReference = objectReference,
@@ -140,6 +142,8 @@ public sealed class SemanticReportProductionWiringRegressionTests
             update.Reference.Equals(objectReference, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(projection.Warnings, warning =>
             warning.StartsWith("REPORT_RAW_STRUCT:", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_FALLBACK:", StringComparison.OrdinalIgnoreCase));
     }
 
     private static LiveIedDataAttributeModel Attribute(string reference, string path)
