@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using AR.Iec61850.Discovery;
 using ArMms = AR.Iec61850.Mms;
@@ -15,6 +16,7 @@ public sealed partial class NativeIec61850Client
     private LiveIedModelDiscoveryDocument? _semanticReportProjectionAuthorityModel;
     private LiveIedModelDiscoveryDocument? _semanticReportProjectionContextModel;
     private ArMms.MmsReportSemanticProjectionContext? _semanticReportProjectionContext;
+    private readonly HashSet<string> _semanticReportProjectionWarningsSeen = new(StringComparer.OrdinalIgnoreCase);
 
     private void SetSemanticReportProjectionAuthority(LiveIedModelDiscoveryDocument model)
     {
@@ -25,6 +27,7 @@ public sealed partial class NativeIec61850Client
         _semanticReportProjectionAuthorityModel = model;
         _semanticReportProjectionContextModel = null;
         _semanticReportProjectionContext = null;
+        _semanticReportProjectionWarningsSeen.Clear();
     }
 
     private void ResetSemanticReportProjectionContext()
@@ -32,6 +35,7 @@ public sealed partial class NativeIec61850Client
         _semanticReportProjectionAuthorityModel = null;
         _semanticReportProjectionContextModel = null;
         _semanticReportProjectionContext = null;
+        _semanticReportProjectionWarningsSeen.Clear();
     }
 
     private ArMms.MmsReportValueProjection ProjectReportValue(ArMms.MmsReportFrame report)
@@ -52,18 +56,20 @@ public sealed partial class NativeIec61850Client
             {
                 _semanticReportProjectionContext = ArMms.MmsReportSemanticProjectionContext.Create(model);
                 _semanticReportProjectionContextModel = model;
+                _semanticReportProjectionWarningsSeen.Clear();
             }
 
-            return ArMms.MmsSemanticReportValueProjector.Project(
+            var projection = ArMms.MmsSemanticReportValueProjector.Project(
                 report,
                 _semanticReportProjectionContext);
+            return SuppressRepeatedSemanticWarnings(projection);
         }
         catch (Exception ex)
         {
             // Projection must never invent evidence or tear down a healthy MMS association.
             // Preserve the established raw update and expose an explicit fail-closed warning.
             var baseline = ArMms.MmsReportValueProjector.Project(report);
-            return new ArMms.MmsReportValueProjection
+            var fallback = new ArMms.MmsReportValueProjection
             {
                 Updates = baseline.Updates,
                 Warnings = baseline.Warnings
@@ -74,6 +80,30 @@ public sealed partial class NativeIec61850Client
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray()
             };
+            return SuppressRepeatedSemanticWarnings(fallback);
         }
+    }
+
+    private ArMms.MmsReportValueProjection SuppressRepeatedSemanticWarnings(
+        ArMms.MmsReportValueProjection projection)
+    {
+        if (projection.Warnings.Count == 0)
+            return projection;
+
+        // Structured report projection runs for every report frame. The same structural
+        // expansion warning can therefore repeat indefinitely even though it describes a
+        // stable model fact. Keep processing every value update, but surface each identical
+        // semantic warning once per projection model/session to avoid log/UI churn.
+        var freshWarnings = projection.Warnings
+            .Where(warning => _semanticReportProjectionWarningsSeen.Add(warning))
+            .ToArray();
+        if (freshWarnings.Length == projection.Warnings.Count)
+            return projection;
+
+        return new ArMms.MmsReportValueProjection
+        {
+            Updates = projection.Updates,
+            Warnings = freshWarnings
+        };
     }
 }
