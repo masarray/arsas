@@ -84,10 +84,10 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     public bool CanEditPlan =>
         !IsPreparingIed && Session.CanEditPlan;
 
-    // Importing another SCL source does not mutate the capture scope owned by the
-    // active evidence session. Keep it available while FAT is running, but serialize
-    // it with connection preparation so model imports cannot race endpoint setup.
-    public bool CanAddFatIed => !IsPreparingIed && !_isAddingFatIeds;
+    // P0.4: adding another SCL is a workspace-level append operation, independent of
+    // per-IED connection preparation and the single active evidence session. Only another
+    // SCL append locks this action; existing IED workflows continue untouched.
+    public bool CanAddFatIed => !_isAddingFatIeds;
 
     private void SetAddingFatIeds(bool value)
     {
