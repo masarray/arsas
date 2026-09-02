@@ -22,12 +22,22 @@ public static class IoTestReconciliationCache
     /// already-active association and let ARIEC61850 own exact reads, alternate strategies,
     /// probe budgets, and failure verdicts. A workspace that has never created a session may
     /// still build a model-only document; that path can only remain DesignOnly, never Absent.
+    ///
+    /// Direct SCL FAT is intentionally different. Its complete static DataSet scope is already
+    /// authoritative before association, and the monitor/report pipeline will acquire the
+    /// selected values immediately. Running connected exact-read reconciliation before that
+    /// acquisition can serialize dozens of MMS probes and hold FAT preparation for more than
+    /// a minute on real relays. For that workflow reconcile models only; absence remains
+    /// unproven and live acquisition starts without a network-probe gate.
     /// </summary>
     public static Task RefreshAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(device);
+
+        if (UsesDirectSclFatAuthority(device))
+            return RefreshModelOnlyAsync(device, cancellationToken);
 
         if (!NativeIec61850Client.HasReconciliationOwner(device.IpAddress, device.Port))
             return RefreshModelOnlyAsync(device, cancellationToken);
@@ -192,6 +202,10 @@ public static class IoTestReconciliationCache
         ArgumentNullException.ThrowIfNull(device);
         Entries.TryRemove(device, out _);
     }
+
+    private static bool UsesDirectSclFatAuthority(Iec61850MonitorDevice device)
+        => device.SclWorkspace?.DesignModel is not null &&
+           device.IdentitySource.Contains("FAT SCL", StringComparison.OrdinalIgnoreCase);
 
     private sealed record CacheEntry(
         object DesignModel,
