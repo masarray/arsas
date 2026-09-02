@@ -87,8 +87,12 @@ public sealed class IoFatMultiIedConnectionRegressionTests
     public void DirectSclAcquisition_ResolvesUncheckedIncludedMember_ButNotRemovedMember()
     {
         const string reference = "IED_ALD0/GGIO1.Ind1.stVal";
-        var point = Point("P-A", "IED_A", "192.168.81.10", reference);
-        point.BindingStatus = "SCL_DATASET_AUTHORITY";
+        var point = Point(
+            "P-A",
+            "IED_A",
+            "192.168.81.10",
+            reference,
+            bindingStatus: "SCL_DATASET_AUTHORITY");
         point.TestEnabled = false;
 
         var signal = new SignalDefinition
@@ -194,7 +198,12 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("entry.DeviceId.Equals(activeDevice.DeviceId", session, StringComparison.Ordinal);
     }
 
-    private static IoTestPointPlan Point(string id, string iedName, string ipAddress, string reference) => new()
+    private static IoTestPointPlan Point(
+        string id,
+        string iedName,
+        string ipAddress,
+        string reference,
+        string bindingStatus = "") => new()
     {
         TestPointId = id,
         IedName = iedName,
@@ -211,6 +220,7 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         SourceIecReference = reference,
         EventLogSearchReference = reference,
         ReportDisplayReference = reference + " [ST]",
+        BindingStatus = bindingStatus,
         TestEnabled = true,
         ImportReady = true
     };
