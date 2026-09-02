@@ -9,7 +9,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
 {
     [Fact]
-    public void StructuredStaticMember_KeepsDedicatedIdentityBesideCachedScalarSignal()
+    public void StructuredStaticMember_KeepsDedicatedIdentityAndPublishesResolvedThdScalarToRuntime()
     {
         const string dataObject = "IEDLD0/I_MHAI1.ThdA";
         const string staticMember = dataObject + ".phsA";
@@ -111,6 +111,29 @@ public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
         Assert.Equal(runtimeLeaf, membershipSignal.ObjectReference);
         Assert.Equal(dataSet, membershipSignal.DataSetReference);
 
+        // P5.4 field regression: the generic curated-HMI THD row may remain classified as
+        // harmonic/statistics noise, but an explicit static DataSet member that ARIEC has
+        // resolved to one scalar leaf is authoritative FAT scope and must cross the exact
+        // SignalDefinition -> monitor-point runtime gate.
+        Assert.False(genericScalar.CanPublishToRuntime);
+        Assert.True(membershipSignal.IsExplicitDataSetRuntimeValue);
+        Assert.True(membershipSignal.CanPublishAsSignal);
+        Assert.True(membershipSignal.CanPublishToRuntime);
+
+        var structuredParent = new SignalDefinition
+        {
+            Name = "ThdA",
+            ObjectReference = dataObject,
+            DisplayReference = dataObject,
+            FunctionalConstraint = "MX",
+            DataType = "structure",
+            Category = "DataSet",
+            DataSetReference = dataSet,
+            Source = "ARIEC static DataSet parent"
+        };
+        Assert.False(structuredParent.IsExplicitDataSetRuntimeValue);
+        Assert.False(structuredParent.CanPublishToRuntime);
+
         var point = new IoTestPointPlan
         {
             TestPointId = "THD-A",
@@ -151,23 +174,31 @@ public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
         Assert.True(selection.Succeeded, selection.Message);
         var match = Assert.Single(selection.Matches);
         Assert.Same(membershipSignal, match.Signal);
+        Assert.True(match.Signal.CanPublishToRuntime);
         Assert.Empty(selection.MissingPoints);
         Assert.Empty(selection.AmbiguousPoints);
     }
 
     [Fact]
-    public void DirectSclFat_ReconciliationCannotGateAcquisitionWithConnectedExactReads()
+    public void DirectSclFat_ReconciliationCannotGateAcquisitionAtAll()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestReconciliationCache.cs"));
         var directSclGate = source.IndexOf("if (UsesDirectSclFatAuthority(device))", StringComparison.Ordinal);
         var connectedOwnerGate = source.IndexOf("if (!NativeIec61850Client.HasReconciliationOwner", StringComparison.Ordinal);
 
-        Assert.True(directSclGate >= 0, "Direct SCL FAT must have an explicit non-probing reconciliation path.");
+        Assert.True(directSclGate >= 0, "Direct SCL FAT must have an explicit nonblocking reconciliation path.");
         Assert.True(connectedOwnerGate > directSclGate,
-            "Direct SCL FAT must bypass connected exact-read reconciliation before native session ownership is considered.");
-        Assert.Contains("return RefreshModelOnlyAsync(device, cancellationToken);", source, StringComparison.Ordinal);
+            "Direct SCL FAT must return before native reconciliation ownership is considered.");
+        Assert.Contains("Entries.TryRemove(device, out _);", source, StringComparison.Ordinal);
+        Assert.Contains("return Task.CompletedTask;", source, StringComparison.Ordinal);
         Assert.Contains("UsesDirectSclFatAuthority", source, StringComparison.Ordinal);
         Assert.Contains("FAT SCL", source, StringComparison.Ordinal);
+
+        var gateBodyStart = source.IndexOf('{', directSclGate);
+        var gateBodyEnd = source.IndexOf('}', gateBodyStart + 1);
+        var gateBody = source.Substring(gateBodyStart, gateBodyEnd - gateBodyStart + 1);
+        Assert.DoesNotContain("RefreshModelOnlyAsync", gateBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReconcileConnectedAsync", gateBody, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
