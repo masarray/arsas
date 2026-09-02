@@ -1,3 +1,6 @@
+using System.Globalization;
+using ArIED61850Tester.Models.IoTesting;
+
 namespace ARSAS.Tests;
 
 public sealed class IoFatV2UiLockRegressionTests
@@ -30,6 +33,26 @@ public sealed class IoFatV2UiLockRegressionTests
         // disabled by the TEST-checkbox edit lock.
         Assert.Contains("CanCaptureOperatorSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("Session.CaptureOperatorSnapshot(point, slot)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditabilityConverter_AllowsOtherIedWhileActiveOwnerRemainsLocked()
+    {
+        var activeIed = new IoTestIedPlan { IedName = "IED-A", IpAddress = "192.0.2.10" };
+        var otherIed = new IoTestIedPlan { IedName = "IED-B", IpAddress = "192.0.2.11" };
+        var converter = new ArIED61850Tester.IoFatSelectedIedPlanEditabilityConverter();
+
+        bool Evaluate(IoTestIedPlan selected, IoTestIedPlan? active, bool sessionActive, bool preparing)
+            => Assert.IsType<bool>(converter.Convert(
+                new object[] { selected, active!, sessionActive, preparing },
+                typeof(bool),
+                null!,
+                CultureInfo.InvariantCulture));
+
+        Assert.False(Evaluate(activeIed, activeIed, sessionActive: true, preparing: false));
+        Assert.True(Evaluate(otherIed, activeIed, sessionActive: true, preparing: false));
+        Assert.False(Evaluate(otherIed, activeIed, sessionActive: true, preparing: true));
+        Assert.True(Evaluate(activeIed, active: null, sessionActive: false, preparing: false));
     }
 
     [Fact]
