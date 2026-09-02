@@ -13,11 +13,11 @@ public sealed class IoFatV2UiLockRegressionTests
         Assert.DoesNotContain("DataContext.CanEditPlan", source, StringComparison.Ordinal);
         Assert.Contains("public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);", source, StringComparison.Ordinal);
         Assert.Contains("!ied.IsPreparing", source, StringComparison.Ordinal);
-        Assert.Contains("!Session.IsSessionActive || !ReferenceEquals(Session.ActiveIed, ied)", source, StringComparison.Ordinal);
+        Assert.Contains("!Session.IsIedSessionActive(ied)", source, StringComparison.Ordinal);
 
-        // The TEST checkbox binds directly to the selected IED and session owner so the
-        // owning IED locks synchronously; another IED remains editable without waiting for
-        // a dispatcher-level window-property refresh.
+        // The TEST checkbox binds directly to the selected IED and selected-session
+        // projection so the owning IED locks synchronously; another IED remains editable
+        // without waiting for a dispatcher-level window-property refresh.
         Assert.Contains("var editability = new MultiBinding", source, StringComparison.Ordinal);
         Assert.Contains("DataContext.SelectedIed", source, StringComparison.Ordinal);
         Assert.Contains("DataContext.Session.ActiveIed", source, StringComparison.Ordinal);
@@ -61,6 +61,7 @@ public sealed class IoFatV2UiLockRegressionTests
         var workspace = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
         var removed = File.ReadAllText(FindRepoFile("RemovedFatSignalsWindow.cs"));
 
+        Assert.Contains("!Session.IsIedSessionActive(ied)", workspace, StringComparison.Ordinal);
         Assert.Contains("new RemovedFatSignalsWindow(Project, CanEditPointPlan)", workspace, StringComparison.Ordinal);
         Assert.Contains("Func<IoTestPointPlan, bool>? canEditPoint", removed, StringComparison.Ordinal);
         Assert.Contains("canEditPoint?.Invoke(point) ?? true", removed, StringComparison.Ordinal);
