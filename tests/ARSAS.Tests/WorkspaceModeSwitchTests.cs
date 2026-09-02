@@ -14,7 +14,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("ShowLoadedIoFatWorkspace", source, StringComparison.Ordinal);
         Assert.Contains("Continue loaded FAT project", source, StringComparison.Ordinal);
         Assert.Contains("Import SCL / CID files", source, StringComparison.Ordinal);
-        Assert.Contains("Import another SCL / CID file set", source, StringComparison.Ordinal);
+        Assert.Contains("Add SCL / CID to loaded FAT workspace", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSclForLoadedFatAppendAsync(loaded)", source, StringComparison.Ordinal);
         Assert.Contains("OpenSclFatTesting_Click", source, StringComparison.Ordinal);
         Assert.Contains("Import another IO List Excel workbook", source, StringComparison.Ordinal);
         Assert.Contains("Open another portable .arsas project", source, StringComparison.Ordinal);
@@ -44,7 +45,7 @@ public sealed class WorkspaceModeSwitchTests
     }
 
     [Fact]
-    public void LoadingAnotherFatProject_IsExplicitAndClosesTheLoadedWorkspaceFirst()
+    public void LoadingAnotherFatProject_IsExplicitWhileLoadedSclImportIsAdditive()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.WorkspaceModeSwitch.cs"));
         var hostSource = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
@@ -52,7 +53,13 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Save and close that workspace before loading another project?", source, StringComparison.Ordinal);
         Assert.Contains("loaded.Close();", source, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.BeginInvoke(openReplacement", source, StringComparison.Ordinal);
-        Assert.Contains("OpenSclFatTesting_Click(this, new RoutedEventArgs())", source, StringComparison.Ordinal);
+
+        // P0.4 keeps SCL additive while workbook/project opens remain explicit replacement.
+        Assert.Contains("OpenSclForLoadedFatAppendAsync(loaded)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "QueueIoFatWorkspaceReplacement(\n            () => OpenSclFatTesting_Click",
+            source,
+            StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click", hostSource, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click", hostSource, StringComparison.Ordinal);
     }
