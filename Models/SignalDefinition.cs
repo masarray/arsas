@@ -633,9 +633,22 @@ public class SignalDefinition : ObservableObject
 
     // q/t, Health, Beh, Mod, RCB attributes, nameplate, and other engineering leaves are
     // companion/diagnostic attributes. They must not become user-selected SCADA points.
-    public bool IsRawAttribute => IsRawEngineeringAttribute(ObjectReference, DataType);
+    // Explicit static DataSet membership is different: once ARIEC has resolved that member
+    // to one scalar ST/MX leaf, the engineering noise filter must not discard the operator's
+    // authoritative FAT scope merely because the path contains THD/harmonic/demand wording.
+    public bool IsExplicitDataSetRuntimeValue =>
+        !IsControlSignal &&
+        !string.IsNullOrWhiteSpace(DataSetReference) &&
+        (string.IsNullOrWhiteSpace(FunctionalConstraint) ||
+         FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
+         FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)) &&
+        IsRuntimeValueLeaf(ObjectReference, DataType);
 
-    public bool IsValueSignal => !IsControlSignal && IsRuntimeValueSignal(ObjectReference, FunctionalConstraint, DataType, Category);
+    public bool IsRawAttribute => IsRawEngineeringAttribute(ObjectReference, DataType) && !IsExplicitDataSetRuntimeValue;
+
+    public bool IsValueSignal => !IsControlSignal &&
+                                 (IsRuntimeValueSignal(ObjectReference, FunctionalConstraint, DataType, Category) ||
+                                  IsExplicitDataSetRuntimeValue);
     public bool CanPublishAsSignal => !IsControlSignal && IsValueSignal && !IsRawAttribute;
     public bool IsKnownReadFailure => IsKnownReadFailureState(Value, Quality, ProbeStatus);
     public bool CanPublishToRuntime => CanPublishAsSignal && !IsKnownReadFailure;
