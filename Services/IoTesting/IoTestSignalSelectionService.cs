@@ -30,6 +30,7 @@ public sealed record IoTestSignalSelectionResult(
 public sealed class IoTestSignalSelectionService
 {
     internal const string SclDataSetAuthorityBindingStatus = "SCL_DATASET_AUTHORITY";
+    private const int SclStaticMembershipIdentityBonus = 1000;
 
     private static readonly Regex ProtectionCodeRegex = new(
         @"\((?<code>\d{2,3}[A-Z]{0,3})(?:\s*-\s*[^)]*)?\)",
@@ -170,6 +171,16 @@ public sealed class IoTestSignalSelectionService
         if (importedReferences.Count == 0)
             return 0;
 
+        // Direct SCL FAT owns stronger identity than a runtime leaf: one row corresponds
+        // to one exact static DataSet membership. A connected Engineering Workspace can
+        // legitimately contain both a generic scalar signal and a dedicated static-member
+        // projection with the same ObjectReference. Without this precedence both score as
+        // exact runtime matches and the FAT row becomes ambiguous. Prefer exact
+        // (DataSetReference + DisplayReference) membership identity, then use the resolved
+        // ObjectReference only as the acquisition target.
+        if (HasExactSclStaticMembershipIdentity(point, signal))
+            return IoTestReferenceMatcher.ExactScore + SclStaticMembershipIdentityBonus;
+
         // ARIEC deliberately keeps static FCDA/FCD membership identity in
         // DisplayReference while ObjectReference may remain the resolved runtime leaf.
         // SCL-backed FAT rows therefore compare against both engine-owned identities.
@@ -191,6 +202,38 @@ public sealed class IoTestSignalSelectionService
                 point.LogicalNode)))
             .DefaultIfEmpty(0)
             .Max();
+    }
+
+    private static bool HasExactSclStaticMembershipIdentity(
+        IoTestPointPlan point,
+        SignalDefinition signal)
+    {
+        if (!IsSclDataSetAuthority(point) || string.IsNullOrWhiteSpace(signal.DisplayReference))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(point.DataSetName) &&
+            !string.IsNullOrWhiteSpace(signal.DataSetReference) &&
+            !IoTestLiveBindingService.NormalizeReference(point.DataSetName)
+                .Equals(
+                    IoTestLiveBindingService.NormalizeReference(signal.DataSetReference),
+                    StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var display = IoTestLiveBindingService.NormalizeReference(signal.DisplayReference);
+        if (display.Length == 0)
+            return false;
+
+        return new[]
+            {
+                point.SourceIecReference,
+                point.ReportDisplayReference,
+                point.EventLogSearchReference
+            }
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .Select(IoTestLiveBindingService.NormalizeReference)
+            .Any(reference => reference.Equals(display, StringComparison.OrdinalIgnoreCase));
     }
 
     private static List<SignalDefinition> NarrowByProtectionIdentity(
