@@ -26,12 +26,24 @@ public partial class MainWindow
         if (ied.IsPreparing)
             return IoTestSessionActionResult.Failure($"{ied.IedName} is already being prepared for FAT acquisition.");
 
+        // P1: connection/acquisition scope and FAT evidence selection are different
+        // authorities. A normal Connect prepares every included import-ready row whether
+        // its TEST checkbox is on or off. The optional override is retained for legacy
+        // callers that explicitly ask to validate a narrower evidence subset.
         var requestedPoints = (requestedPointsOverride ?? ied.TestPoints)
-            .Where(point => point.TestEnabled && point.ImportReady)
+            .Where(point =>
+                point.IsIncludedInFat &&
+                point.ImportReady &&
+                (requestedPointsOverride is null || point.TestEnabled))
             .Distinct()
             .ToList();
         if (requestedPoints.Count == 0)
-            return IoTestSessionActionResult.Failure("No import-ready FAT signal is enabled for this IED.");
+        {
+            return IoTestSessionActionResult.Failure(
+                requestedPointsOverride is null
+                    ? "No included import-ready FAT signal is available for this IED."
+                    : "No operator-selected import-ready FAT signal is available for this IED.");
+        }
 
         void ReportProgress(string message)
         {
@@ -276,7 +288,18 @@ public partial class MainWindow
                     device.DeviceId);
             }
 
-            var selectionChanged = false;
+            // P1 acquisition scope is the safe model match set, not the operator TEST
+            // selection. Keep the Engineering/TEST flags untouched while arming all proven
+            // included static members in the isolated runtime session for this IED.
+            var acquisitionSignals = selection.Matches
+                .Select(match => match.Signal)
+                .Where(signal => signal.CanPublishToRuntime)
+                .GroupBy(
+                    signal => IoTestLiveBindingService.NormalizeReference(signal.ObjectReference),
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+
             foreach (var match in selection.Matches)
             {
                 // Preserve the unique reference proven by the preparation pass. This is
@@ -291,20 +314,19 @@ public partial class MainWindow
                         : "FAT preparation matched an exact engine-owned IEC 61850 model identity.",
                     device.DeviceId,
                     match.Signal.ObjectReference);
-
-                if (match.Signal.IsSelected)
-                    continue;
-                match.Signal.IsSelected = true;
-                selectionChanged = true;
             }
 
             // Time synchronization is device-level FAT evidence rather than an ON/OFF
             // test point. If the live model exposes an explicit status (for example
             // SIPROTEC TimeSynchrnz or MiCOM LLN0.SyncSt), arm that one extra read-only
             // signal so the FAT window can capture the real IED value automatically.
-            var timeSyncArmed = IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device);
-            if (timeSyncArmed)
-                selectionChanged = true;
+            IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device);
+            var timeSyncSignal = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device);
+            if (timeSyncSignal?.CanPublishToRuntime == true &&
+                acquisitionSignals.All(signal => !ReferenceEquals(signal, timeSyncSignal)))
+            {
+                acquisitionSignals.Add(timeSyncSignal);
+            }
 
             device.RecountSelectedSignals();
             device.RefreshComputed();
@@ -313,20 +335,30 @@ public partial class MainWindow
             _ioTestLiveBindingService.BindIed(ied, Devices);
             var fatPollingNotActive = device.IsMonitoring &&
                                       device.Points.Any(point => point.PollingIntervalMs > 500);
+            var requestedAcquisitionReferences = acquisitionSignals
+                .Select(signal => IoTestLiveBindingService.NormalizeReference(signal.ObjectReference))
+                .Where(reference => reference.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var activeAcquisitionReferences = device.Points
+                .Select(point => IoTestLiveBindingService.NormalizeReference(point.IecReference))
+                .Where(reference => reference.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var acquisitionScopeChanged =
+                !requestedAcquisitionReferences.SetEquals(activeAcquisitionReferences);
 
-            // P5.3: unresolved selected rows are not a reason to tear down an otherwise
-            // healthy monitor. Restart only when the selected live model changed or the FAT
-            // polling cadence itself needs correction.
-            if (device.IsMonitoring && (selectionChanged || fatPollingNotActive))
+            // Each IED monitor is isolated. Refresh only this device when its acquisition
+            // scope or FAT polling cadence changed; another connected/monitoring IED is
+            // never stopped or rebound by this preparation.
+            if (device.IsMonitoring && (acquisitionScopeChanged || fatPollingNotActive))
             {
-                ReportProgress("Refreshing FAT acquisition · deterministic fast digital polling");
+                ReportProgress("Refreshing this IED's FAT acquisition · other IED monitors remain active");
                 await StopDeviceMonitorAsync(device);
             }
 
             if (!device.IsMonitoring)
             {
-                ReportProgress("Starting FAT live acquisition · fast MMS verification");
-                if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
+                ReportProgress("Starting independent FAT live acquisition · fast MMS verification");
+                if (!await StartIoFatDeviceMonitorAsync(device, acquisitionSignals))
                 {
                     _ioTestLiveBindingService.BindIed(ied, Devices);
                     return IoTestSessionActionResult.Failure(
@@ -337,7 +369,7 @@ public partial class MainWindow
             // The monitor points now exist and MMS polling has already been scheduled.
             // Return control to FAT immediately: waiting here for values/report setup made
             // a sub-second SCL association look like a 30-50 second connection whenever
-            // the UI dispatcher was busy with the first report burst.  Values and report
+            // the UI dispatcher was busy with the first report burst. Values and report
             // optimization continue through the shared Engineering runtime.
             var binding = _ioTestLiveBindingService.BindIed(ied, Devices);
             var acquisition = ReadIoFatAcquisitionSummary(requestedPoints, device);
@@ -352,6 +384,8 @@ public partial class MainWindow
                     $"{ied.IedName} is connected and monitoring, but none of the {requestedPoints.Count} requested FAT signal(s) has a unique live monitor point. Unresolved: {string.Join(", ", unresolved)}.");
             }
 
+            // The temporary acquisition arm has already been restored by
+            // StartIoFatDeviceMonitorAsync. Persist only the real operator selection.
             SaveSignalSelectionMemory(device);
             var modelText = hasSclRuntimeAuthority
                 ? "imported SCL model"
@@ -365,13 +399,13 @@ public partial class MainWindow
             var unresolvedCount = requestedPoints.Count - liveCount;
             var partialText = unresolvedCount == 0
                 ? string.Empty
-                : $" · {unresolvedCount} selected row(s) waiting for safe live binding";
+                : $" · {unresolvedCount} FAT row(s) waiting for safe live binding";
             var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}{partialText}";
             SetStatus(message);
             AddLog(
                 unresolvedCount == 0 ? "INFO" : "WARN",
                 "IO Testing",
-                $"{message}. Live rows are usable immediately; unresolved rows stay operator-selected and visible but are excluded from the active evidence scope until a unique live point exists. No checkbox or FAT disposition is changed by the engine. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
+                $"{message}. Live rows are usable immediately; unresolved rows stay visible but are excluded from the active evidence scope until a unique live point exists. No checkbox or FAT disposition is changed by the engine. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
