@@ -200,7 +200,8 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("EnqueueAdditional", coordinator, StringComparison.Ordinal);
         Assert.Contains("!ReferenceEquals(controller, _primaryController)", coordinator, StringComparison.Ordinal);
         Assert.Contains("AttachIoTestParallelEvidenceSessions", runtimeWiring, StringComparison.Ordinal);
-        Assert.Contains("_runtime.PointUpdated += coordinator.EnqueueAdditional", runtimeWiring, StringComparison.Ordinal);
+        Assert.Contains("_runtime.PointUpdated += Runtime_IoTestAdditionalPointUpdated", runtimeWiring, StringComparison.Ordinal);
+        Assert.Contains("coordinator.EnqueueAdditional(new Iec61850EventEntry", runtimeWiring, StringComparison.Ordinal);
         Assert.Contains("IoTestMultiSessionCoordinator Session", window, StringComparison.Ordinal);
         Assert.Contains("Session.StopAll", window, StringComparison.Ordinal);
     }
