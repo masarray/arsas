@@ -95,7 +95,7 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
     }
 
     [Fact]
-    public void ExistingEngineeringSelection_InitializesFat_AndThenSynchronizesBothWays()
+    public void FreshSclSelection_OverridesOlderEngineeringSelection_ThenSynchronizesBothWays()
     {
         const string dataSet = "IEDTHD/LLN0.Analog";
         const string member = "IEDTHD/I_MHAI1.ThdA.phsA";
@@ -105,24 +105,31 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
         var point = Point(member, runtime, dataSet);
         var ied = Ied(point);
 
+        // Simulate a stale persisted checkbox plus an older/narrower Engineering selection.
+        // Fresh raw SCL import must restore the included static DataSet member to checked and
+        // push that selection into Engineering instead of inheriting the older false state.
+        point.TestEnabled = false;
         IoFatEngineeringSelectionBridge.Initialize(
             ied,
             device,
             preserveExistingEngineeringSelection: true);
-        Assert.False(point.TestEnabled);
+        Assert.True(point.TestEnabled);
+        Assert.True(signal.IsSelected);
 
-        signal.IsSelected = true;
+        // After initialization the shared bridge remains bidirectional: Engineering changes
+        // still update FAT, and FAT checkbox changes still update the Engineering catalog.
+        signal.IsSelected = false;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
             signal,
-            selected: true,
+            selected: false,
             ied,
             device));
-        Assert.True(point.TestEnabled);
+        Assert.False(point.TestEnabled);
         Assert.True(point.IsIncludedInFat);
 
-        point.TestEnabled = false;
+        point.TestEnabled = true;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
-        Assert.False(signal.IsSelected);
+        Assert.True(signal.IsSelected);
     }
 
     [Fact]
