@@ -146,9 +146,6 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("point.TestEnabled || IsSclDataSetAuthority(point)", resolver, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat", resolver, StringComparison.Ordinal);
 
-        // Connect passes no operator checkbox subset. Start FAT still creates captureScope,
-        // but its preparation also uses the full IED acquisition scope; only Session.Start
-        // receives the selected live evidence rows.
         Assert.DoesNotContain("var enabledReady = targetIed.TestPoints", contextUx, StringComparison.Ordinal);
         Assert.Contains("private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync", contextUx, StringComparison.Ordinal);
         Assert.Contains("Project,\n            targetIed,\n            progress);", contextUx, StringComparison.Ordinal);
@@ -156,8 +153,6 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextUx, StringComparison.Ordinal);
         Assert.Contains("var result = Session.Start(selectedIed, liveCaptureScope);", contextUx, StringComparison.Ordinal);
 
-        // Runtime StartMonitoringAsync still expects IsSelected. P1 therefore uses a
-        // device-local temporary bulk arm, then restores the real Engineering/TEST state.
         Assert.Contains("device.BeginBulkSignalSelection();", monitor, StringComparison.Ordinal);
         Assert.Contains("signal.IsSelected = acquisitionSet.Contains(signal);", monitor, StringComparison.Ordinal);
         Assert.Contains("signal.IsSelected = wasSelected;", monitor, StringComparison.Ordinal);
@@ -167,14 +162,17 @@ public sealed class IoFatMultiIedConnectionRegressionTests
     }
 
     [Fact]
-    public void P1_SourceContract_UsesPerIedPreparationWithoutWeakeningEvidenceIsolation()
+    public void P2_SourceContract_UsesPerIedEvidenceLeavesWithoutWeakeningDeviceIsolation()
     {
         var autoConnect = ReadRepoFile("MainWindow.IoTesting.AutoConnect.cs");
         var contextUx = ReadRepoFile("IoListTestingWindow.ContextUx.cs");
         var progressUx = ReadRepoFile("IoListTestingWindow.RealPreparationProgress.cs");
         var connectUx = ReadRepoFile("IoListTestingWindow.MultiIedConnectionUx.cs");
         var printPreview = ReadRepoFile("IoListTestingWindow.PrintPreview.cs");
-        var session = ReadRepoFile("Services/IoTesting/IoTestSessionController.cs");
+        var leaf = ReadRepoFile("Services/IoTesting/IoTestSessionController.cs");
+        var coordinator = ReadRepoFile("Services/IoTesting/IoTestMultiSessionCoordinator.cs");
+        var runtimeWiring = ReadRepoFile("MainWindow.IoTesting.MultiSessionEvidence.cs");
+        var window = ReadRepoFile("IoListTestingWindow.xaml.cs");
 
         Assert.Contains("_ioTestLiveBindingService.BindIed(ied, Devices)", autoConnect, StringComparison.Ordinal);
         Assert.DoesNotContain("_ioTestLiveBindingService.Bind(project, Devices)", autoConnect, StringComparison.Ordinal);
@@ -192,10 +190,19 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         Assert.Contains("Other IED connection workflows keep running", connectUx, StringComparison.Ordinal);
         Assert.Contains("new Binding(nameof(SelectedIed))", connectUx, StringComparison.Ordinal);
 
-        // P1 parallelizes connection/monitoring only. The evidence controller remains
-        // intentionally single-active so relay transitions cannot enter the wrong journal.
-        Assert.Contains("Stop the active FAT session before starting another IED.", session, StringComparison.Ordinal);
-        Assert.Contains("entry.DeviceId.Equals(activeDevice.DeviceId", session, StringComparison.Ordinal);
+        // The leaf still refuses a second IED because it is intentionally one-Ied-only.
+        // P2 parallelism comes from one leaf/journal per IED, never by weakening the leaf.
+        Assert.Contains("Stop the active FAT session before starting another IED.", leaf, StringComparison.Ordinal);
+        Assert.Contains("entry.DeviceId.Equals(activeDevice.DeviceId", leaf, StringComparison.Ordinal);
+        Assert.Contains("class IoTestMultiSessionCoordinator", coordinator, StringComparison.Ordinal);
+        Assert.Contains("ActiveSessionCount", coordinator, StringComparison.Ordinal);
+        Assert.Contains("GetOrCreateController", coordinator, StringComparison.Ordinal);
+        Assert.Contains("EnqueueAdditional", coordinator, StringComparison.Ordinal);
+        Assert.Contains("!ReferenceEquals(controller, _primaryController)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("AttachIoTestParallelEvidenceSessions", runtimeWiring, StringComparison.Ordinal);
+        Assert.Contains("_runtime.PointUpdated += coordinator.EnqueueAdditional", runtimeWiring, StringComparison.Ordinal);
+        Assert.Contains("IoTestMultiSessionCoordinator Session", window, StringComparison.Ordinal);
+        Assert.Contains("Session.StopAll", window, StringComparison.Ordinal);
     }
 
     private static IoTestPointPlan Point(
