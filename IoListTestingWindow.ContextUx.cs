@@ -250,6 +250,9 @@ public partial class IoListTestingWindow
             return;
         }
 
+        // TEST is evidence authority only. Keep this selected capture scope for the
+        // evidence controller, while connection/live acquisition below remains the full
+        // included import-ready IED scope.
         var captureScope = selectedIed.TestPoints
             .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
@@ -268,8 +271,7 @@ public partial class IoListTestingWindow
                 var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(
                     Project,
                     selectedIed,
-                    progress,
-                    captureScope);
+                    progress);
                 RaiseStatusProperties();
                 RaiseSelectedIedContextProperties();
                 if (!preparation.Succeeded)
