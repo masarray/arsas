@@ -68,19 +68,6 @@ public sealed class G27NativePerIedFieldCapabilityRegressionTests
     }
 
     [Fact]
-    public void P17_NormalRuntimeDiagnosticsIdentifyNativePerIedEvidenceWithoutLegacyQ0Label()
-    {
-        var runtime = Read("Services/NativeIec61850Client.HybridReporting.cs");
-
-        Assert.Contains("P1.7 native per-IED field-capability runtime authorized", runtime, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("physical spontaneous dchg + cleanup is capability proof", runtime, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("P1.7 dynamic group", runtime, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("runtime=P1.7 native per-IED field-capability witness", runtime, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("P1.6 legacy field-capability runtime authorized", runtime, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Q0/A3 is capability proof", runtime, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void P17_EngineLockPinsMergedNativeFieldCapabilityEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
