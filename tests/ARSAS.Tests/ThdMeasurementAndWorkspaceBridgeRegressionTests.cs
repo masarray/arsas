@@ -133,6 +133,45 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
     }
 
     [Fact]
+    public void RemovedSclFatRow_EngineeringSelectionChangesCheckboxButNeverRestoresDisposition()
+    {
+        const string dataSet = "IEDTHD/LLN0.Analog";
+        const string member = "IEDTHD/I_MHAI1.ThdA.phsB";
+        const string runtime = member + ".cVal.mag.f";
+        var signal = Signal(runtime, member, dataSet);
+        signal.IsSelected = true;
+        var device = Device(signal);
+        var point = Point(member, runtime, dataSet);
+        var ied = Ied(point);
+
+        point.RemoveFromFat();
+        Assert.False(point.IsIncludedInFat);
+        Assert.True(point.TestEnabled);
+
+        signal.IsSelected = false;
+        Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+            signal,
+            selected: false,
+            ied,
+            device));
+        Assert.False(point.IsIncludedInFat);
+        Assert.False(point.TestEnabled);
+
+        signal.IsSelected = true;
+        Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+            signal,
+            selected: true,
+            ied,
+            device));
+        Assert.False(point.IsIncludedInFat);
+        Assert.True(point.TestEnabled);
+
+        point.RestoreToFat();
+        Assert.True(point.IsIncludedInFat);
+        Assert.True(point.TestEnabled);
+    }
+
+    [Fact]
     public void NewDirectSclFatWorkspace_SelectsTheSameCanonicalEngineeringRows()
     {
         const string dataSet = "IEDTHD/LLN0.Analog";
