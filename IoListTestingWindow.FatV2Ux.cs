@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -14,6 +15,7 @@ public partial class IoListTestingWindow
     private ICollectionView? _fatSignalsView;
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
+    private readonly IoFatSelectedIedPlanEditabilityConverter _fatPlanEditabilityConverter = new();
 
     // P0.3: plan ownership is per IED. Another IED may be preparing or may own the
     // single active evidence session without freezing the selected IED's checkbox scope.
@@ -97,10 +99,28 @@ public partial class IoListTestingWindow
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
         });
-        enabledFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("DataContext.SelectedCanEditPlan")
+
+        // Bind directly to selected-IED/session/preparation sources so the active IED locks
+        // synchronously when Session.Start or IsPreparing changes. This avoids a dispatcher
+        // timing window where a stale global CanEditPlan value could accept one more click.
+        var editability = new MultiBinding { Converter = _fatPlanEditabilityConverter };
+        editability.Bindings.Add(new Binding("DataContext.SelectedIed")
         {
             RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
         });
+        editability.Bindings.Add(new Binding("DataContext.Session.ActiveIed")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        editability.Bindings.Add(new Binding("DataContext.Session.IsSessionActive")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        editability.Bindings.Add(new Binding("DataContext.SelectedIed.IsPreparing")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        enabledFactory.SetBinding(UIElement.IsEnabledProperty, editability);
         enabledFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         enabledFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         grid.Columns.Add(new DataGridTemplateColumn
@@ -388,4 +408,21 @@ public partial class IoListTestingWindow
         }
         return null;
     }
+}
+
+public sealed class IoFatSelectedIedPlanEditabilityConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 4 || values[0] is not IoTestIedPlan selectedIed)
+            return false;
+
+        var activeIed = values[1] as IoTestIedPlan;
+        var sessionActive = values[2] is bool active && active;
+        var selectedPreparing = values[3] is bool preparing && preparing;
+        return !selectedPreparing && (!sessionActive || !ReferenceEquals(activeIed, selectedIed));
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => targetTypes.Select(_ => Binding.DoNothing).ToArray();
 }
