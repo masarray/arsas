@@ -14,12 +14,12 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private FatVerificationWindow? _fatV2Window;
+    private FatSclWorkspaceLaunchResult? _fatV2Launch;
 
     private void ScheduleFatV2LauncherInstall()
     {
-        // P4 remains additive to the proven workbook FAT path. Install the SCL FAT command
-        // after the existing first-run card has been constructed instead of rewriting the
-        // legacy launcher or its session lifecycle.
+        // FAT v2 remains additive to the proven workbook FAT path. Install SCL/project
+        // commands after the existing first-run card has been constructed.
         Dispatcher.BeginInvoke(
             new Action(InstallFatV2Launcher),
             DispatcherPriority.Background);
@@ -42,47 +42,39 @@ public partial class MainWindow
         if (description != null)
         {
             description.Text =
-                "Create FAT v2 directly from every static IEC 61850 DataSet membership in one or more SCL files, or continue using the proven Excel IO List workflow.";
+                "Create FAT v2 directly from every static IEC 61850 DataSet membership, reopen a portable FAT v2 ARSAS project, or continue using the proven Excel IO List workflow.";
         }
 
-        var button = CreateLauncherButton(
+        var sclButton = CreateLauncherButton(
             "Open SCL for FAT v2",
             "LucideFileInput",
             "PrimaryButton",
             OpenFatV2Scl_Click,
             Brushes.White,
             new Thickness(0, 0, 0, 8));
-        button.Tag = "FatV2SclLauncher";
+        sclButton.Tag = "FatV2SclLauncher";
 
-        var firstExistingButton = content.Children
-            .OfType<Button>()
-            .FirstOrDefault();
+        var projectButton = CreateLauncherButton(
+            "Open FAT v2 ARSAS Project",
+            "LucideFolderOpen",
+            "SecondaryButton",
+            OpenFatV2Project_Click,
+            Brush("#1F2937"),
+            new Thickness(0, 0, 0, 8));
+        projectButton.Tag = "FatV2ProjectLauncher";
+
+        var firstExistingButton = content.Children.OfType<Button>().FirstOrDefault();
         var insertAt = firstExistingButton == null
             ? content.Children.Count
             : content.Children.IndexOf(firstExistingButton);
-        content.Children.Insert(insertAt, button);
+        content.Children.Insert(insertAt, projectButton);
+        content.Children.Insert(insertAt, sclButton);
     }
 
     private async void OpenFatV2Scl_Click(object sender, RoutedEventArgs e)
     {
-        if (_fatV2Window is { IsLoaded: true })
-        {
-            if (_fatV2Window.WindowState == WindowState.Minimized)
-                _fatV2Window.WindowState = WindowState.Normal;
-            _fatV2Window.Activate();
+        if (!CanOpenFatV2Workspace())
             return;
-        }
-
-        if (_loadedIoFatWindow is { IsLoaded: true })
-        {
-            MessageBox.Show(
-                this,
-                "Close the active IO List FAT workspace before opening a FAT v2 SCL workspace.",
-                "FAT workspace already open",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
 
         var dialog = new OpenFileDialog
         {
@@ -98,36 +90,11 @@ public partial class MainWindow
         SetStatus($"Creating FAT v2 from {dialog.FileNames.Length} SCL source(s)…");
         try
         {
-            var bootstrap = new FatSclWorkspaceBootstrapService();
-            var launch = await bootstrap.OpenAsync(
+            var launch = await new FatSclWorkspaceBootstrapService().OpenAsync(
                 dialog.FileNames,
                 IoTestingProjectsRoot(),
                 _applicationCancellation.Token);
-
-            var digital = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Discrete);
-            var analog = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Analog);
-            var other = launch.Project.Signals.Count - digital - analog;
-            var status =
-                $"FAT v2 ready: {launch.Project.Signals.Count} static DataSet membership(s) from {launch.SourceFiles.Count} SCL source(s) — " +
-                $"{digital} digital, {analog} analog, {other} other.";
-            SetStatus(status);
-            AddLog("INFO", "FAT v2", $"{status} Sources: {sourceNames}");
-
-            var window = new FatVerificationWindow(launch) { Owner = this };
-            _fatV2Window = window;
-            _runtime.PointUpdated += Runtime_FatV2PointUpdated;
-            SeedFatV2LiveValues(window);
-
-            void WindowClosed(object? _, EventArgs __)
-            {
-                window.Closed -= WindowClosed;
-                _runtime.PointUpdated -= Runtime_FatV2PointUpdated;
-                if (ReferenceEquals(_fatV2Window, window))
-                    _fatV2Window = null;
-            }
-
-            window.Closed += WindowClosed;
-            window.Show();
+            ShowFatV2Workspace(launch, sourceNames);
         }
         catch (OperationCanceledException)
         {
@@ -135,16 +102,118 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            AddLog("ERROR", "FAT v2", ex.Message);
-            MarkDiagnosticAlert();
-            SetStatus("FAT v2 SCL import failed. The source SCL was not modified.");
+            ShowFatV2Failure(ex, "FAT v2 SCL import failed");
+        }
+    }
+
+    private async void OpenFatV2Project_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanOpenFatV2Workspace())
+            return;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open ARSAS FAT v2 Project",
+            Filter = "ARSAS FAT v2 project (*.arsas)|*.arsas|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        SetStatus($"Opening FAT v2 project {Path.GetFileName(dialog.FileName)}…");
+        try
+        {
+            var launch = await FatVerificationPackageService.OpenAsync(
+                dialog.FileName,
+                IoTestingProjectsRoot(),
+                _applicationCancellation.Token);
+            ShowFatV2Workspace(launch, Path.GetFileName(dialog.FileName));
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("FAT v2 project open cancelled.");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            ShowFatV2Failure(ex, "FAT v2 project open failed");
+        }
+    }
+
+    private bool CanOpenFatV2Workspace()
+    {
+        if (_fatV2Window is { IsLoaded: true })
+        {
+            if (_fatV2Window.WindowState == WindowState.Minimized)
+                _fatV2Window.WindowState = WindowState.Normal;
+            _fatV2Window.Activate();
+            return false;
+        }
+
+        if (_loadedIoFatWindow is { IsLoaded: true })
+        {
             MessageBox.Show(
                 this,
-                $"ARSAS could not create FAT v2 from the selected SCL source set.\n\n{ex.Message}",
-                "FAT v2 import failed",
+                "Close the active IO List FAT workspace before opening a FAT v2 workspace.",
+                "FAT workspace already open",
                 MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                MessageBoxImage.Information);
+            return false;
         }
+        return true;
+    }
+
+    private void ShowFatV2Workspace(FatSclWorkspaceLaunchResult launch, string sourceLabel)
+    {
+        var digital = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Discrete);
+        var analog = launch.Project.Signals.Count(signal => signal.SignalKind == FatSignalKind.Analog);
+        var other = launch.Project.Signals.Count - digital - analog;
+        var status =
+            $"FAT v2 ready: {launch.Project.Signals.Count} static DataSet membership(s) from {launch.SourceFiles.Count} SCL source(s) — " +
+            $"{digital} digital, {analog} analog, {other} other.";
+        SetStatus(status);
+        AddLog("INFO", "FAT v2", $"{status} Source: {sourceLabel}");
+
+        var window = new FatVerificationWindow(launch) { Owner = this };
+        _fatV2Window = window;
+        _fatV2Launch = launch;
+        _runtime.PointUpdated += Runtime_FatV2PointUpdated;
+        SeedFatV2LiveValues(window);
+
+        void WindowClosed(object? _, EventArgs __)
+        {
+            window.Closed -= WindowClosed;
+            _runtime.PointUpdated -= Runtime_FatV2PointUpdated;
+            try
+            {
+                FatVerificationPersistenceService.SaveNow(launch);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                AddLog("ERROR", "FAT v2 persistence", ex.Message);
+                MarkDiagnosticAlert();
+            }
+            if (ReferenceEquals(_fatV2Window, window))
+                _fatV2Window = null;
+            if (ReferenceEquals(_fatV2Launch, launch))
+                _fatV2Launch = null;
+        }
+
+        window.Closed += WindowClosed;
+        window.Show();
+    }
+
+    private void ShowFatV2Failure(Exception ex, string title)
+    {
+        AddLog("ERROR", "FAT v2", ex.Message);
+        MarkDiagnosticAlert();
+        SetStatus($"{title}. The source SCL was not modified.");
+        MessageBox.Show(
+            this,
+            ex.Message,
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private void Runtime_FatV2PointUpdated(Iec61850PointSnapshot snapshot)
