@@ -152,6 +152,8 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
         point.RemoveFromFat();
         Assert.False(point.IsIncludedInFat);
         Assert.True(point.TestEnabled);
+        Assert.False(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
+        Assert.True(signal.IsSelected);
 
         signal.IsSelected = false;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
@@ -174,6 +176,8 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
         point.RestoreToFat();
         Assert.True(point.IsIncludedInFat);
         Assert.True(point.TestEnabled);
+        Assert.False(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
+        Assert.True(signal.IsSelected);
     }
 
     [Fact]
