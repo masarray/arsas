@@ -52,7 +52,7 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Save and close that workspace before loading another project?", source, StringComparison.Ordinal);
         Assert.Contains("loaded.Close();", source, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.BeginInvoke(openReplacement", source, StringComparison.Ordinal);
-        Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenSclFatTesting_Click", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSclFatTesting_Click(this, new RoutedEventArgs())", source, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click", hostSource, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click", hostSource, StringComparison.Ordinal);
     }
