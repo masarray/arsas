@@ -68,18 +68,23 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
     }
 
     [Fact]
-    public void FatFastPath_SkipsConnectedReconciliation_AndThdReportOverwrite()
+    public void FatFastPath_SkipsConnectedReconciliation_AndUsesSchemaSafeParentReads()
     {
         var root = FindRepoRoot();
         var autoConnect = File.ReadAllText(Path.Combine(root, "MainWindow.IoTesting.AutoConnect.cs"));
         var runtime = File.ReadAllText(Path.Combine(root, "Services", "Iec61850MonitorRuntime.cs"));
-        var native = File.ReadAllText(Path.Combine(root, "Services", "NativeIec61850Client.cs"));
+        var resolver = File.ReadAllText(Path.Combine(root, "Services", "IecSignalReadResolver.cs"));
+        var aggregate = File.ReadAllText(Path.Combine(root, "Services", "SchemaSafeAggregateProjectionService.cs"));
 
         Assert.Contains("if (hasSclRuntimeAuthority)", autoConnect, StringComparison.Ordinal);
         Assert.Contains("IoTestReconciliationCache.Invalidate(device)", autoConnect, StringComparison.Ordinal);
         Assert.Contains("RequiresExactMmsValueAuthority(point.IecReference)", runtime, StringComparison.Ordinal);
-        Assert.Contains("projected-three-phase-aggregate", native, StringComparison.Ordinal);
-        Assert.Contains("projected-demand-energy-aggregate", native, StringComparison.Ordinal);
+        Assert.Contains("ReadSchemaSafeAggregateAsync", resolver, StringComparison.Ordinal);
+        Assert.Contains("TryBuildSchemaSafeAggregateReadPlan", resolver, StringComparison.Ordinal);
+        Assert.Contains("schema-safe-three-phase-exact-leaf-reads", resolver, StringComparison.Ordinal);
+        Assert.Contains("schema-safe-demand-energy-exact-leaf-read", resolver, StringComparison.Ordinal);
+        Assert.Contains("TryResolvePreferredAttributeReference", aggregate, StringComparison.Ordinal);
+        Assert.DoesNotContain("Children.Take(3)", aggregate, StringComparison.Ordinal);
     }
 
     [Fact]
