@@ -17,6 +17,13 @@ public sealed class RemovedFatSignalsWindow : Window
     private readonly TextBlock _summary;
 
     public RemovedFatSignalsWindow(IoTestProject project)
+        : this(project, canEditPoint: null)
+    {
+    }
+
+    public RemovedFatSignalsWindow(
+        IoTestProject project,
+        Func<IoTestPointPlan, bool>? canEditPoint)
     {
         ArgumentNullException.ThrowIfNull(project);
         Title = "Removed Signals - ARSAS FAT";
@@ -35,7 +42,9 @@ public sealed class RemovedFatSignalsWindow : Window
                 .OrderBy(point => point.IedName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(point => point.DataSetName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(point => point.SourceRow)
-                .Select(point => new RemovedSignalRow(point)));
+                .Select(point => new RemovedSignalRow(
+                    point,
+                    canEditPoint?.Invoke(point) ?? true)));
         _view = CollectionViewSource.GetDefaultView(_rows);
         _view.Filter = FilterRow;
 
@@ -69,7 +78,7 @@ public sealed class RemovedFatSignalsWindow : Window
         });
         headerText.Children.Add(new TextBlock
         {
-            Text = "Remove and restore never delete source identity or Value 1 / Value 2 evidence.",
+            Text = "Remove and restore never delete source identity or Value 1 / Value 2 evidence. Rows owned by an active IED workflow stay locked independently.",
             FontSize = 11.5,
             Foreground = new SolidColorBrush(Color.FromRgb(99, 116, 139)),
             Margin = new Thickness(0, 4, 0, 0)
@@ -132,15 +141,22 @@ public sealed class RemovedFatSignalsWindow : Window
             HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(233, 238, 245)),
             EnableRowVirtualization = true
         };
-        grid.Columns.Add(new DataGridCheckBoxColumn
+
+        var selectionFactory = new FrameworkElementFactory(typeof(CheckBox));
+        selectionFactory.SetBinding(CheckBox.IsCheckedProperty, new Binding(nameof(RemovedSignalRow.IsSelected))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        selectionFactory.SetBinding(UIElement.IsEnabledProperty, new Binding(nameof(RemovedSignalRow.CanEdit)));
+        selectionFactory.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(RemovedSignalRow.EditToolTip)));
+        selectionFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        selectionFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        grid.Columns.Add(new DataGridTemplateColumn
         {
             Header = "SELECT",
             Width = 64,
-            Binding = new Binding(nameof(RemovedSignalRow.IsSelected))
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-            }
+            CellTemplate = new DataTemplate { VisualTree = selectionFactory }
         });
         grid.Columns.Add(TextColumn("IED", nameof(RemovedSignalRow.IedName), 130));
         grid.Columns.Add(TextColumn("SIGNAL", nameof(RemovedSignalRow.SignalName), new DataGridLength(1.1, DataGridLengthUnitType.Star), 160));
@@ -201,20 +217,20 @@ public sealed class RemovedFatSignalsWindow : Window
 
     private void SetVisibleSelection(bool selected)
     {
-        foreach (var item in _view.Cast<RemovedSignalRow>())
+        foreach (var item in _view.Cast<RemovedSignalRow>().Where(row => row.CanEdit))
             item.IsSelected = selected;
         _summary.Text = SummaryText();
     }
 
     private void RestoreSelected_Click(object sender, RoutedEventArgs e)
     {
-        var selected = _rows.Where(row => row.IsSelected).ToArray();
+        var selected = _rows.Where(row => row.CanEdit && row.IsSelected).ToArray();
         if (selected.Length == 0)
         {
             MessageBox.Show(
                 this,
-                "Select at least one removed signal to restore.",
-                "No signal selected",
+                "Select at least one editable removed signal to restore. Rows owned by an active IED connection/session remain locked.",
+                "No editable signal selected",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -228,7 +244,13 @@ public sealed class RemovedFatSignalsWindow : Window
     }
 
     private string SummaryText()
-        => $"{_rows.Count} removed · {_rows.Count(row => row.IsSelected)} selected";
+    {
+        var locked = _rows.Count(row => !row.CanEdit);
+        var selected = _rows.Count(row => row.CanEdit && row.IsSelected);
+        return locked == 0
+            ? $"{_rows.Count} removed · {selected} selected"
+            : $"{_rows.Count} removed · {selected} selected · {locked} active-IED locked";
+    }
 
     private static Button ActionButton(string content, bool primary)
         => new()
@@ -264,12 +286,17 @@ public sealed class RemovedFatSignalsWindow : Window
     {
         private bool _isSelected;
 
-        public RemovedSignalRow(IoTestPointPlan point)
+        public RemovedSignalRow(IoTestPointPlan point, bool canEdit)
         {
             Point = point;
+            CanEdit = canEdit;
         }
 
         public IoTestPointPlan Point { get; }
+        public bool CanEdit { get; }
+        public string EditToolTip => CanEdit
+            ? "Select this signal to restore it to FAT"
+            : "This IED's FAT scope is locked by its active connection preparation or evidence session";
         public string IedName => Point.IedName;
         public string SignalName => Point.SignalName;
         public string DataSetName => Point.DataSetName;
@@ -281,6 +308,8 @@ public sealed class RemovedFatSignalsWindow : Window
             get => _isSelected;
             set
             {
+                if (!CanEdit && value)
+                    return;
                 if (_isSelected == value)
                     return;
                 _isSelected = value;
