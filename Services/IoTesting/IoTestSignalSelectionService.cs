@@ -21,11 +21,12 @@ public sealed record IoTestSignalSelectionResult(
 }
 
 /// <summary>
-/// Resolves the enabled IO-list scope against one discovered IED model without
+/// Resolves an IO-list/FAT acquisition scope against one discovered IED model without
 /// guessing. Exact references remain highest priority. Canonical IEC 61850 forms
 /// accept vendor-safe spelling differences only when the best candidate is unique.
-/// Weak source rows are resolved only after stronger references have claimed their
-/// signals, allowing deterministic sibling evidence without fuzzy text matching.
+/// Weak legacy source rows remain gated by TEST selection. Direct-SCL static DataSet
+/// authority rows are acquisition candidates whenever they remain included in FAT;
+/// their TEST checkbox is evidence authority only.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
@@ -50,8 +51,14 @@ public sealed class IoTestSignalSelectionService
         // semantic inference in ARSAS; the engine remains the sole membership authority.
         Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
 
+        // P1: direct-SCL connection/live acquisition follows included static DataSet
+        // membership, not TEST. Legacy workbook rows retain their historical TestEnabled
+        // gate because they do not have an independent engine-owned membership authority.
         var requested = ied.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
+            .Where(point =>
+                point.IsIncludedInFat &&
+                point.ImportReady &&
+                (point.TestEnabled || IsSclDataSetAuthority(point)))
             .ToList();
         var matches = new List<IoTestSignalMatch>(requested.Count);
         var missing = new List<IoTestPointPlan>();
@@ -152,7 +159,7 @@ public sealed class IoTestSignalSelectionService
             matches,
             missing,
             ambiguous,
-            $"Resolved {matches.Count} enabled FAT signal(s) to discovered model points.{smartText}");
+            $"Resolved {matches.Count} FAT acquisition signal(s) to discovered model points.{smartText}");
     }
 
     internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
