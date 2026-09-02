@@ -84,17 +84,63 @@ public sealed class IoFatMultiIedConnectionRegressionTests
     }
 
     [Fact]
+    public void DirectSclAcquisition_ResolvesUncheckedIncludedMember_ButNotRemovedMember()
+    {
+        const string reference = "IED_ALD0/GGIO1.Ind1.stVal";
+        var point = Point("P-A", "IED_A", "192.168.81.10", reference);
+        point.BindingStatus = "SCL_DATASET_AUTHORITY";
+        point.TestEnabled = false;
+
+        var signal = new SignalDefinition
+        {
+            Name = "Ind1",
+            ObjectReference = reference,
+            DisplayReference = reference,
+            FunctionalConstraint = "ST",
+            DataType = "BOOLEAN",
+            Category = "DataSet"
+        };
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "IED_A",
+            SclIedName = "IED_A",
+            IpAddress = "192.168.81.10",
+            Port = 102
+        };
+        device.Signals.Add(signal);
+
+        var service = new IoTestSignalSelectionService();
+        var included = service.Resolve(Ied("IED_A", "192.168.81.10", point), device);
+
+        Assert.Single(included.Matches);
+        Assert.Same(point, included.Matches[0].TestPoint);
+        Assert.Same(signal, included.Matches[0].Signal);
+        Assert.False(point.TestEnabled);
+
+        point.RemoveFromFat();
+        var removed = service.Resolve(Ied("IED_A", "192.168.81.10", point), device);
+        Assert.Empty(removed.Matches);
+        Assert.Empty(removed.MissingPoints);
+        Assert.Empty(removed.AmbiguousPoints);
+        Assert.False(point.IsIncludedInFat);
+        Assert.False(point.TestEnabled);
+    }
+
+    [Fact]
     public void P1_ConnectAndAcquisitionDoNotUseTestCheckboxAsAuthority()
     {
         var autoConnect = ReadRepoFile("MainWindow.IoTesting.AutoConnect.cs");
         var contextUx = ReadRepoFile("IoListTestingWindow.ContextUx.cs");
         var monitor = ReadRepoFile("MainWindow.IoTesting.MultiIedMonitor.cs");
+        var resolver = ReadRepoFile("Services/IoTesting/IoTestSignalSelectionService.cs");
 
         Assert.Contains("requestedPointsOverride is null || point.TestEnabled", autoConnect, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat", autoConnect, StringComparison.Ordinal);
         Assert.Contains("point.ImportReady", autoConnect, StringComparison.Ordinal);
         Assert.Contains("var acquisitionSignals = selection.Matches", autoConnect, StringComparison.Ordinal);
         Assert.Contains("StartIoFatDeviceMonitorAsync(device, acquisitionSignals)", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled || IsSclDataSetAuthority(point)", resolver, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat", resolver, StringComparison.Ordinal);
 
         // Connect passes no operator checkbox subset. Start FAT still creates captureScope,
         // but its preparation also uses the full IED acquisition scope; only Session.Start
