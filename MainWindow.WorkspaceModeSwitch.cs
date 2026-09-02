@@ -96,7 +96,7 @@ public partial class MainWindow
             FontSize = 10.5,
             FontWeight = FontWeights.Bold,
             Cursor = Cursors.Hand,
-            ToolTip = "Load another IO List workbook or portable ARSAS project"
+            ToolTip = "Load SCL/CID, IO List workbook, or portable ARSAS project"
         };
         menuButton.Click += OpenIoFatWorkspaceMenu_Click;
         modes.Children.Add(menuButton);
@@ -189,6 +189,15 @@ public partial class MainWindow
             menu.Items.Add(new Separator());
         }
 
+        var importScl = new MenuItem
+        {
+            Header = _loadedIoFatWindow == null
+                ? "Import SCL / CID files"
+                : "Import another SCL / CID file set"
+        };
+        importScl.Click += (_, _) => QueueIoFatWorkspaceReplacement(
+            () => OpenSclFatTesting_Click(this, new RoutedEventArgs()));
+
         var importWorkbook = new MenuItem
         {
             Header = _loadedIoFatWindow == null
@@ -207,6 +216,7 @@ public partial class MainWindow
         openProject.Click += (_, _) => QueueIoFatWorkspaceReplacement(
             () => OpenIoListPackage_Click(this, new RoutedEventArgs()));
 
+        menu.Items.Add(importScl);
         menu.Items.Add(importWorkbook);
         menu.Items.Add(openProject);
         menu.IsOpen = true;

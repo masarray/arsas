@@ -13,6 +13,9 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("_loadedIoFatWindow", source, StringComparison.Ordinal);
         Assert.Contains("ShowLoadedIoFatWorkspace", source, StringComparison.Ordinal);
         Assert.Contains("Continue loaded FAT project", source, StringComparison.Ordinal);
+        Assert.Contains("Import SCL / CID files", source, StringComparison.Ordinal);
+        Assert.Contains("Import another SCL / CID file set", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSclFatTesting_Click", source, StringComparison.Ordinal);
         Assert.Contains("Import another IO List Excel workbook", source, StringComparison.Ordinal);
         Assert.Contains("Open another portable .arsas project", source, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement", source, StringComparison.Ordinal);
@@ -49,6 +52,7 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Save and close that workspace before loading another project?", source, StringComparison.Ordinal);
         Assert.Contains("loaded.Close();", source, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.BeginInvoke(openReplacement", source, StringComparison.Ordinal);
+        Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenSclFatTesting_Click", source, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click", hostSource, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click", hostSource, StringComparison.Ordinal);
     }

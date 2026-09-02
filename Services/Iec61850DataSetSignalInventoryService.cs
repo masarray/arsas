@@ -68,8 +68,15 @@ public static class Iec61850DataSetSignalInventoryService
         foreach (var descriptor in mandatory)
         {
             var inventoryReference = InventoryReference(descriptor);
-            var engineReferences = EngineReferenceCandidates(descriptor).ToArray();
-            var current = engineReferences
+
+            // A structured DataSet can expose siblings such as ThdA.phsA/phsB/phsC
+            // while every descriptor also carries the same parent DesignReference (ThdA).
+            // Parent/design aliases are therefore NOT identity keys. Using them here can
+            // silently collapse several physical DataSet members into the first sibling,
+            // leaving the remaining FAT rows without a unique live signal. Match only the
+            // exact static membership or the engine-resolved primary scalar leaf.
+            var identityReferences = EngineIdentityReferenceCandidates(descriptor).ToArray();
+            var current = identityReferences
                 .Select(reference => existing.TryGetValue(reference, out var signal) ? signal : null)
                 .FirstOrDefault(signal => signal is not null);
 
@@ -78,7 +85,7 @@ public static class Iec61850DataSetSignalInventoryService
                 if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference))
                     enriched++;
 
-                foreach (var key in EngineReferenceCandidates(descriptor)
+                foreach (var key in EngineIdentityReferenceCandidates(descriptor)
                              .Concat(SignalReferenceCandidates(current))
                              .Append(inventoryReference)
                              .Where(value => !string.IsNullOrWhiteSpace(value)))
@@ -98,7 +105,7 @@ public static class Iec61850DataSetSignalInventoryService
 
             var signal = CreateSignal(descriptor, reference, inventoryReference);
             signals.Add(signal);
-            foreach (var key in EngineReferenceCandidates(descriptor)
+            foreach (var key in EngineIdentityReferenceCandidates(descriptor)
                          .Concat(SignalReferenceCandidates(signal))
                          .Append(inventoryReference)
                          .Where(value => !string.IsNullOrWhiteSpace(value)))
@@ -243,7 +250,7 @@ public static class Iec61850DataSetSignalInventoryService
             .Select(LiteralReference)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-    private static IEnumerable<string> EngineReferenceCandidates(Iec61850SignalDescriptor descriptor)
+    private static IEnumerable<string> EngineIdentityReferenceCandidates(Iec61850SignalDescriptor descriptor)
     {
         var membershipReferences = descriptor.DataSetMemberships
             .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
@@ -254,19 +261,18 @@ public static class Iec61850DataSetSignalInventoryService
                 membership.OriginalMemberReference
             });
 
-        var descriptorReferences = new[]
+        // PrimaryValueReference is the resolved scalar identity. PrimaryValueMmsReference
+        // is its literal MMS-form twin used by live discovery. Do not add DesignReference,
+        // ObservedReference or other parent aliases here: for structured CDCs they can be
+        // intentionally shared by several phase members and are evidence, not identity.
+        var resolvedPrimaryReferences = new[]
         {
             descriptor.PrimaryValueReference,
-            descriptor.DesignReference,
-            descriptor.ObservedReference,
-            descriptor.PrimaryValueMmsReference,
-            descriptor.CanonicalMmsReference,
-            descriptor.EffectiveMmsReference,
-            descriptor.ObservedMmsReference
+            descriptor.PrimaryValueMmsReference
         };
 
         return membershipReferences
-            .Concat(descriptorReferences)
+            .Concat(resolvedPrimaryReferences)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(LiteralReference)
             .Distinct(StringComparer.OrdinalIgnoreCase);
