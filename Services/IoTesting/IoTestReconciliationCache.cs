@@ -24,11 +24,12 @@ public static class IoTestReconciliationCache
     /// still build a model-only document; that path can only remain DesignOnly, never Absent.
     ///
     /// Direct SCL FAT is intentionally different. Its complete static DataSet scope is already
-    /// authoritative before association, and the monitor/report pipeline will acquire the
-    /// selected values immediately. Running connected exact-read reconciliation before that
-    /// acquisition can serialize dozens of MMS probes and hold FAT preparation for more than
-    /// a minute on real relays. For that workflow reconcile models only; absence remains
-    /// unproven and live acquisition starts without a network-probe gate.
+    /// authoritative before association and local signal selection does not require design/live
+    /// reconciliation. Even model-only reconciliation can be CPU-heavy enough on a large saved
+    /// model to hold the operator before StartMonitoringAsync. Therefore direct SCL FAT has no
+    /// reconciliation gate at all: invalidate any stale cache and return immediately. Live
+    /// acquisition starts from the SCL authority; Engineering/diagnostic reconciliation remains
+    /// an explicit, non-critical workflow and is never allowed to delay physical FAT readiness.
     /// </summary>
     public static Task RefreshAsync(
         Iec61850MonitorDevice device,
@@ -37,7 +38,10 @@ public static class IoTestReconciliationCache
         ArgumentNullException.ThrowIfNull(device);
 
         if (UsesDirectSclFatAuthority(device))
-            return RefreshModelOnlyAsync(device, cancellationToken);
+        {
+            Entries.TryRemove(device, out _);
+            return Task.CompletedTask;
+        }
 
         if (!NativeIec61850Client.HasReconciliationOwner(device.IpAddress, device.Port))
             return RefreshModelOnlyAsync(device, cancellationToken);
