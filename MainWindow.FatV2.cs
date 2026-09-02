@@ -42,7 +42,7 @@ public partial class MainWindow
         if (description != null)
         {
             description.Text =
-                "Create FAT v2 directly from every static IEC 61850 DataSet membership, reopen a portable FAT v2 ARSAS project, or continue using the proven Excel IO List workflow.";
+                "Create FAT v2 directly from every static IEC 61850 DataSet membership, reopen or save a portable FAT v2 ARSAS project, or continue using the proven Excel IO List workflow.";
         }
 
         var sclButton = CreateLauncherButton(
@@ -59,14 +59,24 @@ public partial class MainWindow
             "LucideFolderOpen",
             "SecondaryButton",
             OpenFatV2Project_Click,
-            Brush("#1F2937"),
+            Brushes.DarkSlateGray,
             new Thickness(0, 0, 0, 8));
         projectButton.Tag = "FatV2ProjectLauncher";
+
+        var saveButton = CreateLauncherButton(
+            "Save active FAT v2 ARSAS Project",
+            "LucideSave",
+            "SecondaryButton",
+            SaveFatV2Project_Click,
+            Brushes.DarkSlateGray,
+            new Thickness(0, 0, 0, 8));
+        saveButton.Tag = "FatV2SaveLauncher";
 
         var firstExistingButton = content.Children.OfType<Button>().FirstOrDefault();
         var insertAt = firstExistingButton == null
             ? content.Children.Count
             : content.Children.IndexOf(firstExistingButton);
+        content.Children.Insert(insertAt, saveButton);
         content.Children.Insert(insertAt, projectButton);
         content.Children.Insert(insertAt, sclButton);
     }
@@ -137,6 +147,51 @@ public partial class MainWindow
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
             ShowFatV2Failure(ex, "FAT v2 project open failed");
+        }
+    }
+
+    private async void SaveFatV2Project_Click(object sender, RoutedEventArgs e)
+    {
+        var launch = _fatV2Launch;
+        if (launch == null || _fatV2Window is not { IsLoaded: true })
+        {
+            MessageBox.Show(
+                this,
+                "Open a FAT v2 workspace before saving a portable ARSAS project.",
+                "No active FAT v2 workspace",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save ARSAS FAT v2 Project",
+            Filter = "ARSAS FAT v2 project (*.arsas)|*.arsas",
+            DefaultExt = ".arsas",
+            AddExtension = true,
+            FileName = $"FAT-v2-{DateTime.Now:yyyyMMdd-HHmm}.arsas"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        SetStatus($"Saving FAT v2 project {Path.GetFileName(dialog.FileName)}…");
+        try
+        {
+            var saved = await FatVerificationPackageService.ExportAsync(
+                launch,
+                dialog.FileName,
+                _applicationCancellation.Token);
+            SetStatus($"FAT v2 project saved: {Path.GetFileName(saved)}");
+            AddLog("INFO", "FAT v2", $"Portable FAT v2 project saved to {saved}");
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("FAT v2 project save cancelled.");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            ShowFatV2Failure(ex, "FAT v2 project save failed");
         }
     }
 
