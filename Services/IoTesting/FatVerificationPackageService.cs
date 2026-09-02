@@ -140,7 +140,12 @@ public static class FatVerificationPackageService
                 Verify(bytes, descriptor.Sha256, $"SCL source '{descriptor.FileName}'");
                 if (descriptor.Length > 0 && descriptor.Length != bytes.LongLength)
                     throw new InvalidDataException($"SCL source '{descriptor.FileName}' length does not match the manifest.");
-                var path = Path.Combine(extractionRoot, descriptor.SourceId + Path.GetExtension(descriptor.FileName));
+
+                // SourceId includes the engineering filename. Keep that basename exactly while
+                // using a per-source directory to avoid collisions between equal filenames.
+                var sourceDirectory = Path.Combine(extractionRoot, descriptor.SourceId);
+                Directory.CreateDirectory(sourceDirectory);
+                var path = Path.Combine(sourceDirectory, descriptor.FileName);
                 await File.WriteAllBytesAsync(path, bytes, cancellationToken).ConfigureAwait(false);
                 sourcePaths.Add(path);
             }
