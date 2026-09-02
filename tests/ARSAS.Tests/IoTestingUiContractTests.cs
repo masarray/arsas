@@ -66,7 +66,7 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_AllowsAddingAnIedDuringAnActiveEvidenceSession()
+    public void IoTestingWindow_AllowsAddingAnIedDuringIndependentIedWorkflows()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -78,10 +78,12 @@ public sealed class IoTestingUiContractTests
 
         var window = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
         var addFlow = File.ReadAllText(FindRepoFile("IoListTestingWindow.AddIed.cs"));
-        Assert.Contains("public bool CanAddFatIed => !IsPreparingIed && !_isAddingFatIeds", window, StringComparison.Ordinal);
+        Assert.Contains("public bool CanAddFatIed => !_isAddingFatIeds", window, StringComparison.Ordinal);
+        Assert.DoesNotContain("CanAddFatIed => !IsPreparingIed", window, StringComparison.Ordinal);
         Assert.Contains("if (!CanAddFatIed", addFlow, StringComparison.Ordinal);
         Assert.Contains("SetAddingFatIeds(true)", addFlow, StringComparison.Ordinal);
         Assert.Contains("SetAddingFatIeds(false)", addFlow, StringComparison.Ordinal);
+        Assert.Contains("AppendSclIedsToLoadedFatAsync(this, sclPaths)", addFlow, StringComparison.Ordinal);
     }
 
     [Fact]
