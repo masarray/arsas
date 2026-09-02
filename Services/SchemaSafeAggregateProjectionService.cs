@@ -19,10 +19,109 @@ public static class SchemaSafeAggregateProjectionService
         string DeviceTimestamp,
         string ProjectionStatus);
 
+    public sealed record ReadLeaf(
+        string Reference,
+        string Label,
+        string DataType);
+
+    public sealed record ReadPlan(
+        string ParentReference,
+        string Kind,
+        IReadOnlyList<ReadLeaf> Leaves);
+
     private sealed record BoundLeaf(
         Iec61850BoundValueRow Row,
         IReadOnlyList<Iec61850BoundValueRow> Ancestors,
         double NumericValue);
+
+    /// <summary>
+    /// Builds the exact scalar-read plan used by the live FAT/Engineering runtime.
+    /// The plan is derived only from named attributes in the authoritative SCL/live model.
+    /// It never derives phase identity from MMS child position or numeric value ordering.
+    /// </summary>
+    public static bool TryBuildReadPlan(
+        LiveIedModelDiscoveryDocument? authorityModel,
+        string requestedReference,
+        out ReadPlan plan,
+        out string status)
+    {
+        plan = new ReadPlan(requestedReference ?? string.Empty, string.Empty, Array.Empty<ReadLeaf>());
+        status = string.Empty;
+
+        if (authorityModel is null)
+        {
+            status = "Schema-safe aggregate read plan blocked: no authoritative SCL/live IEC 61850 model is attached.";
+            return false;
+        }
+
+        if (!TryFindDataObject(authorityModel, requestedReference, out var dataObject))
+        {
+            status = $"Schema-safe aggregate read plan blocked: DataObject schema was not found uniquely for {requestedReference}.";
+            return false;
+        }
+
+        if (IsThreePhaseThd(requestedReference, out var phases))
+        {
+            var leaves = new List<ReadLeaf>(phases.Count);
+            foreach (var phase in phases)
+            {
+                var prefix = NormalizeReference(requestedReference) + "." + phase.Path.ToLowerInvariant();
+                var tiers = new[]
+                {
+                    new[] { prefix + ".cval.mag.f" },
+                    new[] { prefix + ".mag.f" },
+                    new[] { prefix + ".instcval.mag.f", prefix + ".instmag.f" }
+                };
+
+                if (!TryResolvePreferredAttributeReference(dataObject, tiers, out var reference, out var failure))
+                {
+                    status = $"Schema-safe THD read plan blocked for {requestedReference}: phase {phase.Label} has no unique named magnitude leaf. {failure}";
+                    return false;
+                }
+
+                leaves.Add(new ReadLeaf(reference, phase.Label, "Float32"));
+            }
+
+            if (leaves.Select(leaf => NormalizeReference(leaf.Reference))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() != phases.Count)
+            {
+                status = $"Schema-safe THD read plan blocked for {requestedReference}: phase leaves are not unique.";
+                return false;
+            }
+
+            plan = new ReadPlan(requestedReference, "ThreePhaseThd", leaves);
+            status = $"Schema-safe THD read plan resolved exact leaves: {string.Join(", ", leaves.Select(leaf => leaf.Reference))}.";
+            return true;
+        }
+
+        if (IsDemandEnergy(requestedReference))
+        {
+            var prefix = NormalizeReference(requestedReference);
+            var tiers = new[]
+            {
+                new[] { prefix + ".mag.f" },
+                new[] { prefix + ".cval.mag.f" },
+                new[] { prefix + ".instmag.f", prefix + ".instcval.mag.f" }
+            };
+
+            if (!TryResolvePreferredAttributeReference(dataObject, tiers, out var reference, out var failure))
+            {
+                status = $"Schema-safe DmdWh read plan blocked for {requestedReference}: no unique named energy magnitude leaf. {failure}";
+                return false;
+            }
+
+            plan = new ReadPlan(
+                requestedReference,
+                "DemandEnergy",
+                new[] { new ReadLeaf(reference, "Value", "Float32") });
+            status = $"Schema-safe DmdWh read plan resolved exact leaf {reference}.";
+            return true;
+        }
+
+        status = $"Schema-safe aggregate read planning does not own {requestedReference}.";
+        return false;
+    }
 
     public static bool TryProject(
         LiveIedModelDiscoveryDocument? authorityModel,
@@ -172,6 +271,60 @@ public static class SchemaSafeAggregateProjectionService
             "schema-safe-demand-energy-aggregate");
         status = $"Schema-safe DmdWh aggregate projected from exact named leaf {leaf.Row.Reference}.";
         return true;
+    }
+
+    private static bool TryResolvePreferredAttributeReference(
+        LiveIedDataObjectModel dataObject,
+        IReadOnlyList<string[]> candidateTiers,
+        out string reference,
+        out string failure)
+    {
+        reference = string.Empty;
+        failure = string.Empty;
+
+        foreach (var tier in candidateTiers)
+        {
+            var expected = tier.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var matches = dataObject.Attributes
+                .Select(attribute => new
+                {
+                    Attribute = attribute,
+                    EffectiveReference = EffectiveAttributeReference(dataObject, attribute)
+                })
+                .Where(item => expected.Contains(NormalizeReference(item.EffectiveReference)))
+                .Where(item => string.IsNullOrWhiteSpace(item.Attribute.FunctionalConstraint) ||
+                               item.Attribute.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(item => NormalizeReference(item.EffectiveReference), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First().EffectiveReference)
+                .ToArray();
+
+            if (matches.Length == 0)
+                continue;
+            if (matches.Length != 1)
+            {
+                failure = $"Approved named fallback tier is ambiguous: {string.Join(", ", matches)}.";
+                return false;
+            }
+
+            reference = matches[0];
+            return true;
+        }
+
+        failure = "The authoritative schema contains none of the approved exact magnitude references.";
+        return false;
+    }
+
+    private static string EffectiveAttributeReference(
+        LiveIedDataObjectModel dataObject,
+        LiveIedDataAttributeModel attribute)
+    {
+        if (!string.IsNullOrWhiteSpace(attribute.ObjectReference))
+            return attribute.ObjectReference.Trim().Replace('$', '.');
+
+        var path = (attribute.AttributePath ?? string.Empty).Trim().Replace('$', '.').Trim('.');
+        return string.IsNullOrWhiteSpace(path)
+            ? string.Empty
+            : dataObject.Reference.Trim().Replace('$', '.').TrimEnd('.') + "." + path;
     }
 
     private static bool TryResolvePreferredNumericLeaf(
