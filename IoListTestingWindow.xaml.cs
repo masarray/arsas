@@ -349,7 +349,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private bool EnsureSessionSealedForExport(string outputName)
     {
-        if (!Session.IsSessionActive)
+        if (!Session.HasActiveSessions)
             return true;
 
         MessageBox.Show(
@@ -379,7 +379,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (Session.IsSessionActive)
+        if (Session.HasActiveSessions)
         {
             var activeCount = Session.ActiveSessionCount;
             var answer = MessageBox.Show(
