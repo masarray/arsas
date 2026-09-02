@@ -68,10 +68,9 @@ public static class Iec61850DataSetSignalInventoryService
             // membership row. Reusing by runtime-primary identity made diagnostics appear
             // complete while several FAT rows had no distinct static identity to bind.
             //
-            // Reuse only a signal that already represents this exact static member in this
-            // DataSet. A plain scalar/live signal remains untouched and a dedicated DataSet
-            // projection row is created beside it. Runtime monitoring may still deduplicate
-            // identical ObjectReference reads later; FAT membership identity is not lost.
+            // Scalar members remain backward compatible: when the static member itself is
+            // the resolved primary leaf, an existing exact IEC or engine-provided MMS-form
+            // signal may be enriched instead of duplicated.
             var current = FindExistingMembershipSignal(signals, descriptor, inventoryReference);
             if (current is not null)
             {
@@ -103,11 +102,12 @@ public static class Iec61850DataSetSignalInventoryService
     {
         var membership = FirstMembership(descriptor);
         var dataSetReference = membership?.DataSetReference ?? string.Empty;
+        var materialized = signals.ToArray();
 
         // Strongest identity: the presentation row already carries both the exact static
         // member and the exact DataSet. This is safe even when its runtime ObjectReference
         // is shared with another membership.
-        var exact = signals.FirstOrDefault(signal =>
+        var exact = materialized.FirstOrDefault(signal =>
             ReferenceEquals(signal.DisplayReference, inventoryReference) &&
             ReferenceEquals(signal.DataSetReference, dataSetReference));
         if (exact is not null)
@@ -116,7 +116,7 @@ public static class Iec61850DataSetSignalInventoryService
         // An unclaimed row whose DisplayReference is already the exact static member may
         // be promoted into this membership. Never steal a row already owned by a different
         // DataSet merely because its runtime leaf happens to match.
-        var unclaimedDisplay = signals.FirstOrDefault(signal =>
+        var unclaimedDisplay = materialized.FirstOrDefault(signal =>
             ReferenceEquals(signal.DisplayReference, inventoryReference) &&
             string.IsNullOrWhiteSpace(signal.DataSetReference));
         if (unclaimedDisplay is not null)
@@ -124,12 +124,27 @@ public static class Iec61850DataSetSignalInventoryService
 
         // Legacy/live catalogs sometimes leave DisplayReference empty. Reuse their exact
         // ObjectReference only when the static member itself is that same scalar identity.
-        // This intentionally does NOT compare against descriptor.PrimaryValueReference when
-        // the static member is a structured/intermediate component.
-        return signals.FirstOrDefault(signal =>
+        var exactStaticObject = materialized.FirstOrDefault(signal =>
             ReferenceEquals(signal.ObjectReference, inventoryReference) &&
             (string.IsNullOrWhiteSpace(signal.DisplayReference) ||
              ReferenceEquals(signal.DisplayReference, inventoryReference)) &&
+            (string.IsNullOrWhiteSpace(signal.DataSetReference) ||
+             ReferenceEquals(signal.DataSetReference, dataSetReference)));
+        if (exactStaticObject is not null)
+            return exactStaticObject;
+
+        // Preserve the long-standing literal MMS-reference compatibility only for a true
+        // scalar member: the static membership and resolved primary IEC reference must be
+        // identical. Structured/intermediate members deliberately fail this test, so a
+        // shared/container MMS alias cannot absorb ThdA.phsA/phsB/phsC-style memberships.
+        var staticIsResolvedScalar =
+            !string.IsNullOrWhiteSpace(descriptor.PrimaryValueReference) &&
+            ReferenceEquals(descriptor.PrimaryValueReference, inventoryReference);
+        if (!staticIsResolvedScalar || string.IsNullOrWhiteSpace(descriptor.PrimaryValueMmsReference))
+            return null;
+
+        return materialized.FirstOrDefault(signal =>
+            ReferenceEquals(signal.ObjectReference, descriptor.PrimaryValueMmsReference) &&
             (string.IsNullOrWhiteSpace(signal.DataSetReference) ||
              ReferenceEquals(signal.DataSetReference, dataSetReference)));
     }
