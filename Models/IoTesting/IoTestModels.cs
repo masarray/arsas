@@ -274,6 +274,7 @@ public sealed class IoTestPointRuntime : ObservableObject
 
 public sealed class IoTestPointPlan : ObservableObject
 {
+    private bool _workspaceSelected = true;
     private bool _testEnabled = true;
     private FatSignalDisposition _fatDisposition = FatSignalDisposition.Included;
     private IoTestLiveBindingState _liveBindingState = IoTestLiveBindingState.NotEvaluated;
@@ -318,6 +319,20 @@ public sealed class IoTestPointPlan : ObservableObject
     public int SourceRow { get; init; }
     public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
     public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
+
+    // Shared Engineering/FAT workspace membership. This is intentionally separate from
+    // TestEnabled, which remains a FAT-only capture/evidence scope toggle.
+    public bool WorkspaceSelected
+    {
+        get => _workspaceSelected;
+        set
+        {
+            if (!Set(ref _workspaceSelected, value))
+                return;
+            RaiseFatComputedProperties();
+        }
+    }
+
     public bool TestEnabled
     {
         get => _testEnabled;
@@ -353,7 +368,7 @@ public sealed class IoTestPointPlan : ObservableObject
 
     [JsonIgnore]
     public bool CanCaptureOperatorSnapshot =>
-        IsOperatorSnapshot && IsIncludedInFat && TestEnabled && ImportReady && IsLiveBound;
+        IsOperatorSnapshot && WorkspaceSelected && IsIncludedInFat && TestEnabled && ImportReady && IsLiveBound;
 
     [JsonIgnore]
     public bool IsFatEvidenceComplete => CaptureMode == FatCaptureMode.AutomaticTransition
@@ -604,11 +619,11 @@ public sealed class IoTestIedPlan : ObservableObject
     [JsonIgnore]
     public bool CanPrepareConnection => !IsPreparing;
 
-    public int EnabledCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled);
-    public int CompleteCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.IsFatEvidenceComplete);
-    public int PassedCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Passed);
-    public int ReviewCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Review);
-    public int BoundCount => TestPoints.Count(point => point.IsIncludedInFat && point.IsLiveBound);
+    public int EnabledCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled);
+    public int CompleteCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.IsFatEvidenceComplete);
+    public int PassedCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Passed);
+    public int ReviewCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Review);
+    public int BoundCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.IsLiveBound);
     public int RemovedCount => TestPoints.Count(point => !point.IsIncludedInFat);
     public int PendingCount => Math.Max(0, EnabledCount - CompleteCount);
 
@@ -644,17 +659,38 @@ public sealed class IoTestIedPlan : ObservableObject
         _notificationsInitialized = true;
 
         foreach (var point in TestPoints)
-        {
-            point.PropertyChanged += Point_PropertyChanged;
-            point.Runtime.PropertyChanged += PointRuntime_PropertyChanged;
-        }
+            SubscribePoint(point);
         RaiseProgressProperties();
+    }
+
+    public bool AddTestPoint(IoTestPointPlan point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        if (TestPoints.Any(existing => existing.TestPointId.Equals(point.TestPointId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        TestPoints.Add(point);
+        if (_notificationsInitialized)
+            SubscribePoint(point);
+        RaiseProgressProperties();
+        return true;
+    }
+
+    private void SubscribePoint(IoTestPointPlan point)
+    {
+        point.PropertyChanged += Point_PropertyChanged;
+        point.Runtime.PropertyChanged += PointRuntime_PropertyChanged;
     }
 
     private void Point_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IoTestPointPlan.TestEnabled) or nameof(IoTestPointPlan.LiveBindingState) or nameof(IoTestPointPlan.FatDisposition))
+        if (e.PropertyName is nameof(IoTestPointPlan.WorkspaceSelected) or
+            nameof(IoTestPointPlan.TestEnabled) or
+            nameof(IoTestPointPlan.LiveBindingState) or
+            nameof(IoTestPointPlan.FatDisposition))
+        {
             RaiseProgressProperties();
+        }
     }
 
     private void PointRuntime_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -712,10 +748,10 @@ public sealed class IoTestProject
     public string SourceSetSha256 { get; private set; } = string.Empty;
 
     public int SignalCount => Ieds.Sum(ied => ied.TestPoints.Count);
-    public int IncludedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat));
-    public int RemovedSignalCount => SignalCount - IncludedSignalCount;
-    public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat && point.ImportReady));
-    public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat && point.IsLiveBound));
+    public int IncludedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat));
+    public int RemovedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => !point.IsIncludedInFat));
+    public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.ImportReady));
+    public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.IsLiveBound));
 
     public void SetSources(IEnumerable<IoFatSourceDescriptor> sources, string sourceSetSha256)
     {
