@@ -27,11 +27,12 @@ public partial class MainWindow
             return IoTestSessionActionResult.Failure($"{ied.IedName} is already being prepared for FAT acquisition.");
 
         // P1: connection/acquisition scope and FAT evidence selection are different
-        // authorities. A normal Connect prepares every included import-ready row whether
-        // its TEST checkbox is on or off. The optional override is retained for legacy
-        // callers that explicitly ask to validate a narrower evidence subset.
+        // authorities. A normal Connect prepares every shared-workspace-selected,
+        // included, import-ready row whether its TEST checkbox is on or off. The optional
+        // override is retained for callers that explicitly ask for narrower evidence scope.
         var requestedPoints = (requestedPointsOverride ?? ied.TestPoints)
             .Where(point =>
+                point.WorkspaceSelected &&
                 point.IsIncludedInFat &&
                 point.ImportReady &&
                 (requestedPointsOverride is null || point.TestEnabled))
@@ -41,7 +42,7 @@ public partial class MainWindow
         {
             return IoTestSessionActionResult.Failure(
                 requestedPointsOverride is null
-                    ? "No included import-ready FAT signal is available for this IED."
+                    ? "No shared-workspace-selected import-ready FAT signal is available for this IED."
                     : "No operator-selected import-ready FAT signal is available for this IED.");
         }
 
@@ -185,7 +186,7 @@ public partial class MainWindow
                 // pass and used to hold this SIPROTEC FAT preparation for about one minute.
                 // Explicit Re-scan remains the design-versus-live comparison action.
                 IoTestReconciliationCache.Invalidate(device);
-                ReportProgress("Using authoritative SCL DataSet identity · starting live acquisition");
+                ReportProgress("Using authoritative SCL workspace identity · starting live acquisition");
             }
             else
             {
@@ -219,10 +220,10 @@ public partial class MainWindow
                 device);
 
             // Legacy workbook rows may still request one fresh discovery when a saved live
-            // model is stale. An SCL-backed FAT row already has engine-owned static DataSet
-            // authority; a local match miss must not trigger a 50-second rediscovery loop.
+            // model is stale. Direct SCL rows already own imported workspace identity; a
+            // local match miss must not trigger a 50-second rediscovery loop.
             var hasBlockingNonSclMiss = selection.MissingPoints.Any(point =>
-                !IoTestSignalSelectionService.IsSclDataSetAuthority(point));
+                !IoTestSignalSelectionService.IsDirectSclAuthority(point));
             if (!selection.Succeeded && selection.CanRetryWithFreshDiscovery && hasBlockingNonSclMiss)
             {
                 ReportProgress("Refreshing live model once · saved model missed legacy FAT points");
@@ -269,7 +270,7 @@ public partial class MainWindow
             var mayProceedWithPartialSclSelection =
                 hasSclRuntimeAuthority &&
                 selection.Matches.Count > 0 &&
-                unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsSclDataSetAuthority);
+                unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsDirectSclAuthority);
 
             if (!selection.Succeeded && !mayProceedWithPartialSclSelection)
             {
@@ -284,13 +285,13 @@ public partial class MainWindow
             {
                 unresolved.ApplyLiveBinding(
                     IoTestLiveBindingState.NotEvaluated,
-                    "Static DataSet membership remains selected, but no unique runtime point is safe to bind yet. Other live FAT rows remain usable.",
+                    "Selected SCL workspace identity remains authoritative, but no unique runtime point is safe to bind yet. Other live FAT rows remain usable.",
                     device.DeviceId);
             }
 
             // P1 acquisition scope is the safe model match set, not the operator TEST
-            // selection. Keep the Engineering/TEST flags untouched while arming all proven
-            // included static members in the isolated runtime session for this IED.
+            // selection. Keep Engineering selection and FAT TEST untouched while arming
+            // all proven shared-workspace-selected rows for this isolated IED runtime.
             var acquisitionSignals = selection.Matches
                 .Select(match => match.Signal)
                 .Where(signal => signal.CanPublishToRuntime)
@@ -450,7 +451,7 @@ public partial class MainWindow
         device.SclAccessPointName = workspace.AccessPointName;
         device.IdentitySource = "FAT SCL · ARIEC workspace";
 
-        if (!device.HasDiscoveryCache)
+        if (device.Signals.Count == 0)
         {
             var projected = SclWorkspaceSignalMapper.BuildSignals(workspace);
             DetachSignalHandlers(device.Signals);
@@ -459,8 +460,10 @@ public partial class MainWindow
         }
         else
         {
-            // An existing Engineering Workspace keeps its richer live model. Merge only
-            // engine-authoritative static DataSet inventory; never replace discovered rows.
+            // Existing Engineering signals are the live shared selection authority even
+            // when they came from offline SCL rather than a discovery cache. Preserve those
+            // SignalDefinition instances/checks and merge only missing mandatory DataSet
+            // descriptors; never recreate the catalog during an Engineering -> FAT switch.
             Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(
                 device.Signals,
                 workspace.DesignModel);
@@ -515,6 +518,25 @@ public partial class MainWindow
                 ied,
                 device,
                 preserveEngineeringSelection);
+
+            // When Engineering already owns this workspace, project every selected SCL
+            // signal into FAT. This materializes manually selected non-DataSet signals and
+            // keeps intentionally empty manual selections empty without changing TEST.
+            if (preserveEngineeringSelection)
+            {
+                foreach (var signal in device.Signals)
+                {
+                    if (IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+                            signal,
+                            signal.IsSelected,
+                            ied,
+                            device))
+                    {
+                        synchronized++;
+                    }
+                }
+            }
+
             _ioTestLiveBindingService.BindIed(ied, Devices);
             SaveSignalSelectionMemory(device);
         }
