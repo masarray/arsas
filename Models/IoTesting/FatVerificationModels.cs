@@ -34,7 +34,17 @@ public enum FatValueSlot
 public enum FatEvidenceCaptureKind
 {
     AutomaticTransition,
-    OperatorSnapshot
+    OperatorSnapshot,
+    AutomaticValue,
+    OperatorRecapture
+}
+
+public enum FatAutoCaptureStage
+{
+    WaitingValue1,
+    WaitingChange,
+    StabilizingValue2,
+    Complete
 }
 
 public sealed record FatValueEvidence(
