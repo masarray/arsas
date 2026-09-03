@@ -555,9 +555,21 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                         Value2Evidence = point.Runtime.Value2Evidence
                     })
                 {
+                    WorkspaceSelected = point.WorkspaceSelected,
                     SignalKind = point.SignalKind,
                     CaptureMode = point.CaptureMode,
-                    FatDisposition = point.FatDisposition
+                    FatDisposition = point.FatDisposition,
+                    Cdc = point.Cdc,
+                    SourceIecReference = point.SourceIecReference,
+                    ReportDisplayReference = point.ReportDisplayReference,
+                    EventLogSearchReference = point.EventLogSearchReference,
+                    EvidenceExpected = point.EvidenceExpected,
+                    MappingQuality = point.MappingQuality,
+                    ReviewStatus = point.ReviewStatus,
+                    ReviewReason = point.ReviewReason,
+                    EventLogMatch = point.EventLogMatch,
+                    EvidenceReference = point.EvidenceReference,
+                    ReviewerComment = point.ReviewerComment
                 }).ToList())
             {
                 LatestComtradeFiles = ied.LatestComtradeFiles,
@@ -658,10 +670,22 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             LogicalNode = data.LogicalNode,
             DataObject = data.DataObject,
             DataAttribute = data.DataAttribute,
+            Cdc = data.Cdc,
+            SourceIecReference = data.SourceIecReference,
+            ReportDisplayReference = data.ReportDisplayReference,
+            EventLogSearchReference = data.EventLogSearchReference,
+            EvidenceExpected = data.EvidenceExpected,
+            MappingQuality = data.MappingQuality,
+            ReviewStatus = data.ReviewStatus,
+            ReviewReason = data.ReviewReason,
+            EventLogMatch = data.EventLogMatch,
+            EvidenceReference = data.EvidenceReference,
+            ReviewerComment = data.ReviewerComment,
             SourceSheet = data.SourceSheet,
             SourceRow = data.SourceRow,
             SignalKind = data.SignalKind,
             CaptureMode = data.CaptureMode,
+            WorkspaceSelected = data.WorkspaceSelected,
             TestEnabled = data.TestEnabled,
             ImportReady = data.ImportReady,
             BindingStatus = data.BindingStatus,
@@ -747,7 +771,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
 
             builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Type / capture</th><th>Value 1</th><th>Value 2</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
             var index = 0;
-            foreach (var point in ied.TestPoints.Where(point => point.IsIncludedInFat))
+            foreach (var point in ied.TestPoints.Where(point => point.WorkspaceSelected && point.IsIncludedInFat))
             {
                 index++;
                 builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ReportIecReference)).Append("</td><td>")
@@ -999,9 +1023,21 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string BindingEvidence,
         IoTestRuntimeData Runtime)
     {
+        public bool WorkspaceSelected { get; init; } = true;
         public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
         public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
         public FatSignalDisposition FatDisposition { get; init; } = FatSignalDisposition.Included;
+        public string Cdc { get; init; } = string.Empty;
+        public string SourceIecReference { get; init; } = string.Empty;
+        public string ReportDisplayReference { get; init; } = string.Empty;
+        public string EventLogSearchReference { get; init; } = string.Empty;
+        public string EvidenceExpected { get; init; } = string.Empty;
+        public string MappingQuality { get; init; } = string.Empty;
+        public string ReviewStatus { get; init; } = string.Empty;
+        public string ReviewReason { get; init; } = string.Empty;
+        public string EventLogMatch { get; init; } = string.Empty;
+        public string EvidenceReference { get; init; } = string.Empty;
+        public string ReviewerComment { get; init; } = string.Empty;
     }
 
     private sealed record IoTestRuntimeData(
