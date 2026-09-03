@@ -97,9 +97,9 @@ internal sealed class DynamicReportPerIedFieldCapabilityBootstrapService
         if (!loaded.IsValid || loaded.Profile is null)
         {
             progress?.Report(
-                $"G2.7 P1.7 [{identity.StableIdentityKey}] stage 1/3: no valid per-IED profile; running existing G2.3 exact bounded dynamic DataSet qualification…");
-            var g23 = await new DynamicReportQualificationCommissioningService(_profileStore)
-                .RunAsync(device, fullModelSignals, cancellationToken)
+                $"G2.7 P1.7 [{identity.StableIdentityKey}] stage 1/3: no valid per-IED profile; running existing G2.3 exact bounded dynamic DataSet qualification with one fail-closed fresh-association recovery opportunity…");
+            var g23 = await new DynamicReportQualificationFreshRecoveryCommissioningService(_profileStore)
+                .RunAsync(device, fullModelSignals, progress, cancellationToken)
                 .ConfigureAwait(false);
             if (!g23.IsSuccess)
             {
