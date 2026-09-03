@@ -13,6 +13,7 @@ public partial class IoListTestingWindow
 {
     private bool _selectedIedContextInstalled;
     private bool _contextRefreshScheduled;
+    private bool _contextRowRefreshScheduled;
 
     public bool SelectedCanStartWorkflow =>
         SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
@@ -368,21 +369,26 @@ public partial class IoListTestingWindow
         if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
             RaisePreparationProperties();
 
-        ScheduleContextRefresh();
+        ScheduleContextRefresh(e.PropertyName is
+            nameof(IoTestIedPlan.EnabledCount) or
+            nameof(IoTestIedPlan.RemovedCount));
     }
 
-    private void ScheduleContextRefresh()
+    private void ScheduleContextRefresh(bool refreshRows = false)
     {
+        _contextRowRefreshScheduled |= refreshRows;
         if (_contextRefreshScheduled)
             return;
         _contextRefreshScheduled = true;
         Dispatcher.BeginInvoke(new Action(() =>
         {
             _contextRefreshScheduled = false;
+            var refreshFilteredRows = _contextRowRefreshScheduled;
+            _contextRowRefreshScheduled = false;
             // Session/runtime notifications update summaries and visible cells through
-            // normal bindings. Re-filtering the complete collection for every live
-            // value used to interrupt scrolling and swallow Capture clicks.
-            RefreshFatV2WorkspaceUx();
+            // normal bindings. Re-filter only when shared selection/disposition changes;
+            // live value traffic must never interrupt scrolling or Capture clicks.
+            RefreshFatV2WorkspaceUx(refreshFilteredRows);
             Raise(nameof(SelectedIedSummary));
             RaiseSelectedIedContextProperties();
         }), DispatcherPriority.Background);

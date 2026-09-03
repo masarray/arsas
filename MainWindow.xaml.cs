@@ -188,6 +188,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var refreshed = 0;
             var retained = 0;
             Iec61850MonitorDevice? firstImported = null;
+            var importedDevices = new List<Iec61850MonitorDevice>();
 
             foreach (var workspace in document.Ieds)
             {
@@ -200,6 +201,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     retained++;
                     firstImported ??= device;
+                    importedDevices.Add(device);
                     continue;
                 }
 
@@ -217,6 +219,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                 ApplySclWorkspaceToDevice(device, document, workspace, signals);
                 firstImported ??= device;
+                importedDevices.Add(device);
             }
 
             if (firstImported != null)
@@ -231,10 +234,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus(status);
             AddLog("INFO", "SCL", status);
 
-            if (firstImported != null && firstImported.Signals.Count > 0)
+            var selectableDevices = importedDevices
+                .Where(device => device.Signals.Count > 0)
+                .Distinct()
+                .ToArray();
+            SclSignalSelectionMode? sharedSelectionMode = null;
+            if (selectableDevices.Length > 0)
             {
-                AddLog("INFO", "SCL", $"{firstImported.Name}: SCL model ready. Choose signals; saving the selection will continue to endpoint binding, connection, and monitoring.");
-                await OpenSignalSelectionWizardAsync(firstImported);
+                var selectionMode = PromptSclSignalSelectionMode(this, selectableDevices.Length);
+                sharedSelectionMode = selectionMode;
+                if (selectionMode == SclSignalSelectionMode.StaticDataSet)
+                {
+                    foreach (var importedDevice in selectableDevices)
+                        ApplyStaticDataSetSelection(importedDevice);
+
+                    AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
+                    if (firstImported is { SelectedLiveSignalCount: > 0 })
+                    {
+                        var connected = firstImported.IsConnected ||
+                                        await ConnectUsingSavedModelAsync(firstImported);
+                        if (connected && !firstImported.IsMonitoring)
+                            await StartDeviceMonitorAsync(firstImported);
+                    }
+                }
+                else
+                {
+                    AddLog("INFO", "SCL", "Manual Signal Selection is shared by Engineering and FAT; each imported IED keeps its own checkbox state.");
+                    foreach (var importedDevice in selectableDevices)
+                    {
+                        await OpenSignalSelectionWizardAsync(
+                            importedDevice,
+                            autoStartAfterSave: ReferenceEquals(importedDevice, firstImported));
+                        MarkSharedSelectionAuthority(importedDevice);
+                    }
+                }
+            }
+
+            // Importing through Engineering must update an already-loaded FAT project as
+            // the same workspace mutation. The selection decision has already been applied,
+            // so the hidden FAT view receives the new IEDs without a second prompt or reset.
+            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat &&
+                sharedSelectionMode.HasValue &&
+                !loadedFat.Project.Sources.Any(source =>
+                    source.Sha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase)))
+            {
+                var append = await AppendSclIedsToLoadedFatAsync(
+                    loadedFat,
+                    new[] { dialog.FileName },
+                    useStaticSelection: sharedSelectionMode == SclSignalSelectionMode.StaticDataSet,
+                    selectionAlreadyApplied: true);
+                if (!append.Succeeded)
+                    AddLog("WARN", "SCL/FAT", append.Message);
             }
         }
         catch (OperationCanceledException)
@@ -857,7 +907,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<bool> OpenSignalSelectionWizardAsync(
         Iec61850MonitorDevice device,
         int restoredSelectionCount = -1,
-        bool autoStartAfterSave = true)
+        bool autoStartAfterSave = true,
+        Window? ownerOverride = null)
     {
         if (device.Signals.Count == 0)
         {
@@ -876,7 +927,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device,
             restoredSelectionCount < 0 ? device.SelectedSignalCount : restoredSelectionCount)
         {
-            Owner = this,
+            Owner = ownerOverride ?? this,
             ShowInTaskbar = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner
         };

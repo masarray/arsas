@@ -266,11 +266,19 @@ public partial class MainWindow
         if (dialog.ShowDialog(this) != true)
             return;
 
-        SetStatus($"Building FAT scope from {dialog.FileNames.Length} SCL source(s)…");
+        var selectionMode = PromptSclSignalSelectionMode(this, dialog.FileNames.Length);
+        await OpenSclFatSourcesAsync(dialog.FileNames, selectionMode);
+    }
+
+    private async Task OpenSclFatSourcesAsync(
+        IReadOnlyCollection<string> sclPaths,
+        SclSignalSelectionMode? selectionMode)
+    {
+        SetStatus($"Building shared Engineering/FAT workspace from {sclPaths.Count} SCL source(s)…");
         try
         {
             var import = await _ioFatSclProjectImportService.ImportAsync(
-                dialog.FileNames,
+                sclPaths,
                 cancellationToken: _applicationCancellation.Token);
             if (import.Project.SignalCount == 0)
             {
@@ -299,6 +307,26 @@ public partial class MainWindow
             // restored but before the window is shown, and establish one shared selection
             // authority. No discovery or second model is created during mode switches.
             SynchronizeImportedSclFatWithEngineering(launch.Project);
+            RegisterSharedSclSourcePaths(launch.Project, launch.Project.Ieds, import.SourceInputs);
+            if (selectionMode == SclSignalSelectionMode.Manual)
+            {
+                await ApplyManualSelectionToFatProjectAsync(
+                    launch.Project,
+                    launch.Project.Ieds,
+                    this,
+                    resetSelection: true);
+            }
+            else
+            {
+                foreach (var ied in launch.Project.Ieds)
+                {
+                    var device = ResolveIoTestDevice(ied.LiveDeviceId)
+                                 ?? ResolveIoTestDevice(ied.IpAddress)
+                                 ?? ResolveIoTestDevice(ied.IedName);
+                    if (device is not null)
+                        MarkSharedSelectionAuthority(device);
+                }
+            }
             var warningCount = import.Findings.Count(finding =>
                 finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
                 finding.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ||

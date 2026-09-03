@@ -12,6 +12,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("IO LIST FAT · LOADED", source, StringComparison.Ordinal);
         Assert.Contains("_loadedIoFatWindow", source, StringComparison.Ordinal);
         Assert.Contains("ShowLoadedIoFatWorkspace", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentEngineeringSclSourcePaths", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSclFatSourcesAsync(sharedSources, selectionMode: null)", source, StringComparison.Ordinal);
         Assert.Contains("Continue loaded FAT project", source, StringComparison.Ordinal);
         Assert.Contains("Import SCL / CID files", source, StringComparison.Ordinal);
         Assert.Contains("Add SCL / CID to loaded FAT workspace", source, StringComparison.Ordinal);
@@ -21,6 +23,24 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Open another portable .arsas project", source, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement", source, StringComparison.Ordinal);
         Assert.Contains("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SclImport_UsesOneSelectionAuthorityAcrossEngineeringAndFat()
+    {
+        var workflow = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        var engineering = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+        var fat = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
+        var fatProjection = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
+
+        Assert.Contains("Use Static DataSet", workflow, StringComparison.Ordinal);
+        Assert.Contains("Choose Signals Manually", workflow, StringComparison.Ordinal);
+        Assert.Contains("_sharedSclSelectionAuthorityDeviceIds", workflow, StringComparison.Ordinal);
+        Assert.Contains("ApplyStaticDataSetSelection", engineering, StringComparison.Ordinal);
+        Assert.Contains("selectionAlreadyApplied: true", engineering, StringComparison.Ordinal);
+        Assert.Contains("ApplyManualSelectionToFatProjectAsync", fat, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat &&", fatProjection, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled", fatProjection, StringComparison.Ordinal);
     }
 
     [Fact]

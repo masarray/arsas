@@ -505,7 +505,9 @@ public partial class MainWindow
                 Devices.Add(device);
             }
 
-            var preserveEngineeringSelection = existed && device.Signals.Any(signal => signal.IsSelected);
+            var preserveEngineeringSelection = existed &&
+                (_sharedSclSelectionAuthorityDeviceIds.Contains(device.DeviceId) ||
+                 device.Signals.Any(signal => signal.IsSelected));
             if (!AttachIoFatSclRuntimeAuthority(ied, device))
                 continue;
 

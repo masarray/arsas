@@ -66,7 +66,12 @@ public partial class IoListTestingWindow
             if (view != null && !ReferenceEquals(view, _fatSignalsView))
             {
                 _fatSignalsView = view;
-                view.Filter = item => item is IoTestPointPlan point && point.IsIncludedInFat;
+                // FAT projects every signal selected by the shared Engineering authority.
+                // Disposition is a FAT-only overlay; either an Engineering deselection or
+                // Remove from FAT hides the row without deleting its identity/evidence.
+                view.Filter = item => item is IoTestPointPlan point &&
+                                             point.IsIncludedInFat &&
+                                             point.TestEnabled;
                 refreshRows = true;
             }
             if (refreshRows)

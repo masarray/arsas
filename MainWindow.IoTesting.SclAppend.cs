@@ -43,7 +43,9 @@ public partial class MainWindow
 
     internal async Task<IoTestSessionActionResult> AppendSclIedsToLoadedFatAsync(
         IoListTestingWindow window,
-        IReadOnlyCollection<string> sclPaths)
+        IReadOnlyCollection<string> sclPaths,
+        bool? useStaticSelection = null,
+        bool selectionAlreadyApplied = false)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(sclPaths);
@@ -91,6 +93,12 @@ public partial class MainWindow
                     "The selected SCL source contains no new IED endpoint; every imported IED is already present in this FAT workspace.");
             }
 
+            var selectionMode = useStaticSelection.HasValue
+                ? (useStaticSelection.Value
+                    ? SclSignalSelectionMode.StaticDataSet
+                    : SclSignalSelectionMode.Manual)
+                : PromptSclSignalSelectionMode(window, addedIeds.Length);
+
             // Persist source bytes before publishing the new plans to the active project.
             // This gate serializes only append operations; it does not lock any IED's
             // connection preparation or evidence journal.
@@ -119,6 +127,26 @@ public partial class MainWindow
             // Existing running/preparing IEDs are deliberately untouched. Only the newly
             // appended endpoints join Engineering and the loaded FAT explorer.
             SynchronizeImportedSclFatWithEngineering(window.Project, addedIeds);
+            RegisterSharedSclSourcePaths(window.Project, addedIeds, import.SourceInputs);
+            if (selectionMode == SclSignalSelectionMode.Manual && !selectionAlreadyApplied)
+            {
+                await ApplyManualSelectionToFatProjectAsync(
+                    window.Project,
+                    addedIeds,
+                    window,
+                    resetSelection: true);
+            }
+            else
+            {
+                foreach (var ied in addedIeds)
+                {
+                    var device = ResolveIoTestDevice(ied.LiveDeviceId)
+                                 ?? ResolveIoTestDevice(ied.IpAddress)
+                                 ?? ResolveIoTestDevice(ied.IedName);
+                    if (device is not null)
+                        MarkSharedSelectionAuthority(device);
+                }
+            }
             window.RegisterAddedIeds(addedIeds);
             window.Storage?.ScheduleSave();
 

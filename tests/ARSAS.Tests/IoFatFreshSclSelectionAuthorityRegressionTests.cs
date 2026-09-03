@@ -13,15 +13,15 @@ public sealed class IoFatFreshSclSelectionAuthorityRegressionTests
     }
 
     [Fact]
-    public void FreshSclBridge_FatSelectionWinsOverOlderEngineeringSelection()
+    public void SclBridge_UsesExistingEngineeringSelectionWhenItWasAlreadyDecided()
     {
         var source = Read("Services/IoTesting/IoFatEngineeringSelectionBridge.cs");
 
-        Assert.Contains("raw SCL import is a fresh FAT selection authority", source, StringComparison.Ordinal);
-        Assert.Contains("if (point.IsIncludedInFat && !point.TestEnabled)", source, StringComparison.Ordinal);
+        Assert.Contains("if (preserveExistingEngineeringSelection)", source, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled != signal.IsSelected", source, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled = signal.IsSelected;", source, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled = true;", source, StringComparison.Ordinal);
-        Assert.Contains("var selected = point.TestEnabled && point.IsIncludedInFat;", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("var enabled = signal.IsSelected && point.IsIncludedInFat;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_ = preserveExistingEngineeringSelection;", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class IoFatFreshSclSelectionAuthorityRegressionTests
     {
         var source = Read("Services/IoTesting/IoFatEngineeringSelectionBridge.cs");
 
-        Assert.Contains("Keep Removed Signals disposition independent", source, StringComparison.Ordinal);
+        Assert.Contains("FatDisposition remains orthogonal", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.RestoreToFat();\n                point.TestEnabled = true;", source, StringComparison.Ordinal);
     }
 
