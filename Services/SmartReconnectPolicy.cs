@@ -8,37 +8,33 @@ namespace ArIED61850Tester.Services;
 /// </summary>
 public static class SmartReconnectPolicy
 {
-    public static TimeSpan ClientCleanupBudget => TimeSpan.FromMilliseconds(750);
-    public static TimeSpan ConnectBudget => TimeSpan.FromSeconds(10);
-    public static TimeSpan InitialAssociationRetryDelay => TimeSpan.FromMilliseconds(750);
-    public static TimeSpan ReportRearmDelay => TimeSpan.FromSeconds(3);
-    public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(5);
-    public static TimeSpan RecoveryWarmupDuration => TimeSpan.FromSeconds(10);
+    public static TimeSpan ClientCleanupBudget => TimeSpan.FromMilliseconds(500);
+    public static TimeSpan ConnectBudget => TimeSpan.FromSeconds(2);
+    public static TimeSpan InitialAssociationRetryDelay => TimeSpan.FromMilliseconds(500);
+    public static TimeSpan ReportRearmDelay => TimeSpan.FromSeconds(1);
+    public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(3);
+    public static TimeSpan RecoveryWarmupDuration => TimeSpan.FromSeconds(3);
 
     public static TimeSpan GetRetryDelay(int consecutiveFailureCount)
     {
         var attempt = Math.Max(1, consecutiveFailureCount);
-        var seconds = attempt switch
+        return attempt switch
         {
-            1 => 1,
-            2 => 2,
-            3 => 4,
-            4 => 8,
-            5 => 15,
-            _ => 30
+            1 => TimeSpan.FromMilliseconds(500),
+            2 => TimeSpan.FromSeconds(1),
+            _ => TimeSpan.FromSeconds(2)
         };
-        return TimeSpan.FromSeconds(seconds);
     }
 
     public static int ApplyRecoveryPollFloor(int intervalMs, bool recoveryWarmup)
     {
         var bounded = Math.Clamp(intervalMs, 50, 600000);
-        return recoveryWarmup ? Math.Max(bounded, 2000) : bounded;
+        return recoveryWarmup ? Math.Max(bounded, 500) : bounded;
     }
 
     public static int GetRecoveryStaggerDelayMs(int zeroBasedIndex)
     {
         var index = Math.Max(0, zeroBasedIndex);
-        return Math.Min(2000, index * 20);
+        return Math.Min(500, index * 10);
     }
 }

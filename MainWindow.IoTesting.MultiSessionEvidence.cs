@@ -11,7 +11,8 @@ public partial class MainWindow
     /// P2 attaches the FAT window's additional per-IED evidence leaves to the same
     /// Engineering IEC 61850 runtime. The existing primary controller keeps its legacy
     /// Runtime_IoTestPointUpdated route; only sibling leaves use the additional route so a
-    /// primary event can never be journaled twice.
+    /// primary live observation can never be journaled twice. Every isolated controller is
+    /// also registered with commissioning recovery so reconnect/auto-resume works per IED.
     /// </summary>
     internal void AttachIoTestParallelEvidenceSessions(
         IoTestMultiSessionCoordinator coordinator,
@@ -20,8 +21,15 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(coordinator);
         ArgumentException.ThrowIfNullOrWhiteSpace(evidenceRoot);
 
-        coordinator.ConfigureSiblingFactory(
-            () => CreateIoTestSession(coordinator.Project, evidenceRoot));
+        ClearFatCommissioningControllers();
+        RegisterFatCommissioningController(coordinator.PrimaryController);
+        coordinator.ConfigureSiblingFactory(() =>
+        {
+            var controller = CreateIoTestSession(coordinator.Project, evidenceRoot);
+            RegisterFatCommissioningController(controller);
+            return controller;
+        });
+
         _activeIoTestMultiSessionCoordinator = coordinator;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
         _runtime.PointUpdated += Runtime_IoTestAdditionalPointUpdated;
@@ -34,6 +42,7 @@ public partial class MainWindow
         if (ReferenceEquals(_activeIoTestMultiSessionCoordinator, coordinator))
             _activeIoTestMultiSessionCoordinator = null;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
+        ClearFatCommissioningControllers();
     }
 
     private void Runtime_IoTestAdditionalPointUpdated(Iec61850PointSnapshot snapshot)
