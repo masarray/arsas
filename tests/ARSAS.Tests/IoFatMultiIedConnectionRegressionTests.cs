@@ -139,18 +139,20 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         var resolver = ReadRepoFile("Services/IoTesting/IoTestSignalSelectionService.cs");
 
         Assert.Contains("requestedPointsOverride is null || point.TestEnabled", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("point.WorkspaceSelected", autoConnect, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat", autoConnect, StringComparison.Ordinal);
         Assert.Contains("point.ImportReady", autoConnect, StringComparison.Ordinal);
         Assert.Contains("var acquisitionSignals = selection.Matches", autoConnect, StringComparison.Ordinal);
         Assert.Contains("StartIoFatDeviceMonitorAsync(device, acquisitionSignals)", autoConnect, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled || IsSclDataSetAuthority(point)", resolver, StringComparison.Ordinal);
+        Assert.Contains("point.TestEnabled || IsDirectSclAuthority(point)", resolver, StringComparison.Ordinal);
+        Assert.Contains("point.WorkspaceSelected", resolver, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat", resolver, StringComparison.Ordinal);
 
         Assert.DoesNotContain("var enabledReady = targetIed.TestPoints", contextUx, StringComparison.Ordinal);
         Assert.Contains("private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync", contextUx, StringComparison.Ordinal);
         Assert.Contains("Project,\n            targetIed,\n            progress);", contextUx, StringComparison.Ordinal);
         Assert.Contains("var captureScope = selectedIed.TestPoints", contextUx, StringComparison.Ordinal);
-        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextUx, StringComparison.Ordinal);
+        Assert.Contains("point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextUx, StringComparison.Ordinal);
         Assert.Contains("var result = Session.Start(selectedIed, liveCaptureScope);", contextUx, StringComparison.Ordinal);
 
         Assert.Contains("device.BeginBulkSignalSelection();", monitor, StringComparison.Ordinal);
@@ -229,6 +231,7 @@ public sealed class IoFatMultiIedConnectionRegressionTests
         EventLogSearchReference = reference,
         ReportDisplayReference = reference + " [ST]",
         BindingStatus = bindingStatus,
+        WorkspaceSelected = true,
         TestEnabled = true,
         ImportReady = true
     };
