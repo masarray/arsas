@@ -110,34 +110,38 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
         var point = Point(member, runtime, dataSet);
         var ied = Ied(point);
 
-        // Engineering is the already-decided shared selection authority. FAT must inherit
-        // even an intentionally unchecked signal rather than silently selecting it again.
+        // Engineering owns shared workspace membership, while TEST remains a FAT-only
+        // evidence-scope preference. An intentionally unchecked Engineering signal must
+        // hide from FAT without mutating the operator's TEST choice.
         point.TestEnabled = true;
         IoFatEngineeringSelectionBridge.Initialize(
             ied,
             device,
             preserveExistingEngineeringSelection: true);
-        Assert.False(point.TestEnabled);
+        Assert.False(point.WorkspaceSelected);
+        Assert.True(point.TestEnabled);
         Assert.False(signal.IsSelected);
 
-        // After initialization the shared bridge remains bidirectional: Engineering changes
-        // still update FAT, and FAT checkbox changes still update the Engineering catalog.
+        // Engineering reselects the shared row without touching FAT-only TEST state.
         signal.IsSelected = true;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
             signal,
             selected: true,
             ied,
             device));
+        Assert.True(point.WorkspaceSelected);
         Assert.True(point.TestEnabled);
         Assert.True(point.IsIncludedInFat);
 
-        point.TestEnabled = false;
+        // FAT can change the shared workspace membership independently from TEST.
+        point.WorkspaceSelected = false;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
         Assert.False(signal.IsSelected);
+        Assert.True(point.TestEnabled);
     }
 
     [Fact]
-    public void RemovedSclFatRow_EngineeringSelectionChangesCheckboxButNeverRestoresDisposition()
+    public void RemovedSclFatRow_EngineeringSelectionChangesWorkspaceOnly_AndNeverRestoresDisposition()
     {
         const string dataSet = "IEDTHD/LLN0.Analog";
         const string member = "IEDTHD/I_MHAI1.ThdA.phsB";
@@ -150,6 +154,7 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
 
         point.RemoveFromFat();
         Assert.False(point.IsIncludedInFat);
+        Assert.True(point.WorkspaceSelected);
         Assert.True(point.TestEnabled);
         Assert.False(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
         Assert.True(signal.IsSelected);
@@ -161,7 +166,8 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
             ied,
             device));
         Assert.False(point.IsIncludedInFat);
-        Assert.False(point.TestEnabled);
+        Assert.False(point.WorkspaceSelected);
+        Assert.True(point.TestEnabled);
 
         signal.IsSelected = true;
         Assert.True(IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
@@ -170,10 +176,12 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
             ied,
             device));
         Assert.False(point.IsIncludedInFat);
+        Assert.True(point.WorkspaceSelected);
         Assert.True(point.TestEnabled);
 
         point.RestoreToFat();
         Assert.True(point.IsIncludedInFat);
+        Assert.True(point.WorkspaceSelected);
         Assert.True(point.TestEnabled);
         Assert.False(IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device));
         Assert.True(signal.IsSelected);
@@ -250,6 +258,7 @@ public sealed class ThdMeasurementAndWorkspaceBridgeRegressionTests
         EventLogSearchReference = member,
         BindingStatus = IoTestSignalSelectionService.SclDataSetAuthorityBindingStatus,
         ImportReady = true,
+        WorkspaceSelected = true,
         TestEnabled = true,
         SignalKind = FatSignalKind.Analog,
         CaptureMode = FatCaptureMode.OperatorSnapshot
