@@ -20,20 +20,16 @@ public partial class MainWindow
     private readonly HashSet<string> _sharedSclSelectionAuthorityDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private SclSignalSelectionMode PromptSclSignalSelectionMode(Window owner, int iedCount)
+    private SclSignalSelectionMode? PromptSclSignalSelectionMode(Window owner, int iedCount)
     {
-        var result = MessageBox.Show(
-            owner,
-            $"Choose the signal authority for this SCL import ({iedCount} item(s)). The result is used by both Engineering and FAT.\n\n" +
-            "YES — Use Static DataSet\n" +
-            "Select every authoritative static DataSet member.\n\n" +
-            "NO — Choose Signals Manually\n" +
-            "Open Signal Selection and use the same checkboxes in Engineering and FAT.",
-            "SCL Signal Selection",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question,
-            MessageBoxResult.Yes);
-        return result == MessageBoxResult.Yes
+        var dialog = new SclSignalSelectionModeWindow(iedCount)
+        {
+            Owner = owner
+        };
+        if (dialog.ShowDialog() != true)
+            return null;
+
+        return dialog.UseStaticDataSet
             ? SclSignalSelectionMode.StaticDataSet
             : SclSignalSelectionMode.Manual;
     }

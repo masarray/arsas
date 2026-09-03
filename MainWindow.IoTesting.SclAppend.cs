@@ -98,6 +98,8 @@ public partial class MainWindow
                     ? SclSignalSelectionMode.StaticDataSet
                     : SclSignalSelectionMode.Manual)
                 : PromptSclSignalSelectionMode(window, addedIeds.Length);
+            if (!selectionMode.HasValue)
+                return IoTestSessionActionResult.Failure("SCL append cancelled before the shared workspace was changed.");
 
             // Persist source bytes before publishing the new plans to the active project.
             // This gate serializes only append operations; it does not lock any IED's

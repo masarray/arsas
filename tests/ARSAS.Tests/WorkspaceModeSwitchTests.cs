@@ -29,18 +29,40 @@ public sealed class WorkspaceModeSwitchTests
     public void SclImport_UsesOneSelectionAuthorityAcrossEngineeringAndFat()
     {
         var workflow = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        var selectionWindow = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml"));
         var engineering = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
         var fat = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
         var fatProjection = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
 
-        Assert.Contains("Use Static DataSet", workflow, StringComparison.Ordinal);
-        Assert.Contains("Choose Signals Manually", workflow, StringComparison.Ordinal);
+        Assert.Contains("new SclSignalSelectionModeWindow", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageBox.Show", workflow, StringComparison.Ordinal);
+        Assert.Contains("Use Static DataSet", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("Choose Signals Manually", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("SelectionCard", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("CardShadow", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("PrimaryButton", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("SoftButton", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("_sharedSclSelectionAuthorityDeviceIds", workflow, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection", engineering, StringComparison.Ordinal);
         Assert.Contains("selectionAlreadyApplied: true", engineering, StringComparison.Ordinal);
         Assert.Contains("ApplyManualSelectionToFatProjectAsync", fat, StringComparison.Ordinal);
+        Assert.Contains("promptForSelection: true", fat, StringComparison.Ordinal);
+        Assert.Contains("PromptSclSignalSelectionMode(this, import.Project.Ieds.Count)", fat, StringComparison.Ordinal);
         Assert.Contains("point.IsIncludedInFat &&", fatProjection, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled", fatProjection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EngineeringSclImport_IsAdditiveAndSupportsMultipleFiles()
+    {
+        var engineering = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+
+        Assert.Contains("Title = \"Open one or more IEC 61850 SCL files\"", engineering, StringComparison.Ordinal);
+        Assert.Contains("Multiselect = true", engineering, StringComparison.Ordinal);
+        Assert.Contains("foreach (var sourcePath in dialog.FileNames.Distinct", engineering, StringComparison.Ordinal);
+        Assert.Contains("var importedSources = new List<(string Path, string Sha256)>()", engineering, StringComparison.Ordinal);
+        Assert.Contains("newFatSourcePaths", engineering, StringComparison.Ordinal);
+        Assert.Contains("AppendSclIedsToLoadedFatAsync", engineering, StringComparison.Ordinal);
     }
 
     [Fact]

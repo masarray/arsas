@@ -266,13 +266,16 @@ public partial class MainWindow
         if (dialog.ShowDialog(this) != true)
             return;
 
-        var selectionMode = PromptSclSignalSelectionMode(this, dialog.FileNames.Length);
-        await OpenSclFatSourcesAsync(dialog.FileNames, selectionMode);
+        await OpenSclFatSourcesAsync(
+            dialog.FileNames,
+            selectionMode: null,
+            promptForSelection: true);
     }
 
     private async Task OpenSclFatSourcesAsync(
         IReadOnlyCollection<string> sclPaths,
-        SclSignalSelectionMode? selectionMode)
+        SclSignalSelectionMode? selectionMode,
+        bool promptForSelection = false)
     {
         SetStatus($"Building shared Engineering/FAT workspace from {sclPaths.Count} SCL source(s)…");
         try
@@ -293,6 +296,16 @@ public partial class MainWindow
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
+            }
+
+            if (promptForSelection && !selectionMode.HasValue)
+            {
+                selectionMode = PromptSclSignalSelectionMode(this, import.Project.Ieds.Count);
+                if (!selectionMode.HasValue)
+                {
+                    SetStatus("SCL FAT import cancelled before the workspace was changed.");
+                    return;
+                }
             }
 
             var launch = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
