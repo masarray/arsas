@@ -30,6 +30,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     private readonly object _saveSync = new();
     private readonly Timer _saveTimer;
     private readonly IoTestSessionController _session;
+    private readonly List<IoFatWorkspaceSource> _sourceFiles;
     private bool _disposed;
     private string _statusText = "Progress storage is ready";
     private DateTimeOffset? _lastSavedAtUtc;
@@ -39,14 +40,14 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         IoTestProject project,
         IoTestSessionController session,
         string localDirectory,
-        string sourceWorkbookPath,
+        IReadOnlyList<IoFatWorkspaceSource> sourceFiles,
         string evidenceProjectDirectory)
     {
         Project = project;
         _session = session;
         LocalDirectory = localDirectory;
         SnapshotPath = Path.Combine(localDirectory, "project.snapshot.json");
-        SourceWorkbookPath = sourceWorkbookPath;
+        _sourceFiles = sourceFiles.ToList();
         EvidenceProjectDirectory = evidenceProjectDirectory;
         _saveTimer = new Timer(_ => SaveFromTimer(), null, Timeout.Infinite, Timeout.Infinite);
         Subscribe();
@@ -55,7 +56,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     public IoTestProject Project { get; }
     public string LocalDirectory { get; }
     public string SnapshotPath { get; }
-    public string SourceWorkbookPath { get; }
+    public IReadOnlyList<IoFatWorkspaceSource> SourceFiles => _sourceFiles;
+    public string SourceWorkbookPath => SourceFiles
+        .FirstOrDefault(source => source.Source.Kind.Equals(IoFatSourceKinds.Workbook, StringComparison.OrdinalIgnoreCase))
+        ?.LocalPath ?? string.Empty;
+    public string PrimarySourcePath => SourceFiles.FirstOrDefault()?.LocalPath ?? string.Empty;
     public string EvidenceProjectDirectory { get; }
     public string StatusText { get => _statusText; private set => Set(ref _statusText, value ?? string.Empty); }
     public DateTimeOffset? LastSavedAtUtc { get => _lastSavedAtUtc; private set { if (Set(ref _lastSavedAtUtc, value)) Raise(nameof(LastSavedText)); } }
@@ -65,25 +70,45 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     public string LastExportPath { get => _lastExportPath; private set => Set(ref _lastExportPath, value ?? string.Empty); }
     public bool CanExport => !_session.IsSessionActive;
 
-    public static async Task<IoTestWorkspaceOpenResult> OpenWorkbookAsync(
+    public static Task<IoTestWorkspaceOpenResult> OpenWorkbookAsync(
         IoTestProject importedProject,
         IoTestSessionController session,
         string workbookPath,
         string localProjectsRoot,
         string evidenceRoot,
         CancellationToken cancellationToken = default)
+        => OpenSourcesAsync(
+            importedProject,
+            session,
+            new[] { new IoFatSourceInput(workbookPath, IoFatSourceKinds.Workbook) },
+            localProjectsRoot,
+            evidenceRoot,
+            cancellationToken);
+
+    public static async Task<IoTestWorkspaceOpenResult> OpenSourcesAsync(
+        IoTestProject importedProject,
+        IoTestSessionController session,
+        IReadOnlyCollection<IoFatSourceInput> sourceInputs,
+        string localProjectsRoot,
+        string evidenceRoot,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(importedProject);
         ArgumentNullException.ThrowIfNull(session);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workbookPath);
+        ArgumentNullException.ThrowIfNull(sourceInputs);
         cancellationToken.ThrowIfCancellationRequested();
+
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
         Directory.CreateDirectory(localDirectory);
         var localSourceDirectory = Path.Combine(localDirectory, "source");
-        Directory.CreateDirectory(localSourceDirectory);
-        var localWorkbookPath = Path.Combine(localSourceDirectory, SafeFileName(importedProject.SourceWorkbookName, "source.xlsx"));
-        await CopyFileAtomicAsync(workbookPath, localWorkbookPath, cancellationToken).ConfigureAwait(false);
+        var sourceFiles = await IoFatSourceWorkspaceService.StageDescribedAsync(
+            importedProject,
+            described,
+            localSourceDirectory,
+            cancellationToken).ConfigureAwait(false);
 
         var snapshotPath = Path.Combine(localDirectory, "project.snapshot.json");
         var project = importedProject;
@@ -96,14 +121,14 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 var candidate = await LoadSnapshotAsync(snapshotPath, cancellationToken).ConfigureAwait(false);
                 if (candidate.ProjectId.Equals(importedProject.ProjectId, StringComparison.OrdinalIgnoreCase) &&
                     candidate.SchemaVersion.Equals(importedProject.SchemaVersion, StringComparison.OrdinalIgnoreCase) &&
-                    candidate.SourceWorkbookSha256.Equals(importedProject.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase))
+                    SameSourceSet(candidate, importedProject))
                 {
                     project = candidate;
                     restored = true;
                 }
                 else
                 {
-                    warnings.Add("A local snapshot existed but did not match the current workbook identity, so it was not restored.");
+                    warnings.Add("A local snapshot existed but did not match the current FAT source-set identity, so it was not restored.");
                 }
             }
             catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
@@ -112,9 +137,10 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             }
         }
 
+        IoFatSourceIdentity.AttachOrValidate(project, sourceFiles.Select(source => source.Source).ToArray());
         project.InitializeRuntimeNotifications();
         var evidenceDirectory = Path.Combine(evidenceRoot, SanitizePathPart(project.ProjectId));
-        var workspace = new IoTestWorkspacePersistence(project, session, localDirectory, localWorkbookPath, evidenceDirectory);
+        var workspace = new IoTestWorkspacePersistence(project, session, localDirectory, sourceFiles, evidenceDirectory);
         workspace.SaveNow();
         return new IoTestWorkspaceOpenResult(project, workspace, restored, warnings);
     }
@@ -153,15 +179,37 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         if (!project.ProjectId.Equals(manifest.ProjectId, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("The package project identity does not match its snapshot.");
 
+        var manifestSources = manifest.SourceFiles ?? new List<IoFatPackageSource>();
+        if (manifestSources.Count > 0 && !string.IsNullOrWhiteSpace(manifest.SourceSetSha256))
+        {
+            var manifestFingerprint = IoFatSourceIdentity.ComputeSetFingerprint(manifestSources.Select(source => source.Descriptor));
+            if (!manifestFingerprint.Equals(manifest.SourceSetSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The package FAT source-set fingerprint is invalid.");
+        }
+
+        if (manifestSources.Count == 0 && project.Sources.Count > 1)
+            throw new InvalidDataException("The package snapshot declares multiple FAT sources but its manifest contains only the legacy workbook contract.");
+
         var localDirectory = ProjectDirectory(localProjectsRoot, project);
         Directory.CreateDirectory(localDirectory);
         var sourceDirectory = Path.Combine(localDirectory, "source");
-        Directory.CreateDirectory(sourceDirectory);
-        var sourceEntry = RequiredEntry(archive, manifest.SourceWorkbookEntry);
-        var sourceBytes = await ReadEntryAsync(sourceEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
-        VerifyHash(sourceBytes, project.SourceWorkbookSha256, "source workbook");
-        var sourcePath = Path.Combine(sourceDirectory, SafeFileName(project.SourceWorkbookName, "source.xlsx"));
-        await WriteFileAtomicAsync(sourcePath, sourceBytes, cancellationToken).ConfigureAwait(false);
+        var sourceFiles = await IoFatSourceWorkspaceService.ImportAsync(
+            project,
+            archive,
+            manifestSources,
+            manifest.SourceWorkbookEntry,
+            string.IsNullOrWhiteSpace(manifest.SourceWorkbookSha256)
+                ? project.SourceWorkbookSha256
+                : manifest.SourceWorkbookSha256,
+            sourceDirectory,
+            cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(manifest.SourceSetSha256) &&
+            !IoFatSourceIdentity.ComputeSetFingerprint(sourceFiles.Select(source => source.Source))
+                .Equals(manifest.SourceSetSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("Imported FAT sources do not match the package source-set fingerprint.");
+        }
 
         var evidenceDirectory = Path.Combine(evidenceRoot, SanitizePathPart(project.ProjectId));
         Directory.CreateDirectory(evidenceDirectory);
@@ -192,7 +240,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         await WriteFileAtomicAsync(Path.Combine(localDirectory, "project.snapshot.json"), snapshotBytes, cancellationToken).ConfigureAwait(false);
         project.InitializeRuntimeNotifications();
         var session = sessionFactory(project, evidenceRoot);
-        var workspace = new IoTestWorkspacePersistence(project, session, localDirectory, sourcePath, evidenceDirectory);
+        var workspace = new IoTestWorkspacePersistence(project, session, localDirectory, sourceFiles, evidenceDirectory);
         workspace.StatusText = $"Handover package imported from {Path.GetFileName(packagePath)}";
         workspace.LastSavedAtUtc = snapshot.SavedAtUtc;
         workspace.SaveNow();
@@ -205,6 +253,70 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             return;
         StatusText = "Progress changed · saving shortly…";
         _saveTimer.Change(650, Timeout.Infinite);
+    }
+
+    public async Task AddSourcesAsync(
+        IoTestProject importedSourceProject,
+        IReadOnlyCollection<IoFatSourceInput> sourceInputs,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(importedSourceProject);
+        ArgumentNullException.ThrowIfNull(sourceInputs);
+
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken)
+            .ConfigureAwait(false);
+        var newHashes = described
+            .Where(source => _sourceFiles.All(existing =>
+                !existing.Source.Sha256.Equals(source.Source.Sha256, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (newHashes.Length == 0)
+            return;
+
+        var stagingProject = new IoTestProject
+        {
+            ProjectId = importedSourceProject.ProjectId,
+            SchemaVersion = importedSourceProject.SchemaVersion,
+            ProjectName = importedSourceProject.ProjectName
+        };
+        var stagingDescriptors = newHashes.Select(source => source.Source).ToArray();
+        stagingProject.SetSources(
+            stagingDescriptors,
+            IoFatSourceIdentity.ComputeSetFingerprint(stagingDescriptors));
+        var staged = await IoFatSourceWorkspaceService.StageDescribedAsync(
+                stagingProject,
+                newHashes,
+                Path.Combine(LocalDirectory, "source"),
+                cancellationToken)
+            .ConfigureAwait(false);
+        lock (_saveSync)
+        {
+            foreach (var source in staged)
+            {
+                if (_sourceFiles.All(existing =>
+                    !existing.Source.Sha256.Equals(source.Source.Sha256, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _sourceFiles.Add(source);
+                }
+            }
+            _sourceFiles.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.Source.SourceId, right.Source.SourceId));
+        }
+    }
+
+    public void TrackAddedIed(IoTestIedPlan ied)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(ied);
+        ied.PropertyChanged -= Changed;
+        ied.PropertyChanged += Changed;
+        foreach (var point in ied.TestPoints)
+        {
+            point.PropertyChanged -= Changed;
+            point.PropertyChanged += Changed;
+            point.Runtime.PropertyChanged -= Changed;
+            point.Runtime.PropertyChanged += Changed;
+        }
     }
 
     public void SaveNow()
@@ -230,8 +342,17 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
 
         SaveNow();
         var snapshotBytes = await File.ReadAllBytesAsync(SnapshotPath, cancellationToken).ConfigureAwait(false);
-        var sourceBytes = await File.ReadAllBytesAsync(SourceWorkbookPath, cancellationToken).ConfigureAwait(false);
-        VerifyHash(sourceBytes, Project.SourceWorkbookSha256, "local source workbook");
+        var sourcePayloads = new List<(IoFatWorkspaceSource Source, byte[] Bytes)>();
+        foreach (var source in SourceFiles)
+        {
+            sourcePayloads.Add((
+                source,
+                await IoFatSourceWorkspaceService.ReadVerifiedAsync(source, cancellationToken).ConfigureAwait(false)));
+        }
+        var packageSources = IoFatSourceWorkspaceService.ToPackageSources(SourceFiles).ToList();
+        var sourceSetSha256 = IoFatSourceIdentity.ComputeSetFingerprint(SourceFiles.Select(source => source.Source));
+        var workbook = SourceFiles.FirstOrDefault(source =>
+            source.Source.Kind.Equals(IoFatSourceKinds.Workbook, StringComparison.OrdinalIgnoreCase));
 
         var evidenceFiles = new List<IoTestPackageEvidence>();
         if (Directory.Exists(EvidenceProjectDirectory))
@@ -260,10 +381,14 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             Project.SchemaVersion,
             "project.snapshot.json",
             snapshotHash,
-            $"source/{SafeFileName(Project.SourceWorkbookName, "source.xlsx")}",
-            Project.SourceWorkbookSha256,
+            workbook?.PackageEntry ?? string.Empty,
+            workbook?.Source.Sha256 ?? string.Empty,
             "report/IO-FAT-Report.html",
-            evidenceFiles);
+            evidenceFiles)
+        {
+            SourceSetSha256 = sourceSetSha256,
+            SourceFiles = packageSources
+        };
 
         var fullDestination = destinationPath.EndsWith(PackageExtension, StringComparison.OrdinalIgnoreCase)
             ? destinationPath
@@ -276,7 +401,8 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             {
                 await WriteEntryAsync(archive, "manifest.json", JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions), cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.SnapshotEntry, snapshotBytes, cancellationToken).ConfigureAwait(false);
-                await WriteEntryAsync(archive, manifest.SourceWorkbookEntry, sourceBytes, cancellationToken).ConfigureAwait(false);
+                foreach (var source in sourcePayloads)
+                    await WriteEntryAsync(archive, source.Source.PackageEntry, source.Bytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.ReportEntry, reportBytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, "README.txt", Encoding.UTF8.GetBytes(BuildPackageReadme()), cancellationToken).ConfigureAwait(false);
                 foreach (var evidence in evidenceFiles)
@@ -341,7 +467,23 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         }
     }
 
-    private void Changed(object? sender, PropertyChangedEventArgs e) => ScheduleSave();
+    private void Changed(object? sender, PropertyChangedEventArgs e)
+    {
+        // Live telemetry is transient and can change hundreds of times per second.
+        // Evidence/state changes still autosave, and their snapshot includes the most
+        // recent live value. Avoid resetting the timer and notifying UI for every poll.
+        if (sender is IoTestPointRuntime && e.PropertyName is
+            nameof(IoTestPointRuntime.CurrentValue) or
+            nameof(IoTestPointRuntime.CurrentQuality) or
+            nameof(IoTestPointRuntime.CurrentSource) or
+            nameof(IoTestPointRuntime.CurrentIedTimestamp) or
+            nameof(IoTestPointRuntime.LastSequence))
+        {
+            return;
+        }
+
+        ScheduleSave();
+    }
 
     private void SaveFromTimer()
     {
@@ -407,7 +549,28 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                         point.Runtime.Attempt,
                         point.Runtime.CurrentValue,
                         point.Runtime.CurrentQuality,
-                        point.Runtime.CurrentSource))).ToList())
+                        point.Runtime.CurrentSource)
+                    {
+                        Value1Evidence = point.Runtime.Value1Evidence,
+                        Value2Evidence = point.Runtime.Value2Evidence
+                    })
+                {
+                    WorkspaceSelected = point.WorkspaceSelected,
+                    SignalKind = point.SignalKind,
+                    CaptureMode = point.CaptureMode,
+                    FatDisposition = point.FatDisposition,
+                    Cdc = point.Cdc,
+                    SourceIecReference = point.SourceIecReference,
+                    ReportDisplayReference = point.ReportDisplayReference,
+                    EventLogSearchReference = point.EventLogSearchReference,
+                    EvidenceExpected = point.EvidenceExpected,
+                    MappingQuality = point.MappingQuality,
+                    ReviewStatus = point.ReviewStatus,
+                    ReviewReason = point.ReviewReason,
+                    EventLogMatch = point.EventLogMatch,
+                    EvidenceReference = point.EvidenceReference,
+                    ReviewerComment = point.ReviewerComment
+                }).ToList())
             {
                 LatestComtradeFiles = ied.LatestComtradeFiles,
                 LatestComtradeRemotePath = ied.LatestComtradeRemotePath,
@@ -417,7 +580,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 LatestComtradeCapturedAtUtc = ied.LatestComtradeCapturedAtUtc,
                 LatestComtradeFileCount = ied.LatestComtradeFileCount,
                 LatestComtradeKnownSizeBytes = ied.LatestComtradeKnownSizeBytes
-            }).ToList()));
+            }).ToList())
+        {
+            SourceSetSha256 = IoFatSourceIdentity.ProjectSourceFingerprint(project),
+            Sources = project.Sources.Select(IoFatSourceIdentity.Normalize).ToList()
+        });
 
     private static async Task<IoTestProject> LoadSnapshotAsync(string path, CancellationToken cancellationToken)
     {
@@ -459,6 +626,25 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                 TestPoints = ied.TestPoints.Select(RestorePoint).ToList()
             }).ToList()
         };
+
+        var sources = snapshot.Project.Sources ?? new List<IoFatSourceDescriptor>();
+        if (sources.Count > 0)
+        {
+            var normalized = sources.Select(IoFatSourceIdentity.Normalize).ToArray();
+            var fingerprint = IoFatSourceIdentity.ComputeSetFingerprint(normalized);
+            if (!string.IsNullOrWhiteSpace(snapshot.Project.SourceSetSha256) &&
+                !fingerprint.Equals(snapshot.Project.SourceSetSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The local snapshot FAT source-set fingerprint is invalid.");
+            }
+            project.SetSources(normalized, fingerprint);
+        }
+        else if (!string.IsNullOrWhiteSpace(project.SourceWorkbookSha256))
+        {
+            var legacy = IoFatSourceIdentity.LegacyWorkbook(project.SourceWorkbookName, project.SourceWorkbookSha256);
+            project.SetSources(new[] { legacy }, IoFatSourceIdentity.ComputeSetFingerprint(new[] { legacy }));
+        }
+
         project.InitializeRuntimeNotifications();
         return project;
     }
@@ -484,18 +670,35 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             LogicalNode = data.LogicalNode,
             DataObject = data.DataObject,
             DataAttribute = data.DataAttribute,
+            Cdc = data.Cdc,
+            SourceIecReference = data.SourceIecReference,
+            ReportDisplayReference = data.ReportDisplayReference,
+            EventLogSearchReference = data.EventLogSearchReference,
+            EvidenceExpected = data.EvidenceExpected,
+            MappingQuality = data.MappingQuality,
+            ReviewStatus = data.ReviewStatus,
+            ReviewReason = data.ReviewReason,
+            EventLogMatch = data.EventLogMatch,
+            EvidenceReference = data.EvidenceReference,
+            ReviewerComment = data.ReviewerComment,
             SourceSheet = data.SourceSheet,
             SourceRow = data.SourceRow,
+            SignalKind = data.SignalKind,
+            CaptureMode = data.CaptureMode,
+            WorkspaceSelected = data.WorkspaceSelected,
             TestEnabled = data.TestEnabled,
             ImportReady = data.ImportReady,
             BindingStatus = data.BindingStatus,
             BindingEvidence = data.BindingEvidence
         };
+        point.RestoreFatDisposition(data.FatDisposition);
 
         var runtime = point.Runtime;
         runtime.Attempt = data.Runtime.Attempt;
         runtime.OnEvidence = data.Runtime.OnEvidence;
         runtime.OffEvidence = data.Runtime.OffEvidence;
+        runtime.Value1Evidence = data.Runtime.Value1Evidence;
+        runtime.Value2Evidence = data.Runtime.Value2Evidence;
         runtime.CurrentValue = "-";
         runtime.CurrentQuality = "Unknown";
         runtime.CurrentSource = "Restored · live baseline required";
@@ -503,7 +706,16 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         runtime.LastSequence = -1;
         runtime.ConnectionGeneration = -1;
 
-        if (data.Runtime.State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
+        if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+        {
+            runtime.State = IoTestPointState.NotStarted;
+            runtime.StatusReason = point.IsFatEvidenceComplete
+                ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
+                : runtime.Value1Evidence is not null || runtime.Value2Evidence is not null
+                    ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
+                    : "Progress restored; reconnect live acquisition before operator snapshot capture.";
+        }
+        else if (data.Runtime.State is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
         {
             runtime.State = data.Runtime.State;
             runtime.StatusReason = data.Runtime.StatusReason;
@@ -525,18 +737,20 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     {
         var totalPassed = project.Ieds.Sum(ied => ied.PassedCount);
         var totalReview = project.Ieds.Sum(ied => ied.ReviewCount);
+        var totalComplete = project.Ieds.Sum(ied => ied.CompleteCount);
         var builder = new StringBuilder();
         builder.Append("<!doctype html><html><head><meta charset=\"utf-8\"><title>")
-            .Append(Html(project.ProjectName)).Append(" - IO FAT Report</title><style>")
+            .Append(Html(project.ProjectName)).Append(" - FAT Report</title><style>")
             .Append("body{font-family:Segoe UI,Arial,sans-serif;color:#172033;margin:28px}h1{margin:0;color:#2458b8}h2{margin-top:30px;border-bottom:2px solid #dbe6f6;padding-bottom:6px}.meta{background:#f5f8fd;border:1px solid #dbe6f6;border-radius:10px;padding:14px;margin:16px 0}.summary{display:flex;gap:12px;flex-wrap:wrap}.pill{border:1px solid #dbe6f6;border-radius:16px;padding:7px 12px;background:#fff}.file-evidence{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin:8px 0 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #cdd8e8;padding:6px;vertical-align:top}th{background:#eaf1fb;text-align:left}.pass{color:#08783f;font-weight:700}.review,.failed{color:#a75800;font-weight:700}.pending{color:#667085}@media print{body{margin:8mm}.ied{page-break-before:always}.ied:first-of-type{page-break-before:auto}.no-print{display:none}}@page{size:A4 landscape;margin:8mm}</style></head><body>");
-        builder.Append("<h1>ARSAS IO List FAT Evidence Report</h1><div class=\"meta\"><b>Project:</b> ").Append(Html(project.ProjectName))
+        builder.Append("<h1>ARSAS IEC 61850 FAT Evidence Report</h1><div class=\"meta\"><b>Project:</b> ").Append(Html(project.ProjectName))
             .Append("<br><b>Project ID:</b> ").Append(Html(project.ProjectId))
-            .Append("<br><b>Source workbook:</b> ").Append(Html(project.SourceWorkbookName))
-            .Append("<br><b>Workbook SHA-256:</b> ").Append(Html(project.SourceWorkbookSha256))
+            .Append("<br><b>FAT sources:</b> ").Append(Html(SourceSummary(project)))
+            .Append("<br><b>Source-set SHA-256:</b> ").Append(Html(IoFatSourceIdentity.ProjectSourceFingerprint(project)))
             .Append("<br><b>Generated:</b> ").Append(Html(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))).Append("</div>");
         builder.Append("<div class=\"summary\"><span class=\"pill\">IED: ").Append(project.Ieds.Count)
-            .Append("</span><span class=\"pill\">Signals: ").Append(project.SignalCount)
-            .Append("</span><span class=\"pill pass\">PASS: ").Append(totalPassed)
+            .Append("</span><span class=\"pill\">Included signals: ").Append(project.IncludedSignalCount)
+            .Append("</span><span class=\"pill\">Complete: ").Append(totalComplete)
+            .Append("</span><span class=\"pill pass\">Digital PASS: ").Append(totalPassed)
             .Append("</span><span class=\"pill review\">Review: ").Append(totalReview).Append("</span></div>");
 
         foreach (var ied in project.Ieds)
@@ -555,20 +769,33 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                     .Append("</div>");
             }
 
-            builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Expected ON/OFF</th><th>ON evidence</th><th>OFF evidence</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
+            builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Type / capture</th><th>Value 1</th><th>Value 2</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
             var index = 0;
-            foreach (var point in ied.TestPoints)
+            foreach (var point in ied.TestPoints.Where(point => point.WorkspaceSelected && point.IsIncludedInFat))
             {
                 index++;
-                builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ObjectReference)).Append("</td><td>")
-                    .Append(Html($"{point.ExpectedOnText} ({point.ExpectedOnRaw}) / {point.ExpectedOffText} ({point.ExpectedOffRaw})"))
-                    .Append("</td><td>").Append(EvidenceHtml(point.Runtime.OnEvidence)).Append("</td><td>").Append(EvidenceHtml(point.Runtime.OffEvidence)).Append("</td><td class=\"")
-                    .Append(ResultClass(point.Runtime.State)).Append("\">").Append(Html(point.Runtime.State.ToString())).Append("</td><td>").Append(Html(point.Runtime.StatusReason)).Append("</td></tr>");
+                builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ReportIecReference)).Append("</td><td>")
+                    .Append(Html($"{point.SignalKind} / {point.CaptureMode}"))
+                    .Append("</td><td>").Append(GenericEvidenceHtml(point, FatValueSlot.Value1)).Append("</td><td>").Append(GenericEvidenceHtml(point, FatValueSlot.Value2)).Append("</td><td class=\"")
+                    .Append(point.CaptureMode == FatCaptureMode.OperatorSnapshot && point.IsFatEvidenceComplete ? "pass" : ResultClass(point.Runtime.State)).Append("\">")
+                    .Append(Html(point.FatResultText)).Append("</td><td>").Append(Html(point.Runtime.StatusReason)).Append("</td></tr>");
             }
             builder.Append("</tbody></table></section>");
         }
         builder.Append("<p class=\"no-print\">Open this file in a browser and choose Print → Save as PDF.</p></body></html>");
         return builder.ToString();
+    }
+
+    private static string GenericEvidenceHtml(IoTestPointPlan point, FatValueSlot slot)
+    {
+        if (point.CaptureMode == FatCaptureMode.AutomaticTransition)
+        {
+            var evidence = slot == FatValueSlot.Value1 ? point.Runtime.OnEvidence : point.Runtime.OffEvidence;
+            return EvidenceHtml(evidence);
+        }
+
+        var snapshot = slot == FatValueSlot.Value1 ? point.Runtime.Value1Evidence : point.Runtime.Value2Evidence;
+        return EvidenceHtml(snapshot);
     }
 
     private static string EvidenceHtml(IoTestTransitionEvidence? evidence)
@@ -581,6 +808,16 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             .Replace("\n", "<br>", StringComparison.Ordinal);
     }
 
+    private static string EvidenceHtml(FatValueEvidence? evidence)
+    {
+        if (evidence == null)
+            return "<span class=\"pending\">—</span>";
+        var iedTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff zzz", "not supplied");
+        var arsasTime = global::ArIED61850Tester.Iec61850TimestampPresentation.FormatMilliseconds(evidence.CapturedAt, "yyyy-MM-dd HH:mm:ss.fff zzz");
+        return Html($"IED {iedTime}\nARSAS {arsasTime}\n{evidence.RawValue} · {evidence.Quality} · {evidence.AcquisitionSource}\n{evidence.CaptureKind}")
+            .Replace("\n", "<br>", StringComparison.Ordinal);
+    }
+
     private static string ResultClass(IoTestPointState state) => state switch
     {
         IoTestPointState.Passed => "pass",
@@ -589,11 +826,18 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         _ => "pending"
     };
 
+    private static string SourceSummary(IoTestProject project)
+    {
+        if (project.Sources.Count > 0)
+            return string.Join(", ", project.Sources.OrderBy(source => source.FileName, StringComparer.OrdinalIgnoreCase).Select(source => $"{source.FileName} [{source.Kind}]"));
+        return string.IsNullOrWhiteSpace(project.SourceWorkbookName) ? "not supplied" : project.SourceWorkbookName;
+    }
+
     private static string BuildPackageReadme() =>
         "ARSAS IO FAT portable handover package\r\n\r\n" +
         "To continue testing: open this .arsas-iofat file from the FAT / IO List Testing card in ARSAS.\r\n" +
         "To print or create PDF without ARSAS: extract the package and open report/IO-FAT-Report.html in a browser, then Print -> Save as PDF.\r\n" +
-        "The package contains the project snapshot, source workbook, verified evidence journals, and a printable report.\r\n";
+        "The package contains the project snapshot, complete FAT source bundle, verified evidence journals, and a printable report.\r\n";
 
     private static ZipArchiveEntry RequiredEntry(ZipArchive archive, string name)
     {
@@ -625,10 +869,20 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     private static string ProjectDirectory(string root, IoTestProject project)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        var hash = string.IsNullOrWhiteSpace(project.SourceWorkbookSha256)
+        var fingerprint = IoFatSourceIdentity.ProjectStorageFingerprint(project);
+        var hash = string.IsNullOrWhiteSpace(fingerprint)
             ? "nohash"
-            : project.SourceWorkbookSha256[..Math.Min(12, project.SourceWorkbookSha256.Length)];
+            : fingerprint[..Math.Min(12, fingerprint.Length)];
         return Path.Combine(root, $"{SanitizePathPart(project.ProjectId)}_{hash}");
+    }
+
+    private static bool SameSourceSet(IoTestProject left, IoTestProject right)
+    {
+        var leftHash = IoFatSourceIdentity.ProjectSourceFingerprint(left);
+        var rightHash = IoFatSourceIdentity.ProjectSourceFingerprint(right);
+        if (!string.IsNullOrWhiteSpace(leftHash) || !string.IsNullOrWhiteSpace(rightHash))
+            return leftHash.Equals(rightHash, StringComparison.OrdinalIgnoreCase);
+        return left.SourceWorkbookSha256.Equals(right.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SafeFileName(string? value, string fallback)
@@ -643,12 +897,6 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         var invalid = Path.GetInvalidFileNameChars().ToHashSet();
         var sanitized = new string(text.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
         return sanitized.Length == 0 ? "IO-TEST" : sanitized;
-    }
-
-    private static async Task CopyFileAtomicAsync(string source, string destination, CancellationToken cancellationToken)
-    {
-        var bytes = await File.ReadAllBytesAsync(source, cancellationToken).ConfigureAwait(false);
-        await WriteFileAtomicAsync(destination, bytes, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task WriteFileAtomicAsync(string destination, byte[] bytes, CancellationToken cancellationToken)
@@ -724,7 +972,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string SourceWorkbookName,
         string SourceWorkbookSha256,
         DateTimeOffset ImportedAt,
-        List<IoTestIedData> Ieds);
+        List<IoTestIedData> Ieds)
+    {
+        public string SourceSetSha256 { get; init; } = string.Empty;
+        public List<IoFatSourceDescriptor> Sources { get; init; } = new();
+    }
 
     private sealed record IoTestIedData(
         string IedName,
@@ -769,7 +1021,24 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         bool ImportReady,
         string BindingStatus,
         string BindingEvidence,
-        IoTestRuntimeData Runtime);
+        IoTestRuntimeData Runtime)
+    {
+        public bool WorkspaceSelected { get; init; } = true;
+        public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
+        public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
+        public FatSignalDisposition FatDisposition { get; init; } = FatSignalDisposition.Included;
+        public string Cdc { get; init; } = string.Empty;
+        public string SourceIecReference { get; init; } = string.Empty;
+        public string ReportDisplayReference { get; init; } = string.Empty;
+        public string EventLogSearchReference { get; init; } = string.Empty;
+        public string EvidenceExpected { get; init; } = string.Empty;
+        public string MappingQuality { get; init; } = string.Empty;
+        public string ReviewStatus { get; init; } = string.Empty;
+        public string ReviewReason { get; init; } = string.Empty;
+        public string EventLogMatch { get; init; } = string.Empty;
+        public string EvidenceReference { get; init; } = string.Empty;
+        public string ReviewerComment { get; init; } = string.Empty;
+    }
 
     private sealed record IoTestRuntimeData(
         IoTestPointState State,
@@ -782,7 +1051,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         int Attempt,
         string CurrentValue,
         string CurrentQuality,
-        string CurrentSource);
+        string CurrentSource)
+    {
+        public FatValueEvidence? Value1Evidence { get; init; }
+        public FatValueEvidence? Value2Evidence { get; init; }
+    }
 
     private sealed record IoTestPackageManifest(
         string PackageVersion,
@@ -795,7 +1068,11 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string SourceWorkbookEntry,
         string SourceWorkbookSha256,
         string ReportEntry,
-        List<IoTestPackageEvidence> EvidenceFiles);
+        List<IoTestPackageEvidence> EvidenceFiles)
+    {
+        public string SourceSetSha256 { get; init; } = string.Empty;
+        public List<IoFatPackageSource> SourceFiles { get; init; } = new();
+    }
 
     private sealed record IoTestPackageEvidence(
         string Entry,

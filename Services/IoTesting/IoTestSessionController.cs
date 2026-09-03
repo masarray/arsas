@@ -21,10 +21,22 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
     private readonly Action<Action> _dispatch;
     private readonly Func<IoTestProject, IoTestIedPlan, Guid, DateTimeOffset, IIoTestEvidenceJournal> _journalFactory;
     private readonly IoTestTransitionEvaluator _evaluator;
-    private readonly ConcurrentQueue<QueuedSnapshot> _pendingSnapshots = new();
+    private readonly IoTestRollingCaptureCoordinator _captureCoordinator;
+    private readonly FatAutoCaptureCoordinator _autoCaptureCoordinator = new();
+    // Only the newest observation per live point is needed by the UI transition
+    // evaluator. Coalescing prevents a fast report/poll stream from building an
+    // unbounded dispatcher backlog while the operator scrolls the FAT grid.
+    private readonly ConcurrentDictionary<string, QueuedSnapshot> _pendingSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    // Actual transitions are never coalesced: FAT evidence must retain a fast
+    // OFF→ON→OFF sequence even when all three samples arrive in one UI frame.
+    private readonly ConcurrentQueue<QueuedSnapshot> _pendingEdgeSnapshots = new();
     private readonly Dictionary<string, List<IoTestPointPlan>> _activePointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _activeLivePoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _sessionPointIds = new(StringComparer.OrdinalIgnoreCase);
+    // Value 1 & Value 2 bulk Recapture is deliberately two-stage. The staged Value 1
+    // remains audit history only until Value 2 is captured successfully; current pointers
+    // therefore keep the old complete pair authoritative during the condition change.
+    private readonly Dictionary<string, FatValueEvidence> _pendingPairValue1 = new(StringComparer.OrdinalIgnoreCase);
 
     private IoTestSessionState _state = IoTestSessionState.Idle;
     private IoTestIedPlan? _activeIed;
@@ -55,6 +67,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
         ArgumentException.ThrowIfNullOrWhiteSpace(journalRootDirectory);
         _evaluator = evaluator ?? new IoTestTransitionEvaluator();
+        _captureCoordinator = new IoTestRollingCaptureCoordinator(_evaluator);
         _journalFactory = journalFactory ?? ((testProject, ied, sessionId, startedAt) =>
             IoTestEvidenceJournal.Create(journalRootDirectory, testProject, ied, sessionId, startedAt));
     }
@@ -95,14 +108,20 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         {
             if (ActiveIed == null || _sessionPointIds.Count == 0)
                 return "0 / 0 complete";
-            var complete = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.IsComplete);
-            var passed = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Passed);
-            var review = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Review);
+            var scoped = ActiveIed.TestPoints.Where(point => _sessionPointIds.Contains(point.TestPointId)).ToList();
+            var complete = scoped.Count(point => point.IsFatEvidenceComplete);
+            var passed = scoped.Count(point => point.CaptureMode == FatCaptureMode.AutomaticTransition && point.Runtime.State == IoTestPointState.Passed);
+            var review = scoped.Count(point => point.CaptureMode == FatCaptureMode.AutomaticTransition && point.Runtime.State == IoTestPointState.Review);
             return $"{complete} / {_sessionPointIds.Count} complete · {passed} PASS · {review} review";
         }
     }
 
     public IoTestSessionActionResult Start(IoTestIedPlan? ied)
+        => Start(ied, captureScope: null);
+
+    public IoTestSessionActionResult Start(
+        IoTestIedPlan? ied,
+        IReadOnlyCollection<IoTestPointPlan>? captureScope)
     {
         ThrowIfDisposed();
         if (ied == null)
@@ -116,21 +135,44 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!device.IsConnected || !device.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ied.IedName} must be connected and monitoring before FAT evidence can start.");
 
-        var expectedPoints = ied.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
-            .ToList();
-        if (expectedPoints.Count == 0)
-            return IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED.");
+        List<IoTestPointPlan> expectedPoints;
+        if (captureScope == null)
+        {
+            expectedPoints = ied.TestPoints
+                .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
+                .ToList();
+        }
+        else
+        {
+            var knownPoints = new HashSet<IoTestPointPlan>(ied.TestPoints);
+            var invalidScope = captureScope
+                .Where(point => !knownPoints.Contains(point) || !point.WorkspaceSelected || !point.IsIncludedInFat || !point.TestEnabled || !point.ImportReady)
+                .Distinct()
+                .ToList();
+            if (invalidScope.Count > 0)
+            {
+                return IoTestSessionActionResult.Failure(
+                    "The requested FAT capture scope contains a row that is not part of this IED/shared workspace, was removed by the operator, has TEST disabled, or is not import-ready.");
+            }
 
-        var bindings = BuildSessionBindings(ied, device);
+            expectedPoints = captureScope.Distinct().ToList();
+        }
+
+        if (expectedPoints.Count == 0)
+            return IoTestSessionActionResult.Failure("No import-ready operator-selected signal is available in the requested FAT capture scope.");
+
+        var bindings = BuildSessionBindings(expectedPoints, device);
         if (bindings.Count != expectedPoints.Count)
         {
             var missing = expectedPoints.Count - bindings.Count;
             return IoTestSessionActionResult.Failure(
-                $"{missing} of {expectedPoints.Count} enabled IO-list signal(s) do not have one unique live monitor point. Resolve their binding or disable them before starting FAT.");
+                $"{missing} of {expectedPoints.Count} requested FAT signal(s) do not have one unique live monitor point. Resolve their binding or change the operator selection before starting FAT.");
         }
 
         CleanupSessionResources(disposeJournal: true);
+        _captureCoordinator.Clear();
+        _autoCaptureCoordinator.Clear();
+        _pendingPairValue1.Clear();
         SessionId = Guid.NewGuid();
         StartedAtUtc = DateTimeOffset.UtcNow;
         CompletedAtUtc = null;
@@ -141,7 +183,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _activePointIndex.Clear();
         _activeLivePoints.Clear();
         _sessionPointIds.Clear();
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
 
         foreach (var binding in bindings)
         {
@@ -161,20 +203,41 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             LastJournalHash = string.Empty;
             JournalIntegrityText = "Evidence journal open · hash chain initialized";
 
-            // Establish all baselines first, then persist the startup records with one
-            // durable flush. Hash chaining is unchanged, but a 100-point FAT no longer
-            // performs 101 synchronous fsync operations on the UI thread.
-            var startupEntries = new List<IoTestJournalEntry>(bindings.Count + 1)
+            var startupEntries = new List<IoTestJournalEntry>((bindings.Count * 2) + 1)
             {
-                SessionEvent("session_started", "FAT session started with a live baseline for every enabled bound point.")
+                SessionEvent("session_started", $"FAT session started with an explicit capture scope of {bindings.Count} operator-selected point(s).")
             };
+            var autoDecisions = new List<(IoTestPointPlan Point, FatAutoCaptureDecision Decision)>();
             foreach (var binding in bindings)
             {
                 var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
-                _evaluator.StartAttempt(binding.Point, observation);
-                startupEntries.Add(PointEvent("baseline", binding.Point, observation, null, binding.Point.Runtime.StatusReason));
+                if (binding.Point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+                {
+                    var genericObservation = observation with { NormalizedState = null };
+                    binding.Point.Runtime.ApplyObservation(genericObservation);
+                    startupEntries.Add(PointEvent(
+                        "operator_snapshot_baseline",
+                        binding.Point,
+                        genericObservation,
+                        null,
+                        "Live value established for automatic/manual Value 1 / Value 2 capture."));
+                    var decision = _autoCaptureCoordinator.Observe(binding.Point, genericObservation);
+                    autoDecisions.Add((binding.Point, decision));
+                    if (decision.Evidence != null)
+                        startupEntries.Add(FatValueEvent(binding.Point, decision.Evidence));
+                    continue;
+                }
+
+                var evaluation = _captureCoordinator.Start(binding.Point, observation);
+                startupEntries.Add(PointEvent("baseline", binding.Point, observation, evaluation.Evidence, evaluation.Reason));
+                var automaticDecision = _autoCaptureCoordinator.Observe(binding.Point, observation);
+                autoDecisions.Add((binding.Point, automaticDecision));
+                if (automaticDecision.Evidence != null)
+                    startupEntries.Add(FatValueEvent(binding.Point, automaticDecision.Evidence));
             }
             AppendBatchRequired(startupEntries);
+            foreach (var (point, decision) in autoDecisions)
+                PromoteAutoCaptureDecision(point, decision);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -186,8 +249,9 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         }
 
         State = IoTestSessionState.Running;
-        StatusText = $"FAT session running for {ied.IedName}. Waiting for OFF → ON → OFF transitions.";
+        StatusText = $"FAT capture running for {ied.IedName}. Value 1 / Value 2 auto-capture is armed; manual Capture and multi-row Recapture remain operator overrides until Stop.";
         RaiseProgress();
+        UpdateRunningCompletionStatus();
         return IoTestSessionActionResult.Success(StatusText);
     }
 
@@ -198,7 +262,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             return IoTestSessionActionResult.Failure("No running FAT session is available to pause.");
 
         State = IoTestSessionState.Paused;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
         StatusText = reason;
         if (!AppendOrFault(SessionEvent("session_paused", reason)))
             return IoTestSessionActionResult.Failure(StatusText);
@@ -213,9 +277,10 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!_activeDevice.IsConnected || !_activeDevice.IsMonitoring)
             return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} is not connected and monitoring yet.");
 
-        var refreshedBindings = BuildSessionBindings(ActiveIed, _activeDevice)
-            .Where(binding => _sessionPointIds.Contains(binding.Point.TestPointId))
+        var sessionPoints = ActiveIed.TestPoints
+            .Where(point => _sessionPointIds.Contains(point.TestPointId))
             .ToList();
+        var refreshedBindings = BuildSessionBindings(sessionPoints, _activeDevice);
         if (refreshedBindings.Count != _sessionPointIds.Count)
             return IoTestSessionActionResult.Failure($"{ActiveIed.IedName} does not yet have all {_sessionPointIds.Count} session points live after reconnect.");
 
@@ -230,22 +295,42 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         }
 
         _connectionGeneration++;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
-        if (!AppendOrFault(SessionEvent("session_resumed", "Session resumed after rebinding current live points; current values are treated as a new baseline image.")))
+        _pendingPairValue1.Clear();
+        _autoCaptureCoordinator.Clear();
+        ClearPendingSnapshots();
+        if (!AppendOrFault(SessionEvent("session_resumed", "Session resumed after rebinding current live points; current values are treated as a new baseline image. Any staged pair Recapture was cancelled.")))
             return IoTestSessionActionResult.Failure(StatusText);
 
         foreach (var binding in refreshedBindings)
         {
             var observation = CreateObservation(binding.Point, binding.LivePoint, _connectionGeneration, DateTimeOffset.UtcNow);
-            var evaluation = _evaluator.Observe(binding.Point, observation);
+            if (binding.Point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+            {
+                var genericObservation = observation with { NormalizedState = null };
+                binding.Point.Runtime.ApplyObservation(genericObservation);
+                if (!AppendOrFault(PointEvent(
+                        "operator_snapshot_resume_baseline",
+                        binding.Point,
+                        genericObservation,
+                        null,
+                        "Live value refreshed after reconnect; existing Value 1 / Value 2 evidence is preserved.")))
+                    return IoTestSessionActionResult.Failure(StatusText);
+                if (!ApplyAutoCapture(binding.Point, genericObservation))
+                    return IoTestSessionActionResult.Failure(StatusText);
+                continue;
+            }
+
+            var evaluation = _captureCoordinator.Observe(binding.Point, observation);
             if (!AppendOrFault(PointEvent("resume_baseline", binding.Point, observation, evaluation.Evidence, evaluation.Reason)))
+                return IoTestSessionActionResult.Failure(StatusText);
+            if (!ApplyAutoCapture(binding.Point, observation))
                 return IoTestSessionActionResult.Failure(StatusText);
         }
 
         State = IoTestSessionState.Running;
-        StatusText = $"FAT session resumed for {ActiveIed.IedName}.";
+        StatusText = $"FAT capture resumed for {ActiveIed.IedName}; current evidence is preserved and auto-capture continues only for incomplete slots.";
         RaiseProgress();
-        CompleteIfAllPointsFinished();
+        UpdateRunningCompletionStatus();
         return IoTestSessionActionResult.Success(StatusText);
     }
 
@@ -287,6 +372,186 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         return IoTestSessionActionResult.Success(StatusText);
     }
 
+    public IoTestSessionActionResult CaptureOperatorSnapshot(IoTestPointPlan? point, FatValueSlot slot)
+    {
+        ThrowIfDisposed();
+        if (State != IoTestSessionState.Running || ActiveIed == null)
+            return IoTestSessionActionResult.Failure("Start the IED FAT session before capturing Value 1 or Value 2.");
+        if (point == null || !ActiveIed.TestPoints.Contains(point))
+            return IoTestSessionActionResult.Failure("The selected FAT row is not part of the active IED session.");
+        if (!_sessionPointIds.Contains(point.TestPointId))
+            return IoTestSessionActionResult.Failure("The selected FAT row is not part of the active capture scope.");
+        if (!point.WorkspaceSelected || !point.IsIncludedInFat || !point.TestEnabled || !point.ImportReady)
+            return IoTestSessionActionResult.Failure("The FAT row must remain in the shared workspace, included, TEST-enabled, and import-ready to capture evidence.");
+        if (point.CaptureMode != FatCaptureMode.OperatorSnapshot)
+            return IoTestSessionActionResult.Failure("Use right-click Recapture for automatic-transition rows.");
+        if (!_activeLivePoints.TryGetValue(point.TestPointId, out var livePoint))
+            return IoTestSessionActionResult.Failure("The FAT row does not have one active live point to snapshot.");
+
+        try
+        {
+            var observation = CreateLiveValueObservation(livePoint);
+            var evidence = FatOperatorSnapshotCaptureService.CreateEvidence(slot, observation);
+
+            // Audit history is authoritative and append-only. Only after the journal write
+            // succeeds may the replaceable current Value 1 / Value 2 pointer be promoted.
+            if (!AppendOrFault(FatValueEvent(point, evidence)))
+                return IoTestSessionActionResult.Failure(StatusText);
+
+            point.Runtime.SetFatValueEvidence(evidence);
+            point.Runtime.AutoCaptureStage = point.IsFatEvidenceComplete
+                ? FatAutoCaptureStage.Complete
+                : point.HasValue1Evidence ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.WaitingValue1;
+            _autoCaptureCoordinator.Clear(point);
+            point.Runtime.StatusReason = point.IsFatEvidenceComplete
+                ? "Value 1 and Value 2 captured. Current evidence is complete; either value may be recaptured while the session remains running."
+                : $"{(slot == FatValueSlot.Value1 ? "Value 1" : "Value 2")} captured; capture the remaining value to complete current evidence.";
+            RaiseProgress();
+            UpdateRunningCompletionStatus();
+            return IoTestSessionActionResult.Success(
+                $"{point.SignalName}: {(slot == FatValueSlot.Value1 ? "Value 1" : "Value 2")} captured as '{evidence.RawValue}'.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return IoTestSessionActionResult.Failure(ex.Message);
+        }
+    }
+
+    public IoTestSessionActionResult RecaptureValues(
+        IReadOnlyCollection<IoTestPointPlan> points,
+        FatValueSlot slot)
+    {
+        ThrowIfDisposed();
+        if (!TryPrepareRecapture(points, out var bindings, out var failure))
+            return IoTestSessionActionResult.Failure(failure);
+
+        if (slot == FatValueSlot.Value1 && bindings.Any(binding => _pendingPairValue1.ContainsKey(binding.Point.TestPointId)))
+        {
+            return IoTestSessionActionResult.Failure(
+                "A Value 1 & Value 2 pair Recapture is already staged for one or more selected rows. Complete it with Recapture Value 2 or cancel the staged pair first.");
+        }
+
+        var captures = new List<(IoTestPointPlan Point, FatValueEvidence Evidence, FatValueEvidence? StagedValue1)>();
+        try
+        {
+            foreach (var binding in bindings)
+            {
+                var evidence = FatOperatorSnapshotCaptureService.CreateEvidence(
+                    slot,
+                    CreateLiveValueObservation(binding.LivePoint),
+                    FatEvidenceCaptureKind.OperatorRecapture);
+                _pendingPairValue1.TryGetValue(binding.Point.TestPointId, out var stagedValue1);
+                if (slot == FatValueSlot.Value2 && stagedValue1 != null && stagedValue1.ConnectionGeneration != _connectionGeneration)
+                {
+                    return IoTestSessionActionResult.Failure(
+                        "A staged Value 1 belongs to an earlier IED connection generation. Cancel it and start Value 1 & Value 2 Recapture again.");
+                }
+                captures.Add((binding.Point, evidence, slot == FatValueSlot.Value2 ? stagedValue1 : null));
+            }
+
+            AppendBatchRequired(captures.Select(item => FatValueEvent(
+                item.Point,
+                item.Evidence,
+                item.StagedValue1 != null ? "fat_value_recapture_pair_commit" : "fat_value_recapture")).ToList());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return IoTestSessionActionResult.Failure(ex.Message);
+        }
+
+        foreach (var capture in captures)
+        {
+            if (capture.StagedValue1 != null)
+            {
+                capture.Point.Runtime.SetFatValueEvidence(capture.StagedValue1);
+                _pendingPairValue1.Remove(capture.Point.TestPointId);
+            }
+            capture.Point.Runtime.SetFatValueEvidence(capture.Evidence);
+            capture.Point.Runtime.AutoCaptureStage = capture.Point.IsFatEvidenceComplete
+                ? FatAutoCaptureStage.Complete
+                : capture.Point.HasValue1Evidence ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.WaitingValue1;
+            capture.Point.Runtime.StatusReason = capture.StagedValue1 != null
+                ? "Operator pair Recapture completed; staged Value 1 and current Value 2 are now the authoritative pair."
+                : $"Operator recaptured {slot}; the other current slot was preserved.";
+            FatCurrentEvidenceAssessmentService.Apply(capture.Point);
+            _autoCaptureCoordinator.Clear(capture.Point);
+        }
+
+        StatusText = captures.Any(item => item.StagedValue1 != null)
+            ? $"{captures.Count} signal(s) · Value 1 & Value 2 recaptured · {ActiveIed!.IedName}"
+            : $"{captures.Count} signal(s) · {slot} recaptured · {ActiveIed!.IedName}";
+        RaiseProgress();
+        UpdateRunningCompletionStatus();
+        return IoTestSessionActionResult.Success(StatusText);
+    }
+
+    public IoTestSessionActionResult BeginPairRecapture(IReadOnlyCollection<IoTestPointPlan> points)
+    {
+        ThrowIfDisposed();
+        if (!TryPrepareRecapture(points, out var bindings, out var failure))
+            return IoTestSessionActionResult.Failure(failure);
+        if (bindings.Any(binding => _pendingPairValue1.ContainsKey(binding.Point.TestPointId)))
+            return IoTestSessionActionResult.Failure("A Value 1 & Value 2 pair Recapture is already staged for one or more selected rows.");
+
+        var staged = new List<(IoTestPointPlan Point, FatValueEvidence Evidence)>();
+        try
+        {
+            foreach (var binding in bindings)
+            {
+                staged.Add((
+                    binding.Point,
+                    FatOperatorSnapshotCaptureService.CreateEvidence(
+                        FatValueSlot.Value1,
+                        CreateLiveValueObservation(binding.LivePoint),
+                        FatEvidenceCaptureKind.OperatorRecapture)));
+            }
+
+            AppendBatchRequired(staged.Select(item => FatValueEvent(
+                item.Point,
+                item.Evidence,
+                "fat_value_recapture_pair_staged",
+                "Operator staged a new Value 1 for transactional Value 1 & Value 2 Recapture; current pointers remain unchanged until Value 2 is captured.")).ToList());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return IoTestSessionActionResult.Failure(ex.Message);
+        }
+
+        foreach (var item in staged)
+        {
+            _pendingPairValue1[item.Point.TestPointId] = item.Evidence;
+            item.Point.Runtime.StatusReason = "New Value 1 staged for pair Recapture; change the test condition, then Recapture Value 2. Existing current pair remains authoritative.";
+        }
+
+        StatusText = $"{staged.Count} signal(s) · Value 1 staged · change condition, then Recapture Value 2 · {ActiveIed!.IedName}";
+        RaiseProgress();
+        return IoTestSessionActionResult.Success(StatusText);
+    }
+
+    public IoTestSessionActionResult CancelPairRecapture(IReadOnlyCollection<IoTestPointPlan> points)
+    {
+        ThrowIfDisposed();
+        var requested = points?.Where(point => point != null).Distinct().ToList() ?? new List<IoTestPointPlan>();
+        var staged = requested.Where(point => _pendingPairValue1.ContainsKey(point.TestPointId)).ToList();
+        if (staged.Count == 0)
+            return IoTestSessionActionResult.Failure("No staged Value 1 & Value 2 Recapture exists for the selected rows.");
+        if (State != IoTestSessionState.Running || ActiveIed == null)
+            return IoTestSessionActionResult.Failure("The owning FAT session is not running.");
+
+        if (!AppendOrFault(SessionEvent(
+                "fat_value_recapture_pair_cancelled",
+                $"Operator cancelled staged pair Recapture for {staged.Count} row(s): {string.Join(", ", staged.Select(point => point.TestPointId))}.")))
+            return IoTestSessionActionResult.Failure(StatusText);
+
+        foreach (var point in staged)
+        {
+            _pendingPairValue1.Remove(point.TestPointId);
+            point.Runtime.StatusReason = "Staged pair Recapture cancelled; previous current evidence remains unchanged.";
+        }
+        StatusText = $"{staged.Count} signal(s) · staged pair Recapture cancelled · {ActiveIed.IedName}";
+        return IoTestSessionActionResult.Success(StatusText);
+    }
+
     public void Enqueue(Iec61850EventEntry entry)
     {
         if (entry == null || _disposed || State != IoTestSessionState.Running)
@@ -297,7 +562,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             !entry.DeviceId.Equals(activeDevice.DeviceId, StringComparison.OrdinalIgnoreCase))
             return;
 
-        _pendingSnapshots.Enqueue(new QueuedSnapshot(
+        var queued = new QueuedSnapshot(
             entry.DeviceId,
             entry.IecReference,
             entry.OldValue,
@@ -307,7 +572,24 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             entry.SourceMode,
             entry.Reason,
             entry.Sequence,
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow);
+        var pendingKey = PointKey(entry.DeviceId, entry.IecReference);
+        var preservesTransitionEvidence =
+            _activePointIndex.TryGetValue(pendingKey, out var mappedPoints) &&
+            mappedPoints.Any(point => point.CaptureMode == FatCaptureMode.AutomaticTransition);
+        if (preservesTransitionEvidence &&
+            !Iec61850MonitorPoint.AreSemanticallyEquivalent(entry.OldValue, entry.NewValue))
+        {
+            _pendingSnapshots.TryRemove(pendingKey, out _);
+            _pendingEdgeSnapshots.Enqueue(queued);
+        }
+        else
+        {
+            _pendingSnapshots.AddOrUpdate(
+                pendingKey,
+                queued,
+                (_, current) => queued.Sequence >= current.Sequence ? queued : current);
+        }
         ScheduleDrain();
     }
 
@@ -319,7 +601,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             Stop("Workspace closed; FAT session stopped.");
         _disposed = true;
         CleanupSessionResources(disposeJournal: true);
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        ClearPendingSnapshots();
     }
 
     private void ScheduleDrain()
@@ -344,9 +626,15 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         try
         {
             while (processed < MaxSnapshotsPerDrain &&
-                   stopwatch.ElapsedMilliseconds < DrainBudgetMilliseconds &&
-                   _pendingSnapshots.TryDequeue(out var snapshot))
+                   stopwatch.ElapsedMilliseconds < DrainBudgetMilliseconds)
             {
+                QueuedSnapshot? snapshot;
+                if (!_pendingEdgeSnapshots.TryDequeue(out snapshot))
+                {
+                    var pendingKey = _pendingSnapshots.Keys.FirstOrDefault();
+                    if (pendingKey == null || !_pendingSnapshots.TryRemove(pendingKey, out snapshot))
+                        break;
+                }
                 ProcessSnapshot(snapshot);
                 processed++;
                 if (State != IoTestSessionState.Running)
@@ -356,9 +644,15 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         finally
         {
             Interlocked.Exchange(ref _drainScheduled, 0);
-            if (!_pendingSnapshots.IsEmpty && State == IoTestSessionState.Running)
+            if ((!_pendingEdgeSnapshots.IsEmpty || !_pendingSnapshots.IsEmpty) && State == IoTestSessionState.Running)
                 ScheduleDrain();
         }
+    }
+
+    private void ClearPendingSnapshots()
+    {
+        _pendingSnapshots.Clear();
+        while (_pendingEdgeSnapshots.TryDequeue(out _)) { }
     }
 
     private void ProcessSnapshot(QueuedSnapshot snapshot)
@@ -370,9 +664,12 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (!_activePointIndex.TryGetValue(key, out var points))
             return;
 
+        var progressChanged = false;
         foreach (var point in points.Distinct())
         {
-            var normalized = IoTestValueNormalizer.Normalize(point, snapshot.Value);
+            var normalized = point.CaptureMode == FatCaptureMode.AutomaticTransition
+                ? IoTestValueNormalizer.Normalize(point, snapshot.Value)
+                : null;
             var observation = new IoTestObservation(
                 normalized,
                 snapshot.Value,
@@ -382,68 +679,106 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
                 snapshot.SourceMode,
                 snapshot.Sequence,
                 _connectionGeneration);
-            var evaluation = _evaluator.Observe(point, observation);
 
-            if (evaluation.Evidence != null)
+            if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
             {
-                var eventType = evaluation.Evidence.Verdict == IoEvidenceVerdict.Rejected
-                    ? "transition_rejected"
-                    : evaluation.Evidence.Transition == IoEvidenceTransition.On
-                        ? "on_evidence"
-                        : "off_evidence";
-                if (!AppendOrFault(PointEvent(eventType, point, observation, evaluation.Evidence, evaluation.Reason, snapshot.Reason, snapshot.PreviousValue)))
-                    return;
+                point.Runtime.ApplyObservation(observation);
             }
-            else if (evaluation.StateChanged)
+            else
             {
-                if (!AppendOrFault(PointEvent(
-                        "baseline_state",
-                        point,
-                        observation,
-                        null,
-                        evaluation.Reason,
-                        snapshot.Reason,
-                        snapshot.PreviousValue)))
-                    return;
+                var evaluation = _captureCoordinator.Observe(point, observation);
+                progressChanged |= evaluation.StateChanged || evaluation.Evidence != null;
+
+                if (evaluation.Evidence != null)
+                {
+                    var eventType = evaluation.Evidence.Verdict == IoEvidenceVerdict.Rejected
+                        ? "transition_rejected"
+                        : evaluation.Evidence.Transition == IoEvidenceTransition.On
+                            ? "on_evidence"
+                            : "off_evidence";
+                    if (!AppendOrFault(PointEvent(eventType, point, observation, evaluation.Evidence, evaluation.Reason, snapshot.Reason, snapshot.PreviousValue)))
+                        return;
+                }
+                else if (evaluation.StateChanged)
+                {
+                    if (!AppendOrFault(PointEvent(
+                            "baseline_state",
+                            point,
+                            observation,
+                            null,
+                            evaluation.Reason,
+                            snapshot.Reason,
+                            snapshot.PreviousValue)))
+                        return;
+                }
+                else if (normalized == null)
+                {
+                    if (!AppendOrFault(PointEvent(
+                            "unresolved_edge",
+                            point,
+                            observation,
+                            null,
+                            "A live edge was observed but its digital state could not be normalized.",
+                            snapshot.Reason,
+                            snapshot.PreviousValue)))
+                        return;
+                }
             }
-            else if (normalized == null)
-            {
-                if (!AppendOrFault(PointEvent(
-                        "unresolved_edge",
-                        point,
-                        observation,
-                        null,
-                        "A live edge was observed but its digital state could not be normalized.",
-                        snapshot.Reason,
-                        snapshot.PreviousValue)))
-                    return;
-            }
+
+            var previousStage = point.Runtime.AutoCaptureStage;
+            var previousComplete = point.IsFatEvidenceComplete;
+            if (!ApplyAutoCapture(point, observation))
+                return;
+            progressChanged |= previousStage != point.Runtime.AutoCaptureStage || previousComplete != point.IsFatEvidenceComplete;
         }
 
-        RaiseProgress();
-        CompleteIfAllPointsFinished();
+        if (progressChanged)
+        {
+            RaiseProgress();
+            UpdateRunningCompletionStatus();
+        }
     }
 
-    private void CompleteIfAllPointsFinished()
+    private bool ApplyAutoCapture(IoTestPointPlan point, IoTestObservation observation)
+    {
+        var decision = _autoCaptureCoordinator.Observe(point, observation);
+        if (decision.Evidence != null && !AppendOrFault(FatValueEvent(point, decision.Evidence)))
+            return false;
+        PromoteAutoCaptureDecision(point, decision);
+        return true;
+    }
+
+    private static void PromoteAutoCaptureDecision(IoTestPointPlan point, FatAutoCaptureDecision decision)
+    {
+        point.Runtime.AutoCaptureStage = decision.Stage;
+        if (decision.Evidence != null)
+            point.Runtime.SetFatValueEvidence(decision.Evidence);
+        if (point.CaptureMode == FatCaptureMode.OperatorSnapshot || decision.Evidence != null)
+            point.Runtime.StatusReason = decision.Message;
+
+        FatCurrentEvidenceAssessmentService.Apply(point);
+    }
+
+    private void UpdateRunningCompletionStatus()
     {
         if (State != IoTestSessionState.Running || ActiveIed == null || _sessionPointIds.Count == 0)
             return;
-        var allComplete = ActiveIed.TestPoints
+
+        var scoped = ActiveIed.TestPoints
             .Where(point => _sessionPointIds.Contains(point.TestPointId))
-            .All(point => point.Runtime.IsComplete);
-        if (!allComplete)
+            .ToList();
+        var complete = scoped.Count(point => point.IsFatEvidenceComplete);
+        if (complete != scoped.Count)
             return;
 
-        var passed = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Passed);
-        var review = ActiveIed.TestPoints.Count(point => _sessionPointIds.Contains(point.TestPointId) && point.Runtime.State == IoTestPointState.Review);
-        if (!AppendOrFault(SessionEvent("session_completed", $"All {_sessionPointIds.Count} session points completed: {passed} PASS, {review} review.")))
-            return;
-        CompletedAtUtc = DateTimeOffset.UtcNow;
-        State = IoTestSessionState.Completed;
-        StatusText = $"{ActiveIed.IedName} completed: {passed} PASS, {review} review.";
-        CleanupSessionResources(disposeJournal: true, keepActiveIed: true);
-        VerifySealedJournal();
-        RaiseProgress();
+        var automatic = scoped.Where(point => point.CaptureMode == FatCaptureMode.AutomaticTransition).ToList();
+        var passed = automatic.Count(point => point.Runtime.State == IoTestPointState.Passed);
+        var review = automatic.Count(point => point.Runtime.State == IoTestPointState.Review);
+        var failed = automatic.Count(point => point.Runtime.State == IoTestPointState.Failed);
+        var snapshots = scoped.Count - automatic.Count;
+        StatusText =
+            $"{ActiveIed.IedName} current evidence complete: {passed} PASS, {review} review, {failed} fail, {snapshots} snapshot row(s) complete. " +
+            "Auto-capture is locked at the current pair; explicit Recapture is required to replace Value 1 or Value 2 until Stop.";
     }
 
     private void ActiveDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -462,16 +797,64 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         if (State != IoTestSessionState.Running || ActiveIed == null)
             return;
 
+        var stagedCount = _pendingPairValue1.Count;
+        _pendingPairValue1.Clear();
+        _autoCaptureCoordinator.Clear();
         State = IoTestSessionState.Interrupted;
-        while (_pendingSnapshots.TryDequeue(out _)) { }
-        StatusText = $"{ActiveIed.IedName} monitoring was interrupted ({capturedStatus}). Reconnect the IED, then Resume to establish a new baseline.";
+        ClearPendingSnapshots();
+        StatusText = $"{ActiveIed.IedName} monitoring was interrupted ({capturedStatus}). Reconnect the IED, then Resume to establish a new baseline." +
+                     (stagedCount == 0 ? string.Empty : $" {stagedCount} staged pair Recapture item(s) were cancelled; current pointers were unchanged.");
         AppendOrFault(SessionEvent("session_interrupted", StatusText));
     }
 
-    private List<SessionBinding> BuildSessionBindings(IoTestIedPlan ied, Iec61850MonitorDevice device)
+    private bool TryPrepareRecapture(
+        IReadOnlyCollection<IoTestPointPlan>? points,
+        out List<SessionBinding> bindings,
+        out string failure)
+    {
+        bindings = new List<SessionBinding>();
+        failure = string.Empty;
+        if (State != IoTestSessionState.Running || ActiveIed == null)
+        {
+            failure = "Start this IED FAT session before using Recapture.";
+            return false;
+        }
+
+        var requested = points?.Where(point => point != null).Distinct().ToList() ?? new List<IoTestPointPlan>();
+        if (requested.Count == 0)
+        {
+            failure = "Select one or more FAT rows before using Recapture.";
+            return false;
+        }
+
+        foreach (var point in requested)
+        {
+            if (!ActiveIed.TestPoints.Contains(point) || !_sessionPointIds.Contains(point.TestPointId))
+            {
+                failure = $"{point.SignalName} is not part of the active IED capture scope. No evidence changed.";
+                return false;
+            }
+            if (!point.WorkspaceSelected || !point.IsIncludedInFat || !point.TestEnabled || !point.ImportReady)
+            {
+                failure = $"{point.SignalName} is not eligible for Recapture because it left the shared/included/TEST/import-ready FAT scope. No evidence changed.";
+                return false;
+            }
+            if (!_activeLivePoints.TryGetValue(point.TestPointId, out var livePoint))
+            {
+                failure = $"{point.SignalName} does not have one active live point. No evidence changed.";
+                return false;
+            }
+            bindings.Add(new SessionBinding(point, livePoint));
+        }
+        return true;
+    }
+
+    private static List<SessionBinding> BuildSessionBindings(
+        IReadOnlyCollection<IoTestPointPlan> captureScope,
+        Iec61850MonitorDevice device)
     {
         var result = new List<SessionBinding>();
-        foreach (var point in ied.TestPoints.Where(point => point.TestEnabled && point.ImportReady && point.IsLiveBound))
+        foreach (var point in captureScope.Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.IsLiveBound))
         {
             var expected = IoTestLiveBindingService.NormalizeReference(
                 string.IsNullOrWhiteSpace(point.LiveSignalReference) ? point.ObjectReference : point.LiveSignalReference);
@@ -502,7 +885,9 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         long connectionGeneration,
         DateTimeOffset capturedAtUtc)
         => new(
-            IoTestValueNormalizer.Normalize(point, livePoint.Value),
+            point.CaptureMode == FatCaptureMode.AutomaticTransition
+                ? IoTestValueNormalizer.Normalize(point, livePoint.Value)
+                : null,
             livePoint.Value,
             capturedAtUtc,
             IoTestValueNormalizer.ParseIedTimestamp(livePoint.DeviceTimestamp),
@@ -510,6 +895,16 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             livePoint.SourceMode,
             livePoint.Sequence,
             connectionGeneration);
+
+    private FatLiveValueObservation CreateLiveValueObservation(Iec61850MonitorPoint livePoint)
+        => new(
+            livePoint.Value,
+            DateTimeOffset.UtcNow,
+            IoTestValueNormalizer.ParseIedTimestamp(livePoint.DeviceTimestamp),
+            livePoint.Quality,
+            livePoint.SourceMode,
+            livePoint.Sequence,
+            _connectionGeneration);
 
     private void AddPointIndex(string deviceId, string reference, IoTestPointPlan point)
     {
@@ -583,6 +978,48 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         Reason = evidence?.VerdictReason ?? reason
     };
 
+    private IoTestJournalEntry FatValueEvent(
+        IoTestPointPlan point,
+        FatValueEvidence evidence,
+        string? eventType = null,
+        string? reason = null)
+    {
+        var automatic = evidence.CaptureKind == FatEvidenceCaptureKind.AutomaticValue;
+        var recapture = evidence.CaptureKind == FatEvidenceCaptureKind.OperatorRecapture;
+        return new IoTestJournalEntry
+        {
+            EventType = eventType ?? (automatic ? "fat_value_auto" : recapture ? "fat_value_recapture" : "fat_value_snapshot"),
+            RecordedAtUtc = evidence.CapturedAt,
+            ProjectId = _project.ProjectId,
+            SessionId = SessionId,
+            IedName = point.IedName,
+            IpAddress = point.IpAddress,
+            SourceWorkbookName = _project.SourceWorkbookName,
+            SourceWorkbookSha256 = _project.SourceWorkbookSha256,
+            ApplicationVersion = CurrentApplicationVersion,
+            Operator = Environment.UserName,
+            Workstation = Environment.MachineName,
+            TestPointId = point.TestPointId,
+            SignalName = point.SignalName,
+            ObjectReference = string.IsNullOrWhiteSpace(point.LiveSignalReference) ? point.ObjectReference : point.LiveSignalReference,
+            Attempt = point.Runtime.Attempt,
+            Transition = evidence.Slot.ToString(),
+            ObservedValue = evidence.RawValue,
+            IedTimestamp = evidence.IedTimestamp,
+            Quality = evidence.Quality,
+            AcquisitionSource = evidence.AcquisitionSource,
+            PointSequence = evidence.Sequence,
+            ConnectionGeneration = evidence.ConnectionGeneration,
+            Verdict = "Accepted",
+            Reason = reason ?? (automatic
+                ? $"Auto Capture accepted {evidence.Slot} from the stable live IEC 61850 value."
+                : recapture
+                    ? $"Operator recaptured {evidence.Slot} from the current live IEC 61850 value."
+                    : $"Operator captured {evidence.Slot} from the current live IEC 61850 value."),
+            EvidenceKind = automatic ? "fat-value-auto" : recapture ? "fat-value-recapture" : "fat-value-snapshot"
+        };
+    }
+
     private void AppendRequired(IoTestJournalEntry entry)
     {
         if (!AppendOrFault(entry))
@@ -596,7 +1033,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             var journal = _journal ?? throw new InvalidOperationException("No evidence journal is open for the active FAT session.");
             var envelopes = journal.AppendBatch(entries);
             if (envelopes.Count == 0)
-                throw new InvalidOperationException("Evidence journal startup batch produced no records.");
+                throw new InvalidOperationException("Evidence journal batch produced no records.");
             var envelope = envelopes[^1];
             EvidenceRecordCount = envelope.JournalSequence;
             LastJournalHash = envelope.Hash;
@@ -658,7 +1095,10 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
         _activeDevice = null;
         _activePointIndex.Clear();
         _activeLivePoints.Clear();
-        while (_pendingSnapshots.TryDequeue(out _)) { }
+        _captureCoordinator.Clear();
+        _autoCaptureCoordinator.Clear();
+        _pendingPairValue1.Clear();
+        ClearPendingSnapshots();
         if (disposeJournal)
         {
             _journal?.Dispose();

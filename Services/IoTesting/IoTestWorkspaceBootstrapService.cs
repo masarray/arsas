@@ -17,16 +17,35 @@ public static class IoTestWorkspaceBootstrapService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public static async Task<IoTestWorkspaceLaunchResult> OpenWorkbookAsync(
+    public static Task<IoTestWorkspaceLaunchResult> OpenWorkbookAsync(
         IoTestProject importedProject,
         string workbookPath,
         string localProjectsRoot,
         string evidenceRoot,
         Func<IoTestProject, string, IoTestSessionController> sessionFactory,
         CancellationToken cancellationToken = default)
+        => OpenSourcesAsync(
+            importedProject,
+            new[] { new IoFatSourceInput(workbookPath, IoFatSourceKinds.Workbook) },
+            localProjectsRoot,
+            evidenceRoot,
+            sessionFactory,
+            cancellationToken);
+
+    public static async Task<IoTestWorkspaceLaunchResult> OpenSourcesAsync(
+        IoTestProject importedProject,
+        IReadOnlyCollection<IoFatSourceInput> sourceInputs,
+        string localProjectsRoot,
+        string evidenceRoot,
+        Func<IoTestProject, string, IoTestSessionController> sessionFactory,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(importedProject);
+        ArgumentNullException.ThrowIfNull(sourceInputs);
         ArgumentNullException.ThrowIfNull(sessionFactory);
+
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
         var snapshotPath = Path.Combine(localDirectory, "project.snapshot.json");
@@ -56,10 +75,10 @@ public static class IoTestWorkspaceBootstrapService
             var session = sessionFactory(importedProject, evidenceRoot);
             try
             {
-                var opened = await IoTestWorkspacePersistence.OpenWorkbookAsync(
+                var opened = await IoTestWorkspacePersistence.OpenSourcesAsync(
                     importedProject,
                     session,
-                    workbookPath,
+                    sourceInputs,
                     localProjectsRoot,
                     evidenceRoot,
                     cancellationToken).ConfigureAwait(false);
@@ -104,7 +123,6 @@ public static class IoTestWorkspaceBootstrapService
             localProjectsRoot,
             evidenceRoot,
             cancellationToken).ConfigureAwait(false);
-        ExcludeCompletedFromNextSession(opened.Project);
         opened.Workspace.SaveNow();
         return new IoTestWorkspaceLaunchResult(
             opened.Project,
@@ -125,13 +143,14 @@ public static class IoTestWorkspaceBootstrapService
         var savedProject = RequiredObject(root, "project");
         if (!RequiredString(savedProject, "projectId").Equals(project.ProjectId, StringComparison.OrdinalIgnoreCase) ||
             !RequiredString(savedProject, "schemaVersion").Equals(project.SchemaVersion, StringComparison.OrdinalIgnoreCase) ||
-            !RequiredString(savedProject, "sourceWorkbookSha256").Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase))
+            !SnapshotSourceMatches(savedProject, project))
         {
-            throw new InvalidDataException("The local snapshot belongs to a different workbook or schema.");
+            throw new InvalidDataException("The local snapshot belongs to a different FAT source set or schema.");
         }
 
         var savedIeds = RequiredArray(savedProject, "ieds").EnumerateArray().ToArray();
         RestoreIedLevelEvidence(project, savedIeds);
+        RestoreMissingManualWorkspaceRows(project, savedIeds);
 
         var savedPoints = savedIeds
             .SelectMany(ied => RequiredArray(ied, "testPoints").EnumerateArray())
@@ -142,14 +161,26 @@ public static class IoTestWorkspaceBootstrapService
             if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
                 continue;
 
+            // Shared Engineering/FAT membership, FAT TEST scope, and FAT disposition are
+            // three independent operator authorities. Same-source continuation restores all
+            // three without allowing Remove/Restore to rewrite Engineering selection.
+            if (saved.TryGetProperty("workspaceSelected", out var workspaceSelected) &&
+                workspaceSelected.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                point.WorkspaceSelected = workspaceSelected.GetBoolean();
+            }
             if (saved.TryGetProperty("testEnabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 point.TestEnabled = enabled.GetBoolean();
+            point.RestoreFatDisposition(OptionalEnum(saved, "fatDisposition", FatSignalDisposition.Included));
+
             if (!saved.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
                 continue;
 
             point.Runtime.Attempt = OptionalInt(runtime, "attempt", 0);
             point.Runtime.OnEvidence = OptionalEvidence(runtime, "onEvidence");
             point.Runtime.OffEvidence = OptionalEvidence(runtime, "offEvidence");
+            point.Runtime.Value1Evidence = OptionalFatEvidence(runtime, "value1Evidence");
+            point.Runtime.Value2Evidence = OptionalFatEvidence(runtime, "value2Evidence");
             point.Runtime.LastObservedState = null;
             point.Runtime.LastSequence = -1;
             point.Runtime.ConnectionGeneration = -1;
@@ -157,18 +188,27 @@ public static class IoTestWorkspaceBootstrapService
             point.Runtime.CurrentQuality = "Unknown";
             point.Runtime.CurrentSource = "Restored · live baseline required";
 
+            if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+            {
+                point.Runtime.State = IoTestPointState.NotStarted;
+                point.Runtime.StatusReason = point.IsFatEvidenceComplete
+                    ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
+                    : point.Runtime.Value1Evidence is not null || point.Runtime.Value2Evidence is not null
+                        ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
+                        : "Progress restored; reconnect live acquisition before operator snapshot capture.";
+                continue;
+            }
+
             var savedState = OptionalState(runtime, "state", IoTestPointState.NotStarted);
             if (savedState is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
             {
                 point.Runtime.State = savedState;
                 point.Runtime.StatusReason = OptionalString(runtime, "statusReason", "Restored completed result");
-                point.TestEnabled = false;
             }
             else if (point.Runtime.OnEvidence != null && point.Runtime.OffEvidence == null)
             {
                 point.Runtime.State = IoTestPointState.Review;
                 point.Runtime.StatusReason = "Progress was restored after the live session ended; OFF continuity after saved ON evidence cannot be proven.";
-                point.TestEnabled = false;
             }
             else
             {
@@ -177,6 +217,128 @@ public static class IoTestWorkspaceBootstrapService
             }
         }
         project.InitializeRuntimeNotifications();
+    }
+
+    private static bool SnapshotSourceMatches(JsonElement savedProject, IoTestProject project)
+    {
+        var expectedSet = IoFatSourceIdentity.ProjectSourceFingerprint(project);
+        var savedSet = OptionalString(savedProject, "sourceSetSha256", string.Empty);
+        if (!string.IsNullOrWhiteSpace(savedSet))
+            return savedSet.Equals(expectedSet, StringComparison.OrdinalIgnoreCase);
+
+        var legacyWorkbookSha = OptionalString(savedProject, "sourceWorkbookSha256", string.Empty);
+        return !string.IsNullOrWhiteSpace(legacyWorkbookSha) &&
+               legacyWorkbookSha.Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RestoreMissingManualWorkspaceRows(
+        IoTestProject project,
+        IReadOnlyList<JsonElement> savedIeds)
+    {
+        if (!project.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var trustedSclHashes = project.Sources
+            .Where(source => source.Kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase))
+            .Select(source => source.Sha256)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (trustedSclHashes.Count == 0)
+            return;
+
+        foreach (var ied in project.Ieds)
+        {
+            var savedIed = savedIeds.FirstOrDefault(candidate =>
+                OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
+                OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
+            if (savedIed.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var existingIds = ied.TestPoints
+                .Select(point => point.TestPointId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var savedPoint in RequiredArray(savedIed, "testPoints").EnumerateArray())
+            {
+                var testPointId = RequiredString(savedPoint, "testPointId");
+                if (existingIds.Contains(testPointId))
+                    continue;
+
+                var bindingStatus = OptionalString(savedPoint, "bindingStatus", string.Empty);
+                if (!bindingStatus.Equals(
+                        IoTestSignalSelectionService.SclWorkspaceAuthorityBindingStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!testPointId.StartsWith("scl-manual-", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Saved manual SCL row '{testPointId}' has an invalid workspace identity.");
+
+                var savedIedName = RequiredString(savedPoint, "iedName");
+                var savedIpAddress = RequiredString(savedPoint, "ipAddress");
+                if (!savedIedName.Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) ||
+                    !savedIpAddress.Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException($"Saved manual SCL row '{testPointId}' does not belong to its persisted IED endpoint.");
+                }
+
+                var sourceSha = OptionalString(savedPoint, "signalAddress", string.Empty).Trim();
+                if (sourceSha.Length == 0 || !trustedSclHashes.Contains(sourceSha))
+                {
+                    throw new InvalidDataException(
+                        $"Saved manual SCL row '{testPointId}' does not belong to the exact reopened SCL source set.");
+                }
+
+                var objectReference = RequiredString(savedPoint, "objectReference");
+                var sourceReference = OptionalString(savedPoint, "sourceIecReference", string.Empty);
+                if (string.IsNullOrWhiteSpace(objectReference) || string.IsNullOrWhiteSpace(sourceReference))
+                    throw new InvalidDataException($"Saved manual SCL row '{testPointId}' has incomplete IEC 61850 identity.");
+
+                var point = new IoTestPointPlan
+                {
+                    TestPointId = testPointId,
+                    IedName = savedIedName,
+                    IpAddress = savedIpAddress,
+                    SignalName = RequiredString(savedPoint, "signalName"),
+                    ObjectReference = objectReference,
+                    FunctionalConstraint = OptionalString(savedPoint, "functionalConstraint", string.Empty),
+                    ExpectedOnText = RequiredString(savedPoint, "expectedOnText"),
+                    ExpectedOffText = RequiredString(savedPoint, "expectedOffText"),
+                    ExpectedOnRaw = OptionalInt(savedPoint, "expectedOnRaw", 1),
+                    ExpectedOffRaw = OptionalInt(savedPoint, "expectedOffRaw", 0),
+                    DataType = OptionalString(savedPoint, "dataType", "SDI"),
+                    SignalAddress = sourceSha,
+                    DataSetName = OptionalString(savedPoint, "dataSetName", string.Empty),
+                    LogicalDevice = OptionalString(savedPoint, "logicalDevice", string.Empty),
+                    LogicalNode = OptionalString(savedPoint, "logicalNode", string.Empty),
+                    DataObject = OptionalString(savedPoint, "dataObject", string.Empty),
+                    DataAttribute = OptionalString(savedPoint, "dataAttribute", string.Empty),
+                    Cdc = OptionalString(savedPoint, "cdc", string.Empty),
+                    SourceIecReference = sourceReference,
+                    ReportDisplayReference = OptionalString(savedPoint, "reportDisplayReference", sourceReference),
+                    EventLogSearchReference = OptionalString(savedPoint, "eventLogSearchReference", objectReference),
+                    EvidenceExpected = OptionalString(savedPoint, "evidenceExpected", string.Empty),
+                    MappingQuality = OptionalString(savedPoint, "mappingQuality", string.Empty),
+                    ReviewStatus = OptionalString(savedPoint, "reviewStatus", string.Empty),
+                    ReviewReason = OptionalString(savedPoint, "reviewReason", string.Empty),
+                    EventLogMatch = OptionalString(savedPoint, "eventLogMatch", string.Empty),
+                    EvidenceReference = OptionalString(savedPoint, "evidenceReference", string.Empty),
+                    ReviewerComment = OptionalString(savedPoint, "reviewerComment", string.Empty),
+                    SourceSheet = OptionalString(savedPoint, "sourceSheet", string.Empty),
+                    SourceRow = OptionalInt(savedPoint, "sourceRow", 0),
+                    SignalKind = OptionalEnum(savedPoint, "signalKind", FatSignalKind.Other),
+                    CaptureMode = OptionalEnum(savedPoint, "captureMode", FatCaptureMode.OperatorSnapshot),
+                    WorkspaceSelected = OptionalBool(savedPoint, "workspaceSelected", true),
+                    TestEnabled = OptionalBool(savedPoint, "testEnabled", true),
+                    ImportReady = OptionalBool(savedPoint, "importReady", true),
+                    BindingStatus = bindingStatus,
+                    BindingEvidence = OptionalString(savedPoint, "bindingEvidence", string.Empty)
+                };
+
+                if (!ied.AddTestPoint(point))
+                    throw new InvalidDataException($"Saved manual SCL row '{testPointId}' collides with the reopened workspace.");
+                existingIds.Add(testPointId);
+            }
+        }
     }
 
     private static void RestoreIedLevelEvidence(IoTestProject project, IReadOnlyList<JsonElement> savedIeds)
@@ -189,8 +351,6 @@ public static class IoTestWorkspaceBootstrapService
             if (saved.ValueKind != JsonValueKind.Object)
                 continue;
 
-            // These fields are optional so snapshots written before COMTRADE FAT evidence
-            // was introduced remain fully readable.
             ied.LatestComtradeFiles = OptionalString(saved, "latestComtradeFiles", string.Empty);
             ied.LatestComtradeRemotePath = OptionalString(saved, "latestComtradeRemotePath", string.Empty);
             ied.LatestComtradeCompleteness = OptionalString(saved, "latestComtradeCompleteness", string.Empty);
@@ -202,15 +362,6 @@ public static class IoTestWorkspaceBootstrapService
         }
     }
 
-    private static void ExcludeCompletedFromNextSession(IoTestProject project)
-    {
-        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
-        {
-            if (point.Runtime.IsComplete)
-                point.TestEnabled = false;
-        }
-    }
-
     private static IoTestTransitionEvidence? OptionalEvidence(JsonElement runtime, string property)
     {
         if (!runtime.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null)
@@ -218,25 +369,30 @@ public static class IoTestWorkspaceBootstrapService
         return element.Deserialize<IoTestTransitionEvidence>(JsonOptions);
     }
 
+    private static FatValueEvidence? OptionalFatEvidence(JsonElement runtime, string property)
+    {
+        if (!runtime.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null)
+            return null;
+        return element.Deserialize<FatValueEvidence>(JsonOptions);
+    }
+
+    private static TEnum OptionalEnum<TEnum>(JsonElement parent, string property, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        if (!parent.TryGetProperty(property, out var value))
+            return fallback;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && Enum.IsDefined(typeof(TEnum), number))
+            return (TEnum)Enum.ToObject(typeof(TEnum), number);
+        if (value.ValueKind == JsonValueKind.String && Enum.TryParse<TEnum>(value.GetString(), ignoreCase: true, out var parsed))
+            return parsed;
+        return fallback;
+    }
+
     private static IoTestPointState OptionalState(
         JsonElement parent,
         string property,
         IoTestPointState fallback)
-    {
-        if (!parent.TryGetProperty(property, out var value))
-            return fallback;
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) &&
-            Enum.IsDefined(typeof(IoTestPointState), number))
-        {
-            return (IoTestPointState)number;
-        }
-        if (value.ValueKind == JsonValueKind.String &&
-            Enum.TryParse<IoTestPointState>(value.GetString(), ignoreCase: true, out var parsed))
-        {
-            return parsed;
-        }
-        return fallback;
-    }
+        => OptionalEnum(parent, property, fallback);
 
     private static JsonElement RequiredObject(JsonElement parent, string property)
     {
@@ -264,6 +420,11 @@ public static class IoTestWorkspaceBootstrapService
             ? value.GetString() ?? fallback
             : fallback;
 
+    private static bool OptionalBool(JsonElement parent, string property, bool fallback)
+        => parent.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : fallback;
+
     private static int OptionalInt(JsonElement parent, string property, int fallback)
         => parent.TryGetProperty(property, out var value) && value.TryGetInt32(out var number)
             ? number
@@ -283,9 +444,10 @@ public static class IoTestWorkspaceBootstrapService
 
     private static string ProjectDirectory(string root, IoTestProject project)
     {
-        var hash = string.IsNullOrWhiteSpace(project.SourceWorkbookSha256)
+        var fingerprint = IoFatSourceIdentity.ProjectStorageFingerprint(project);
+        var hash = string.IsNullOrWhiteSpace(fingerprint)
             ? "nohash"
-            : project.SourceWorkbookSha256[..Math.Min(12, project.SourceWorkbookSha256.Length)];
+            : fingerprint[..Math.Min(12, fingerprint.Length)];
         return Path.Combine(root, $"{Sanitize(project.ProjectId)}_{hash}");
     }
 

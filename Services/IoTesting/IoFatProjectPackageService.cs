@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
@@ -58,6 +59,7 @@ public static class IoFatProjectPackageService
                 $"This .arsas project has package kind '{kind.GetString()}' and cannot be opened in the IO List Testing workspace.");
         }
 
+        await VerifySourceBundleAsync(archive, root, cancellationToken).ConfigureAwait(false);
         await VerifyOptionalManifestEntryAsync(
             archive,
             root,
@@ -88,11 +90,22 @@ public static class IoFatProjectPackageService
             throw new InvalidOperationException(
                 "Stop the active FAT session before exporting an ARSAS project so every evidence journal is sealed.");
         }
+        if (workspace.SourceFiles.Count == 0)
+            throw new InvalidDataException("The FAT workspace contains no source files to package.");
 
         workspace.SaveNow();
         var snapshotBytes = await File.ReadAllBytesAsync(workspace.SnapshotPath, cancellationToken).ConfigureAwait(false);
-        var sourceBytes = await File.ReadAllBytesAsync(workspace.SourceWorkbookPath, cancellationToken).ConfigureAwait(false);
-        VerifyHash(sourceBytes, workspace.Project.SourceWorkbookSha256, "local source workbook");
+        var sourcePayloads = new List<(IoFatWorkspaceSource Source, byte[] Bytes)>();
+        foreach (var source in workspace.SourceFiles)
+        {
+            sourcePayloads.Add((
+                source,
+                await IoFatSourceWorkspaceService.ReadVerifiedAsync(source, cancellationToken).ConfigureAwait(false)));
+        }
+        var packageSources = IoFatSourceWorkspaceService.ToPackageSources(workspace.SourceFiles).ToList();
+        var sourceSetSha256 = IoFatSourceIdentity.ComputeSetFingerprint(workspace.SourceFiles.Select(source => source.Source));
+        var workbook = workspace.SourceFiles.FirstOrDefault(source =>
+            source.Source.Kind.Equals(IoFatSourceKinds.Workbook, StringComparison.OrdinalIgnoreCase));
 
         var evidenceFiles = new List<PackageEvidence>();
         if (Directory.Exists(workspace.EvidenceProjectDirectory))
@@ -121,31 +134,39 @@ public static class IoFatProjectPackageService
         cancellationToken.ThrowIfCancellationRequested();
         var generatedAt = DateTimeOffset.Now;
         var pdfBytes = IoFatPdfReportService.Generate(workspace.Project, generatedAt);
-        var resultWorkbookTemporary = Path.Combine(
-            Path.GetTempPath(),
-            "ARSAS",
-            "IO FAT Export",
-            Guid.NewGuid().ToString("N") + ".xlsx");
-        byte[] resultWorkbookBytes;
-        try
+
+        string resultWorkbookEntry = string.Empty;
+        string resultWorkbookSha256 = string.Empty;
+        byte[]? resultWorkbookBytes = null;
+        if (workbook != null)
         {
-            await IoFatExcelResultExportService.ExportAsync(
-                workspace.SourceWorkbookPath,
-                resultWorkbookTemporary,
-                workspace.Project,
-                cancellationToken).ConfigureAwait(false);
-            resultWorkbookBytes = await File.ReadAllBytesAsync(
-                resultWorkbookTemporary,
-                cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (File.Exists(resultWorkbookTemporary))
-                File.Delete(resultWorkbookTemporary);
+            var resultWorkbookTemporary = Path.Combine(
+                Path.GetTempPath(),
+                "ARSAS",
+                "IO FAT Export",
+                Guid.NewGuid().ToString("N") + ".xlsx");
+            try
+            {
+                await IoFatExcelResultExportService.ExportAsync(
+                    workbook.LocalPath,
+                    resultWorkbookTemporary,
+                    workspace.Project,
+                    cancellationToken).ConfigureAwait(false);
+                resultWorkbookBytes = await File.ReadAllBytesAsync(
+                    resultWorkbookTemporary,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (File.Exists(resultWorkbookTemporary))
+                    File.Delete(resultWorkbookTemporary);
+            }
+
+            resultWorkbookEntry = "report/IO-FAT-Results.xlsx";
+            resultWorkbookSha256 = HashBytes(resultWorkbookBytes);
         }
 
         const string reportEntry = "report/IO-FAT-Report.pdf";
-        const string resultWorkbookEntry = "report/IO-FAT-Results.xlsx";
         var manifest = new PackageManifest(
             IoTestWorkspacePersistence.PackageVersion,
             "io-fat",
@@ -155,13 +176,17 @@ public static class IoFatProjectPackageService
             workspace.Project.SchemaVersion,
             "project.snapshot.json",
             HashBytes(snapshotBytes),
-            $"source/{SafeFileName(workspace.Project.SourceWorkbookName, "source.xlsx")}",
-            workspace.Project.SourceWorkbookSha256,
+            workbook?.PackageEntry ?? string.Empty,
+            workbook?.Source.Sha256 ?? string.Empty,
             reportEntry,
             HashBytes(pdfBytes),
             resultWorkbookEntry,
-            HashBytes(resultWorkbookBytes),
-            evidenceFiles);
+            resultWorkbookSha256,
+            evidenceFiles)
+        {
+            SourceSetSha256 = sourceSetSha256,
+            SourceFiles = packageSources
+        };
 
         var fullDestination = NormalizeDestination(destinationPath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullDestination)!);
@@ -176,13 +201,15 @@ public static class IoFatProjectPackageService
                     JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions),
                     cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.SnapshotEntry, snapshotBytes, cancellationToken).ConfigureAwait(false);
-                await WriteEntryAsync(archive, manifest.SourceWorkbookEntry, sourceBytes, cancellationToken).ConfigureAwait(false);
+                foreach (var source in sourcePayloads)
+                    await WriteEntryAsync(archive, source.Source.PackageEntry, source.Bytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(archive, manifest.ReportEntry, pdfBytes, cancellationToken).ConfigureAwait(false);
-                await WriteEntryAsync(archive, manifest.ResultWorkbookEntry, resultWorkbookBytes, cancellationToken).ConfigureAwait(false);
+                if (resultWorkbookBytes != null)
+                    await WriteEntryAsync(archive, manifest.ResultWorkbookEntry, resultWorkbookBytes, cancellationToken).ConfigureAwait(false);
                 await WriteEntryAsync(
                     archive,
                     "README.txt",
-                    Encoding.UTF8.GetBytes(BuildReadme()),
+                    Encoding.UTF8.GetBytes(BuildReadme(workbook != null)),
                     cancellationToken).ConfigureAwait(false);
 
                 foreach (var evidence in evidenceFiles)
@@ -208,6 +235,50 @@ public static class IoFatProjectPackageService
         }
     }
 
+    private static async Task VerifySourceBundleAsync(
+        ZipArchive archive,
+        JsonElement manifest,
+        CancellationToken cancellationToken)
+    {
+        if (manifest.TryGetProperty("sourceFiles", out var sourceFiles) && sourceFiles.ValueKind == JsonValueKind.Array && sourceFiles.GetArrayLength() > 0)
+        {
+            var sources = sourceFiles.Deserialize<List<IoFatPackageSource>>(JsonOptions)
+                ?? throw new InvalidDataException("The ARSAS project source bundle manifest is invalid.");
+            if (sources.Count == 0)
+                throw new InvalidDataException("The ARSAS project source bundle is empty.");
+
+            foreach (var source in sources)
+            {
+                var descriptor = IoFatSourceIdentity.Normalize(source.Descriptor);
+                var bundleEntry = RequiredEntry(archive, source.Entry);
+                var bytes = await ReadEntryAsync(bundleEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+                VerifyHash(bytes, descriptor.Sha256, $"FAT source '{descriptor.FileName}'");
+                if (descriptor.Length > 0 && descriptor.Length != bytes.LongLength)
+                    throw new InvalidDataException($"FAT source '{descriptor.FileName}' length does not match the project manifest.");
+            }
+
+            if (manifest.TryGetProperty("sourceSetSha256", out var sourceSet) && sourceSet.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(sourceSet.GetString()))
+            {
+                var actual = IoFatSourceIdentity.ComputeSetFingerprint(sources.Select(source => source.Descriptor));
+                if (!actual.Equals(sourceSet.GetString(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The ARSAS project FAT source-set fingerprint is invalid.");
+            }
+            return;
+        }
+
+        // Legacy package: singular source workbook is still accepted and fully verified.
+        if (!manifest.TryGetProperty("sourceWorkbookEntry", out var legacyEntry) || legacyEntry.ValueKind != JsonValueKind.String ||
+            !manifest.TryGetProperty("sourceWorkbookSha256", out var legacyHash) || legacyHash.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(legacyEntry.GetString()) || string.IsNullOrWhiteSpace(legacyHash.GetString()))
+        {
+            throw new InvalidDataException("The ARSAS project contains no FAT source bundle.");
+        }
+        var legacySourceEntry = RequiredEntry(archive, legacyEntry.GetString()!);
+        var bytesLegacy = await ReadEntryAsync(legacySourceEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+        VerifyHash(bytesLegacy, legacyHash.GetString()!, "legacy source workbook");
+    }
+
     private static async Task VerifyOptionalManifestEntryAsync(
         ZipArchive archive,
         JsonElement manifest,
@@ -216,18 +287,21 @@ public static class IoFatProjectPackageService
         string label,
         CancellationToken cancellationToken)
     {
-        if (!manifest.TryGetProperty(entryProperty, out var entryValue) || entryValue.ValueKind != JsonValueKind.String ||
-            !manifest.TryGetProperty(hashProperty, out var hashValue) || hashValue.ValueKind != JsonValueKind.String)
-        {
-            return; // Legacy package: existing importer verifies snapshot, workbook and journals.
-        }
+        var hasEntry = manifest.TryGetProperty(entryProperty, out var entryValue) && entryValue.ValueKind == JsonValueKind.String;
+        var hasHash = manifest.TryGetProperty(hashProperty, out var hashValue) && hashValue.ValueKind == JsonValueKind.String;
+        if (!hasEntry && !hasHash)
+            return;
+        if (!hasEntry || !hasHash)
+            throw new InvalidDataException($"The ARSAS project {label} manifest is incomplete.");
 
         var entryName = entryValue.GetString();
         var expectedHash = hashValue.GetString();
+        if (string.IsNullOrWhiteSpace(entryName) && string.IsNullOrWhiteSpace(expectedHash))
+            return;
         if (string.IsNullOrWhiteSpace(entryName) || string.IsNullOrWhiteSpace(expectedHash))
             throw new InvalidDataException($"The ARSAS project {label} manifest is incomplete.");
-        var entry = RequiredEntry(archive, entryName);
-        var bytes = await ReadEntryAsync(entry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+        var manifestArtifactEntry = RequiredEntry(archive, entryName);
+        var bytes = await ReadEntryAsync(manifestArtifactEntry, 100 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
         VerifyHash(bytes, expectedHash, label);
     }
 
@@ -275,14 +349,6 @@ public static class IoFatProjectPackageService
         await destination.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
     }
 
-    private static string SafeFileName(string? value, string fallback)
-    {
-        var name = Path.GetFileName(string.IsNullOrWhiteSpace(value) ? fallback : value.Trim());
-        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
-        var sanitized = new string(name.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
-        return sanitized.Length == 0 ? fallback : sanitized;
-    }
-
     private static void VerifyHash(byte[] bytes, string expected, string label)
     {
         var actual = HashBytes(bytes);
@@ -296,14 +362,16 @@ public static class IoFatProjectPackageService
     private static string HashFile(string path)
         => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
-    private static string BuildReadme() =>
+    private static string BuildReadme(bool hasWorkbook) =>
         "ARSAS IO FAT portable project\r\n\r\n" +
         "Project file extension: .arsas\r\n" +
         "To continue testing: open this file from FAT / IO List Testing > Open ARSAS Project.\r\n" +
         "To review or print evidence: extract report/IO-FAT-Report.pdf.\r\n" +
-        "To review results in Excel: extract report/IO-FAT-Results.xlsx.\r\n" +
+        (hasWorkbook
+            ? "To review results in Excel: extract report/IO-FAT-Results.xlsx.\r\n"
+            : "This project is SCL-backed, so no workbook-derived Excel result copy is generated.\r\n") +
         "The PDF is generated directly by the built-in native ARSAS PDF engine ported from ARIEC60870.\r\n" +
-        "The package also contains the approved source workbook, project snapshot, and verified evidence journals.\r\n";
+        "The package contains the complete FAT source bundle, project snapshot, and verified evidence journals.\r\n";
 
     private sealed record PackageManifest(
         string PackageVersion,
@@ -320,7 +388,11 @@ public static class IoFatProjectPackageService
         string ReportSha256,
         string ResultWorkbookEntry,
         string ResultWorkbookSha256,
-        List<PackageEvidence> EvidenceFiles);
+        List<PackageEvidence> EvidenceFiles)
+    {
+        public string SourceSetSha256 { get; init; } = string.Empty;
+        public List<IoFatPackageSource> SourceFiles { get; init; } = new();
+    }
 
     private sealed record PackageEvidence(
         string Entry,

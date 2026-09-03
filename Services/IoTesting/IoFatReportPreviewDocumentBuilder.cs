@@ -27,8 +27,11 @@ internal static class IoFatReportPreviewDocumentBuilder
         DateTimeOffset? generatedAt = null)
     {
         ArgumentNullException.ThrowIfNull(project);
-        // Replaces the legacy IoFatReportLayoutEngine.Build route with the document-controlled event-log layout.
-        var layout = IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
+        // Replaces the legacy IoFatReportLayoutEngine.Build route with the exact same
+        // scoped layout contract used by native PDF. Remove from FAT is therefore a hard
+        // exclusion in both PDF and on-screen form/print preview, including rows that own
+        // historical completed evidence.
+        var layout = IoFatPdfReportService.BuildLayout(project, generatedAt, draft);
         return Render(layout);
     }
 

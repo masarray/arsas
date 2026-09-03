@@ -12,6 +12,8 @@ namespace ArIED61850Tester;
 public partial class IoListTestingWindow
 {
     private bool _selectedIedContextInstalled;
+    private bool _contextRefreshScheduled;
+    private bool _contextRowRefreshScheduled;
 
     public bool SelectedCanStartWorkflow =>
         SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
@@ -43,17 +45,17 @@ public partial class IoListTestingWindow
             }
 
             var enabled = EnabledPoints(SelectedIed);
-            var allPassed = enabled.Count > 0 && enabled.All(point => point.Runtime.State == IoTestPointState.Passed);
-            var hasCompleted = enabled.Any(point => point.Runtime.IsComplete);
+            var allComplete = enabled.Count > 0 && enabled.All(point => point.IsFatEvidenceComplete);
+            var hasCompleted = enabled.Any(point => point.IsFatEvidenceComplete);
 
             if (SelectedIed.IsLiveMonitoring)
             {
-                if (allPassed)
+                if (allComplete)
                     return "Retest FAT";
                 return hasCompleted ? "Continue FAT" : "Start FAT";
             }
 
-            if (allPassed)
+            if (allComplete)
                 return "Reconnect / Retest";
             return hasCompleted ? "Connect & Continue IED" : "Connect & Start IED";
         }
@@ -73,14 +75,14 @@ public partial class IoListTestingWindow
                 return Session.StatusText;
 
             var enabled = EnabledPoints(SelectedIed);
-            var complete = enabled.Count(point => point.Runtime.IsComplete);
-            var passed = enabled.Count(point => point.Runtime.State == IoTestPointState.Passed);
-
-            if (enabled.Count > 0 && passed == enabled.Count)
-                return $"{SelectedIed.IedName} complete · all {enabled.Count} enabled points PASS · evidence protected.";
+            var complete = enabled.Count(point => point.IsFatEvidenceComplete);
+            if (enabled.Count > 0 && complete == enabled.Count)
+            {
+                return $"{SelectedIed.IedName} current Value 1 / Value 2 evidence complete for all {enabled.Count} selected signal(s). Start FAT can capture newer evidence without clearing current evidence.";
+            }
 
             if (complete > 0)
-                return $"{SelectedIed.IedName} selected · {complete}/{enabled.Count} complete · completed evidence will be preserved.";
+                return $"{SelectedIed.IedName} selected · {complete}/{enabled.Count} current Value 1 / Value 2 evidence complete · included selected rows remain eligible for recapture.";
 
             return $"{SelectedIed.IedName} selected · {SelectedIed.LiveStatusText}";
         }
@@ -94,18 +96,24 @@ public partial class IoListTestingWindow
                 return "0 / 0 complete";
 
             var enabled = EnabledPoints(SelectedIed);
-            var complete = enabled.Count(point => point.Runtime.IsComplete);
-            var passed = enabled.Count(point => point.Runtime.State == IoTestPointState.Passed);
-            var review = enabled.Count(point => point.Runtime.State == IoTestPointState.Review);
-            var failed = enabled.Count(point => point.Runtime.State == IoTestPointState.Failed);
-            return $"{complete} / {enabled.Count} complete · {passed} PASS · {review} review · {failed} fail";
+            var complete = enabled.Count(point => point.IsFatEvidenceComplete);
+            var passed = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.AutomaticTransition &&
+                point.Runtime.State == IoTestPointState.Passed);
+            var review = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.AutomaticTransition &&
+                point.Runtime.State == IoTestPointState.Review);
+            var manual = enabled.Count(point =>
+                point.CaptureMode == FatCaptureMode.OperatorSnapshot &&
+                point.IsFatEvidenceComplete);
+            return $"{complete} / {enabled.Count} complete · {passed} digital PASS · {review} review · {manual} snapshot complete";
         }
     }
 
     public int SelectedEvidenceCount =>
-        (SelectedIed?.TestPoints.Sum(point =>
-            (point.Runtime.OnEvidence == null ? 0 : 1) +
-            (point.Runtime.OffEvidence == null ? 0 : 1)) ?? 0) +
+        (SelectedIed?.TestPoints.Sum(point => point.CaptureMode == FatCaptureMode.AutomaticTransition
+            ? (point.Runtime.OnEvidence == null ? 0 : 1) + (point.Runtime.OffEvidence == null ? 0 : 1)
+            : (point.Runtime.Value1Evidence == null ? 0 : 1) + (point.Runtime.Value2Evidence == null ? 0 : 1)) ?? 0) +
         SelectedSupplementalEvidenceCount;
 
     private bool IsSelectedSessionIed =>
@@ -117,6 +125,7 @@ public partial class IoListTestingWindow
             new Action(() =>
             {
                 InstallSelectedIedContext();
+                InstallFatV2WorkspaceUx();
                 InstallSupplementalEvidenceControls();
                 RefreshSupplementalEvidenceControls();
             }),
@@ -155,36 +164,16 @@ public partial class IoListTestingWindow
         _printPreviewToggle.ToolTip = "Toggle the selected IED between signal evidence and native print preview";
     }
 
-    /// <summary>
-    /// Card-local connection action. Several different IED cards can run this method at
-    /// once; each device owns its own MainWindow connection workflow and model progress.
-    /// Evidence capture remains a separate, single-active session selected by Start FAT.
-    /// </summary>
     private async void ConnectIed_Click(object sender, RoutedEventArgs e)
     {
         var targetIed = (sender as FrameworkElement)?.DataContext as IoTestIedPlan;
         if (targetIed == null || targetIed.IsPreparing)
             return;
 
-        var enabledReady = targetIed.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
-            .ToList();
-        if (enabledReady.Count == 0)
-        {
-            ShowActionResult(
-                IoTestSessionActionResult.Failure("No import-ready IO-list signal is enabled for this IED."),
-                "IED connection scope is not ready");
-            return;
-        }
-
-        // For a continuation, connect only what still needs evidence. Completed rows keep
-        // their sealed evidence and do not have to exist in a replacement relay model.
-        // If every row is already complete, refresh the complete enabled scope instead.
-        var pendingScope = enabledReady.Where(point => !point.Runtime.IsComplete).ToList();
-        IReadOnlyCollection<IoTestPointPlan> connectionScope = pendingScope.Count > 0
-            ? pendingScope
-            : enabledReady;
-
+        // P1: Connect owns endpoint/MMS/live-acquisition state, never FAT evidence
+        // selection. The preparation path receives no checkbox scope here and therefore
+        // acquires every shared-workspace-selected included import-ready SCL row for this
+        // IED. TEST remains authoritative only when Start FAT builds captureScope below.
         if (ReferenceEquals(SelectedIed, targetIed))
             PreparationStatusText = $"Connecting {targetIed.IedName} · {targetIed.IpAddress}:102";
         RaisePreparationProperties();
@@ -206,8 +195,7 @@ public partial class IoListTestingWindow
             var preparation = await PrepareIndependentIedConnectionAsync(
                 engineeringWindow,
                 targetIed,
-                progress,
-                connectionScope);
+                progress);
 
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
@@ -221,7 +209,7 @@ public partial class IoListTestingWindow
 
             await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, targetIed);
             if (ReferenceEquals(SelectedIed, targetIed))
-                PreparationStatusText = $"{targetIed.IedName} live · ready for FAT evidence";
+                PreparationStatusText = preparation.Message;
             Storage?.ScheduleSave();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
@@ -256,56 +244,22 @@ public partial class IoListTestingWindow
             return;
         }
 
-        var enabledReady = selectedIed.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
-            .ToList();
-        var completedPoints = enabledReady
-            .Where(point => point.Runtime.IsComplete)
-            .ToList();
-        var incompletePoints = enabledReady
-            .Where(point => !point.Runtime.IsComplete)
-            .ToList();
-
-        var explicitRetest = false;
-        if (completedPoints.Count > 0 && incompletePoints.Count == 0)
+        var preflight = IoTestSessionPreflight.Validate(selectedIed);
+        if (!preflight.Succeeded)
         {
-            var answer = MessageBox.Show(
-                this,
-                $"All {completedPoints.Count} enabled rows for {selectedIed.IedName} already contain completed evidence.\n\nA normal Start FAT click will not erase them. Choose Yes only when you intentionally want to retest every completed row and replace its ON/OFF evidence.",
-                "Retest completed evidence?",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
-            {
-                PreparationStatusText = $"{selectedIed.IedName} evidence preserved · no retest started.";
-                RaiseSelectedIedContextProperties();
-                return;
-            }
-
-            explicitRetest = true;
+            ShowActionResult(preflight, "FAT session scope is not ready");
+            return;
         }
 
-        var protectedPoints = explicitRetest
-            ? Array.Empty<IoTestPointPlan>()
-            : completedPoints.ToArray();
-
-        // Completed evidence is outside the continuation scope from the first preflight
-        // through live-model preparation and Session.Start. This prevents a completed row
-        // that has since disappeared from the relay model from blocking otherwise-valid
-        // pending rows. The original TestEnabled flags are restored in the outer finally.
-        foreach (var point in protectedPoints)
-            point.TestEnabled = false;
+        // TEST is evidence authority only. Keep this selected capture scope for the
+        // evidence controller, while connection/live acquisition below remains the full
+        // shared-workspace-selected included import-ready IED scope.
+        var captureScope = selectedIed.TestPoints
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
+            .ToList();
 
         try
         {
-            var preflight = IoTestSessionPreflight.Validate(selectedIed);
-            if (!preflight.Succeeded)
-            {
-                ShowActionResult(preflight, "FAT session scope is not ready");
-                return;
-            }
-
             SetPreparingIed(selectedIed, $"Connecting {selectedIed.IedName} · {selectedIed.IpAddress}:102");
             if (Owner is MainWindow engineeringWindow)
             {
@@ -331,15 +285,34 @@ public partial class IoListTestingWindow
                 await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, selectedIed);
             }
 
-            var result = Session.Start(selectedIed);
+            // Operator selection remains authoritative. A selected SCL workspace row that
+            // has no unique live point stays checked/included and visible, but it cannot be
+            // allowed to manufacture evidence. Arm only the currently proven live subset.
+            // Legacy source-contract spelling retained only as documentation:
+            // Session.Start(selectedIed, captureScope)
+            // P5.3 deliberately does not execute that all-or-nothing call.
+            var liveCaptureScope = captureScope
+                .Where(point => point.LiveBindingState == IoTestLiveBindingState.LivePointReady)
+                .ToList();
+            if (liveCaptureScope.Count == 0)
+            {
+                var noLive = IoTestSessionActionResult.Failure(
+                    $"{selectedIed.IedName} is monitoring, but none of the {captureScope.Count} operator-selected FAT row(s) has a unique live point yet.");
+                PreparationStatusText = noLive.Message;
+                ShowActionResult(noLive, "FAT evidence session could not start");
+                return;
+            }
+
+            var waitingCount = captureScope.Count - liveCaptureScope.Count;
+            var result = Session.Start(selectedIed, liveCaptureScope);
             ShowActionResult(result, "FAT evidence session could not start");
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
             if (result.Succeeded)
             {
-                PreparationStatusText = protectedPoints.Length > 0
-                    ? $"{selectedIed.IedName} live · {protectedPoints.Length} completed row(s) preserved · waiting for pending OFF → ON → OFF tests"
-                    : $"{selectedIed.IedName} live · waiting for OFF → ON → OFF";
+                PreparationStatusText = waitingCount == 0
+                    ? $"{selectedIed.IedName} live · automatic rows track transitions · operator-snapshot rows expose ✓ Value 1 / Value 2 capture · session remains active until Stop"
+                    : $"{selectedIed.IedName} FAT active on {liveCaptureScope.Count}/{captureScope.Count} live selected row(s) · {waitingCount} selected row(s) remain waiting for safe live binding · checkbox/disposition unchanged";
                 Storage?.ScheduleSave();
             }
             else
@@ -359,9 +332,6 @@ public partial class IoListTestingWindow
         }
         finally
         {
-            foreach (var point in protectedPoints)
-                point.TestEnabled = true;
-
             selectedIed.SetPreparationState(false, selectedIed.LiveStatusText);
             SetPreparingIed(null, string.Empty);
             RaiseSelectedIedContextProperties();
@@ -371,33 +341,57 @@ public partial class IoListTestingWindow
     private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync(
         MainWindow engineeringWindow,
         IoTestIedPlan targetIed,
-        IProgress<string> progress,
-        IReadOnlyCollection<IoTestPointPlan> connectionScope)
+        IProgress<string> progress)
         => engineeringWindow.PrepareIoTestIedForFatAsync(
             Project,
             targetIed,
-            progress,
-            connectionScope);
+            progress);
 
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(SelectedIed) or nameof(IsPreparingIed) or nameof(PreparationStatusText))
+        {
             RaiseSelectedIedContextProperties();
+            if (e.PropertyName == nameof(SelectedIed))
+                Dispatcher.BeginInvoke(
+                    new Action(() => RefreshFatV2WorkspaceUx(refreshRows: true)),
+                    DispatcherPriority.Background);
+        }
     }
 
     private void ContextSession_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => RaiseSelectedIedContextProperties();
+    {
+        ScheduleContextRefresh();
+    }
 
     private void ContextIed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
             RaisePreparationProperties();
 
-        if (!ReferenceEquals(sender, SelectedIed))
-            return;
+        ScheduleContextRefresh(e.PropertyName is
+            nameof(IoTestIedPlan.EnabledCount) or
+            nameof(IoTestIedPlan.RemovedCount));
+    }
 
-        Raise(nameof(SelectedIedSummary));
-        RaiseSelectedIedContextProperties();
+    private void ScheduleContextRefresh(bool refreshRows = false)
+    {
+        _contextRowRefreshScheduled |= refreshRows;
+        if (_contextRefreshScheduled)
+            return;
+        _contextRefreshScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _contextRefreshScheduled = false;
+            var refreshFilteredRows = _contextRowRefreshScheduled;
+            _contextRowRefreshScheduled = false;
+            // Session/runtime notifications update summaries and visible cells through
+            // normal bindings. Re-filter only when shared selection/disposition changes;
+            // live value traffic must never interrupt scrolling or Capture clicks.
+            RefreshFatV2WorkspaceUx(refreshFilteredRows);
+            Raise(nameof(SelectedIedSummary));
+            RaiseSelectedIedContextProperties();
+        }), DispatcherPriority.Background);
     }
 
     private void RaiseSelectedIedContextProperties()
@@ -425,7 +419,9 @@ public partial class IoListTestingWindow
     }
 
     private static List<IoTestPointPlan> EnabledPoints(IoTestIedPlan ied)
-        => ied.TestPoints.Where(point => point.TestEnabled).ToList();
+        => ied.TestPoints
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled)
+            .ToList();
 }
 
 public sealed class IoFatAllPassedVisibilityConverter : IMultiValueConverter

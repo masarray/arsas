@@ -5,34 +5,33 @@ namespace ARSAS.Tests;
 public sealed class P62CSmartReconnectRegressionTests
 {
     [Theory]
-    [InlineData(1, 1)]
-    [InlineData(2, 2)]
-    [InlineData(3, 4)]
-    [InlineData(4, 8)]
-    [InlineData(5, 15)]
-    [InlineData(6, 30)]
-    [InlineData(20, 30)]
-    public void RetryBackoff_IsBoundedAndDeterministic(int failureCount, int expectedSeconds)
+    [InlineData(1, 500)]
+    [InlineData(2, 1000)]
+    [InlineData(3, 2000)]
+    [InlineData(4, 2000)]
+    [InlineData(20, 2000)]
+    public void RetryBackoff_IsBoundedAndDeterministic(int failureCount, int expectedMilliseconds)
         => Assert.Equal(
-            TimeSpan.FromSeconds(expectedSeconds),
+            TimeSpan.FromMilliseconds(expectedMilliseconds),
             SmartReconnectPolicy.GetRetryDelay(failureCount));
 
     [Fact]
-    public void RecoveryWarmup_ReducesImmediateMmsPressureWithoutChangingSteadyState()
+    public void RecoveryWarmup_RemainsResponsiveForCommissioningReconnect()
     {
-        Assert.Equal(2000, SmartReconnectPolicy.ApplyRecoveryPollFloor(1000, recoveryWarmup: true));
-        Assert.Equal(10000, SmartReconnectPolicy.ApplyRecoveryPollFloor(10000, recoveryWarmup: true));
-        Assert.Equal(1000, SmartReconnectPolicy.ApplyRecoveryPollFloor(1000, recoveryWarmup: false));
+        Assert.Equal(500, SmartReconnectPolicy.ApplyRecoveryPollFloor(250, recoveryWarmup: true));
+        Assert.Equal(1000, SmartReconnectPolicy.ApplyRecoveryPollFloor(1000, recoveryWarmup: true));
+        Assert.Equal(250, SmartReconnectPolicy.ApplyRecoveryPollFloor(250, recoveryWarmup: false));
         Assert.Equal(0, SmartReconnectPolicy.GetRecoveryStaggerDelayMs(0));
-        Assert.Equal(2000, SmartReconnectPolicy.GetRecoveryStaggerDelayMs(100));
-        Assert.Equal(2000, SmartReconnectPolicy.GetRecoveryStaggerDelayMs(1000));
+        Assert.Equal(500, SmartReconnectPolicy.GetRecoveryStaggerDelayMs(100));
+        Assert.Equal(500, SmartReconnectPolicy.GetRecoveryStaggerDelayMs(1000));
     }
 
     [Fact]
-    public void ReconnectBudgets_AreShorterThanAFieldVisibleStall()
+    public void ReconnectBudgets_AreCommissioningResponsive()
     {
-        Assert.True(SmartReconnectPolicy.ClientCleanupBudget <= TimeSpan.FromSeconds(1));
-        Assert.True(SmartReconnectPolicy.ConnectBudget <= TimeSpan.FromSeconds(10));
+        Assert.True(SmartReconnectPolicy.ClientCleanupBudget <= TimeSpan.FromMilliseconds(500));
+        Assert.True(SmartReconnectPolicy.ConnectBudget <= TimeSpan.FromSeconds(2));
+        Assert.True(SmartReconnectPolicy.GetRetryDelay(20) <= TimeSpan.FromSeconds(2));
         Assert.True(SmartReconnectPolicy.ReportRearmDelay < SmartReconnectPolicy.RecoveryWarmupDuration);
         Assert.True(SmartReconnectPolicy.ReportRearmDeadline <= SmartReconnectPolicy.RecoveryWarmupDuration);
     }

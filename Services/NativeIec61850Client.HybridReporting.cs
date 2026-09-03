@@ -46,6 +46,7 @@ public sealed partial class NativeIec61850Client
         cancellationToken.ThrowIfCancellationRequested();
 
         _authoritativeHybridSubscriptions.Clear();
+        ResetSemanticReportProjectionContext();
 
         var planningModel = ResolveHybridPlanningModel(device);
         if (planningModel is null)
@@ -77,6 +78,8 @@ public sealed partial class NativeIec61850Client
                 PollingFallbackSignalCount = points.Count
             };
         }
+
+        SetSemanticReportProjectionAuthority(planningModel);
 
         // A fast SCL connect deliberately skips full live-model discovery. The opened SCL
         // design model is still an ARIEC-typed model and is therefore valid as the catalog

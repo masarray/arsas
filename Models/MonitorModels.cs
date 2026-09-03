@@ -638,7 +638,9 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     public string SourceMode { get => _sourceMode; set => Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string Reason { get => _reason; set => Set(ref _reason, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string Status { get => _status; set => Set(ref _status, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
-    public long Sequence { get => _sequence; set => Set(ref _sequence, value); }
+    // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
+    // notification for every poll/report sample; the value still guards stale snapshots.
+    public long Sequence { get => _sequence; set => _sequence = value; }
     public bool IsRecentlyChanged { get => _isRecentlyChanged; set => Set(ref _isRecentlyChanged, value); }
     public bool IsAnnunciatorSelected { get => _isAnnunciatorSelected; set => Set(ref _isAnnunciatorSelected, value); }
     public bool CanUseAsAnnunciator => FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase);

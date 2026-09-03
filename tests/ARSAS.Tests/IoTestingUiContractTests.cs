@@ -23,17 +23,18 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingLauncher_UsesArsasProjectAndNativePdfWording()
+    public void IoTestingLauncher_UsesSclDataSetAndArsasProjectWording()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
 
         Assert.Contains("InstallFirstRunTestingChoices", source, StringComparison.Ordinal);
         Assert.Contains("GENERAL IEC 61850 TESTING", source, StringComparison.Ordinal);
-        Assert.Contains("FAT / IO LIST TESTING", source, StringComparison.Ordinal);
+        Assert.Contains("FAT / DATASET VERIFICATION", source, StringComparison.Ordinal);
+        Assert.Contains("Open SCL for FAT", source, StringComparison.Ordinal);
         Assert.Contains("Open IO List Workbook", source, StringComparison.Ordinal);
         Assert.Contains("Open ARSAS Project", source, StringComparison.Ordinal);
         Assert.Contains("IoFatProjectPackageService.OpenDialogFilter", source, StringComparison.Ordinal);
-        Assert.Contains("native PDF report", source, StringComparison.Ordinal);
+        Assert.Contains("Value 1 / Value 2 evidence", source, StringComparison.Ordinal);
         Assert.DoesNotContain("printable browser report", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("actionPanel.Children.Insert", source, StringComparison.Ordinal);
         Assert.DoesNotContain("InstallIoListTestingLauncher", source, StringComparison.Ordinal);
@@ -65,7 +66,41 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndProtectsCompletedEvidence()
+    public void IoTestingWindow_AllowsAddingAnIedDuringIndependentIedWorkflows()
+    {
+        var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var addButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => (string?)button.Attribute("Click") == "AddFatIedFromScl_Click");
+
+        Assert.Equal("{Binding CanAddFatIed}", (string?)addButton.Attribute("IsEnabled"));
+
+        var window = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml.cs"));
+        var addFlow = File.ReadAllText(FindRepoFile("IoListTestingWindow.AddIed.cs"));
+        Assert.Contains("public bool CanAddFatIed => !_isAddingFatIeds", window, StringComparison.Ordinal);
+        Assert.DoesNotContain("CanAddFatIed => !IsPreparingIed", window, StringComparison.Ordinal);
+        Assert.Contains("if (!CanAddFatIed", addFlow, StringComparison.Ordinal);
+        Assert.Contains("SetAddingFatIeds(true)", addFlow, StringComparison.Ordinal);
+        Assert.Contains("SetAddingFatIeds(false)", addFlow, StringComparison.Ordinal);
+        Assert.Contains("AppendSclIedsToLoadedFatAsync(this, sclPaths)", addFlow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsExecutableAndProcessDeclareTheArsasTaskbarIconIdentity()
+    {
+        var project = File.ReadAllText(FindRepoFile("ArIED61850Tester.csproj"));
+        var app = File.ReadAllText(FindRepoFile("App.xaml.cs"));
+        var identity = File.ReadAllText(FindRepoFile("App.WindowsIdentity.cs"));
+
+        Assert.Contains("<ApplicationIcon>Assets\\app-icon.ico</ApplicationIcon>", project, StringComparison.Ordinal);
+        Assert.Contains("WindowsApplicationIdentity.Apply();", app, StringComparison.Ordinal);
+        Assert.Contains("SetCurrentProcessExplicitAppUserModelID", identity, StringComparison.Ordinal);
+        Assert.True(File.Exists(FindRepoFile("Assets/app-icon.ico")));
+    }
+
+    [Fact]
+    public void IoTestingWindow_ConnectsWithoutLockingExplorerNavigationAndPreservesOperatorSelection()
     {
         var document = XDocument.Load(FindRepoFile("IoListTestingWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -90,11 +125,13 @@ public sealed class IoTestingUiContractTests
         var contextSource = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"));
         Assert.Contains("PrepareIoTestIedForFatAsync", contextSource, StringComparison.Ordinal);
         Assert.Contains("var selectedIed = SelectedIed", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.Runtime.IsComplete", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
-        Assert.Contains("Session.Start(selectedIed)", contextSource, StringComparison.Ordinal);
-        Assert.Contains("Retest completed evidence?", contextSource, StringComparison.Ordinal);
+        Assert.Contains("var captureScope = selectedIed.TestPoints", contextSource, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = false", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = true", contextSource, StringComparison.Ordinal);
+        Assert.Contains("Session.Start(selectedIed, captureScope)", contextSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Retest completed evidence?", contextSource, StringComparison.Ordinal);
+        Assert.Contains("operator-snapshot rows expose ✓ Value 1 / Value 2 capture", contextSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,9 +170,9 @@ public sealed class IoTestingUiContractTests
         Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
         Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
         Assert.Contains("deterministic fast MMS", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("first live FAT image", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
-        Assert.Contains("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
+        Assert.Contains("Return control to FAT immediately", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromSeconds(10)", source, StringComparison.Ordinal);

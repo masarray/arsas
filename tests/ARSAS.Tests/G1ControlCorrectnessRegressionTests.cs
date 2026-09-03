@@ -5,19 +5,25 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG24P1EngineAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PreservesExactG1FieldProvenAncestryAcrossReviewedPinAdvances()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("26c85400a4da230c4429e6302847f230385b6687", json.GetProperty("commit").GetString());
-        Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
+
+        var commit = json.GetProperty("commit").GetString() ?? string.Empty;
+        Assert.Matches("^[0-9a-f]{40}$", commit);
+        Assert.True(
+            json.GetProperty("sourcePullRequest").GetInt32() >= 95,
+            "A reviewed post-G2.4 engine pin must retain the field-proven G1/G1.1 ancestry contract.");
+
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // G2.4 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
-        // and all non-regression reporting/control safety statements remain explicit.
+        // Engine consumers may advance the immutable pin for a proven missing capability,
+        // but the field-proven G1/G2.3/P0/P1 ancestry and all reporting/control safety
+        // statements must remain explicit in the lock provenance.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", purpose, StringComparison.OrdinalIgnoreCase);

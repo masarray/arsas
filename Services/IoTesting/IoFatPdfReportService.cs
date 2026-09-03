@@ -6,8 +6,10 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Public native PDF contract for ARSAS IO List FAT evidence.
+/// Public native PDF contract for ARSAS FAT evidence.
 /// PDF output and the WPF print preview consume one shared report layout plan.
+/// Legacy workbook projects retain their reviewed executive layout; SCL-backed FAT v2
+/// uses the generic Value 1 / Value 2 layout.
 /// </summary>
 public static class IoFatPdfReportService
 {
@@ -24,8 +26,16 @@ public static class IoFatPdfReportService
         bool draft = false)
     {
         ArgumentNullException.ThrowIfNull(project);
-        var layout = IoFatExecutiveReportLayoutEngine.Build(project, generatedAt ?? DateTimeOffset.Now, draft);
-        return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(project, layout);
+
+        // FAT disposition and shared Engineering/FAT workspace membership are applied
+        // before either report engine. This is a hard boundary: Remove from FAT excludes
+        // the row even when it already owns completed historical evidence.
+        var reportProject = IoFatReportScope.Create(project);
+        var created = generatedAt ?? DateTimeOffset.Now;
+        var layout = reportProject.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase)
+            ? IoFatV2ReportLayoutEngine.Build(reportProject, created, draft)
+            : IoFatExecutiveReportLayoutEngine.Build(reportProject, created, draft);
+        return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(reportProject, layout);
     }
 
     public static void Save(string fileName, IoTestProject project, DateTimeOffset? generatedAt = null)

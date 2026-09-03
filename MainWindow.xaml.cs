@@ -118,7 +118,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _uiFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(100)
+            // Five UI projections per second leave dispatcher capacity for smooth grid
+            // scrolling while the acquisition/evidence pipelines retain full fidelity.
+            Interval = TimeSpan.FromMilliseconds(200)
         };
         _uiFlushTimer.Tick += UiFlushTimer_Tick;
 
@@ -158,63 +160,85 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Open IEC 61850 SCL",
+            Title = "Open one or more IEC 61850 SCL files",
             Filter = "IEC 61850 SCL (*.scd;*.cid;*.icd;*.iid;*.ssd)|*.scd;*.cid;*.icd;*.iid;*.ssd|XML SCL (*.xml)|*.xml|All files (*.*)|*.*",
             CheckFileExists = true,
-            Multiselect = false
+            Multiselect = true
         };
         if (dialog.ShowDialog(this) != true)
             return;
 
-        var sourceName = Path.GetFileName(dialog.FileName);
-        SetStatus($"Opening {sourceName} as an offline IEC 61850 design model…");
+        var sourceLabel = dialog.FileNames.Length == 1
+            ? Path.GetFileName(dialog.FileNames[0])
+            : $"{dialog.FileNames.Length} SCL files";
+        SetStatus($"Opening {sourceLabel} as one shared offline IEC 61850 workspace…");
         try
         {
-            var document = await _sclWorkspaceService.OpenAsync(
-                dialog.FileName,
-                cancellationToken: _applicationCancellation.Token);
-            LogSclFindings(sourceName, document.Findings);
-
-            if (document.Ieds.Count == 0)
-            {
-                SetStatus($"{sourceName}: no IED model was found.");
-                AddLog("WARN", "SCL", $"{sourceName}: the engine returned no IED workspace.");
-                return;
-            }
-
             var added = 0;
             var refreshed = 0;
             var retained = 0;
+            var offlineCount = 0;
+            var endpointCount = 0;
             Iec61850MonitorDevice? firstImported = null;
+            var importedDevices = new List<Iec61850MonitorDevice>();
+            var importedSources = new List<(string Path, string Sha256)>();
 
-            foreach (var workspace in document.Ieds)
+            foreach (var sourcePath in dialog.FileNames.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                var device = Devices.FirstOrDefault(item =>
-                    item.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
-                    item.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
-                    item.SclAccessPointName.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase));
+                var sourceName = Path.GetFileName(sourcePath);
+                SetStatus($"Opening {sourceName} · {importedSources.Count + 1} of {dialog.FileNames.Length}…");
+                var document = await _sclWorkspaceService.OpenAsync(
+                    sourcePath,
+                    cancellationToken: _applicationCancellation.Token);
+                LogSclFindings(sourceName, document.Findings);
 
-                if (device != null && (device.IsConnected || device.IsBusy || device.IsMonitoring))
+                if (document.Ieds.Count == 0)
                 {
-                    retained++;
-                    firstImported ??= device;
+                    AddLog("WARN", "SCL", $"{sourceName}: the engine returned no IED workspace.");
                     continue;
                 }
 
-                var signals = SclWorkspaceSignalMapper.BuildSignals(workspace);
-                if (device == null)
-                {
-                    device = new Iec61850MonitorDevice();
-                    Devices.Add(device);
-                    added++;
-                }
-                else
-                {
-                    refreshed++;
-                }
+                importedSources.Add((sourcePath, document.SourceSha256));
+                offlineCount += document.Ieds.Count(item => item.CanBrowseOffline);
+                endpointCount += document.Ieds.Count(item => !item.RequiresEndpointBinding);
 
-                ApplySclWorkspaceToDevice(device, document, workspace, signals);
-                firstImported ??= device;
+                foreach (var workspace in document.Ieds)
+                {
+                    var device = Devices.FirstOrDefault(item =>
+                        item.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
+                        item.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
+                        item.SclAccessPointName.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase));
+
+                    if (device != null && (device.IsConnected || device.IsBusy || device.IsMonitoring))
+                    {
+                        retained++;
+                        firstImported ??= device;
+                        importedDevices.Add(device);
+                        continue;
+                    }
+
+                    var signals = SclWorkspaceSignalMapper.BuildSignals(workspace);
+                    if (device == null)
+                    {
+                        device = new Iec61850MonitorDevice();
+                        Devices.Add(device);
+                        added++;
+                    }
+                    else
+                    {
+                        refreshed++;
+                    }
+
+                    ApplySclWorkspaceToDevice(device, document, workspace, signals);
+                    firstImported ??= device;
+                    importedDevices.Add(device);
+                }
+            }
+
+            if (importedDevices.Count == 0)
+            {
+                SetStatus($"{sourceLabel}: no IED model was found.");
+                return;
             }
 
             if (firstImported != null)
@@ -223,26 +247,81 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UpdateNavigationVisuals(0, animate: true);
             RaiseWorkspaceCounts();
 
-            var offlineCount = document.Ieds.Count(item => item.CanBrowseOffline);
-            var endpointCount = document.Ieds.Count(item => !item.RequiresEndpointBinding);
-            var status = $"{sourceName}: {document.Ieds.Count} IED/AP workspace(s), {offlineCount} offline model(s), {endpointCount} MMS endpoint(s) — {added} added, {refreshed} refreshed, {retained} active retained.";
+            var status = $"{sourceLabel}: {importedDevices.Count} IED/AP workspace(s), {offlineCount} offline model(s), {endpointCount} MMS endpoint(s) — {added} added, {refreshed} refreshed, {retained} active retained.";
             SetStatus(status);
             AddLog("INFO", "SCL", status);
 
-            if (firstImported != null && firstImported.Signals.Count > 0)
+            var selectableDevices = importedDevices
+                .Where(device => device.Signals.Count > 0)
+                .Distinct()
+                .ToArray();
+            SclSignalSelectionMode? sharedSelectionMode = null;
+            if (selectableDevices.Length > 0)
             {
-                AddLog("INFO", "SCL", $"{firstImported.Name}: SCL model ready. Choose signals; saving the selection will continue to endpoint binding, connection, and monitoring.");
-                await OpenSignalSelectionWizardAsync(firstImported);
+                var selectionMode = PromptSclSignalSelectionMode(this, selectableDevices.Length);
+                sharedSelectionMode = selectionMode;
+                if (!selectionMode.HasValue)
+                {
+                    AddLog("INFO", "SCL", "Shared signal selection was cancelled; the imported offline models remain available in Engineering.");
+                    SetStatus($"{sourceLabel} imported · signal selection was not changed.");
+                }
+                else if (selectionMode == SclSignalSelectionMode.StaticDataSet)
+                {
+                    foreach (var importedDevice in selectableDevices)
+                        ApplyStaticDataSetSelection(importedDevice);
+
+                    AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
+                    if (firstImported is { SelectedLiveSignalCount: > 0 })
+                    {
+                        var connected = firstImported.IsConnected ||
+                                        await ConnectUsingSavedModelAsync(firstImported);
+                        if (connected && !firstImported.IsMonitoring)
+                            await StartDeviceMonitorAsync(firstImported);
+                    }
+                }
+                else
+                {
+                    AddLog("INFO", "SCL", "Manual Signal Selection is shared by Engineering and FAT; each imported IED keeps its own checkbox state.");
+                    foreach (var importedDevice in selectableDevices)
+                    {
+                        await OpenSignalSelectionWizardAsync(
+                            importedDevice,
+                            autoStartAfterSave: ReferenceEquals(importedDevice, firstImported));
+                        MarkSharedSelectionAuthority(importedDevice);
+                    }
+                }
+            }
+
+            // Importing through Engineering must update an already-loaded FAT project as
+            // the same workspace mutation. The selection decision has already been applied,
+            // so the hidden FAT view receives the new IEDs without a second prompt or reset.
+            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat && sharedSelectionMode.HasValue)
+            {
+                var newFatSourcePaths = importedSources
+                    .Where(imported => !loadedFat.Project.Sources.Any(source =>
+                        source.Sha256.Equals(imported.Sha256, StringComparison.OrdinalIgnoreCase)))
+                    .Select(imported => imported.Path)
+                    .ToArray();
+                if (newFatSourcePaths.Length > 0)
+                {
+                    var append = await AppendSclIedsToLoadedFatAsync(
+                        loadedFat,
+                        newFatSourcePaths,
+                        useStaticSelection: sharedSelectionMode == SclSignalSelectionMode.StaticDataSet,
+                        selectionAlreadyApplied: true);
+                    if (!append.Succeeded)
+                        AddLog("WARN", "SCL/FAT", append.Message);
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            SetStatus($"{sourceName}: SCL open cancelled.");
+            SetStatus($"{sourceLabel}: SCL open cancelled.");
         }
         catch (Exception ex)
         {
-            AddLog("ERROR", "SCL", $"Could not open {sourceName}: {ex.Message}");
-            SetStatus($"{sourceName}: SCL open failed. Diagnostics is marked with !.");
+            AddLog("ERROR", "SCL", $"Could not open {sourceLabel}: {ex.Message}");
+            SetStatus($"{sourceLabel}: SCL open failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
             MessageBox.Show(
                 this,
@@ -855,7 +934,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<bool> OpenSignalSelectionWizardAsync(
         Iec61850MonitorDevice device,
         int restoredSelectionCount = -1,
-        bool autoStartAfterSave = true)
+        bool autoStartAfterSave = true,
+        Window? ownerOverride = null)
     {
         if (device.Signals.Count == 0)
         {
@@ -874,7 +954,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device,
             restoredSelectionCount < 0 ? device.SelectedSignalCount : restoredSelectionCount)
         {
-            Owner = this,
+            Owner = ownerOverride ?? this,
             ShowInTaskbar = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
@@ -900,6 +980,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return false;
             }
 
+            SynchronizeAllEngineeringSelectionsToFat(device);
             SaveSignalSelectionMemory(device);
             device.RefreshComputed();
             RebuildControlFeedbackIndex(device);
@@ -1721,6 +1802,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var point = snapshot.Point;
             if (snapshot.Sequence < point.Sequence)
                 continue;
+            var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
             var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
@@ -1730,8 +1812,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
-            UpdateCommandFeedbackFromLivePoint(point);
-            ReconcileAnnunciatorFromLivePoint(point);
+            if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
+            {
+                UpdateCommandFeedbackFromLivePoint(point);
+                ReconcileAnnunciatorFromLivePoint(point);
+            }
             if (snapshot.IsReportTraffic)
             {
                 var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));
@@ -1827,6 +1912,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (owner.IsBulkSignalSelectionUpdate)
                 return;
             owner.ApplySignalSelectionChange(changedSignal, changedSignal.IsSelected);
+            SynchronizeEngineeringSelectionToFat(changedSignal, owner);
         }
         RaiseWorkspaceCounts();
     }

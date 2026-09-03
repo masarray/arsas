@@ -1,4 +1,41 @@
-# IED protection relay fascia design QA
+# SCL signal selection modal design QA
+
+## Visual sources
+
+- User reference / previous implementation: attached visual `codex-clipboard-090813c8-4eb5-4d1a-a394-dd81fe44b6f0.png`
+- Runtime capture of the new WPF modal: `output/scl-signal-selection-modern.png`
+- Side-by-side comparison: `output/scl-signal-selection-comparison.png`
+
+## Current scope
+
+The native `MessageBox` used after SCL import was replaced by `SclSignalSelectionModeWindow`, a modal WPF card that uses the existing ARSAS application icon, typography, color tokens, button styles, Lucide resources, elevation, and rounded-card language.
+
+## Comparison findings
+
+- The previous paragraph-heavy system dialog now has a clear title, shared-workspace subtitle, IED count badge, two explicit selection cards, and a supporting note.
+- `Use Static DataSet` is selected by default and visibly marked as recommended; `Choose Signals Manually` is an equally accessible radio-card choice.
+- Generic Yes/No labels are replaced by Cancel and Continue, with default and cancel keyboard behavior retained.
+- Spacing, 17–24 px corner radii, subdued borders, blue selection state, Aptos/Segoe typography, and application button styles match existing ARSAS pop windows such as Save SCL.
+- The runtime screenshot shows no clipped copy, overlapping controls, broken padding, or truncated actions at the captured Windows scaling.
+- Both cards are fully clickable, mouse/pressed/focus states are defined, Enter continues, Escape cancels, and closing the window leaves the imported Engineering model unchanged.
+
+## Functional companion checks
+
+- Engineering Open SCL now permits multiple file selection and adds every distinct file into the same Engineering workspace.
+- A single signal-authority decision applies to all newly imported IED workspaces and is bridged into an already-loaded FAT workspace without a second prompt.
+- Duplicate FAT sources are filtered by SHA-256 before append; existing connected or monitoring IEDs are retained.
+
+## Current validation
+
+- Release build: passed with 0 errors using the ARIEC61850 commit pinned by `engines/ARIEC61850.lock.json`.
+- Test suite: 616 passed, 0 failed, 0 skipped.
+- Runtime WPF capture and side-by-side visual inspection: passed.
+
+Final result for the SCL signal selection modal: **passed**.
+
+---
+
+# Previous IED protection relay fascia design QA
 
 ## Scope
 
