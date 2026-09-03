@@ -26,7 +26,7 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.Contains("MmsGuardedDynamicReportRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
-        Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityEnvelopeBoundRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.DoesNotContain("MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
         Assert.Contains("capability, not member scope", guarded, StringComparison.OrdinalIgnoreCase);
@@ -99,6 +99,8 @@ public sealed class G26SmartDynamicRuntimeRegressionTests
         Assert.Contains("4d7a896c606194c5533322bf975a2c9c57da7c64", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #110", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProvenSafeMemberCount", engineLock, StringComparison.Ordinal);
         Assert.Contains("InformationReportProven", engineLock, StringComparison.Ordinal);
         Assert.Contains("ProductionEligible stays independent", engineLock, StringComparison.OrdinalIgnoreCase);
     }
