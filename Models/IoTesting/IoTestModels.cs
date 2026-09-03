@@ -77,6 +77,7 @@ public sealed class IoTestPointRuntime : ObservableObject
     private IoTestTransitionEvidence? _offEvidence;
     private FatValueEvidence? _value1Evidence;
     private FatValueEvidence? _value2Evidence;
+    private FatAutoCaptureStage _autoCaptureStage = FatAutoCaptureStage.WaitingValue1;
     private string _statusReason = "Not started";
     private int _attempt;
     private string _currentValue = "-";
@@ -146,6 +147,13 @@ public sealed class IoTestPointRuntime : ObservableObject
             Raise(nameof(Value2RelayTimestampText));
             Raise(nameof(Value2EvidenceToolTip));
         }
+    }
+
+    [JsonIgnore]
+    public FatAutoCaptureStage AutoCaptureStage
+    {
+        get => _autoCaptureStage;
+        internal set => Set(ref _autoCaptureStage, value);
     }
 
     public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
@@ -371,39 +379,55 @@ public sealed class IoTestPointPlan : ObservableObject
         IsOperatorSnapshot && WorkspaceSelected && IsIncludedInFat && TestEnabled && ImportReady && IsLiveBound;
 
     [JsonIgnore]
-    public bool IsFatEvidenceComplete => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidence is not null && Runtime.OffEvidence is not null
-        : Runtime.Value1Evidence is not null && Runtime.Value2Evidence is not null;
+    public bool HasValue1Evidence =>
+        Runtime.Value1Evidence is not null ||
+        (CaptureMode == FatCaptureMode.AutomaticTransition && Runtime.OnEvidence is not null);
 
     [JsonIgnore]
-    public string Value1Text => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidence?.RawValue ?? "—"
-        : Runtime.Value1Evidence?.RawValue ?? "—";
+    public bool HasValue2Evidence =>
+        Runtime.Value2Evidence is not null ||
+        (CaptureMode == FatCaptureMode.AutomaticTransition && Runtime.OffEvidence is not null);
 
     [JsonIgnore]
-    public string Value2Text => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffEvidence?.RawValue ?? "—"
-        : Runtime.Value2Evidence?.RawValue ?? "—";
+    public bool IsFatEvidenceComplete => HasValue1Evidence && HasValue2Evidence;
 
     [JsonIgnore]
-    public string Value1RelayTimestampText => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnRelayTimestampText
-        : Runtime.Value1RelayTimestampText;
+    public string Value1Text => Runtime.Value1Evidence?.RawValue ??
+                                (CaptureMode == FatCaptureMode.AutomaticTransition ? Runtime.OnEvidence?.RawValue : null) ??
+                                "—";
 
     [JsonIgnore]
-    public string Value2RelayTimestampText => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffRelayTimestampText
-        : Runtime.Value2RelayTimestampText;
+    public string Value2Text => Runtime.Value2Evidence?.RawValue ??
+                                (CaptureMode == FatCaptureMode.AutomaticTransition ? Runtime.OffEvidence?.RawValue : null) ??
+                                "—";
 
     [JsonIgnore]
-    public string Value1EvidenceToolTip => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidenceToolTip
-        : Runtime.Value1EvidenceToolTip;
+    public string Value1RelayTimestampText => Runtime.Value1Evidence is not null
+        ? Runtime.Value1RelayTimestampText
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OnRelayTimestampText
+            : Runtime.Value1RelayTimestampText;
 
     [JsonIgnore]
-    public string Value2EvidenceToolTip => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffEvidenceToolTip
-        : Runtime.Value2EvidenceToolTip;
+    public string Value2RelayTimestampText => Runtime.Value2Evidence is not null
+        ? Runtime.Value2RelayTimestampText
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OffRelayTimestampText
+            : Runtime.Value2RelayTimestampText;
+
+    [JsonIgnore]
+    public string Value1EvidenceToolTip => Runtime.Value1Evidence is not null
+        ? Runtime.Value1EvidenceToolTip
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OnEvidenceToolTip
+            : Runtime.Value1EvidenceToolTip;
+
+    [JsonIgnore]
+    public string Value2EvidenceToolTip => Runtime.Value2Evidence is not null
+        ? Runtime.Value2EvidenceToolTip
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OffEvidenceToolTip
+            : Runtime.Value2EvidenceToolTip;
 
     [JsonIgnore]
     public string FatStatusText
@@ -412,13 +436,15 @@ public sealed class IoTestPointPlan : ObservableObject
         {
             if (!IsIncludedInFat)
                 return "REMOVED";
-            if (CaptureMode == FatCaptureMode.AutomaticTransition)
-                return Runtime.StateText;
             if (IsFatEvidenceComplete)
                 return "COMPLETE";
-            if (Runtime.Value1Evidence is not null || Runtime.Value2Evidence is not null)
-                return "1 / 2 captured";
-            return "Ready to capture";
+            if (Runtime.AutoCaptureStage == FatAutoCaptureStage.StabilizingValue2)
+                return "STABILIZING…";
+            if (HasValue1Evidence)
+                return "WAITING V2";
+            return Runtime.AutoCaptureStage == FatAutoCaptureStage.WaitingValue1
+                ? "WAITING V1"
+                : "READY";
         }
     }
 
@@ -501,6 +527,7 @@ public sealed class IoTestPointPlan : ObservableObject
             nameof(IoTestPointRuntime.OffEvidence) or
             nameof(IoTestPointRuntime.Value1Evidence) or
             nameof(IoTestPointRuntime.Value2Evidence) or
+            nameof(IoTestPointRuntime.AutoCaptureStage) or
             nameof(IoTestPointRuntime.State) or
             nameof(IoTestPointRuntime.StatusReason))
         {
@@ -512,6 +539,8 @@ public sealed class IoTestPointPlan : ObservableObject
     {
         Raise(nameof(IsIncludedInFat));
         Raise(nameof(CanCaptureOperatorSnapshot));
+        Raise(nameof(HasValue1Evidence));
+        Raise(nameof(HasValue2Evidence));
         Raise(nameof(IsFatEvidenceComplete));
         Raise(nameof(Value1Text));
         Raise(nameof(Value2Text));
