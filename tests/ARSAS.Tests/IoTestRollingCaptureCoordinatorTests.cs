@@ -88,6 +88,40 @@ public sealed class IoTestRollingCaptureCoordinatorTests
         Assert.NotEqual(firstOn, point.Runtime.OnEvidence!.EvidenceId);
     }
 
+    [Fact]
+    public void SteadyTelemetry_WithCurrentEvidence_DoesNotRewriteStatusOrInvalidateFatRow()
+    {
+        var point = PassedPoint();
+        var coordinator = new IoTestRollingCaptureCoordinator(new IoTestTransitionEvaluator());
+        coordinator.Start(point, Observation(false, 10));
+
+        var expectedReason = point.Runtime.StatusReason;
+        var oldOn = point.Runtime.OnEvidence!.EvidenceId;
+        var oldOff = point.Runtime.OffEvidence!.EvidenceId;
+        var runtimeChanges = new List<string?>();
+        var pointChanges = new List<string?>();
+
+        point.Runtime.PropertyChanged += (_, e) => runtimeChanges.Add(e.PropertyName);
+        point.PropertyChanged += (_, e) => pointChanges.Add(e.PropertyName);
+
+        for (var sequence = 11; sequence <= 100; sequence++)
+            coordinator.Observe(point, Observation(false, sequence));
+
+        Assert.Equal(expectedReason, point.Runtime.StatusReason);
+        Assert.Equal(oldOn, point.Runtime.OnEvidence!.EvidenceId);
+        Assert.Equal(oldOff, point.Runtime.OffEvidence!.EvidenceId);
+        Assert.DoesNotContain(nameof(IoTestPointRuntime.StatusReason), runtimeChanges);
+        Assert.DoesNotContain(nameof(IoTestPointPlan.Value1Text), pointChanges);
+        Assert.DoesNotContain(nameof(IoTestPointPlan.Value2Text), pointChanges);
+        Assert.DoesNotContain(nameof(IoTestPointPlan.FatStatusText), pointChanges);
+        Assert.DoesNotContain(nameof(IoTestPointPlan.FatResultText), pointChanges);
+
+        var transition = coordinator.Observe(point, Observation(true, 101));
+
+        Assert.True(transition.StateChanged);
+        Assert.Contains(nameof(IoTestPointRuntime.StatusReason), runtimeChanges);
+    }
+
     private static IoTestPointPlan PassedPoint()
     {
         var point = Point();

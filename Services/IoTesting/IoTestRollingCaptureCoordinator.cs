@@ -105,7 +105,15 @@ public sealed class IoTestRollingCaptureCoordinator
             return ProjectResult(evaluation, point.Runtime, point.Runtime.StatusReason);
         }
 
-        point.Runtime.StatusReason = PreserveReason(evaluation.Reason);
+        // Steady telemetry must not rewrite the operator-facing reason on every poll.
+        // Before P3, live values were deliberately coalesced below input priority. P3's
+        // rolling-capture path accidentally reintroduced a UI notification storm by
+        // assigning an equivalent/preserved StatusReason for every unchanged sample,
+        // even though the current FAT evidence pair had not changed. Update the reason
+        // only when the shadow evaluator actually advances or emits new evidence.
+        if (evaluation.StateChanged || evaluation.Evidence is not null)
+            point.Runtime.StatusReason = PreserveReason(evaluation.Reason);
+
         return ProjectResult(evaluation, point.Runtime, point.Runtime.StatusReason);
     }
 
