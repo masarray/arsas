@@ -21,8 +21,16 @@ public static class IoFatEngineeringSelectionBridge
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
 
-        var changed = 0;
-        foreach (var point in ied.TestPoints.Where(IoTestSignalSelectionService.IsDirectSclAuthority))
+        // A previous shared-workspace build could materialize a generic scalar as an
+        // scl-manual-* row even though an authoritative static DataSet membership already
+        // owned the same runtime leaf. Retire only that redundant shared-selection overlay;
+        // keep TEST, FAT disposition, and any captured evidence untouched for audit history.
+        var redundantManualPoints = FindRedundantManualWorkspacePoints(ied);
+        var changed = RetireRedundantManualWorkspaceRows(ied);
+
+        foreach (var point in ied.TestPoints
+                     .Where(IoTestSignalSelectionService.IsDirectSclAuthority)
+                     .Where(point => !redundantManualPoints.Contains(point)))
         {
             var signal = FindSignal(point, device);
             if (signal is null)
@@ -50,6 +58,30 @@ public static class IoFatEngineeringSelectionBridge
                 if (!signal.IsSelected)
                 {
                     signal.IsSelected = true;
+                    changed++;
+                }
+            }
+        }
+
+        // If Engineering had explicitly selected the redundant generic scalar, preserve
+        // that operator intent by projecting it onto the authoritative static FAT row(s),
+        // never by re-enabling the stale manual duplicate.
+        if (preserveExistingEngineeringSelection)
+        {
+            foreach (var manualPoint in redundantManualPoints)
+            {
+                var signal = FindSignal(manualPoint, device);
+                if (signal?.IsSelected != true)
+                    continue;
+
+                foreach (var staticPoint in FindStaticDataSetRuntimeCoverage(
+                             ied,
+                             manualPoint.ObjectReference,
+                             manualPoint.FunctionalConstraint))
+                {
+                    if (staticPoint.WorkspaceSelected)
+                        continue;
+                    staticPoint.WorkspaceSelected = true;
                     changed++;
                 }
             }
@@ -93,6 +125,11 @@ public static class IoFatEngineeringSelectionBridge
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
 
+        // Always retire stale manual overlays before applying the current Engineering
+        // decision. This makes persisted projects self-heal on reopen without deleting
+        // historical evidence or weakening the duplicate-reference FAT preflight guard.
+        var changed = RetireRedundantManualWorkspaceRows(ied) > 0;
+
         // Engineering owns shared workspace membership only. A FAT row explicitly removed
         // by the operator stays removed, and its FAT TEST preference/evidence is preserved
         // across Engineering deselect/reselect operations.
@@ -101,7 +138,71 @@ public static class IoFatEngineeringSelectionBridge
             .Where(point => ReferenceEquals(FindSignal(point, device), signal))
             .ToArray();
 
-        var changed = false;
+        // An exact static membership signal remains one-to-one even when multiple distinct
+        // static memberships share the same engine-proven runtime leaf. Never fan a direct
+        // static checkbox action across sibling memberships merely because ObjectReference
+        // is shared.
+        var staticMatching = matching
+            .Where(IoTestSignalSelectionService.IsSclDataSetAuthority)
+            .ToArray();
+        if (staticMatching.Length > 0)
+        {
+            foreach (var point in staticMatching)
+            {
+                if (point.WorkspaceSelected == selected)
+                    continue;
+                point.WorkspaceSelected = selected;
+                changed = true;
+            }
+
+            foreach (var manualPoint in matching.Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority))
+            {
+                if (!manualPoint.WorkspaceSelected)
+                    continue;
+                manualPoint.WorkspaceSelected = false;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        var staticCoverage = FindStaticDataSetRuntimeCoverage(
+            ied,
+            signal.ObjectReference,
+            signal.FunctionalConstraint);
+        if (staticCoverage.Count > 0)
+        {
+            // A generic Engineering scalar already represented by static DataSet authority
+            // must not create a second scl-manual-* FAT row. Selecting the scalar projects
+            // onto the existing static row(s); deselecting it only retires redundant manual
+            // overlays because each exact static membership owns its own checkbox decision.
+            if (selected)
+            {
+                foreach (var staticPoint in staticCoverage)
+                {
+                    if (staticPoint.WorkspaceSelected)
+                        continue;
+                    staticPoint.WorkspaceSelected = true;
+                    changed = true;
+                }
+            }
+
+            foreach (var manualPoint in ied.TestPoints
+                         .Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority)
+                         .Where(point => HasSameRuntimeIdentity(
+                             point,
+                             signal.ObjectReference,
+                             signal.FunctionalConstraint)))
+            {
+                if (!manualPoint.WorkspaceSelected)
+                    continue;
+                manualPoint.WorkspaceSelected = false;
+                changed = true;
+            }
+
+            return changed;
+        }
+
         foreach (var point in matching)
         {
             if (point.WorkspaceSelected == selected)
@@ -168,6 +269,70 @@ public static class IoFatEngineeringSelectionBridge
                 StringComparison.OrdinalIgnoreCase))
             .ToArray();
         return runtimeMatches.Length == 1 ? runtimeMatches[0] : null;
+    }
+
+    internal static IReadOnlyList<IoTestPointPlan> FindStaticDataSetRuntimeCoverage(
+        IoTestIedPlan ied,
+        string? runtimeReference,
+        string? functionalConstraint = null)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        var runtime = IoTestLiveBindingService.NormalizeReference(runtimeReference);
+        if (runtime.Length == 0)
+            return Array.Empty<IoTestPointPlan>();
+
+        var requiredFc = functionalConstraint?.Trim() ?? string.Empty;
+        return ied.TestPoints
+            .Where(IoTestSignalSelectionService.IsSclDataSetAuthority)
+            .Where(point => IoTestLiveBindingService.NormalizeReference(point.ObjectReference)
+                .Equals(runtime, StringComparison.OrdinalIgnoreCase))
+            .Where(point => requiredFc.Length == 0 ||
+                            string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
+                            point.FunctionalConstraint.Equals(requiredFc, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
+    internal static int RetireRedundantManualWorkspaceRows(IoTestIedPlan ied)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        var changed = 0;
+        foreach (var point in FindRedundantManualWorkspacePoints(ied))
+        {
+            if (!point.WorkspaceSelected)
+                continue;
+            point.WorkspaceSelected = false;
+            changed++;
+        }
+        return changed;
+    }
+
+    private static HashSet<IoTestPointPlan> FindRedundantManualWorkspacePoints(IoTestIedPlan ied)
+        => ied.TestPoints
+            .Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority)
+            .Where(point => FindStaticDataSetRuntimeCoverage(
+                    ied,
+                    point.ObjectReference,
+                    point.FunctionalConstraint)
+                .Count > 0)
+            .ToHashSet();
+
+    private static bool HasSameRuntimeIdentity(
+        IoTestPointPlan point,
+        string? runtimeReference,
+        string? functionalConstraint)
+    {
+        var runtime = IoTestLiveBindingService.NormalizeReference(runtimeReference);
+        if (runtime.Length == 0 ||
+            !IoTestLiveBindingService.NormalizeReference(point.ObjectReference)
+                .Equals(runtime, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var requiredFc = functionalConstraint?.Trim() ?? string.Empty;
+        return requiredFc.Length == 0 ||
+               string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
+               point.FunctionalConstraint.Equals(requiredFc, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryCreateManualWorkspacePoint(

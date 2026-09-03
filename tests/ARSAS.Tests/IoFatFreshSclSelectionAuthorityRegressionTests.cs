@@ -36,6 +36,24 @@ public sealed class IoFatFreshSclSelectionAuthorityRegressionTests
         Assert.DoesNotContain("point.TestEnabled = signal.IsSelected;", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void GenericEngineeringScalar_IsGuardedByStaticRuntimeCoverageBeforeManualRowCreation()
+    {
+        var source = Read("Services/IoTesting/IoFatEngineeringSelectionBridge.cs");
+
+        Assert.Contains("RetireRedundantManualWorkspaceRows(ied)", source, StringComparison.Ordinal);
+        Assert.Contains("var staticCoverage = FindStaticDataSetRuntimeCoverage(", source, StringComparison.Ordinal);
+        Assert.Contains("if (staticCoverage.Count > 0)", source, StringComparison.Ordinal);
+        Assert.Contains("must not create a second scl-manual-* FAT row", source, StringComparison.Ordinal);
+
+        var coverageGuard = source.IndexOf("if (staticCoverage.Count > 0)", StringComparison.Ordinal);
+        var manualCreate = source.IndexOf(
+            "if (matching.Length == 0 && selected && TryCreateManualWorkspacePoint",
+            StringComparison.Ordinal);
+        Assert.True(coverageGuard >= 0, "Static runtime coverage guard is missing.");
+        Assert.True(manualCreate > coverageGuard, "Manual row creation must remain behind the static runtime coverage guard.");
+    }
+
     private static string Read(string relativePath)
         => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 
