@@ -131,20 +131,29 @@ public sealed class P6FieldStabilityRegressionTests
     }
 
     [Fact]
-    public void StaticFailure_IsBaselineIsolatedAndCannotOpenOrUseDynamicCircuit()
+    public void StaticFailure_RecoveryPreservesP6FieldSafety()
     {
-        var source = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
+        var bridge = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.cs");
+        var recovery = ReadRepoFile("Services/NativeIec61850Client.HybridReporting.P4.cs");
 
-        Assert.Contains("baseline static-failure isolation", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no dynamic DataSet/RCB write was attempted", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("UsedDynamicDataSet = false", source, StringComparison.Ordinal);
-        Assert.Contains("DynamicAttempted = false", source, StringComparison.Ordinal);
-        Assert.Contains("FailureReason = \"StaticActivationFailed\"", source, StringComparison.Ordinal);
-        Assert.Contains("PollingFallbackReason = \"StaticActivationFailed\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("MmsCapabilityAwareHybridReportAcquisitionPlanner.Build", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("DynamicWriteCircuitByDevice[appPlan.RelayId]", source, StringComparison.Ordinal);
+        // Recovery cannot reuse the failed static RCB and cannot write directly from the
+        // compatibility layer. The same PlanId-bound ARIEC guarded/capability planner must
+        // select the only exact proven alternate dynamic target from fresh evidence.
+        Assert.Contains("alternateSnapshots", recovery, StringComparison.Ordinal);
+        Assert.Contains("!SameLiteralReference(snapshot.Reference, authoritative.ReportControlReference)", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowStaticBrcb = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("AllowStaticUrcb = false", recovery, StringComparison.Ordinal);
+        Assert.Contains("RequireExactAvailabilityEvidence = true", recovery, StringComparison.Ordinal);
+        Assert.Contains("TryGetGuardedRuntimeContext(appPlan.PlanId", recovery, StringComparison.Ordinal);
+        Assert.Contains("BuildCapabilityPlanWithGuardedRuntime", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReportMonitorWithAttemptEvidenceAsync", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("DefineNamedVariableList", recovery, StringComparison.OrdinalIgnoreCase);
+
+        // A static activation that already touched RCB state needs positive rollback evidence
+        // before Smart Auto is allowed to attempt the alternate dynamic RCB.
+        Assert.Contains("StaticCleanupUnproven", recovery, StringComparison.Ordinal);
+        Assert.Contains("staticCleanupProven: attempt.CleanupSucceeded", bridge, StringComparison.Ordinal);
+        Assert.Contains("DynamicWriteCircuitByDevice.TryGetValue(appPlan.RelayId", recovery, StringComparison.Ordinal);
     }
 
     [Fact]

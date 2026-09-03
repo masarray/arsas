@@ -5,18 +5,18 @@ namespace ARSAS.Tests;
 public sealed class G1ControlCorrectnessRegressionTests
 {
     [Fact]
-    public void EngineLock_PinsReviewedG24P1EngineAndPreservesExactG1FieldProvenAncestry()
+    public void EngineLock_PinsGuardedRuntimeEngineAndPreservesExactG1FieldProvenAncestry()
     {
         var root = RepoRoot();
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "engines", "ARIEC61850.lock.json")));
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("26c85400a4da230c4429e6302847f230385b6687", json.GetProperty("commit").GetString());
-        Assert.Equal(95, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("9b60458ed910a410b843185384f0e04d3ca78ce0", json.GetProperty("commit").GetString());
+        Assert.Equal(110, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // G2.4 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
+        // G2.7 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
         // and all non-regression reporting/control safety statements remain explicit.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
@@ -37,7 +37,41 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("C0A851F0", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("192.168.81.240", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Owner mismatch or unsupported encoding remains a hard failure", purpose, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Production automatic dynamic BRCB/URCB activation remains quarantined", purpose, StringComparison.OrdinalIgnoreCase);
+
+        // Production/certification ancestry remains explicit while P1.6/P1.7 preserve the
+        // field-capability Smart Auto contract and stable multi-RCB temporary DataSet identity.
+        Assert.Contains("PR #97", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible profile", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exact InformationReport-proven RCB/member evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #98", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("report-vs-independent-MMS shadow evaluator", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never mutates a profile", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #99", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actually observed paired report/poll quality evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actually observed paired report/poll device timestamp evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("absence of q/t evidence cannot become a production PASS", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #100", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("identity-compatible InformationReportProven", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("at most one exact proven dynamic RCB/member envelope", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not call MarkProductionEligible", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible as a separate certification boundary", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #102", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no profile save/mutation", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #104", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capability evidence rather than permanent member scope", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("all still-uncovered exact-resolved selected signals", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #105", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("native per-IED field-capability authorization", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #108", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fresh-association qualification residue recovery", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #109", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exceptions never count as absence evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #110", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("envelope-bounded native runtime", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProvenSafeMemberCount", purpose, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,11 +157,22 @@ public sealed class G1ControlCorrectnessRegressionTests
     }
 
     [Fact]
-    public void G1_DoesNotReenableDynamicReportingOrChangeReconnectPolicy()
+    public void G1_ControlPathDoesNotOwnGuardedDynamicRuntimeOrChangeReconnectPolicy()
     {
         var engineLock = File.ReadAllText(Path.Combine(RepoRoot(), "engines", "ARIEC61850.lock.json"));
         Assert.Contains("PR #89 quarantines automatic full dynamic DataSet activation", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #100", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #101", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #102", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #108", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #109", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #110", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
 
+        // G1 control remains independent from the G2.7 report acquisition bridge.
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
         Assert.Contains("SmartReconnectPolicy", runtime, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicBrcb = true", runtime, StringComparison.Ordinal);
