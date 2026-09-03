@@ -79,7 +79,7 @@ public static class FatCurrentEvidenceAssessmentService
                 // PASS earned by a complete new legacy cycle. If no terminal continuity
                 // verdict exists yet, fail closed to REVIEW rather than showing COMPLETE
                 // with a blank/non-terminal Result.
-                return PreserveRuntimeAssessment(point);
+                return PreserveRuntimeAssessment(point, pairIsSameGeneration);
             }
 
             return new FatCurrentEvidenceAssessment(
@@ -139,7 +139,9 @@ public static class FatCurrentEvidenceAssessmentService
         return assessment;
     }
 
-    private static FatCurrentEvidenceAssessment PreserveRuntimeAssessment(IoTestPointPlan point)
+    private static FatCurrentEvidenceAssessment PreserveRuntimeAssessment(
+        IoTestPointPlan point,
+        bool pairIsSameGeneration)
     {
         var terminalState = point.Runtime.State is IoTestPointState.Passed or IoTestPointState.Failed or IoTestPointState.Review;
         if (terminalState)
@@ -153,7 +155,9 @@ public static class FatCurrentEvidenceAssessmentService
 
         return new FatCurrentEvidenceAssessment(
             IoTestPointState.Review,
-            "REVIEW: automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation and no terminal live transition continuity verdict is available.");
+            pairIsSameGeneration
+                ? "REVIEW: automatic current Value 1 / Value 2 evidence belongs to an earlier IED connection generation and no terminal live transition continuity verdict is available."
+                : "REVIEW: automatic current Value 1 and Value 2 belong to different IED connection generations and no terminal live transition continuity verdict is available.");
     }
 
     private static CurrentEvidence? EffectiveValue1(IoTestPointPlan point)
