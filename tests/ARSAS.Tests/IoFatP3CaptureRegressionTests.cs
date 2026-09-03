@@ -138,6 +138,7 @@ public sealed class IoFatP3CaptureRegressionTests
         Assert.Equal("40", fixture.Point.Value2Text);
         Assert.Equal(FatEvidenceCaptureKind.OperatorRecapture, fixture.Point.Runtime.Value1Evidence!.CaptureKind);
         Assert.Equal(FatEvidenceCaptureKind.OperatorRecapture, fixture.Point.Runtime.Value2Evidence!.CaptureKind);
+        Assert.True(controller.Stop().Succeeded);
         var journal = File.ReadAllText(controller.JournalPath);
         Assert.Contains("fat_value_recapture_pair_staged", journal, StringComparison.Ordinal);
         Assert.Contains("fat_value_recapture_pair_commit", journal, StringComparison.Ordinal);
