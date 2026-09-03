@@ -1,4 +1,5 @@
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services.IoTesting;
 
 using System.ComponentModel;
 using System.Globalization;
@@ -527,6 +528,13 @@ public sealed class IoTestPointPlan : ObservableObject
 
     private void Runtime_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (SignalKind == FatSignalKind.Analog &&
+            (e.PropertyName is nameof(IoTestPointRuntime.Value1Evidence) or nameof(IoTestPointRuntime.Value2Evidence)) &&
+            IsFatEvidenceComplete)
+        {
+            FatCurrentEvidenceAssessmentService.Apply(this);
+        }
+
         if (e.PropertyName is nameof(IoTestPointRuntime.OnEvidence) or
             nameof(IoTestPointRuntime.OffEvidence) or
             nameof(IoTestPointRuntime.Value1Evidence) or
