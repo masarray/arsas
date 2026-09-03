@@ -13,6 +13,7 @@ public partial class IoListTestingWindow
     private DataGrid? _fatSignalsGrid;
     private Button? _removedSignalsButton;
     private ICollectionView? _fatSignalsView;
+    private IoTestPointPlan? _fatContextPoint;
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
     private readonly IoFatSelectedIedPlanEditabilityConverter _fatPlanEditabilityConverter = new();
@@ -40,6 +41,10 @@ public partial class IoListTestingWindow
             _fatSignalsGrid = FindVisualDescendant<DataGrid>(this);
             if (_fatSignalsGrid != null)
             {
+                // P3 desktop selection contract: Ctrl+Click selects disjoint rows,
+                // Shift+Click selects ranges, and Recapture consumes SelectedItems.
+                _fatSignalsGrid.SelectionMode = DataGridSelectionMode.Extended;
+                _fatSignalsGrid.SelectionUnit = DataGridSelectionUnit.FullRow;
                 ConfigureFatV2Columns(_fatSignalsGrid);
                 _fatSignalsGrid.PreviewMouseRightButtonDown += FatSignalsGrid_PreviewMouseRightButtonDown;
                 _fatSignalsGrid.ContextMenu = BuildFatContextMenu();
@@ -94,6 +99,8 @@ public partial class IoListTestingWindow
 
     private void ConfigureFatV2Columns(DataGrid grid)
     {
+        grid.SelectionMode = DataGridSelectionMode.Extended;
+        grid.SelectionUnit = DataGridSelectionUnit.FullRow;
         grid.Columns.Clear();
 
         var enabledFactory = new FrameworkElementFactory(typeof(CheckBox));
@@ -277,10 +284,77 @@ public partial class IoListTestingWindow
     private ContextMenu BuildFatContextMenu()
     {
         var menu = new ContextMenu();
+
+        var recapture = new MenuItem { Header = "Recapture" };
+        var value1 = new MenuItem { Header = "Value 1" };
+        value1.Click += RecaptureValue1_Click;
+        var value2 = new MenuItem { Header = "Value 2" };
+        value2.Click += RecaptureValue2_Click;
+        var both = new MenuItem
+        {
+            Header = "Value 1 & Value 2",
+            ToolTip = "Stage Value 1 now, change the test condition, then use Recapture → Value 2 to commit the new pair"
+        };
+        both.Click += BeginPairRecapture_Click;
+        var cancelPair = new MenuItem { Header = "Cancel staged Value 1 & Value 2" };
+        cancelPair.Click += CancelPairRecapture_Click;
+        recapture.Items.Add(value1);
+        recapture.Items.Add(value2);
+        recapture.Items.Add(both);
+        recapture.Items.Add(new Separator());
+        recapture.Items.Add(cancelPair);
+        menu.Items.Add(recapture);
+        menu.Items.Add(new Separator());
+
+        // Remove remains a deliberate one-row disposition action. Multi-selection is for
+        // Recapture in P3; right-click remembers the exact context row so preserving a
+        // broader selection never removes an arbitrary anchor row.
         var remove = new MenuItem { Header = "Remove from FAT" };
         remove.Click += RemoveSelectedFromFat_Click;
         menu.Items.Add(remove);
+        menu.Opened += (_, _) =>
+        {
+            var count = SelectedFatRows().Count;
+            recapture.Header = count <= 1 ? "Recapture" : $"Recapture ({count} selected)";
+        };
         return menu;
+    }
+
+    private IReadOnlyList<IoTestPointPlan> SelectedFatRows()
+    {
+        if (_fatSignalsGrid == null)
+            return Array.Empty<IoTestPointPlan>();
+        return _fatSignalsGrid.SelectedItems
+            .OfType<IoTestPointPlan>()
+            .Distinct()
+            .ToArray();
+    }
+
+    private void RecaptureValue1_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.RecaptureValues(SelectedFatRows(), FatValueSlot.Value1), "Value 1 Recapture failed");
+
+    private void RecaptureValue2_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.RecaptureValues(SelectedFatRows(), FatValueSlot.Value2), "Value 2 Recapture failed");
+
+    private void BeginPairRecapture_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.BeginPairRecapture(SelectedFatRows()), "Value 1 & Value 2 Recapture could not be staged");
+
+    private void CancelPairRecapture_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.CancelPairRecapture(SelectedFatRows()), "Staged Value 1 & Value 2 Recapture could not be cancelled");
+
+    private void ApplyBulkRecapture(IoTestSessionActionResult result, string failureTitle)
+    {
+        if (!result.Succeeded)
+        {
+            ShowActionResult(result, failureTitle);
+            return;
+        }
+
+        // Success feedback stays compact in the selected IED footer through Session.StatusText.
+        // Never display one modal popup per row for a batch operation.
+        Storage?.ScheduleSave();
+        RaiseSelectedIedContextProperties();
+        RefreshFatV2WorkspaceUx();
     }
 
     private void FatSignalsGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -288,16 +362,24 @@ public partial class IoListTestingWindow
         if (_fatSignalsGrid == null)
             return;
         var row = FindVisualAncestor<DataGridRow>(e.OriginalSource as DependencyObject);
-        if (row?.Item is IoTestPointPlan point)
-        {
-            _fatSignalsGrid.SelectedItem = point;
-            row.IsSelected = true;
-        }
+        if (row?.Item is not IoTestPointPlan point)
+            return;
+
+        _fatContextPoint = point;
+        if (row.IsSelected)
+            return;
+
+        // Desktop convention: right-clicking outside the current set makes that row the
+        // sole target. Right-clicking inside an existing Ctrl/Shift selection preserves it.
+        _fatSignalsGrid.SelectedItems.Clear();
+        row.IsSelected = true;
+        _fatSignalsGrid.SelectedItem = point;
     }
 
     private void RemoveSelectedFromFat_Click(object sender, RoutedEventArgs e)
     {
-        if (_fatSignalsGrid?.SelectedItem is not IoTestPointPlan point)
+        var point = _fatContextPoint ?? _fatSignalsGrid?.SelectedItem as IoTestPointPlan;
+        if (point == null)
             return;
         if (!CanEditPointPlan(point))
         {
@@ -311,6 +393,7 @@ public partial class IoListTestingWindow
         }
 
         point.RemoveFromFat();
+        _fatContextPoint = null;
         Storage?.ScheduleSave();
         RefreshFatV2WorkspaceUx(refreshRows: true);
         RaiseSelectedIedContextProperties();
