@@ -76,7 +76,9 @@ public static class FatCurrentEvidenceAssessmentService
                 // Resume/rebind deliberately establishes a new continuity authority. Old
                 // automatic V1/V2 pointers may remain visible for audit, but they must not
                 // overwrite REVIEW after a potentially missed edge or overwrite a later
-                // PASS earned by a complete new legacy cycle.
+                // PASS earned by a complete new legacy cycle. If no terminal continuity
+                // verdict exists yet, fail closed to REVIEW rather than showing COMPLETE
+                // with a blank/non-terminal Result.
                 return PreserveRuntimeAssessment(point);
             }
 
@@ -138,11 +140,21 @@ public static class FatCurrentEvidenceAssessmentService
     }
 
     private static FatCurrentEvidenceAssessment PreserveRuntimeAssessment(IoTestPointPlan point)
-        => new(
-            point.Runtime.State,
-            string.IsNullOrWhiteSpace(point.Runtime.StatusReason)
-                ? "Automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation; live transition continuity remains authoritative."
-                : point.Runtime.StatusReason);
+    {
+        var terminalState = point.Runtime.State is IoTestPointState.Passed or IoTestPointState.Failed or IoTestPointState.Review;
+        if (terminalState)
+        {
+            return new FatCurrentEvidenceAssessment(
+                point.Runtime.State,
+                string.IsNullOrWhiteSpace(point.Runtime.StatusReason)
+                    ? "Automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation; the existing live transition continuity verdict remains authoritative."
+                    : point.Runtime.StatusReason);
+        }
+
+        return new FatCurrentEvidenceAssessment(
+            IoTestPointState.Review,
+            "REVIEW: automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation and no terminal live transition continuity verdict is available.");
+    }
 
     private static CurrentEvidence? EffectiveValue1(IoTestPointPlan point)
     {
