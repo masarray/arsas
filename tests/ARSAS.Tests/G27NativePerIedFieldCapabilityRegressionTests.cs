@@ -22,9 +22,11 @@ public sealed class G27NativePerIedFieldCapabilityRegressionTests
     public void P17_ExplicitBootstrapReusesExistingGuardedCommissioningLadder()
     {
         var bootstrap = Read("Services/DynamicReportPerIedFieldCapabilityBootstrapService.cs");
+        var recovery = Read("Services/DynamicReportQualificationFreshRecoveryCommissioningService.cs");
         var persistence = Read("Services/DynamicReportNativeFieldCapabilityPersistenceService.cs");
 
-        Assert.Contains("DynamicReportQualificationCommissioningService", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportQualificationFreshRecoveryCommissioningService", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("DynamicReportQualificationCommissioningService", recovery, StringComparison.Ordinal);
         Assert.Contains("DynamicReportActivationCommissioningServiceV2", bootstrap, StringComparison.Ordinal);
         Assert.Contains("DynamicReportNativeFieldCapabilityPersistenceService", bootstrap, StringComparison.Ordinal);
         Assert.Contains("DynamicReportSpontaneousDataChangeCommissioningService", persistence, StringComparison.Ordinal);
@@ -33,7 +35,23 @@ public sealed class G27NativePerIedFieldCapabilityRegressionTests
         Assert.Contains("MmsDynamicInformationReportKind.DataChange", persistence, StringComparison.Ordinal);
         Assert.Contains("GeneralInterrogationDisabled = true", persistence, StringComparison.Ordinal);
         Assert.DoesNotContain("MarkProductionEligible(", bootstrap, StringComparison.Ordinal);
+        Assert.DoesNotContain("MarkProductionEligible(", recovery, StringComparison.Ordinal);
         Assert.DoesNotContain("MarkProductionEligible(", persistence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P17_G23FreshRecoveryIsExactBoundedAndOneRetryOnly()
+    {
+        var recovery = Read("Services/DynamicReportQualificationFreshRecoveryCommissioningService.cs");
+
+        Assert.Contains("RequiresFreshAssociation", recovery, StringComparison.Ordinal);
+        Assert.Contains("RecoverDynamicDataSetQualificationResidueAsync", recovery, StringComparison.Ordinal);
+        Assert.Contains("IsExactCurrentRunG23TemporaryDataSet", recovery, StringComparison.Ordinal);
+        Assert.Contains("ARQ<8-hex>", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exactly one new G2.3 commissioning run", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("repeated physical mutation-instability evidence", recovery, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("while (", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("MarkProductionEligible(", recovery, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -68,14 +86,17 @@ public sealed class G27NativePerIedFieldCapabilityRegressionTests
     }
 
     [Fact]
-    public void P17_EngineLockPinsMergedNativeFieldCapabilityEngine()
+    public void P17_EngineLockPinsMergedFreshRecoveryEngine()
     {
         var engineLock = Read("engines/ARIEC61850.lock.json");
 
-        Assert.Contains("c979206988ebcbaf79e62b784895e19547184369", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"sourcePullRequest\": 107", engineLock, StringComparison.Ordinal);
+        Assert.Contains("d108eb5967960e697769b00f2dfe4f21c64688cd", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourcePullRequest\": 108", engineLock, StringComparison.Ordinal);
+        Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("native per-IED field-capability authorization", engineLock, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ProductionEligible stays independent", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fresh-association qualification residue recovery", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("name match alone never authorizes delete", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductionEligible remains independent", engineLock, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Read(string relativePath)
