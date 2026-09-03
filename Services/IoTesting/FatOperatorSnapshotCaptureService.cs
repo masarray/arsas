@@ -3,9 +3,9 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Captures the value currently read from the IED when the FAT operator explicitly
-/// confirms Value 1 or Value 2. No injected/reference value or tolerance exists here;
-/// this first public milestone proves trustworthy reading capture only.
+/// Creates immutable FAT Value 1 / Value 2 evidence from a trustworthy live observation.
+/// Pointer promotion is intentionally owned by the session controller so journal writes
+/// happen first and batch recapture can remain transactional.
 /// </summary>
 public static class FatOperatorSnapshotCaptureService
 {
@@ -29,19 +29,25 @@ public static class FatOperatorSnapshotCaptureService
                 $"FAT signal '{signal.SignalName}' uses {signal.CaptureMode} capture and cannot be manually snapshotted.");
         }
 
-        var evidence = CreateEvidence(slot, observation);
+        var evidence = CreateEvidence(slot, observation, FatEvidenceCaptureKind.OperatorSnapshot);
         signal.SetCurrentEvidence(evidence);
         return evidence;
     }
 
-    /// <summary>
-    /// Creates an immutable capture record without mutating a current evidence pointer.
-    /// Session controllers use this so the append-only journal can be durably written
-    /// before the replaceable Value 1 / Value 2 pointer is promoted.
-    /// </summary>
     public static FatValueEvidence CreateEvidence(
         FatValueSlot slot,
         FatLiveValueObservation observation)
+        => CreateEvidence(slot, observation, FatEvidenceCaptureKind.OperatorSnapshot);
+
+    /// <summary>
+    /// Creates an immutable capture record without mutating a current evidence pointer.
+    /// OperatorRecapture is valid for every FAT signal type; AutomaticStableSnapshot is
+    /// reserved for conservative analog/other settling capture.
+    /// </summary>
+    public static FatValueEvidence CreateEvidence(
+        FatValueSlot slot,
+        FatLiveValueObservation observation,
+        FatEvidenceCaptureKind captureKind)
     {
         ArgumentNullException.ThrowIfNull(observation);
         if (string.IsNullOrWhiteSpace(observation.RawValue) ||
@@ -50,10 +56,13 @@ public static class FatOperatorSnapshotCaptureService
             throw new InvalidOperationException("The FAT signal does not have a readable live value to capture.");
         }
 
+        if (captureKind == FatEvidenceCaptureKind.AutomaticTransition)
+            throw new ArgumentOutOfRangeException(nameof(captureKind), "Transition evidence is created by the digital transition evaluator.");
+
         return new FatValueEvidence(
             Guid.NewGuid(),
             slot,
-            FatEvidenceCaptureKind.OperatorSnapshot,
+            captureKind,
             observation.RawValue.Trim(),
             observation.CapturedAt,
             observation.IedTimestamp,
