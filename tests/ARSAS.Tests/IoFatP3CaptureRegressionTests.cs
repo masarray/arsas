@@ -235,7 +235,6 @@ public sealed class IoFatP3CaptureRegressionTests
     private static SnapshotFixture CreateSnapshotFixture(bool useFailingJournal = false)
     {
         var point = NewPoint("AN-SNAPSHOT", FatSignalKind.Analog, FatCaptureMode.OperatorSnapshot);
-        point.ObjectReference = "IED1LD0/MMXU1.A.phsA.cVal.mag.f";
         var ied = new IoTestIedPlan
         {
             IedName = point.IedName,
