@@ -110,8 +110,8 @@ public static class IoFatEngineeringSelectionBridge
             changed = true;
         }
 
-        if (matching.Length == 0 && selected && TryCreateManualWorkspacePoint(signal, ied, device, out var point))
-            changed |= ied.AddTestPoint(point);
+        if (matching.Length == 0 && selected && TryCreateManualWorkspacePoint(signal, ied, device, out var createdPoint))
+            changed |= ied.AddTestPoint(createdPoint);
 
         return changed;
     }
