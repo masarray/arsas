@@ -12,8 +12,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("127a4ecac0a52b3adc02d5403f207d89838c8010", json.GetProperty("commit").GetString());
-        Assert.Equal(109, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("9b60458ed910a410b843185384f0e04d3ca78ce0", json.GetProperty("commit").GetString());
+        Assert.Equal(110, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
         // G2.7 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
@@ -69,6 +69,9 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("fresh-association qualification residue recovery", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #109", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exceptions never count as absence evidence", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #110", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("envelope-bounded native runtime", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProvenSafeMemberCount", purpose, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -166,6 +169,7 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #108", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #109", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #110", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
 
         // G1 control remains independent from the G2.7 report acquisition bridge.
