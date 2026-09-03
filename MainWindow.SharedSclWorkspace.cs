@@ -96,20 +96,37 @@ public partial class MainWindow
 
         foreach (var ied in ieds)
         {
-            var sourceId = ied.TestPoints
-                .Select(point => point.SignalAddress)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            if (string.IsNullOrWhiteSpace(sourceId) ||
-                !sourceById.TryGetValue(sourceId, out var source) ||
-                !uniquePathByFileName.TryGetValue(source.FileName, out var sourcePath))
-            {
-                continue;
-            }
-
             var device = ResolveIoTestDevice(ied.LiveDeviceId)
                          ?? ResolveIoTestDevice(ied.IpAddress)
                          ?? ResolveIoTestDevice(ied.IedName);
             if (device is null)
+                continue;
+
+            IoFatSourceDescriptor? source = null;
+            var sourceId = ied.TestPoints
+                .Select(point => point.SignalAddress)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) && sourceById.ContainsKey(value));
+            if (!string.IsNullOrWhiteSpace(sourceId))
+                source = sourceById[sourceId];
+
+            // Manual-only SCL workspaces can legitimately have zero static DataSet rows,
+            // so source identity must not depend on finding a FAT point first.
+            if (source is null && !string.IsNullOrWhiteSpace(device.SclSourceSha256))
+            {
+                source = project.Sources.FirstOrDefault(candidate => candidate.Sha256.Equals(
+                    device.SclSourceSha256,
+                    StringComparison.OrdinalIgnoreCase));
+            }
+            if (source is null && project.Sources.Count == 1)
+                source = project.Sources[0];
+            if (source is null && !string.IsNullOrWhiteSpace(device.SclSourcePath))
+            {
+                var currentName = Path.GetFileName(device.SclSourcePath);
+                source = project.Sources.FirstOrDefault(candidate => candidate.FileName.Equals(
+                    currentName,
+                    StringComparison.OrdinalIgnoreCase));
+            }
+            if (source is null || !uniquePathByFileName.TryGetValue(source.FileName, out var sourcePath))
                 continue;
 
             device.SclSourcePath = sourcePath;
@@ -135,7 +152,7 @@ public partial class MainWindow
             {
                 ClearSharedSignalSelection(device);
                 foreach (var point in ied.TestPoints)
-                    point.TestEnabled = false;
+                    point.WorkspaceSelected = false;
             }
 
             await OpenSignalSelectionWizardAsync(
@@ -144,8 +161,9 @@ public partial class MainWindow
                 ownerOverride: owner);
 
             // The FAT window is not yet attached during an initial FAT import, so perform
-            // the same bridge operation explicitly. Once loaded, property changes remain
-            // synchronized bidirectionally by the normal bridge handlers.
+            // the same bridge operation explicitly. Selected non-DataSet SCL signals are
+            // materialized here as persistent FAT rows; existing FAT TEST/disposition state
+            // is never rewritten by Engineering selection.
             foreach (var signal in device.Signals)
             {
                 IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
