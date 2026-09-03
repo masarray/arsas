@@ -53,11 +53,6 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
 
     public int ActiveSessionCount => ControllerSnapshot().Count(controller => controller.IsSessionActive);
     public bool HasActiveSessions => ActiveSessionCount > 0;
-
-    // Session-facing properties are deliberately selected-context projections. This keeps
-    // existing FAT UI bindings intuitive: when IED A is running and the operator selects
-    // IED B, B still shows Start FAT and remains editable. Workspace-close/export code uses
-    // HasActiveSessions/ActiveSessionCount for the global safety boundary.
     public bool IsSelectedSessionActive => SelectedController?.IsSessionActive == true;
     public bool IsSessionActive => IsSelectedSessionActive;
     public bool CanStart => _selectedIed != null && !IsSelectedSessionActive;
@@ -94,11 +89,6 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         }
     }
 
-    /// <summary>
-    /// Supplies the MainWindow-owned leaf factory after the FAT window has an Owner.
-    /// The factory must create a fresh IoTestSessionController for the same project and
-    /// evidence directory; no controller instance may be shared between IEDs.
-    /// </summary>
     public void ConfigureSiblingFactory(Func<IoTestSessionController> factory)
     {
         ThrowIfDisposed();
@@ -202,11 +192,32 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         return result;
     }
 
-    /// <summary>
-    /// Runtime event route for additional P2 leaves only. MainWindow already routes every
-    /// event to PrimaryController, therefore including it here would duplicate primary
-    /// evidence. Each sibling leaf still enforces its own exact DeviceId boundary.
-    /// </summary>
+    public IoTestSessionActionResult RecaptureBatch(
+        IReadOnlyCollection<IoTestPointPlan> points,
+        FatValueSlot slot)
+    {
+        ThrowIfDisposed();
+        var controller = ResolveControllerForBatch(points, out var error);
+        if (controller == null)
+            return IoTestSessionActionResult.Failure(error);
+
+        var result = controller.RecaptureBatch(points, slot, FatEvidenceCaptureKind.OperatorRecapture);
+        RaiseProjectionProperties();
+        return result;
+    }
+
+    public IoTestSessionActionResult BeginRecapturePair(IReadOnlyCollection<IoTestPointPlan> points)
+    {
+        ThrowIfDisposed();
+        var controller = ResolveControllerForBatch(points, out var error);
+        if (controller == null)
+            return IoTestSessionActionResult.Failure(error);
+
+        var result = controller.BeginRecapturePair(points);
+        RaiseProjectionProperties();
+        return result;
+    }
+
     public void EnqueueAdditional(Iec61850EventEntry entry)
     {
         if (entry == null || _disposed)
@@ -234,6 +245,34 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
 
         lock (_sync)
             _controllers.Clear();
+    }
+
+    private IoTestSessionController? ResolveControllerForBatch(
+        IReadOnlyCollection<IoTestPointPlan>? points,
+        out string error)
+    {
+        if (points == null || points.Count == 0)
+        {
+            error = "Select one or more FAT rows first.";
+            return null;
+        }
+
+        var distinct = points.Distinct().ToArray();
+        var matches = ControllerSnapshot()
+            .Where(candidate => candidate.IsSessionActive &&
+                                candidate.ActiveIed != null &&
+                                distinct.All(point => candidate.ActiveIed.TestPoints.Contains(point)))
+            .ToArray();
+        if (matches.Length == 1)
+        {
+            error = string.Empty;
+            return matches[0];
+        }
+
+        error = matches.Length == 0
+            ? "All selected rows must belong to one active IED FAT session."
+            : "Selected rows resolved to more than one session controller; recapture was not started.";
+        return null;
     }
 
     private IoTestSessionController GetOrCreateController(IoTestIedPlan ied)
