@@ -161,7 +161,7 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Select one or multiple CID / ICD / IID / SCD / SSD files. Every static DataSet member becomes FAT scope. Excel import remains available for legacy IO-list projects.",
+            Text = "Select one or multiple CID / ICD / IID / SCD / SSD files. Use static DataSet membership or choose SCL signals manually; Engineering and FAT share the same workspace selection.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13.4,
             Foreground = TryFindResource("Muted") as Brush,
@@ -190,7 +190,7 @@ public partial class MainWindow
             new Thickness(0, 0, 0, 10)));
         content.Children.Add(new TextBlock
         {
-            Text = "Static DataSet authority · Value 1 / Value 2 evidence · autosave · portable continuation",
+            Text = "Shared SCL signal authority · Value 1 / Value 2 evidence · autosave · portable continuation",
             Style = TryFindResource("Caption") as Style,
             TextWrapping = TextWrapping.Wrap
         });
@@ -283,20 +283,6 @@ public partial class MainWindow
             var import = await _ioFatSclProjectImportService.ImportAsync(
                 sclPaths,
                 cancellationToken: _applicationCancellation.Token);
-            if (import.Project.SignalCount == 0)
-            {
-                var details = string.Join(
-                    Environment.NewLine,
-                    import.Findings.Take(12).Select(finding => $"• {finding.Code}: {finding.Message}"));
-                SetStatus("SCL FAT import contains no static DataSet members.");
-                MessageBox.Show(
-                    this,
-                    "The selected SCL source(s) contain no static DataSet members. ARSAS did not fabricate FAT rows.\n\n" + details,
-                    "No FAT DataSet scope",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                return;
-            }
 
             if (promptForSelection && !selectionMode.HasValue)
             {
@@ -306,6 +292,24 @@ public partial class MainWindow
                     SetStatus("SCL FAT import cancelled before the workspace was changed.");
                     return;
                 }
+            }
+
+            // Static mode is intentionally strict: it cannot invent FAT rows when SCL has
+            // no static DataSet membership. Manual mode is different; its selected SCL
+            // signals are materialized after the shared Engineering workspace is attached.
+            if (selectionMode == SclSignalSelectionMode.StaticDataSet && import.Project.SignalCount == 0)
+            {
+                var details = string.Join(
+                    Environment.NewLine,
+                    import.Findings.Take(12).Select(finding => $"• {finding.Code}: {finding.Message}"));
+                SetStatus("SCL FAT import contains no static DataSet members.");
+                MessageBox.Show(
+                    this,
+                    "The selected SCL source(s) contain no static DataSet members for Static DataSet mode. Choose Signals Manually to build FAT scope from valid SCL signals.\n\n" + details,
+                    "No static DataSet FAT scope",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
             }
 
             var launch = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
@@ -340,6 +344,11 @@ public partial class MainWindow
                         MarkSharedSelectionAuthority(device);
                 }
             }
+
+            // Manual non-DataSet rows are created after bootstrap restoration. Persist that
+            // shared workspace projection before the FAT window is exposed.
+            launch.Workspace.ScheduleSave();
+
             var warningCount = import.Findings.Count(finding =>
                 finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
                 finding.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ||
@@ -612,7 +621,7 @@ public partial class MainWindow
     private void IoFatSelectionPoint_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_ioFatSelectionBridgeActive || sender is not IoTestPointPlan point ||
-            e.PropertyName is not (nameof(IoTestPointPlan.TestEnabled) or nameof(IoTestPointPlan.FatDisposition)))
+            e.PropertyName != nameof(IoTestPointPlan.WorkspaceSelected))
         {
             return;
         }
@@ -629,6 +638,7 @@ public partial class MainWindow
             if (IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device))
             {
                 ScheduleIoFatSelectionSave(device);
+                _loadedIoFatWindow?.Storage?.ScheduleSave();
                 RaiseWorkspaceCounts();
             }
         }
@@ -678,11 +688,25 @@ public partial class MainWindow
         _ioFatSelectionBridgeActive = true;
         try
         {
-            IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+            var previousCount = ied.TestPoints.Count;
+            var changed = IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
                 signal,
                 signal.IsSelected,
                 ied,
                 device);
+            if (!changed)
+                return;
+
+            if (ied.TestPoints.Count > previousCount)
+            {
+                foreach (var point in ied.TestPoints.Skip(previousCount))
+                    point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
+            }
+
+            ScheduleIoFatSelectionSave(device);
+            _loadedIoFatWindow?.Storage?.ScheduleSave();
+            _loadedIoFatWindow?.NotifySharedWorkspacePointsChanged(ied);
+            RaiseWorkspaceCounts();
         }
         finally
         {
