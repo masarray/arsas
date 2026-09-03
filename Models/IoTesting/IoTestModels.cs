@@ -260,9 +260,12 @@ public sealed class IoTestPointRuntime : ObservableObject
             evidence.IedTimestamp,
             "yyyy-MM-dd HH:mm:ss.fff zzz",
             "not supplied");
+        var rawRelay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
+        var captured = evidence.CapturedAt.ToString("O", CultureInfo.InvariantCulture);
         return $"{label}: {evidence.RawValue}\n" +
-               $"IED timestamp: {displayed}\n" +
-               $"ARSAS capture: {evidence.CapturedAt:O}\n" +
+               $"Displayed (rounded to nearest ms): {displayed}\n" +
+               $"Decoded IED timestamp (full precision): {rawRelay}\n" +
+               $"ARSAS capture (full precision): {captured}\n" +
                $"Quality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n" +
                $"Capture: {evidence.CaptureKind}";
     }
