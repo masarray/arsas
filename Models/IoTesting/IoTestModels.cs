@@ -452,15 +452,16 @@ public sealed class IoTestPointPlan : ObservableObject
     }
 
     [JsonIgnore]
-    public string FatResultText => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.State switch
-        {
-            IoTestPointState.Passed => "✔ PASS",
-            IoTestPointState.Review => "⚠ REVIEW",
-            IoTestPointState.Failed => "✖ FAILED",
-            _ => "—"
-        }
-        : IsFatEvidenceComplete ? "✔ COMPLETE" : "—";
+    public string FatResultText =>
+        CaptureMode == FatCaptureMode.AutomaticTransition || SignalKind == FatSignalKind.Analog
+            ? Runtime.State switch
+            {
+                IoTestPointState.Passed => "✔ PASS",
+                IoTestPointState.Review => "⚠ REVIEW",
+                IoTestPointState.Failed => "✖ FAILED",
+                _ => "—"
+            }
+            : IsFatEvidenceComplete ? "✔ COMPLETE" : "—";
 
     [JsonIgnore]
     public string ReportIecReference
