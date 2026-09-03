@@ -13,12 +13,12 @@ public partial class IoListTestingWindow
     private DataGrid? _fatSignalsGrid;
     private Button? _removedSignalsButton;
     private ICollectionView? _fatSignalsView;
+    private IoTestPointPlan? _fatContextPoint;
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
     private readonly IoFatSelectedIedPlanEditabilityConverter _fatPlanEditabilityConverter = new();
+    private readonly IoFatEffectiveValuePresentationConverter _fatEffectiveValueConverter = new();
 
-    // P0.3/P2: plan ownership is per IED. Connection preparation and evidence sessions
-    // lock only the owning IED; sibling IEDs remain independently editable.
     public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);
 
     private bool CanEditIedPlan(IoTestIedPlan ied)
@@ -40,6 +40,10 @@ public partial class IoListTestingWindow
             _fatSignalsGrid = FindVisualDescendant<DataGrid>(this);
             if (_fatSignalsGrid != null)
             {
+                // P3 desktop selection contract: Ctrl+Click for disjoint rows, Shift+Click
+                // for ranges, and full-row context actions.
+                _fatSignalsGrid.SelectionMode = DataGridSelectionMode.Extended;
+                _fatSignalsGrid.SelectionUnit = DataGridSelectionUnit.FullRow;
                 ConfigureFatV2Columns(_fatSignalsGrid);
                 _fatSignalsGrid.PreviewMouseRightButtonDown += FatSignalsGrid_PreviewMouseRightButtonDown;
                 _fatSignalsGrid.ContextMenu = BuildFatContextMenu();
@@ -55,8 +59,6 @@ public partial class IoListTestingWindow
 
     private void RefreshFatV2WorkspaceUx(bool refreshRows = false)
     {
-        // Selected/session/preparation notifications all converge here through the selected
-        // IED context refresh. Re-evaluate the per-IED edit contract without touching rows.
         Raise(nameof(SelectedCanEditPlan));
         Raise(nameof(CanRestoreAnyRemovedSignal));
 
@@ -66,9 +68,6 @@ public partial class IoListTestingWindow
             if (view != null && !ReferenceEquals(view, _fatSignalsView))
             {
                 _fatSignalsView = view;
-                // FAT projects the shared Engineering workspace selection. TEST is a FAT-only
-                // evidence-scope toggle and must never hide a shared signal. Remove/Restore is
-                // a second, orthogonal FAT-only disposition overlay.
                 view.Filter = item => item is IoTestPointPlan point &&
                                              point.IsIncludedInFat &&
                                              point.WorkspaceSelected;
@@ -103,9 +102,6 @@ public partial class IoListTestingWindow
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
         });
 
-        // Bind directly to selected-IED/session/preparation sources so the active IED locks
-        // synchronously when Session.Start or IsPreparing changes. This avoids a dispatcher
-        // timing window where a stale global CanEditPlan value could accept one more click.
         var editability = new MultiBinding { Converter = _fatPlanEditabilityConverter };
         editability.Bindings.Add(new Binding("DataContext.SelectedIed")
         {
@@ -211,21 +207,15 @@ public partial class IoListTestingWindow
         panel.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1));
 
         var value = new FrameworkElementFactory(typeof(TextBlock));
-        value.SetBinding(TextBlock.TextProperty, new Binding(slot == FatValueSlot.Value1
-            ? nameof(IoTestPointPlan.Value1Text)
-            : nameof(IoTestPointPlan.Value2Text)));
+        value.SetBinding(TextBlock.TextProperty, EffectiveValueBinding(slot, "value"));
         value.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
         value.SetValue(TextBlock.FontSizeProperty, 11.4);
         value.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-        value.SetBinding(FrameworkElement.ToolTipProperty, new Binding(slot == FatValueSlot.Value1
-            ? nameof(IoTestPointPlan.Value1EvidenceToolTip)
-            : nameof(IoTestPointPlan.Value2EvidenceToolTip)));
+        value.SetBinding(FrameworkElement.ToolTipProperty, EffectiveValueBinding(slot, "tooltip"));
         panel.AppendChild(value);
 
         var timestamp = new FrameworkElementFactory(typeof(TextBlock));
-        timestamp.SetBinding(TextBlock.TextProperty, new Binding(slot == FatValueSlot.Value1
-            ? nameof(IoTestPointPlan.Value1RelayTimestampText)
-            : nameof(IoTestPointPlan.Value2RelayTimestampText)));
+        timestamp.SetBinding(TextBlock.TextProperty, EffectiveValueBinding(slot, "timestamp"));
         timestamp.SetValue(TextBlock.FontSizeProperty, 8.8);
         timestamp.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Cascadia Mono, Consolas"));
         timestamp.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(112, 126, 145)));
@@ -255,6 +245,19 @@ public partial class IoListTestingWindow
         };
     }
 
+    private MultiBinding EffectiveValueBinding(FatValueSlot slot, string format)
+    {
+        var binding = new MultiBinding
+        {
+            Converter = _fatEffectiveValueConverter,
+            ConverterParameter = format
+        };
+        binding.Bindings.Add(new Binding(slot == FatValueSlot.Value1 ? "Runtime.Value1Evidence" : "Runtime.Value2Evidence"));
+        binding.Bindings.Add(new Binding(slot == FatValueSlot.Value1 ? "Runtime.OnEvidence" : "Runtime.OffEvidence"));
+        binding.Bindings.Add(new Binding(nameof(IoTestPointPlan.CaptureMode)));
+        return binding;
+    }
+
     private void CaptureValue1_Click(object sender, RoutedEventArgs e)
         => CaptureOperatorValue(sender, FatValueSlot.Value1);
 
@@ -277,10 +280,56 @@ public partial class IoListTestingWindow
     private ContextMenu BuildFatContextMenu()
     {
         var menu = new ContextMenu();
+        var recapture = new MenuItem { Header = "Recapture" };
+        var value1 = new MenuItem { Header = "Value 1" };
+        value1.Click += (_, _) => RecaptureSelected(FatValueSlot.Value1);
+        var value2 = new MenuItem { Header = "Value 2" };
+        value2.Click += (_, _) => RecaptureSelected(FatValueSlot.Value2);
+        var both = new MenuItem { Header = "Value 1 & Value 2 (re-arm)" };
+        both.Click += (_, _) => BeginPairRecaptureSelected();
+        recapture.Items.Add(value1);
+        recapture.Items.Add(value2);
+        recapture.Items.Add(new Separator());
+        recapture.Items.Add(both);
+        menu.Items.Add(recapture);
+        menu.Items.Add(new Separator());
+
         var remove = new MenuItem { Header = "Remove from FAT" };
         remove.Click += RemoveSelectedFromFat_Click;
         menu.Items.Add(remove);
         return menu;
+    }
+
+    private IReadOnlyList<IoTestPointPlan> SelectedFatPoints()
+    {
+        if (_fatSignalsGrid == null)
+            return Array.Empty<IoTestPointPlan>();
+        return _fatSignalsGrid.SelectedItems
+            .OfType<IoTestPointPlan>()
+            .Distinct()
+            .ToArray();
+    }
+
+    private void RecaptureSelected(FatValueSlot slot)
+    {
+        var selected = SelectedFatPoints();
+        var result = Session.RecaptureBatch(selected, slot);
+        ShowActionResult(result, "Bulk recapture failed");
+        PreparationStatusText = result.Message;
+        if (!result.Succeeded)
+            return;
+        Storage?.ScheduleSave();
+        RaiseSelectedIedContextProperties();
+        RefreshFatV2WorkspaceUx();
+    }
+
+    private void BeginPairRecaptureSelected()
+    {
+        var selected = SelectedFatPoints();
+        var result = Session.BeginRecapturePair(selected);
+        ShowActionResult(result, "Value 1 & Value 2 re-arm failed");
+        PreparationStatusText = result.Message;
+        RaiseSelectedIedContextProperties();
     }
 
     private void FatSignalsGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -288,16 +337,25 @@ public partial class IoListTestingWindow
         if (_fatSignalsGrid == null)
             return;
         var row = FindVisualAncestor<DataGridRow>(e.OriginalSource as DependencyObject);
-        if (row?.Item is IoTestPointPlan point)
+        if (row?.Item is not IoTestPointPlan point)
+            return;
+
+        _fatContextPoint = point;
+        // Desktop convention: right-clicking inside the existing selection preserves the
+        // whole Ctrl/Shift selection. Right-clicking an unselected row makes only that row
+        // the context target.
+        if (!row.IsSelected)
         {
-            _fatSignalsGrid.SelectedItem = point;
+            _fatSignalsGrid.SelectedItems.Clear();
             row.IsSelected = true;
+            _fatSignalsGrid.SelectedItem = point;
         }
     }
 
     private void RemoveSelectedFromFat_Click(object sender, RoutedEventArgs e)
     {
-        if (_fatSignalsGrid?.SelectedItem is not IoTestPointPlan point)
+        var point = _fatContextPoint ?? _fatSignalsGrid?.SelectedItem as IoTestPointPlan;
+        if (point == null)
             return;
         if (!CanEditPointPlan(point))
         {
@@ -411,6 +469,42 @@ public partial class IoListTestingWindow
         }
         return null;
     }
+}
+
+public sealed class IoFatEffectiveValuePresentationConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var generic = values.Length > 0 ? values[0] as FatValueEvidence : null;
+        var transition = values.Length > 1 ? values[1] as IoTestTransitionEvidence : null;
+        var captureMode = values.Length > 2 && values[2] is FatCaptureMode mode ? mode : FatCaptureMode.OperatorSnapshot;
+        var format = parameter?.ToString() ?? "value";
+
+        if (generic != null)
+        {
+            return format switch
+            {
+                "timestamp" => Iec61850TimestampPresentation.FormatMilliseconds(generic.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff"),
+                "tooltip" => $"{generic.Slot}: {generic.RawValue}\nCapture: {generic.CaptureKind}\nQuality: {generic.Quality}\nSource: {generic.AcquisitionSource}\nARSAS: {generic.CapturedAt:O}",
+                _ => generic.RawValue
+            };
+        }
+
+        if (captureMode == FatCaptureMode.AutomaticTransition && transition != null)
+        {
+            return format switch
+            {
+                "timestamp" => Iec61850TimestampPresentation.FormatMilliseconds(transition.IedTimestamp, "yyyy-MM-dd HH:mm:ss.fff"),
+                "tooltip" => $"Automatic transition: {transition.RawValue}\n{transition.Verdict}: {transition.VerdictReason}\nQuality: {transition.Quality}\nSource: {transition.AcquisitionSource}",
+                _ => transition.RawValue
+            };
+        }
+
+        return format == "tooltip" ? "Value has not been captured." : "—";
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => targetTypes.Select(_ => Binding.DoNothing).ToArray();
 }
 
 public sealed class IoFatSelectedIedPlanEditabilityConverter : IMultiValueConverter
