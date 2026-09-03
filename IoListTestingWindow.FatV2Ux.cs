@@ -66,12 +66,12 @@ public partial class IoListTestingWindow
             if (view != null && !ReferenceEquals(view, _fatSignalsView))
             {
                 _fatSignalsView = view;
-                // FAT projects every signal selected by the shared Engineering authority.
-                // Disposition is a FAT-only overlay; either an Engineering deselection or
-                // Remove from FAT hides the row without deleting its identity/evidence.
+                // FAT projects the shared Engineering workspace selection. TEST is a FAT-only
+                // evidence-scope toggle and must never hide a shared signal. Remove/Restore is
+                // a second, orthogonal FAT-only disposition overlay.
                 view.Filter = item => item is IoTestPointPlan point &&
                                              point.IsIncludedInFat &&
-                                             point.TestEnabled;
+                                             point.WorkspaceSelected;
                 refreshRows = true;
             }
             if (refreshRows)
@@ -367,7 +367,7 @@ public partial class IoListTestingWindow
             if (text.Text == "IO LIST FAT")
                 text.Text = "IEC 61850 FAT";
             else if (text.Text == "Workbook scope · report-first acquisition · relay-timestamped evidence")
-                text.Text = "Static DataSet scope · Value 1 / Value 2 · immutable evidence history";
+                text.Text = "Shared SCL scope · Value 1 / Value 2 · immutable evidence history";
             else if (text.Text == "Workbook devices")
                 text.Text = "FAT source IEDs";
         }
