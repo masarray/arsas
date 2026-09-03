@@ -172,8 +172,8 @@ public partial class IoListTestingWindow
 
         // P1: Connect owns endpoint/MMS/live-acquisition state, never FAT evidence
         // selection. The preparation path receives no checkbox scope here and therefore
-        // acquires every included import-ready static member for this IED. TEST remains
-        // authoritative only when Start FAT builds its explicit captureScope below.
+        // acquires every shared-workspace-selected included import-ready SCL row for this
+        // IED. TEST remains authoritative only when Start FAT builds captureScope below.
         if (ReferenceEquals(SelectedIed, targetIed))
             PreparationStatusText = $"Connecting {targetIed.IedName} · {targetIed.IpAddress}:102";
         RaisePreparationProperties();
@@ -253,9 +253,9 @@ public partial class IoListTestingWindow
 
         // TEST is evidence authority only. Keep this selected capture scope for the
         // evidence controller, while connection/live acquisition below remains the full
-        // included import-ready IED scope.
+        // shared-workspace-selected included import-ready IED scope.
         var captureScope = selectedIed.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
 
         try
@@ -285,7 +285,7 @@ public partial class IoListTestingWindow
                 await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, selectedIed);
             }
 
-            // Operator selection remains authoritative. A selected static DataSet row that
+            // Operator selection remains authoritative. A selected SCL workspace row that
             // has no unique live point stays checked/included and visible, but it cannot be
             // allowed to manufacture evidence. Arm only the currently proven live subset.
             // Legacy source-contract spelling retained only as documentation:
@@ -419,7 +419,9 @@ public partial class IoListTestingWindow
     }
 
     private static List<IoTestPointPlan> EnabledPoints(IoTestIedPlan ied)
-        => ied.TestPoints.Where(point => point.IsIncludedInFat && point.TestEnabled).ToList();
+        => ied.TestPoints
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled)
+            .ToList();
 }
 
 public sealed class IoFatAllPassedVisibilityConverter : IMultiValueConverter
