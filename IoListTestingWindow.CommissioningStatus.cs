@@ -64,16 +64,16 @@ public partial class IoListTestingWindow
             // visibility binding hid StateBadge when all rows passed; a local value here
             // intentionally keeps ONLINE / RECONNECTING / OFFLINE visible at all times.
             badge.Visibility = Visibility.Visible;
-            badge.Background = BrushFromHex(palette.Background);
-            badge.BorderBrush = BrushFromHex(palette.Border);
+            badge.Background = ConnectionBadgeBrushFromHex(palette.Background);
+            badge.BorderBrush = ConnectionBadgeBrushFromHex(palette.Border);
             badge.ToolTip = string.IsNullOrWhiteSpace(plan.LiveStatusText)
                 ? state
                 : $"{state} · {plan.LiveStatusText}";
             text.Text = state;
-            text.Foreground = BrushFromHex(palette.Foreground);
+            text.Foreground = ConnectionBadgeBrushFromHex(palette.Foreground);
 
             if (FindNamedVisual<Control>(container, "RelayIcon") is { } relayIcon)
-                relayIcon.Foreground = BrushFromHex(palette.Foreground);
+                relayIcon.Foreground = ConnectionBadgeBrushFromHex(palette.Foreground);
         }
     }
 
@@ -93,7 +93,7 @@ public partial class IoListTestingWindow
         return null;
     }
 
-    private static Brush BrushFromHex(string value)
+    private static Brush ConnectionBadgeBrushFromHex(string value)
         => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
 
     private sealed record BadgePalette(string Background, string Border, string Foreground);
