@@ -123,7 +123,12 @@
                         </Border>
                     </Grid>
 
-                    <ListBox ItemsSource="{Binding Project.Ieds}"
+                    <Button DockPanel.Dock="Bottom" Content="＋ Add IED · Import SCL"
+                            Style="{StaticResource PrimaryButton}" Margin="4,10,4,2" Padding="12,9"
+                            IsEnabled="{Binding CanAddFatIed}" Click="AddFatIedFromScl_Click"
+                            ToolTip="Add another IED from CID/SCD/ICD/IID without replacing the current FAT workspace"/>
+
+                    <ListBox x:Name="FatIedList" ItemsSource="{Binding Project.Ieds}"
                              SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
                              IsEnabled="{Binding CanSelectIed}"
                              BorderThickness="0" Background="Transparent"
@@ -344,10 +349,13 @@
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
                               RowHeaderWidth="0"
-                              FrozenColumnCount="1"
-                              EnableRowVirtualization="True"
-                              EnableColumnVirtualization="True"
-                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                               FrozenColumnCount="1"
+                               EnableRowVirtualization="True"
+                               EnableColumnVirtualization="True"
+                               VirtualizingPanel.IsVirtualizing="True"
+                               VirtualizingPanel.VirtualizationMode="Recycling"
+                               ScrollViewer.CanContentScroll="True"
+                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="TEST" Width="48" HeaderStyle="{StaticResource CenteredFatGridHeader}">

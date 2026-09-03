@@ -26,11 +26,16 @@ public static class IoFatPdfReportService
         bool draft = false)
     {
         ArgumentNullException.ThrowIfNull(project);
+
+        // FAT disposition and shared Engineering/FAT workspace membership are applied
+        // before either report engine. This is a hard boundary: Remove from FAT excludes
+        // the row even when it already owns completed historical evidence.
+        var reportProject = IoFatReportScope.Create(project);
         var created = generatedAt ?? DateTimeOffset.Now;
-        var layout = project.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase)
-            ? IoFatV2ReportLayoutEngine.Build(project, created, draft)
-            : IoFatExecutiveReportLayoutEngine.Build(project, created, draft);
-        return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(project, layout);
+        var layout = reportProject.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase)
+            ? IoFatV2ReportLayoutEngine.Build(reportProject, created, draft)
+            : IoFatExecutiveReportLayoutEngine.Build(reportProject, created, draft);
+        return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(reportProject, layout);
     }
 
     public static void Save(string fileName, IoTestProject project, DateTimeOffset? generatedAt = null)

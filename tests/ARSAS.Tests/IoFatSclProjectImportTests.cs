@@ -149,6 +149,26 @@ public sealed class IoFatSclProjectImportTests
     }
 
     [Fact]
+    public async Task IncrementalImport_PreservesExistingRuntimeWorkspaceAndAddsNextIed()
+    {
+        var root = TempDirectory();
+        var first = Path.Combine(root, "relay-first.cid");
+        var second = Path.Combine(root, "relay-next.cid");
+        BuildSinglePointFixture("IED-FIRST", "S1", "ADD", "GGIO", "1", "Dig01", "ST", "BOOLEAN").Save(first);
+        BuildSinglePointFixture("IED-NEXT", "S1", "MEAS", "MMXU", "1", "Ana01", "MX", "FLOAT32").Save(second);
+        var importer = new IoFatSclProjectImportService();
+
+        await importer.ImportAsync(new[] { first });
+        var additional = await importer.ImportAdditionalAsync(new[] { second });
+
+        Assert.True(importer.TryGetRuntimeWorkspace("IED-FIRST", string.Empty, out var firstWorkspace));
+        Assert.True(importer.TryGetRuntimeWorkspace("IED-NEXT", string.Empty, out var nextWorkspace));
+        Assert.NotNull(firstWorkspace);
+        Assert.NotNull(nextWorkspace);
+        Assert.Equal("IED-NEXT", Assert.Single(additional.Project.Ieds).IedName);
+    }
+
+    [Fact]
     public async Task ProductionLoader_NoStaticDataSet_ReturnsZeroRowsAndExplicitFinding()
     {
         var root = TempDirectory();

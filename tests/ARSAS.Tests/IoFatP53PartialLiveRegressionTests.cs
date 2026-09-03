@@ -11,7 +11,7 @@ public sealed class IoFatP53PartialLiveRegressionTests
 
         Assert.Contains("mayProceedWithPartialSclSelection", source, StringComparison.Ordinal);
         Assert.Contains("selection.Matches.Count > 0", source, StringComparison.Ordinal);
-        Assert.Contains("unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsSclDataSetAuthority)", source, StringComparison.Ordinal);
+        Assert.Contains("unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsDirectSclAuthority)", source, StringComparison.Ordinal);
         Assert.Contains("if (liveCount == 0)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RemoveFromFat()", source, StringComparison.Ordinal);
@@ -44,6 +44,7 @@ public sealed class IoFatP53PartialLiveRegressionTests
             FunctionalConstraint = "MX",
             ExpectedOnText = "Value 1",
             ExpectedOffText = "Value 2",
+            WorkspaceSelected = true,
             TestEnabled = true,
             ImportReady = true
         };
@@ -53,6 +54,7 @@ public sealed class IoFatP53PartialLiveRegressionTests
             "Waiting for safe structured primary binding.",
             "device-1");
 
+        Assert.True(point.WorkspaceSelected);
         Assert.True(point.TestEnabled);
         Assert.True(point.IsIncludedInFat);
         Assert.Equal(IoTestLiveBindingState.NotEvaluated, point.LiveBindingState);

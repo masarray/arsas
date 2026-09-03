@@ -1,3 +1,4 @@
+using System.Globalization;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
@@ -17,6 +18,13 @@ public static class IecSignalReadResolver
         SignalDefinition signal,
         CancellationToken cancellationToken)
     {
+        // Object-level THD and demand-energy members are structured values. They must
+        // never enter the generic parent-read path, because a raw MMS structure can only
+        // identify its children positionally. Build an exact named-leaf plan from the
+        // per-IED SCL/live schema and read those scalar leaves directly instead.
+        if (client is NativeIec61850Client native && IsSchemaSafeAggregate(signal.ObjectReference))
+            return await ReadSchemaSafeAggregateAsync(native, signal, cancellationToken).ConfigureAwait(false);
+
         var references = BuildReadCandidates(signal.ObjectReference).ToList();
         Exception? firstFailure = null;
 
@@ -46,6 +54,145 @@ public static class IecSignalReadResolver
         if (firstFailure != null)
             throw firstFailure;
         return null;
+    }
+
+    private sealed record AggregateLeafRead(
+        SchemaSafeAggregateProjectionService.ReadLeaf Leaf,
+        double NumericValue,
+        string Quality,
+        string DeviceTimestamp);
+
+    private static async Task<ResolvedIecSignalRead?> ReadSchemaSafeAggregateAsync(
+        NativeIec61850Client client,
+        SignalDefinition signal,
+        CancellationToken cancellationToken)
+    {
+        // Failure to prove the schema is an intentional hard stop for this parent value.
+        // Do not fall through to NativeIec61850Client.ReadValueAsync(parent), where raw
+        // structure ordering could silently assign the wrong phase/value.
+        if (!client.TryBuildSchemaSafeAggregateReadPlan(signal.ObjectReference, out var plan, out _))
+            return null;
+
+        var reads = new List<AggregateLeafRead>(plan.Leaves.Count);
+        foreach (var leaf in plan.Leaves)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var value = await client.ReadValueAsync(
+                leaf.Reference,
+                signal.FunctionalConstraint,
+                leaf.DataType,
+                cancellationToken).ConfigureAwait(false);
+            if (value is null)
+                return null;
+
+            var raw = Iec61850ReadValue.Unwrap(value);
+            if (!TryConvertNumeric(raw, out var numeric))
+                return null;
+
+            var rich = value as Iec61850ReadValue;
+            reads.Add(new AggregateLeafRead(
+                leaf,
+                numeric,
+                rich?.Quality ?? string.Empty,
+                rich?.DeviceTimestamp ?? string.Empty));
+        }
+
+        if (plan.Kind.Equals("ThreePhaseThd", StringComparison.OrdinalIgnoreCase))
+        {
+            if (reads.Count != 3)
+                return null;
+
+            var display = string.Join(", ", reads.Select(read =>
+                $"{read.Leaf.Label}={read.NumericValue.ToString("0.######", CultureInfo.InvariantCulture)}"));
+            var rich = new Iec61850ReadValue
+            {
+                Value = display,
+                DisplayValue = display,
+                Quality = UnanimousUseful(reads.Select(read => read.Quality)),
+                DeviceTimestamp = UnanimousUseful(reads.Select(read => read.DeviceTimestamp)),
+                SourceReference = signal.ObjectReference,
+                ReadReference = string.Join(" | ", reads.Select(read => read.Leaf.Reference)),
+                Projection = "schema-safe-three-phase-exact-leaf-reads"
+            };
+            return new ResolvedIecSignalRead(rich, signal.ObjectReference);
+        }
+
+        if (plan.Kind.Equals("DemandEnergy", StringComparison.OrdinalIgnoreCase))
+        {
+            var read = reads.Count == 1 ? reads[0] : null;
+            if (read is null)
+                return null;
+
+            var display = read.NumericValue.ToString("0.######", CultureInfo.InvariantCulture);
+            var rich = new Iec61850ReadValue
+            {
+                Value = read.NumericValue,
+                DisplayValue = display,
+                Quality = read.Quality,
+                DeviceTimestamp = read.DeviceTimestamp,
+                SourceReference = signal.ObjectReference,
+                ReadReference = read.Leaf.Reference,
+                Projection = "schema-safe-demand-energy-exact-leaf-read"
+            };
+
+            // The runtime keeps the FAT identity on the parent point, but uses this exact
+            // effective leaf to derive low-rate q/t companion references. Returning the
+            // parent here would incorrectly derive XPRE_MMTR1.q instead of DmdWhMV.q.
+            return new ResolvedIecSignalRead(rich, read.Leaf.Reference);
+        }
+
+        return null;
+    }
+
+    private static bool IsSchemaSafeAggregate(string reference)
+        => SignalDefinition.IsThreePhaseMeasurementAggregate(reference) ||
+           SignalDefinition.IsDemandEnergyAggregate(reference);
+
+    private static bool TryConvertNumeric(object? value, out double numeric)
+    {
+        numeric = 0d;
+        if (value is null)
+            return false;
+
+        try
+        {
+            switch (value)
+            {
+                case double d:
+                    numeric = d;
+                    return double.IsFinite(d);
+                case float f:
+                    numeric = f;
+                    return float.IsFinite(f);
+                case decimal m:
+                    numeric = (double)m;
+                    return double.IsFinite(numeric);
+                case byte or sbyte or short or ushort or int or uint or long or ulong:
+                    numeric = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                    return double.IsFinite(numeric);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
+        {
+            return false;
+        }
+
+        return double.TryParse(
+                   Convert.ToString(value, CultureInfo.InvariantCulture),
+                   NumberStyles.Float | NumberStyles.AllowThousands,
+                   CultureInfo.InvariantCulture,
+                   out numeric) &&
+               double.IsFinite(numeric);
+    }
+
+    private static string UnanimousUseful(IEnumerable<string> values)
+    {
+        var useful = values
+            .Where(value => !string.IsNullOrWhiteSpace(value) && value != "-")
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return useful.Length == 1 ? useful[0] : string.Empty;
     }
 
     public static bool ApplyEffectiveReference(SignalDefinition signal, string effectiveReference)

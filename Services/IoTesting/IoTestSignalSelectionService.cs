@@ -21,15 +21,18 @@ public sealed record IoTestSignalSelectionResult(
 }
 
 /// <summary>
-/// Resolves the enabled IO-list scope against one discovered IED model without
+/// Resolves an IO-list/FAT acquisition scope against one discovered IED model without
 /// guessing. Exact references remain highest priority. Canonical IEC 61850 forms
 /// accept vendor-safe spelling differences only when the best candidate is unique.
-/// Weak source rows are resolved only after stronger references have claimed their
-/// signals, allowing deterministic sibling evidence without fuzzy text matching.
+/// Weak legacy source rows remain gated by TEST selection. Direct-SCL workspace rows
+/// are acquisition candidates whenever shared workspace selection keeps them visible;
+/// their TEST checkbox is evidence authority only.
 /// </summary>
 public sealed class IoTestSignalSelectionService
 {
     internal const string SclDataSetAuthorityBindingStatus = "SCL_DATASET_AUTHORITY";
+    internal const string SclWorkspaceAuthorityBindingStatus = "SCL_WORKSPACE_AUTHORITY";
+    private const int SclStaticMembershipIdentityBonus = 1000;
 
     private static readonly Regex ProtectionCodeRegex = new(
         @"\((?<code>\d{2,3}[A-Z]{0,3})(?:\s*-\s*[^)]*)?\)",
@@ -49,8 +52,16 @@ public sealed class IoTestSignalSelectionService
         // semantic inference in ARSAS; the engine remains the sole membership authority.
         Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
 
+        // P1 + shared workspace authority: direct-SCL connection/live acquisition follows
+        // the Engineering/FAT workspace selection, not TEST. Legacy workbook rows retain
+        // their historical TestEnabled gate because they do not have an independent
+        // SCL-owned workspace identity.
         var requested = ied.TestPoints
-            .Where(point => point.TestEnabled && point.ImportReady)
+            .Where(point =>
+                point.WorkspaceSelected &&
+                point.IsIncludedInFat &&
+                point.ImportReady &&
+                (point.TestEnabled || IsDirectSclAuthority(point)))
             .ToList();
         var matches = new List<IoTestSignalMatch>(requested.Count);
         var missing = new List<IoTestPointPlan>();
@@ -88,11 +99,12 @@ public sealed class IoTestSignalSelectionService
         // assignments as elimination evidence. No candidate is ever selected by text
         // similarity: it must still be the one unique best IEC object left.
         //
-        // SCL FAT rows are different from legacy workbook rows: their identity is the
-        // engine-authoritative static DataSet membership, not a unique runtime leaf. Two
-        // distinct memberships may legally resolve to the same primary DataAttribute, so
-        // those authority rows are allowed to fan out from one proven live signal. The
-        // signal is still recorded as used so a legacy workbook row cannot silently share it.
+        // Static DataSet FAT rows are different from legacy workbook rows: their identity
+        // is an engine-authoritative membership, not a unique runtime leaf. Two distinct
+        // memberships may legally resolve to the same primary DataAttribute, so those
+        // static authority rows are allowed to fan out from one proven live signal. Manual
+        // workspace rows own a normal unique SCL object identity and therefore do not use
+        // this static-membership sharing exception.
         var madeProgress = true;
         while (madeProgress && unresolved.Count > 0)
         {
@@ -151,7 +163,7 @@ public sealed class IoTestSignalSelectionService
             matches,
             missing,
             ambiguous,
-            $"Resolved {matches.Count} enabled FAT signal(s) to discovered model points.{smartText}");
+            $"Resolved {matches.Count} FAT acquisition signal(s) to discovered model points.{smartText}");
     }
 
     internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
@@ -159,6 +171,15 @@ public sealed class IoTestSignalSelectionService
             point.BindingStatus,
             SclDataSetAuthorityBindingStatus,
             StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsSclWorkspaceAuthority(IoTestPointPlan point)
+        => string.Equals(
+            point.BindingStatus,
+            SclWorkspaceAuthorityBindingStatus,
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsDirectSclAuthority(IoTestPointPlan point)
+        => IsSclDataSetAuthority(point) || IsSclWorkspaceAuthority(point);
 
     private static int BestSignalScore(
         IoTestPointPlan point,
@@ -170,11 +191,20 @@ public sealed class IoTestSignalSelectionService
         if (importedReferences.Count == 0)
             return 0;
 
+        // Direct static SCL FAT owns stronger identity than a runtime leaf: one row
+        // corresponds to one exact static DataSet membership. A connected Engineering
+        // Workspace can legitimately contain both a generic scalar signal and a dedicated
+        // static-member projection with the same ObjectReference. Prefer exact
+        // (DataSetReference + DisplayReference) membership identity, then use the resolved
+        // ObjectReference only as the acquisition target.
+        if (HasExactSclStaticMembershipIdentity(point, signal))
+            return IoTestReferenceMatcher.ExactScore + SclStaticMembershipIdentityBonus;
+
         // ARIEC deliberately keeps static FCDA/FCD membership identity in
         // DisplayReference while ObjectReference may remain the resolved runtime leaf.
-        // SCL-backed FAT rows therefore compare against both engine-owned identities.
+        // Manual SCL workspace rows also preserve DisplayReference as exact source identity.
         // Legacy workbook rows keep the old ObjectReference-only contract.
-        var observedReferences = IsSclDataSetAuthority(point)
+        var observedReferences = IsDirectSclAuthority(point)
             ? new[] { signal.ObjectReference, signal.DisplayReference }
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -191,6 +221,38 @@ public sealed class IoTestSignalSelectionService
                 point.LogicalNode)))
             .DefaultIfEmpty(0)
             .Max();
+    }
+
+    private static bool HasExactSclStaticMembershipIdentity(
+        IoTestPointPlan point,
+        SignalDefinition signal)
+    {
+        if (!IsSclDataSetAuthority(point) || string.IsNullOrWhiteSpace(signal.DisplayReference))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(point.DataSetName) &&
+            !string.IsNullOrWhiteSpace(signal.DataSetReference) &&
+            !IoTestLiveBindingService.NormalizeReference(point.DataSetName)
+                .Equals(
+                    IoTestLiveBindingService.NormalizeReference(signal.DataSetReference),
+                    StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var display = IoTestLiveBindingService.NormalizeReference(signal.DisplayReference);
+        if (display.Length == 0)
+            return false;
+
+        return new[]
+            {
+                point.SourceIecReference,
+                point.ReportDisplayReference,
+                point.EventLogSearchReference
+            }
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .Select(IoTestLiveBindingService.NormalizeReference)
+            .Any(reference => reference.Equals(display, StringComparison.OrdinalIgnoreCase));
     }
 
     private static List<SignalDefinition> NarrowByProtectionIdentity(

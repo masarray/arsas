@@ -67,13 +67,26 @@ public sealed class IoFatSclProjectImportService
         }
     }
 
-    public async Task<IoFatSclProjectImportResult> ImportAsync(
+    public Task<IoFatSclProjectImportResult> ImportAsync(
         IReadOnlyCollection<string> sclPaths,
         string? projectName = null,
         CancellationToken cancellationToken = default)
+        => ImportCoreAsync(sclPaths, projectName, replaceRuntimeWorkspaces: true, cancellationToken);
+
+    public Task<IoFatSclProjectImportResult> ImportAdditionalAsync(
+        IReadOnlyCollection<string> sclPaths,
+        CancellationToken cancellationToken = default)
+        => ImportCoreAsync(sclPaths, projectName: null, replaceRuntimeWorkspaces: false, cancellationToken);
+
+    private async Task<IoFatSclProjectImportResult> ImportCoreAsync(
+        IReadOnlyCollection<string> sclPaths,
+        string? projectName,
+        bool replaceRuntimeWorkspaces,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sclPaths);
-        SetRuntimeWorkspaces(Array.Empty<SclIedWorkspace>());
+        if (replaceRuntimeWorkspaces)
+            SetRuntimeWorkspaces(Array.Empty<SclIedWorkspace>());
         var requestedPaths = sclPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(Path.GetFullPath)
@@ -217,9 +230,13 @@ public sealed class IoFatSclProjectImportService
         // Keep the exact engine-owned workspaces alive for the current FAT run. AutoConnect
         // can attach these already-parsed models to the IED and perform a fast MMS association
         // instead of repeating a network-wide Smart Scan that SCL-backed FAT does not need.
-        SetRuntimeWorkspaces(loadedSources
+        var importedWorkspaces = loadedSources
             .SelectMany(source => source.Document.Ieds)
-            .ToArray());
+            .ToArray();
+        if (replaceRuntimeWorkspaces)
+            SetRuntimeWorkspaces(importedWorkspaces);
+        else
+            AddRuntimeWorkspaces(importedWorkspaces);
 
         return new IoFatSclProjectImportResult(
             project,
@@ -233,6 +250,18 @@ public sealed class IoFatSclProjectImportService
     {
         lock (_runtimeWorkspaceGate)
             _runtimeWorkspaces = workspaces;
+    }
+
+    private void AddRuntimeWorkspaces(IReadOnlyCollection<SclIedWorkspace> workspaces)
+    {
+        lock (_runtimeWorkspaceGate)
+        {
+            _runtimeWorkspaces = _runtimeWorkspaces
+                .Concat(workspaces)
+                .GroupBy(workspace => workspace.WorkspaceKey, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last())
+                .ToArray();
+        }
     }
 
     private static List<IoTestIedPlan> BuildIedPlans(

@@ -10,19 +10,19 @@ public static class IoTestSessionPreflight
             return IoTestSessionActionResult.Failure("Select an imported IED first.");
 
         var unsafeEnabled = ied.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && !point.ImportReady)
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && !point.ImportReady)
             .ToList();
         if (unsafeEnabled.Count > 0)
         {
             return IoTestSessionActionResult.Failure(
-                $"{unsafeEnabled.Count} included, enabled signal(s) still require import/binding review. Disable them or repair their mapping before starting FAT.");
+                $"{unsafeEnabled.Count} shared-workspace-selected FAT signal(s) still require import/binding review. Disable their TEST scope or repair their mapping before starting FAT.");
         }
 
         var enabledReady = ied.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
         if (enabledReady.Count == 0)
-            return IoTestSessionActionResult.Failure("No included, import-ready FAT signal is enabled for this IED.");
+            return IoTestSessionActionResult.Failure("No shared-workspace-selected, included, import-ready FAT signal has TEST enabled for this IED.");
 
         var duplicateReferences = enabledReady
             .GroupBy(
@@ -40,11 +40,11 @@ public static class IoTestSessionPreflight
             var first = duplicateReferences[0];
             var ids = string.Join(", ", first.Select(point => point.TestPointId));
             return IoTestSessionActionResult.Failure(
-                $"One live IEC 61850 reference is assigned to multiple enabled test points in the included FAT scope ({ids}). Resolve the duplicate mapping before FAT so one edge cannot produce multiple results.");
+                $"One live IEC 61850 reference is assigned to multiple enabled test points in the shared included FAT scope ({ids}). Resolve the duplicate mapping before FAT so one edge cannot produce multiple results.");
         }
 
         return IoTestSessionActionResult.Success(
-            $"{enabledReady.Count} included signal(s) passed FAT session preflight.");
+            $"{enabledReady.Count} shared-workspace-selected FAT signal(s) passed session preflight.");
     }
 
     private static bool IsDistinctSclDataSetMembershipFanOut(IEnumerable<IoTestPointPlan> points)

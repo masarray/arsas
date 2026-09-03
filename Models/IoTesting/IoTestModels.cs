@@ -77,6 +77,7 @@ public sealed class IoTestPointRuntime : ObservableObject
     private IoTestTransitionEvidence? _offEvidence;
     private FatValueEvidence? _value1Evidence;
     private FatValueEvidence? _value2Evidence;
+    private FatAutoCaptureStage _autoCaptureStage = FatAutoCaptureStage.WaitingValue1;
     private string _statusReason = "Not started";
     private int _attempt;
     private string _currentValue = "-";
@@ -146,6 +147,13 @@ public sealed class IoTestPointRuntime : ObservableObject
             Raise(nameof(Value2RelayTimestampText));
             Raise(nameof(Value2EvidenceToolTip));
         }
+    }
+
+    [JsonIgnore]
+    public FatAutoCaptureStage AutoCaptureStage
+    {
+        get => _autoCaptureStage;
+        internal set => Set(ref _autoCaptureStage, value);
     }
 
     public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
@@ -252,9 +260,12 @@ public sealed class IoTestPointRuntime : ObservableObject
             evidence.IedTimestamp,
             "yyyy-MM-dd HH:mm:ss.fff zzz",
             "not supplied");
+        var rawRelay = evidence.IedTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "not supplied";
+        var captured = evidence.CapturedAt.ToString("O", CultureInfo.InvariantCulture);
         return $"{label}: {evidence.RawValue}\n" +
-               $"IED timestamp: {displayed}\n" +
-               $"ARSAS capture: {evidence.CapturedAt:O}\n" +
+               $"Displayed (rounded to nearest ms): {displayed}\n" +
+               $"Decoded IED timestamp (full precision): {rawRelay}\n" +
+               $"ARSAS capture (full precision): {captured}\n" +
                $"Quality: {evidence.Quality}\nSource: {evidence.AcquisitionSource}\n" +
                $"Capture: {evidence.CaptureKind}";
     }
@@ -274,6 +285,7 @@ public sealed class IoTestPointRuntime : ObservableObject
 
 public sealed class IoTestPointPlan : ObservableObject
 {
+    private bool _workspaceSelected = true;
     private bool _testEnabled = true;
     private FatSignalDisposition _fatDisposition = FatSignalDisposition.Included;
     private IoTestLiveBindingState _liveBindingState = IoTestLiveBindingState.NotEvaluated;
@@ -318,6 +330,20 @@ public sealed class IoTestPointPlan : ObservableObject
     public int SourceRow { get; init; }
     public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
     public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
+
+    // Shared Engineering/FAT workspace membership. This is intentionally separate from
+    // TestEnabled, which remains a FAT-only capture/evidence scope toggle.
+    public bool WorkspaceSelected
+    {
+        get => _workspaceSelected;
+        set
+        {
+            if (!Set(ref _workspaceSelected, value))
+                return;
+            RaiseFatComputedProperties();
+        }
+    }
+
     public bool TestEnabled
     {
         get => _testEnabled;
@@ -353,42 +379,58 @@ public sealed class IoTestPointPlan : ObservableObject
 
     [JsonIgnore]
     public bool CanCaptureOperatorSnapshot =>
-        IsOperatorSnapshot && IsIncludedInFat && TestEnabled && ImportReady && IsLiveBound;
+        IsOperatorSnapshot && WorkspaceSelected && IsIncludedInFat && TestEnabled && ImportReady && IsLiveBound;
 
     [JsonIgnore]
-    public bool IsFatEvidenceComplete => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidence is not null && Runtime.OffEvidence is not null
-        : Runtime.Value1Evidence is not null && Runtime.Value2Evidence is not null;
+    public bool HasValue1Evidence =>
+        Runtime.Value1Evidence is not null ||
+        (CaptureMode == FatCaptureMode.AutomaticTransition && Runtime.OnEvidence is not null);
 
     [JsonIgnore]
-    public string Value1Text => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidence?.RawValue ?? "—"
-        : Runtime.Value1Evidence?.RawValue ?? "—";
+    public bool HasValue2Evidence =>
+        Runtime.Value2Evidence is not null ||
+        (CaptureMode == FatCaptureMode.AutomaticTransition && Runtime.OffEvidence is not null);
 
     [JsonIgnore]
-    public string Value2Text => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffEvidence?.RawValue ?? "—"
-        : Runtime.Value2Evidence?.RawValue ?? "—";
+    public bool IsFatEvidenceComplete => HasValue1Evidence && HasValue2Evidence;
 
     [JsonIgnore]
-    public string Value1RelayTimestampText => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnRelayTimestampText
-        : Runtime.Value1RelayTimestampText;
+    public string Value1Text => Runtime.Value1Evidence?.RawValue ??
+                                (CaptureMode == FatCaptureMode.AutomaticTransition ? Runtime.OnEvidence?.RawValue : null) ??
+                                "—";
 
     [JsonIgnore]
-    public string Value2RelayTimestampText => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffRelayTimestampText
-        : Runtime.Value2RelayTimestampText;
+    public string Value2Text => Runtime.Value2Evidence?.RawValue ??
+                                (CaptureMode == FatCaptureMode.AutomaticTransition ? Runtime.OffEvidence?.RawValue : null) ??
+                                "—";
 
     [JsonIgnore]
-    public string Value1EvidenceToolTip => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OnEvidenceToolTip
-        : Runtime.Value1EvidenceToolTip;
+    public string Value1RelayTimestampText => Runtime.Value1Evidence is not null
+        ? Runtime.Value1RelayTimestampText
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OnRelayTimestampText
+            : Runtime.Value1RelayTimestampText;
 
     [JsonIgnore]
-    public string Value2EvidenceToolTip => CaptureMode == FatCaptureMode.AutomaticTransition
-        ? Runtime.OffEvidenceToolTip
-        : Runtime.Value2EvidenceToolTip;
+    public string Value2RelayTimestampText => Runtime.Value2Evidence is not null
+        ? Runtime.Value2RelayTimestampText
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OffRelayTimestampText
+            : Runtime.Value2RelayTimestampText;
+
+    [JsonIgnore]
+    public string Value1EvidenceToolTip => Runtime.Value1Evidence is not null
+        ? Runtime.Value1EvidenceToolTip
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OnEvidenceToolTip
+            : Runtime.Value1EvidenceToolTip;
+
+    [JsonIgnore]
+    public string Value2EvidenceToolTip => Runtime.Value2Evidence is not null
+        ? Runtime.Value2EvidenceToolTip
+        : CaptureMode == FatCaptureMode.AutomaticTransition
+            ? Runtime.OffEvidenceToolTip
+            : Runtime.Value2EvidenceToolTip;
 
     [JsonIgnore]
     public string FatStatusText
@@ -397,13 +439,15 @@ public sealed class IoTestPointPlan : ObservableObject
         {
             if (!IsIncludedInFat)
                 return "REMOVED";
-            if (CaptureMode == FatCaptureMode.AutomaticTransition)
-                return Runtime.StateText;
             if (IsFatEvidenceComplete)
                 return "COMPLETE";
-            if (Runtime.Value1Evidence is not null || Runtime.Value2Evidence is not null)
-                return "1 / 2 captured";
-            return "Ready to capture";
+            if (Runtime.AutoCaptureStage == FatAutoCaptureStage.StabilizingValue2)
+                return "STABILIZING…";
+            if (HasValue1Evidence)
+                return "WAITING V2";
+            return Runtime.AutoCaptureStage == FatAutoCaptureStage.WaitingValue1
+                ? "WAITING V1"
+                : "READY";
         }
     }
 
@@ -486,6 +530,7 @@ public sealed class IoTestPointPlan : ObservableObject
             nameof(IoTestPointRuntime.OffEvidence) or
             nameof(IoTestPointRuntime.Value1Evidence) or
             nameof(IoTestPointRuntime.Value2Evidence) or
+            nameof(IoTestPointRuntime.AutoCaptureStage) or
             nameof(IoTestPointRuntime.State) or
             nameof(IoTestPointRuntime.StatusReason))
         {
@@ -497,6 +542,8 @@ public sealed class IoTestPointPlan : ObservableObject
     {
         Raise(nameof(IsIncludedInFat));
         Raise(nameof(CanCaptureOperatorSnapshot));
+        Raise(nameof(HasValue1Evidence));
+        Raise(nameof(HasValue2Evidence));
         Raise(nameof(IsFatEvidenceComplete));
         Raise(nameof(Value1Text));
         Raise(nameof(Value2Text));
@@ -604,11 +651,11 @@ public sealed class IoTestIedPlan : ObservableObject
     [JsonIgnore]
     public bool CanPrepareConnection => !IsPreparing;
 
-    public int EnabledCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled);
-    public int CompleteCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.IsFatEvidenceComplete);
-    public int PassedCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Passed);
-    public int ReviewCount => TestPoints.Count(point => point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Review);
-    public int BoundCount => TestPoints.Count(point => point.IsIncludedInFat && point.IsLiveBound);
+    public int EnabledCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled);
+    public int CompleteCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.IsFatEvidenceComplete);
+    public int PassedCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Passed);
+    public int ReviewCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.Runtime.State == IoTestPointState.Review);
+    public int BoundCount => TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.IsLiveBound);
     public int RemovedCount => TestPoints.Count(point => !point.IsIncludedInFat);
     public int PendingCount => Math.Max(0, EnabledCount - CompleteCount);
 
@@ -644,17 +691,38 @@ public sealed class IoTestIedPlan : ObservableObject
         _notificationsInitialized = true;
 
         foreach (var point in TestPoints)
-        {
-            point.PropertyChanged += Point_PropertyChanged;
-            point.Runtime.PropertyChanged += PointRuntime_PropertyChanged;
-        }
+            SubscribePoint(point);
         RaiseProgressProperties();
+    }
+
+    public bool AddTestPoint(IoTestPointPlan point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        if (TestPoints.Any(existing => existing.TestPointId.Equals(point.TestPointId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        TestPoints.Add(point);
+        if (_notificationsInitialized)
+            SubscribePoint(point);
+        RaiseProgressProperties();
+        return true;
+    }
+
+    private void SubscribePoint(IoTestPointPlan point)
+    {
+        point.PropertyChanged += Point_PropertyChanged;
+        point.Runtime.PropertyChanged += PointRuntime_PropertyChanged;
     }
 
     private void Point_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IoTestPointPlan.TestEnabled) or nameof(IoTestPointPlan.LiveBindingState) or nameof(IoTestPointPlan.FatDisposition))
+        if (e.PropertyName is nameof(IoTestPointPlan.WorkspaceSelected) or
+            nameof(IoTestPointPlan.TestEnabled) or
+            nameof(IoTestPointPlan.LiveBindingState) or
+            nameof(IoTestPointPlan.FatDisposition))
+        {
             RaiseProgressProperties();
+        }
     }
 
     private void PointRuntime_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -712,10 +780,10 @@ public sealed class IoTestProject
     public string SourceSetSha256 { get; private set; } = string.Empty;
 
     public int SignalCount => Ieds.Sum(ied => ied.TestPoints.Count);
-    public int IncludedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat));
-    public int RemovedSignalCount => SignalCount - IncludedSignalCount;
-    public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat && point.ImportReady));
-    public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.IsIncludedInFat && point.IsLiveBound));
+    public int IncludedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat));
+    public int RemovedSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => !point.IsIncludedInFat));
+    public int ReadySignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.ImportReady));
+    public int LiveBoundSignalCount => Ieds.Sum(ied => ied.TestPoints.Count(point => point.WorkspaceSelected && point.IsIncludedInFat && point.IsLiveBound));
 
     public void SetSources(IEnumerable<IoFatSourceDescriptor> sources, string sourceSetSha256)
     {

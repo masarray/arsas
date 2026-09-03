@@ -10,7 +10,8 @@ public sealed class IoFatSelectionAuthorityRegressionTests
         Assert.DoesNotContain("ExcludeCompletedFromNextSession", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.Contains("point.TestEnabled = enabled.GetBoolean();", source, StringComparison.Ordinal);
-        Assert.Contains("TestEnabled and FAT disposition are both operator-authored", source, StringComparison.Ordinal);
+        Assert.Contains("WorkspaceSelected", source, StringComparison.Ordinal);
+        Assert.Contains("FAT TEST scope, and FAT disposition", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -19,6 +20,7 @@ public sealed class IoFatSelectionAuthorityRegressionTests
         var source = Read("Services/IoTesting/IoFatCleanSessionService.cs");
 
         Assert.DoesNotContain("point.TestEnabled =", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.WorkspaceSelected =", source, StringComparison.Ordinal);
         Assert.Contains("runtime.OnEvidence = null;", source, StringComparison.Ordinal);
         Assert.Contains("runtime.OffEvidence = null;", source, StringComparison.Ordinal);
         Assert.Contains("Selection belongs to the operator", source, StringComparison.Ordinal);
@@ -31,7 +33,7 @@ public sealed class IoFatSelectionAuthorityRegressionTests
 
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
-        Assert.Contains("point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
+        Assert.Contains("point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady", source, StringComparison.Ordinal);
         Assert.Contains("point.LiveBindingState == IoTestLiveBindingState.LivePointReady", source, StringComparison.Ordinal);
         Assert.Contains("Session.Start(selectedIed, liveCaptureScope)", source, StringComparison.Ordinal);
         Assert.Contains("checkbox/disposition unchanged", source, StringComparison.Ordinal);

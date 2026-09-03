@@ -37,11 +37,13 @@ public static class FatOperatorSnapshotCaptureService
     /// <summary>
     /// Creates an immutable capture record without mutating a current evidence pointer.
     /// Session controllers use this so the append-only journal can be durably written
-    /// before the replaceable Value 1 / Value 2 pointer is promoted.
+    /// before the replaceable Value 1 / Value 2 pointer is promoted. Explicit bulk
+    /// Recapture uses OperatorRecapture provenance even for automatic-transition rows.
     /// </summary>
     public static FatValueEvidence CreateEvidence(
         FatValueSlot slot,
-        FatLiveValueObservation observation)
+        FatLiveValueObservation observation,
+        FatEvidenceCaptureKind captureKind = FatEvidenceCaptureKind.OperatorSnapshot)
     {
         ArgumentNullException.ThrowIfNull(observation);
         if (string.IsNullOrWhiteSpace(observation.RawValue) ||
@@ -50,10 +52,13 @@ public static class FatOperatorSnapshotCaptureService
             throw new InvalidOperationException("The FAT signal does not have a readable live value to capture.");
         }
 
+        if (captureKind is not (FatEvidenceCaptureKind.OperatorSnapshot or FatEvidenceCaptureKind.OperatorRecapture))
+            throw new ArgumentOutOfRangeException(nameof(captureKind), captureKind, "Operator capture requires operator provenance.");
+
         return new FatValueEvidence(
             Guid.NewGuid(),
             slot,
-            FatEvidenceCaptureKind.OperatorSnapshot,
+            captureKind,
             observation.RawValue.Trim(),
             observation.CapturedAt,
             observation.IedTimestamp,

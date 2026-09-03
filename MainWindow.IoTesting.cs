@@ -1,4 +1,5 @@
 using System.IO;
+using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,7 +23,10 @@ public partial class MainWindow
     private IoTestSessionController? _activeIoTestSessionController;
     private long _ioTestObservationSequence;
     private int? _pollingIntervalBeforeIoFat;
-    private int _ioFatEvidenceDrainDispatchActive;
+    private IoTestProject? _ioFatSelectionBridgeProject;
+    private bool _ioFatSelectionBridgeActive;
+    private readonly HashSet<string> _ioFatSelectionSaveDeviceIds = new(StringComparer.OrdinalIgnoreCase);
+    private bool _ioFatSelectionSaveScheduled;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -157,7 +161,7 @@ public partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Select one or multiple CID / ICD / IID / SCD / SSD files. Every static DataSet member becomes FAT scope. Excel import remains available for legacy IO-list projects.",
+            Text = "Select one or multiple CID / ICD / IID / SCD / SSD files. Use static DataSet membership or choose SCL signals manually; Engineering and FAT share the same workspace selection.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13.4,
             Foreground = TryFindResource("Muted") as Brush,
@@ -186,7 +190,7 @@ public partial class MainWindow
             new Thickness(0, 0, 0, 10)));
         content.Children.Add(new TextBlock
         {
-            Text = "Static DataSet authority · Value 1 / Value 2 evidence · autosave · portable continuation",
+            Text = "Shared SCL signal authority · Value 1 / Value 2 evidence · autosave · portable continuation",
             Style = TryFindResource("Caption") as Style,
             TextWrapping = TextWrapping.Wrap
         });
@@ -262,13 +266,38 @@ public partial class MainWindow
         if (dialog.ShowDialog(this) != true)
             return;
 
-        SetStatus($"Building FAT scope from {dialog.FileNames.Length} SCL source(s)…");
+        await OpenSclFatSourcesAsync(
+            dialog.FileNames,
+            selectionMode: null,
+            promptForSelection: true);
+    }
+
+    private async Task OpenSclFatSourcesAsync(
+        IReadOnlyCollection<string> sclPaths,
+        SclSignalSelectionMode? selectionMode,
+        bool promptForSelection = false)
+    {
+        SetStatus($"Building shared Engineering/FAT workspace from {sclPaths.Count} SCL source(s)…");
         try
         {
             var import = await _ioFatSclProjectImportService.ImportAsync(
-                dialog.FileNames,
+                sclPaths,
                 cancellationToken: _applicationCancellation.Token);
-            if (import.Project.SignalCount == 0)
+
+            if (promptForSelection && !selectionMode.HasValue)
+            {
+                selectionMode = PromptSclSignalSelectionMode(this, import.Project.Ieds.Count);
+                if (!selectionMode.HasValue)
+                {
+                    SetStatus("SCL FAT import cancelled before the workspace was changed.");
+                    return;
+                }
+            }
+
+            // Static mode is intentionally strict: it cannot invent FAT rows when SCL has
+            // no static DataSet membership. Manual mode is different; its selected SCL
+            // signals are materialized after the shared Engineering workspace is attached.
+            if (selectionMode == SclSignalSelectionMode.StaticDataSet && import.Project.SignalCount == 0)
             {
                 var details = string.Join(
                     Environment.NewLine,
@@ -276,8 +305,8 @@ public partial class MainWindow
                 SetStatus("SCL FAT import contains no static DataSet members.");
                 MessageBox.Show(
                     this,
-                    "The selected SCL source(s) contain no static DataSet members. ARSAS did not fabricate FAT rows.\n\n" + details,
-                    "No FAT DataSet scope",
+                    "The selected SCL source(s) contain no static DataSet members for Static DataSet mode. Choose Signals Manually to build FAT scope from valid SCL signals.\n\n" + details,
+                    "No static DataSet FAT scope",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
@@ -290,6 +319,36 @@ public partial class MainWindow
                 IoTestingEvidenceRoot(),
                 CreateIoTestSession,
                 _applicationCancellation.Token);
+            // A direct SCL FAT import is also an Engineering import. Attach the exact
+            // already-parsed ARIEC workspace now, after persisted FAT choices have been
+            // restored but before the window is shown, and establish one shared selection
+            // authority. No discovery or second model is created during mode switches.
+            SynchronizeImportedSclFatWithEngineering(launch.Project);
+            RegisterSharedSclSourcePaths(launch.Project, launch.Project.Ieds, import.SourceInputs);
+            if (selectionMode == SclSignalSelectionMode.Manual)
+            {
+                await ApplyManualSelectionToFatProjectAsync(
+                    launch.Project,
+                    launch.Project.Ieds,
+                    this,
+                    resetSelection: true);
+            }
+            else
+            {
+                foreach (var ied in launch.Project.Ieds)
+                {
+                    var device = ResolveIoTestDevice(ied.LiveDeviceId)
+                                 ?? ResolveIoTestDevice(ied.IpAddress)
+                                 ?? ResolveIoTestDevice(ied.IedName);
+                    if (device is not null)
+                        MarkSharedSelectionAuthority(device);
+                }
+            }
+
+            // Manual non-DataSet rows are created after bootstrap restoration. Persist that
+            // shared workspace projection before the FAT window is exposed.
+            launch.Workspace.ScheduleSave();
+
             var warningCount = import.Findings.Count(finding =>
                 finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
                 finding.Severity.Equals("High", StringComparison.OrdinalIgnoreCase) ||
@@ -412,6 +471,7 @@ public partial class MainWindow
 
     private Task ShowIoTestingWorkspaceAsync(IoTestWorkspaceLaunchResult launch, int importWarningCount)
     {
+        AttachIoFatSelectionBridge(launch.Project);
         var binding = _ioTestLiveBindingService.Bind(launch.Project, Devices);
         var restoredText = launch.RestoredProgress ? "saved progress restored" : "new project";
         SetStatus(
@@ -442,6 +502,7 @@ public partial class MainWindow
         void WindowClosed(object? sender, EventArgs args)
         {
             window.Closed -= WindowClosed;
+            DetachIoFatSelectionBridge(launch.Project);
             _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
             if (ReferenceEquals(_activeIoTestSessionController, controller))
                 _activeIoTestSessionController = null;
@@ -469,6 +530,196 @@ public partial class MainWindow
         return Task.CompletedTask;
     }
 
+    internal async Task<IoTestSessionActionResult> AddSclIedsToLoadedFatAsync(
+        IoListTestingWindow window,
+        IReadOnlyCollection<string> sclPaths)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(sclPaths);
+        if (!ReferenceEquals(window, _loadedIoFatWindow) || !window.IsLoaded)
+            return IoTestSessionActionResult.Failure("The target FAT workspace is no longer active.");
+        if (!window.CanAddFatIed)
+            return IoTestSessionActionResult.Failure("Wait for the current IED connection preparation before importing another SCL source.");
+
+        SetStatus($"Adding {sclPaths.Count} SCL source(s) to the current FAT workspace…");
+        var import = await _ioFatSclProjectImportService.ImportAdditionalAsync(
+            sclPaths,
+            _applicationCancellation.Token);
+
+        var existingSources = window.Project.Sources
+            .ToDictionary(source => source.Sha256, StringComparer.OrdinalIgnoreCase);
+        var uniqueImportedSources = import.Sources
+            .Where(source => !existingSources.ContainsKey(source.Sha256))
+            .ToArray();
+
+        var existingIedKeys = window.Project.Ieds
+            .Select(ied => $"{ied.IedName.Trim()}|{ied.IpAddress.Trim()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var addedIeds = import.Project.Ieds
+            .Where(ied => existingIedKeys.Add($"{ied.IedName.Trim()}|{ied.IpAddress.Trim()}"))
+            .ToArray();
+        if (addedIeds.Length == 0)
+        {
+            return IoTestSessionActionResult.Failure(
+                "The selected SCL source contains no new IED endpoint; every IED is already present in this FAT workspace.");
+        }
+
+        if (window.Storage != null && uniqueImportedSources.Length > 0)
+        {
+            await window.Storage.AddSourcesAsync(
+                import.Project,
+                import.SourceInputs,
+                _applicationCancellation.Token);
+        }
+
+        foreach (var ied in addedIeds)
+            window.Project.Ieds.Add(ied);
+
+        var allSources = window.Project.Sources
+            .Concat(uniqueImportedSources)
+            .GroupBy(source => source.Sha256, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(source => source.SourceId, StringComparer.Ordinal)
+            .ToArray();
+        window.Project.SetSources(allSources, IoFatSourceIdentity.ComputeSetFingerprint(allSources));
+
+        foreach (var point in addedIeds.SelectMany(ied => ied.TestPoints))
+            point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
+        // The running IED and its immutable session mapping are deliberately left
+        // untouched. Only newly imported endpoints join the shared workspace.
+        SynchronizeImportedSclFatWithEngineering(window.Project, addedIeds);
+        window.RegisterAddedIeds(addedIeds);
+        window.Storage?.ScheduleSave();
+
+        var warningCount = import.Findings.Count(finding =>
+            finding.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+            finding.Severity.Equals("Error", StringComparison.OrdinalIgnoreCase));
+        var message = $"Added {addedIeds.Length} IED(s) and {addedIeds.Sum(ied => ied.TestPoints.Count)} static DataSet point(s) to FAT" +
+                      (warningCount == 0 ? "." : $" · {warningCount} import warning(s).");
+        SetStatus(message);
+        return IoTestSessionActionResult.Success(message);
+    }
+
+    private void AttachIoFatSelectionBridge(IoTestProject project)
+    {
+        DetachIoFatSelectionBridge(_ioFatSelectionBridgeProject);
+        _ioFatSelectionBridgeProject = project;
+        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
+            point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
+    }
+
+    private void DetachIoFatSelectionBridge(IoTestProject? project)
+    {
+        if (project is null)
+            return;
+        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
+            point.PropertyChanged -= IoFatSelectionPoint_PropertyChanged;
+        if (ReferenceEquals(_ioFatSelectionBridgeProject, project))
+            _ioFatSelectionBridgeProject = null;
+    }
+
+    private void IoFatSelectionPoint_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_ioFatSelectionBridgeActive || sender is not IoTestPointPlan point ||
+            e.PropertyName != nameof(IoTestPointPlan.WorkspaceSelected))
+        {
+            return;
+        }
+
+        var device = ResolveIoTestDevice(point.LiveDeviceId)
+                     ?? ResolveIoTestDevice(point.IpAddress)
+                     ?? ResolveIoTestDevice(point.IedName);
+        if (device is null)
+            return;
+
+        _ioFatSelectionBridgeActive = true;
+        try
+        {
+            if (IoFatEngineeringSelectionBridge.ApplyFatPointSelection(point, device))
+            {
+                ScheduleIoFatSelectionSave(device);
+                _loadedIoFatWindow?.Storage?.ScheduleSave();
+                RaiseWorkspaceCounts();
+            }
+        }
+        finally
+        {
+            _ioFatSelectionBridgeActive = false;
+        }
+    }
+
+    private void ScheduleIoFatSelectionSave(Iec61850MonitorDevice device)
+    {
+        _ioFatSelectionSaveDeviceIds.Add(device.DeviceId);
+        if (_ioFatSelectionSaveScheduled)
+            return;
+
+        _ioFatSelectionSaveScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _ioFatSelectionSaveScheduled = false;
+            var deviceIds = _ioFatSelectionSaveDeviceIds.ToArray();
+            _ioFatSelectionSaveDeviceIds.Clear();
+            foreach (var deviceId in deviceIds)
+            {
+                var target = ResolveIoTestDevice(deviceId);
+                if (target is not null)
+                    SaveSignalSelectionMemory(target);
+            }
+        }), DispatcherPriority.Background);
+    }
+
+    private void SynchronizeEngineeringSelectionToFat(
+        SignalDefinition signal,
+        Iec61850MonitorDevice device)
+    {
+        var project = _ioFatSelectionBridgeProject;
+        if (_ioFatSelectionBridgeActive || project is null)
+            return;
+
+        var ied = project.Ieds.FirstOrDefault(candidate =>
+            candidate.LiveDeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+            (candidate.IedName.Equals(device.SclIedName, StringComparison.OrdinalIgnoreCase) &&
+             candidate.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase)) ||
+            candidate.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase));
+        if (ied is null)
+            return;
+
+        _ioFatSelectionBridgeActive = true;
+        try
+        {
+            var previousCount = ied.TestPoints.Count;
+            var changed = IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+                signal,
+                signal.IsSelected,
+                ied,
+                device);
+            if (!changed)
+                return;
+
+            if (ied.TestPoints.Count > previousCount)
+            {
+                foreach (var point in ied.TestPoints.Skip(previousCount))
+                    point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
+            }
+
+            ScheduleIoFatSelectionSave(device);
+            _loadedIoFatWindow?.Storage?.ScheduleSave();
+            _loadedIoFatWindow?.NotifySharedWorkspacePointsChanged(ied);
+            RaiseWorkspaceCounts();
+        }
+        finally
+        {
+            _ioFatSelectionBridgeActive = false;
+        }
+    }
+
+    private void SynchronizeAllEngineeringSelectionsToFat(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals)
+            SynchronizeEngineeringSelectionToFat(signal, device);
+    }
+
     private IoTestSessionController CreateIoTestSession(IoTestProject project, string evidenceRoot)
         => new(
             project,
@@ -480,24 +731,10 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        var priority = Volatile.Read(ref _ioFatEvidenceDrainDispatchActive) == 0
-            ? DispatcherPriority.DataBind
-            : DispatcherPriority.Background;
-
-        Dispatcher.BeginInvoke(
-            new Action(() =>
-            {
-                Interlocked.Increment(ref _ioFatEvidenceDrainDispatchActive);
-                try
-                {
-                    action();
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref _ioFatEvidenceDrainDispatchActive);
-                }
-            }),
-            priority);
+        // Live evidence is important but must never outrank mouse/keyboard input.
+        // Bounded drains still preserve every digital edge; Background priority lets
+        // scrolling and operator Capture clicks run between those short batches.
+        Dispatcher.BeginInvoke(action, DispatcherPriority.Background);
     }
 
     private static string IoTestingProjectsRoot() => Path.Combine(

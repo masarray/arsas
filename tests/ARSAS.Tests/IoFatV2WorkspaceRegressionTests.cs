@@ -63,6 +63,36 @@ public sealed class IoFatV2WorkspaceRegressionTests
     }
 
     [Fact]
+    public void OperatorSnapshot_LiveRefreshDoesNotRaiseSessionProgressForEverySample()
+    {
+        var fixture = ManualFixture();
+        using var controller = fixture.Controller;
+        Assert.True(controller.Start(fixture.Ied).Succeeded);
+
+        var sessionNotifications = 0;
+        controller.PropertyChanged += (_, _) => sessionNotifications++;
+        controller.Enqueue(new Iec61850EventEntry
+        {
+            Sequence = 2,
+            DeviceId = fixture.Device.DeviceId,
+            PointKey = fixture.LivePoint.PointKey,
+            DeviceTimestamp = "2026-09-01T03:00:00.250Z",
+            DeviceName = fixture.Device.Name,
+            IpAddress = fixture.Device.IpAddress,
+            SignalName = fixture.LivePoint.SignalName,
+            IecReference = fixture.LivePoint.IecReference,
+            OldValue = "12.34",
+            NewValue = "12.35",
+            Quality = "Good",
+            SourceMode = "BRCB",
+            Reason = "periodic-refresh"
+        });
+
+        Assert.Equal("12.35", fixture.Point.Runtime.CurrentValue);
+        Assert.Equal(0, sessionNotifications);
+    }
+
+    [Fact]
     public void RemoveRestore_PreservesCheckboxAndCurrentEvidence()
     {
         var fixture = ManualFixture();

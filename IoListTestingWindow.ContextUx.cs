@@ -12,6 +12,8 @@ namespace ArIED61850Tester;
 public partial class IoListTestingWindow
 {
     private bool _selectedIedContextInstalled;
+    private bool _contextRefreshScheduled;
+    private bool _contextRowRefreshScheduled;
 
     public bool SelectedCanStartWorkflow =>
         SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
@@ -168,19 +170,10 @@ public partial class IoListTestingWindow
         if (targetIed == null || targetIed.IsPreparing)
             return;
 
-        var enabledReady = targetIed.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
-            .ToList();
-        if (enabledReady.Count == 0)
-        {
-            ShowActionResult(
-                IoTestSessionActionResult.Failure("No import-ready operator-selected signal is enabled in the active FAT scope for this IED."),
-                "IED connection scope is not ready");
-            return;
-        }
-
-        IReadOnlyCollection<IoTestPointPlan> connectionScope = enabledReady;
-
+        // P1: Connect owns endpoint/MMS/live-acquisition state, never FAT evidence
+        // selection. The preparation path receives no checkbox scope here and therefore
+        // acquires every shared-workspace-selected included import-ready SCL row for this
+        // IED. TEST remains authoritative only when Start FAT builds captureScope below.
         if (ReferenceEquals(SelectedIed, targetIed))
             PreparationStatusText = $"Connecting {targetIed.IedName} · {targetIed.IpAddress}:102";
         RaisePreparationProperties();
@@ -202,8 +195,7 @@ public partial class IoListTestingWindow
             var preparation = await PrepareIndependentIedConnectionAsync(
                 engineeringWindow,
                 targetIed,
-                progress,
-                connectionScope);
+                progress);
 
             RaiseStatusProperties();
             RaiseSelectedIedContextProperties();
@@ -259,8 +251,11 @@ public partial class IoListTestingWindow
             return;
         }
 
+        // TEST is evidence authority only. Keep this selected capture scope for the
+        // evidence controller, while connection/live acquisition below remains the full
+        // shared-workspace-selected included import-ready IED scope.
         var captureScope = selectedIed.TestPoints
-            .Where(point => point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
 
         try
@@ -277,8 +272,7 @@ public partial class IoListTestingWindow
                 var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(
                     Project,
                     selectedIed,
-                    progress,
-                    captureScope);
+                    progress);
                 RaiseStatusProperties();
                 RaiseSelectedIedContextProperties();
                 if (!preparation.Succeeded)
@@ -291,7 +285,7 @@ public partial class IoListTestingWindow
                 await CaptureTimeSyncEvidenceAfterPreparationAsync(engineeringWindow, selectedIed);
             }
 
-            // Operator selection remains authoritative. A selected static DataSet row that
+            // Operator selection remains authoritative. A selected SCL workspace row that
             // has no unique live point stays checked/included and visible, but it cannot be
             // allowed to manufacture evidence. Arm only the currently proven live subset.
             // Legacy source-contract spelling retained only as documentation:
@@ -347,13 +341,11 @@ public partial class IoListTestingWindow
     private Task<IoTestSessionActionResult> PrepareIndependentIedConnectionAsync(
         MainWindow engineeringWindow,
         IoTestIedPlan targetIed,
-        IProgress<string> progress,
-        IReadOnlyCollection<IoTestPointPlan> connectionScope)
+        IProgress<string> progress)
         => engineeringWindow.PrepareIoTestIedForFatAsync(
             Project,
             targetIed,
-            progress,
-            connectionScope);
+            progress);
 
     private void ContextWindow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -361,14 +353,15 @@ public partial class IoListTestingWindow
         {
             RaiseSelectedIedContextProperties();
             if (e.PropertyName == nameof(SelectedIed))
-                Dispatcher.BeginInvoke(new Action(RefreshFatV2WorkspaceUx), DispatcherPriority.DataBind);
+                Dispatcher.BeginInvoke(
+                    new Action(() => RefreshFatV2WorkspaceUx(refreshRows: true)),
+                    DispatcherPriority.Background);
         }
     }
 
     private void ContextSession_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        RaiseSelectedIedContextProperties();
-        RefreshFatV2WorkspaceUx();
+        ScheduleContextRefresh();
     }
 
     private void ContextIed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -376,12 +369,29 @@ public partial class IoListTestingWindow
         if (e.PropertyName == nameof(IoTestIedPlan.IsPreparing))
             RaisePreparationProperties();
 
-        RefreshFatV2WorkspaceUx();
-        if (!ReferenceEquals(sender, SelectedIed))
-            return;
+        ScheduleContextRefresh(e.PropertyName is
+            nameof(IoTestIedPlan.EnabledCount) or
+            nameof(IoTestIedPlan.RemovedCount));
+    }
 
-        Raise(nameof(SelectedIedSummary));
-        RaiseSelectedIedContextProperties();
+    private void ScheduleContextRefresh(bool refreshRows = false)
+    {
+        _contextRowRefreshScheduled |= refreshRows;
+        if (_contextRefreshScheduled)
+            return;
+        _contextRefreshScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _contextRefreshScheduled = false;
+            var refreshFilteredRows = _contextRowRefreshScheduled;
+            _contextRowRefreshScheduled = false;
+            // Session/runtime notifications update summaries and visible cells through
+            // normal bindings. Re-filter only when shared selection/disposition changes;
+            // live value traffic must never interrupt scrolling or Capture clicks.
+            RefreshFatV2WorkspaceUx(refreshFilteredRows);
+            Raise(nameof(SelectedIedSummary));
+            RaiseSelectedIedContextProperties();
+        }), DispatcherPriority.Background);
     }
 
     private void RaiseSelectedIedContextProperties()
@@ -409,7 +419,9 @@ public partial class IoListTestingWindow
     }
 
     private static List<IoTestPointPlan> EnabledPoints(IoTestIedPlan ied)
-        => ied.TestPoints.Where(point => point.IsIncludedInFat && point.TestEnabled).ToList();
+        => ied.TestPoints
+            .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled)
+            .ToList();
 }
 
 public sealed class IoFatAllPassedVisibilityConverter : IMultiValueConverter

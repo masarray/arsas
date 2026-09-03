@@ -64,6 +64,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         _liveModel = null;
         _reportMonitorSessions.Clear();
         _reportMonitorCoverage.Clear();
+        ResetSemanticReportProjectionContext();
         Interlocked.Exchange(ref _engineCompatibilityWarningIssued, 0);
         DetectedIdentity = new Iec61850DeviceIdentity();
         _host = ipAddress?.Trim() ?? string.Empty;
@@ -490,7 +491,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 ReceivedAt = report.ReceivedAt
             });
 
-            var projection = ArMms.MmsReportValueProjector.Project(report);
+            var projection = ProjectReportValue(report);
             warnings.AddRange(projection.Warnings);
             updates.AddRange(projection.Updates.Select(update => new NativeReportValueUpdate
             {
@@ -4058,6 +4059,23 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
     private Iec61850ReadValue? ProjectReadValue(ArMms.MmsDataValue? value, string dataType, string readReference, string requestedReference)
     {
+        // Explicit object-level DataSet members must be projected before generic
+        // first-scalar semantic binding. Otherwise a three-phase THD object collapses
+        // to phase A and loses the B/C values carried by the same MMS structure.
+        if (value != null &&
+            SignalDefinition.IsThreePhaseMeasurementAggregate(requestedReference) &&
+            TryProjectThreePhaseAggregate(value, requestedReference, readReference, out var aggregate))
+        {
+            return aggregate;
+        }
+
+        if (value != null &&
+            SignalDefinition.IsDemandEnergyAggregate(requestedReference) &&
+            TryProjectDemandEnergyAggregate(value, requestedReference, readReference, dataType, out var demand))
+        {
+            return demand;
+        }
+
         if (TryProjectStructuredLeafBySemantic(value, dataType, readReference, requestedReference, out var semanticProjection, out var semanticStatus))
             return semanticProjection;
 
@@ -4092,6 +4110,72 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             ReadReference = readReference,
             Projection = projection.Description
         };
+    }
+
+    private static bool TryProjectThreePhaseAggregate(
+        ArMms.MmsDataValue value,
+        string requestedReference,
+        string readReference,
+        out Iec61850ReadValue projected)
+    {
+        projected = new Iec61850ReadValue();
+        if (value.Kind is not (ArMms.MmsDataKind.Structure or ArMms.MmsDataKind.Array) ||
+            value.Children.Count < 3)
+        {
+            return false;
+        }
+
+        var phaseValues = new List<string>(3);
+        foreach (var phase in value.Children.Take(3))
+        {
+            var scalar = FindFirstFloating(phase) ?? FindFirstInteger(phase);
+            if (scalar == null)
+                return false;
+
+            var converted = ConvertProjectedValue(scalar, "Float32", requestedReference);
+            phaseValues.Add(Convert.ToDouble(converted, CultureInfo.InvariantCulture)
+                .ToString("0.######", CultureInfo.InvariantCulture));
+        }
+
+        var display = string.Join(", ", phaseValues);
+        projected = new Iec61850ReadValue
+        {
+            Value = display,
+            DisplayValue = display,
+            Quality = DecodeQuality(value),
+            DeviceTimestamp = DecodeTimestamp(value),
+            SourceReference = requestedReference,
+            ReadReference = readReference,
+            Projection = "projected-three-phase-aggregate"
+        };
+        return true;
+    }
+
+    private static bool TryProjectDemandEnergyAggregate(
+        ArMms.MmsDataValue value,
+        string requestedReference,
+        string readReference,
+        string dataType,
+        out Iec61850ReadValue projected)
+    {
+        projected = new Iec61850ReadValue();
+        var scalar = FindFirstFloating(value) ?? FindFirstInteger(value);
+        if (scalar == null)
+            return false;
+
+        var raw = ConvertProjectedValue(scalar, dataType, requestedReference);
+        var display = FormatProjectedDisplay(raw, dataType);
+        projected = new Iec61850ReadValue
+        {
+            Value = raw,
+            DisplayValue = display,
+            Quality = DecodeQuality(value),
+            DeviceTimestamp = DecodeTimestamp(value),
+            SourceReference = requestedReference,
+            ReadReference = readReference,
+            Projection = "projected-demand-energy-aggregate"
+        };
+        return true;
     }
 
     private bool TryProjectWithArIecBinding(

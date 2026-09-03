@@ -96,7 +96,7 @@ public partial class MainWindow
             FontSize = 10.5,
             FontWeight = FontWeights.Bold,
             Cursor = Cursors.Hand,
-            ToolTip = "Load another IO List workbook or portable ARSAS project"
+            ToolTip = "Load SCL/CID, IO List workbook, or portable ARSAS project"
         };
         menuButton.Click += OpenIoFatWorkspaceMenu_Click;
         modes.Children.Add(menuButton);
@@ -136,10 +136,20 @@ public partial class MainWindow
         UpdateIoFatWorkspaceModeState();
     }
 
-    private void OpenOrResumeIoFatWorkspace_Click(object sender, RoutedEventArgs e)
+    private async void OpenOrResumeIoFatWorkspace_Click(object sender, RoutedEventArgs e)
     {
         if (ShowLoadedIoFatWorkspace())
             return;
+
+        // Engineering and FAT are two views over the same imported SCL workspace. If an
+        // Engineering SCL is already open, the primary FAT mode button projects that exact
+        // source and its existing checkbox authority without asking for another import.
+        var sharedSources = CurrentEngineeringSclSourcePaths();
+        if (sharedSources.Length > 0)
+        {
+            await OpenSclFatSourcesAsync(sharedSources, selectionMode: null);
+            return;
+        }
 
         if (sender is Button anchor)
             OpenIoFatWorkspaceMenu(anchor);
@@ -189,6 +199,26 @@ public partial class MainWindow
             menu.Items.Add(new Separator());
         }
 
+        var importScl = new MenuItem
+        {
+            Header = _loadedIoFatWindow is { IsLoaded: true }
+                ? "Add SCL / CID to loaded FAT workspace"
+                : "Import SCL / CID files"
+        };
+        importScl.Click += (_, _) =>
+        {
+            if (_loadedIoFatWindow is { IsLoaded: true } loaded)
+            {
+                // P0.4: SCL is additive while a FAT workspace is loaded. Existing IED
+                // connections/session evidence stay alive; replacement is reserved for
+                // explicit workbook/project open flows below.
+                _ = OpenSclForLoadedFatAppendAsync(loaded);
+                return;
+            }
+
+            OpenSclFatTesting_Click(this, new RoutedEventArgs());
+        };
+
         var importWorkbook = new MenuItem
         {
             Header = _loadedIoFatWindow == null
@@ -207,6 +237,7 @@ public partial class MainWindow
         openProject.Click += (_, _) => QueueIoFatWorkspaceReplacement(
             () => OpenIoListPackage_Click(this, new RoutedEventArgs()));
 
+        menu.Items.Add(importScl);
         menu.Items.Add(importWorkbook);
         menu.Items.Add(openProject);
         menu.IsOpen = true;

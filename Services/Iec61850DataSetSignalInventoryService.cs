@@ -53,38 +53,29 @@ public static class Iec61850DataSetSignalInventoryService
         if (mandatory.Count == 0)
             return EmptyResult();
 
-        // Keep application matching literal. The engine owns IEC 61850 reference
-        // canonicalization; ARSAS only compares reference forms already exposed by ARIEC.
-        // DisplayReference is included because static FCD identity is intentionally kept
-        // separate from a resolved runtime DataAttribute reference such as .stVal.
-        var existing = signals
-            .SelectMany(signal => SignalReferenceCandidates(signal).Select(reference => (reference, signal)))
-            .GroupBy(item => item.reference, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().signal, StringComparer.OrdinalIgnoreCase);
-
         var added = new List<SignalDefinition>();
         var enriched = 0;
 
         foreach (var descriptor in mandatory)
         {
             var inventoryReference = InventoryReference(descriptor);
-            var engineReferences = EngineReferenceCandidates(descriptor).ToArray();
-            var current = engineReferences
-                .Select(reference => existing.TryGetValue(reference, out var signal) ? signal : null)
-                .FirstOrDefault(signal => signal is not null);
+            if (string.IsNullOrWhiteSpace(inventoryReference))
+                continue;
 
+            // The static DataSet membership is the inventory identity. A structured FCDA
+            // such as ThdA.phsA can resolve to a scalar runtime leaf such as
+            // ThdA.phsA.cVal.mag.f, but that scalar leaf must never be used to claim the
+            // membership row. Reusing by runtime-primary identity made diagnostics appear
+            // complete while several FAT rows had no distinct static identity to bind.
+            //
+            // Scalar members remain backward compatible: when the static member itself is
+            // the resolved primary leaf, an existing exact IEC or engine-provided MMS-form
+            // signal may be enriched instead of duplicated.
+            var current = FindExistingMembershipSignal(signals, descriptor, inventoryReference);
             if (current is not null)
             {
                 if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference))
                     enriched++;
-
-                foreach (var key in EngineReferenceCandidates(descriptor)
-                             .Concat(SignalReferenceCandidates(current))
-                             .Append(inventoryReference)
-                             .Where(value => !string.IsNullOrWhiteSpace(value)))
-                {
-                    existing.TryAdd(LiteralReference(key), current);
-                }
                 continue;
             }
 
@@ -98,17 +89,64 @@ public static class Iec61850DataSetSignalInventoryService
 
             var signal = CreateSignal(descriptor, reference, inventoryReference);
             signals.Add(signal);
-            foreach (var key in EngineReferenceCandidates(descriptor)
-                         .Concat(SignalReferenceCandidates(signal))
-                         .Append(inventoryReference)
-                         .Where(value => !string.IsNullOrWhiteSpace(value)))
-            {
-                existing.TryAdd(LiteralReference(key), signal);
-            }
             added.Add(signal);
         }
 
         return new Iec61850DataSetSignalInventoryMergeResult(added, enriched, mandatory.Count);
+    }
+
+    private static SignalDefinition? FindExistingMembershipSignal(
+        IEnumerable<SignalDefinition> signals,
+        Iec61850SignalDescriptor descriptor,
+        string inventoryReference)
+    {
+        var membership = FirstMembership(descriptor);
+        var dataSetReference = membership?.DataSetReference ?? string.Empty;
+        var materialized = signals.ToArray();
+
+        // Strongest identity: the presentation row already carries both the exact static
+        // member and the exact DataSet. This is safe even when its runtime ObjectReference
+        // is shared with another membership.
+        var exact = materialized.FirstOrDefault(signal =>
+            ReferenceEquals(signal.DisplayReference, inventoryReference) &&
+            ReferenceEquals(signal.DataSetReference, dataSetReference));
+        if (exact is not null)
+            return exact;
+
+        // An unclaimed row whose DisplayReference is already the exact static member may
+        // be promoted into this membership. Never steal a row already owned by a different
+        // DataSet merely because its runtime leaf happens to match.
+        var unclaimedDisplay = materialized.FirstOrDefault(signal =>
+            ReferenceEquals(signal.DisplayReference, inventoryReference) &&
+            string.IsNullOrWhiteSpace(signal.DataSetReference));
+        if (unclaimedDisplay is not null)
+            return unclaimedDisplay;
+
+        // Legacy/live catalogs sometimes leave DisplayReference empty. Reuse their exact
+        // ObjectReference only when the static member itself is that same scalar identity.
+        var exactStaticObject = materialized.FirstOrDefault(signal =>
+            ReferenceEquals(signal.ObjectReference, inventoryReference) &&
+            (string.IsNullOrWhiteSpace(signal.DisplayReference) ||
+             ReferenceEquals(signal.DisplayReference, inventoryReference)) &&
+            (string.IsNullOrWhiteSpace(signal.DataSetReference) ||
+             ReferenceEquals(signal.DataSetReference, dataSetReference)));
+        if (exactStaticObject is not null)
+            return exactStaticObject;
+
+        // Preserve the long-standing literal MMS-reference compatibility only for a true
+        // scalar member: the static membership and resolved primary IEC reference must be
+        // identical. Structured/intermediate members deliberately fail this test, so a
+        // shared/container MMS alias cannot absorb ThdA.phsA/phsB/phsC-style memberships.
+        var staticIsResolvedScalar =
+            !string.IsNullOrWhiteSpace(descriptor.PrimaryValueReference) &&
+            ReferenceEquals(descriptor.PrimaryValueReference, inventoryReference);
+        if (!staticIsResolvedScalar || string.IsNullOrWhiteSpace(descriptor.PrimaryValueMmsReference))
+            return null;
+
+        return materialized.FirstOrDefault(signal =>
+            ReferenceEquals(signal.ObjectReference, descriptor.PrimaryValueMmsReference) &&
+            (string.IsNullOrWhiteSpace(signal.DataSetReference) ||
+             ReferenceEquals(signal.DataSetReference, dataSetReference)));
     }
 
     private static Iec61850DataSetSignalInventoryMergeResult EmptyResult()
@@ -237,41 +275,6 @@ public static class Iec61850DataSetSignalInventoryService
         return changed;
     }
 
-    private static IEnumerable<string> SignalReferenceCandidates(SignalDefinition signal)
-        => new[] { signal.DisplayReference, signal.ObjectReference }
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(LiteralReference)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-
-    private static IEnumerable<string> EngineReferenceCandidates(Iec61850SignalDescriptor descriptor)
-    {
-        var membershipReferences = descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .SelectMany(membership => new[]
-            {
-                membership.CanonicalMemberReference,
-                membership.OriginalMemberReference
-            });
-
-        var descriptorReferences = new[]
-        {
-            descriptor.PrimaryValueReference,
-            descriptor.DesignReference,
-            descriptor.ObservedReference,
-            descriptor.PrimaryValueMmsReference,
-            descriptor.CanonicalMmsReference,
-            descriptor.EffectiveMmsReference,
-            descriptor.ObservedMmsReference
-        };
-
-        return membershipReferences
-            .Concat(descriptorReferences)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(LiteralReference)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-    }
-
     private static string InventoryReference(Iec61850SignalDescriptor descriptor)
     {
         var membership = FirstMembership(descriptor);
@@ -312,6 +315,9 @@ public static class Iec61850DataSetSignalInventoryService
                resolutionText +
                " Inventory presence is engine-authoritative; user selection remains independent.";
     }
+
+    private static bool ReferenceEquals(string? left, string? right)
+        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
 
     private static string LiteralReference(string? reference)
         => (reference ?? string.Empty).Trim();

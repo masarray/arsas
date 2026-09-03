@@ -21,7 +21,7 @@ public sealed class IoTestSessionControllerTests
         Assert.Equal(IoTestSessionState.Running, controller.State);
         Assert.NotNull(fixture.Point.Runtime.OnEvidence);
         Assert.NotNull(fixture.Point.Runtime.OffEvidence);
-        Assert.Contains("Capture remains running", controller.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("explicit Recapture", controller.StatusText, StringComparison.OrdinalIgnoreCase);
 
         var stopped = controller.Stop();
 
@@ -178,7 +178,7 @@ public sealed class IoTestSessionControllerTests
         Assert.False(result.Succeeded);
         Assert.False(fixture.Point.TestEnabled);
         Assert.Equal(IoTestSessionState.Idle, controller.State);
-        Assert.Contains("not selected", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TEST disabled", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

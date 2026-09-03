@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -11,8 +12,27 @@ public partial class IoListTestingWindow
 {
     private DataGrid? _fatSignalsGrid;
     private Button? _removedSignalsButton;
+    private ICollectionView? _fatSignalsView;
+    private IoTestPointPlan? _fatContextPoint;
     private bool _fatV2UxInstalled;
     private readonly BooleanToVisibilityConverter _fatBooleanVisibility = new();
+    private readonly IoFatSelectedIedPlanEditabilityConverter _fatPlanEditabilityConverter = new();
+
+    // P0.3/P2: plan ownership is per IED. Connection preparation and evidence sessions
+    // lock only the owning IED; sibling IEDs remain independently editable.
+    public bool SelectedCanEditPlan => SelectedIed is not null && CanEditIedPlan(SelectedIed);
+
+    private bool CanEditIedPlan(IoTestIedPlan ied)
+        => !ied.IsPreparing && !Session.IsIedSessionActive(ied);
+
+    private bool CanEditPointPlan(IoTestPointPlan point)
+    {
+        var owner = Project.Ieds.FirstOrDefault(ied => ied.TestPoints.Contains(point));
+        return owner is not null && CanEditIedPlan(owner);
+    }
+
+    private bool CanRestoreAnyRemovedSignal => Project.Ieds.Any(ied =>
+        CanEditIedPlan(ied) && ied.TestPoints.Any(point => !point.IsIncludedInFat));
 
     private void InstallFatV2WorkspaceUx()
     {
@@ -21,6 +41,10 @@ public partial class IoListTestingWindow
             _fatSignalsGrid = FindVisualDescendant<DataGrid>(this);
             if (_fatSignalsGrid != null)
             {
+                // P3 desktop selection contract: Ctrl+Click selects disjoint rows,
+                // Shift+Click selects ranges, and Recapture consumes SelectedItems.
+                _fatSignalsGrid.SelectionMode = DataGridSelectionMode.Extended;
+                _fatSignalsGrid.SelectionUnit = DataGridSelectionUnit.FullRow;
                 ConfigureFatV2Columns(_fatSignalsGrid);
                 _fatSignalsGrid.PreviewMouseRightButtonDown += FatSignalsGrid_PreviewMouseRightButtonDown;
                 _fatSignalsGrid.ContextMenu = BuildFatContextMenu();
@@ -31,19 +55,32 @@ public partial class IoListTestingWindow
             _fatV2UxInstalled = true;
         }
 
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
     }
 
-    private void RefreshFatV2WorkspaceUx()
+    private void RefreshFatV2WorkspaceUx(bool refreshRows = false)
     {
+        // Selected/session/preparation notifications all converge here through the selected
+        // IED context refresh. Re-evaluate the per-IED edit contract without touching rows.
+        Raise(nameof(SelectedCanEditPlan));
+        Raise(nameof(CanRestoreAnyRemovedSignal));
+
         if (_fatSignalsGrid != null)
         {
             var view = CollectionViewSource.GetDefaultView(_fatSignalsGrid.ItemsSource);
-            if (view != null)
+            if (view != null && !ReferenceEquals(view, _fatSignalsView))
             {
-                view.Filter = item => item is IoTestPointPlan point && point.IsIncludedInFat;
-                view.Refresh();
+                _fatSignalsView = view;
+                // FAT projects the shared Engineering workspace selection. TEST is a FAT-only
+                // evidence-scope toggle and must never hide a shared signal. Remove/Restore is
+                // a second, orthogonal FAT-only disposition overlay.
+                view.Filter = item => item is IoTestPointPlan point &&
+                                             point.IsIncludedInFat &&
+                                             point.WorkspaceSelected;
+                refreshRows = true;
             }
+            if (refreshRows)
+                view?.Refresh();
         }
 
         if (_removedSignalsButton != null)
@@ -51,7 +88,7 @@ public partial class IoListTestingWindow
             _removedSignalsButton.Content = Project.RemovedSignalCount == 0
                 ? "Removed Signals"
                 : $"Removed Signals ({Project.RemovedSignalCount})";
-            _removedSignalsButton.IsEnabled = CanEditPlan && Project.RemovedSignalCount > 0;
+            _removedSignalsButton.IsEnabled = CanRestoreAnyRemovedSignal && Project.RemovedSignalCount > 0;
         }
 
         Raise(nameof(ProjectSummary));
@@ -62,6 +99,8 @@ public partial class IoListTestingWindow
 
     private void ConfigureFatV2Columns(DataGrid grid)
     {
+        grid.SelectionMode = DataGridSelectionMode.Extended;
+        grid.SelectionUnit = DataGridSelectionUnit.FullRow;
         grid.Columns.Clear();
 
         var enabledFactory = new FrameworkElementFactory(typeof(CheckBox));
@@ -70,10 +109,28 @@ public partial class IoListTestingWindow
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
         });
-        enabledFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("DataContext.CanEditPlan")
+
+        // Bind directly to selected-IED/session/preparation sources so the active IED locks
+        // synchronously when Session.Start or IsPreparing changes. This avoids a dispatcher
+        // timing window where a stale global CanEditPlan value could accept one more click.
+        var editability = new MultiBinding { Converter = _fatPlanEditabilityConverter };
+        editability.Bindings.Add(new Binding("DataContext.SelectedIed")
         {
             RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
         });
+        editability.Bindings.Add(new Binding("DataContext.Session.ActiveIed")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        editability.Bindings.Add(new Binding("DataContext.Session.IsSessionActive")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        editability.Bindings.Add(new Binding("DataContext.SelectedIed.IsPreparing")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(DataGrid), 1)
+        });
+        enabledFactory.SetBinding(UIElement.IsEnabledProperty, editability);
         enabledFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         enabledFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         grid.Columns.Add(new DataGridTemplateColumn
@@ -227,10 +284,77 @@ public partial class IoListTestingWindow
     private ContextMenu BuildFatContextMenu()
     {
         var menu = new ContextMenu();
+
+        var recapture = new MenuItem { Header = "Recapture" };
+        var value1 = new MenuItem { Header = "Value 1" };
+        value1.Click += RecaptureValue1_Click;
+        var value2 = new MenuItem { Header = "Value 2" };
+        value2.Click += RecaptureValue2_Click;
+        var both = new MenuItem
+        {
+            Header = "Value 1 & Value 2",
+            ToolTip = "Stage Value 1 now, change the test condition, then use Recapture → Value 2 to commit the new pair"
+        };
+        both.Click += BeginPairRecapture_Click;
+        var cancelPair = new MenuItem { Header = "Cancel staged Value 1 & Value 2" };
+        cancelPair.Click += CancelPairRecapture_Click;
+        recapture.Items.Add(value1);
+        recapture.Items.Add(value2);
+        recapture.Items.Add(both);
+        recapture.Items.Add(new Separator());
+        recapture.Items.Add(cancelPair);
+        menu.Items.Add(recapture);
+        menu.Items.Add(new Separator());
+
+        // Remove remains a deliberate one-row disposition action. Multi-selection is for
+        // Recapture in P3; right-click remembers the exact context row so preserving a
+        // broader selection never removes an arbitrary anchor row.
         var remove = new MenuItem { Header = "Remove from FAT" };
         remove.Click += RemoveSelectedFromFat_Click;
         menu.Items.Add(remove);
+        menu.Opened += (_, _) =>
+        {
+            var count = SelectedFatRows().Count;
+            recapture.Header = count <= 1 ? "Recapture" : $"Recapture ({count} selected)";
+        };
         return menu;
+    }
+
+    private IReadOnlyList<IoTestPointPlan> SelectedFatRows()
+    {
+        if (_fatSignalsGrid == null)
+            return Array.Empty<IoTestPointPlan>();
+        return _fatSignalsGrid.SelectedItems
+            .OfType<IoTestPointPlan>()
+            .Distinct()
+            .ToArray();
+    }
+
+    private void RecaptureValue1_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.RecaptureValues(SelectedFatRows(), FatValueSlot.Value1), "Value 1 Recapture failed");
+
+    private void RecaptureValue2_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.RecaptureValues(SelectedFatRows(), FatValueSlot.Value2), "Value 2 Recapture failed");
+
+    private void BeginPairRecapture_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.BeginPairRecapture(SelectedFatRows()), "Value 1 & Value 2 Recapture could not be staged");
+
+    private void CancelPairRecapture_Click(object sender, RoutedEventArgs e)
+        => ApplyBulkRecapture(Session.CancelPairRecapture(SelectedFatRows()), "Staged Value 1 & Value 2 Recapture could not be cancelled");
+
+    private void ApplyBulkRecapture(IoTestSessionActionResult result, string failureTitle)
+    {
+        if (!result.Succeeded)
+        {
+            ShowActionResult(result, failureTitle);
+            return;
+        }
+
+        // Success feedback stays compact in the selected IED footer through Session.StatusText.
+        // Never display one modal popup per row for a batch operation.
+        Storage?.ScheduleSave();
+        RaiseSelectedIedContextProperties();
+        RefreshFatV2WorkspaceUx();
     }
 
     private void FatSignalsGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -238,31 +362,40 @@ public partial class IoListTestingWindow
         if (_fatSignalsGrid == null)
             return;
         var row = FindVisualAncestor<DataGridRow>(e.OriginalSource as DependencyObject);
-        if (row?.Item is IoTestPointPlan point)
-        {
-            _fatSignalsGrid.SelectedItem = point;
-            row.IsSelected = true;
-        }
+        if (row?.Item is not IoTestPointPlan point)
+            return;
+
+        _fatContextPoint = point;
+        if (row.IsSelected)
+            return;
+
+        // Desktop convention: right-clicking outside the current set makes that row the
+        // sole target. Right-clicking inside an existing Ctrl/Shift selection preserves it.
+        _fatSignalsGrid.SelectedItems.Clear();
+        row.IsSelected = true;
+        _fatSignalsGrid.SelectedItem = point;
     }
 
     private void RemoveSelectedFromFat_Click(object sender, RoutedEventArgs e)
     {
-        if (_fatSignalsGrid?.SelectedItem is not IoTestPointPlan point)
+        var point = _fatContextPoint ?? _fatSignalsGrid?.SelectedItem as IoTestPointPlan;
+        if (point == null)
             return;
-        if (!CanEditPlan)
+        if (!CanEditPointPlan(point))
         {
             MessageBox.Show(
                 this,
-                "Stop the active FAT session or connection preparation before changing FAT scope.",
-                "FAT scope is locked",
+                "This IED's FAT scope is locked while its connection preparation or evidence session is active. Other IEDs remain editable.",
+                "IED FAT scope is locked",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
         }
 
         point.RemoveFromFat();
+        _fatContextPoint = null;
         Storage?.ScheduleSave();
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
         RaiseSelectedIedContextProperties();
     }
 
@@ -290,15 +423,23 @@ public partial class IoListTestingWindow
 
     private void RemovedSignals_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanEditPlan)
+        if (!CanRestoreAnyRemovedSignal)
+        {
+            MessageBox.Show(
+                this,
+                "Removed signals currently belong only to an IED whose connection preparation or FAT evidence session owns an immutable scope.",
+                "Removed Signals are locked",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
+        }
 
-        var window = new RemovedFatSignalsWindow(Project) { Owner = this };
+        var window = new RemovedFatSignalsWindow(Project, CanEditPointPlan) { Owner = this };
         if (window.ShowDialog() != true || window.RestoredCount == 0)
             return;
 
         Storage?.ScheduleSave();
-        RefreshFatV2WorkspaceUx();
+        RefreshFatV2WorkspaceUx(refreshRows: true);
         RaiseSelectedIedContextProperties();
     }
 
@@ -309,7 +450,7 @@ public partial class IoListTestingWindow
             if (text.Text == "IO LIST FAT")
                 text.Text = "IEC 61850 FAT";
             else if (text.Text == "Workbook scope · report-first acquisition · relay-timestamped evidence")
-                text.Text = "Static DataSet scope · Value 1 / Value 2 · immutable evidence history";
+                text.Text = "Shared SCL scope · Value 1 / Value 2 · immutable evidence history";
             else if (text.Text == "Workbook devices")
                 text.Text = "FAT source IEDs";
         }
@@ -353,4 +494,21 @@ public partial class IoListTestingWindow
         }
         return null;
     }
+}
+
+public sealed class IoFatSelectedIedPlanEditabilityConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 4 || values[0] is not IoTestIedPlan selectedIed)
+            return false;
+
+        var activeIed = values[1] as IoTestIedPlan;
+        var sessionActive = values[2] is bool active && active;
+        var selectedPreparing = values[3] is bool preparing && preparing;
+        return !selectedPreparing && (!sessionActive || !ReferenceEquals(activeIed, selectedIed));
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => targetTypes.Select(_ => Binding.DoNothing).ToArray();
 }

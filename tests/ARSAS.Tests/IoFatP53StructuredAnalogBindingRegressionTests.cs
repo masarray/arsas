@@ -1,6 +1,8 @@
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services;
+using ArIED61850Tester.Services.IoTesting;
 
 namespace ARSAS.Tests;
 
@@ -30,6 +32,7 @@ public sealed class IoFatP53StructuredAnalogBindingRegressionTests
         Assert.Equal(staticMember, signal.DisplayReference);
         Assert.Equal(runtimeLeaf, signal.ObjectReference);
         Assert.Equal("MX", signal.FunctionalConstraint);
+        Assert.True(signal.CanPublishAsSignal);
         Assert.Contains("mandatory static DataSet member", signal.Source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("primary leaf unresolved", signal.Source, StringComparison.OrdinalIgnoreCase);
     }
@@ -55,9 +58,98 @@ public sealed class IoFatP53StructuredAnalogBindingRegressionTests
         Assert.DoesNotContain("phsBC", signal.ObjectReference, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("A", "phsA", "phsB", "phsC")]
+    [InlineData("PPV", "phsAB", "phsBC", "phsCA")]
+    public void MandatoryInventory_DoesNotCollapseStructuredPhaseSiblingsThroughSharedParentAlias(
+        string dataObjectName,
+        string phase1,
+        string phase2,
+        string phase3)
+    {
+        var dataObject = "IEDLD0/MMXU1." + dataObjectName;
+        var phases = new[] { phase1, phase2, phase3 };
+        var members = phases.Select(phase => dataObject + "." + phase).ToArray();
+        var attributes = phases
+            .SelectMany(phase => new[]
+            {
+                Attribute(dataObject + "." + phase + ".cVal.mag.f", phase + ".cVal.mag.f"),
+                Attribute(dataObject + "." + phase + ".q", phase + ".q", "Quality"),
+                Attribute(dataObject + "." + phase + ".t", phase + ".t", "Timestamp")
+            })
+            .ToArray();
+        var design = BuildDesign(dataObject, members, attributes);
+        var signals = new List<SignalDefinition>();
+
+        var result = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(signals, design);
+
+        Assert.Equal(3, result.MandatoryCatalogCount);
+        Assert.Equal(3, result.AddedCount);
+        Assert.Equal(3, signals.Count);
+        Assert.Equal(3, signals.Select(signal => signal.DisplayReference).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, signals.Select(signal => signal.ObjectReference).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+        foreach (var phase in phases)
+        {
+            var staticMember = dataObject + "." + phase;
+            var runtimeLeaf = staticMember + ".cVal.mag.f";
+            var signal = Assert.Single(signals.Where(candidate =>
+                candidate.DisplayReference.Equals(staticMember, StringComparison.OrdinalIgnoreCase)));
+            Assert.Equal(runtimeLeaf, signal.ObjectReference);
+        }
+
+        var ied = new IoTestIedPlan
+        {
+            IedName = "IED",
+            IpAddress = "192.0.2.10",
+            IedRole = "Regression",
+            TestPoints = phases.Select(phase =>
+            {
+                var staticMember = dataObject + "." + phase;
+                return new IoTestPointPlan
+                {
+                    TestPointId = "THD-" + phase,
+                    IedName = "IED",
+                    IpAddress = "192.0.2.10",
+                    SignalName = phase,
+                    ObjectReference = staticMember + ".cVal.mag.f",
+                    SourceIecReference = staticMember,
+                    ReportDisplayReference = staticMember,
+                    FunctionalConstraint = "MX",
+                    ExpectedOnText = "Value 1",
+                    ExpectedOffText = "Value 2",
+                    ImportReady = true,
+                    TestEnabled = true
+                };
+            }).ToList()
+        };
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "IED",
+            SclIedName = "IED",
+            IpAddress = "192.0.2.10",
+            Port = 102
+        };
+        device.Signals.AddRange(signals);
+
+        var selection = new IoTestSignalSelectionService().Resolve(ied, device);
+
+        Assert.True(selection.Succeeded, selection.Message);
+        Assert.Equal(3, selection.Matches.Count);
+        Assert.Equal(3, selection.Matches.Select(match => match.Signal).Distinct().Count());
+        Assert.Empty(selection.MissingPoints);
+        Assert.Empty(selection.AmbiguousPoints);
+    }
+
     private static LiveIedModelDiscoveryDocument BuildDesign(
         string dataObjectReference,
         string memberReference,
+        params LiveIedDataAttributeModel[] attributes)
+        => BuildDesign(dataObjectReference, new[] { memberReference }, attributes);
+
+    private static LiveIedModelDiscoveryDocument BuildDesign(
+        string dataObjectReference,
+        IReadOnlyList<string> memberReferences,
         params LiveIedDataAttributeModel[] attributes)
     {
         var slash = dataObjectReference.IndexOf('/');
@@ -105,18 +197,16 @@ public sealed class IoFatP53StructuredAnalogBindingRegressionTests
                     Domain = domain,
                     LogicalNode = "LLN0",
                     Name = "Analog",
-                    MemberCount = 1,
-                    Members = new[]
-                    {
+                    MemberCount = memberReferences.Count,
+                    Members = memberReferences.Select((memberReference, index) =>
                         new LiveIedDataSetMemberModel
                         {
-                            Index = 0,
+                            Index = index,
                             Reference = memberReference,
                             FunctionalConstraint = "MX",
                             MmsReference = BuildMmsReference(memberReference),
                             Confidence = LiveIedDiscoveryConfidenceLevel.Exact
-                        }
-                    }
+                        }).ToArray()
                 }
             }
         };

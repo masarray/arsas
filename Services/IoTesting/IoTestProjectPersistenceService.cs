@@ -30,6 +30,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     private readonly object _saveSync = new();
     private readonly Timer _saveTimer;
     private readonly IoTestSessionController _session;
+    private readonly List<IoFatWorkspaceSource> _sourceFiles;
     private bool _disposed;
     private string _statusText = "Progress storage is ready";
     private DateTimeOffset? _lastSavedAtUtc;
@@ -46,7 +47,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         _session = session;
         LocalDirectory = localDirectory;
         SnapshotPath = Path.Combine(localDirectory, "project.snapshot.json");
-        SourceFiles = sourceFiles;
+        _sourceFiles = sourceFiles.ToList();
         EvidenceProjectDirectory = evidenceProjectDirectory;
         _saveTimer = new Timer(_ => SaveFromTimer(), null, Timeout.Infinite, Timeout.Infinite);
         Subscribe();
@@ -55,7 +56,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
     public IoTestProject Project { get; }
     public string LocalDirectory { get; }
     public string SnapshotPath { get; }
-    public IReadOnlyList<IoFatWorkspaceSource> SourceFiles { get; }
+    public IReadOnlyList<IoFatWorkspaceSource> SourceFiles => _sourceFiles;
     public string SourceWorkbookPath => SourceFiles
         .FirstOrDefault(source => source.Source.Kind.Equals(IoFatSourceKinds.Workbook, StringComparison.OrdinalIgnoreCase))
         ?.LocalPath ?? string.Empty;
@@ -254,6 +255,70 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         _saveTimer.Change(650, Timeout.Infinite);
     }
 
+    public async Task AddSourcesAsync(
+        IoTestProject importedSourceProject,
+        IReadOnlyCollection<IoFatSourceInput> sourceInputs,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(importedSourceProject);
+        ArgumentNullException.ThrowIfNull(sourceInputs);
+
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken)
+            .ConfigureAwait(false);
+        var newHashes = described
+            .Where(source => _sourceFiles.All(existing =>
+                !existing.Source.Sha256.Equals(source.Source.Sha256, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (newHashes.Length == 0)
+            return;
+
+        var stagingProject = new IoTestProject
+        {
+            ProjectId = importedSourceProject.ProjectId,
+            SchemaVersion = importedSourceProject.SchemaVersion,
+            ProjectName = importedSourceProject.ProjectName
+        };
+        var stagingDescriptors = newHashes.Select(source => source.Source).ToArray();
+        stagingProject.SetSources(
+            stagingDescriptors,
+            IoFatSourceIdentity.ComputeSetFingerprint(stagingDescriptors));
+        var staged = await IoFatSourceWorkspaceService.StageDescribedAsync(
+                stagingProject,
+                newHashes,
+                Path.Combine(LocalDirectory, "source"),
+                cancellationToken)
+            .ConfigureAwait(false);
+        lock (_saveSync)
+        {
+            foreach (var source in staged)
+            {
+                if (_sourceFiles.All(existing =>
+                    !existing.Source.Sha256.Equals(source.Source.Sha256, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _sourceFiles.Add(source);
+                }
+            }
+            _sourceFiles.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.Source.SourceId, right.Source.SourceId));
+        }
+    }
+
+    public void TrackAddedIed(IoTestIedPlan ied)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(ied);
+        ied.PropertyChanged -= Changed;
+        ied.PropertyChanged += Changed;
+        foreach (var point in ied.TestPoints)
+        {
+            point.PropertyChanged -= Changed;
+            point.PropertyChanged += Changed;
+            point.Runtime.PropertyChanged -= Changed;
+            point.Runtime.PropertyChanged += Changed;
+        }
+    }
+
     public void SaveNow()
     {
         ThrowIfDisposed();
@@ -402,7 +467,23 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         }
     }
 
-    private void Changed(object? sender, PropertyChangedEventArgs e) => ScheduleSave();
+    private void Changed(object? sender, PropertyChangedEventArgs e)
+    {
+        // Live telemetry is transient and can change hundreds of times per second.
+        // Evidence/state changes still autosave, and their snapshot includes the most
+        // recent live value. Avoid resetting the timer and notifying UI for every poll.
+        if (sender is IoTestPointRuntime && e.PropertyName is
+            nameof(IoTestPointRuntime.CurrentValue) or
+            nameof(IoTestPointRuntime.CurrentQuality) or
+            nameof(IoTestPointRuntime.CurrentSource) or
+            nameof(IoTestPointRuntime.CurrentIedTimestamp) or
+            nameof(IoTestPointRuntime.LastSequence))
+        {
+            return;
+        }
+
+        ScheduleSave();
+    }
 
     private void SaveFromTimer()
     {
@@ -474,9 +555,21 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                         Value2Evidence = point.Runtime.Value2Evidence
                     })
                 {
+                    WorkspaceSelected = point.WorkspaceSelected,
                     SignalKind = point.SignalKind,
                     CaptureMode = point.CaptureMode,
-                    FatDisposition = point.FatDisposition
+                    FatDisposition = point.FatDisposition,
+                    Cdc = point.Cdc,
+                    SourceIecReference = point.SourceIecReference,
+                    ReportDisplayReference = point.ReportDisplayReference,
+                    EventLogSearchReference = point.EventLogSearchReference,
+                    EvidenceExpected = point.EvidenceExpected,
+                    MappingQuality = point.MappingQuality,
+                    ReviewStatus = point.ReviewStatus,
+                    ReviewReason = point.ReviewReason,
+                    EventLogMatch = point.EventLogMatch,
+                    EvidenceReference = point.EvidenceReference,
+                    ReviewerComment = point.ReviewerComment
                 }).ToList())
             {
                 LatestComtradeFiles = ied.LatestComtradeFiles,
@@ -577,10 +670,22 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
             LogicalNode = data.LogicalNode,
             DataObject = data.DataObject,
             DataAttribute = data.DataAttribute,
+            Cdc = data.Cdc,
+            SourceIecReference = data.SourceIecReference,
+            ReportDisplayReference = data.ReportDisplayReference,
+            EventLogSearchReference = data.EventLogSearchReference,
+            EvidenceExpected = data.EvidenceExpected,
+            MappingQuality = data.MappingQuality,
+            ReviewStatus = data.ReviewStatus,
+            ReviewReason = data.ReviewReason,
+            EventLogMatch = data.EventLogMatch,
+            EvidenceReference = data.EvidenceReference,
+            ReviewerComment = data.ReviewerComment,
             SourceSheet = data.SourceSheet,
             SourceRow = data.SourceRow,
             SignalKind = data.SignalKind,
             CaptureMode = data.CaptureMode,
+            WorkspaceSelected = data.WorkspaceSelected,
             TestEnabled = data.TestEnabled,
             ImportReady = data.ImportReady,
             BindingStatus = data.BindingStatus,
@@ -666,7 +771,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
 
             builder.Append("<table><thead><tr><th>#</th><th>Signal</th><th>IEC 61850 reference</th><th>Type / capture</th><th>Value 1</th><th>Value 2</th><th>Result</th><th>Reason</th></tr></thead><tbody>");
             var index = 0;
-            foreach (var point in ied.TestPoints.Where(point => point.IsIncludedInFat))
+            foreach (var point in ied.TestPoints.Where(point => point.WorkspaceSelected && point.IsIncludedInFat))
             {
                 index++;
                 builder.Append("<tr><td>").Append(index).Append("</td><td>").Append(Html(point.SignalName)).Append("</td><td>").Append(Html(point.ReportIecReference)).Append("</td><td>")
@@ -918,9 +1023,21 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string BindingEvidence,
         IoTestRuntimeData Runtime)
     {
+        public bool WorkspaceSelected { get; init; } = true;
         public FatSignalKind SignalKind { get; init; } = FatSignalKind.Discrete;
         public FatCaptureMode CaptureMode { get; init; } = FatCaptureMode.AutomaticTransition;
         public FatSignalDisposition FatDisposition { get; init; } = FatSignalDisposition.Included;
+        public string Cdc { get; init; } = string.Empty;
+        public string SourceIecReference { get; init; } = string.Empty;
+        public string ReportDisplayReference { get; init; } = string.Empty;
+        public string EventLogSearchReference { get; init; } = string.Empty;
+        public string EvidenceExpected { get; init; } = string.Empty;
+        public string MappingQuality { get; init; } = string.Empty;
+        public string ReviewStatus { get; init; } = string.Empty;
+        public string ReviewReason { get; init; } = string.Empty;
+        public string EventLogMatch { get; init; } = string.Empty;
+        public string EvidenceReference { get; init; } = string.Empty;
+        public string ReviewerComment { get; init; } = string.Empty;
     }
 
     private sealed record IoTestRuntimeData(

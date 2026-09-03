@@ -704,6 +704,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     : result.AcquisitionLabel;
                 foreach (var point in coveredPoints)
                 {
+                    if (RequiresExactMmsValueAuthority(point.IecReference))
+                        continue;
                     session.PointPlanIds[point.PointKey] = plan.PlanId;
                     if (!string.IsNullOrWhiteSpace(result.ReportControlReference))
                         point.ReportControlReference = result.ReportControlReference;
@@ -969,6 +971,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 var point = FindPointForReportReference(session, update.Reference);
                 if (point == null)
+                    continue;
+
+                // Siemens static DataSets report THD as a nested three-phase structure.
+                // Until its scalar fan-out is schema-proven, exact MMS reads remain the
+                // value authority so a report projection cannot overwrite correct values.
+                if (RequiresExactMmsValueAuthority(point.IecReference))
                     continue;
 
                 // A real report update proves reference coverage, but an initial GI or
@@ -1998,6 +2006,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                point.IecDataType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
                reference.Contains(".pos.stval") ||
                reference.EndsWith(".general");
+    }
+
+    private static bool RequiresExactMmsValueAuthority(string reference)
+    {
+        var normalized = NormalizeReference(reference);
+        return SignalDefinition.IsThreePhaseMeasurementAggregate(normalized) ||
+               normalized.Contains(".thda.phs", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains(".thdppv.phs", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains(".dmdwh", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasExactSemanticEdge(Iec61850MonitorPoint point, string oldValue, string newValue)

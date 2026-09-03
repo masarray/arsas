@@ -11,6 +11,8 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 {
     private IoTestIedPlan? _selectedIed;
     private string _preparationStatusText = string.Empty;
+    private bool _isAddingFatIeds;
+    private bool _parallelSessionsAttached;
 
     public IoListTestingWindow()
         : this(CreateEmptyProject(), CreateEmptyController(), null)
@@ -23,17 +25,20 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         IoTestWorkspacePersistence? persistence)
     {
         Project = project ?? throw new ArgumentNullException(nameof(project));
-        Session = session ?? throw new ArgumentNullException(nameof(session));
+        Session = new IoTestMultiSessionCoordinator(
+            Project,
+            session ?? throw new ArgumentNullException(nameof(session)));
         Storage = persistence;
         Project.InitializeRuntimeNotifications();
         Session.PropertyChanged += Session_PropertyChanged;
         InitializeComponent();
         DataContext = this;
         SelectedIed = Project.Ieds.FirstOrDefault();
+        Loaded += Window_LoadedForParallelEvidenceSessions;
     }
 
     public IoTestProject Project { get; }
-    public IoTestSessionController Session { get; }
+    public IoTestMultiSessionCoordinator Session { get; }
     public IoTestWorkspacePersistence? Storage { get; }
 
     public IoTestIedPlan? SelectedIed
@@ -44,14 +49,15 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             if (ReferenceEquals(_selectedIed, value))
                 return;
             _selectedIed = value;
+            Session.SelectContext(_selectedIed);
             Raise();
             Raise(nameof(SelectedIedSummary));
             RaisePreparationProperties();
         }
     }
 
-    // Compatibility aggregate used for close/edit protection. It no longer blocks
-    // another IED from starting its own independent connection workflow.
+    // Compatibility aggregate used for close protection. It no longer blocks another
+    // IED from starting its own independent connection or evidence workflow.
     public bool IsPreparingIed => Project.Ieds.Any(ied => ied.IsPreparing);
 
     public string PreparationStatusText
@@ -74,14 +80,26 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
     public bool CanStartWorkflow =>
         SelectedIed != null && !SelectedIed.IsPreparing && Session.CanStart;
 
-    // Explorer navigation stays available while one or more IEDs are connecting or a
-    // FAT evidence session is running. Each IED card owns its own connection progress.
+    // Explorer navigation stays available while one or more IEDs are connecting or FAT
+    // evidence sessions are running. Each IED owns its own connection and evidence state.
     public bool CanSelectIed => true;
 
-    // Keep plan mutation frozen while any network preparation is consuming the selected
-    // FAT scope, or while the evidence controller owns a session.
+    // P2 edit lock is selected-IED-local: an IED whose evidence session is active is
+    // immutable, while another selected IED remains editable even when its sibling is live.
     public bool CanEditPlan =>
-        !IsPreparingIed && Session.CanEditPlan;
+        SelectedIed?.IsPreparing != true && Session.CanEditPlan;
+
+    // Adding another SCL is a workspace-level append operation, independent of per-IED
+    // connection preparation and P2 evidence sessions. Only another append locks it.
+    public bool CanAddFatIed => !_isAddingFatIeds;
+
+    private void SetAddingFatIeds(bool value)
+    {
+        if (_isAddingFatIeds == value)
+            return;
+        _isAddingFatIeds = value;
+        Raise(nameof(CanAddFatIed));
+    }
 
     public string StartWorkflowText =>
         SelectedIed?.IsPreparing == true ? $"Connecting {SelectedIed.IedName}…" : "Connect & Start IED";
@@ -310,7 +328,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             IsEnabled = false;
             var exportedPath = await IoFatProjectPackageService.ExportAsync(
                 Storage,
-                Session,
+                Session.PrimaryController,
                 dialog.FileName);
             MessageBox.Show(
                 this,
@@ -331,13 +349,13 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private bool EnsureSessionSealedForExport(string outputName)
     {
-        if (!Session.IsSessionActive)
+        if (!Session.HasActiveSessions)
             return true;
 
         MessageBox.Show(
             this,
-            $"Stop the active IED session before exporting the {outputName}. This seals and verifies the current evidence journal first.",
-            "Stop session before export",
+            $"Stop all active IED evidence sessions before exporting the {outputName}. Every per-IED evidence journal must be sealed and verified first.",
+            "Stop sessions before export",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
         return false;
@@ -361,12 +379,13 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (Session.IsSessionActive)
+        if (Session.HasActiveSessions)
         {
+            var activeCount = Session.ActiveSessionCount;
             var answer = MessageBox.Show(
                 this,
-                "A FAT session is active. Returning to Engineering will stop the session, seal the evidence journal, and save the current project progress.\n\nStop the session and return?",
-                "Stop active FAT session",
+                $"{activeCount} FAT evidence session(s) are active. Returning to Engineering will stop every active IED session, seal each independent evidence journal, and save the current project progress.\n\nStop all sessions and return?",
+                "Stop active FAT sessions",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -376,7 +395,13 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
                 return;
             }
 
-            Session.Stop("Workspace closed by operator; evidence journal sealed.");
+            var stopAll = Session.StopAll("Workspace closed by operator; per-IED evidence journal sealed.");
+            if (!stopAll.Succeeded)
+            {
+                MessageBox.Show(this, stopAll.Message, "Evidence journals could not be sealed", MessageBoxButton.OK, MessageBoxImage.Error);
+                e.Cancel = true;
+                return;
+            }
         }
 
         try
@@ -397,9 +422,35 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private void Window_LoadedForParallelEvidenceSessions(object sender, RoutedEventArgs e)
+    {
+        if (_parallelSessionsAttached || Owner is not MainWindow engineeringWindow)
+            return;
+
+        var evidenceRoot = Storage?.EvidenceProjectDirectory;
+        if (string.IsNullOrWhiteSpace(evidenceRoot))
+        {
+            evidenceRoot = Path.Combine(
+                Path.GetTempPath(),
+                "ARSAS",
+                "IO Testing Evidence",
+                string.IsNullOrWhiteSpace(Project.ProjectId) ? "UNNAMED" : Project.ProjectId);
+        }
+
+        engineeringWindow.AttachIoTestParallelEvidenceSessions(Session, evidenceRoot);
+        _parallelSessionsAttached = true;
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        Loaded -= Window_LoadedForParallelEvidenceSessions;
         Session.PropertyChanged -= Session_PropertyChanged;
+        if (_parallelSessionsAttached && Owner is MainWindow engineeringWindow)
+        {
+            engineeringWindow.DetachIoTestParallelEvidenceSessions(Session);
+            _parallelSessionsAttached = false;
+        }
+        Session.Dispose();
         base.OnClosed(e);
     }
 
@@ -422,6 +473,7 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
         Raise(nameof(CanStartWorkflow));
         Raise(nameof(CanSelectIed));
         Raise(nameof(CanEditPlan));
+        Raise(nameof(CanAddFatIed));
         Raise(nameof(StartWorkflowText));
         Raise(nameof(FooterStatusText));
     }

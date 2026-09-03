@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatContinuationScopeRegressionTests
 {
     [Fact]
-    public void SelectedRows_ArePreparedExplicitlyAndOnlyLiveSubsetIsArmedWithoutMutatingOperatorSelection()
+    public void SelectedRows_DefineEvidenceScopeWhileFullIedScopeOwnsLivePreparation()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ContextUx.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -15,7 +15,7 @@ public sealed class IoFatContinuationScopeRegressionTests
             "var captureScope = selectedIed.TestPoints",
             StringComparison.Ordinal);
         var preparationIndex = source.IndexOf(
-            "progress,\n                    captureScope);",
+            "var preparation = await engineeringWindow.PrepareIoTestIedForFatAsync(\n                    Project,\n                    selectedIed,\n                    progress);",
             StringComparison.Ordinal);
         var liveScopeIndex = source.IndexOf(
             "var liveCaptureScope = captureScope",
@@ -27,12 +27,13 @@ public sealed class IoFatContinuationScopeRegressionTests
             "Session.Start(selectedIed, liveCaptureScope)",
             StringComparison.Ordinal);
 
-        Assert.True(preflightIndex >= 0, "The real operator selection must be validated before capture scope creation.");
+        Assert.True(preflightIndex >= 0, "The operator-selected evidence scope must be validated before capture scope creation.");
         Assert.True(scopeIndex > preflightIndex, "Capture scope must be created only after preflight succeeds.");
-        Assert.True(preparationIndex > scopeIndex, "The complete operator-selected scope must be used for live preparation.");
-        Assert.True(liveScopeIndex > preparationIndex, "Live evidence scope must be derived only after preparation has produced binding evidence.");
+        Assert.True(preparationIndex > scopeIndex, "P1 live preparation must use the full included IED acquisition scope, not the TEST subset.");
+        Assert.True(liveScopeIndex > preparationIndex, "Evidence scope must be filtered to proven live rows only after full IED preparation.");
         Assert.True(liveReadyIndex >= liveScopeIndex, "Active evidence scope must require LivePointReady rows.");
-        Assert.True(sessionStartIndex > liveScopeIndex, "Only the proven live subset may reach Session.Start.");
+        Assert.True(sessionStartIndex > liveScopeIndex, "Only the proven selected live subset may reach Session.Start.");
+        Assert.DoesNotContain("progress,\n                    captureScope);", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = true", source, StringComparison.Ordinal);
         Assert.DoesNotContain("protectedPoints", source, StringComparison.Ordinal);

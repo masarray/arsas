@@ -4,6 +4,21 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.33 — 2026-09-02
+
+### Added
+
+- FAT workspaces can import additional CID/SCD/ICD/IID sources without replacing the current project, including while another IED evidence session remains active.
+- Engineering and FAT workspaces now share imported SCL signal selection, so operator selection remains consistent when switching modes.
+
+### Fixed
+
+- Direct-SCL FAT connection now reuses the imported model and returns after the MMS association and bounded point setup instead of rediscovering or waiting through the legacy settle path.
+- Structured THD current/voltage aggregates and demand-energy values retain exact parent and phase identities and use authoritative MMS projections instead of remaining `Unknown`.
+- FAT live updates are coalesced below operator input priority; steady telemetry no longer refreshes the whole collection or schedules autosave for every sample, restoring smooth scrolling and reliable Capture clicks.
+- The Add IED action is independent from the active evidence-session edit lock while preserving the running IED's immutable capture mapping.
+- Windows receives a stable ARSAS AppUserModelID in addition to the embedded executable icon, fixing generic taskbar grouping for portable and `dotnet`-hosted launches.
+
 ## 1.6.31 — 2026-08-15
 
 ### Fixed

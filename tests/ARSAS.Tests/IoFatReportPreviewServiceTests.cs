@@ -160,15 +160,15 @@ public sealed class IoFatReportPreviewServiceTests
     }
 
     [Fact]
-    public void IoFatPreparation_UsesCachedReconnect_AndReturnsOnFirstUsableLiveImage()
+    public void IoFatPreparation_UsesCachedReconnect_AndReturnsImmediatelyAfterMonitorStart()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("Fast reconnect", source, StringComparison.Ordinal);
         Assert.Contains("ConnectUsingSavedModelAsync", source, StringComparison.Ordinal);
-        Assert.Contains("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
-        Assert.Contains("Waiting for first live FAT image", source, StringComparison.Ordinal);
-        Assert.Contains("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
+        Assert.Contains("Return control to FAT immediately", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.Contains("IsReportSource", source, StringComparison.Ordinal);
         Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
