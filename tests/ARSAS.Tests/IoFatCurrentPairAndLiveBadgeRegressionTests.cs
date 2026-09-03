@@ -14,7 +14,7 @@ public sealed class IoFatCurrentPairAndLiveBadgeRegressionTests
 
         var decision = FatCurrentEvidenceAssessmentService.Apply(point);
 
-        Assert.Equal(FatCurrentEvidenceVerdict.Passed, decision.Verdict);
+        Assert.Equal(IoTestPointState.Passed, decision.State);
         Assert.Equal(IoTestPointState.Passed, point.Runtime.State);
         Assert.Equal("✔ PASS", point.FatResultText);
         Assert.True(point.IsFatEvidenceComplete);
