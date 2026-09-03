@@ -473,6 +473,7 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             capture.Point.Runtime.StatusReason = capture.StagedValue1 != null
                 ? "Operator pair Recapture completed; staged Value 1 and current Value 2 are now the authoritative pair."
                 : $"Operator recaptured {slot}; the other current slot was preserved.";
+            FatCurrentEvidenceAssessmentService.Apply(capture.Point);
             _autoCaptureCoordinator.Clear(capture.Point);
         }
 
@@ -754,6 +755,8 @@ public sealed class IoTestSessionController : ObservableObject, IDisposable
             point.Runtime.SetFatValueEvidence(decision.Evidence);
         if (point.CaptureMode == FatCaptureMode.OperatorSnapshot || decision.Evidence != null)
             point.Runtime.StatusReason = decision.Message;
+
+        FatCurrentEvidenceAssessmentService.Apply(point);
     }
 
     private void UpdateRunningCompletionStatus()
