@@ -12,8 +12,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         var json = doc.RootElement;
         Assert.Equal("masarray/ARIEC61850", json.GetProperty("repository").GetString());
         Assert.Equal("main", json.GetProperty("ref").GetString());
-        Assert.Equal("c979206988ebcbaf79e62b784895e19547184369", json.GetProperty("commit").GetString());
-        Assert.Equal(107, json.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("127a4ecac0a52b3adc02d5403f207d89838c8010", json.GetProperty("commit").GetString());
+        Assert.Equal(109, json.GetProperty("sourcePullRequest").GetInt32());
         var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
 
         // G2.7 may advance the engine pin only while the field-proven G1/G2.3/P0/P1 ancestry
@@ -65,6 +65,10 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("deterministic AR_HYB_<SHA256-prefix>", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #107", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("native per-IED field-capability authorization", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #108", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fresh-association qualification residue recovery", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #109", purpose, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exceptions never count as absence evidence", purpose, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -160,6 +164,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("PR #104", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #105", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PR #107", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #108", engineLock, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #109", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible as a separate certification boundary", engineLock, StringComparison.OrdinalIgnoreCase);
 
         // G1 control remains independent from the G2.7 report acquisition bridge.
