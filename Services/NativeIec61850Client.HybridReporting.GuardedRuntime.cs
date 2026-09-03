@@ -7,6 +7,8 @@ namespace ArIED61850Tester.Services;
 
 public sealed partial class NativeIec61850Client
 {
+    private const int NativeFieldCapabilityAbsoluteDynamicPlanLimit = 64;
+
     private readonly Dictionary<string, ArMms.MmsDynamicReportGuardedRuntimePlanningContext> _guardedRuntimeContexts =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -165,14 +167,15 @@ public sealed partial class NativeIec61850Client
                     guardedContext.CurrentIdentity.StableIdentityKey,
                     out var nativeEvidence))
             {
-                return ArMms.MmsGuardedDynamicReportNativeFieldCapabilityStableRuntimePlanner.Build(
+                var nativeOptions = BuildNativeFieldCapabilityOptions(options, availability);
+                return ArMms.MmsGuardedDynamicReportNativeFieldCapabilityEnvelopeBoundRuntimePlanner.Build(
                     catalog,
                     requestedSignals,
                     inventory,
                     availability,
                     liveDirectory,
                     negotiatedCapabilities,
-                    options,
+                    nativeOptions,
                     guardedContext,
                     nativeEvidence);
             }
@@ -219,6 +222,38 @@ public sealed partial class NativeIec61850Client
             negotiatedCapabilities,
             options,
             guardedContext);
+    }
+
+    private static ArMms.MmsHybridReportAcquisitionOptions BuildNativeFieldCapabilityOptions(
+        ArMms.MmsHybridReportAcquisitionOptions source,
+        ArMms.MmsRcbAvailabilityResult availability)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(availability);
+
+        // The generic planner default of eight Dynamic RCB plans is intentionally conservative,
+        // but after a complete P1.7 per-IED physical capability witness it can strand otherwise
+        // eligible exact-resolved signals on polling solely because of that generic budget.
+        // Expand only the native P1.7 plan budget, bounded by this association's freshly checked
+        // RCB inventory and an application hard ceiling. The ARIEC planner still admits only
+        // exact verified-free slots, and PR #110 separately caps each DataSet to ProvenSafeMemberCount.
+        var associationBoundPlanLimit = Math.Min(
+            NativeFieldCapabilityAbsoluteDynamicPlanLimit,
+            Math.Max(source.MaxDynamicReportPlans, availability.ReportControls.Count));
+
+        return new ArMms.MmsHybridReportAcquisitionOptions
+        {
+            MaxStaticReportPlans = source.MaxStaticReportPlans,
+            MaxDynamicReportPlans = associationBoundPlanLimit,
+            MaxDynamicMembersPerReport = source.MaxDynamicMembersPerReport,
+            RequireExactAvailabilityEvidence = source.RequireExactAvailabilityEvidence,
+            AllowCallerOwnedReports = source.AllowCallerOwnedReports,
+            AllowStaticBrcb = source.AllowStaticBrcb,
+            AllowStaticUrcb = source.AllowStaticUrcb,
+            AllowDynamicBrcb = source.AllowDynamicBrcb,
+            AllowDynamicUrcb = source.AllowDynamicUrcb,
+            AllowPollingFallback = source.AllowPollingFallback
+        };
     }
 
     private bool TryGetGuardedRuntimeContext(
