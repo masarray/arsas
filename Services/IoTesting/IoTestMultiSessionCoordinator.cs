@@ -5,10 +5,10 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// P2 evidence-session authority. Each FAT IED owns one isolated
+/// P2/P3 evidence-session authority. Each FAT IED owns one isolated
 /// <see cref="IoTestSessionController"/> so several connected IEDs can capture evidence
 /// at the same time without sharing a journal, live-point index, connection generation,
-/// transition evaluator, or DeviceId acceptance boundary.
+/// transition evaluator, auto-capture state, or Recapture transaction.
 ///
 /// The controller supplied by MainWindow remains the primary leaf for backwards
 /// compatibility. Additional leaves are created lazily through the configured sibling
@@ -191,16 +191,34 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         if (point == null)
             return IoTestSessionActionResult.Failure("Select a FAT row before capturing Value 1 or Value 2.");
 
-        var controller = ControllerSnapshot().FirstOrDefault(candidate =>
-            candidate.IsSessionActive && candidate.ActiveIed?.TestPoints.Contains(point) == true);
-        controller ??= SelectedController;
+        var controller = ResolveOwningActiveController(new[] { point }, out var failure);
         if (controller == null)
-            return IoTestSessionActionResult.Failure("Start this IED FAT session before capturing Value 1 or Value 2.");
+            return IoTestSessionActionResult.Failure(failure);
 
         var result = controller.CaptureOperatorSnapshot(point, slot);
         RaiseProjectionProperties();
         return result;
     }
+
+    public IoTestSessionActionResult RecaptureValues(
+        IReadOnlyCollection<IoTestPointPlan> points,
+        FatValueSlot slot)
+        => BatchPointAction(
+            points,
+            (controller, batch) => controller.RecaptureValues(batch, slot),
+            "Select one or more rows from one active IED FAT session before using Recapture.");
+
+    public IoTestSessionActionResult BeginPairRecapture(IReadOnlyCollection<IoTestPointPlan> points)
+        => BatchPointAction(
+            points,
+            (controller, batch) => controller.BeginPairRecapture(batch),
+            "Select one or more rows from one active IED FAT session before staging Value 1 & Value 2 Recapture.");
+
+    public IoTestSessionActionResult CancelPairRecapture(IReadOnlyCollection<IoTestPointPlan> points)
+        => BatchPointAction(
+            points,
+            (controller, batch) => controller.CancelPairRecapture(batch),
+            "Select one or more rows from one active IED FAT session before cancelling staged Recapture.");
 
     /// <summary>
     /// Runtime event route for additional P2 leaves only. MainWindow already routes every
@@ -234,6 +252,57 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
 
         lock (_sync)
             _controllers.Clear();
+    }
+
+    private IoTestSessionActionResult BatchPointAction(
+        IReadOnlyCollection<IoTestPointPlan>? points,
+        Func<IoTestSessionController, IReadOnlyCollection<IoTestPointPlan>, IoTestSessionActionResult> action,
+        string missingMessage)
+    {
+        ThrowIfDisposed();
+        var batch = points?.Where(point => point != null).Distinct().ToArray() ?? Array.Empty<IoTestPointPlan>();
+        if (batch.Length == 0)
+            return IoTestSessionActionResult.Failure(missingMessage);
+
+        var controller = ResolveOwningActiveController(batch, out var failure);
+        if (controller == null)
+            return IoTestSessionActionResult.Failure(failure);
+
+        var result = action(controller, batch);
+        RaiseProjectionProperties();
+        return result;
+    }
+
+    private IoTestSessionController? ResolveOwningActiveController(
+        IReadOnlyCollection<IoTestPointPlan> points,
+        out string failure)
+    {
+        failure = string.Empty;
+        if (points.Count == 0)
+        {
+            failure = "Select at least one FAT row.";
+            return null;
+        }
+
+        var owners = _project.Ieds
+            .Where(ied => points.Any(ied.TestPoints.Contains))
+            .Distinct()
+            .ToArray();
+        if (owners.Length != 1 || points.Any(point => !owners[0].TestPoints.Contains(point)))
+        {
+            failure = "Bulk Recapture must contain rows from exactly one IED. No evidence changed.";
+            return null;
+        }
+
+        lock (_sync)
+        {
+            if (!_controllers.TryGetValue(owners[0], out var controller) || !controller.IsSessionActive)
+            {
+                failure = $"Start the {owners[0].IedName} FAT session before using Recapture.";
+                return null;
+            }
+            return controller;
+        }
     }
 
     private IoTestSessionController GetOrCreateController(IoTestIedPlan ied)
