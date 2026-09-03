@@ -10,7 +10,7 @@ public sealed class G27NativePerIedFieldCapabilityRegressionTests
 
         Assert.Contains("DynamicReportNativeFieldCapabilityWitnessStore", guarded, StringComparison.Ordinal);
         Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityPolicy.TryValidate", guarded, StringComparison.Ordinal);
-        Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityStableRuntimePlanner.Build", guarded, StringComparison.Ordinal);
+        Assert.Contains("MmsGuardedDynamicReportNativeFieldCapabilityEnvelopeBoundRuntimePlanner.Build", guarded, StringComparison.Ordinal);
         Assert.Contains("DataChange profile is present but general Dynamic RCB runtime remains withheld", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ModelFingerprint", store, StringComparison.Ordinal);
         Assert.Contains("ProfileRevision", store, StringComparison.Ordinal);
