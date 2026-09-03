@@ -48,8 +48,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("ApplyManualSelectionToFatProjectAsync", fat, StringComparison.Ordinal);
         Assert.Contains("promptForSelection: true", fat, StringComparison.Ordinal);
         Assert.Contains("PromptSclSignalSelectionMode(this, import.Project.Ieds.Count)", fat, StringComparison.Ordinal);
-        Assert.Contains("point.IsIncludedInFat &&", fatProjection, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled", fatProjection, StringComparison.Ordinal);
+        Assert.Contains("point.WorkspaceSelected", fatProjection, StringComparison.Ordinal);
+        Assert.Contains("point.IsIncludedInFat", fatProjection, StringComparison.Ordinal);
     }
 
     [Fact]
