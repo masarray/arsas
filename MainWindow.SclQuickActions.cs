@@ -28,9 +28,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Opens the fault-record/COMTRADE workflow with its own bounded file-transfer client.
-    /// It may establish the MMS connection required for file services, but it never starts
-    /// the Engineering monitoring acquisition pipeline.
+    /// Opens the fault-record/COMTRADE workflow with its own task-scoped file-transfer client.
+    /// The FaultRecordWindow owns the MMS file-service session; this helper deliberately does
+    /// not route through Engineering connect/monitor APIs.
     /// </summary>
     internal void OpenSelectedSclComtradeDownload()
     {
@@ -53,7 +53,9 @@ public partial class MainWindow
             return;
         }
 
-        var window = new FaultRecordWindow(device, _applicationCancellation.Token)
+        // FaultRecordWindow's public contract is endpoint-scoped. Passing only the IED
+        // identity and endpoint keeps file transfer independent from Live Monitor state.
+        var window = new FaultRecordWindow(device.Name, device.IpAddress, device.Port)
         {
             Owner = this,
             ShowInTaskbar = false,
