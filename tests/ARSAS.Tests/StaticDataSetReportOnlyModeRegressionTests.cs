@@ -18,7 +18,7 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void StaticSelection_AllowsOnlyRuntimeSignalsWithExplicitDataSetAuthority()
+    public void StaticSelectionPolicy_StillRejectsBrowsedAndControlSignals()
     {
         var dataSetLeaf = Signal("IEDLD/MMXU1.TotW.mag.f", "IEDLD/LLN0.Analog");
         var browsedLeaf = Signal("IEDLD/MMXU1.Hz.mag.f", string.Empty);
@@ -40,13 +40,37 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void SharedSclStaticSelection_UsesDatasetAuthorityPolicy_NotSelectEverything()
+    public void SharedSclStaticSelection_UsesExactAriecMembershipRows_NotEveryDatasetTaggedAlias()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        var authority = File.ReadAllText(FindRepoFile("Services/Iec61850StaticDataSetAuthoritySelection.cs"));
+
         Assert.Contains("Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticDataSetAuthoritySelection.Build(device)", source, StringComparison.Ordinal);
+        Assert.Contains("signal.IsSelected = authoritativeSignals.Contains(signal)", source, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", source, StringComparison.Ordinal);
-        Assert.Contains("Iec61850StaticDataSetSelectionPolicy.IsEligible(signal)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("signal.IsSelected = !string.IsNullOrWhiteSpace(signal.DataSetReference)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850StaticDataSetSelectionPolicy.IsEligible(signal)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseStaticDataSetWithMmsFallback", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("fallback remains available", source, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model)", authority, StringComparison.Ordinal);
+        Assert.Contains("LiteralEquals(signal.DataSetReference, membership.DataSetReference)", authority, StringComparison.Ordinal);
+        Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartsWith(memberReference", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("Contains(memberReference", authority, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StaticDataSetRegressionGuard_PreservesFa16ReportOnlyDirection()
+    {
+        var shared = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        var registry = File.ReadAllText(FindRepoFile("Services/Iec61850MonitoringModeRegistry.cs"));
+
+        Assert.Contains("UseStaticDataSetReportOnly(device)", shared, StringComparison.Ordinal);
+        Assert.Contains("Static DataSet report-only authority selected", shared, StringComparison.Ordinal);
+        Assert.Contains("cyclic MMS process polling and dynamic DataSet writes remain disabled", shared, StringComparison.Ordinal);
+        Assert.Contains("state.StaticDataSetReportOnly = true", registry, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseStaticDataSetWithMmsFallback", registry, StringComparison.Ordinal);
     }
 
     private static SignalDefinition Signal(string reference, string dataSetReference)
