@@ -1,20 +1,34 @@
 using System.Windows;
+using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
 
 public partial class SclSignalSelectionModeWindow : Window
 {
+    private readonly Iec61850MonitorDevice? _targetDevice;
     private bool _useStaticDataSet;
 
-    public SclSignalSelectionModeWindow(int iedCount)
+    public SclSignalSelectionModeWindow(int iedCount, Iec61850MonitorDevice? targetDevice = null)
     {
+        _targetDevice = targetDevice;
         InitializeComponent();
-        ImportScopeText = iedCount == 1
-            ? "1 IED WORKSPACE"
-            : $"{iedCount} IED WORKSPACES";
+
+        DialogTitle = targetDevice is null ? "SCL Quick Start" : $"IED Actions — {targetDevice.Name}";
+        ContextHeading = targetDevice is null ? "Workspace opened offline" : $"IED actions — {targetDevice.Name}";
+        ContextSubtitle = targetDevice is null
+            ? "Choose a task. ARSAS only connects when that task needs the IED."
+            : "Choose what to do with this IED. Closing this window changes nothing.";
+        ImportScopeText = targetDevice is not null
+            ? targetDevice.Name
+            : iedCount == 1
+                ? "1 IED WORKSPACE"
+                : $"{iedCount} IED WORKSPACES";
         DataContext = this;
     }
 
+    public string DialogTitle { get; }
+    public string ContextHeading { get; }
+    public string ContextSubtitle { get; }
     public string ImportScopeText { get; }
 
     public bool UseStaticDataSet => _useStaticDataSet;
@@ -35,21 +49,30 @@ public partial class SclSignalSelectionModeWindow : Window
     {
         var mainWindow = Owner as MainWindow;
 
-        // Close Quick Start before opening a second modal workflow. Returning false keeps
-        // the imported SCL offline and prevents the caller from interpreting this as a
-        // monitoring signal-selection decision.
+        // Close the action chooser before opening a second modal workflow. Returning
+        // false means the caller must not reinterpret this engineering action as a
+        // monitoring-selection decision.
         DialogResult = false;
-        mainWindow?.OpenSelectedSclRcbEngineering();
+        if (mainWindow is null)
+            return;
+
+        if (_targetDevice is not null)
+            mainWindow.OpenSclRcbEngineering(_targetDevice);
+        else
+            mainWindow.OpenSelectedSclRcbEngineering();
     }
 
     private void DownloadComtrade_Click(object sender, RoutedEventArgs e)
     {
         var mainWindow = Owner as MainWindow;
-
-        // File transfer is a separate task intent, not a monitoring selection. Close this
-        // modal first so the fault-record window has one clear owner/focus chain.
         DialogResult = false;
-        mainWindow?.OpenSelectedSclComtradeDownload();
+        if (mainWindow is null)
+            return;
+
+        if (_targetDevice is not null)
+            mainWindow.OpenSclComtradeDownload(_targetDevice);
+        else
+            mainWindow.OpenSelectedSclComtradeDownload();
     }
 
     private void BrowseOffline_Click(object sender, RoutedEventArgs e)
