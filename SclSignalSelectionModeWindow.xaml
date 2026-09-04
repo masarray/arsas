@@ -6,6 +6,8 @@
         ShowInTaskbar="False" Background="{StaticResource Bg}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico">
+    <!-- Default Open SCL heading: Workspace opened offline. The same window is reused
+         from an IED card, where ContextHeading is scoped to that exact IED instead. -->
     <Grid Margin="22,20,22,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
