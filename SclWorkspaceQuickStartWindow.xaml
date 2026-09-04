@@ -111,7 +111,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock VerticalAlignment="Center" Text="You can run any action later from the IED workspace."
+            <TextBlock VerticalAlignment="Center" Text="Keep the workspace offline; connect only when an online task is explicitly selected."
                        FontSize="10.8" Foreground="{StaticResource Muted}"/>
             <Button Grid.Column="1" Style="{StaticResource SoftButton}" MinWidth="120" Padding="12,7"
                     Click="KeepOffline_Click" IsDefault="True">
