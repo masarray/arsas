@@ -1,7 +1,7 @@
 <Window x:Class="ArIED61850Tester.SclSignalSelectionModeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SCL Quick Start" Width="760" MinWidth="760" MaxWidth="760"
+        Title="{Binding DialogTitle}" Width="760" MinWidth="760" MaxWidth="760"
         SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False" Background="{StaticResource Bg}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
@@ -20,10 +20,10 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="Workspace opened offline" FontSize="21" FontWeight="SemiBold"
+                <TextBlock Text="{Binding ContextHeading}" FontSize="21" FontWeight="SemiBold"
                            Foreground="{StaticResource Ink}"/>
                 <TextBlock Margin="0,4,0,0" FontSize="12.3" Foreground="{StaticResource Muted}"
-                           Text="Choose a task. ARSAS only connects when that task needs the IED."/>
+                           Text="{Binding ContextSubtitle}"/>
             </StackPanel>
             <Border Grid.Column="1" VerticalAlignment="Center" Background="#E8F1FF"
                     BorderBrush="#C8DAF8" BorderThickness="1" CornerRadius="11" Padding="11,6">
@@ -100,7 +100,7 @@
                 </Grid>
                 <TextBlock Grid.Row="2" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11.2"
                            Foreground="{StaticResource Muted}"
-                           Text="RCB engineering does not start online monitoring. COMTRADE uses a task-scoped MMS file-transfer connection and leaves Live Monitor off."/>
+                           Text="RCB engineering does not start online monitoring. COMTRADE uses a task-scoped MMS file-transfer connection and leaves Live Monitor ownership unchanged."/>
             </Grid>
         </Border>
 
@@ -110,7 +110,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock VerticalAlignment="Center" FontSize="11.3" Foreground="#667085"
-                       Text="Need only the model? Keep the imported SCL as an offline Engineering workspace."/>
+                       Text="Need only the model? Keep this IED in its current offline/engineering state."/>
             <Button Grid.Column="1" Style="{StaticResource SoftButton}" MinWidth="124" Padding="13,8"
                     Click="BrowseOffline_Click" IsCancel="True" Content="Browse Offline"/>
         </Grid>
