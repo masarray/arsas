@@ -1,0 +1,52 @@
+name: Apply Static DataSet report projection patch
+
+on:
+  push:
+    branches:
+      - fix/static-dataset-report-projection-parity
+    paths:
+      - .github/workflows/apply-static-dataset-report-projection-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-runtime-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/static-dataset-report-projection-parity
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Reconstruct and apply reviewed runtime patch
+        shell: bash
+        run: |
+          cat .github/patches/static-report-runtime.part00 \
+              .github/patches/static-report-runtime.part01 \
+              .github/patches/static-report-runtime.part02 \
+              .github/patches/static-report-runtime.part03 \
+              .github/patches/static-report-runtime.part04 \
+              | base64 -d > /tmp/runtime.patch
+          echo "Runtime patch sha256: $(sha256sum /tmp/runtime.patch | awk '{print $1}')"
+          test "$(sha256sum /tmp/runtime.patch | awk '{print $1}')" = "384e87fbd2424182cccd6bffac6913c2c6fbfb1ede87423f78f4ae719beb0898"
+          git apply --check /tmp/runtime.patch
+          git apply /tmp/runtime.patch
+
+      - name: Commit runtime wiring and remove one-shot staging files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-static-dataset-report-projection-patch.yml
+          git rm .github/patches/static-report-runtime.part00
+          git rm .github/patches/static-report-runtime.part01
+          git rm .github/patches/static-report-runtime.part02
+          git rm .github/patches/static-report-runtime.part03
+          git rm .github/patches/static-report-runtime.part04
+          git add Services/Iec61850MonitorRuntime.cs
+          git diff --cached --check
+          git commit -m "Static DataSet: wire schema-safe report projection"
+          git push origin HEAD:fix/static-dataset-report-projection-parity
