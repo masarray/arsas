@@ -5,14 +5,15 @@ namespace ARSAS.Tests;
 public sealed class IoFatP53PartialLiveRegressionTests
 {
     [Fact]
-    public void Preparation_AllowsUsablePartialSclLiveScopeWithoutMutatingOperatorSelection()
+    public void Preparation_AllowsUsablePartialSclBindingWithoutMutatingOperatorSelection()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("mayProceedWithPartialSclSelection", source, StringComparison.Ordinal);
         Assert.Contains("selection.Matches.Count > 0", source, StringComparison.Ordinal);
         Assert.Contains("unresolvedSelectionPoints.All(IoTestSignalSelectionService.IsDirectSclAuthority)", source, StringComparison.Ordinal);
-        Assert.Contains("if (liveCount == 0)", source, StringComparison.Ordinal);
+        Assert.Contains("if (boundCount == 0)", source, StringComparison.Ordinal);
+        Assert.Contains("FAT is an evidence consumer", source, StringComparison.Ordinal);
         Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RemoveFromFat()", source, StringComparison.Ordinal);
         Assert.Contains("checkbox or FAT disposition is changed by the engine", source, StringComparison.OrdinalIgnoreCase);
