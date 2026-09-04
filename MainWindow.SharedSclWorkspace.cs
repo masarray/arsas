@@ -37,13 +37,14 @@ public partial class MainWindow
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
     {
-        // Static DataSet is a protocol-authority mode, not a request to monitor the
-        // whole IED and then opportunistically prefer reports. First make sure every
-        // ARIEC-owned DataSet member is present in the workspace, then select only
-        // runtime signals that carry an explicit static DataSet identity.
+        // Static DataSet remains the source of truth for WHAT is monitored. Acquisition
+        // prefers the IED's configured BRCB/URCB, while bounded MMS reads remain available
+        // for the initial image and for DataSet members whose report mapping/projection is
+        // incomplete. Dynamic DataSet writes stay disabled so monitoring never rewrites the
+        // IED configuration merely to obtain IEDScout-equivalent readable values.
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
         RegisterRecoveredDataSetSignals(device, merge);
-        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+        Iec61850MonitoringModeRegistry.UseStaticDataSetWithMmsFallback(device);
 
         device.BeginBulkSignalSelection();
         try
@@ -64,7 +65,7 @@ public partial class MainWindow
         AddLog(
             "INFO",
             device.Name,
-            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} runtime DataSet signal(s); cyclic MMS process polling and dynamic DataSet writes are disabled for this monitoring mode.");
+            $"Static DataSet authority selected: {device.SelectedLiveSignalCount} runtime DataSet signal(s); configured RCB reporting is preferred, bounded MMS read fallback remains available for initial/uncovered values, and dynamic DataSet writes are disabled.");
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
