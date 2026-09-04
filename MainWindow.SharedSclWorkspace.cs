@@ -77,6 +77,12 @@ public partial class MainWindow
             "INFO",
             device.Name,
             $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} exact runtime member row(s) from {merge.MandatoryCatalogCount} ARIEC static membership descriptor(s); cyclic MMS process polling and dynamic DataSet writes remain disabled.");
+
+        // Make feasibility and first-report proof visible from the initial Engineering
+        // workflow rather than waiting until FAT is opened. The observer waits for the
+        // shared monitor to start and never changes acquisition method.
+        LogStaticDataSetReportFeasibility(device);
+        _ = ObserveInitialStaticReportEvidenceAsync(device);
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
