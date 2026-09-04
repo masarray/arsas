@@ -37,19 +37,20 @@ public partial class MainWindow
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
     {
-        // Static DataSet is a protocol-authority mode, not a request to monitor the
-        // whole IED and then opportunistically prefer reports. First make sure every
-        // ARIEC-owned DataSet member is present in the workspace, then select only
-        // runtime signals that carry an explicit static DataSet identity.
+        // Static DataSet remains the protocol authority established by the report-only
+        // baseline. Materialize every ARIEC-owned member first, then select exactly one
+        // presentation/runtime row per literal static membership. A browsed alias carrying
+        // DataSetReference is not enough authority and must not inflate the live plan.
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
         RegisterRecoveredDataSetSignals(device, merge);
+        var authoritativeSignals = Iec61850StaticDataSetAuthoritySelection.Build(device);
         Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
 
         device.BeginBulkSignalSelection();
         try
         {
             foreach (var signal in device.Signals)
-                signal.IsSelected = Iec61850StaticDataSetSelectionPolicy.IsEligible(signal);
+                signal.IsSelected = authoritativeSignals.Contains(signal);
         }
         finally
         {
@@ -64,7 +65,7 @@ public partial class MainWindow
         AddLog(
             "INFO",
             device.Name,
-            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} runtime DataSet signal(s); cyclic MMS process polling and dynamic DataSet writes are disabled for this monitoring mode.");
+            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} exact runtime member row(s) from {merge.MandatoryCatalogCount} ARIEC static membership descriptor(s); cyclic MMS process polling and dynamic DataSet writes remain disabled.");
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
