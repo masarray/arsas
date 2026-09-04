@@ -83,6 +83,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public string HealthProbePointKey { get; set; } = string.Empty;
         public int ControlCommandActive;
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
+        public bool StaticDataSetReportOnly { get; set; }
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
@@ -359,10 +360,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryGetValue(device.DeviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException($"{device.Name} is not connected. Connect and discover this IED first.");
 
+        var staticDataSetReportOnly = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
         var selected = selectedSignals
             .Where(signal => signal.IsSelected && signal.CanPublishToRuntime)
+            .Where(signal => !staticDataSetReportOnly || !string.IsNullOrWhiteSpace(signal.DataSetReference))
             .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
+            .Select(group => group
+                .OrderByDescending(signal => !string.IsNullOrWhiteSpace(signal.DataSetReference))
+                .ThenByDescending(signal => !signal.Category.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
+                .First())
             .ToList();
 
         if (selected.Count == 0)
@@ -393,6 +399,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ConsecutiveHealthProbeFailures = 0;
         session.HealthProbePointKey = string.Empty;
         session.HybridValidation.Reset(null);
+        session.StaticDataSetReportOnly = staticDataSetReportOnly;
 
         var safePollMs = Math.Clamp(pollingIntervalMs <= 0 ? 1000 : pollingIntervalMs, 50, 600000);
         foreach (var signal in selected)
@@ -402,17 +409,25 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             IndexPointReference(session, point);
             session.States[point.PointKey] = new RuntimePointState
             {
-                NextPollUtc = DateTime.UtcNow,
-                SourceMode = signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling",
-                Reason = signal.IsReportCapable ? "report plan pending" : "cyclic"
+                NextPollUtc = staticDataSetReportOnly ? DateTime.MaxValue : DateTime.UtcNow,
+                AcquisitionLabel = staticDataSetReportOnly ? "Static DataSet report pending" : "MMS polling",
+                SourceMode = staticDataSetReportOnly
+                    ? "Static DataSet report pending"
+                    : signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling",
+                Reason = staticDataSetReportOnly
+                    ? "configured static DataSet / RCB required; cyclic MMS process polling disabled"
+                    : signal.IsReportCapable ? "report plan pending" : "cyclic",
+                Status = staticDataSetReportOnly ? "Waiting for static RCB" : "Queued"
             };
         }
 
-        session.HealthProbePointKey = session.Points.Values
-            .OrderByDescending(IsFastPoint)
-            .ThenBy(point => point.SignalName, StringComparer.OrdinalIgnoreCase)
-            .Select(point => point.PointKey)
-            .FirstOrDefault() ?? string.Empty;
+        session.HealthProbePointKey = staticDataSetReportOnly
+            ? string.Empty
+            : session.Points.Values
+                .OrderByDescending(IsFastPoint)
+                .ThenBy(point => point.SignalName, StringComparer.OrdinalIgnoreCase)
+                .Select(point => point.PointKey)
+                .FirstOrDefault() ?? string.Empty;
 
         var hasHybridAuthority = session.Client.CanUseHybridReportPlanner(device);
         var plans = hasHybridAuthority
@@ -420,23 +435,38 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             : Iec61850ReportPlanner.BuildPlans(device, session.Points.Values);
         session.PendingReportPlans = plans;
         session.ReportSetupPending = hasHybridAuthority || plans.Count > 0;
-        session.ReportSetupNotBeforeUtc = DateTime.UtcNow.AddMilliseconds(350);
-        session.ReportSetupDeadlineUtc = DateTime.UtcNow.AddMilliseconds(1500);
+        var setupUtc = DateTime.UtcNow;
+        session.ReportSetupNotBeforeUtc = staticDataSetReportOnly ? setupUtc : setupUtc.AddMilliseconds(350);
+        session.ReportSetupDeadlineUtc = staticDataSetReportOnly ? setupUtc : setupUtc.AddMilliseconds(1500);
         ResetPollQueue(session);
 
         device.IsMonitoring = true;
         device.IsConnected = true;
         device.Status = "Monitoring";
-        device.AcquisitionMode = session.ReportSetupPending
-            ? "MMS live start • arming ARIEC hybrid reporting"
-            : $"MMS polling fallback • {session.Points.Count} point(s)";
-        device.Detail = session.ReportSetupPending
-            ? $"{session.Points.Count} point(s): MMS is reading the initial live image immediately while the ARIEC hybrid planner validates fresh static/dynamic BRCB/URCB capability in the same independent IED session."
-            : $"{session.Points.Count} point(s): no report candidate is available; MMS polling is active.";
+        if (staticDataSetReportOnly)
+        {
+            device.AcquisitionMode = session.ReportSetupPending
+                ? "Static DataSet • arming configured RCB"
+                : "Static DataSet • no static RCB candidate";
+            device.Detail = session.ReportSetupPending
+                ? $"{session.Points.Count} DataSet-derived point(s): configured BRCB/URCB reporting is being armed immediately. Cyclic MMS process polling and dynamic DataSet writes are disabled."
+                : $"{session.Points.Count} DataSet-derived point(s): no static report candidate is available. Values remain unavailable rather than silently falling back to MMS polling.";
+        }
+        else
+        {
+            device.AcquisitionMode = session.ReportSetupPending
+                ? "MMS live start • arming ARIEC hybrid reporting"
+                : $"MMS polling fallback • {session.Points.Count} point(s)";
+            device.Detail = session.ReportSetupPending
+                ? $"{session.Points.Count} point(s): MMS is reading the initial live image immediately while the ARIEC hybrid planner validates fresh static/dynamic BRCB/URCB capability in the same independent IED session."
+                : $"{session.Points.Count} point(s): no report candidate is available; MMS polling is active.";
+        }
         device.RefreshComputed();
 
         Log("INFO", device.Name,
-            $"Fast live start: points={session.Points.Count}, legacy compatibility plan(s)={plans.Count}, ARIEC hybrid authority={(hasHybridAuthority ? "available" : "unavailable")}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
+            staticDataSetReportOnly
+                ? $"Static DataSet report-only start: points={session.Points.Count}, static report planning pending={session.ReportSetupPending}, cyclic MMS scheduler={session.PollQueue.Count}. Full signal discovery and dynamic DataSet creation are not part of this monitoring mode."
+                : $"Fast live start: points={session.Points.Count}, legacy compatibility plan(s)={plans.Count}, ARIEC hybrid authority={(hasHybridAuthority ? "available" : "unavailable")}, initial MMS scheduler={session.PollQueue.Count}, target={safePollMs} ms. Full signal discovery is not part of monitor start.");
 
         session.MonitorTask = Task.Run(
             () => MonitorLoopAsync(session, session.MonitorCancellation.Token),
@@ -686,7 +716,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 if (!result.IsSuccess)
                 {
                     Log("WARN", session.Device.Name,
-                        $"Report plan unavailable for {plan.DisplayReference}. MMS polling remains the final fallback. {result.Message}");
+                        session.StaticDataSetReportOnly
+                            ? $"Static DataSet report unavailable for {plan.DisplayReference}. MMS process fallback is disabled by operator mode; affected values remain unavailable. {result.Message}"
+                            : $"Report plan unavailable for {plan.DisplayReference}. MMS polling remains the final fallback. {result.Message}");
+                    if (session.StaticDataSetReportOnly)
+                    {
+                        foreach (var point in plan.Bindings)
+                        {
+                            if (!session.States.TryGetValue(point.PointKey, out var unavailableState))
+                                continue;
+                            unavailableState.SourceMode = "Static DataSet: RCB unavailable";
+                            unavailableState.AcquisitionLabel = unavailableState.SourceMode;
+                            unavailableState.Reason = result.Message;
+                            EmitStatusSnapshot(point, unavailableState, "Static report unavailable / no MMS fallback", "Pending");
+                        }
+                    }
                     foreach (var warning in result.Warnings.Take(3))
                         Log("WARN", session.Device.Name, warning);
                     continue;
@@ -705,7 +749,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 foreach (var point in coveredPoints)
                 {
                     if (RequiresExactMmsValueAuthority(point.IecReference))
+                    {
+                        if (session.StaticDataSetReportOnly && session.States.TryGetValue(point.PointKey, out var unresolvedState))
+                        {
+                            unresolvedState.SourceMode = "Static DataSet: report leaf unresolved";
+                            unresolvedState.AcquisitionLabel = unresolvedState.SourceMode;
+                            unresolvedState.Reason = "structured report projection is not yet schema-proven; unsafe MMS fallback is disabled in Static DataSet mode";
+                            EmitStatusSnapshot(point, unresolvedState, "Static report leaf unresolved / no MMS fallback", "Pending");
+                        }
                         continue;
+                    }
                     session.PointPlanIds[point.PointKey] = plan.PlanId;
                     if (!string.IsNullOrWhiteSpace(result.ReportControlReference))
                         point.ReportControlReference = result.ReportControlReference;
@@ -770,7 +823,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Log("WARN", session.Device.Name,
-                    $"Report setup failed for {plan.DisplayReference}; MMS polling remains the final fallback. {ex.GetType().Name}: {ex.Message}");
+                    session.StaticDataSetReportOnly
+                        ? $"Static DataSet report setup failed for {plan.DisplayReference}; MMS process fallback is disabled. {ex.GetType().Name}: {ex.Message}"
+                        : $"Report setup failed for {plan.DisplayReference}; MMS polling remains the final fallback. {ex.GetType().Name}: {ex.Message}");
+                if (session.StaticDataSetReportOnly)
+                {
+                    foreach (var point in plan.Bindings)
+                    {
+                        if (!session.States.TryGetValue(point.PointKey, out var failedState))
+                            continue;
+                        failedState.SourceMode = "Static DataSet: report setup failed";
+                        failedState.AcquisitionLabel = failedState.SourceMode;
+                        failedState.Reason = $"{ex.GetType().Name}: {ex.Message}";
+                        EmitStatusSnapshot(point, failedState, "Static report setup failed / no MMS fallback", "Pending");
+                    }
+                }
             }
         }
     }
@@ -838,7 +905,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (now < session.ReportSetupNotBeforeUtc)
             return;
 
-        var initialImageReady = session.States.Values.All(state =>
+        var initialImageReady = session.StaticDataSetReportOnly || session.States.Values.All(state =>
             state.HasValue || state.ConsecutiveErrors > 0);
         if (!initialImageReady && now < session.ReportSetupDeadlineUtc)
             return;
@@ -848,9 +915,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.PendingReportPlans = Array.Empty<ReportControlPlan>();
 
         Log("INFO", session.Device.Name,
-            initialImageReady
-                ? "Initial live image is available. Validating static/dynamic report acquisition in the background monitor pipeline."
-                : "Initial live-image deadline reached. Continuing report validation while MMS fallback remains active.");
+            session.StaticDataSetReportOnly
+                ? "Static DataSet report-only mode: arming configured RCBs immediately; no cyclic MMS initial-image scheduler is active."
+                : initialImageReady
+                    ? "Initial live image is available. Validating static/dynamic report acquisition in the background monitor pipeline."
+                    : "Initial live-image deadline reached. Continuing report validation while MMS fallback remains active.");
 
         plans = await BuildReportPlansForCurrentAssociationAsync(
             session,
@@ -914,8 +983,23 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var dynamicReportCount = session.ActiveReportPlans.Values.Count(plan =>
             plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase));
         var staticReportCount = session.ActiveReportPlans.Count - dynamicReportCount;
-        var pollingFallbackCount = Math.Max(0, session.Points.Count - session.PointPlanIds.Count);
+        var unassignedCount = Math.Max(0, session.Points.Count - session.PointPlanIds.Count);
 
+        if (session.StaticDataSetReportOnly)
+        {
+            session.Device.AcquisitionMode = staticReportCount > 0
+                ? $"Static DataSet reporting • RCB {staticReportCount} • unresolved {unassignedCount}"
+                : $"Static DataSet reporting unavailable • unresolved {unassignedCount}";
+            session.Device.Detail = staticReportCount > 0
+                ? $"{session.Points.Count} DataSet-derived point(s): configured RCB reporting is the process-value authority; {unassignedCount} point(s) are unresolved/unavailable. Cyclic MMS process polling is disabled."
+                : $"{session.Points.Count} DataSet-derived point(s): no configured RCB could be armed. Values remain unavailable; MMS process fallback is disabled by Static DataSet mode.";
+            session.Device.RefreshComputed();
+            Log("INFO", session.Device.Name,
+                $"Static DataSet acquisition ready: static report plan(s)={staticReportCount}, report-covered={session.PointPlanIds.Count}, unresolved={unassignedCount}, cyclic MMS process polling=0.");
+            return;
+        }
+
+        var pollingFallbackCount = unassignedCount;
         session.Device.AcquisitionMode = dynamicReportCount > 0
             ? $"Smart reporting • dynamic {dynamicReportCount} • static {staticReportCount} • fallback {pollingFallbackCount}"
             : staticReportCount > 0
@@ -1773,9 +1857,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             state.LastCommandFeedbackUtc = DateTime.MinValue;
             state.CommandFeedbackGuardUntilUtc = DateTime.MinValue;
             state.CommandReportDeadlineUtc = DateTime.MinValue;
-            state.AcquisitionLabel = "MMS polling";
-            state.SourceMode = "Report rearming / MMS polling fallback";
-            state.Reason = "new MMS association / report evidence reset";
+            state.AcquisitionLabel = session.StaticDataSetReportOnly ? "Static DataSet report rearming" : "MMS polling";
+            state.SourceMode = session.StaticDataSetReportOnly
+                ? "Static DataSet report rearming"
+                : "Report rearming / MMS polling fallback";
+            state.Reason = session.StaticDataSetReportOnly
+                ? "new MMS association / configured RCB evidence reset; MMS process fallback disabled"
+                : "new MMS association / report evidence reset";
             state.Status = "Reconnected / report rearming";
         }
     }
@@ -1816,6 +1904,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private async Task ProbeSessionHealthAsync(DeviceSession session, CancellationToken cancellationToken)
     {
+        // Static DataSet report-only uses report receive/transport evidence for health;
+        // process leaves are never repurposed as cyclic MMS heartbeat reads.
+        if (session.StaticDataSetReportOnly)
+            return;
         if (Volatile.Read(ref session.ControlCommandActive) > 0)
             return;
         var now = DateTime.UtcNow;
@@ -1977,7 +2069,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             DataSetReference = signal.DataSetReference,
             ReportControlReference = signal.ReportControlReference,
             PollingIntervalMs = pollingIntervalMs,
-            SourceMode = signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling"
+            SourceMode = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device)
+                ? "Static DataSet report pending"
+                : signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling"
         };
     }
 
@@ -2385,6 +2479,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         bool staggerForRecovery = false)
     {
         session.PollQueue.Clear();
+        if (session.StaticDataSetReportOnly)
+        {
+            foreach (var state in session.States.Values)
+                state.NextPollUtc = DateTime.MaxValue;
+            return;
+        }
+
         var nowUtc = DateTime.UtcNow;
         var index = 0;
         foreach (var point in session.Points.Values)

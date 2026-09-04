@@ -1,0 +1,77 @@
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
+
+namespace ARSAS.Tests;
+
+public sealed class StaticDataSetReportOnlyModeRegressionTests
+{
+    [Fact]
+    public void StaticMode_DisablesDynamicWrites_AndManualModeRestoresPriorValue()
+    {
+        var device = new Iec61850MonitorDevice { AllowDynamicDataSetWrites = true };
+        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+        Assert.True(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
+        Assert.False(device.AllowDynamicDataSetWrites);
+        Iec61850MonitoringModeRegistry.UseHybrid(device);
+        Assert.False(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
+        Assert.True(device.AllowDynamicDataSetWrites);
+    }
+
+    [Fact]
+    public void StaticSelection_AllowsOnlyRuntimeSignalsWithExplicitDataSetAuthority()
+    {
+        var dataSetLeaf = Signal("IEDLD/MMXU1.TotW.mag.f", "IEDLD/LLN0.Analog");
+        var browsedLeaf = Signal("IEDLD/MMXU1.Hz.mag.f", string.Empty);
+        var control = Signal("IEDLD/CSWI1.Pos", "IEDLD/LLN0.Digital");
+        control.IsControlSignal = true;
+        Assert.True(Iec61850StaticDataSetSelectionPolicy.IsEligible(dataSetLeaf));
+        Assert.False(Iec61850StaticDataSetSelectionPolicy.IsEligible(browsedLeaf));
+        Assert.False(Iec61850StaticDataSetSelectionPolicy.IsEligible(control));
+    }
+
+    [Fact]
+    public void RuntimeContract_StaticDataSetMode_DoesNotScheduleCyclicMmsProcessPolling()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        Assert.Contains("Static DataSet acquisition ready", source, StringComparison.Ordinal);
+        Assert.Contains("cyclic MMS process polling=0", source, StringComparison.Ordinal);
+        Assert.Contains("state.NextPollUtc = DateTime.MaxValue", source, StringComparison.Ordinal);
+        Assert.Contains("process leaves are never repurposed as cyclic MMS heartbeat reads", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SharedSclStaticSelection_UsesDatasetAuthorityPolicy_NotSelectEverything()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        Assert.Contains("Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticDataSetSelectionPolicy.IsEligible(signal)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("signal.IsSelected = !string.IsNullOrWhiteSpace(signal.DataSetReference)", source, StringComparison.Ordinal);
+    }
+
+    private static SignalDefinition Signal(string reference, string dataSetReference)
+        => new()
+        {
+            Name = "signal",
+            ObjectReference = reference,
+            DisplayReference = reference,
+            FunctionalConstraint = "MX",
+            DataType = "Float32",
+            Category = "Measurement",
+            DataSetReference = dataSetReference,
+            Confidence = "High"
+        };
+
+    private static string FindRepoFile(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+        throw new FileNotFoundException($"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
+    }
+}
