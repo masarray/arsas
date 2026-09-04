@@ -32,6 +32,7 @@ jobs:
               | base64 -d > /tmp/runtime.patch
           echo "Runtime patch sha256: $(sha256sum /tmp/runtime.patch | awk '{print $1}')"
           test "$(sha256sum /tmp/runtime.patch | awk '{print $1}')" = "384e87fbd2424182cccd6bffac6913c2c6fbfb1ede87423f78f4ae719beb0898"
+          sed -i 's/\r$//' /tmp/runtime.patch
           git apply --check /tmp/runtime.patch
           git apply /tmp/runtime.patch
 
