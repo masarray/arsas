@@ -6,14 +6,35 @@ namespace ARSAS.Tests;
 public sealed class StaticDataSetReportOnlyModeRegressionTests
 {
     [Fact]
-    public void StaticMode_DisablesDynamicWrites_AndManualModeRestoresPriorValue()
+    public void StaticDataSetWithMmsFallback_DisablesDynamicWrites_AndManualModeRestoresPriorValue()
     {
         var device = new Iec61850MonitorDevice { AllowDynamicDataSetWrites = true };
+
+        Iec61850MonitoringModeRegistry.UseStaticDataSetWithMmsFallback(device);
+
+        Assert.True(Iec61850MonitoringModeRegistry.IsStaticDataSetMode(device));
+        Assert.False(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
+        Assert.False(device.AllowDynamicDataSetWrites);
+
+        Iec61850MonitoringModeRegistry.UseHybrid(device);
+
+        Assert.False(Iec61850MonitoringModeRegistry.IsStaticDataSetMode(device));
+        Assert.False(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
+        Assert.True(device.AllowDynamicDataSetWrites);
+    }
+
+    [Fact]
+    public void StrictStaticDataSetReportOnly_RemainsAvailableForExplicitDiagnosticUse()
+    {
+        var device = new Iec61850MonitorDevice { AllowDynamicDataSetWrites = true };
+
         Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+
+        Assert.True(Iec61850MonitoringModeRegistry.IsStaticDataSetMode(device));
         Assert.True(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
         Assert.False(device.AllowDynamicDataSetWrites);
+
         Iec61850MonitoringModeRegistry.UseHybrid(device);
-        Assert.False(Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device));
         Assert.True(device.AllowDynamicDataSetWrites);
     }
 
@@ -30,7 +51,7 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void RuntimeContract_StaticDataSetMode_DoesNotScheduleCyclicMmsProcessPolling()
+    public void StrictRuntimeContract_StaticDataSetReportOnlyMode_DoesNotScheduleCyclicMmsProcessPolling()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
         Assert.Contains("Static DataSet acquisition ready", source, StringComparison.Ordinal);
@@ -40,12 +61,14 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void SharedSclStaticSelection_UsesDatasetAuthorityPolicy_NotSelectEverything()
+    public void SharedSclStaticSelection_UsesDatasetAuthorityAndReadableMmsFallback_NotStrictReportOnly()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
         Assert.Contains("Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device)", source, StringComparison.Ordinal);
-        Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetWithMmsFallback(device)", source, StringComparison.Ordinal);
         Assert.Contains("Iec61850StaticDataSetSelectionPolicy.IsEligible(signal)", source, StringComparison.Ordinal);
+        Assert.Contains("bounded MMS read fallback remains available", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("signal.IsSelected = !string.IsNullOrWhiteSpace(signal.DataSetReference)", source, StringComparison.Ordinal);
     }
 
