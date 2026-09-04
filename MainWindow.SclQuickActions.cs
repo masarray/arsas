@@ -111,7 +111,7 @@ public partial class MainWindow
             ApplyStaticDataSetSelection(device);
             if (device.SelectedLiveSignalCount == 0)
             {
-                SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
+                SetStatus($"{device.Name}: Static DataSet selected, but no DataSet-authoritative process signal is available to monitor.");
                 return;
             }
 
