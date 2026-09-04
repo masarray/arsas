@@ -26,10 +26,25 @@ public sealed class SclTaskFirstQuickStartRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.SclQuickActions.cs"));
 
         Assert.Contains("IedEditRcb_Click", source, StringComparison.Ordinal);
-        Assert.Contains("new FaultRecordWindow", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "new FaultRecordWindow(device.Name, device.IpAddress, device.Port)",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("new FaultRecordWindow(device,", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_applicationCancellation.Token", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ConnectUsingSavedModelAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartMonitoring", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EngineeringAndFileActions_CloseQuickStartBeforeOpeningSecondaryWorkflow()
+    {
+        var code = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml.cs"));
+
+        Assert.Contains("DialogResult = false;", code, StringComparison.Ordinal);
+        Assert.Contains("mainWindow?.OpenSelectedSclRcbEngineering();", code, StringComparison.Ordinal);
+        Assert.Contains("mainWindow?.OpenSelectedSclComtradeDownload();", code, StringComparison.Ordinal);
     }
 
     [Fact]
