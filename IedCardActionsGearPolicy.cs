@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
@@ -90,7 +89,7 @@ internal static class IedCardActionsGearPolicy
 
         var iconStroke = new SolidColorBrush(Color.FromRgb(49, 93, 191));
         iconStroke.Freeze();
-        var icon = new Path
+        var icon = new System.Windows.Shapes.Path
         {
             Data = GearGeometry,
             Stroke = iconStroke,
