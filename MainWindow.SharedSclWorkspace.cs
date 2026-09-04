@@ -41,7 +41,7 @@ public partial class MainWindow
         // prefers the IED's configured BRCB/URCB, while bounded MMS reads remain available
         // for the initial image and for DataSet members whose report mapping/projection is
         // incomplete. Dynamic DataSet writes stay disabled so monitoring never rewrites the
-        // IED configuration merely to obtain IEDScout-equivalent readable values.
+        // IED configuration merely to obtain complete readable process values.
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
         RegisterRecoveredDataSetSignals(device, merge);
         Iec61850MonitoringModeRegistry.UseStaticDataSetWithMmsFallback(device);
