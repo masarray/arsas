@@ -21,6 +21,16 @@ public partial class MainWindow
     private readonly HashSet<string> _sharedSclSelectionAuthorityDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Keep the operator's acquisition intent independently of transient runtime teardown.
+    // FAT and Engineering share one device/workspace, so entering FAT must never demote an
+    // explicitly selected Static DataSet report-only workspace into generic Hybrid/MMS.
+    private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
+        => _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId) ||
+           Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
+
     private SclSignalSelectionMode? PromptSclSignalSelectionMode(Window owner, int iedCount)
     {
         var dialog = new SclSignalSelectionModeWindow(iedCount)
@@ -59,6 +69,7 @@ public partial class MainWindow
 
         SynchronizeAllEngineeringSelectionsToFat(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+        _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
         device.RefreshComputed();
 
@@ -85,6 +96,7 @@ public partial class MainWindow
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
         // Manual selection restores the normal Smart/Hybrid acquisition contract.
+        _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
         Iec61850MonitoringModeRegistry.UseHybrid(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
