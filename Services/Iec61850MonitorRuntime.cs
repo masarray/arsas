@@ -83,6 +83,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public string HealthProbePointKey { get; set; } = string.Empty;
         public int ControlCommandActive;
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
+        public StaticDataSetReportProjectionAccumulator StaticReportProjection { get; } = new();
         public bool StaticDataSetReportOnly { get; set; }
     }
 
@@ -399,6 +400,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ConsecutiveHealthProbeFailures = 0;
         session.HealthProbePointKey = string.Empty;
         session.HybridValidation.Reset(null);
+        session.StaticReportProjection.Reset();
         session.StaticDataSetReportOnly = staticDataSetReportOnly;
 
         var safePollMs = Math.Clamp(pollingIntervalMs <= 0 ? 1000 : pollingIntervalMs, 50, 600000);
@@ -743,22 +745,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 session.ActiveReportPlanOrder.Add(plan);
 
                 var coveredPoints = ResolveCoveredPoints(plan, result.CoveredReferences);
-                var acquisitionLabel = string.IsNullOrWhiteSpace(result.AcquisitionLabel)
-                    ? BuildPlanAcquisitionLabel(plan, result.UsedDynamicDataSet)
-                    : result.AcquisitionLabel;
+                var acquisitionLabel = session.StaticDataSetReportOnly
+                    ? BuildStaticDataSetAcquisitionLabel(plan)
+                    : string.IsNullOrWhiteSpace(result.AcquisitionLabel)
+                        ? BuildPlanAcquisitionLabel(plan, result.UsedDynamicDataSet)
+                        : result.AcquisitionLabel;
                 foreach (var point in coveredPoints)
                 {
-                    if (RequiresExactMmsValueAuthority(point.IecReference))
-                    {
-                        if (session.StaticDataSetReportOnly && session.States.TryGetValue(point.PointKey, out var unresolvedState))
-                        {
-                            unresolvedState.SourceMode = "Static DataSet: report leaf unresolved";
-                            unresolvedState.AcquisitionLabel = unresolvedState.SourceMode;
-                            unresolvedState.Reason = "structured report projection is not yet schema-proven; unsafe MMS fallback is disabled in Static DataSet mode";
-                            EmitStatusSnapshot(point, unresolvedState, "Static report leaf unresolved / no MMS fallback", "Pending");
-                        }
+                    // Hybrid/manual mode retains its conservative exact-MMS authority rule.
+                    // Static DataSet report-only mode is different: when ARIEC proves that
+                    // the configured RCB covers the literal DataSet member, bind that point
+                    // to the report plan and let schema-safe report projection decide whether
+                    // an arriving value is publishable. Never convert this case into MMS.
+                    if (!session.StaticDataSetReportOnly && RequiresExactMmsValueAuthority(point.IecReference))
                         continue;
-                    }
+
                     session.PointPlanIds[point.PointKey] = plan.PlanId;
                     if (!string.IsNullOrWhiteSpace(result.ReportControlReference))
                         point.ReportControlReference = result.ReportControlReference;
@@ -768,8 +769,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     {
                         pointState.AcquisitionLabel = acquisitionLabel;
                         pointState.SourceMode = acquisitionLabel;
-                        pointState.Reason = "awaiting report / MMS initial read";
-                        pointState.Status = "Report armed / verification active";
+                        pointState.Reason = session.StaticDataSetReportOnly
+                            ? "awaiting configured static report / General Interrogation"
+                            : "awaiting report / MMS initial read";
+                        pointState.Status = session.StaticDataSetReportOnly
+                            ? "Static report armed / awaiting value"
+                            : "Report armed / verification active";
                     }
                 }
 
@@ -954,22 +959,37 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     IsAuthoritative = true,
                     Authority = "ARIEC61850 hybrid acquisition",
-                    Status = "Planner failure / polling safe",
-                    Summary = $"ARIEC hybrid planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted; bounded MMS polling remains active.",
+                    Status = session.StaticDataSetReportOnly
+                        ? "Planner failure / static report unavailable"
+                        : "Planner failure / polling safe",
+                    Summary = session.StaticDataSetReportOnly
+                        ? $"ARIEC report planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted and MMS process fallback remains disabled by Static DataSet mode."
+                        : $"ARIEC hybrid planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted; bounded MMS polling remains active.",
                     RequestedPointCount = session.Points.Count,
-                    PollingPointKeys = session.Points.Keys.ToArray(),
-                    PollingFallbackSignalCount = session.Points.Count,
+                    PollingPointKeys = session.StaticDataSetReportOnly ? Array.Empty<string>() : session.Points.Keys.ToArray(),
+                    PollingFallbackSignalCount = session.StaticDataSetReportOnly ? 0 : session.Points.Count,
+                    UncoveredSignalCount = session.StaticDataSetReportOnly ? session.Points.Count : 0,
                     Warnings = [$"Hybrid planning exception: {ex.GetType().Name}: {ex.Message}"]
                 };
             }
 
             session.HybridValidation.Reset(hybrid);
-            Log("INFO", session.Device.Name,
-                $"Hybrid authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, dynamicBRCB={hybrid.DynamicBrcbSignalCount}, dynamicURCB={hybrid.DynamicUrcbSignalCount}, polling={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. {hybrid.Summary}");
+            if (session.StaticDataSetReportOnly)
+            {
+                Log("INFO", session.Device.Name,
+                    $"Static DataSet ARIEC authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, engineFallbackCandidates={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. Engine fallback candidates are diagnostic only and are not scheduled as MMS process polling.");
+            }
+            else
+            {
+                Log("INFO", session.Device.Name,
+                    $"Hybrid authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, dynamicBRCB={hybrid.DynamicBrcbSignalCount}, dynamicURCB={hybrid.DynamicUrcbSignalCount}, polling={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. {hybrid.Summary}");
+            }
             foreach (var warning in hybrid.Warnings.Take(5))
                 Log("WARN", session.Device.Name, warning);
 
-            return hybrid.ReportPlans;
+            return session.StaticDataSetReportOnly
+                ? hybrid.ReportPlans.Where(plan => !plan.AllowDynamicDataSetWrites).ToArray()
+                : hybrid.ReportPlans;
         }
 
         session.HybridValidation.Reset(null);
@@ -1051,22 +1071,37 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
                 RecordSuccessfulIo(session);
 
-            foreach (var update in slice.Updates)
+            foreach (var sourceUpdate in slice.Updates)
             {
-                var point = FindPointForReportReference(session, update.Reference);
-                if (point == null)
-                    continue;
+                var effectiveUpdates = session.StaticDataSetReportOnly
+                    ? session.StaticReportProjection.Project(
+                        session.Device.LiveDiscoveryModel ?? session.Device.SclWorkspace?.DesignModel,
+                        session.Points.Values.ToArray(),
+                        sourceUpdate)
+                    : new[] { sourceUpdate };
 
-                // Siemens static DataSets report THD as a nested three-phase structure.
-                // Until its scalar fan-out is schema-proven, exact MMS reads remain the
-                // value authority so a report projection cannot overwrite correct values.
-                if (RequiresExactMmsValueAuthority(point.IecReference))
-                    continue;
+                foreach (var update in effectiveUpdates)
+                {
+                    var point = FindPointForReportReference(session, update.Reference);
+                    if (point == null)
+                        continue;
 
-                // A real report update proves reference coverage, but an initial GI or
-                // integrity image does not yet prove that dchg/qchg is working. Keep MMS
-                // verification active until a change report is actually observed.
-                session.PointPlanIds[point.PointKey] = plan.PlanId;
+                    // The old rule rejected every THD/DmdWh report value merely because
+                    // those families once required MMS reads. ARIEC now provides exact
+                    // semantic leaf identities, and StaticDataSetReportProjectionAccumulator
+                    // reconstructs structured parents from schema-named leaves. Keep the
+                    // legacy veto only when the report update itself is not schema-proven.
+                    if (RequiresExactMmsValueAuthority(point.IecReference) &&
+                        !HasSchemaProvenReportValueAuthority(point, update))
+                    {
+                        continue;
+                    }
+
+                    // A real report update proves reference coverage. In Hybrid mode an
+                    // initial GI/integrity image still keeps MMS verification active until
+                    // dchg/qchg is proven; Static DataSet mode publishes the schema-safe GI
+                    // image directly because cyclic MMS process verification is disabled.
+                    session.PointPlanIds[point.PointKey] = plan.PlanId;
 
                 var state = session.States[point.PointKey];
                 var display = update.HasValue
@@ -1084,7 +1119,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     // A malformed/misaligned report is still useful as proof that the
                     // RCB is alive, but its process value is not authoritative. Do not
-                    // mutate state or SOE history; keep MMS verification/fallback active.
+                    // mutate state or SOE history. Hybrid mode keeps MMS verification;
+                    // Static DataSet mode stays report-pending without any MMS fallback.
                     state.ReportTrafficSeen = true;
                     state.LastReportUtc = DateTime.UtcNow;
                     state.ReportChangeVerified = false;
@@ -1096,7 +1132,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (rawSummary.Length > 120)
                             rawSummary = rawSummary[..120] + "…";
                         Log("WARN", session.Device.Name,
-                            $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} MMS verification/fallback remains authoritative.");
+                            session.StaticDataSetReportOnly
+                                ? $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} The point remains report-pending; MMS process fallback is disabled."
+                                : $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} MMS verification/fallback remains authoritative.");
                     }
                     continue;
                 }
@@ -1168,11 +1206,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     reportSource,
                     string.IsNullOrWhiteSpace(update.Reason) ? "report / reason not supplied" : update.Reason,
                     receivedUtc,
-                    state.ReportChangeVerified
-                        ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
-                        : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
+                    session.StaticDataSetReportOnly
+                        ? state.ReportChangeVerified
+                            ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / static report verified" : $"Live / static report verified ({update.ProjectionStatus})"
+                            : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / static report" : $"Live / static report ({update.ProjectionStatus})"
+                        : state.ReportChangeVerified
+                            ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
+                            : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
                     trustReportEdge: true,
                     hasProcessValue: update.HasValue);
+                }
             }
 
             var verifiedReportPointKeys = slice.Updates
@@ -2032,6 +2075,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlans.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
+        session.StaticReportProjection.Reset();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
         session.LastUnroutedReportCount = 0;
@@ -2109,6 +2153,33 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                normalized.Contains(".thda.phs", StringComparison.OrdinalIgnoreCase) ||
                normalized.Contains(".thdppv.phs", StringComparison.OrdinalIgnoreCase) ||
                normalized.Contains(".dmdwh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasSchemaProvenReportValueAuthority(
+        Iec61850MonitorPoint point,
+        NativeReportValueUpdate update)
+    {
+        var projectionStatus = (update.ProjectionStatus ?? string.Empty).Trim();
+        if (projectionStatus.Equals("semantic-structured-leaf", StringComparison.OrdinalIgnoreCase) ||
+            projectionStatus.Equals("schema-safe-report-three-phase-aggregate", StringComparison.OrdinalIgnoreCase) ||
+            projectionStatus.Equals("schema-safe-report-demand-energy-aggregate", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Exact report identity is also authoritative for a scalar member. This admits
+        // direct and deterministic MX-pair projections only when ARIEC has named exactly
+        // the same IEC reference selected by the runtime; parent/child prefix coincidence
+        // alone is not sufficient.
+        if (!CanonicalDataReference(point.IecReference)
+                .Equals(CanonicalDataReference(update.Reference), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return projectionStatus.Length == 0 ||
+               projectionStatus.Equals("direct", StringComparison.OrdinalIgnoreCase) ||
+               projectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasExactSemanticEdge(Iec61850MonitorPoint point, string oldValue, string newValue)
@@ -2256,6 +2327,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             reportAssigned,
             state.ReportTrafficSeen,
             state.ReportChangeVerified);
+
+    private static string BuildStaticDataSetAcquisitionLabel(ReportControlPlan plan)
+    {
+        if (!string.IsNullOrWhiteSpace(plan.EngineAcquisitionKind))
+            return $"Static DataSet: {plan.EngineAcquisitionKind}";
+        return plan.Buffered ? "Static DataSet: StaticBrcb" : "Static DataSet: StaticUrcb";
+    }
 
     private static string BuildPlanAcquisitionLabel(ReportControlPlan plan, bool dynamicDataSet)
     {
