@@ -73,6 +73,21 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.DoesNotContain("UseStaticDataSetWithMmsFallback", registry, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void FatMode_ReusesSharedStaticDataSetAuthority_InsteadOfDemotingToMms()
+    {
+        var shared = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
+        var fatMonitor = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.MultiIedMonitor.cs"));
+
+        Assert.Contains("_sharedSclStaticDataSetAuthorityDeviceIds", shared, StringComparison.Ordinal);
+        Assert.Contains("_sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId)", shared, StringComparison.Ordinal);
+        Assert.Contains("_sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId)", shared, StringComparison.Ordinal);
+        Assert.Contains("IsSharedStaticDataSetAuthority(device)", fatMonitor, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", fatMonitor, StringComparison.Ordinal);
+        Assert.Contains("FAT reuses the shared Static DataSet report-only authority", fatMonitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850MonitoringModeRegistry.UseHybrid(device)", fatMonitor, StringComparison.Ordinal);
+    }
+
     private static SignalDefinition Signal(string reference, string dataSetReference)
         => new()
         {
