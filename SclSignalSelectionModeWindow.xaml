@@ -50,7 +50,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" Style="{StaticResource PrimaryButton}" Padding="14,11"
-                            Click="MonitorStaticDataSet_Click" ToolTip="Select authoritative static DataSet members and start online monitoring">
+                            Click="MonitorStaticDataSet_Click" ToolTip="Select authoritative static DataSet members. Configured BRCB/URCB reporting is preferred; bounded MMS reads keep initial or uncovered values readable without creating dynamic DataSets.">
                         <StackPanel>
                             <TextBlock Text="Static DataSet" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                             <TextBlock Text="Select + monitor" FontSize="10.5" Opacity="0.82" HorizontalAlignment="Center"/>
