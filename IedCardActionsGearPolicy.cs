@@ -50,9 +50,12 @@ internal static class IedCardActionsGearPolicy
         if (sender is not ListBoxItem item || item.DataContext is not Iec61850MonitorDevice)
             return;
 
-        // Defer until the DataTemplate has materialized its action bar.
+        // Wait until the DataTemplate and its final card width are both available.
+        // The former implementation injected a sixth fixed-width button into a
+        // five-slot bar; on the compact IED card that placed the gear beyond the
+        // visible card edge even though the button existed in the visual tree.
         item.Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
+            DispatcherPriority.ContextIdle,
             new Action(() => EnsureGearButton(item)));
     }
 
@@ -70,15 +73,25 @@ internal static class IedCardActionsGearPolicy
                        buttons.Any(button => ReferenceEquals(button.Tag, device));
             });
 
-        if (actionBar == null || actionBar.Children.OfType<Button>().Any(button => button.Uid == GearUid))
+        if (actionBar == null)
             return;
 
+        if (actionBar.Children.OfType<Button>().All(button => button.Uid != GearUid))
+            actionBar.Children.Add(CreateGearButton(device));
+
+        NormalizeActionBar(actionBar);
+    }
+
+    private static Button CreateGearButton(Iec61850MonitorDevice device)
+    {
         var button = new Button
         {
             Uid = GearUid,
-            Width = 27,
+            Width = double.NaN,
+            MinWidth = 0,
             Height = 27,
             Margin = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Tag = device,
             ToolTip = GearToolTip,
             FocusVisualStyle = null
@@ -86,6 +99,13 @@ internal static class IedCardActionsGearPolicy
 
         if (Application.Current.TryFindResource("IedIconButton") is Style buttonStyle)
             button.Style = buttonStyle;
+
+        // Local layout values deliberately override the style's 31 px fixed width.
+        // Every action gets one equal-width UniformGrid cell, so six actions remain
+        // inside the compact card instead of clipping the gear at the right edge.
+        button.Width = double.NaN;
+        button.MinWidth = 0;
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
 
         var iconStroke = new SolidColorBrush(Color.FromRgb(49, 93, 191));
         iconStroke.Freeze();
@@ -103,14 +123,36 @@ internal static class IedCardActionsGearPolicy
 
         button.Content = new Viewbox
         {
-            Width = 14,
-            Height = 14,
+            Width = 13,
+            Height = 13,
             Child = icon
         };
         button.Click += GearButton_Click;
+        return button;
+    }
 
-        actionBar.Children.Add(button);
-        actionBar.Columns = Math.Max(actionBar.Columns, actionBar.Children.Count);
+    private static void NormalizeActionBar(UniformGrid actionBar)
+    {
+        var buttons = actionBar.Children.OfType<Button>().ToArray();
+        if (buttons.Length == 0)
+            return;
+
+        actionBar.Rows = 1;
+        actionBar.Columns = buttons.Length;
+        actionBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+        foreach (var button in buttons)
+        {
+            button.Width = double.NaN;
+            button.MinWidth = 0;
+            button.Height = 27;
+            button.Margin = new Thickness(0);
+            button.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+
+        actionBar.InvalidateMeasure();
+        actionBar.InvalidateArrange();
+        actionBar.UpdateLayout();
     }
 
     private static async void GearButton_Click(object sender, RoutedEventArgs args)
