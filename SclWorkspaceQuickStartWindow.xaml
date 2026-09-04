@@ -1,0 +1,122 @@
+<Window x:Class="ArIED61850Tester.SclWorkspaceQuickStartWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SCL Quick Start"
+        Width="760" MinWidth="760" MaxWidth="760"
+        SizeToContent="Height" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="{StaticResource Bg}"
+        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        Icon="Assets/app-icon.ico">
+    <Window.Resources>
+        <Style x:Key="QuickActionButton" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+            <Setter Property="Padding" Value="15,12"/>
+            <Setter Property="MinHeight" Value="76"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22,20,22,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="SCL workspace ready" FontSize="20" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}"/>
+                <TextBlock Margin="0,4,0,0" Text="Choose the job you want to do. Opening SCL itself stays offline."
+                           FontSize="12.2" Foreground="{StaticResource Muted}"/>
+            </StackPanel>
+            <Border Grid.Column="1" VerticalAlignment="Center" Padding="10,5"
+                    Background="#EAF2FF" BorderBrush="#C7D9F5" BorderThickness="1" CornerRadius="10">
+                <TextBlock Text="OFFLINE READY" FontSize="9.7" FontWeight="SemiBold" Foreground="#315D9D"/>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="1" Margin="0,14,0,0" Padding="11,8"
+                Background="#F7F9FC" BorderBrush="#DEE6F1" BorderThickness="1" CornerRadius="10">
+            <TextBlock Text="{Binding ScopeText}" FontSize="11.3" Foreground="#586A82"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding ScopeText}"/>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,15,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="10"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource QuickActionButton}"
+                    Tag="MonitorStaticDataSet" Click="Action_Click" IsEnabled="{Binding CanMonitor}"
+                    ToolTip="Select authoritative static DataSet members, connect the selected IED, and start live monitoring.">
+                <StackPanel>
+                    <TextBlock Text="MONITOR" FontSize="9.4" FontWeight="SemiBold" Foreground="#667085"/>
+                    <TextBlock Margin="0,3,0,0" Text="Static DataSet" FontSize="13.3" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,3,0,0" Text="Use SCL DataSet membership, then go online." FontSize="10.8"
+                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Button>
+
+            <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource QuickActionButton}"
+                    Tag="MonitorSelectedSignals" Click="Action_Click" IsEnabled="{Binding CanMonitor}"
+                    ToolTip="Choose exact signals first, then start monitoring the selected IED.">
+                <StackPanel>
+                    <TextBlock Text="MONITOR" FontSize="9.4" FontWeight="SemiBold" Foreground="#667085"/>
+                    <TextBlock Margin="0,3,0,0" Text="Select Signals" FontSize="13.3" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,3,0,0" Text="Choose exact ST/MX points, then go online." FontSize="10.8"
+                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Button>
+
+            <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource QuickActionButton}"
+                    Tag="RcbEngineering" Click="Action_Click"
+                    ToolTip="Open the source-backed RCB engineering/export workspace without starting monitoring.">
+                <StackPanel>
+                    <TextBlock Text="ENGINEERING" FontSize="9.4" FontWeight="SemiBold" Foreground="#667085"/>
+                    <TextBlock Margin="0,3,0,0" Text="RCB Engineering" FontSize="13.3" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,3,0,0" Text="Inspect/export source RCBs. No monitor start." FontSize="10.8"
+                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Button>
+
+            <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource QuickActionButton}"
+                    Tag="DownloadComtrade" Click="Action_Click" IsEnabled="{Binding CanDownloadComtrade}"
+                    ToolTip="Open fault-record transfer using a task-scoped file connection; live monitoring stays off.">
+                <StackPanel>
+                    <TextBlock Text="IED FILES" FontSize="9.4" FontWeight="SemiBold" Foreground="#667085"/>
+                    <TextBlock Margin="0,3,0,0" Text="Download COMTRADE" FontSize="13.3" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,3,0,0" Text="Connect file service only; monitoring stays off." FontSize="10.8"
+                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Text="You can run any action later from the IED workspace."
+                       FontSize="10.8" Foreground="{StaticResource Muted}"/>
+            <Button Grid.Column="1" Style="{StaticResource SoftButton}" MinWidth="120" Padding="12,7"
+                    Click="KeepOffline_Click" IsDefault="True">
+                <TextBlock Text="Keep Offline" FontWeight="SemiBold"/>
+            </Button>
+        </Grid>
+    </Grid>
+</Window>
