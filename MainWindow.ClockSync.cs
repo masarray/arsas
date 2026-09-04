@@ -24,18 +24,27 @@ public partial class MainWindow
             return;
 
         _clockSyncLifecycleAttached = true;
-        Devices.CollectionChanged += ClockSyncDevices_CollectionChanged;
-        foreach (var device in Devices)
-            AttachClockSyncDevice(device);
+        InstallGlobalSntpToggle();
+
+        if (_clockSyncEnabled)
+        {
+            Devices.CollectionChanged += ClockSyncDevices_CollectionChanged;
+            foreach (var device in Devices)
+                AttachClockSyncDevice(device);
+        }
 
         _sntpClockService.StatusChanged += ClockSyncService_StatusChanged;
         _sntpClockService.ClientRequestObserved += ClockSyncService_ClientRequestObserved;
         _sntpClockService.ReplySent += ClockSyncService_ReplySent;
         Closed += ClockSyncMainWindow_Closed;
+        PublishGlobalSntpUiState();
     }
 
     private void ClockSyncDevices_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (!_clockSyncEnabled)
+            return;
+
         if (e.OldItems != null)
         {
             foreach (var item in e.OldItems.OfType<Iec61850MonitorDevice>())
@@ -51,6 +60,9 @@ public partial class MainWindow
 
     private void AttachClockSyncDevice(Iec61850MonitorDevice device)
     {
+        if (!_clockSyncEnabled)
+            return;
+
         device.PropertyChanged -= ClockSyncDevice_PropertyChanged;
         device.PropertyChanged += ClockSyncDevice_PropertyChanged;
 
@@ -60,16 +72,21 @@ public partial class MainWindow
 
     private void ClockSyncDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(Iec61850MonitorDevice.IsConnected) ||
-            sender is not Iec61850MonitorDevice device ||
-            !device.IsConnected)
+        if (!_clockSyncEnabled || sender is not Iec61850MonitorDevice device || !device.IsConnected)
             return;
 
-        ScheduleClockSyncReconcile(device);
+        if (e.PropertyName == nameof(Iec61850MonitorDevice.IsConnected) ||
+            e.PropertyName == nameof(Iec61850MonitorDevice.IpAddress))
+        {
+            ScheduleClockSyncReconcile(device);
+        }
     }
 
     private void ScheduleClockSyncReconcile(Iec61850MonitorDevice device)
     {
+        if (!_clockSyncEnabled)
+            return;
+
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(new Action(() => ScheduleClockSyncReconcile(device)));
@@ -81,13 +98,19 @@ public partial class MainWindow
 
     private async Task EnsureClockSyncForDeviceAsync(Iec61850MonitorDevice device)
     {
-        if (!IPAddress.TryParse(device.IpAddress, out var iedAddress) ||
+        if (!_clockSyncEnabled || !device.IsConnected ||
+            !IPAddress.TryParse(device.IpAddress, out var iedAddress) ||
             iedAddress.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
             return;
 
         await _clockSyncIntegrationGate.WaitAsync();
         try
         {
+            // Re-check after entering the integration gate so a queued connect event cannot
+            // restart SNTP after the operator has switched the global toggle off.
+            if (!_clockSyncEnabled || !device.IsConnected)
+                return;
+
             await _sntpClockService.EnsureStartedAsync(iedAddress, _applicationCancellation.Token);
             _sntpClockService.RequestImmediateBroadcast();
         }
@@ -96,8 +119,8 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            AddLog("WARN", "Clock Sync",
-                $"{device.Name}: IEC 61850 remains connected, but ARSAS SNTP could not start: {ex.Message}");
+            AddLog("WARN", "SNTP Server",
+                $"{device.Name}: IEC 61850 remains connected, but the global ARSAS SNTP Server could not start: {ex.Message}");
         }
         finally
         {
@@ -109,8 +132,9 @@ public partial class MainWindow
     {
         void Publish()
         {
-            // FAT telemetry must receive every evidence-counter change even when the textual
-            // service detail did not change. The live log remains deduplicated separately.
+            // Global telemetry receives every evidence-counter change even when the textual
+            // service detail did not change. FAT is only one passive consumer of this state.
+            RefreshGlobalSntpToggle(snapshot);
             ClockSyncSnapshotChanged?.Invoke(snapshot);
 
             var status = $"{snapshot.State}|{snapshot.TransportMode}|{snapshot.Detail}";
@@ -125,7 +149,7 @@ public partial class MainWindow
                 SntpClockServiceState.Stopped => "INFO",
                 _ => "WARN"
             };
-            AddLog(level, "Clock Sync", snapshot.Detail);
+            AddLog(level, "SNTP Server", snapshot.Detail);
         }
 
         if (Dispatcher.CheckAccess())
@@ -146,7 +170,7 @@ public partial class MainWindow
             var device = Devices.FirstOrDefault(item =>
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
             var name = device?.Name ?? key;
-            AddLog("INFO", "Clock Sync",
+            AddLog("INFO", "SNTP Server",
                 $"{name} ({key}) sent an SNTPv{observation.Version} client request to ARSAS. Request observed; synchronization is not yet proven.");
         }
 
@@ -169,7 +193,7 @@ public partial class MainWindow
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
             var name = device?.Name ?? key;
             var transport = observation.TransportMode == SntpClockTransportMode.NpcapRaw ? "Npcap RAW" : "UDP";
-            AddLog("INFO", "Clock Sync",
+            AddLog("INFO", "SNTP Server",
                 $"{name} ({key}) received an ARSAS SNTP Mode 4 reply via {transport}. Reply sent; relay clock synchronization remains unproven until device evidence confirms it.");
         }
 
