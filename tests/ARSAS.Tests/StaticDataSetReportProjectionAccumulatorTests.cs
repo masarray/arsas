@@ -38,6 +38,48 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
+    public void ReportCompanionQualityAndTimestamp_ArrivingBeforeSemanticValue_ArePreserved()
+    {
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
+        const string phaseA = parent + ".phsA.cVal.mag.f";
+        const string phaseB = parent + ".phsB.cVal.mag.f";
+        const string phaseC = parent + ".phsC.cVal.mag.f";
+        var model = Model(DataObject(
+            parent,
+            "ThdA",
+            Attribute(phaseA, "phsA.cVal.mag.f"),
+            Attribute(phaseB, "phsB.cVal.mag.f"),
+            Attribute(phaseC, "phsC.cVal.mag.f")));
+        var parentPoint = Point(parent);
+        var phaseAPoint = Point(phaseA);
+        var monitored = new[] { parentPoint, phaseAPoint };
+        var accumulator = new StaticDataSetReportProjectionAccumulator();
+
+        // ARIEC may expose q/t on the phase structure before its semantic cVal.mag.f leaf.
+        accumulator.Project(model, monitored, CompanionUpdate(parent + ".phsA"));
+        accumulator.Project(model, monitored, CompanionUpdate(parent + ".phsB"));
+        accumulator.Project(model, monitored, CompanionUpdate(parent + ".phsC"));
+
+        var phaseAUpdates = accumulator.Project(model, monitored, ValueOnlyUpdate(phaseA, "1"));
+        var exactPhaseA = Assert.Single(phaseAUpdates, value =>
+            value.Reference.Equals(phaseA, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("questionable", exactPhaseA.Quality, ignoreCase: true);
+        Assert.Equal("2026-09-04 16:20:51.480", exactPhaseA.Timestamp);
+        Assert.True(exactPhaseA.HasQuality);
+        Assert.True(exactPhaseA.HasTimestamp);
+
+        Assert.Empty(accumulator.Project(model, monitored, ValueOnlyUpdate(phaseB, "2")));
+        var finalUpdates = accumulator.Project(model, monitored, ValueOnlyUpdate(phaseC, "3"));
+        var aggregate = Assert.Single(finalUpdates, value =>
+            value.Reference.Equals(parent, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("A=1, B=2, C=3", aggregate.Value);
+        Assert.Equal("questionable", aggregate.Quality, ignoreCase: true);
+        Assert.Equal("2026-09-04 16:20:51.480", aggregate.Timestamp);
+        Assert.True(aggregate.HasQuality);
+        Assert.True(aggregate.HasTimestamp);
+    }
+
+    [Fact]
     public void ThdA_InstantaneousSibling_DoesNotOverrideCanonicalCValPlan()
     {
         const string parent = "IEDLD0/I_MHAI1.ThdA";
@@ -118,6 +160,16 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
         Assert.DoesNotContain("structured report projection is not yet schema-proven; unsafe MMS fallback is disabled", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void IpWizard_DoesNotRunEditableAddressBindingOnEveryKeystroke()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("IpConnectWizardWindow.xaml"));
+
+        Assert.Contains("IsTextSearchEnabled=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged", xaml, StringComparison.Ordinal);
+    }
+
     private static NativeReportValueUpdate Update(string reference, string value)
         => new()
         {
@@ -134,6 +186,42 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
             DataSetReference = "IEDLD0/LLN0.Analog",
             ReportControlReference = "IEDLD0/LLN0.RP.Unbuffer02",
             UpdatedAt = new DateTimeOffset(2026, 9, 4, 16, 0, 0, TimeSpan.FromHours(7))
+        };
+
+    private static NativeReportValueUpdate CompanionUpdate(string reference)
+        => new()
+        {
+            Reference = reference,
+            FunctionalConstraint = "MX",
+            Value = "-",
+            Quality = "questionable",
+            Timestamp = "2026-09-04 16:20:51.480",
+            Reason = "integrity",
+            ProjectionStatus = "measurement-companion",
+            HasValue = false,
+            HasQuality = true,
+            HasTimestamp = true,
+            DataSetReference = "IEDLD0/LLN0.Analog",
+            ReportControlReference = "IEDLD0/LLN0.RP.Unbuffer02",
+            UpdatedAt = new DateTimeOffset(2026, 9, 4, 16, 20, 51, 480, TimeSpan.FromHours(7))
+        };
+
+    private static NativeReportValueUpdate ValueOnlyUpdate(string reference, string value)
+        => new()
+        {
+            Reference = reference,
+            FunctionalConstraint = "MX",
+            Value = value,
+            Quality = string.Empty,
+            Timestamp = string.Empty,
+            Reason = "integrity",
+            ProjectionStatus = "semantic-structured-leaf",
+            HasValue = true,
+            HasQuality = false,
+            HasTimestamp = false,
+            DataSetReference = "IEDLD0/LLN0.Analog",
+            ReportControlReference = "IEDLD0/LLN0.RP.Unbuffer02",
+            UpdatedAt = new DateTimeOffset(2026, 9, 4, 16, 20, 51, 481, TimeSpan.FromHours(7))
         };
 
     private static Iec61850MonitorPoint Point(string reference)
