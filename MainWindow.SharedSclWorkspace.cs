@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services;
 using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
@@ -36,11 +37,19 @@ public partial class MainWindow
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
     {
+        // Static DataSet is a protocol-authority mode, not a request to monitor the
+        // whole IED and then opportunistically prefer reports. First make sure every
+        // ARIEC-owned DataSet member is present in the workspace, then select only
+        // runtime signals that carry an explicit static DataSet identity.
+        var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
+        RegisterRecoveredDataSetSignals(device, merge);
+        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+
         device.BeginBulkSignalSelection();
         try
         {
             foreach (var signal in device.Signals)
-                signal.IsSelected = !string.IsNullOrWhiteSpace(signal.DataSetReference);
+                signal.IsSelected = Iec61850StaticDataSetSelectionPolicy.IsEligible(signal);
         }
         finally
         {
@@ -51,6 +60,11 @@ public partial class MainWindow
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
         device.RefreshComputed();
+
+        AddLog(
+            "INFO",
+            device.Name,
+            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} runtime DataSet signal(s); cyclic MMS process polling and dynamic DataSet writes are disabled for this monitoring mode.");
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
@@ -69,6 +83,8 @@ public partial class MainWindow
 
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
+        // Manual selection restores the normal Smart/Hybrid acquisition contract.
+        Iec61850MonitoringModeRegistry.UseHybrid(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
     }

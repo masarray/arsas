@@ -1,219 +1,120 @@
 <Window x:Class="ArIED61850Tester.SclSignalSelectionModeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SCL Signal Selection" Width="720" MinWidth="720" MaxWidth="720"
+        Title="{Binding DialogTitle}" Width="760" MinWidth="760" MaxWidth="760"
         SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False" Background="{StaticResource Bg}"
         FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico">
-    <Window.Resources>
-        <Style x:Key="SelectionCard" TargetType="RadioButton">
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#D8E2EF"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Chrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="17" Padding="18,16">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ContentPresenter Grid.Column="0" Grid.ColumnSpan="2"
-                                                  Content="{TemplateBinding Content}"
-                                                  VerticalAlignment="Center"/>
-                                <Border x:Name="ChoiceIndicator" Grid.Column="2"
-                                        Width="24" Height="24" Margin="18,0,0,0"
-                                        VerticalAlignment="Center" CornerRadius="12"
-                                        Background="#F8FAFD" BorderBrush="#AEBCCF" BorderThickness="1.5">
-                                    <Ellipse x:Name="ChoiceDot" Width="10" Height="10"
-                                             Fill="White" Visibility="Collapsed"/>
-                                </Border>
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#F7FAFF"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#9FB7D8"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#EEF5FF"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#6F9EF1"/>
-                                <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
-                                <Setter TargetName="ChoiceIndicator" Property="Background" Value="{StaticResource Accent}"/>
-                                <Setter TargetName="ChoiceIndicator" Property="BorderBrush" Value="{StaticResource Accent}"/>
-                                <Setter TargetName="ChoiceDot" Property="Visibility" Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource AccentDeep}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Opacity" Value="0.86"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="22,22,22,26">
+    <!-- Default Open SCL heading: Workspace opened offline. The same window is reused
+         from an IED card, where ContextHeading is scoped to that exact IED instead. -->
+    <Grid Margin="22,20,22,22">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border CornerRadius="24" BorderBrush="#D5E1F0" BorderThickness="1"
-                Padding="26,24" Effect="{StaticResource CardShadow}">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#FFFFFF" Offset="0"/>
-                    <GradientStop Color="#F2F7FF" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="{Binding ContextHeading}" FontSize="21" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}"/>
+                <TextBlock Margin="0,4,0,0" FontSize="12.3" Foreground="{StaticResource Muted}"
+                           Text="{Binding ContextSubtitle}"/>
+            </StackPanel>
+            <Border Grid.Column="1" VerticalAlignment="Center" Background="#E8F1FF"
+                    BorderBrush="#C8DAF8" BorderThickness="1" CornerRadius="11" Padding="11,6">
+                <TextBlock Text="{Binding ImportScopeText}" FontSize="11.5" FontWeight="SemiBold"
+                           Foreground="#315D9D"/>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="1" Margin="0,18,0,0" Background="#FFFFFF" BorderBrush="#D8E2EF"
+                BorderThickness="1" CornerRadius="14" Padding="14">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-
-                <Grid>
+                <TextBlock Text="MONITORING" FontSize="10.5" FontWeight="SemiBold" Foreground="#667085"/>
+                <Grid Grid.Row="1" Margin="0,9,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="50" Height="50" CornerRadius="16" Margin="0,0,15,0">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                <GradientStop Color="#DBEAFE" Offset="0"/>
-                                <GradientStop Color="#E0E7FF" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <Viewbox Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
-                        </Viewbox>
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="Choose the shared signal source" FontSize="21" FontWeight="SemiBold"
-                                   Foreground="{StaticResource Ink}"/>
-                        <TextBlock Text="One selection for Engineering and FAT" Margin="0,4,0,0"
-                                   FontSize="12.5" Foreground="{StaticResource Muted}"/>
-                    </StackPanel>
-                    <Border Grid.Column="2" VerticalAlignment="Center" Background="#E8F1FF"
-                            BorderBrush="#C8DAF8" BorderThickness="1" CornerRadius="12" Padding="11,6">
-                        <TextBlock Text="{Binding ImportScopeText}" FontSize="11.5" FontWeight="SemiBold"
-                                   Foreground="#315D9D"/>
-                    </Border>
+                    <Button Grid.Column="0" Style="{StaticResource PrimaryButton}" Padding="14,11"
+                            Click="MonitorStaticDataSet_Click" ToolTip="Select authoritative static DataSet members and start online monitoring">
+                        <StackPanel>
+                            <TextBlock Text="Static DataSet" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Select + monitor" FontSize="10.5" Opacity="0.82" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource SoftButton}" Padding="14,11"
+                            Click="MonitorManual_Click" ToolTip="Choose exact ST, MX and control points, then start monitoring">
+                        <StackPanel>
+                            <TextBlock Text="Select Signals" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Manual + monitor" FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
-
-                <TextBlock Grid.Row="1" Margin="0,21,0,10" Text="How should ARSAS build the signal workspace?"
-                           FontSize="12.4" FontWeight="SemiBold" Foreground="#475467"/>
-
-                <StackPanel Grid.Row="2">
-                    <RadioButton x:Name="StaticDataSetChoice" GroupName="SignalSelectionMode"
-                                 Style="{StaticResource SelectionCard}" IsChecked="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Width="42" Height="42" Margin="0,0,14,0" CornerRadius="13"
-                                    Background="#DCEAFF">
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Path Data="{StaticResource LucideFileInput}" Style="{StaticResource LucideIcon}"/>
-                                </Viewbox>
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Use Static DataSet" FontSize="14" FontWeight="SemiBold"
-                                               Foreground="{StaticResource Ink}"/>
-                                    <Border Margin="9,0,0,0" Padding="8,3" CornerRadius="9"
-                                            Background="#E0F4E8" BorderBrush="#BDE3CB" BorderThickness="1">
-                                        <TextBlock Text="RECOMMENDED" FontSize="9.5" FontWeight="SemiBold"
-                                                   Foreground="#167146"/>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock Margin="0,6,0,0" MaxWidth="510" TextWrapping="Wrap"
-                                           Text="Use every authoritative static DataSet member from the imported SCL. Best for complete engineering review and FAT coverage."
-                                           FontSize="11.7" LineHeight="17" Foreground="{StaticResource Muted}"/>
-                            </StackPanel>
-                        </Grid>
-                    </RadioButton>
-
-                    <RadioButton x:Name="ManualChoice" GroupName="SignalSelectionMode" Margin="0,10,0,0"
-                                 Style="{StaticResource SelectionCard}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Width="42" Height="42" Margin="0,0,14,0" CornerRadius="13"
-                                    Background="#EEE9FF">
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"
-                                          Stroke="#6558C8"/>
-                                </Viewbox>
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="Choose Signals Manually" FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{StaticResource Ink}"/>
-                                <TextBlock Margin="0,6,0,0" MaxWidth="510" TextWrapping="Wrap"
-                                           Text="Open Signal Selection for each imported IED and choose the exact ST, MX, and control points. FAT uses the same checkboxes."
-                                           FontSize="11.7" LineHeight="17" Foreground="{StaticResource Muted}"/>
-                            </StackPanel>
-                        </Grid>
-                    </RadioButton>
-                </StackPanel>
-
-                <Border Grid.Row="3" Margin="0,17,0,0" Background="#F7F9FC" BorderBrush="#DEE6F1"
-                        BorderThickness="1" CornerRadius="12" Padding="12,10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Viewbox Width="16" Height="16" Margin="0,0,9,0" VerticalAlignment="Center">
-                            <Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"
-                                  Stroke="#5C6F89" StrokeThickness="1.8"/>
-                        </Viewbox>
-                        <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="11.4" Foreground="#586A82"
-                                   Text="You can revise the shared selection later from Edit Signals. FAT evidence, test results, and reports remain independent for each IED."/>
-                    </Grid>
-                </Border>
+                <TextBlock Grid.Row="2" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11.2"
+                           Foreground="{StaticResource Muted}"
+                           Text="Signal selection is shared with FAT, but monitoring starts only after you choose one of these monitoring actions."/>
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Style="{StaticResource SoftButton}" IsCancel="True" MinWidth="108" Margin="0,0,10,0">
-                <StackPanel Orientation="Horizontal">
-                    <Viewbox Width="15" Height="15" Margin="0,0,7,0">
-                        <Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#52647E"/>
-                    </Viewbox>
-                    <TextBlock Text="Cancel"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource PrimaryButton}" IsDefault="True" MinWidth="132"
-                    Click="Continue_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Continue"/>
-                    <Viewbox Width="15" Height="15" Margin="7,0,0,0">
-                        <Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/>
-                    </Viewbox>
-                </StackPanel>
-            </Button>
-        </StackPanel>
+        <Border Grid.Row="2" Margin="0,12,0,0" Background="#FFFFFF" BorderBrush="#D8E2EF"
+                BorderThickness="1" CornerRadius="14" Padding="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="ENGINEERING &amp; FILES" FontSize="10.5" FontWeight="SemiBold" Foreground="#667085"/>
+                <Grid Grid.Row="1" Margin="0,9,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource SoftButton}" Padding="14,11"
+                            Click="RcbEngineering_Click" ToolTip="Review SCL ReportControl/DataSet configuration without starting monitoring">
+                        <StackPanel>
+                            <TextBlock Text="RCB Engineering" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Offline-first" FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource SoftButton}" Padding="14,11"
+                            Click="DownloadComtrade_Click" ToolTip="Open fault-record download using only the file-transfer workflow">
+                        <StackPanel>
+                            <TextBlock Text="Download COMTRADE" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="File service only" FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+                <TextBlock Grid.Row="2" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11.2"
+                           Foreground="{StaticResource Muted}"
+                           Text="RCB engineering does not start online monitoring. COMTRADE uses a task-scoped MMS file-transfer connection and leaves Live Monitor ownership unchanged."/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" FontSize="11.3" Foreground="#667085"
+                       Text="Need only the model? Keep this IED in its current offline/engineering state."/>
+            <Button Grid.Column="1" Style="{StaticResource SoftButton}" MinWidth="124" Padding="13,8"
+                    Click="BrowseOffline_Click" IsCancel="True" Content="Browse Offline"/>
+        </Grid>
     </Grid>
 </Window>
