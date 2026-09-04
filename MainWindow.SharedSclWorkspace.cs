@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
@@ -22,16 +23,78 @@ public partial class MainWindow
 
     private SclSignalSelectionMode? PromptSclSignalSelectionMode(Window owner, int iedCount)
     {
-        var dialog = new SclSignalSelectionModeWindow(iedCount)
+        // Engineering SCL import is offline-first. The legacy selection mode remains the
+        // authority returned to OpenScl_Click only when the operator explicitly chooses a
+        // monitoring workflow; RCB/file-transfer actions are independent and never imply
+        // Live Monitor startup.
+        if (SelectedDevice is not { } selectedDevice)
+        {
+            var fallbackDialog = new SclSignalSelectionModeWindow(iedCount)
+            {
+                Owner = owner
+            };
+            if (fallbackDialog.ShowDialog() != true)
+                return null;
+
+            return fallbackDialog.UseStaticDataSet
+                ? SclSignalSelectionMode.StaticDataSet
+                : SclSignalSelectionMode.Manual;
+        }
+
+        var canDownloadComtrade = !string.IsNullOrWhiteSpace(selectedDevice.IpAddress);
+        var quickStart = new SclWorkspaceQuickStartWindow(
+            iedCount,
+            selectedDevice.Name,
+            canDownloadComtrade ? selectedDevice.EndpointText : "No MMS endpoint in SCL",
+            canMonitor: true,
+            canDownloadComtrade)
         {
             Owner = owner
         };
-        if (dialog.ShowDialog() != true)
-            return null;
 
-        return dialog.UseStaticDataSet
-            ? SclSignalSelectionMode.StaticDataSet
-            : SclSignalSelectionMode.Manual;
+        if (quickStart.ShowDialog() != true)
+        {
+            ScheduleSclOfflineReadyStatus(selectedDevice);
+            return null;
+        }
+
+        switch (quickStart.SelectedAction)
+        {
+            case SclWorkspaceAction.MonitorStaticDataSet:
+                return SclSignalSelectionMode.StaticDataSet;
+
+            case SclWorkspaceAction.MonitorSelectedSignals:
+                return SclSignalSelectionMode.Manual;
+
+            case SclWorkspaceAction.RcbEngineering:
+                Dispatcher.BeginInvoke(
+                    new Action(() => OpenRcbEngineeringQuickStart(selectedDevice)),
+                    DispatcherPriority.ContextIdle);
+                return null;
+
+            case SclWorkspaceAction.DownloadComtrade:
+                Dispatcher.BeginInvoke(
+                    new Action(() => OpenComtradeQuickStart(selectedDevice)),
+                    DispatcherPriority.ContextIdle);
+                return null;
+
+            case SclWorkspaceAction.BrowseOffline:
+            case null:
+            default:
+                ScheduleSclOfflineReadyStatus(selectedDevice);
+                return null;
+        }
+    }
+
+    private void ScheduleSclOfflineReadyStatus(Iec61850MonitorDevice device)
+    {
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                AddLog("INFO", "SCL", $"{device.Name}: Engineering workspace kept offline; no MMS connection or monitoring session was started.");
+                SetStatus($"{device.Name}: SCL workspace ready offline · choose an IED action when needed.");
+            }),
+            DispatcherPriority.ContextIdle);
     }
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
