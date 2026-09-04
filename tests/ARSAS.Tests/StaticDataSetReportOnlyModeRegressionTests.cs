@@ -51,6 +51,22 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
+    public void ReadCompatibleStaticMode_FlowsIntoExistingBoundedMmsScheduler()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        Assert.Contains(
+            "var staticDataSetReportOnly = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "NextPollUtc = staticDataSetReportOnly ? DateTime.MaxValue : DateTime.UtcNow",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains("ResetPollQueue(session);", source, StringComparison.Ordinal);
+        Assert.Contains("MMS live start", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StrictRuntimeContract_StaticDataSetReportOnlyMode_DoesNotScheduleCyclicMmsProcessPolling()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
