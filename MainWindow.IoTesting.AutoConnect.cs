@@ -13,6 +13,11 @@ public partial class MainWindow
     /// Prepares one imported IO-list IED for monitoring-only FAT acquisition. Calls for
     /// different IEDs are independent and may overlap; the IED model itself owns the
     /// preparation flag, while live binding is deliberately scoped to this IED only.
+    ///
+    /// For an SCL workspace already owned by Engineering, FAT is a consumer of the
+    /// existing per-IED acquisition session. It must never stop/restart that session merely
+    /// to change evidence scope or polling cadence. Legacy workbook-only FAT remains on the
+    /// compatibility acquisition path until it is migrated to the same shared-session model.
     /// </summary>
     internal async Task<IoTestSessionActionResult> PrepareIoTestIedForFatAsync(
         IoTestProject project,
@@ -103,11 +108,21 @@ public partial class MainWindow
         // connection path can then perform only TCP/ACSE/MMS association; Re-scan remains
         // the explicit engineering action for full live discovery/comparison.
         var hasSclRuntimeAuthority = AttachIoFatSclRuntimeAuthority(ied, device);
+        var sharedStaticDataSetAuthority =
+            hasSclRuntimeAuthority && IsSharedStaticDataSetAuthority(device);
+        var reuseSharedSclAcquisition =
+            hasSclRuntimeAuthority &&
+            (_sharedSclSelectionAuthorityDeviceIds.Contains(device.DeviceId) ||
+             sharedStaticDataSetAuthority);
 
-        // Monitoring-only toward the process: no control commands are executed. FAT uses
-        // deterministic fast MMS acquisition for digital commissioning points while the
-        // normal engineering workspace keeps report-first behavior for ordinary intervals.
-        device.AllowDynamicDataSetWrites = true;
+        // Static DataSet is an operator acquisition contract, not a FAT-local preference.
+        // Never turn dynamic DataSet writes back on while FAT attaches to that shared
+        // Engineering session. Legacy/non-shared FAT keeps its historical compatibility
+        // behavior for now.
+        if (sharedStaticDataSetAuthority)
+            Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+        else if (!reuseSharedSclAcquisition)
+            device.AllowDynamicDataSetWrites = true;
 
         try
         {
@@ -186,7 +201,9 @@ public partial class MainWindow
                 // pass and used to hold this SIPROTEC FAT preparation for about one minute.
                 // Explicit Re-scan remains the design-versus-live comparison action.
                 IoTestReconciliationCache.Invalidate(device);
-                ReportProgress("Using authoritative SCL workspace identity · starting live acquisition");
+                ReportProgress(reuseSharedSclAcquisition
+                    ? "Using shared Engineering SCL identity · FAT will consume the existing acquisition session"
+                    : "Using authoritative SCL workspace identity · starting live acquisition");
             }
             else
             {
@@ -289,9 +306,9 @@ public partial class MainWindow
                     device.DeviceId);
             }
 
-            // P1 acquisition scope is the safe model match set, not the operator TEST
-            // selection. Keep Engineering selection and FAT TEST untouched while arming
-            // all proven shared-workspace-selected rows for this isolated IED runtime.
+            // FAT evidence scope is a consumer-side projection. It must not redefine the
+            // SCL acquisition session owned by Engineering. For legacy/non-shared FAT this
+            // list is still used by the compatibility monitor path below.
             var acquisitionSignals = selection.Matches
                 .Select(match => match.Signal)
                 .Where(signal => signal.CanPublishToRuntime)
@@ -317,13 +334,15 @@ public partial class MainWindow
                     match.Signal.ObjectReference);
             }
 
-            // Time synchronization is device-level FAT evidence rather than an ON/OFF
-            // test point. If the live model exposes an explicit status (for example
-            // SIPROTEC TimeSynchrnz or MiCOM LLN0.SyncSt), arm that one extra read-only
-            // signal so the FAT window can capture the real IED value automatically.
-            IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device);
+            // Time-sync evidence must not contaminate a strict Static DataSet selection.
+            // If the status point is already part of the shared session we can consume it;
+            // otherwise SNTP/clock evidence remains device-level and FAT must not add a
+            // process point that would force an acquisition restart.
+            if (!reuseSharedSclAcquisition)
+                IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device);
             var timeSyncSignal = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device);
-            if (timeSyncSignal?.CanPublishToRuntime == true &&
+            if (!reuseSharedSclAcquisition &&
+                timeSyncSignal?.CanPublishToRuntime == true &&
                 acquisitionSignals.All(signal => !ReferenceEquals(signal, timeSyncSignal)))
             {
                 acquisitionSignals.Add(timeSyncSignal);
@@ -334,52 +353,88 @@ public partial class MainWindow
             RaiseWorkspaceCounts();
 
             _ioTestLiveBindingService.BindIed(ied, Devices);
-            var fatPollingNotActive = device.IsMonitoring &&
-                                      device.Points.Any(point => point.PollingIntervalMs > 500);
-            var requestedAcquisitionReferences = acquisitionSignals
-                .Select(signal => IoTestLiveBindingService.NormalizeReference(signal.ObjectReference))
-                .Where(reference => reference.Length > 0)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var activeAcquisitionReferences = device.Points
-                .Select(point => IoTestLiveBindingService.NormalizeReference(point.IecReference))
-                .Where(reference => reference.Length > 0)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var acquisitionScopeChanged =
-                !requestedAcquisitionReferences.SetEquals(activeAcquisitionReferences);
 
-            // Each IED monitor is isolated. Refresh only this device when its acquisition
-            // scope or FAT polling cadence changed; another connected/monitoring IED is
-            // never stopped or rebound by this preparation.
-            if (device.IsMonitoring && (acquisitionScopeChanged || fatPollingNotActive))
+            if (reuseSharedSclAcquisition)
             {
-                ReportProgress("Refreshing this IED's FAT acquisition · other IED monitors remain active");
-                await StopDeviceMonitorAsync(device);
-            }
+                // P0 lifecycle rule: one IED owns one acquisition session. FAT is only a
+                // consumer. It must not call StopDeviceMonitorAsync, StartIoFatDeviceMonitorAsync,
+                // or alter polling cadence merely because its evidence scope differs.
+                if (sharedStaticDataSetAuthority)
+                    Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
 
-            if (!device.IsMonitoring)
-            {
-                ReportProgress("Starting independent FAT live acquisition · fast MMS verification");
-                // Compatibility note: the pre-P1 source contract called StartDeviceMonitorAsync
-                // here. P1 routes through StartIoFatDeviceMonitorAsync so acquisition scope can
-                // be armed without mutating/persisting the operator TEST selection.
-                if (!await StartIoFatDeviceMonitorAsync(device, acquisitionSignals))
+                if (!device.IsMonitoring)
                 {
-                    _ioTestLiveBindingService.BindIed(ied, Devices);
-                    return IoTestSessionActionResult.Failure(
-                        $"{ied.IedName} connected, but ARSAS could not start live acquisition for the imported FAT scope.");
+                    ReportProgress(sharedStaticDataSetAuthority
+                        ? "Starting the shared Static DataSet acquisition session · FAT will subscribe to it"
+                        : "Starting the shared Engineering acquisition session · FAT will subscribe to it");
+                    if (!await StartDeviceMonitorAsync(device, navigateToExplorer: false))
+                    {
+                        _ioTestLiveBindingService.BindIed(ied, Devices);
+                        return IoTestSessionActionResult.Failure(
+                            $"{ied.IedName} connected, but ARSAS could not start the shared Engineering acquisition session required by FAT.");
+                    }
+                }
+                else
+                {
+                    ReportProgress("FAT attached to the existing shared acquisition session · no monitor restart");
+                    AddLog(
+                        "INFO",
+                        "IO Testing",
+                        $"{ied.IedName}: FAT attached as a consumer of the existing Engineering acquisition session. Session ownership, RCB state and acquisition mode were not restarted or replaced.");
+                }
+
+                if (sharedStaticDataSetAuthority)
+                {
+                    AddLog(
+                        "INFO",
+                        device.Name,
+                        "Static DataSet lifecycle evidence: configured RCB control-plane setup includes GI; waiting for actual InformationReport traffic. FAT will not use MMS process polling as a substitute.");
+                    _ = ObserveSharedStaticReportEvidenceAsync(device, TimeSpan.FromSeconds(3));
+                }
+            }
+            else
+            {
+                var fatPollingNotActive = device.IsMonitoring &&
+                                          device.Points.Any(point => point.PollingIntervalMs > 500);
+                var requestedAcquisitionReferences = acquisitionSignals
+                    .Select(signal => IoTestLiveBindingService.NormalizeReference(signal.ObjectReference))
+                    .Where(reference => reference.Length > 0)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var activeAcquisitionReferences = device.Points
+                    .Select(point => IoTestLiveBindingService.NormalizeReference(point.IecReference))
+                    .Where(reference => reference.Length > 0)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var acquisitionScopeChanged =
+                    !requestedAcquisitionReferences.SetEquals(activeAcquisitionReferences);
+
+                // Compatibility path for non-shared/legacy FAT only. Shared SCL workspaces
+                // never enter this stop/restart branch.
+                if (device.IsMonitoring && (acquisitionScopeChanged || fatPollingNotActive))
+                {
+                    ReportProgress("Refreshing this legacy FAT IED acquisition · other IED monitors remain active");
+                    await StopDeviceMonitorAsync(device);
+                }
+
+                if (!device.IsMonitoring)
+                {
+                    ReportProgress("Starting legacy FAT live acquisition · fast MMS verification");
+                    if (!await StartIoFatDeviceMonitorAsync(device, acquisitionSignals))
+                    {
+                        _ioTestLiveBindingService.BindIed(ied, Devices);
+                        return IoTestSessionActionResult.Failure(
+                            $"{ied.IedName} connected, but ARSAS could not start live acquisition for the imported FAT scope.");
+                    }
                 }
             }
 
-            // The monitor points now exist and MMS polling has already been scheduled.
-            // Return control to FAT immediately: waiting here for values/report setup made
-            // a sub-second SCL association look like a 30-50 second connection whenever
-            // the UI dispatcher was busy with the first report burst. Values and report
-            // optimization continue through the shared Engineering runtime.
+            // Bind FAT rows to the already-owned per-IED monitor points. In a shared SCL
+            // workspace this is purely a consumer projection; it does not create another
+            // runtime or change the acquisition method.
             var binding = _ioTestLiveBindingService.BindIed(ied, Devices);
             var acquisition = ReadIoFatAcquisitionSummary(requestedPoints, device);
-            var liveCount = requestedPoints.Count(point =>
+            var boundCount = requestedPoints.Count(point =>
                 point.LiveBindingState == IoTestLiveBindingState.LivePointReady);
-            if (liveCount == 0)
+            if (boundCount == 0)
             {
                 var unresolved = requestedPoints
                     .Take(4)
@@ -388,28 +443,31 @@ public partial class MainWindow
                     $"{ied.IedName} is connected and monitoring, but none of the {requestedPoints.Count} requested FAT signal(s) has a unique live monitor point. Unresolved: {string.Join(", ", unresolved)}.");
             }
 
-            // The temporary acquisition arm has already been restored by
-            // StartIoFatDeviceMonitorAsync. Persist only the real operator selection.
             SaveSignalSelectionMemory(device);
             var modelText = hasSclRuntimeAuthority
                 ? "imported SCL model"
                 : usedSavedModel ? "saved model" : "live model";
-            var acquisitionText = acquisition.PollingCount == 0
-                ? $"report-backed {acquisition.ReportCount}/{liveCount}"
-                : $"fast MMS {acquisition.PollingCount} · report-backed {acquisition.ReportCount}";
+            var acquisitionText = sharedStaticDataSetAuthority
+                ? $"static report live {acquisition.ReportCount} · pending/unavailable {acquisition.UnknownCount} · MMS polling {acquisition.PollingCount}"
+                : acquisition.PollingCount == 0
+                    ? $"report-backed {acquisition.ReportCount}/{boundCount}"
+                    : $"fast MMS {acquisition.PollingCount} · report-backed {acquisition.ReportCount}";
             var timeSyncText = IoFatSupplementalEvidenceService.FindTimeSyncSignal(device) == null
                 ? " · time-sync fallback ready"
-                : " · time-sync status armed";
-            var unresolvedCount = requestedPoints.Count - liveCount;
+                : reuseSharedSclAcquisition
+                    ? " · time-sync evidence observed from shared scope only"
+                    : " · time-sync status armed";
+            var unresolvedCount = requestedPoints.Count - boundCount;
             var partialText = unresolvedCount == 0
                 ? string.Empty
                 : $" · {unresolvedCount} FAT row(s) waiting for safe live binding";
-            var message = $"{ied.IedName} · {liveCount}/{requestedPoints.Count} live · {acquisitionText}{timeSyncText}{partialText}";
+            var sessionText = reuseSharedSclAcquisition ? " · shared acquisition session" : string.Empty;
+            var message = $"{ied.IedName} · {boundCount}/{requestedPoints.Count} bound · {acquisitionText}{timeSyncText}{partialText}{sessionText}";
             SetStatus(message);
             AddLog(
                 unresolvedCount == 0 ? "INFO" : "WARN",
                 "IO Testing",
-                $"{message}. Live rows are usable immediately; unresolved rows stay visible but are excluded from the active evidence scope until a unique live point exists. No checkbox or FAT disposition is changed by the engine. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
+                $"{message}. FAT is an evidence consumer; shared SCL acquisition ownership is preserved. No checkbox or FAT disposition is changed by the engine. IED live-bound={binding.LivePointCount}; model={modelText}; mode={device.AcquisitionMode}.");
             ReportProgress(message);
             return IoTestSessionActionResult.Success(message);
         }
@@ -431,6 +489,40 @@ public partial class MainWindow
             ied.SetPreparationState(false, ied.LiveStatusText);
             if (createdForFat)
                 RaiseWorkspaceCounts();
+        }
+    }
+
+    private async Task ObserveSharedStaticReportEvidenceAsync(
+        Iec61850MonitorDevice device,
+        TimeSpan proofWindow)
+    {
+        try
+        {
+            await Task.Delay(proofWindow, _applicationCancellation.Token);
+            if (!device.IsMonitoring || !IsSharedStaticDataSetAuthority(device))
+                return;
+
+            if (device.HasReportStream)
+            {
+                var reportPoints = device.Points.Count(point =>
+                    IsReportSource(point.SourceMode) &&
+                    !point.SourceMode.Contains("pending", StringComparison.OrdinalIgnoreCase));
+                AddLog(
+                    "INFO",
+                    device.Name,
+                    $"Static DataSet report evidence: actual InformationReport traffic observed; report-backed runtime point(s)={reportPoints}. RCB/GI path is alive.");
+                return;
+            }
+
+            AddLog(
+                "WARN",
+                device.Name,
+                $"Static DataSet report evidence: configured RCB setup/GI was requested, but no InformationReport traffic was observed within {proofWindow.TotalSeconds:0.#} s. ARSAS will remain report-pending and will NOT switch process values to cyclic MMS polling. Check RptEna/ownership, GI support and whether the IED server actually emits reports for the configured DataSet.");
+            MarkDiagnosticAlert();
+        }
+        catch (OperationCanceledException)
+        {
+            // Application shutdown or explicit lifecycle cancellation needs no warning.
         }
     }
 
@@ -604,9 +696,18 @@ public partial class MainWindow
     }
 
     private static bool IsReportSource(string source)
-        => source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
-           source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
-           source.Contains("report", StringComparison.OrdinalIgnoreCase);
+    {
+        if (string.IsNullOrWhiteSpace(source) ||
+            source.Contains("pending", StringComparison.OrdinalIgnoreCase) ||
+            source.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("report", StringComparison.OrdinalIgnoreCase);
+    }
 
     private sealed record IoFatAcquisitionSummary(
         int LiveCount,
