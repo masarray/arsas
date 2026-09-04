@@ -7,10 +7,9 @@ namespace ArIED61850Tester;
 
 public partial class IoListTestingWindow
 {
-    private CheckBox? _clockSyncCheckBox;
+    private TextBlock? _clockSyncGlobalStatusText;
     private TextBlock? _clockSyncEvidenceText;
     private MainWindow? _clockSyncSnapshotOwner;
-    private bool _clockSyncCheckBoxRefreshing;
 
     protected override void OnInitialized(EventArgs e)
     {
@@ -21,9 +20,8 @@ public partial class IoListTestingWindow
 
     private void ClockSyncUx_Loaded(object sender, RoutedEventArgs e)
     {
-        if (_clockSyncCheckBox != null)
+        if (_clockSyncGlobalStatusText != null)
         {
-            RefreshClockSyncCheckBox();
             AttachClockSyncSnapshotOwner();
             return;
         }
@@ -35,18 +33,17 @@ public partial class IoListTestingWindow
         if (previewIndex < 0)
             return;
 
-        var checkBox = new CheckBox
+        var globalStatus = new TextBlock
         {
-            Name = "ClockSyncEnabledCheckBox",
-            Content = "Clock Sync",
+            Name = "GlobalSntpStatusTextBlock",
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(2, 0, 2, 0),
             FontSize = 11.2,
             FontWeight = FontWeights.SemiBold,
             Foreground = TryFindResource("Ink") as Brush ?? Brushes.DimGray,
-            Focusable = false,
-            ToolTip = "SNTP laptop → IED. Checked: ARSAS serves laptop time using normal UDP/123 when available, with an Npcap RAW fallback when Windows already owns UDP/123. Unchecked: ARSAS stops only its Clock Sync service. IEC 61850 remains unaffected."
+            Text = "Global SNTP",
+            ToolTip = "Global SNTP is controlled from the ARSAS header. It is not owned by FAT and continues running when the FAT window closes while the global server toggle remains enabled."
         };
 
         var evidence = new TextBlock
@@ -57,15 +54,12 @@ public partial class IoListTestingWindow
             FontSize = 10.4,
             FontWeight = FontWeights.Medium,
             Foreground = TryFindResource("MutedInk") as Brush ?? Brushes.SlateGray,
-            Text = "Clock: waiting"
+            Text = "SNTP: waiting"
         };
 
-        _clockSyncCheckBox = checkBox;
+        _clockSyncGlobalStatusText = globalStatus;
         _clockSyncEvidenceText = evidence;
-        RefreshClockSyncCheckBox();
-        checkBox.Checked += ClockSyncCheckBox_Changed;
-        checkBox.Unchecked += ClockSyncCheckBox_Changed;
-        actionPanel.Children.Insert(previewIndex + 1, checkBox);
+        actionPanel.Children.Insert(previewIndex + 1, globalStatus);
         actionPanel.Children.Insert(previewIndex + 2, evidence);
         AttachClockSyncSnapshotOwner();
     }
@@ -100,28 +94,40 @@ public partial class IoListTestingWindow
 
     private void RefreshClockSyncEvidence(SntpClockServiceSnapshot snapshot)
     {
-        if (_clockSyncEvidenceText == null)
+        if (_clockSyncEvidenceText == null || _clockSyncGlobalStatusText == null)
             return;
 
+        var enabled = _clockSyncSnapshotOwner?.IsClockSyncEnabled == true;
         var transport = snapshot.TransportMode switch
         {
             SntpClockTransportMode.NpcapRaw => "RAW",
             SntpClockTransportMode.UdpSocket => "UDP",
             _ => "—"
         };
+        var localAddress = snapshot.Binding?.LocalAddress.ToString();
 
-        _clockSyncEvidenceText.Text = snapshot.State switch
-        {
-            SntpClockServiceState.Serving =>
-                $"{transport} · B {snapshot.BroadcastCount} · Req {snapshot.ClientRequestCount} · Reply {snapshot.ReplyCount} · sync not proven",
-            SntpClockServiceState.Starting => "Clock: starting…",
-            SntpClockServiceState.Stopped => "Clock: off",
-            SntpClockServiceState.PortUnavailable => "Clock: unavailable",
-            SntpClockServiceState.Faulted => "Clock: fault",
-            _ => $"Clock: {snapshot.State}"
-        };
+        _clockSyncGlobalStatusText.Text = !enabled
+            ? "Global SNTP · Off"
+            : snapshot.State == SntpClockServiceState.Serving
+                ? $"Global SNTP · {localAddress ?? "Active"}"
+                : "Global SNTP · Enabled";
 
-        _clockSyncEvidenceText.ToolTip = BuildClockSyncEvidenceToolTip(snapshot, transport);
+        _clockSyncEvidenceText.Text = !enabled
+            ? "SNTP: off"
+            : snapshot.State switch
+            {
+                SntpClockServiceState.Serving =>
+                    $"{transport} · B {snapshot.BroadcastCount} · Req {snapshot.ClientRequestCount} · Reply {snapshot.ReplyCount} · sync not proven",
+                SntpClockServiceState.Starting => "SNTP: starting…",
+                SntpClockServiceState.Stopped => "SNTP: waiting for connected IED",
+                SntpClockServiceState.PortUnavailable => "SNTP: unavailable",
+                SntpClockServiceState.Faulted => "SNTP: fault",
+                _ => $"SNTP: {snapshot.State}"
+            };
+
+        var toolTip = BuildClockSyncEvidenceToolTip(snapshot, transport, enabled);
+        _clockSyncGlobalStatusText.ToolTip = toolTip;
+        _clockSyncEvidenceText.ToolTip = toolTip;
         _clockSyncEvidenceText.Foreground = snapshot.State switch
         {
             SntpClockServiceState.PortUnavailable or SntpClockServiceState.Faulted => Brushes.DarkOrange,
@@ -130,58 +136,26 @@ public partial class IoListTestingWindow
         };
     }
 
-    private static string BuildClockSyncEvidenceToolTip(SntpClockServiceSnapshot snapshot, string transport)
+    private static string BuildClockSyncEvidenceToolTip(
+        SntpClockServiceSnapshot snapshot,
+        string transport,
+        bool enabled)
     {
         var binding = snapshot.Binding == null ? "—" : snapshot.Binding.Summary;
         var lastBroadcast = snapshot.LastBroadcastUtc?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
         var lastRequest = snapshot.LastRequestUtc?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
         var lastReply = snapshot.LastReplyUtc?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
-        return $"Clock Sync evidence\n" +
+        return $"Global ARSAS SNTP Server\n" +
+               $"Enabled: {enabled}\n" +
                $"State: {snapshot.State}\n" +
                $"Transport: {transport}\n" +
                $"Binding: {binding}\n" +
                $"Broadcast sent: {snapshot.BroadcastCount} (last {lastBroadcast})\n" +
                $"Client request seen: {snapshot.ClientRequestCount} (last {lastRequest})\n" +
                $"Mode 4 reply sent: {snapshot.ReplyCount} (last {lastReply})\n\n" +
+               "The global server is controlled from the ARSAS header and continues outside FAT while enabled. " +
                "These counters prove packet activity only. ARSAS does not claim that the relay clock is synchronized without device-side evidence.\n\n" +
                snapshot.Detail;
-    }
-
-    private void RefreshClockSyncCheckBox()
-    {
-        if (_clockSyncCheckBox == null || Owner is not MainWindow mainWindow)
-            return;
-
-        _clockSyncCheckBoxRefreshing = true;
-        try
-        {
-            _clockSyncCheckBox.IsChecked = mainWindow.IsClockSyncEnabled;
-        }
-        finally
-        {
-            _clockSyncCheckBoxRefreshing = false;
-        }
-    }
-
-    private async void ClockSyncCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_clockSyncCheckBoxRefreshing ||
-            _clockSyncCheckBox == null ||
-            Owner is not MainWindow mainWindow)
-            return;
-
-        var requested = _clockSyncCheckBox.IsChecked == true;
-        _clockSyncCheckBox.IsEnabled = false;
-        try
-        {
-            await mainWindow.SetClockSyncEnabledAsync(requested);
-            RefreshClockSyncCheckBox();
-            RefreshClockSyncEvidence(mainWindow.ClockSyncSnapshot);
-        }
-        finally
-        {
-            _clockSyncCheckBox.IsEnabled = true;
-        }
     }
 
     private void ClockSyncUx_Closed(object? sender, EventArgs e)
