@@ -273,7 +273,9 @@ public sealed class HybridReportPhysicalValidationTests
         Assert.Contains("state.ReportTrafficSeen = false;", reset, StringComparison.Ordinal);
         Assert.Contains("state.ReportChangeVerified = false;", reset, StringComparison.Ordinal);
         Assert.Contains("state.AwaitingCommandReportEdge = false;", reset, StringComparison.Ordinal);
-        Assert.Contains("state.AcquisitionLabel = \"MMS polling\";", reset, StringComparison.Ordinal);
+        Assert.Contains("session.StaticDataSetReportOnly ? \"Static DataSet report rearming\" : \"MMS polling\"", reset, StringComparison.Ordinal);
+        Assert.Contains("\"Report rearming / MMS polling fallback\"", reset, StringComparison.Ordinal);
+        Assert.Contains("\"new MMS association / configured RCB evidence reset; MMS process fallback disabled\"", reset, StringComparison.Ordinal);
     }
 
     private static ReportControlPlan EnginePlan(
