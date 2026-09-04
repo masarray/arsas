@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -20,7 +21,7 @@ internal static class IedCardActionsGearPolicy
     private const string GearToolTip = "IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline";
 
     // Lucide Settings/Cog geometry adapted to the application's existing 24 px
-    // outline-icon convention. Stroke/fill are inherited from LucideIcon.
+    // outline-icon convention.
     private static readonly Geometry GearGeometry = Geometry.Parse(
         "M12.22,2 H11.78 A2,2 0 0 0 9.78,4 V4.18 " +
         "A2,2 0 0 1 8.78,5.91 L8.62,6 A2,2 0 0 1 6.62,6 L6.44,5.91 " +
@@ -87,10 +88,12 @@ internal static class IedCardActionsGearPolicy
         if (Application.Current.TryFindResource("IedIconButton") is Style buttonStyle)
             button.Style = buttonStyle;
 
+        var iconStroke = new SolidColorBrush(Color.FromRgb(49, 93, 191));
+        iconStroke.Freeze();
         var icon = new Path
         {
             Data = GearGeometry,
-            Stroke = new SolidColorBrush(Color.FromRgb(49, 93, 191)),
+            Stroke = iconStroke,
             Fill = Brushes.Transparent,
             StrokeThickness = 1.8,
             StrokeLineJoin = PenLineJoin.Round,
@@ -98,7 +101,6 @@ internal static class IedCardActionsGearPolicy
             StrokeEndLineCap = PenLineCap.Round,
             Stretch = Stretch.Uniform
         };
-        icon.Stroke.Freeze();
 
         button.Content = new Viewbox
         {
