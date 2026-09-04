@@ -88,6 +88,59 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.DoesNotContain("Iec61850MonitoringModeRegistry.UseHybrid(device)", fatMonitor, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SharedSclFat_IsConsumerOfExistingAcquisitionSession_NotASecondMonitorOwner()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
+
+        Assert.Contains("var reuseSharedSclAcquisition", source, StringComparison.Ordinal);
+        Assert.Contains("FAT attached to the existing shared acquisition session · no monitor restart", source, StringComparison.Ordinal);
+        Assert.Contains("StartDeviceMonitorAsync(device, navigateToExplorer: false)", source, StringComparison.Ordinal);
+        Assert.Contains("one IED owns one acquisition session", source, StringComparison.Ordinal);
+        Assert.Contains("FAT is only a", source, StringComparison.Ordinal);
+        Assert.Contains("consumer", source, StringComparison.Ordinal);
+        Assert.Contains("if (reuseSharedSclAcquisition)", source, StringComparison.Ordinal);
+        Assert.Contains("if (!reuseSharedSclAcquisition)", source, StringComparison.Ordinal);
+        Assert.Contains("Compatibility path for non-shared/legacy FAT only", source, StringComparison.Ordinal);
+
+        // The legacy helper may remain for workbook-only FAT, but the shared SCL branch
+        // must be structurally separate and must start through the normal Engineering owner.
+        var sharedBranchStart = source.IndexOf("if (reuseSharedSclAcquisition)", StringComparison.Ordinal);
+        var legacyBranchStart = source.IndexOf("Compatibility path for non-shared/legacy FAT only", StringComparison.Ordinal);
+        Assert.True(sharedBranchStart >= 0 && legacyBranchStart > sharedBranchStart);
+
+        var sharedBranch = source[sharedBranchStart..legacyBranchStart];
+        Assert.DoesNotContain("StopDeviceMonitorAsync(device)", sharedBranch, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartIoFatDeviceMonitorAsync(device", sharedBranch, StringComparison.Ordinal);
+        Assert.DoesNotContain("initial MMS", sharedBranch, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SharedStaticFat_DoesNotAddSupplementalSignalOrMisreportPendingAsReportBacked()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
+
+        Assert.Contains("if (!reuseSharedSclAcquisition)", source, StringComparison.Ordinal);
+        Assert.Contains("IoFatSupplementalEvidenceService.EnsureTimeSyncSignalSelected(device)", source, StringComparison.Ordinal);
+        Assert.Contains("source.Contains(\"pending\"", source, StringComparison.Ordinal);
+        Assert.Contains("source.Contains(\"unavailable\"", source, StringComparison.Ordinal);
+        Assert.Contains("static report live", source, StringComparison.Ordinal);
+        Assert.Contains("pending/unavailable", source, StringComparison.Ordinal);
+        Assert.Contains("MMS polling", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SharedStaticFat_EmitsCausalReportEvidenceWithoutMmsFallback()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
+
+        Assert.Contains("ObserveSharedStaticReportEvidenceAsync", source, StringComparison.Ordinal);
+        Assert.Contains("waiting for actual InformationReport traffic", source, StringComparison.Ordinal);
+        Assert.Contains("actual InformationReport traffic observed", source, StringComparison.Ordinal);
+        Assert.Contains("no InformationReport traffic was observed", source, StringComparison.Ordinal);
+        Assert.Contains("will NOT switch process values to cyclic MMS polling", source, StringComparison.Ordinal);
+    }
+
     private static SignalDefinition Signal(string reference, string dataSetReference)
         => new()
         {
