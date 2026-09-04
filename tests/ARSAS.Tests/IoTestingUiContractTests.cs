@@ -162,15 +162,16 @@ public sealed class IoTestingUiContractTests
     }
 
     [Fact]
-    public void IoFatAutomaticPreparation_UsesFastCommissioningAcquisitionWithoutProcessControls()
+    public void IoFatAutomaticPreparation_ReusesSharedSclAcquisitionWithoutProcessControls()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
-        Assert.Contains("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
-        Assert.Contains("ConnectAndConfigureDeviceAsync", source, StringComparison.Ordinal);
-        Assert.Contains("StartDeviceMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("deterministic fast MMS", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Return control to FAT immediately", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reuseSharedSclAcquisition", source, StringComparison.Ordinal);
+        Assert.Contains("sharedStaticDataSetAuthority", source, StringComparison.Ordinal);
+        Assert.Contains("StartDeviceMonitorAsync(device, navigateToExplorer: false)", source, StringComparison.Ordinal);
+        Assert.Contains("FAT attached to the existing shared acquisition session · no monitor restart", source, StringComparison.Ordinal);
+        Assert.Contains("FAT is an evidence consumer", source, StringComparison.Ordinal);
+        Assert.Contains("Compatibility path for non-shared/legacy FAT only", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.OrdinalIgnoreCase);
