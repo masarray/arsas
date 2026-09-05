@@ -8,7 +8,7 @@ public sealed class DeterministicStaticReportPathRegressionTests
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("Deterministic Static DataSet configured-RCB path", source, StringComparison.Ordinal);
-        Assert.Contains("configurationModels", source, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
         Assert.Contains("configurationModel.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
@@ -18,6 +18,7 @@ public sealed class DeterministicStaticReportPathRegressionTests
         Assert.Contains("PollingPointKeys = Array.Empty<string>()", source, StringComparison.Ordinal);
         Assert.Contains("PollingFallbackSignalCount = 0", source, StringComparison.Ordinal);
 
+        Assert.DoesNotContain("configurationModels", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MmsCapabilityAwareHybridReportAcquisitionPlanner", source, StringComparison.Ordinal);
         Assert.DoesNotContain("BuildDynamicPlan", source, StringComparison.Ordinal);
         Assert.DoesNotContain("DefineNamedVariableList", source, StringComparison.Ordinal);
@@ -30,14 +31,29 @@ public sealed class DeterministicStaticReportPathRegressionTests
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("SameStaticReference(report.DataSetReference, dataSetGroup.Key)", source, StringComparison.Ordinal);
-        Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank(configured.Reference, candidate.Reference)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
         Assert.Contains("arbitrary same-DataSet", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("live DataSet directory could not prove an ordered non-empty member list", source, StringComparison.Ordinal);
         Assert.Contains("directory.Members", source, StringComparison.Ordinal);
         Assert.Contains("No MMS process polling was substituted", source, StringComparison.Ordinal);
-        Assert.Contains("SCL binds", source, StringComparison.Ordinal);
+        Assert.Contains("authoritative configuration binds", source, StringComparison.Ordinal);
         Assert.Contains("live DatSet reports", source, StringComparison.Ordinal);
         Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StaticPath_SclAuthorityCannotBeDisplacedByLivePeerRcb()
+    {
+        var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
+
+        Assert.Contains("device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", source, StringComparison.Ordinal);
+        Assert.Contains("only ReportControls from that", source, StringComparison.Ordinal);
+        Assert.Contains("design model may authorize static acquisition", source, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
+        Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectMany(configurationModel => configurationModel.ReportControls)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("configuredReports[0]", source, StringComparison.Ordinal);
+        Assert.Contains("remained authoritative", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -51,7 +67,7 @@ public sealed class DeterministicStaticReportPathRegressionTests
         Assert.Contains("MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate)", source, StringComparison.Ordinal);
         Assert.Contains("every concrete instance was explicitly enabled or reserved", source, StringComparison.Ordinal);
         Assert.Contains("Static mode will not steal an occupied RCB", source, StringComparison.Ordinal);
-        Assert.Contains("explicit-disabled preference then literal instance order", source, StringComparison.Ordinal);
+        Assert.Contains("prefer exact identity, then BRCB, explicitly disabled state", source, StringComparison.Ordinal);
     }
 
     [Fact]
