@@ -116,17 +116,28 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var slot = GetSlot(deviceId);
         await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        CancellationTokenSource linkedCancellation;
-        long generation;
-        lock (slot.SyncRoot)
-        {
-            linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            slot.ActiveOperationCancellation = linkedCancellation;
-            generation = ++slot.Generation;
-        }
-
+        CancellationTokenSource? linkedCancellation = null;
+        long generation = 0;
         try
         {
+            // A Stop that is already in progress owns StopGate. Waiting here prevents a new
+            // Connect/Start from racing the teardown. We hold StopGate only while publishing
+            // the new active-operation identity; never for the network operation itself.
+            await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                lock (slot.SyncRoot)
+                {
+                    slot.ActiveOperationCancellation = linkedCancellation;
+                    generation = ++slot.Generation;
+                }
+            }
+            finally
+            {
+                slot.StopGate.Release();
+            }
+
             await Task.Run(
                     async () => await operation(linkedCancellation.Token).ConfigureAwait(false),
                     CancellationToken.None)
@@ -144,15 +155,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         finally
         {
-            lock (slot.SyncRoot)
+            if (linkedCancellation != null)
             {
-                if (slot.Generation == generation &&
-                    ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                lock (slot.SyncRoot)
                 {
-                    slot.ActiveOperationCancellation = null;
+                    if (ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                        slot.ActiveOperationCancellation = null;
                 }
+                linkedCancellation.Dispose();
             }
-            linkedCancellation.Dispose();
             slot.OperationGate.Release();
         }
     }
@@ -168,17 +179,25 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var slot = GetSlot(deviceId);
         await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        CancellationTokenSource linkedCancellation;
-        long generation;
-        lock (slot.SyncRoot)
-        {
-            linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            slot.ActiveOperationCancellation = linkedCancellation;
-            generation = ++slot.Generation;
-        }
-
+        CancellationTokenSource? linkedCancellation = null;
+        long generation = 0;
         try
         {
+            await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                lock (slot.SyncRoot)
+                {
+                    slot.ActiveOperationCancellation = linkedCancellation;
+                    generation = ++slot.Generation;
+                }
+            }
+            finally
+            {
+                slot.StopGate.Release();
+            }
+
             var result = await Task.Run(
                     async () => await operation(linkedCancellation.Token).ConfigureAwait(false),
                     CancellationToken.None)
@@ -194,15 +213,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         finally
         {
-            lock (slot.SyncRoot)
+            if (linkedCancellation != null)
             {
-                if (slot.Generation == generation &&
-                    ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                lock (slot.SyncRoot)
                 {
-                    slot.ActiveOperationCancellation = null;
+                    if (ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                        slot.ActiveOperationCancellation = null;
                 }
+                linkedCancellation.Dispose();
             }
-            linkedCancellation.Dispose();
             slot.OperationGate.Release();
         }
     }
