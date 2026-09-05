@@ -45,6 +45,17 @@ public sealed partial class NativeIec61850Client
         ArgumentNullException.ThrowIfNull(points);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Static DataSet is deliberately deterministic: exact configured SCL RCB +
+        // exact live RCB object + ordered live DataSet directory -> RptEna + GI. Do not
+        // send Static mode through adaptive Hybrid availability/capability policy.
+        if (Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device.DeviceId))
+        {
+            return await BuildStaticDataSetReportPlansAsync(
+                device,
+                points,
+                cancellationToken).ConfigureAwait(false);
+        }
+
         _authoritativeHybridSubscriptions.Clear();
         ResetSemanticReportProjectionContext();
 
@@ -355,6 +366,12 @@ public sealed partial class NativeIec61850Client
     {
         ArgumentNullException.ThrowIfNull(plan);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Deterministic Static plans are executed directly. Hybrid revalidation can
+        // otherwise discard a valid configured RCB merely because reservation metadata
+        // is incomplete, which is exactly the field regression this path removes.
+        if (_deterministicStaticSubscriptions.ContainsKey(plan.PlanId))
+            return await StartStaticDataSetReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
 
         if (!plan.IsEngineAuthoritative)
         {
