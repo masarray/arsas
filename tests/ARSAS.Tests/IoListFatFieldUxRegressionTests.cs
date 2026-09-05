@@ -15,14 +15,15 @@ public sealed class IoListFatFieldUxRegressionTests
     [Fact]
     public void AutomaticAnalogValuePair_DoesNotExposeNormalCaptureButtons()
     {
-        var ux = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
+        var presentation = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0Presentation.cs"));
         var capture = File.ReadAllText(FindRepoFile("Services/IoTesting/FatAutoCaptureCoordinator.cs"));
 
-        Assert.Contains("nameof(IoTestPointPlan.IsOperatorSnapshot)", ux, StringComparison.Ordinal);
-        Assert.Contains("CanCaptureOperatorSnapshot", ux, StringComparison.Ordinal);
+        Assert.Contains("Equals(button.Content, \"✓ Capture\")", presentation, StringComparison.Ordinal);
+        Assert.Contains("button.Visibility = Visibility.Collapsed;", presentation, StringComparison.Ordinal);
+        Assert.Contains("Static DataSet", capture, StringComparison.Ordinal);
+        Assert.Contains("Report-backed analog Value 1 captured automatically", capture, StringComparison.Ordinal);
+        Assert.Contains("Report-backed analog Value 2 captured automatically", capture, StringComparison.Ordinal);
         Assert.Contains("AnalogStableSampleCount = 3", capture, StringComparison.Ordinal);
-        Assert.Contains("Stable analog Value 1 captured", capture, StringComparison.Ordinal);
-        Assert.Contains("Stable analog Value 2 captured", capture, StringComparison.Ordinal);
     }
 
     [Fact]
