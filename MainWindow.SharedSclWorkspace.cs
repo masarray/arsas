@@ -27,6 +27,13 @@ public partial class MainWindow
     private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // The same selection dialog is used by Engineering import and FAT import. Remember its
+    // result only long enough for every IED from that one import to consume it. This closes
+    // the FAT-first gap where Static DataSet was selected in the dialog but the subsequent
+    // generic shared-selection marker silently changed the device back to Hybrid.
+    private SclSignalSelectionMode? _pendingSharedSclSelectionMode;
+    private int _pendingSharedSclSelectionAssignments;
+
     private bool IsSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
         => _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId) ||
            Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
@@ -40,9 +47,22 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return null;
 
-        return dialog.UseStaticDataSet
+        var mode = dialog.UseStaticDataSet
             ? SclSignalSelectionMode.StaticDataSet
             : SclSignalSelectionMode.Manual;
+        _pendingSharedSclSelectionMode = mode;
+        _pendingSharedSclSelectionAssignments = Math.Max(1, iedCount);
+        return mode;
+    }
+
+    private void CompletePendingSharedSclSelectionAssignment()
+    {
+        if (_pendingSharedSclSelectionAssignments <= 0)
+            return;
+
+        _pendingSharedSclSelectionAssignments--;
+        if (_pendingSharedSclSelectionAssignments == 0)
+            _pendingSharedSclSelectionMode = null;
     }
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
@@ -72,6 +92,7 @@ public partial class MainWindow
         _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
         device.RefreshComputed();
+        CompletePendingSharedSclSelectionAssignment();
 
         AddLog(
             "INFO",
@@ -101,11 +122,35 @@ public partial class MainWindow
 
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
+        // FAT-first Static DataSet selection must survive the generic shared-workspace
+        // hand-off. If the immediately preceding import dialog chose Static DataSet,
+        // establish the same authority Engineering uses instead of demoting to Hybrid.
+        if (_pendingSharedSclSelectionMode == SclSignalSelectionMode.StaticDataSet)
+        {
+            ApplyStaticDataSetSelection(device);
+            return;
+        }
+
+        // Switching Engineering -> FAT with no new selection dialog must preserve the
+        // acquisition contract already owned by the Engineering device.
+        if (IsSharedStaticDataSetAuthority(device))
+        {
+            Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+            _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+            _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
+            SaveSignalSelectionMemory(device);
+            device.RefreshComputed();
+            CompletePendingSharedSclSelectionAssignment();
+            return;
+        }
+
         // Manual selection restores the normal Smart/Hybrid acquisition contract.
         _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
         Iec61850MonitoringModeRegistry.UseHybrid(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
+        device.RefreshComputed();
+        CompletePendingSharedSclSelectionAssignment();
     }
 
     private string[] CurrentEngineeringSclSourcePaths()
@@ -208,6 +253,11 @@ public partial class MainWindow
                     device);
             }
 
+            // Manual is an explicit acquisition choice. Establish Hybrid before the shared
+            // authority marker so a previous Static DataSet session cannot leak into this
+            // newly selected manual workspace.
+            _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
+            Iec61850MonitoringModeRegistry.UseHybrid(device);
             MarkSharedSelectionAuthority(device);
         }
     }
