@@ -14,12 +14,36 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class IoListTestingWindow
 {
+    private static readonly bool P0LifecycleRegistered = RegisterP0Lifecycle();
+
+    private bool _p0LifecycleInstalled;
     private bool _p0CloseInProgress;
     private bool _p0AllowClose;
 
-    protected override void OnSourceInitialized(EventArgs e)
+    private static bool RegisterP0Lifecycle()
     {
-        base.OnSourceInitialized(e);
+        // Avoid another Window lifecycle override in this already heavily split partial class.
+        // Loaded is a routed event, so one class handler can install the P0 Closing handler on
+        // every FAT workspace instance after XAML has wired its legacy Window_Closing handler.
+        EventManager.RegisterClassHandler(
+            typeof(IoListTestingWindow),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(P0Lifecycle_Loaded));
+        return true;
+    }
+
+    private static void P0Lifecycle_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is IoListTestingWindow window)
+            window.InstallP0Lifecycle();
+    }
+
+    private void InstallP0Lifecycle()
+    {
+        if (_p0LifecycleInstalled)
+            return;
+
+        _p0LifecycleInstalled = true;
 
         // XAML wires Window_Closing during InitializeComponent. Replace only that lifecycle
         // edge; all existing OnClosed cleanup remains intact.
