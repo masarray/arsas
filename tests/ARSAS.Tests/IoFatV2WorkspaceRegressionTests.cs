@@ -27,7 +27,8 @@ public sealed class IoFatV2WorkspaceRegressionTests
         Assert.True(second.Succeeded, second.Message);
         Assert.True(fixture.Point.IsFatEvidenceComplete);
         Assert.Equal("18.90", fixture.Point.Value2Text);
-        Assert.Equal("✔ COMPLETE", fixture.Point.FatResultText);
+        Assert.Equal(IoTestPointState.Passed, fixture.Point.Runtime.State);
+        Assert.Equal("✔ PASS", fixture.Point.FatResultText);
         Assert.Equal(IoTestSessionState.Running, controller.State);
 
         fixture.LivePoint.Value = "13.01";

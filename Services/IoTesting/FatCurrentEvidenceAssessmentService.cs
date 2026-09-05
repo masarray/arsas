@@ -5,6 +5,12 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// <summary>
 /// Assesses the exact Value 1 / Value 2 pair currently presented by FAT v2.
 ///
+/// Discrete rows PASS when the current pair proves a good-quality state change in one
+/// connection generation. Analog rows PASS when both current values are good-quality,
+/// ordered, numeric, and differ beyond the same adaptive settling tolerance used by
+/// automatic analog capture. This keeps capture and assessment on one meaning of
+/// "changed" instead of treating measurement noise as a successful FAT operation.
+///
 /// The legacy transition state machine remains responsible for collecting historical
 /// OFF -> ON -> OFF evidence. Once generic FAT evidence overrides either current slot,
 /// this service becomes the assessment authority only while that pair belongs to the
@@ -19,11 +25,14 @@ public static class FatCurrentEvidenceAssessmentService
     {
         ArgumentNullException.ThrowIfNull(point);
 
-        if (point.CaptureMode != FatCaptureMode.AutomaticTransition)
+        var usesPassAssessment =
+            point.CaptureMode == FatCaptureMode.AutomaticTransition ||
+            point.SignalKind == FatSignalKind.Analog;
+        if (!usesPassAssessment)
         {
             return new FatCurrentEvidenceAssessment(
                 IoTestPointState.NotStarted,
-                "Operator-snapshot rows are complete when both current value slots are captured; no digital PASS assessment is applied.");
+                "Operator-snapshot rows are complete when both current value slots are captured; no PASS assessment is applied for this signal kind.");
         }
 
         if (!point.IsFatEvidenceComplete)
@@ -76,9 +85,9 @@ public static class FatCurrentEvidenceAssessmentService
                 // Resume/rebind deliberately establishes a new continuity authority. Old
                 // automatic V1/V2 pointers may remain visible for audit, but they must not
                 // overwrite REVIEW after a potentially missed edge or overwrite a later
-                // PASS earned by a complete new legacy cycle. If no terminal continuity
-                // verdict exists yet, fail closed to REVIEW rather than showing COMPLETE
-                // with a blank/non-terminal Result.
+                // PASS earned by a complete new cycle. If no terminal continuity verdict
+                // exists yet, fail closed to REVIEW rather than showing COMPLETE with a
+                // blank/non-terminal Result.
                 return PreserveRuntimeAssessment(point, pairIsSameGeneration);
             }
 
@@ -106,6 +115,9 @@ public static class FatCurrentEvidenceAssessmentService
                 "REVIEW: current Value 2 does not follow current Value 1 in the live evidence sequence; recapture Value 2 after the intended condition change.");
         }
 
+        if (point.SignalKind == FatSignalKind.Analog)
+            return AssessAnalogChange(value1, value2);
+
         var state1 = IoTestValueNormalizer.Normalize(point, value1.RawValue);
         var state2 = IoTestValueNormalizer.Normalize(point, value2.RawValue);
         if (state1 is null || state2 is null)
@@ -131,12 +143,44 @@ public static class FatCurrentEvidenceAssessmentService
     {
         ArgumentNullException.ThrowIfNull(point);
         var assessment = Evaluate(point);
-        if (point.CaptureMode == FatCaptureMode.AutomaticTransition && point.IsFatEvidenceComplete)
+        var usesPassAssessment =
+            point.CaptureMode == FatCaptureMode.AutomaticTransition ||
+            point.SignalKind == FatSignalKind.Analog;
+        if (usesPassAssessment && point.IsFatEvidenceComplete)
         {
             point.Runtime.State = assessment.State;
             point.Runtime.StatusReason = assessment.Reason;
         }
         return assessment;
+    }
+
+    private static FatCurrentEvidenceAssessment AssessAnalogChange(
+        CurrentEvidence value1,
+        CurrentEvidence value2)
+    {
+        if (!FatAutoCaptureCoordinator.TryParseNumeric(value1.RawValue, out var numeric1) ||
+            !FatAutoCaptureCoordinator.TryParseNumeric(value2.RawValue, out var numeric2))
+        {
+            return new FatCurrentEvidenceAssessment(
+                IoTestPointState.Review,
+                "REVIEW: one or both current analog values cannot be parsed as numeric evidence.");
+        }
+
+        var scale = Math.Max(1d, Math.Max(Math.Abs(numeric1), Math.Abs(numeric2)));
+        var tolerance = Math.Max(
+            1e-9d,
+            scale * FatAutoCaptureCoordinator.AnalogRelativeSettlingFraction);
+        var delta = Math.Abs(numeric2 - numeric1);
+        if (delta <= tolerance)
+        {
+            return new FatCurrentEvidenceAssessment(
+                IoTestPointState.Review,
+                $"REVIEW: analog Value 1 ({value1.RawValue}) and Value 2 ({value2.RawValue}) are equivalent within the settling tolerance; the current pair does not prove a meaningful value change.");
+        }
+
+        return new FatCurrentEvidenceAssessment(
+            IoTestPointState.Passed,
+            $"PASS: analog Value 1 ({value1.RawValue}) -> Value 2 ({value2.RawValue}) proves a good-quality value change beyond settling tolerance in one connection generation.");
     }
 
     private static FatCurrentEvidenceAssessment PreserveRuntimeAssessment(
@@ -149,15 +193,15 @@ public static class FatCurrentEvidenceAssessmentService
             return new FatCurrentEvidenceAssessment(
                 point.Runtime.State,
                 string.IsNullOrWhiteSpace(point.Runtime.StatusReason)
-                    ? "Automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation; the existing live transition continuity verdict remains authoritative."
+                    ? "Automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation; the existing live continuity verdict remains authoritative."
                     : point.Runtime.StatusReason);
         }
 
         return new FatCurrentEvidenceAssessment(
             IoTestPointState.Review,
             pairIsSameGeneration
-                ? "REVIEW: automatic current Value 1 / Value 2 evidence belongs to an earlier IED connection generation and no terminal live transition continuity verdict is available."
-                : "REVIEW: automatic current Value 1 and Value 2 belong to different IED connection generations and no terminal live transition continuity verdict is available.");
+                ? "REVIEW: automatic current Value 1 / Value 2 evidence belongs to an earlier IED connection generation and no terminal live continuity verdict is available."
+                : "REVIEW: automatic current Value 1 and Value 2 belong to different IED connection generations and no terminal live continuity verdict is available.");
     }
 
     private static CurrentEvidence? EffectiveValue1(IoTestPointPlan point)
