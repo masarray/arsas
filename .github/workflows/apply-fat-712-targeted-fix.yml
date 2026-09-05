@@ -1,0 +1,261 @@
+name: Apply isolated FAT 712 recovery patch
+
+on:
+  push:
+    branches:
+      - fix/fat-712-targeted-four-fixes
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply targeted source changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              raw = p.read_bytes()
+              text = raw.decode('utf-8')
+              nl = '\r\n' if '\r\n' in text else '\n'
+              old_n = old.replace('\n', nl)
+              new_n = new.replace('\n', nl)
+              actual = text.count(old_n)
+              if actual != count:
+                  raise SystemExit(f'{path}: expected {count} match(es), found {actual}')
+              p.write_bytes(text.replace(old_n, new_n, count).encode('utf-8'))
+
+          replace('Models/MonitorModels.cs', '''    public bool ApplyProcessValue(string? value)
+    {
+        var next = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        var previous = Value;
+        Value = next;
+        return IsInitializedProcessValue(previous) &&
+               IsInitializedProcessValue(next) &&
+               !AreSemanticallyEquivalent(previous, next);
+    }
+
+    private static bool IsInitializedProcessValue(string? value)
+''', '''    public bool ApplyProcessValue(string? value)
+    {
+        var next = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        var previous = Value;
+        var previousInitialized = IsInitializedProcessValue(previous);
+        var nextInitialized = IsInitializedProcessValue(next);
+
+        // Do not repaint a process value when only its presentation changes, e.g. false -> False.
+        if (previousInitialized && nextInitialized && AreSemanticallyEquivalent(previous, next))
+            return false;
+
+        Value = next;
+        return previousInitialized && nextInitialized;
+    }
+
+    internal static bool IsInitializedProcessValue(string? value)
+''')
+
+          replace('Models/IoTesting/IoTestModels.cs', '''    private string _currentValue = "-";
+    private string _currentQuality = "Unknown";
+    private string _currentSource = "Not connected";
+    private string _currentIedTimestamp = "—";
+''', '''    private string _currentValue = "-";
+    private string _currentQuality = "Unknown";
+    private string _currentSource = "Not connected";
+    private string _currentIedTimestamp = "—";
+    private Iec61850MonitorPoint? _livePoint;
+''')
+
+          replace('Models/IoTesting/IoTestModels.cs', '''    public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
+    public int Attempt { get => _attempt; internal set => Set(ref _attempt, value); }
+    public string CurrentValue { get => _currentValue; internal set => Set(ref _currentValue, string.IsNullOrWhiteSpace(value) ? "-" : value); }
+    public string CurrentQuality { get => _currentQuality; internal set => Set(ref _currentQuality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string CurrentSource { get => _currentSource; internal set => Set(ref _currentSource, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+
+    [JsonIgnore]
+    public string CurrentIedTimestamp
+    {
+        get => _currentIedTimestamp;
+        internal set => Set(ref _currentIedTimestamp, string.IsNullOrWhiteSpace(value) ? "—" : value);
+    }
+''', '''    public string StatusReason { get => _statusReason; internal set => Set(ref _statusReason, value ?? string.Empty); }
+    public int Attempt { get => _attempt; internal set => Set(ref _attempt, value); }
+
+    public string CurrentValue
+    {
+        get => _currentValue;
+        internal set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+            if (Iec61850MonitorPoint.IsInitializedProcessValue(_currentValue) &&
+                Iec61850MonitorPoint.IsInitializedProcessValue(next) &&
+                Iec61850MonitorPoint.AreSemanticallyEquivalent(_currentValue, next))
+                return;
+            Set(ref _currentValue, next);
+        }
+    }
+
+    public string CurrentQuality { get => _currentQuality; internal set => Set(ref _currentQuality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Trim()); }
+    public string CurrentSource { get => _currentSource; internal set => Set(ref _currentSource, string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Trim()); }
+
+    [JsonIgnore]
+    public string CurrentIedTimestamp
+    {
+        get => _currentIedTimestamp;
+        internal set => Set(ref _currentIedTimestamp, string.IsNullOrWhiteSpace(value) ? "—" : value.Trim());
+    }
+
+    // FAT LIVE VALUE follows the authoritative Engineering monitor point even when no
+    // evidence session is running. PropertyChangedEventManager keeps this subscription weak.
+    internal void AttachLivePoint(Iec61850MonitorPoint? livePoint)
+    {
+        if (ReferenceEquals(_livePoint, livePoint))
+        {
+            ApplyLivePointSnapshot();
+            return;
+        }
+        if (_livePoint != null)
+            PropertyChangedEventManager.RemoveHandler(_livePoint, LivePoint_PropertyChanged, string.Empty);
+        _livePoint = livePoint;
+        if (_livePoint != null)
+            PropertyChangedEventManager.AddHandler(_livePoint, LivePoint_PropertyChanged, string.Empty);
+        ApplyLivePointSnapshot();
+    }
+
+    private void LivePoint_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _livePoint) || _livePoint == null)
+            return;
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(Iec61850MonitorPoint.Value))
+            CurrentValue = _livePoint.Value;
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(Iec61850MonitorPoint.Quality))
+            CurrentQuality = _livePoint.Quality;
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(Iec61850MonitorPoint.SourceMode))
+            CurrentSource = _livePoint.SourceMode;
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(Iec61850MonitorPoint.DeviceTimestamp))
+            CurrentIedTimestamp = NormalizeLiveTimestamp(_livePoint.DeviceTimestamp);
+    }
+
+    private void ApplyLivePointSnapshot()
+    {
+        if (_livePoint == null)
+            return;
+        CurrentValue = _livePoint.Value;
+        CurrentQuality = _livePoint.Quality;
+        CurrentSource = _livePoint.SourceMode;
+        CurrentIedTimestamp = NormalizeLiveTimestamp(_livePoint.DeviceTimestamp);
+    }
+
+    private static string NormalizeLiveTimestamp(string? value)
+        => string.IsNullOrWhiteSpace(value) || value.Trim() == "-" ? "—" : value.Trim();
+''')
+
+          replace('Services/IoTesting/IoTestLiveBindingService.cs', '''                foreach (var point in iedPlan.TestPoints)
+                {
+                    point.ApplyLiveBinding(
+                        IoTestLiveBindingState.DeviceNotLoaded,
+                        "Load or connect the imported IED before starting its FAT session.");
+                }
+''', '''                foreach (var point in iedPlan.TestPoints)
+                {
+                    point.Runtime.AttachLivePoint(null);
+                    point.ApplyLiveBinding(
+                        IoTestLiveBindingState.DeviceNotLoaded,
+                        "Load or connect the imported IED before starting its FAT session.");
+                }
+''')
+
+          replace('Services/IoTesting/IoTestLiveBindingService.cs', '''                var binding = BindPoint(point, device, reconciliation);
+                point.ApplyLiveBinding(binding.State, binding.Reason, device.DeviceId, binding.Reference);
+                if (point.IsLiveBound)
+''', '''                var binding = BindPoint(point, device, reconciliation);
+                point.ApplyLiveBinding(binding.State, binding.Reason, device.DeviceId, binding.Reference);
+                point.Runtime.AttachLivePoint(binding.LivePoint);
+                if (point.IsLiveBound)
+''')
+
+          replace('Models/SignalDefinition.cs', '    private bool _controlSynchroCheck;\n', '    private bool _controlSynchroCheck = true;\n')
+          replace('Models/ControlModels.cs', '    public bool SynchroCheck { get; init; }\n', '    public bool SynchroCheck { get; init; } = true;\n')
+
+          test = r'''using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services.IoTesting;
+
+namespace ARSAS.Tests;
+
+public sealed class FatTargetedFourFixRegressionTests
+{
+    [Fact]
+    public void FormattingOnlyBooleanUpdate_DoesNotRepaintMonitorValue()
+    {
+        var point = new Iec61850MonitorPoint();
+        Assert.False(point.ApplyProcessValue("false"));
+        var valueNotifications = 0;
+        point.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Iec61850MonitorPoint.Value)) valueNotifications++; };
+        Assert.False(point.ApplyProcessValue("False"));
+        Assert.Equal("false", point.Value);
+        Assert.Equal(0, valueNotifications);
+    }
+
+    [Fact]
+    public void EngineeringCommandDefaults_EnableInterlockAndSynchrocheck()
+    {
+        var signal = new SignalDefinition();
+        Assert.True(signal.ControlInterlockCheck);
+        Assert.True(signal.ControlSynchroCheck);
+        var request = new Iec61850ControlCommandRequest { Signal = signal };
+        Assert.True(request.InterlockCheck);
+        Assert.True(request.SynchroCheck);
+    }
+
+    [Fact]
+    public void FatLiveValue_FollowsBoundMonitorPointWithoutRunningEvidenceSession()
+    {
+        const string reference = "IEDLD0/GGIO1.CBClsd.stVal";
+        var project = new IoTestProject { ProjectId = "LIVE", SchemaVersion = "ARSAS-FAT-IO-1.0", ProjectName = "Live", Ieds = { new IoTestIedPlan { IedName = "IED", IpAddress = "192.168.1.10", TestPoints = { new IoTestPointPlan { TestPointId = "TP-1", IedName = "IED", IpAddress = "192.168.1.10", SignalName = "CB closed", ObjectReference = reference, FunctionalConstraint = "ST", ExpectedOnText = "Closed", ExpectedOffText = "Open", WorkspaceSelected = true, TestEnabled = true, ImportReady = true } } } } };
+        project.InitializeRuntimeNotifications();
+        var device = new Iec61850MonitorDevice { Name = "IED", SclIedName = "IED", IpAddress = "192.168.1.10", Status = "Ready" };
+        var live = new Iec61850MonitorPoint { DeviceId = device.DeviceId, DeviceName = device.Name, IpAddress = device.IpAddress, SignalName = "CB closed", IecReference = reference, FunctionalConstraint = "ST", Value = "Open", Quality = "Good", SourceMode = "BRCB" };
+        device.Points.Add(live);
+        var summary = new IoTestLiveBindingService().Bind(project, new[] { device });
+        var fatPoint = project.Ieds[0].TestPoints[0];
+        Assert.Equal(1, summary.LivePointCount);
+        Assert.Equal("Open", fatPoint.Runtime.CurrentValue);
+        live.ApplyProcessValue("Closed");
+        Assert.Equal("Closed", fatPoint.Runtime.CurrentValue);
+    }
+
+    [Fact]
+    public void AnalogAutoCapture_RemainsArmedForStableLiveValues()
+    {
+        var point = new IoTestPointPlan { TestPointId = "AN-1", IedName = "IED", IpAddress = "192.168.1.10", SignalName = "Current A", ObjectReference = "IEDLD0/MMXU1.A.phsA.cVal.mag.f", FunctionalConstraint = "MX", ExpectedOnText = "", ExpectedOffText = "", SignalKind = FatSignalKind.Analog, CaptureMode = FatCaptureMode.OperatorSnapshot, WorkspaceSelected = true, TestEnabled = true, ImportReady = true };
+        var coordinator = new FatAutoCaptureCoordinator();
+        FatAutoCaptureDecision decision = default!;
+        for (var sequence = 1L; sequence <= FatAutoCaptureCoordinator.AnalogStableSampleCount; sequence++)
+            decision = coordinator.Observe(point, new IoTestObservation(null, "65.748", DateTimeOffset.UtcNow, null, "Good", "BRCB", sequence, 1));
+        Assert.NotNull(decision.Evidence);
+        Assert.Equal(FatValueSlot.Value1, decision.Evidence!.Slot);
+        Assert.Equal("65.748", decision.Evidence.RawValue);
+    }
+}
+'''
+          Path('tests/ARSAS.Tests/FatTargetedFourFixRegressionTests.cs').write_text(test, encoding='utf-8')
+          Path('.github/workflows/apply-fat-712-targeted-fix.yml').unlink()
+          PY
+      - name: Commit isolated patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Fix targeted FAT live value, flicker and command defaults"
+          git push origin HEAD:${GITHUB_REF_NAME}
