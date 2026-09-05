@@ -1,42 +1,40 @@
-using System.Windows;
 using System.Windows.Controls;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Bench-only scroll stability for the FAT v2 grid.
+/// Scroll stability for the FAT v2 grid.
 ///
-/// Keep the proven Build #1868 FAT schema/lifecycle untouched. WPF recycling may briefly
-/// reuse a realized cell/row while the operator scrolls, which can paint another signal's
-/// Runtime.CurrentValue for one frame. Standard virtualization keeps virtualization enabled
-/// but prevents recycled containers from being reassigned across FAT rows. Column
-/// virtualization is disabled because FAT has only a small fixed column set and correctness
-/// of LIVE VALUE / VALUE 1 / VALUE 2 presentation is more important than recycling 9 cells.
+/// WPF does not allow VirtualizingPanel.VirtualizationMode to be changed after the
+/// ItemsHost has entered Measure. The previous Loaded-class-handler implementation was
+/// therefore invalid and could tear down the FAT render path with InvalidOperationException.
 ///
-/// Deliberately no live-point subscriptions, no Dispatcher loop, no MMS read, no RCB/DataSet
-/// mutation, and no evidence mutation are introduced here.
+/// Apply the narrow virtualization policy during Window initialization, before the first
+/// layout pass: keep row virtualization enabled, use Standard (non-recycling) containers,
+/// and disable column virtualization for the small fixed FAT column set.
+///
+/// Deliberately no live-point subscriptions, Dispatcher work, MMS reads, RCB/DataSet
+/// mutation, ItemsSource/filter mutation, session mutation, or evidence mutation occur here.
 /// </summary>
 public partial class IoListTestingWindow
 {
-    private static readonly bool FatScrollStabilityClassHandlerRegistered =
-        RegisterFatScrollStabilityClassHandler();
-
-    private static bool RegisterFatScrollStabilityClassHandler()
+    protected override void OnInitialized(EventArgs e)
     {
-        EventManager.RegisterClassHandler(
-            typeof(IoListTestingWindow),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(ApplyFatScrollStability));
-        return true;
+        base.OnInitialized(e);
+        ApplyFatScrollStabilityBeforeFirstMeasure();
     }
 
-    private static void ApplyFatScrollStability(object sender, RoutedEventArgs e)
+    private void ApplyFatScrollStabilityBeforeFirstMeasure()
     {
-        if (sender is not IoListTestingWindow window)
+        var grid = _fatSignalsGrid ?? FindVisualDescendant<DataGrid>(this);
+        if (grid == null)
             return;
 
-        var grid = window._fatSignalsGrid ?? FindVisualDescendant<DataGrid>(window);
-        if (grid == null)
+        // Fail closed rather than ever changing VirtualizationMode after WPF has measured
+        // the ItemsHost. OnInitialized is expected to run before this point; this guard turns
+        // any future lifecycle drift into "no scroll patch" instead of an application-wide
+        // UI exception.
+        if (grid.IsMeasureValid)
             return;
 
         grid.EnableRowVirtualization = true;
