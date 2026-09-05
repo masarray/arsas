@@ -9,14 +9,13 @@ public sealed class IoListFatLiveValueAuthorityRegressionTests
         var authority = File.ReadAllText(FindRepoFile("IoListTestingWindow.LiveValueAuthority.cs"));
         var binding = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestLiveBindingService.cs"));
 
-        // Root cause guard: FAT v2 originally rendered the copied runtime image, while
+        // Root-cause guard: FAT v2 originally rendered the copied runtime image, while
         // live binding copied Iec61850MonitorPoint only at binding time.
         Assert.Contains("new Binding(\"Runtime.CurrentValue\")", legacyUx, StringComparison.Ordinal);
         Assert.Contains("point.Runtime.CurrentValue = binding.LivePoint.Value;", binding, StringComparison.Ordinal);
 
-        // The installed field cell must instead subscribe to the shared Engineering
-        // monitor/control objects. Runtime remains only a display fallback and evidence
-        // state; the UI authority must not depend on another protocol read.
+        // The installed field cell subscribes to the shared Engineering monitor/control
+        // objects. It must not start another protocol read or mutate FAT evidence.
         Assert.Contains("FatAuthoritativeLiveValueCell", authority, StringComparison.Ordinal);
         Assert.Contains("_livePoint.PropertyChanged += LivePoint_PropertyChanged;", authority, StringComparison.Ordinal);
         Assert.Contains("nameof(Iec61850MonitorPoint.Value)", authority, StringComparison.Ordinal);
@@ -28,15 +27,45 @@ public sealed class IoListFatLiveValueAuthorityRegressionTests
     }
 
     [Fact]
-    public void LiveValueGrid_DoesNotRecyclePreviousRowContentDuringScroll()
+    public void LiveValuePresentation_PrefersActualMonitorPointOverControlCache()
     {
         var authority = File.ReadAllText(FindRepoFile("IoListTestingWindow.LiveValueAuthority.cs"));
 
-        Assert.Contains("VirtualizingPanel.SetIsVirtualizing(grid, true);", authority, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.SetVirtualizationMode(grid, VirtualizationMode.Standard);", authority, StringComparison.Ordinal);
-        Assert.Contains("_valueText.Text = \"—\";", authority, StringComparison.Ordinal);
-        Assert.Contains("_qualityText.Text = \"Unknown\";", authority, StringComparison.Ordinal);
+        // A relay can change externally while ControlCurrentValue is still stale. The
+        // report/poll monitor point is the actual live process image and must win.
+        Assert.Contains("var liveValue = _livePoint?.Value;", authority, StringComparison.Ordinal);
+        Assert.Contains("var controlValue = _controlSignal?.ControlCurrentValue;", authority, StringComparison.Ordinal);
+        Assert.Contains("var rawValue = IsInitialized(liveValue)", authority, StringComparison.Ordinal);
+        Assert.Contains("? liveValue!", authority, StringComparison.Ordinal);
+        Assert.Contains(": IsInitialized(controlValue)", authority, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveValueGrid_NeverMutatesVirtualizationModeAfterLayout()
+    {
+        var authority = File.ReadAllText(FindRepoFile("IoListTestingWindow.LiveValueAuthority.cs"));
+
+        // WPF throws if VirtualizationMode is changed after the ItemsHost has measured.
+        // Virtualization remains owned by baseline XAML; the cell handles DataContext
+        // recycling synchronously instead.
+        Assert.DoesNotContain("VirtualizingPanel.SetVirtualizationMode(", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("VirtualizingPanel.SetIsVirtualizing(", authority, StringComparison.Ordinal);
         Assert.Contains("Cell_DataContextChanged", authority, StringComparison.Ordinal);
+        Assert.Contains("SetTextIfChanged(_valueText, \"—\")", authority, StringComparison.Ordinal);
+        Assert.Contains("SetTextIfChanged(_qualityText, \"Unknown\")", authority, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveValuePresentation_NormalizesBooleanTextAndSkipsRedundantPaints()
+    {
+        var authority = File.ReadAllText(FindRepoFile("IoListTestingWindow.LiveValueAuthority.cs"));
+
+        // false / False / FALSE are semantically the same relay state. Canonicalize the
+        // display and do not assign Text when the rendered value is already identical.
+        Assert.Contains("bool.TryParse(text, out var booleanValue)", authority, StringComparison.Ordinal);
+        Assert.Contains("booleanValue ? bool.TrueString : bool.FalseString", authority, StringComparison.Ordinal);
+        Assert.Contains("if (!string.Equals(target.Text, value, StringComparison.Ordinal))", authority, StringComparison.Ordinal);
+        Assert.Contains("SetTextIfChanged(_valueText, NormalizeDisplayValue(rawValue, \"—\"));", authority, StringComparison.Ordinal);
     }
 
     [Fact]
