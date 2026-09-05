@@ -40,7 +40,7 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void SharedSclStaticSelection_UsesExactAriecMembershipRows_NotEveryDatasetTaggedAlias()
+    public void SharedSclStaticSelection_UsesOnlyExactRcbBackedAriecMembershipRows()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
         var authority = File.ReadAllText(FindRepoFile("Services/Iec61850StaticDataSetAuthoritySelection.cs"));
@@ -53,11 +53,60 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.DoesNotContain("UseStaticDataSetWithMmsFallback", source, StringComparison.Ordinal);
         Assert.DoesNotContain("fallback remains available", source, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Contains("Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model)", authority, StringComparison.Ordinal);
+        Assert.Contains("var authorityModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", authority, StringComparison.Ordinal);
+        Assert.Contains("Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(authorityModel)", authority, StringComparison.Ordinal);
+        Assert.Contains("BuildReportBackedDataSetReferences(device)", authority, StringComparison.Ordinal);
+        Assert.Contains("reportBackedDataSets.Contains", authority, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", authority, StringComparison.Ordinal);
+        Assert.Contains("AddReportBackedDataSets(configurationModel, result)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddReportBackedDataSets(device.SclWorkspace?.DesignModel, result)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddReportBackedDataSets(device.LiveDiscoveryModel, result)", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DataSetReference, membership.DataSetReference)", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("StartsWith(memberReference", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("Contains(memberReference", authority, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("IEDApplication/LLN0$BR$Buffer", "IEDApplication/LLN0$BR$Buffer01", true)]
+    [InlineData("IEDApplication/LLN0$BR$Buffer", "IEDApplication/LLN0$BR$Buffer02", true)]
+    [InlineData("IEDApplication/LLN0$BR$Buffer02", "IEDApplication/LLN0$BR$Buffer02", true)]
+    [InlineData("IEDApplication/LLN0$BR$Buffer02", "IEDApplication/LLN0$BR$Buffer01", false)]
+    [InlineData("IEDApplication/LLN0$BR$Buffer", "IEDApplication/LLN0$BR$Other01", false)]
+    [InlineData("IEDApplication/LLN0$BR$Buffer0", "IEDApplication/LLN0$BR$Buffer01", false)]
+    public void StaticRcbMatcher_AcceptsOnlyExactOrDecimalIndexedFamilyInstances(
+        string configured,
+        string live,
+        bool expected)
+    {
+        Assert.Equal(expected, Iec61850StaticRcbReferenceMatcher.IsConfiguredOrIndexedInstance(configured, live));
+    }
+
+    [Fact]
+    public void StaticRcbMatcher_ExactIdentityAlwaysRanksBeforeIndexedFamily()
+    {
+        const string configured = "IEDApplication/LLN0$BR$Buffer";
+        Assert.Equal(0, Iec61850StaticRcbReferenceMatcher.MatchRank(configured, configured));
+        Assert.Equal(1, Iec61850StaticRcbReferenceMatcher.MatchRank(configured, "IEDApplication/LLN0$BR$Buffer01"));
+        Assert.Equal(int.MaxValue, Iec61850StaticRcbReferenceMatcher.MatchRank(configured, "IEDApplication/LLN0$BR$Other01"));
+    }
+
+    [Fact]
+    public void DeterministicStaticPlanner_PreservesSclConfigurationAndConcreteLiveRcbAuthority()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.StaticDataSetReporting.cs"));
+
+        Assert.Contains("device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", source, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
+        Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
+        Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
+        Assert.Contains("Install InformationReport receiver before enabling the RCB", source, StringComparison.Ordinal);
+        Assert.Contains("Write RptEna=true, then request GI=true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("configurationModels", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("var configured = configuredReports[0]", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PollingPointKeys = points.Select", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -103,8 +152,6 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.Contains("if (!reuseSharedSclAcquisition)", source, StringComparison.Ordinal);
         Assert.Contains("Compatibility path for non-shared/legacy FAT only", source, StringComparison.Ordinal);
 
-        // The legacy helper may remain for workbook-only FAT, but the shared SCL branch
-        // must be structurally separate and must start through the normal Engineering owner.
         var sharedBranchStart = source.IndexOf("if (reuseSharedSclAcquisition)", StringComparison.Ordinal);
         var legacyBranchStart = source.IndexOf("Compatibility path for non-shared/legacy FAT only", StringComparison.Ordinal);
         Assert.True(sharedBranchStart >= 0 && legacyBranchStart > sharedBranchStart);
