@@ -125,7 +125,7 @@ public sealed partial class NativeIec61850Client
             // remains rank 0. The only fallback accepted here is a decimal indexed instance
             // of that same literal RCB family and the same DataSet; arbitrary same-DataSet
             // RCB substitution is forbidden.
-            var liveCandidates = discovery.ReportInventory.ReportControls
+            var matchedLiveCandidates = discovery.ReportInventory.ReportControls
                 .Select(candidate => new
                 {
                     Candidate = candidate,
@@ -139,8 +139,32 @@ public sealed partial class NativeIec61850Client
                 .ThenBy(item => item.Candidate.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+            // An indexed family can expose several concrete RCBs. Literal instance order is
+            // not an activation policy: Buffer01 may already be enabled/reserved while
+            // Buffer02 is the usable instance. Reject only explicit occupancy; unknown state
+            // remains eligible because some relays omit reservation metadata. Among equally
+            // matched candidates prefer an explicitly disabled RCB, then stable literal order.
+            var liveCandidates = matchedLiveCandidates
+                .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsExplicitlyEnabled(item.Candidate))
+                .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsReservedByOtherClient(item.Candidate))
+                .OrderBy(item => item.Rank)
+                .ThenByDescending(item => ArMms.MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate))
+                .ThenBy(item => item.Candidate.Reference, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
             if (liveCandidates.Length == 0)
             {
+                if (matchedLiveCandidates.Length > 0)
+                {
+                    var occupied = string.Join(
+                        ", ",
+                        matchedLiveCandidates.Take(8).Select(item =>
+                            $"{item.Candidate.Reference}[RptEna={item.Candidate.EnabledState}, Resv={item.Candidate.ReservationState}, ResvTms={item.Candidate.ReservationTimeSeconds}, Owner={item.Candidate.Owner}]"));
+                    warnings.Add(
+                        $"{configured.Reference}: exact/indexed-family RCB objects were found, but every concrete instance was explicitly enabled or reserved ({occupied}). Static mode will not steal an occupied RCB and did not poll process values.");
+                    continue;
+                }
+
                 var sameDataSet = discovery.ReportInventory.ReportControls
                     .Where(candidate =>
                         !string.IsNullOrWhiteSpace(candidate.DataSetReference) &&
@@ -163,7 +187,7 @@ public sealed partial class NativeIec61850Client
             if (bestCandidates.Length > 1)
             {
                 warnings.Add(
-                    $"{configured.Reference}: configured indexed RCB family matched {bestCandidates.Length} concrete live instance(s); selected {bestCandidates[0].Candidate.Reference} by literal instance order. No unrelated RCB was substituted.");
+                    $"{configured.Reference}: configured indexed RCB family matched {bestCandidates.Length} non-occupied concrete live instance(s); selected {bestCandidates[0].Candidate.Reference} by explicit-disabled preference then literal instance order. No unrelated RCB was substituted.");
             }
 
             var liveSource = bestCandidates[0].Candidate;
