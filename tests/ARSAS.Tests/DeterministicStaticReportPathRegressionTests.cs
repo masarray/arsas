@@ -62,12 +62,17 @@ public sealed class DeterministicStaticReportPathRegressionTests
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("matchedLiveCandidates", source, StringComparison.Ordinal);
+        Assert.Contains("evaluatedLiveCandidates", source, StringComparison.Ordinal);
+        Assert.Contains("MmsRcbAvailabilityEvaluator.Evaluate", source, StringComparison.Ordinal);
+        Assert.Contains("callerOwnedRcbReferences", source, StringComparison.Ordinal);
         Assert.Contains("MmsReportSubscriptionPlanner.IsExplicitlyEnabled(item.Candidate)", source, StringComparison.Ordinal);
         Assert.Contains("MmsReportSubscriptionPlanner.IsReservedByOtherClient(item.Candidate)", source, StringComparison.Ordinal);
         Assert.Contains("MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate)", source, StringComparison.Ordinal);
-        Assert.Contains("every concrete instance was explicitly enabled or reserved", source, StringComparison.Ordinal);
+        Assert.Contains("StaticRcbAvailabilityRank", source, StringComparison.Ordinal);
+        Assert.Contains("Owner={item.Candidate.Owner}", source, StringComparison.Ordinal);
+        Assert.Contains("every concrete instance was explicitly unavailable/in-use", source, StringComparison.Ordinal);
         Assert.Contains("Static mode will not steal an occupied RCB", source, StringComparison.Ordinal);
-        Assert.Contains("prefer exact identity, then BRCB, explicitly disabled state", source, StringComparison.Ordinal);
+        Assert.Contains("prefer exact identity, caller-owned/known-safe state", source, StringComparison.Ordinal);
     }
 
     [Fact]
