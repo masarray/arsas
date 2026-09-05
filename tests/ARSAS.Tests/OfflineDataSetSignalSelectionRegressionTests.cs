@@ -82,7 +82,7 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
         Assert.Equal("masarray/ARIEC61850", root.GetProperty("repository").GetString());
         Assert.Equal("main", root.GetProperty("ref").GetString());
         Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
-        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 89);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 112);
         Assert.Contains("one descriptor per static DataSet member", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generic Boolean status structures", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DataRef-enabled InformationReport ordering", source, StringComparison.OrdinalIgnoreCase);
@@ -104,6 +104,10 @@ public sealed class OfflineDataSetSignalSelectionRegressionTests
         Assert.Contains("instMag/mag", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("instCVal/cVal", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ambiguous structures remain raw", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PR #112", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("receiver is registered before RptEna=true and GI=true", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("before unregistering", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never defines, deletes, or rebinds a DataSet", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
