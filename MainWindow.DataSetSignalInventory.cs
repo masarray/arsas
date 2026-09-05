@@ -12,10 +12,11 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(merge);
 
-        // A static FCDA such as CSWI/XCBR.Pos is dual-role: the control DO must remain a
-        // command object, while ARIEC's exact ST primary leaf must also exist as a normal
-        // report-backed runtime row. Materialize that status facet before Static DataSet
-        // authority selection so control semantics never have to weaken CanPublishToRuntime.
+        // A controllable static DataSet member is dual-role. Exact SCL/ARIEC CDC and
+        // DataObjectReference preserve the command companion independently from scalar
+        // feedback resolution; an exact ST/MX PrimaryValueReference may additionally become
+        // a normal report-backed runtime row. This separation keeps command discovery broad
+        // without weakening CanPublishToRuntime or admitting control service leaves.
         var controlStatusProjection =
             Iec61850StaticControlStatusProjectionService.EnsureProjections(device);
 
@@ -54,7 +55,10 @@ public partial class MainWindow
             AddLog(
                 "INFO",
                 device.Name,
-                $"Static DataSet dual-role control projection: restored {controlStatusProjection.AddedCount} exact ST status row(s) and linked {controlStatusProjection.LinkedControlCount} exact control object(s); control service leaves remain excluded from Live Signal Values.");
+                $"Static DataSet control projection: materialized {controlStatusProjection.AddedControlCount} exact control companion(s), " +
+                $"{controlStatusProjection.AddedRuntimeFeedbackCount} exact runtime feedback row(s), and linked " +
+                $"{controlStatusProjection.LinkedControlCount} controllable DataSet member(s). Commands remain gated by live ctlModel; " +
+                "Oper/SBO/SBOw/Cancel/ctlVal/ctlModel service leaves remain excluded from Live Signal Values.");
         }
     }
 }
