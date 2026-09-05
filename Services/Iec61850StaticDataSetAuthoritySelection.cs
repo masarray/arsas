@@ -7,10 +7,11 @@ namespace ArIED61850Tester.Services;
 /// Builds the exact Static DataSet selection used by the report-only workflow.
 ///
 /// Static report-only mode is RCB-backed by definition. A static DataSet that is not
-/// referenced by any configured BRCB/URCB is valid engineering inventory, but it is not
-/// a live acquisition source and therefore must not inflate the monitor with permanently
-/// unavailable rows. Selection is limited to exact DataSet memberships referenced by a
-/// configured ReportControl in either the opened SCL design model or fresh live discovery.
+/// referenced by an authoritative configured BRCB/URCB is valid engineering inventory,
+/// but it is not a live acquisition source and therefore must not inflate the monitor with
+/// permanently unavailable rows. When an SCL workspace is open, its ReportControl bindings
+/// are the configuration authority; live discovery is verification only. For online-only
+/// operation with no SCL workspace, live discovery becomes the configuration authority.
 ///
 /// A DataSetReference on a browsed/runtime alias is also not sufficient authority: several
 /// aliases can point at the same static FCDA/FCD member (for example cVal/instCVal or
@@ -23,36 +24,26 @@ public static class Iec61850StaticDataSetAuthoritySelection
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        // Do not let a partial live model erase richer opened-SCL membership evidence. This
-        // is the same authority rule used for configured RCBs: design + live are additive,
-        // while the live MMS association is still required later to verify/arm acquisition.
-        var authorityModels = new[]
-            {
-                device.SclWorkspace?.DesignModel,
-                device.LiveDiscoveryModel
-            }
-            .Where(model => model is not null)
-            .Cast<LiveIedModelDiscoveryDocument>()
-            .Distinct()
-            .ToArray();
-        if (authorityModels.Length == 0)
+        // Opened SCL is the engineering authority. A partial or richer live model may verify
+        // the configuration later, but it must not introduce extra static memberships that
+        // were never configured in the opened CID/SCD. Online-only mode falls back to live.
+        var authorityModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel;
+        if (authorityModel is null)
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
 
         var reportBackedDataSets = BuildReportBackedDataSetReferences(device);
         if (reportBackedDataSets.Count == 0)
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
 
-        var mandatory = authorityModels
-            .SelectMany(model => Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model))
-            .ToArray();
+        var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(authorityModel);
         var selected = new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
         var signals = device.Signals.ToArray();
 
         foreach (var descriptor in mandatory)
         {
             // A descriptor may carry more than one membership. Do not arbitrarily take the
-            // first DataSet: choose only literal memberships that are backed by configured
-            // report-control authority.
+            // first DataSet: choose only literal memberships that are backed by authoritative
+            // report-control configuration.
             var memberships = descriptor.DataSetMemberships
                 .Where(item => reportBackedDataSets.Contains(NormalizeLiteral(item.DataSetReference)))
                 .OrderBy(item => item.DataSetReference, StringComparer.OrdinalIgnoreCase)
@@ -106,18 +97,17 @@ public static class Iec61850StaticDataSetAuthoritySelection
     }
 
     /// <summary>
-    /// Returns the literal DataSet references that have configured report-control authority.
-    /// The union is deliberate: fast SCL reconnect can have a richer design model than the
-    /// partial live model, while a full discovery can reveal additional valid live RCB
-    /// bindings. Neither source is allowed to erase the other's exact configured evidence.
+    /// Returns the literal DataSet references that have authoritative ReportControl backing.
+    /// Opened SCL configuration wins absolutely over extra live ReportControls. Live discovery
+    /// is used as configuration authority only when no SCL design model is open.
     /// </summary>
     public static IReadOnlySet<string> BuildReportBackedDataSetReferences(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
 
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddReportBackedDataSets(device.SclWorkspace?.DesignModel, result);
-        AddReportBackedDataSets(device.LiveDiscoveryModel, result);
+        var configurationModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel;
+        AddReportBackedDataSets(configurationModel, result);
         return result;
     }
 
