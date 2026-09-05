@@ -107,7 +107,7 @@ public partial class MainWindow
         }
     }
 
-    private void EnsureIoFatRuntimePointIndex()
+    private void EnsureIoFatRuntimePointIndex(bool force = false)
     {
         var project = _ioFatSelectionBridgeProject;
         if (project == null)
@@ -119,7 +119,8 @@ public partial class MainWindow
         }
 
         var pointCount = project.Ieds.Sum(ied => ied.TestPoints.Count);
-        if (ReferenceEquals(project, _ioFatRuntimeIndexedProject) &&
+        if (!force &&
+            ReferenceEquals(project, _ioFatRuntimeIndexedProject) &&
             pointCount == _ioFatRuntimeIndexedPointCount)
         {
             return;
@@ -167,7 +168,15 @@ public partial class MainWindow
     private void ApplyIoFatRuntimeSnapshot(string key, Iec61850PointSnapshot snapshot)
     {
         if (!_ioFatRuntimePointIndex.TryGetValue(key, out var points))
-            return;
+        {
+            // A FAT project can be attached before the corresponding Engineering device
+            // or live binding has finished. Rebuild once on the first unmatched runtime
+            // sample so newly attached device/reference identities become visible without
+            // polling, per-cell subscriptions, or collection scans on every update.
+            EnsureIoFatRuntimePointIndex(force: true);
+            if (!_ioFatRuntimePointIndex.TryGetValue(key, out points))
+                return;
+        }
 
         var value = IoFatValuePresentation.Canonicalize(snapshot.Value);
         var quality = string.IsNullOrWhiteSpace(snapshot.Quality) ? "Unknown" : snapshot.Quality.Trim();
