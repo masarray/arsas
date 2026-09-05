@@ -42,10 +42,11 @@ public sealed class DeterministicStaticReportPathRegressionTests
     {
         var hybrid = Read("Services/NativeIec61850Client.HybridReporting.cs");
 
-        Assert.Contains("Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device.DeviceId)", hybrid, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device)", hybrid, StringComparison.Ordinal);
         Assert.Contains("BuildStaticDataSetReportPlansAsync", hybrid, StringComparison.Ordinal);
         Assert.Contains("_deterministicStaticSubscriptions.ContainsKey(plan.PlanId)", hybrid, StringComparison.Ordinal);
         Assert.Contains("StartStaticDataSetReportMonitorAsync", hybrid, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device.DeviceId)", hybrid, StringComparison.Ordinal);
     }
 
     [Fact]
