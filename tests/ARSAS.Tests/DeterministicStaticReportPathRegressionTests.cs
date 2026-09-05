@@ -41,6 +41,20 @@ public sealed class DeterministicStaticReportPathRegressionTests
     }
 
     [Fact]
+    public void IndexedRcbFamily_PrefersNonOccupiedConcreteInstance()
+    {
+        var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
+
+        Assert.Contains("matchedLiveCandidates", source, StringComparison.Ordinal);
+        Assert.Contains("MmsReportSubscriptionPlanner.IsExplicitlyEnabled(item.Candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("MmsReportSubscriptionPlanner.IsReservedByOtherClient(item.Candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("every concrete instance was explicitly enabled or reserved", source, StringComparison.Ordinal);
+        Assert.Contains("Static mode will not steal an occupied RCB", source, StringComparison.Ordinal);
+        Assert.Contains("explicit-disabled preference then literal instance order", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HybridEntryPoints_RouteStaticModeToDeterministicPath()
     {
         var hybrid = Read("Services/NativeIec61850Client.HybridReporting.cs");
