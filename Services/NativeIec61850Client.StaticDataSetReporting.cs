@@ -61,10 +61,10 @@ public sealed partial class NativeIec61850Client
             : "live discovery model (online-only)";
 
         // Fresh report discovery is verification, not permission policy. In particular we
-        // deliberately do NOT classify a configured BRCB through the Hybrid availability
-        // confidence gate. Some perfectly usable servers expose RptEna and DatSet but omit
-        // enough reservation metadata for that adaptive gate to call the RCB 'Available'.
-        // Explicit enabled/reserved evidence is still used to avoid stealing an occupied RCB.
+        // deliberately do NOT require the adaptive Hybrid availability gate to classify a
+        // configured BRCB as Available. Some perfectly usable servers omit enough reservation
+        // metadata to remain Unknown. Explicit enabled/reserved/owner evidence is still used
+        // to avoid stealing an occupied RCB.
         var discovery = await EnsureDiscoveryForReportingAsync(cancellationToken).ConfigureAwait(false);
         if (discovery is null)
         {
@@ -74,6 +74,11 @@ public sealed partial class NativeIec61850Client
                     ? "Fresh report discovery was unavailable."
                     : LastErrorMessage);
         }
+
+        var callerOwnedRcbReferences = _reportMonitorSessions.Values
+            .Select(session => NormalizeStaticReference(session.ReportControl.Reference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var reportPlans = new List<ReportControlPlan>();
         var warnings = new List<string>();
@@ -133,16 +138,37 @@ public sealed partial class NativeIec61850Client
                 .ThenBy(item => item.Candidate.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+            // Use ARIEC's operational evaluator so Owner is part of the same occupancy
+            // decision as RptEna/Resv/ResvTms. Directory evidence is intentionally omitted at
+            // this stage: Unknown is still eligible and the exact DataSet directory is verified
+            // before the plan is armed. If a currently active session already owns the RCB,
+            // preserve that fact as UsedByCaller instead of misclassifying it as foreign use.
+            var evaluatedLiveCandidates = matchedLiveCandidates
+                .Select(item => new
+                {
+                    item.Configured,
+                    item.Candidate,
+                    item.Rank,
+                    Availability = ArMms.MmsRcbAvailabilityEvaluator.Evaluate(
+                        item.Candidate,
+                        dataSetDirectory: null,
+                        callerOwned: callerOwnedRcbReferences.Contains(
+                            NormalizeStaticReference(item.Candidate.Reference)))
+                })
+                .ToArray();
+
             // An indexed family can expose several concrete RCBs. Literal instance order is
-            // not an activation policy: Buffer01 may already be enabled/reserved while
-            // Buffer02 is the usable instance. Reject only explicit occupancy; unknown state
-            // remains eligible because some relays omit reservation metadata. Among equally
-            // matched candidates prefer exact identity, then BRCB, explicitly disabled state,
-            // and finally stable literal order.
-            var liveCandidates = matchedLiveCandidates
+            // not an activation policy: Buffer01 may already be enabled/reserved/owned while
+            // Buffer02 is the usable instance. Reject only explicit operational blockers;
+            // Unknown remains eligible because some relays omit reservation metadata. Among
+            // equally matched candidates prefer exact identity, caller-owned/known-safe state,
+            // BRCB, explicitly disabled state, and finally stable literal order.
+            var liveCandidates = evaluatedLiveCandidates
+                .Where(item => StaticRcbAvailabilityRank(item.Availability.Availability) != int.MaxValue)
                 .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsExplicitlyEnabled(item.Candidate))
                 .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsReservedByOtherClient(item.Candidate))
                 .OrderBy(item => item.Rank)
+                .ThenBy(item => StaticRcbAvailabilityRank(item.Availability.Availability))
                 .ThenByDescending(item => item.Configured.Buffered)
                 .ThenByDescending(item => ArMms.MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate))
                 .ThenBy(item => item.Configured.Reference, StringComparer.OrdinalIgnoreCase)
@@ -151,14 +177,14 @@ public sealed partial class NativeIec61850Client
 
             if (liveCandidates.Length == 0)
             {
-                if (matchedLiveCandidates.Length > 0)
+                if (evaluatedLiveCandidates.Length > 0)
                 {
                     var occupied = string.Join(
                         ", ",
-                        matchedLiveCandidates.Take(8).Select(item =>
-                            $"{item.Configured.Reference}->{item.Candidate.Reference}[RptEna={item.Candidate.EnabledState}, Resv={item.Candidate.ReservationState}, ResvTms={item.Candidate.ReservationTimeSeconds}, Owner={item.Candidate.Owner}]"));
+                        evaluatedLiveCandidates.Take(8).Select(item =>
+                            $"{item.Configured.Reference}->{item.Candidate.Reference}[availability={item.Availability.Availability}, RptEna={item.Candidate.EnabledState}, Resv={item.Candidate.ReservationState}, ResvTms={item.Candidate.ReservationTimeSeconds}, Owner={item.Candidate.Owner}]"));
                     warnings.Add(
-                        $"{dataSetReference}: exact/indexed-family RCB objects were found for authoritative configuration, but every concrete instance was explicitly enabled or reserved ({occupied}). Static mode will not steal an occupied RCB and did not poll process values.");
+                        $"{dataSetReference}: exact/indexed-family RCB objects were found for authoritative configuration, but every concrete instance was explicitly unavailable/in-use ({occupied}). Static mode will not steal an occupied RCB and did not poll process values.");
                     continue;
                 }
 
@@ -186,12 +212,13 @@ public sealed partial class NativeIec61850Client
             var selected = liveCandidates[0];
             var configured = selected.Configured;
             var liveSource = selected.Candidate;
+            var liveAvailability = selected.Availability;
             var liveRcb = CloneReportControlForPlanning(liveSource);
 
             if (configuredReports.Length > 1 || liveCandidates.Length > 1)
             {
                 warnings.Add(
-                    $"{dataSetReference}: evaluated {configuredReports.Length} authoritative configured RCB(s) and {liveCandidates.Length} non-occupied exact/indexed live match(es); selected {configured.Reference} -> {liveSource.Reference}. {configurationAuthorityLabel} remained authoritative.");
+                    $"{dataSetReference}: evaluated {configuredReports.Length} authoritative configured RCB(s) and {liveCandidates.Length} non-occupied exact/indexed live match(es); selected {configured.Reference} -> {liveSource.Reference} ({liveAvailability.Availability}). {configurationAuthorityLabel} remained authoritative.");
             }
 
             if (!string.IsNullOrWhiteSpace(liveRcb.DataSetReference) &&
@@ -262,6 +289,11 @@ public sealed partial class NativeIec61850Client
             {
                 subscriptionWarnings.Add(
                     $"Configured ReportControl family {configured.Reference} resolved to concrete live indexed instance {concreteReportReference}.");
+            }
+            if (liveAvailability.Availability == ArMms.MmsRcbOperationalAvailability.Unknown)
+            {
+                subscriptionWarnings.Add(
+                    $"Live RCB availability for {concreteReportReference} remains Unknown ({liveAvailability.Reason}). Static mode permits this because identity/configuration are authoritative and no explicit in-use evidence was observed.");
             }
             if (string.IsNullOrWhiteSpace(liveSource.DataSetReference))
             {
@@ -474,6 +506,15 @@ public sealed partial class NativeIec61850Client
             Warnings = new[] { reason },
             PollingFallbackSignalCount = 0,
             UncoveredSignalCount = points.Count
+        };
+
+    private static int StaticRcbAvailabilityRank(ArMms.MmsRcbOperationalAvailability availability)
+        => availability switch
+        {
+            ArMms.MmsRcbOperationalAvailability.UsedByCaller => 0,
+            ArMms.MmsRcbOperationalAvailability.Available => 1,
+            ArMms.MmsRcbOperationalAvailability.Unknown => 2,
+            _ => int.MaxValue
         };
 
     private static bool SameStaticReference(string? left, string? right)
