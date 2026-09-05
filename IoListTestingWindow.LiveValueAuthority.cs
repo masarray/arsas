@@ -11,7 +11,7 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// FAT LIVE VALUE must be a presentation of the shared Engineering live objects, never a
+/// FAT LIVE VALUE is a presentation of the shared Engineering live objects, never a
 /// second cached process image. Evidence state (Value 1 / Value 2, transition history and
 /// journal records) intentionally stays in IoTestPointRuntime and is not changed here.
 /// </summary>
@@ -47,12 +47,10 @@ public partial class IoListTestingWindow
         if (grid == null)
             return;
 
-        // Recycling can display the previous row's text for one render frame while WPF is
-        // moving a cell to a new DataContext. Standard virtualization keeps large FAT lists
-        // virtualized but never reuses a realized row container for another test point.
-        VirtualizingPanel.SetIsVirtualizing(grid, true);
-        VirtualizingPanel.SetVirtualizationMode(grid, VirtualizationMode.Standard);
-
+        // IMPORTANT: virtualization mode is a layout-time WPF property. Never mutate
+        // VirtualizingPanel.VirtualizationMode (or IsVirtualizing) here after Loaded/Measure.
+        // Doing so throws InvalidOperationException and is the direct cause of the blank/
+        // frozen FAT window seen by the recovery build. The baseline XAML owns virtualization.
         var liveColumn = grid.Columns
             .OfType<DataGridTemplateColumn>()
             .FirstOrDefault(column =>
@@ -66,10 +64,11 @@ public partial class IoListTestingWindow
 }
 
 /// <summary>
-/// One event-driven FAT cell. It resolves the exact live monitor point already proven by
-/// the FAT binding service and, for an operable control DataObject, may display the shared
-/// Engineering ControlCurrentValue because that is the direct status image used by the
-/// Command Panel. No MMS read is initiated by this cell and no FAT evidence is mutated.
+/// Event-driven FAT cell. It resolves the exact live monitor point already proven by the
+/// FAT binding service. The live monitor point is authoritative because it is the actual
+/// report/poll process image. Engineering ControlCurrentValue is only a fallback when no
+/// live monitor value exists. No MMS read is initiated by this cell and no FAT evidence is
+/// mutated.
 /// </summary>
 public sealed class FatAuthoritativeLiveValueCell : StackPanel
 {
@@ -134,9 +133,10 @@ public sealed class FatAuthoritativeLiveValueCell : StackPanel
         if (!_attached)
             return;
 
-        // Clear before rebinding so a previous row can never be painted under a new row.
-        _valueText.Text = "—";
-        _qualityText.Text = "Unknown";
+        // Clear synchronously before rebinding so a recycled container can never expose the
+        // previous row. Rebind renders the new row in the same dispatcher turn.
+        SetTextIfChanged(_valueText, "—");
+        SetTextIfChanged(_qualityText, "Unknown");
         RebindAuthoritativeSources();
     }
 
@@ -288,30 +288,48 @@ public sealed class FatAuthoritativeLiveValueCell : StackPanel
         if (!_attached)
             return;
 
-        // For controllable DO rows, the same ControlCurrentValue shown in Engineering's
-        // Command Panel is preferred when initialized. It comes from the shared control
-        // backend; this cell does not trigger a read. All other rows display the exact
-        // Iec61850MonitorPoint current image. Runtime.CurrentValue is last-resort display
-        // fallback only and remains the separate FAT/evidence state machine image.
-        var controlValue = _controlSignal?.ControlCurrentValue;
+        // The monitor point is the current report/poll process image and therefore wins.
+        // ControlCurrentValue can lag after a relay changes externally, so it is fallback
+        // only. Runtime remains the final display fallback and separate FAT evidence state.
         var liveValue = _livePoint?.Value;
-        var value = IsInitialized(controlValue)
-            ? controlValue!
-            : IsInitialized(liveValue)
-                ? liveValue!
+        var controlValue = _controlSignal?.ControlCurrentValue;
+        var rawValue = IsInitialized(liveValue)
+            ? liveValue!
+            : IsInitialized(controlValue)
+                ? controlValue!
                 : IsInitialized(_plan?.Runtime.CurrentValue)
                     ? _plan!.Runtime.CurrentValue
                     : "—";
 
         var liveQuality = _livePoint?.Quality;
-        var quality = IsInitialized(liveQuality)
+        var rawQuality = IsInitialized(liveQuality)
             ? liveQuality!
             : IsInitialized(_plan?.Runtime.CurrentQuality)
                 ? _plan!.Runtime.CurrentQuality
                 : "Unknown";
 
-        _valueText.Text = value;
-        _qualityText.Text = quality;
+        // Normalize equivalent boolean spellings and skip identical Text assignments. This
+        // prevents false -> False churn from repainting a realized FAT cell while scrolling.
+        SetTextIfChanged(_valueText, NormalizeDisplayValue(rawValue, "—"));
+        SetTextIfChanged(_qualityText, NormalizeDisplayValue(rawQuality, "Unknown"));
+    }
+
+    private static void SetTextIfChanged(TextBlock target, string value)
+    {
+        if (!string.Equals(target.Text, value, StringComparison.Ordinal))
+            target.Text = value;
+    }
+
+    private static string NormalizeDisplayValue(string? value, string fallback)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (!IsInitialized(text))
+            return fallback;
+
+        if (bool.TryParse(text, out var booleanValue))
+            return booleanValue ? bool.TrueString : bool.FalseString;
+
+        return text;
     }
 
     private static bool ExactControlReferenceMatch(
