@@ -1,5 +1,4 @@
 using ArIED61850Tester.Models;
-using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
@@ -13,11 +12,12 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
             Name = "Pos",
             ObjectReference = "AA1E1F06R4Q0/CSWI1.Pos",
             DisplayReference = "AA1E1F06R4Q0/CSWI1.Pos",
-            FunctionalConstraint = "ST",
-            DataType = "Dbpos",
+            FunctionalConstraint = "CO",
+            DataType = "DPC",
             Category = "Control",
             DataSetReference = "AA1E1F06R4Application/LLN0.Digital",
-            IsControlSignal = true
+            IsControlSignal = true,
+            ControlCdc = "DPC"
         };
         var status = new SignalDefinition
         {
@@ -38,57 +38,117 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
         Assert.False(status.IsControlSignal);
         Assert.False(SignalDefinition.IsControlObjectReference("AA1E1F06R4Q0/CSWI1.Pos.Oper"));
         Assert.False(SignalDefinition.IsControlObjectReference("AA1E1F06R4Q0/CSWI1.Pos.SBOw"));
+        Assert.False(SignalDefinition.IsControlObjectReference("AA1E1F06R4Q0/CSWI1.Pos.ctlVal"));
+        Assert.False(SignalDefinition.IsControlObjectReference("AA1E1F06R4Q0/CSWI1.Pos.Cancel"));
+    }
+
+    [Theory]
+    [InlineData("SPC", "IEDCTRL/GGIO1.Enable", "boolean")]
+    [InlineData("DPC", "IEDQ0/CSWI1.Pos", "position")]
+    [InlineData("INC", "IEDCTRL/ATCC1.TapCmd", "regulating")]
+    [InlineData("ISC", "IEDCTRL/ATCC1.StepCmd", "regulating")]
+    [InlineData("APC", "IEDCTRL/AVCO1.VRef", "setpoint")]
+    [InlineData("BAC", "IEDCTRL/GAPC1.AnCtl", "setpoint")]
+    [InlineData("BSC", "IEDCTRL/ATCC1.TapPos", "setpoint")]
+    public void ExistingCommandSurface_CoversStandardControlFamilies(
+        string cdc,
+        string reference,
+        string expectedKind)
+    {
+        var signal = new SignalDefinition
+        {
+            Name = reference[(reference.LastIndexOf('.') + 1)..],
+            ObjectReference = reference,
+            DisplayReference = reference,
+            FunctionalConstraint = "CO",
+            DataType = cdc,
+            Category = "Control",
+            IsControlSignal = true,
+            ControlCdc = cdc
+        };
+
+        Assert.True(signal.IsValidControlObject);
+        Assert.False(signal.CanPublishAsSignal);
+        Assert.False(signal.IsGenericControl);
+
+        switch (expectedKind)
+        {
+            case "boolean":
+                Assert.True(signal.IsBooleanControl);
+                break;
+            case "position":
+                Assert.True(signal.IsPositionControl);
+                break;
+            case "regulating":
+                Assert.True(signal.IsRaiseLowerControl);
+                break;
+            case "setpoint":
+                Assert.True(signal.IsSetPointControl);
+                break;
+        }
     }
 
     [Fact]
-    public void StaticPositionProjection_RequiresExactAriecStAuthority()
+    public void StaticControlProjection_UsesExactCdcAndDataObjectAuthority_NotObjectNameGuessing()
     {
         var source = File.ReadAllText(FindRepoFile(
             "Services/Iec61850StaticControlStatusProjectionService.cs"));
 
-        Assert.Contains("descriptor.FunctionalConstraint.Equals(\"ST\"", source, StringComparison.Ordinal);
-        Assert.Contains("descriptor.PrimaryValueReference", source, StringComparison.Ordinal);
-        Assert.Contains("primary.EndsWith(\".stval\"", source, StringComparison.Ordinal);
-        Assert.Contains("\"CSWI\", \"XCBR\", \"XSWI\"", source, StringComparison.Ordinal);
-        Assert.Contains("signal.IsControlSignal && signal.IsValidControlObject", source, StringComparison.Ordinal);
-        Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", source, StringComparison.Ordinal);
-        Assert.Contains("LiteralEquals(signal.ObjectReference, memberReference)", source, StringComparison.Ordinal);
-        Assert.Contains("ObjectReference = primaryValueReference", source, StringComparison.Ordinal);
-        Assert.Contains("FunctionalConstraint = \"ST\"", source, StringComparison.Ordinal);
-        Assert.Contains("Category = \"Position\"", source, StringComparison.Ordinal);
-        Assert.Contains("dual-role control status projection", source, StringComparison.Ordinal);
-        Assert.Contains("No prefix/fuzzy matching", source, StringComparison.Ordinal);
+        foreach (var cdc in new[] { "SPC", "DPC", "INC", "ISC", "APC", "BAC", "BSC", "ENC" })
+            Assert.Contains($"\"{cdc}\"", source, StringComparison.Ordinal);
+
+        Assert.Contains("FirstNonEmpty(descriptor.Cdc, membership.Cdc)", source, StringComparison.Ordinal);
+        Assert.Contains("descriptor.DataObjectReference", source, StringComparison.Ordinal);
+        Assert.Contains("CreateControlCompanion", source, StringComparison.Ordinal);
+        Assert.Contains("ControlCdc = cdc", source, StringComparison.Ordinal);
+        Assert.Contains("FunctionalConstraint = \"CO\"", source, StringComparison.Ordinal);
+        Assert.Contains("ControlStatusReference = exactFeedbackReference", source, StringComparison.Ordinal);
+        Assert.Contains("Actual command actions remain disabled until live ctlModel inspection", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PositionLogicalNodeClasses", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsExactPositionMemberReference", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartsWith(memberReference", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void StaticAuthority_SelectsExactControlCompanionButRuntimeStillRejectsRawControlObjects()
+    public void StaticControlProjection_RetainsControlWhenScalarFeedbackIsUnresolved()
     {
+        var projection = File.ReadAllText(FindRepoFile(
+            "Services/Iec61850StaticControlStatusProjectionService.cs"));
         var authority = File.ReadAllText(FindRepoFile(
             "Services/Iec61850StaticDataSetAuthoritySelection.cs"));
+
+        Assert.Contains("if (control is null)", projection, StringComparison.Ordinal);
+        Assert.Contains("device.Signals.Add(control)", projection, StringComparison.Ordinal);
+        Assert.Contains("if (string.IsNullOrWhiteSpace(exactFeedbackReference))", projection, StringComparison.Ordinal);
+
+        var controlSelection = authority.IndexOf(
+            ".Where(signal => signal.IsControlSignal && signal.IsValidControlObject)",
+            StringComparison.Ordinal);
+        var runtimeCandidates = authority.IndexOf(
+            "var candidates = signals",
+            StringComparison.Ordinal);
+        var noRuntimeCandidate = authority.IndexOf(
+            "if (candidates.Length == 0)",
+            StringComparison.Ordinal);
+
+        Assert.True(controlSelection >= 0);
+        Assert.True(runtimeCandidates > controlSelection);
+        Assert.True(noRuntimeCandidate > controlSelection);
+        Assert.Contains("selected.Add(control)", authority, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServiceLeavesNeverBecomeProcessSignalsOrCommandTargets()
+    {
+        var projection = File.ReadAllText(FindRepoFile(
+            "Services/Iec61850StaticControlStatusProjectionService.cs"));
         var runtime = File.ReadAllText(FindRepoFile(
             "Services/Iec61850MonitorRuntime.cs"));
 
-        Assert.Contains(
-            ".Where(signal => !signal.IsControlSignal && signal.CanPublishToRuntime)",
-            authority,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            ".Where(signal => signal.IsControlSignal && signal.IsValidControlObject)",
-            authority,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "LiteralEquals(signal.DataSetReference, membership.DataSetReference)",
-            authority,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "LiteralEquals(signal.DisplayReference, memberReference)",
-            authority,
-            StringComparison.Ordinal);
-        Assert.Contains("selected.Add(control)", authority, StringComparison.Ordinal);
+        foreach (var leaf in new[] { "ctlModel", "ctlVal", "SBO", "SBOw", "Oper", "Cancel", "origin", "Check", "Test" })
+            Assert.Contains($"\"{leaf}\"", projection, StringComparison.Ordinal);
 
-        // The raw control DO is selected only so ctlModel inspection / Command Panel can use
-        // it. Monitoring still admits only the separate non-control ST status projection.
+        Assert.Contains("ControlServicePathSegments.Contains(segment)", projection, StringComparison.Ordinal);
         Assert.Contains(
             ".Where(signal => signal.IsSelected && signal.CanPublishToRuntime)",
             runtime,
@@ -100,7 +160,7 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
     }
 
     [Fact]
-    public void SharedStaticWorkflow_MaterializesDualRoleStatusBeforeAuthoritySelection()
+    public void SharedStaticWorkflow_MaterializesControlsBeforeAuthoritySelection()
     {
         var registration = File.ReadAllText(FindRepoFile("MainWindow.DataSetSignalInventory.cs"));
         var shared = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
@@ -113,7 +173,9 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
             "merge.AddedSignals.Concat(controlStatusProjection.AddedSignals)",
             registration,
             StringComparison.Ordinal);
-        Assert.Contains("control service leaves remain excluded", registration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AddedControlCount", registration, StringComparison.Ordinal);
+        Assert.Contains("AddedRuntimeFeedbackCount", registration, StringComparison.Ordinal);
+        Assert.Contains("Commands remain gated by live ctlModel", registration, StringComparison.Ordinal);
 
         var registerIndex = shared.IndexOf("RegisterRecoveredDataSetSignals(device, merge)", StringComparison.Ordinal);
         var authorityIndex = shared.IndexOf("Iec61850StaticDataSetAuthoritySelection.Build(device)", StringComparison.Ordinal);
