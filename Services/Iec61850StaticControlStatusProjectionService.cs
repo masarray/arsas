@@ -8,26 +8,46 @@ public sealed record Iec61850StaticControlStatusProjectionResult(
     int LinkedControlCount)
 {
     public int AddedCount => AddedSignals.Count;
+    public int AddedControlCount => AddedSignals.Count(signal => signal.IsControlSignal);
+    public int AddedRuntimeFeedbackCount => AddedSignals.Count(signal => !signal.IsControlSignal);
 }
 
 /// <summary>
-/// Materializes the reportable status facet of an IEC 61850 position control object.
+/// Preserves the two distinct facets of an IEC 61850 control DataObject that is carried by
+/// an authoritative static DataSet.
 ///
-/// A static FCDA such as CSWI1.Pos or XCBR1.Pos is dual-role: the DO itself is the
-/// control object, while its ST primary value (Pos.stVal) is process feedback that belongs
-/// in Live Signal Values. ARSAS must not force one SignalDefinition to serve both roles,
-/// because the normal runtime boundary intentionally rejects control objects.
+/// The exact SCL/ARIEC CDC + DataObjectReference identify the command target. That control
+/// companion is retained even when no scalar feedback attribute can be resolved yet. When
+/// ARIEC also proves one exact ST/MX PrimaryValueReference, a separate non-control runtime
+/// feedback row may be materialized. This keeps command discovery independent from process
+/// acquisition without weakening SignalDefinition.CanPublishToRuntime.
 ///
-/// This bridge is deliberately narrow and engine-authoritative. It only projects a status
-/// row when ARIEC proves an exact static DataSet membership with FC=ST and an exact resolved
-/// primary .stVal leaf, and an existing exact control object matches that same membership.
-/// No prefix/fuzzy matching and no Oper/SBO/CtlVal reconstruction is permitted here.
+/// No control is inferred from object names. No Oper/SBO/SBOw/Cancel/ctlVal/ctlModel path is
+/// reconstructed. Every companion is rooted in an exact DataSet membership plus a standard
+/// controllable CDC, and every runtime feedback reference comes directly from ARIEC semantic
+/// authority. Unsupported/ambiguous feedback therefore fails closed while the proven control
+/// object remains available for live ctlModel inspection.
 /// </summary>
 public static class Iec61850StaticControlStatusProjectionService
 {
-    private static readonly HashSet<string> PositionLogicalNodeClasses = new(StringComparer.OrdinalIgnoreCase)
+    // IEC 61850 controllable CDC families handled by ARSAS' command surface. Keep status-only
+    // CDCs (SPS/DPS/INS/ENS, etc.) out: their presence in a DataSet is not command authority.
+    private static readonly HashSet<string> ControllableCdcs = new(StringComparer.OrdinalIgnoreCase)
     {
-        "CSWI", "XCBR", "XSWI"
+        "SPC", // single point control
+        "DPC", // double point / switch position control
+        "INC", // integer step control
+        "ISC", // integer status/control variant used by regulating devices
+        "APC", // analog process control
+        "BAC", // binary controlled analog
+        "BSC", // binary controlled step position
+        "ENC"  // enumerated control
+    };
+
+    private static readonly HashSet<string> ControlServicePathSegments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ctlModel", "ctlVal", "ctlNum", "stSeld", "SBO", "SBOw", "Oper", "Cancel",
+        "origin", "T", "Test", "Check", "operTm", "sboClass", "sboTimeout", "operTimeout"
     };
 
     public static Iec61850StaticControlStatusProjectionResult EnsureProjections(Iec61850MonitorDevice device)
@@ -47,140 +67,206 @@ public static class Iec61850StaticControlStatusProjectionService
 
         foreach (var descriptor in mandatory)
         {
-            if (!IsExactStaticPositionStatusDescriptor(descriptor))
-                continue;
-
             foreach (var membership in descriptor.DataSetMemberships
                          .OrderBy(item => item.DataSetReference, StringComparer.OrdinalIgnoreCase)
                          .ThenBy(item => item.MemberIndex))
             {
+                var cdc = FirstNonEmpty(descriptor.Cdc, membership.Cdc).ToUpperInvariant();
+                if (!ControllableCdcs.Contains(cdc))
+                    continue;
+
                 var memberReference = FirstNonEmpty(
                     membership.CanonicalMemberReference,
                     membership.OriginalMemberReference,
                     descriptor.DesignReference,
                     descriptor.ObservedReference);
+                var dataObjectReference = (descriptor.DataObjectReference ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(memberReference) ||
                     string.IsNullOrWhiteSpace(membership.DataSetReference) ||
-                    !IsExactPositionMemberReference(memberReference))
+                    string.IsNullOrWhiteSpace(dataObjectReference) ||
+                    !SignalDefinition.IsControlObjectReference(dataObjectReference))
                 {
                     continue;
                 }
 
+                var exactFeedbackReference = ResolveExactFeedbackReference(descriptor, membership);
+
+                // Do not attach a command target to q/t or other companion-only FCDA rows.
+                // The member must either be the control DO/FCD itself or the exact primary
+                // feedback FCDA that ARIEC resolved for that same DataObject.
+                if (!IsControlBearingMembership(memberReference, dataObjectReference, exactFeedbackReference))
+                    continue;
+
                 var control = FindExactControlCompanion(
                     device.Signals,
                     membership.DataSetReference,
-                    memberReference);
+                    memberReference,
+                    dataObjectReference);
                 if (control is null)
-                    continue;
-
-                LinkControlToMembership(control, descriptor, membership, memberReference);
+                {
+                    control = CreateControlCompanion(
+                        descriptor,
+                        membership,
+                        cdc,
+                        memberReference,
+                        dataObjectReference,
+                        exactFeedbackReference);
+                    device.Signals.Add(control);
+                    added.Add(control);
+                }
+                else
+                {
+                    LinkControlToMembership(
+                        control,
+                        descriptor,
+                        membership,
+                        cdc,
+                        memberReference,
+                        exactFeedbackReference);
+                }
                 linkedControls.Add(control);
 
-                var primaryValueReference = descriptor.PrimaryValueReference.Trim();
-                var existingStatus = device.Signals.FirstOrDefault(signal =>
+                if (string.IsNullOrWhiteSpace(exactFeedbackReference))
+                    continue;
+
+                var existingFeedback = device.Signals.FirstOrDefault(signal =>
                     !signal.IsControlSignal &&
                     LiteralEquals(signal.DataSetReference, membership.DataSetReference) &&
                     LiteralEquals(signal.DisplayReference, memberReference) &&
-                    LiteralEquals(signal.ObjectReference, primaryValueReference));
-                if (existingStatus is not null)
+                    LiteralEquals(signal.ObjectReference, exactFeedbackReference));
+                if (existingFeedback is not null)
                     continue;
 
-                var report = descriptor.ReportMemberships.FirstOrDefault();
-                var status = new SignalDefinition
-                {
-                    Name = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, memberReference),
-                    ObjectReference = primaryValueReference,
-                    DisplayReference = memberReference,
-                    FunctionalConstraint = "ST",
-                    DataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown"),
-                    Category = "Position",
-                    Confidence = "High",
-                    DataSetReference = membership.DataSetReference,
-                    ReportControlReference = report?.ReportControlReference ?? string.Empty,
-                    QualityReference = descriptor.QualityReference,
-                    TimestampReference = descriptor.TimestampReference,
-                    Source = "ARIEC61850 static DataSet • dual-role control status projection",
-                    IsSelected = false,
-                    IsReportCapable = true,
-                    ReportCoverage = report is null
-                        ? "Static DataSet position status"
-                        : "Static report/DataSet position status",
-                    ReportCoverageReason =
-                        $"Exact ARIEC static FCDA {memberReference} ({membership.DataSetReference}[{membership.MemberIndex}]) " +
-                        $"resolves to ST primary value {primaryValueReference}; the control DO remains a separate command companion.",
-                    ProbeStatus = "Not probed",
-                    Value = "-",
-                    Quality = "Unknown",
-                    DeviceTimestamp = "-"
-                };
+                var feedback = CreateRuntimeFeedback(
+                    descriptor,
+                    membership,
+                    cdc,
+                    memberReference,
+                    exactFeedbackReference);
 
-                device.Signals.Add(status);
-                added.Add(status);
+                // PrimaryValueReference is semantic authority, but Live Signal admission has
+                // its own process-value contract. If the exact leaf is not a supported runtime
+                // value shape, retain the control companion and fail closed on feedback.
+                if (!feedback.CanPublishAsSignal)
+                    continue;
+
+                device.Signals.Add(feedback);
+                added.Add(feedback);
             }
         }
 
         return new Iec61850StaticControlStatusProjectionResult(added, linkedControls.Count);
     }
 
-    private static bool IsExactStaticPositionStatusDescriptor(Iec61850SignalDescriptor descriptor)
-    {
-        if (!descriptor.FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(descriptor.PrimaryValueReference))
-        {
-            return false;
-        }
+    internal static bool IsControllableCdc(string? cdc)
+        => ControllableCdcs.Contains((cdc ?? string.Empty).Trim());
 
-        var primary = NormalizeReference(descriptor.PrimaryValueReference);
-        return primary.EndsWith(".stval", StringComparison.OrdinalIgnoreCase);
+    private static string ResolveExactFeedbackReference(
+        Iec61850SignalDescriptor descriptor,
+        Iec61850SignalDataSetMembership membership)
+    {
+        var reference = (descriptor.PrimaryValueReference ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(reference))
+            return string.Empty;
+
+        var fc = FirstNonEmpty(descriptor.FunctionalConstraint, membership.FunctionalConstraint).ToUpperInvariant();
+        if (fc is not ("ST" or "MX"))
+            return string.Empty;
+
+        var segments = NormalizeReference(reference)
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Any(segment => ControlServicePathSegments.Contains(segment)))
+            return string.Empty;
+
+        return reference;
     }
 
-    private static bool IsExactPositionMemberReference(string memberReference)
+    private static bool IsControlBearingMembership(
+        string memberReference,
+        string dataObjectReference,
+        string exactFeedbackReference)
     {
-        if (!SignalDefinition.IsControlObjectReference(memberReference))
-            return false;
+        if (LiteralEquals(memberReference, dataObjectReference))
+            return true;
 
-        var normalized = NormalizeReference(memberReference);
-        if (!normalized.EndsWith(".pos", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var slash = normalized.IndexOf('/');
-        if (slash < 0 || slash == normalized.Length - 1)
-            return false;
-
-        var afterSlash = normalized[(slash + 1)..];
-        var logicalNode = afterSlash.Split('.', 2)[0];
-        var logicalNodeClass = SignalDefinition.DetectLogicalNodeClass(logicalNode);
-        return PositionLogicalNodeClasses.Contains(logicalNodeClass);
+        return !string.IsNullOrWhiteSpace(exactFeedbackReference) &&
+               LiteralEquals(memberReference, exactFeedbackReference);
     }
 
     private static SignalDefinition? FindExactControlCompanion(
         IEnumerable<SignalDefinition> signals,
         string dataSetReference,
-        string memberReference)
+        string memberReference,
+        string dataObjectReference)
     {
         return signals
             .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
+            .Where(signal => LiteralEquals(signal.ObjectReference, dataObjectReference))
             .Where(signal =>
                 string.IsNullOrWhiteSpace(signal.DataSetReference) ||
                 LiteralEquals(signal.DataSetReference, dataSetReference))
             .Where(signal =>
+                string.IsNullOrWhiteSpace(signal.DisplayReference) ||
                 LiteralEquals(signal.DisplayReference, memberReference) ||
-                LiteralEquals(signal.ObjectReference, memberReference))
-            .OrderByDescending(signal => LiteralEquals(signal.DisplayReference, memberReference))
+                LiteralEquals(signal.DisplayReference, dataObjectReference))
+            .OrderByDescending(signal => LiteralEquals(signal.DataSetReference, dataSetReference))
+            .ThenByDescending(signal => LiteralEquals(signal.DisplayReference, memberReference))
             .FirstOrDefault();
+    }
+
+    private static SignalDefinition CreateControlCompanion(
+        Iec61850SignalDescriptor descriptor,
+        Iec61850SignalDataSetMembership membership,
+        string cdc,
+        string memberReference,
+        string dataObjectReference,
+        string exactFeedbackReference)
+    {
+        var report = descriptor.ReportMemberships.FirstOrDefault();
+        return new SignalDefinition
+        {
+            Name = FirstNonEmpty(descriptor.DataObject, dataObjectReference),
+            ObjectReference = dataObjectReference,
+            DisplayReference = memberReference,
+            FunctionalConstraint = "CO",
+            DataType = cdc,
+            Category = "Control",
+            Confidence = "High",
+            DataSetReference = membership.DataSetReference,
+            ReportControlReference = report?.ReportControlReference ?? string.Empty,
+            QualityReference = descriptor.QualityReference,
+            TimestampReference = descriptor.TimestampReference,
+            Source = "ARIEC61850 static DataSet • exact CDC/DataObject control companion",
+            IsControlSignal = true,
+            ControlCdc = cdc,
+            ControlStatusReference = exactFeedbackReference,
+            IsSelected = false,
+            IsReportCapable = true,
+            ReportCoverage = "Static DataSet control companion",
+            ReportCoverageReason =
+                $"Exact SCL/ARIEC DataSet member {memberReference} ({membership.DataSetReference}[{membership.MemberIndex}]) " +
+                $"has controllable CDC={cdc} and exact command DataObject {dataObjectReference}. Actual command actions remain disabled until live ctlModel inspection proves Direct/SBO operation.",
+            ProbeStatus = "Control model pending",
+            Value = "-",
+            Quality = "Unknown",
+            DeviceTimestamp = "-"
+        };
     }
 
     private static void LinkControlToMembership(
         SignalDefinition control,
         Iec61850SignalDescriptor descriptor,
         Iec61850SignalDataSetMembership membership,
-        string memberReference)
+        string cdc,
+        string memberReference,
+        string exactFeedbackReference)
     {
-        // Exact FCDA authority only. These fields let StaticDataSetAuthoritySelection select
-        // the command companion without making that control object publishable as a process row.
         control.DisplayReference = memberReference;
         control.DataSetReference = membership.DataSetReference;
         control.IsReportCapable = true;
+        control.ControlCdc = cdc;
+        if (!string.IsNullOrWhiteSpace(exactFeedbackReference))
+            control.ControlStatusReference = exactFeedbackReference;
 
         var report = descriptor.ReportMemberships.FirstOrDefault();
         if (report is not null && string.IsNullOrWhiteSpace(control.ReportControlReference))
@@ -192,17 +278,61 @@ public static class Iec61850StaticControlStatusProjectionService
             control.TimestampReference = descriptor.TimestampReference;
     }
 
+    private static SignalDefinition CreateRuntimeFeedback(
+        Iec61850SignalDescriptor descriptor,
+        Iec61850SignalDataSetMembership membership,
+        string cdc,
+        string memberReference,
+        string exactFeedbackReference)
+    {
+        var report = descriptor.ReportMemberships.FirstOrDefault();
+        var fc = FirstNonEmpty(descriptor.FunctionalConstraint, membership.FunctionalConstraint).ToUpperInvariant();
+        var category = cdc.Equals("DPC", StringComparison.OrdinalIgnoreCase)
+            ? "Position"
+            : fc.Equals("MX", StringComparison.OrdinalIgnoreCase)
+                ? "Measurement"
+                : "Status";
+
+        return new SignalDefinition
+        {
+            Name = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, memberReference),
+            ObjectReference = exactFeedbackReference,
+            DisplayReference = memberReference,
+            FunctionalConstraint = fc,
+            DataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown"),
+            Category = category,
+            Confidence = "High",
+            DataSetReference = membership.DataSetReference,
+            ReportControlReference = report?.ReportControlReference ?? string.Empty,
+            QualityReference = descriptor.QualityReference,
+            TimestampReference = descriptor.TimestampReference,
+            Source = "ARIEC61850 static DataSet • exact control feedback projection",
+            IsSelected = false,
+            IsReportCapable = true,
+            ReportCoverage = report is null
+                ? "Static DataSet control feedback"
+                : "Static report/DataSet control feedback",
+            ReportCoverageReason =
+                $"Exact SCL/ARIEC control member {memberReference} ({membership.DataSetReference}[{membership.MemberIndex}]) " +
+                $"resolves to {fc} primary feedback {exactFeedbackReference}; command and process facets remain separate.",
+            ProbeStatus = "Not probed",
+            Value = "-",
+            Quality = "Unknown",
+            DeviceTimestamp = "-"
+        };
+    }
+
     private static Iec61850StaticControlStatusProjectionResult EmptyResult()
         => new(Array.Empty<SignalDefinition>(), 0);
 
     private static bool LiteralEquals(string? left, string? right)
         => string.Equals(
-            (left ?? string.Empty).Trim(),
-            (right ?? string.Empty).Trim(),
+            NormalizeReference(left),
+            NormalizeReference(right),
             StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeReference(string? reference)
-        => (reference ?? string.Empty).Trim().Replace('$', '.');
+        => (reference ?? string.Empty).Trim().Replace('\\', '/').Replace('$', '.');
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
