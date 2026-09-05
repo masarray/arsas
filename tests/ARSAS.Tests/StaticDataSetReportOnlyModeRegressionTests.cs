@@ -53,11 +53,14 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.DoesNotContain("UseStaticDataSetWithMmsFallback", source, StringComparison.Ordinal);
         Assert.DoesNotContain("fallback remains available", source, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Contains("Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model)", authority, StringComparison.Ordinal);
+        Assert.Contains("var authorityModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", authority, StringComparison.Ordinal);
+        Assert.Contains("Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(authorityModel)", authority, StringComparison.Ordinal);
         Assert.Contains("BuildReportBackedDataSetReferences(device)", authority, StringComparison.Ordinal);
         Assert.Contains("reportBackedDataSets.Contains", authority, StringComparison.Ordinal);
-        Assert.Contains("device.SclWorkspace?.DesignModel", authority, StringComparison.Ordinal);
-        Assert.Contains("device.LiveDiscoveryModel", authority, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", authority, StringComparison.Ordinal);
+        Assert.Contains("AddReportBackedDataSets(configurationModel, result)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddReportBackedDataSets(device.SclWorkspace?.DesignModel, result)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddReportBackedDataSets(device.LiveDiscoveryModel, result)", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DataSetReference, membership.DataSetReference)", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("StartsWith(memberReference", authority, StringComparison.Ordinal);
@@ -93,13 +96,15 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.StaticDataSetReporting.cs"));
 
-        Assert.Contains("device.SclWorkspace?.DesignModel", source, StringComparison.Ordinal);
-        Assert.Contains("device.LiveDiscoveryModel", source, StringComparison.Ordinal);
-        Assert.Contains("configurationModels", source, StringComparison.Ordinal);
+        Assert.Contains("device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", source, StringComparison.Ordinal);
+        Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
         Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
+        Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
         Assert.Contains("Install InformationReport receiver before enabling the RCB", source, StringComparison.Ordinal);
         Assert.Contains("Write RptEna=true, then request GI=true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("configurationModels", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("configuredReports[0]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
         Assert.DoesNotContain("PollingPointKeys = points.Select", source, StringComparison.Ordinal);
     }
