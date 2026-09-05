@@ -29,7 +29,7 @@ public sealed class IoListFatLiveValueAuthorityRegressionTests
 
         Assert.Contains("var liveValue = _livePoint?.Value;", authority, StringComparison.Ordinal);
         Assert.Contains("var controlValue = _controlSignal?.ControlCurrentValue;", authority, StringComparison.Ordinal);
-        Assert.Contains("var value = IsInitialized(liveValue)", authority, StringComparison.Ordinal);
+        Assert.Contains("var rawValue = IsInitialized(liveValue)", authority, StringComparison.Ordinal);
         Assert.Contains("? liveValue!", authority, StringComparison.Ordinal);
         Assert.Contains(": IsInitialized(controlValue)", authority, StringComparison.Ordinal);
     }
@@ -42,6 +42,18 @@ public sealed class IoListFatLiveValueAuthorityRegressionTests
         Assert.DoesNotContain("VirtualizingPanel.SetVirtualizationMode(", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("VirtualizingPanel.SetIsVirtualizing(", authority, StringComparison.Ordinal);
         Assert.Contains("Cell_DataContextChanged", authority, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveValuePresentation_NormalizesBooleanTextAndSkipsRedundantPaints()
+    {
+        var authority = File.ReadAllText(FindRepoFile("IoListTestingWindow.LiveValueAuthority.cs"));
+
+        Assert.Contains("bool.TryParse(text, out var booleanValue)", authority, StringComparison.Ordinal);
+        Assert.Contains("booleanValue ? bool.TrueString : bool.FalseString", authority, StringComparison.Ordinal);
+        Assert.Contains("if (!string.Equals(target.Text, value, StringComparison.Ordinal))", authority, StringComparison.Ordinal);
+        Assert.Contains("SetTextIfChanged(_valueText, NormalizeDisplayValue(rawValue, \"—\"));", authority, StringComparison.Ordinal);
+        Assert.Contains("SetTextIfChanged(_qualityText, NormalizeDisplayValue(rawQuality, \"Unknown\"));", authority, StringComparison.Ordinal);
     }
 
     [Fact]
