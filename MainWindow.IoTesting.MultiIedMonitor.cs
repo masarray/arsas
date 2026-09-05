@@ -1,4 +1,5 @@
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
@@ -18,6 +19,11 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(acquisitionSignals);
+
+        // Engineering and FAT are two views of the same SCL workspace. Remember the
+        // operator's explicit Static DataSet intent independently of any transient monitor
+        // stop/restart that FAT performs while preparing its evidence scope.
+        var preserveStaticDataSetAuthority = IsSharedStaticDataSetAuthority(device);
 
         var acquisition = acquisitionSignals
             .Where(signal => signal.CanPublishToRuntime)
@@ -52,7 +58,21 @@ public partial class MainWindow
             RemoveDevicePoints(device.DeviceId);
             device.Points.Clear();
 
-            SetStatus($"{device.Name}: starting independent FAT live acquisition…");
+            // P0 cross-mode authority guard: FAT must never silently turn an Engineering
+            // Static DataSet workspace into generic Hybrid/MMS acquisition. Reassert the
+            // protocol contract immediately before the new runtime snapshots its mode.
+            if (preserveStaticDataSetAuthority)
+            {
+                Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+                AddLog(
+                    "INFO",
+                    device.Name,
+                    "FAT reuses the shared Static DataSet report-only authority; cyclic MMS process polling remains disabled.");
+            }
+
+            SetStatus(preserveStaticDataSetAuthority
+                ? $"{device.Name}: starting shared Static DataSet FAT acquisition…"
+                : $"{device.Name}: starting independent FAT live acquisition…");
             var points = await _runtime.StartMonitoringAsync(
                 device,
                 acquisition,
@@ -86,6 +106,13 @@ public partial class MainWindow
             foreach (var (signal, wasSelected) in originalSelection)
                 signal.IsSelected = wasSelected;
             device.EndBulkSignalSelection();
+
+            // A temporary FAT acquisition selection must not alter the shared protocol
+            // authority either. This also restores AllowDynamicDataSetWrites=false if an
+            // older FAT preparation path set that compatibility flag while entering FAT.
+            if (preserveStaticDataSetAuthority)
+                Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+
             device.RefreshComputed();
             RaiseWorkspaceCounts();
         }

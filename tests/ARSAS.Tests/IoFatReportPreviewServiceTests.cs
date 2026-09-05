@@ -160,13 +160,16 @@ public sealed class IoFatReportPreviewServiceTests
     }
 
     [Fact]
-    public void IoFatPreparation_UsesCachedReconnect_AndReturnsImmediatelyAfterMonitorStart()
+    public void IoFatPreparation_UsesCachedReconnect_AndAttachesToSharedMonitorWithoutRestart()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("Fast reconnect", source, StringComparison.Ordinal);
         Assert.Contains("ConnectUsingSavedModelAsync", source, StringComparison.Ordinal);
-        Assert.Contains("Return control to FAT immediately", source, StringComparison.Ordinal);
+        Assert.Contains("reuseSharedSclAcquisition", source, StringComparison.Ordinal);
+        Assert.Contains("FAT attached to the existing shared acquisition session · no monitor restart", source, StringComparison.Ordinal);
+        Assert.Contains("StartDeviceMonitorAsync(device, navigateToExplorer: false)", source, StringComparison.Ordinal);
+        Assert.Contains("Bind FAT rows to the already-owned per-IED monitor points", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SettleIoFatReportPriorityAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
         Assert.Contains("IsReportSource", source, StringComparison.Ordinal);

@@ -35,9 +35,9 @@
 
                 <StackPanel Grid.Row="0" Grid.Column="0">
                     <TextBlock Text="IED Runtime IP Address" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
-                    <ComboBox x:Name="RelayIpBox" IsEditable="True" IsTextSearchEnabled="True"
+                    <ComboBox x:Name="RelayIpBox" IsEditable="True" IsTextSearchEnabled="False"
                               ItemsSource="{Binding RecentRelayIps, RelativeSource={RelativeSource AncestorType=Window}}"
-                              Text="{Binding RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"/>
+                              Text="{Binding RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus}"/>
                 </StackPanel>
                 <StackPanel Grid.Row="0" Grid.Column="2">
                     <TextBlock Text="MMS Port" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>

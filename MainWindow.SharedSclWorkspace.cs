@@ -21,6 +21,16 @@ public partial class MainWindow
     private readonly HashSet<string> _sharedSclSelectionAuthorityDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Keep the operator's acquisition intent independently of transient runtime teardown.
+    // FAT and Engineering share one device/workspace, so entering FAT must never demote an
+    // explicitly selected Static DataSet report-only workspace into generic Hybrid/MMS.
+    private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
+        => _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId) ||
+           Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
+
     private SclSignalSelectionMode? PromptSclSignalSelectionMode(Window owner, int iedCount)
     {
         var dialog = new SclSignalSelectionModeWindow(iedCount)
@@ -37,19 +47,20 @@ public partial class MainWindow
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
     {
-        // Static DataSet is a protocol-authority mode, not a request to monitor the
-        // whole IED and then opportunistically prefer reports. First make sure every
-        // ARIEC-owned DataSet member is present in the workspace, then select only
-        // runtime signals that carry an explicit static DataSet identity.
+        // Static DataSet remains the protocol authority established by the report-only
+        // baseline. Materialize every ARIEC-owned member first, then select exactly one
+        // presentation/runtime row per literal static membership. A browsed alias carrying
+        // DataSetReference is not enough authority and must not inflate the live plan.
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
         RegisterRecoveredDataSetSignals(device, merge);
+        var authoritativeSignals = Iec61850StaticDataSetAuthoritySelection.Build(device);
         Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
 
         device.BeginBulkSignalSelection();
         try
         {
             foreach (var signal in device.Signals)
-                signal.IsSelected = Iec61850StaticDataSetSelectionPolicy.IsEligible(signal);
+                signal.IsSelected = authoritativeSignals.Contains(signal);
         }
         finally
         {
@@ -58,13 +69,20 @@ public partial class MainWindow
 
         SynchronizeAllEngineeringSelectionsToFat(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+        _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
         device.RefreshComputed();
 
         AddLog(
             "INFO",
             device.Name,
-            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} runtime DataSet signal(s); cyclic MMS process polling and dynamic DataSet writes are disabled for this monitoring mode.");
+            $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} exact runtime member row(s) from {merge.MandatoryCatalogCount} ARIEC static membership descriptor(s); cyclic MMS process polling and dynamic DataSet writes remain disabled.");
+
+        // Make feasibility and first-report proof visible from the initial Engineering
+        // workflow rather than waiting until FAT is opened. The observer waits for the
+        // shared monitor to start and never changes acquisition method.
+        LogStaticDataSetReportFeasibility(device);
+        _ = ObserveInitialStaticReportEvidenceAsync(device);
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
@@ -84,6 +102,7 @@ public partial class MainWindow
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
         // Manual selection restores the normal Smart/Hybrid acquisition contract.
+        _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
         Iec61850MonitoringModeRegistry.UseHybrid(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);

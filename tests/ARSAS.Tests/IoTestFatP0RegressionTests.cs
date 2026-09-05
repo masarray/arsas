@@ -8,9 +8,10 @@ public sealed class IoTestFatP0RegressionTests
         var main = Read("MainWindow.IoTesting.cs");
         var planner = Read("Services/Iec61850ReportPlanner.cs");
 
-        // FAT may temporarily tighten MMS verification cadence, but that cadence must not
-        // classify fast status/protection points as polling-only. Report planning remains
-        // static first, then dynamic, with MMS polling reserved for the residual fallback.
+        // Legacy workbook-only FAT may temporarily tighten MMS verification cadence, but
+        // that cadence must not classify fast status/protection points as polling-only.
+        // Shared SCL workspaces are guarded separately: FAT consumes the Engineering
+        // acquisition session and never owns a second polling runtime.
         Assert.Contains("private const int IoFatPollingIntervalMs = 250;", main, StringComparison.Ordinal);
         Assert.Contains("_pollingIntervalBeforeIoFat", main, StringComparison.Ordinal);
         Assert.Contains("PollingIntervalMs = Math.Min(PollingIntervalMs, IoFatPollingIntervalMs);", main, StringComparison.Ordinal);
@@ -22,13 +23,15 @@ public sealed class IoTestFatP0RegressionTests
     }
 
     [Fact]
-    public void FatConnect_ReadinessDoesNotBlockOnLegacyEightToEighteenSecondReportSettle()
+    public void SharedSclFat_ReadinessDoesNotRestartMonitorOrWaitForLegacyReportSettle()
     {
         var source = Read("MainWindow.IoTesting.AutoConnect.cs");
 
-        Assert.Contains("Return control to FAT immediately", source, StringComparison.Ordinal);
+        Assert.Contains("reuseSharedSclAcquisition", source, StringComparison.Ordinal);
+        Assert.Contains("FAT attached to the existing shared acquisition session · no monitor restart", source, StringComparison.Ordinal);
+        Assert.Contains("StartDeviceMonitorAsync(device, navigateToExplorer: false)", source, StringComparison.Ordinal);
+        Assert.Contains("Compatibility path for non-shared/legacy FAT only", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromMilliseconds(2500)", source, StringComparison.Ordinal);
-        Assert.Contains("fast MMS verification", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TimeSpan.FromSeconds(8)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TimeSpan.FromSeconds(10)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("rebuilding the report plan once", source, StringComparison.OrdinalIgnoreCase);
