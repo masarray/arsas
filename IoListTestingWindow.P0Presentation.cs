@@ -29,6 +29,23 @@ public partial class IoListTestingWindow
 
         window._p0FatPresentationInstalled = true;
 
+        // A same-source snapshot can contain stale WorkspaceSelected=false values from an
+        // earlier FAT session. When the current shared Engineering device explicitly owns
+        // Static DataSet authority, that authority is stronger than the stale snapshot: the
+        // complete imported static membership is the workspace selection. Repair it before
+        // FAT V2 installs its CollectionView filter, so rows never paint and then disappear.
+        if (window.Owner is MainWindow engineeringWindow)
+        {
+            foreach (var ied in window.Project.Ieds)
+            {
+                if (!engineeringWindow.HasP0SharedStaticDataSetAuthority(ied))
+                    continue;
+
+                foreach (var point in ied.TestPoints.Where(point => point.ImportReady))
+                    point.WorkspaceSelected = true;
+            }
+        }
+
         // The bind-time image may come directly from ARIEC as lowercase Boolean text.
         // Canonicalize it before the operator starts interacting with FAT. Subsequent live
         // snapshots pass through the same formatter in MainWindow.IoFatRuntimeAuthority.
