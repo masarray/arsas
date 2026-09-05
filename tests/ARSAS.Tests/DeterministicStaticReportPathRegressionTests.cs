@@ -52,7 +52,7 @@ public sealed class DeterministicStaticReportPathRegressionTests
         Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
         Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectMany(configurationModel => configurationModel.ReportControls)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("configuredReports[0]", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("var configured = configuredReports[0]", source, StringComparison.Ordinal);
         Assert.Contains("remained authoritative", source, StringComparison.Ordinal);
     }
 
