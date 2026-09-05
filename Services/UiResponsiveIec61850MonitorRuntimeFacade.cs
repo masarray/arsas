@@ -7,23 +7,32 @@ namespace ArIED61850Tester;
 /// <summary>
 /// UI-facing facade for the IEC 61850 runtime.
 ///
-/// The protocol engine intentionally owns MMS serialization, report ownership and per-IED
-/// session state. WPF must not, however, execute the synchronous prefix of a native/network
-/// operation on the Dispatcher thread. Some vendor/OS socket and teardown paths can block
-/// before their first asynchronous yield; when invoked directly from a Click/Closing handler
-/// that makes the whole application appear hung even though the API returns Task.
+/// Native/network calls must never execute their synchronous prefix on the WPF Dispatcher.
+/// A Task-returning API is not sufficient protection because socket/vendor code may block
+/// before the first asynchronous yield.
 ///
-/// This facade is resolved by MainWindow from its own namespace (and wraps the Services
-/// runtime explicitly). Every potentially blocking lifecycle/control operation starts on the
-/// ThreadPool, while a per-device gate prevents Connect/Start/Stop/Disconnect races for the
-/// same IED. Different IEDs remain independent. No polling/read fallback is introduced here.
+/// Per IED, normal lifecycle/control operations remain serialized. Stop/Disconnect is a
+/// deliberately pre-emptive lane: it cancels the active operation first and invokes the
+/// runtime stop without waiting behind a hung Connect/Start gate. A cancelled/stale operation
+/// is never allowed to report success to its caller afterwards. Different IEDs stay fully
+/// independent. This facade changes lifecycle scheduling only; it does not add MMS polling,
+/// dynamic DataSet writes, or any acquisition fallback.
 /// </summary>
 public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 {
     private static readonly TimeSpan DisposeBudget = TimeSpan.FromSeconds(3);
 
+    private sealed class DeviceOperationSlot
+    {
+        public object SyncRoot { get; } = new();
+        public SemaphoreSlim OperationGate { get; } = new(1, 1);
+        public SemaphoreSlim StopGate { get; } = new(1, 1);
+        public CancellationTokenSource? ActiveOperationCancellation { get; set; }
+        public long Generation { get; set; }
+    }
+
     private readonly Services.Iec61850MonitorRuntime _inner = new();
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _deviceLifecycleGates =
+    private readonly ConcurrentDictionary<string, DeviceOperationSlot> _deviceSlots =
         new(StringComparer.OrdinalIgnoreCase);
     private int _disposeStarted;
 
@@ -45,105 +54,194 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress = null)
-        => RunDeviceLifecycleAsync(
+        => RunDeviceOperationAsync(
             device?.DeviceId,
             cancellationToken,
-            () => _inner.ConnectAndDiscoverAsync(device, cancellationToken, progress));
+            token => _inner.ConnectAndDiscoverAsync(device, token, progress));
 
     public Task ConnectUsingCachedModelAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress = null)
-        => RunDeviceLifecycleAsync(
+        => RunDeviceOperationAsync(
             device?.DeviceId,
             cancellationToken,
-            () => _inner.ConnectUsingCachedModelAsync(device, cancellationToken, progress));
+            token => _inner.ConnectUsingCachedModelAsync(device, token, progress));
 
     public Task<IReadOnlyList<Iec61850MonitorPoint>> StartMonitoringAsync(
         Iec61850MonitorDevice device,
         IEnumerable<SignalDefinition> selectedSignals,
         int pollingIntervalMs,
         CancellationToken cancellationToken)
-        => RunDeviceLifecycleAsync(
+        => RunDeviceOperationAsync(
             device?.DeviceId,
             cancellationToken,
-            () => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, cancellationToken));
+            token => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, token));
 
     public Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
         CancellationToken cancellationToken)
-        => RunDeviceLifecycleAsync(
+        => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
-            () => _inner.InspectControlAsync(deviceId, signal, cancellationToken));
+            token => _inner.InspectControlAsync(deviceId, signal, token));
 
     public Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
-        => RunDeviceLifecycleAsync(
+        => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
-            () => _inner.ExecuteControlAsync(deviceId, request, cancellationToken));
+            token => _inner.ExecuteControlAsync(deviceId, request, token));
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
 
     public Task StopMonitoringAsync(string deviceId)
-        => RunDeviceLifecycleAsync(
-            deviceId,
-            CancellationToken.None,
-            () => _inner.StopMonitoringAsync(deviceId));
+        => RunPreemptiveStopAsync(deviceId, () => _inner.StopMonitoringAsync(deviceId));
 
     public Task StopDeviceAsync(string deviceId)
-        => RunDeviceLifecycleAsync(
-            deviceId,
-            CancellationToken.None,
-            () => _inner.StopDeviceAsync(deviceId));
+        => RunPreemptiveStopAsync(deviceId, () => _inner.StopDeviceAsync(deviceId));
 
-    private async Task RunDeviceLifecycleAsync(
+    private async Task RunDeviceOperationAsync(
         string? deviceId,
         CancellationToken cancellationToken,
-        Func<Task> operation)
+        Func<CancellationToken, Task> operation)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(operation);
 
-        var key = NormalizeDeviceKey(deviceId);
-        var gate = _deviceLifecycleGates.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var slot = GetSlot(deviceId);
+        await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        CancellationTokenSource linkedCancellation;
+        long generation;
+        lock (slot.SyncRoot)
+        {
+            linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            slot.ActiveOperationCancellation = linkedCancellation;
+            generation = ++slot.Generation;
+        }
+
         try
         {
-            // Task-returning APIs are not automatically non-blocking. Invoke the complete
-            // operation from the ThreadPool so a blocking native prefix can never seize the
-            // WPF Dispatcher. Awaiting callers still receive the real completion/exception.
-            await Task.Run(operation, CancellationToken.None).ConfigureAwait(false);
+            await Task.Run(
+                    async () => await operation(linkedCancellation.Token).ConfigureAwait(false),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            // Stop/Disconnect can pre-empt this lane. Even if a native call ignored
+            // cancellation and eventually returned success, a pre-empted generation must
+            // not re-enter the UI as a successful stale Connect/Start operation.
+            linkedCancellation.Token.ThrowIfCancellationRequested();
+            lock (slot.SyncRoot)
+            {
+                if (slot.Generation != generation)
+                    throw new OperationCanceledException("IEC 61850 lifecycle operation was superseded.");
+            }
         }
         finally
         {
-            gate.Release();
+            lock (slot.SyncRoot)
+            {
+                if (slot.Generation == generation &&
+                    ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                {
+                    slot.ActiveOperationCancellation = null;
+                }
+            }
+            linkedCancellation.Dispose();
+            slot.OperationGate.Release();
         }
     }
 
-    private async Task<T> RunDeviceLifecycleAsync<T>(
+    private async Task<T> RunDeviceOperationAsync<T>(
         string? deviceId,
         CancellationToken cancellationToken,
-        Func<Task<T>> operation)
+        Func<CancellationToken, Task<T>> operation)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(operation);
 
-        var key = NormalizeDeviceKey(deviceId);
-        var gate = _deviceLifecycleGates.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var slot = GetSlot(deviceId);
+        await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        CancellationTokenSource linkedCancellation;
+        long generation;
+        lock (slot.SyncRoot)
+        {
+            linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            slot.ActiveOperationCancellation = linkedCancellation;
+            generation = ++slot.Generation;
+        }
+
         try
         {
-            return await Task.Run(operation, CancellationToken.None).ConfigureAwait(false);
+            var result = await Task.Run(
+                    async () => await operation(linkedCancellation.Token).ConfigureAwait(false),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            linkedCancellation.Token.ThrowIfCancellationRequested();
+            lock (slot.SyncRoot)
+            {
+                if (slot.Generation != generation)
+                    throw new OperationCanceledException("IEC 61850 lifecycle operation was superseded.");
+            }
+            return result;
         }
         finally
         {
-            gate.Release();
+            lock (slot.SyncRoot)
+            {
+                if (slot.Generation == generation &&
+                    ReferenceEquals(slot.ActiveOperationCancellation, linkedCancellation))
+                {
+                    slot.ActiveOperationCancellation = null;
+                }
+            }
+            linkedCancellation.Dispose();
+            slot.OperationGate.Release();
+        }
+    }
+
+    private async Task RunPreemptiveStopAsync(string? deviceId, Func<Task> stopOperation)
+    {
+        ThrowIfDisposing();
+        ArgumentNullException.ThrowIfNull(stopOperation);
+
+        var slot = GetSlot(deviceId);
+        CancellationTokenSource? activeCancellation;
+        lock (slot.SyncRoot)
+        {
+            activeCancellation = slot.ActiveOperationCancellation;
+            ++slot.Generation;
+        }
+
+        // Cancellation is intentionally issued before StopGate and, critically, without
+        // waiting for OperationGate. This is the escape path when Connect/Start is hung.
+        try
+        {
+            activeCancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The active operation completed between snapshot and cancellation.
+        }
+
+        await slot.StopGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.Run(
+                    async () => await stopOperation().ConfigureAwait(false),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            slot.StopGate.Release();
         }
     }
 
@@ -152,9 +250,24 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
             return;
 
-        // Dispose on a worker thread as well: a vendor/native close path is allowed to be
-        // slow, but it is never allowed to freeze the operator's window. MainWindow also has
-        // its own shutdown budget; this inner bound keeps the facade independently safe.
+        foreach (var slot in _deviceSlots.Values)
+        {
+            CancellationTokenSource? activeCancellation;
+            lock (slot.SyncRoot)
+            {
+                activeCancellation = slot.ActiveOperationCancellation;
+                ++slot.Generation;
+            }
+            try
+            {
+                activeCancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Benign completion race during process teardown.
+            }
+        }
+
         Task disposeTask;
         try
         {
@@ -174,8 +287,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
             catch
             {
-                // Application shutdown is best-effort. The process must remain closable even
-                // when a native session reports a teardown failure.
+                // Shutdown is best-effort. Native teardown failure must not freeze WPF.
             }
         }
         else
@@ -187,10 +299,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 TaskScheduler.Default);
         }
 
-        foreach (var gate in _deviceLifecycleGates.Values)
-            gate.Dispose();
-        _deviceLifecycleGates.Clear();
+        // Do not Dispose the per-device semaphores here. An uncooperative native operation
+        // can still unwind after the bounded shutdown budget and its finally block must be
+        // able to Release() safely. They become process-lifetime garbage with this facade.
+        _deviceSlots.Clear();
     }
+
+    private DeviceOperationSlot GetSlot(string? deviceId)
+        => _deviceSlots.GetOrAdd(NormalizeDeviceKey(deviceId), static _ => new DeviceOperationSlot());
 
     private void ThrowIfDisposing()
     {
