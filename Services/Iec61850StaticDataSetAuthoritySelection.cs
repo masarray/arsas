@@ -43,7 +43,7 @@ public static class Iec61850StaticDataSetAuthoritySelection
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
 
         var mandatory = authorityModels
-            .SelectMany(Iec61850DataSetSignalInventoryProjection.GetMandatorySignals)
+            .SelectMany(model => Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model))
             .ToArray();
         var selected = new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
         var signals = device.Signals.ToArray();
