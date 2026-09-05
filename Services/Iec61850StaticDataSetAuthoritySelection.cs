@@ -15,8 +15,11 @@ namespace ArIED61850Tester.Services;
 ///
 /// A DataSetReference on a browsed/runtime alias is also not sufficient authority: several
 /// aliases can point at the same static FCDA/FCD member (for example cVal/instCVal or
-/// structured measurement descendants). Static mode selects one presentation row for each
-/// engine-authoritative membership, preserving the literal member identity from SCL/ARIEC.
+/// structured measurement descendants). Static mode selects one presentation/runtime row
+/// for each engine-authoritative membership, preserving the literal member identity from
+/// SCL/ARIEC. If that exact membership is also a control DO, the exact control companion is
+/// selected in addition to the runtime status projection so Command Panel inspection can run;
+/// the control object itself still never passes the process-value runtime boundary.
 /// </summary>
 public static class Iec61850StaticDataSetAuthoritySelection
 {
@@ -90,6 +93,19 @@ public static class Iec61850StaticDataSetAuthoritySelection
                     .First();
 
                 selected.Add(chosen);
+
+                // A dual-role FCDA such as CSWI1.Pos/XCBR1.Pos needs two consumers of the
+                // same exact engineering identity: its resolved ST primary leaf is the live
+                // process row above, while the DO itself remains the command target. Select
+                // only literal exact control companions; runtime admission continues to reject
+                // IsControlSignal, so Oper/SBO/CtlVal can never become process rows here.
+                foreach (var control in signals
+                             .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
+                             .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
+                             .Where(signal => LiteralEquals(signal.DisplayReference, memberReference)))
+                {
+                    selected.Add(control);
+                }
             }
         }
 
