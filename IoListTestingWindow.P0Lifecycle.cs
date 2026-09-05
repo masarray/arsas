@@ -7,10 +7,11 @@ namespace ArIED61850Tester;
 /// <summary>
 /// P0 responsiveness guard for the FAT workspace lifecycle.
 ///
-/// The legacy Closing handler sealed evidence journals and flushed persistence synchronously
-/// on the WPF Dispatcher. Both operations can touch disk and, during a live session, cascade
-/// into runtime teardown. That made Close look like an application hang. Keep confirmation on
-/// the UI thread, then perform journal sealing and durable save on a worker thread.
+/// The legacy Closing handler flushed workspace persistence synchronously on the WPF
+/// Dispatcher. Keep confirmation and evidence-session state transitions on the Dispatcher
+/// (the session controllers publish UI-bound PropertyChanged notifications there), then move
+/// only the durable workspace save to a worker thread. Native IEC 61850 teardown is handled
+/// independently by the responsive runtime facade.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -95,8 +96,11 @@ public partial class IoListTestingWindow
         {
             if (Session.HasActiveSessions)
             {
-                var stopAll = await Task.Run(() =>
-                    Session.StopAll("Workspace closed by operator; per-IED evidence journal sealed."));
+                // Session.StopAll mutates controller/project state and raises UI-bound
+                // PropertyChanged notifications. Keep that state transition on Dispatcher;
+                // offloading the whole coordinator would create a cross-thread WPF defect.
+                var stopAll = Session.StopAll(
+                    "Workspace closed by operator; per-IED evidence journal sealed.");
                 if (!stopAll.Succeeded)
                 {
                     MessageBox.Show(
@@ -109,6 +113,8 @@ public partial class IoListTestingWindow
                 }
             }
 
+            // Persistence is pure durable I/O after the session state is sealed and is the
+            // portion that must not occupy the WPF Dispatcher.
             if (Storage != null)
                 await Task.Run(Storage.SaveNow);
 
