@@ -20,47 +20,27 @@ public sealed class FatScrollStabilityRegressionTests
     }
 
     [Fact]
-    public void Recovery_UsesNonRecyclingVirtualizationBeforeFirstMeasureWithoutLiveSubscriptions()
+    public void Recovery_RestoresGoldenWpfVirtualizationAndForbidsRuntimeModeMutation()
     {
-        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatScrollStability.cs"));
+        var root = FindRepoRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "IoListTestingWindow.xaml"));
 
-        Assert.Contains("protected override void OnInitialized(EventArgs e)", source, StringComparison.Ordinal);
-        Assert.Contains("ApplyFatScrollStabilityBeforeFirstMeasure();", source, StringComparison.Ordinal);
-        Assert.Contains("if (grid.IsMeasureValid)", source, StringComparison.Ordinal);
-        Assert.Contains("grid.EnableRowVirtualization = true;", source, StringComparison.Ordinal);
-        Assert.Contains("grid.EnableColumnVirtualization = false;", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizationMode.Standard", source, StringComparison.Ordinal);
+        // The physical-bench failure proved that VirtualizationMode must never be mutated
+        // from Loaded/OnInitialized/runtime code. Restore the Build #1868 XAML-owned policy.
+        Assert.Contains("EnableRowVirtualization=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("EnableColumnVirtualization=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", xaml, StringComparison.Ordinal);
 
-        // VirtualizationMode is immutable after the ItemsHost has entered Measure. Never
-        // regress to the late Loaded handler that caused the physical-bench UI exception.
-        Assert.DoesNotContain("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("RegisterClassHandler", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Loaded +=", source, StringComparison.Ordinal);
+        Assert.False(
+            File.Exists(Path.Combine(root, "IoListTestingWindow.FatScrollStability.cs")),
+            "Do not reintroduce a runtime FAT virtualization patch. WPF throws if VirtualizationMode is changed after the ItemsHost has entered Measure.");
 
-        Assert.DoesNotContain("PropertyChanged +=", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("CollectionChanged +=", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Dispatcher.BeginInvoke", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Dispatcher.Invoke", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Task.Run", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Runtime.CurrentValue =", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Recovery_ScrollPatchCannotOwnFatMembershipSessionOrAcquisition()
-    {
-        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatScrollStability.cs"));
-
-        Assert.DoesNotContain("ItemsSource =", source, StringComparison.Ordinal);
-        Assert.DoesNotContain(".Filter =", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Columns.Clear", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartSession", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("PrepareIoTestIedForFatAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ApplyStaticDataSetSelection", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReportControl", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Iec61850", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Storage", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Evidence", source, StringComparison.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(root, "IoListTestingWindow*.cs", SearchOption.TopDirectoryOnly))
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("VirtualizingPanel.SetVirtualizationMode", source, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
