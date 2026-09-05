@@ -8,7 +8,8 @@ public sealed class DeterministicStaticReportPathRegressionTests
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("Deterministic Static DataSet configured-RCB path", source, StringComparison.Ordinal);
-        Assert.Contains("model.ReportControls", source, StringComparison.Ordinal);
+        Assert.Contains("configurationModels", source, StringComparison.Ordinal);
+        Assert.Contains("configurationModel.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
         Assert.Contains("MmsReportSubscriptionPlanStatus.ReadyRequiresWrite", source, StringComparison.Ordinal);
@@ -24,17 +25,19 @@ public sealed class DeterministicStaticReportPathRegressionTests
     }
 
     [Fact]
-    public void StaticPath_RequiresExactConfiguredRcbAndOrderedLiveDataSetDirectory()
+    public void StaticPath_RequiresConfiguredRcbFamilyAndOrderedLiveDataSetDirectory()
     {
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("SameStaticReference(report.DataSetReference, dataSetGroup.Key)", source, StringComparison.Ordinal);
-        Assert.Contains("SameStaticReference(candidate.Reference, configured.Reference)", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank(configured.Reference, candidate.Reference)", source, StringComparison.Ordinal);
+        Assert.Contains("arbitrary same-DataSet", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("live DataSet directory could not prove an ordered non-empty member list", source, StringComparison.Ordinal);
         Assert.Contains("directory.Members", source, StringComparison.Ordinal);
         Assert.Contains("No MMS process polling was substituted", source, StringComparison.Ordinal);
         Assert.Contains("SCL binds", source, StringComparison.Ordinal);
         Assert.Contains("live DatSet reports", source, StringComparison.Ordinal);
+        Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
     }
 
     [Fact]
