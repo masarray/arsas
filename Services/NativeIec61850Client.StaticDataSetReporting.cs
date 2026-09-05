@@ -314,7 +314,7 @@ public sealed partial class NativeIec61850Client
                     $"Verify authoritative configured RCB {configured.Reference} as live object {concreteReportReference}.",
                     $"Use exact ordered live DataSet directory {dataSetReference} ({directory.Members.Count} members).",
                     "Install InformationReport receiver before enabling the RCB.",
-                    "Write RptEna=true, then request GI=true.",
+                    "Use client-compatible BRCB reservation when ResvTms is exposed, enable RptEna, then request GI after receiver registration.",
                     "Map report values by ordered DataSet member index; never substitute cyclic MMS process reads."
                 },
                 Warnings = subscriptionWarnings
@@ -424,7 +424,7 @@ public sealed partial class NativeIec61850Client
 
         var coveredReferences = ExtractSubscriptionMemberReferences(subscription.Members);
         var attempt = await RunMmsOperationAsync(
-            () => _session.StartPersistentReportMonitorWithAttemptEvidenceAsync(
+            () => _session.StartPersistentReportMonitorClientCompatibleAsync(
                 subscription,
                 triggerGeneralInterrogation: true,
                 deleteDynamicDataSetOnStop: false,
