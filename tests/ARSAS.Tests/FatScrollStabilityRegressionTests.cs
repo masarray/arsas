@@ -20,13 +20,23 @@ public sealed class FatScrollStabilityRegressionTests
     }
 
     [Fact]
-    public void Recovery_UsesNonRecyclingVirtualizationWithoutAddingLiveSubscriptions()
+    public void Recovery_UsesNonRecyclingVirtualizationBeforeFirstMeasureWithoutLiveSubscriptions()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatScrollStability.cs"));
 
+        Assert.Contains("protected override void OnInitialized(EventArgs e)", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyFatScrollStabilityBeforeFirstMeasure();", source, StringComparison.Ordinal);
+        Assert.Contains("if (grid.IsMeasureValid)", source, StringComparison.Ordinal);
         Assert.Contains("grid.EnableRowVirtualization = true;", source, StringComparison.Ordinal);
         Assert.Contains("grid.EnableColumnVirtualization = false;", source, StringComparison.Ordinal);
         Assert.Contains("VirtualizationMode.Standard", source, StringComparison.Ordinal);
+
+        // VirtualizationMode is immutable after the ItemsHost has entered Measure. Never
+        // regress to the late Loaded handler that caused the physical-bench UI exception.
+        Assert.DoesNotContain("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RegisterClassHandler", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Loaded +=", source, StringComparison.Ordinal);
+
         Assert.DoesNotContain("PropertyChanged +=", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CollectionChanged +=", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Dispatcher.BeginInvoke", source, StringComparison.Ordinal);
