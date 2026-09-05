@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 
 namespace ArIED61850Tester;
@@ -26,7 +27,10 @@ public partial class IoListTestingWindow
 
     private void ApplyFatScrollStabilityBeforeFirstMeasure()
     {
-        var grid = _fatSignalsGrid ?? FindVisualDescendant<DataGrid>(this);
+        // Before the Window template is applied, Window.Content is in the logical tree but
+        // may not yet be reachable through VisualTreeHelper. Use the logical tree here so
+        // the declared FAT DataGrid is found deterministically before its ItemsHost measures.
+        var grid = _fatSignalsGrid ?? FindLogicalDescendant<DataGrid>(this);
         if (grid == null)
             return;
 
@@ -41,5 +45,22 @@ public partial class IoListTestingWindow
         grid.EnableColumnVirtualization = false;
         VirtualizingPanel.SetIsVirtualizing(grid, true);
         VirtualizingPanel.SetVirtualizationMode(grid, VirtualizationMode.Standard);
+    }
+
+    private static T? FindLogicalDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is T typed)
+                return typed;
+            if (child is not DependencyObject dependencyObject)
+                continue;
+
+            var nested = FindLogicalDescendant<T>(dependencyObject);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 }
