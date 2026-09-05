@@ -23,15 +23,28 @@ public static class Iec61850StaticDataSetAuthoritySelection
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
-        if (model is null)
+        // Do not let a partial live model erase richer opened-SCL membership evidence. This
+        // is the same authority rule used for configured RCBs: design + live are additive,
+        // while the live MMS association is still required later to verify/arm acquisition.
+        var authorityModels = new[]
+            {
+                device.SclWorkspace?.DesignModel,
+                device.LiveDiscoveryModel
+            }
+            .Where(model => model is not null)
+            .Cast<LiveIedModelDiscoveryDocument>()
+            .Distinct()
+            .ToArray();
+        if (authorityModels.Length == 0)
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
 
         var reportBackedDataSets = BuildReportBackedDataSetReferences(device);
         if (reportBackedDataSets.Count == 0)
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
 
-        var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(model);
+        var mandatory = authorityModels
+            .SelectMany(Iec61850DataSetSignalInventoryProjection.GetMandatorySignals)
+            .ToArray();
         var selected = new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
         var signals = device.Signals.ToArray();
 
