@@ -130,8 +130,8 @@ public sealed class FatAuthoritativeLiveValueCell : StackPanel
         if (!_attached)
             return;
 
-        _valueText.Text = "—";
-        _qualityText.Text = "Unknown";
+        SetTextIfChanged(_valueText, "—");
+        SetTextIfChanged(_qualityText, "Unknown");
         RebindAuthoritativeSources();
     }
 
@@ -285,7 +285,7 @@ public sealed class FatAuthoritativeLiveValueCell : StackPanel
 
         var liveValue = _livePoint?.Value;
         var controlValue = _controlSignal?.ControlCurrentValue;
-        var value = IsInitialized(liveValue)
+        var rawValue = IsInitialized(liveValue)
             ? liveValue!
             : IsInitialized(controlValue)
                 ? controlValue!
@@ -294,14 +294,32 @@ public sealed class FatAuthoritativeLiveValueCell : StackPanel
                     : "—";
 
         var liveQuality = _livePoint?.Quality;
-        var quality = IsInitialized(liveQuality)
+        var rawQuality = IsInitialized(liveQuality)
             ? liveQuality!
             : IsInitialized(_plan?.Runtime.CurrentQuality)
                 ? _plan!.Runtime.CurrentQuality
                 : "Unknown";
 
-        _valueText.Text = value;
-        _qualityText.Text = quality;
+        SetTextIfChanged(_valueText, NormalizeDisplayValue(rawValue, "—"));
+        SetTextIfChanged(_qualityText, NormalizeDisplayValue(rawQuality, "Unknown"));
+    }
+
+    private static void SetTextIfChanged(TextBlock target, string value)
+    {
+        if (!string.Equals(target.Text, value, StringComparison.Ordinal))
+            target.Text = value;
+    }
+
+    private static string NormalizeDisplayValue(string? value, string fallback)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (!IsInitialized(text))
+            return fallback;
+
+        if (bool.TryParse(text, out var booleanValue))
+            return booleanValue ? bool.TrueString : bool.FalseString;
+
+        return text;
     }
 
     private static bool ExactControlReferenceMatch(
