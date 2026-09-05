@@ -14,12 +14,11 @@ namespace ArIED61850Tester.Services;
 /// operation with no SCL workspace, live discovery becomes the configuration authority.
 ///
 /// A DataSetReference on a browsed/runtime alias is also not sufficient authority: several
-/// aliases can point at the same static FCDA/FCD member (for example cVal/instCVal or
-/// structured measurement descendants). Static mode selects one presentation/runtime row
-/// for each engine-authoritative membership, preserving the literal member identity from
-/// SCL/ARIEC. If that exact membership is also a control DO, the exact control companion is
-/// selected in addition to the runtime status projection so Command Panel inspection can run;
-/// the control object itself still never passes the process-value runtime boundary.
+/// aliases can point at the same static FCDA/FCD member. Static mode selects one process row
+/// per engine-authoritative membership when a publishable feedback leaf exists. An exact
+/// control companion for that same membership is selected independently: command discovery
+/// must not disappear merely because scalar feedback is unresolved. Raw control objects are
+/// still rejected by the process-value runtime boundary.
 /// </summary>
 public static class Iec61850StaticDataSetAuthoritySelection
 {
@@ -27,9 +26,6 @@ public static class Iec61850StaticDataSetAuthoritySelection
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        // Opened SCL is the engineering authority. A partial or richer live model may verify
-        // the configuration later, but it must not introduce extra static memberships that
-        // were never configured in the opened CID/SCD. Online-only mode falls back to live.
         var authorityModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel;
         if (authorityModel is null)
             return new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
@@ -44,9 +40,6 @@ public static class Iec61850StaticDataSetAuthoritySelection
 
         foreach (var descriptor in mandatory)
         {
-            // A descriptor may carry more than one membership. Do not arbitrarily take the
-            // first DataSet: choose only literal memberships that are backed by authoritative
-            // report-control configuration.
             var memberships = descriptor.DataSetMemberships
                 .Where(item => reportBackedDataSets.Contains(NormalizeLiteral(item.DataSetReference)))
                 .OrderBy(item => item.DataSetReference, StringComparer.OrdinalIgnoreCase)
@@ -65,6 +58,18 @@ public static class Iec61850StaticDataSetAuthoritySelection
                     string.IsNullOrWhiteSpace(membership.DataSetReference))
                 {
                     continue;
+                }
+
+                // Command retention is independent from scalar process projection. The
+                // projection service has already rooted these companions in exact SCL/ARIEC
+                // CDC + DataObject authority. Selecting them here enables ctlModel inspection
+                // and Command Panel projection even when PrimaryValueReference is unresolved.
+                foreach (var control in signals
+                             .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
+                             .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
+                             .Where(signal => LiteralEquals(signal.DisplayReference, memberReference)))
+                {
+                    selected.Add(control);
                 }
 
                 var candidates = signals
@@ -93,19 +98,6 @@ public static class Iec61850StaticDataSetAuthoritySelection
                     .First();
 
                 selected.Add(chosen);
-
-                // A dual-role FCDA such as CSWI1.Pos/XCBR1.Pos needs two consumers of the
-                // same exact engineering identity: its resolved ST primary leaf is the live
-                // process row above, while the DO itself remains the command target. Select
-                // only literal exact control companions; runtime admission continues to reject
-                // IsControlSignal, so Oper/SBO/CtlVal can never become process rows here.
-                foreach (var control in signals
-                             .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
-                             .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
-                             .Where(signal => LiteralEquals(signal.DisplayReference, memberReference)))
-                {
-                    selected.Add(control);
-                }
             }
         }
 
