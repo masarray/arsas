@@ -19,10 +19,11 @@ public sealed record FatAutoCaptureDecision(
 /// evidence pointers: callers must durably append the returned evidence first, then
 /// promote it. That keeps the evidence journal authoritative when storage fails.
 ///
-/// Analog values use an intentionally small, deterministic settling window rather than
-/// capturing every transient MMS/report update. Three consecutive samples must remain
-/// inside an adaptive 0.05% band before the slot is accepted. Discrete/Other values use
-/// semantic change and are latched immediately after good-quality observation.
+/// Poll-backed analog values use a small deterministic settling window rather than
+/// capturing every transient sample. Authoritative report/Static DataSet observations do
+/// not necessarily repeat the same analog value, so one good report sample is accepted as
+/// the stable condition. Discrete/Other values use semantic change and are latched
+/// immediately after good-quality observation.
 /// </summary>
 public sealed class FatAutoCaptureCoordinator
 {
@@ -98,7 +99,22 @@ public sealed class FatAutoCaptureCoordinator
             Clear(point);
             return FatAutoCaptureDecision.None(
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.WaitingChange,
-                "Analog value is not numerically stable enough for automatic capture; manual Recapture remains available.");
+                "Analog value is not numeric enough for automatic capture; operator Recapture remains available after a valid live value is established.");
+        }
+
+        // Static DataSet / InformationReport acquisition is change-driven. Requiring three
+        // identical reports would leave a perfectly steady analog point uncaptured forever.
+        // One good report observation is already the authoritative relay image, so accept it
+        // immediately while retaining the three-sample settling rule for polling sources.
+        if (IsAuthoritativeReportObservation(observation))
+        {
+            Clear(point);
+            return new FatAutoCaptureDecision(
+                CreateEvidence(slot, observation),
+                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
+                slot == FatValueSlot.Value1
+                    ? "Report-backed analog Value 1 captured automatically; waiting for a meaningful new condition."
+                    : "Report-backed analog Value 2 captured automatically; current evidence is complete.");
         }
 
         var key = point.TestPointId;
@@ -139,6 +155,16 @@ public sealed class FatAutoCaptureCoordinator
     }
 
     public void Clear() => _analogCandidates.Clear();
+
+    private static bool IsAuthoritativeReportObservation(IoTestObservation observation)
+    {
+        var source = observation.AcquisitionSource?.Trim() ?? string.Empty;
+        return source.Contains("Static DataSet", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("InformationReport", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("Report", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("BRCB", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static FatValueEvidence CreateEvidence(FatValueSlot slot, IoTestObservation observation)
         => new(
