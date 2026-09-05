@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
@@ -18,27 +19,39 @@ public partial class IoListTestingWindow
     private readonly HashSet<SignalDefinition> _fatCommandSubscribedSignals = new();
     private bool _fatCommandPanelLifecycleInstalled;
 
-    protected override void OnInitialized(EventArgs e)
-    {
-        base.OnInitialized(e);
-        if (_fatCommandPanelLifecycleInstalled)
-            return;
+    // Register at class level rather than overriding OnInitialized. IoListTestingWindow
+    // already owns an initialization override in another partial; FAT command UI must be
+    // additive and must not compete with the existing workspace lifecycle.
+    private static readonly bool FatCommandPanelClassHandlerRegistered = RegisterFatCommandPanelClassHandler();
 
-        _fatCommandPanelLifecycleInstalled = true;
-        Loaded += FatCommandPanelWindow_Loaded;
-        Closed += FatCommandPanelWindow_Closed;
-        PropertyChanged += FatCommandPanelWindow_PropertyChanged;
+    private static bool RegisterFatCommandPanelClassHandler()
+    {
+        EventManager.RegisterClassHandler(
+            typeof(IoListTestingWindow),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(FatCommandPanelClassLoaded));
+        return true;
     }
 
-    private async void FatCommandPanelWindow_Loaded(object sender, RoutedEventArgs e)
+    private static void FatCommandPanelClassLoaded(object sender, RoutedEventArgs e)
     {
-        InstallFatCommandPanel();
-        await RefreshFatCommandPanelAsync();
+        if (sender is not IoListTestingWindow window || window._fatCommandPanelLifecycleInstalled)
+            return;
+
+        window._fatCommandPanelLifecycleInstalled = true;
+        window.PropertyChanged += window.FatCommandPanelWindow_PropertyChanged;
+        window.Closed += window.FatCommandPanelWindow_Closed;
+        window.Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            window.InstallFatCommandPanel();
+            await window.RefreshFatCommandPanelAsync();
+        }), DispatcherPriority.ContextIdle);
     }
 
     private void FatCommandPanelWindow_Closed(object? sender, EventArgs e)
     {
         PropertyChanged -= FatCommandPanelWindow_PropertyChanged;
+        Closed -= FatCommandPanelWindow_Closed;
         DetachFatCommandDevice();
     }
 
@@ -47,7 +60,7 @@ public partial class IoListTestingWindow
         if (e.PropertyName != nameof(SelectedIed))
             return;
 
-        Dispatcher.BeginInvoke(new Action(async () => await RefreshFatCommandPanelAsync()));
+        Dispatcher.BeginInvoke(new Action(async () => await RefreshFatCommandPanelAsync()), DispatcherPriority.Background);
     }
 
     private void InstallFatCommandPanel()
@@ -62,9 +75,8 @@ public partial class IoListTestingWindow
         if (fatGrid?.Parent is not Grid hostGrid)
             return;
 
-        // The signal table remains the flexible row. The command panel is a compact,
-        // independently scrolling operating surface below it, so large FAT workbooks do not
-        // lose their primary evidence area and large control inventories remain usable.
+        // Keep the FAT evidence table as the flexible row. Controls get their own compact,
+        // independently scrolling surface below it so a large I/O list remains usable.
         hostGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
         hostGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -102,7 +114,7 @@ public partial class IoListTestingWindow
             Margin = new Thickness(0, 9, 0, 0),
             MaxHeight = 174,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = _fatCommandRows
         };
 
@@ -129,6 +141,7 @@ public partial class IoListTestingWindow
     {
         if (_fatCommandRows == null || _fatCommandSummary == null)
             return;
+
         if (Owner is not MainWindow engineeringWindow)
         {
             DetachFatCommandDevice();
@@ -176,10 +189,8 @@ public partial class IoListTestingWindow
 
         DetachFatCommandDevice();
         _fatCommandDevice = device;
-        if (_fatCommandDevice == null)
-            return;
-
-        _fatCommandDevice.CommandSignals.CollectionChanged += FatCommandSignals_CollectionChanged;
+        if (_fatCommandDevice != null)
+            _fatCommandDevice.CommandSignals.CollectionChanged += FatCommandSignals_CollectionChanged;
     }
 
     private void DetachFatCommandDevice()
@@ -194,7 +205,7 @@ public partial class IoListTestingWindow
     }
 
     private void FatCommandSignals_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows));
+        => Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows), DispatcherPriority.Background);
 
     private void FatCommandSignal_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -215,7 +226,7 @@ public partial class IoListTestingWindow
             or nameof(SignalDefinition.ControlCdc)
             or nameof(SignalDefinition.ControlSupportsOperate))
         {
-            Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows));
+            Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows), DispatcherPriority.Background);
         }
     }
 
@@ -258,11 +269,7 @@ public partial class IoListTestingWindow
 
     private FrameworkElement BuildFatCommandRow(SignalDefinition signal)
     {
-        var row = new Grid
-        {
-            Margin = new Thickness(0, 0, 0, 6),
-            Background = Brushes.White
-        };
+        var row = new Grid { MinWidth = 960 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.25, GridUnitType.Star), MinWidth = 210 });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star), MinWidth = 82 });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.72, GridUnitType.Star), MinWidth = 70 });
@@ -278,7 +285,6 @@ public partial class IoListTestingWindow
         var current = FatCommandText(signal.ControlCurrentValue, 11.0, FontWeights.SemiBold);
         current.ToolTip = signal.ControlLastResult;
         AddFatCommandCell(row, current, 1);
-
         AddFatCommandCell(row, FatCommandText(
             string.IsNullOrWhiteSpace(signal.ControlCdc) ? "—" : signal.ControlCdc,
             10.8,
@@ -294,6 +300,7 @@ public partial class IoListTestingWindow
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(9),
             Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, 0, 0, 6),
             Child = row
         };
     }
@@ -307,7 +314,7 @@ public partial class IoListTestingWindow
         return panel;
     }
 
-    private CheckBox FatCommandCheck(string text, SignalDefinition signal, string propertyName)
+    private static CheckBox FatCommandCheck(string text, SignalDefinition signal, string propertyName)
     {
         var check = new CheckBox
         {
@@ -329,6 +336,7 @@ public partial class IoListTestingWindow
     private FrameworkElement BuildFatCommandActions(SignalDefinition signal)
     {
         var panel = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+
         if (signal.IsPositionControl)
         {
             if (signal.ControlConfirmationPending)
@@ -336,6 +344,7 @@ public partial class IoListTestingWindow
                 var confirm = FatCommandButton("Confirm", "PrimaryButton");
                 confirm.Click += async (_, _) => await ConfirmFatPositionControlAsync(signal);
                 panel.Children.Add(confirm);
+
                 var cancel = FatCommandButton("Cancel", "SoftButton");
                 cancel.Margin = new Thickness(6, 0, 0, 0);
                 cancel.Click += (_, _) =>
@@ -404,6 +413,7 @@ public partial class IoListTestingWindow
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
             });
             panel.Children.Add(target);
+
             var set = FatCommandButton("Set", "PrimaryButton");
             set.IsEnabled = signal.ControlSupportsOperate && !signal.ControlIsBusy;
             set.Click += async (_, _) => await ExecuteFatQuickControlAsync(signal, signal.ControlSetPointText, "Set");
@@ -430,7 +440,6 @@ public partial class IoListTestingWindow
             signal.ControlLastResult = $"Command rejected: {rejectionReason}.";
             return;
         }
-
         RebuildFatCommandRows();
     }
 
