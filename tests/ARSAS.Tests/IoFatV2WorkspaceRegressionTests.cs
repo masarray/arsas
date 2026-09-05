@@ -52,6 +52,10 @@ public sealed class IoFatV2WorkspaceRegressionTests
     public void OperatorSnapshot_JournalFailure_DoesNotPromoteCurrentEvidencePointer()
     {
         var fixture = ManualFixture(journalFactory: (_, _, _, _) => new FailAfterStartupJournal());
+        // This test exercises the explicit operator/Recapture override. Poll-backed analog
+        // keeps the settling gate, so startup does not auto-promote Value 1 before the
+        // synthetic journal failure is exercised.
+        fixture.LivePoint.SourceMode = "MMS";
         using var controller = fixture.Controller;
         Assert.True(controller.Start(fixture.Ied).Succeeded);
 
@@ -69,6 +73,9 @@ public sealed class IoFatV2WorkspaceRegressionTests
         using var controller = fixture.Controller;
         Assert.True(controller.Start(fixture.Ied).Succeeded);
 
+        // BRCB startup owns authoritative Value 1. A subsequent sample still inside the
+        // analog settling band updates Live Value but must not create Value 2 or fan out
+        // session-progress notifications for every measurement refresh.
         var sessionNotifications = 0;
         controller.PropertyChanged += (_, _) => sessionNotifications++;
         controller.Enqueue(new Iec61850EventEntry
@@ -82,14 +89,15 @@ public sealed class IoFatV2WorkspaceRegressionTests
             SignalName = fixture.LivePoint.SignalName,
             IecReference = fixture.LivePoint.IecReference,
             OldValue = "12.34",
-            NewValue = "12.35",
+            NewValue = "12.3401",
             Quality = "Good",
             SourceMode = "BRCB",
             Reason = "periodic-refresh"
         });
 
-        Assert.Equal("12.35", fixture.Point.Runtime.CurrentValue);
+        Assert.Equal("12.3401", fixture.Point.Runtime.CurrentValue);
         Assert.Equal(0, sessionNotifications);
+        Assert.Null(fixture.Point.Runtime.Value2Evidence);
     }
 
     [Fact]
