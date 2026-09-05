@@ -102,7 +102,7 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
         Assert.Contains("Install InformationReport receiver before enabling the RCB", source, StringComparison.Ordinal);
-        Assert.Contains("Write RptEna=true, then request GI=true", source, StringComparison.Ordinal);
+        Assert.Contains("enable RptEna, then request GI after receiver registration", source, StringComparison.Ordinal);
         Assert.DoesNotContain("configurationModels", source, StringComparison.Ordinal);
         Assert.DoesNotContain("var configured = configuredReports[0]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
