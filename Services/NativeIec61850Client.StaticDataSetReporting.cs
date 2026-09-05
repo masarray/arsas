@@ -113,11 +113,11 @@ public sealed partial class NativeIec61850Client
                 continue;
             }
 
-            // Evaluate every authoritative configured RCB. This is intentionally not
-            // configuredReports[0]: if several SCL ReportControls legitimately reference the
-            // same DataSet, one missing/occupied RCB must not hide another configured option.
-            // A configured family may resolve only to decimal indexed instances of that same
-            // literal family; arbitrary same-DataSet substitution remains forbidden.
+            // Evaluate every authoritative configured RCB instead of selecting only the first.
+            // If several SCL ReportControls legitimately reference the same DataSet, one
+            // missing/occupied RCB must not hide another configured option. A configured family
+            // may resolve only to decimal indexed instances of that same literal family;
+            // arbitrary same-DataSet substitution remains forbidden.
             var matchedLiveCandidates = configuredReports
                 .SelectMany(configured => discovery.ReportInventory.ReportControls
                     .Select(candidate => new
