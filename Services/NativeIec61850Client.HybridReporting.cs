@@ -48,7 +48,7 @@ public sealed partial class NativeIec61850Client
         // Static DataSet is deliberately deterministic: exact configured SCL RCB +
         // exact live RCB object + ordered live DataSet directory -> RptEna + GI. Do not
         // send Static mode through adaptive Hybrid availability/capability policy.
-        if (Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device.DeviceId))
+        if (Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
         {
             return await BuildStaticDataSetReportPlansAsync(
                 device,
