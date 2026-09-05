@@ -50,10 +50,11 @@ public sealed class P0LifecycleAndTotPfRegressionTests
         var projection = Read("Services/StaticDataSetReportProjectionAccumulator.cs");
 
         Assert.Contains("\"sourcePullRequest\": 111", engineLock, StringComparison.Ordinal);
-        Assert.Contains("0d7525bd330900917fb9f6d15a46059dc3d7a70a", engineLock, StringComparison.Ordinal);
+        Assert.Contains("11ab2304482600c19ba979f4fc9021ddb46b9af9", engineLock, StringComparison.Ordinal);
         Assert.Contains("P1 hardening", engineLock, StringComparison.Ordinal);
         Assert.Contains("report-value position", engineLock, StringComparison.Ordinal);
         Assert.Contains("omits MemberReference", engineLock, StringComparison.Ordinal);
+        Assert.Contains("client-compatible", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MmsSemanticReportValueProjector.Project", semanticBridge, StringComparison.Ordinal);
         Assert.Contains("session.StaticReportProjection.Project", runtime, StringComparison.Ordinal);
         Assert.Contains("MMS process fallback is disabled", runtime, StringComparison.Ordinal);
