@@ -138,6 +138,21 @@ public partial class MainWindow
                     window,
                     resetSelection: true);
             }
+            else if (selectionMode == SclSignalSelectionMode.StaticDataSet && !selectionAlreadyApplied)
+            {
+                // A programmatic Static DataSet append does not pass through the selection
+                // dialog, so establish the report-only authority explicitly here. The same
+                // device, selected signals and acquisition mode are then visible in both
+                // Engineering and FAT without any live discovery pass.
+                foreach (var ied in addedIeds)
+                {
+                    var device = ResolveIoTestDevice(ied.LiveDeviceId)
+                                 ?? ResolveIoTestDevice(ied.IpAddress)
+                                 ?? ResolveIoTestDevice(ied.IedName);
+                    if (device is not null)
+                        ApplyStaticDataSetSelection(device);
+                }
+            }
             else
             {
                 foreach (var ied in addedIeds)
