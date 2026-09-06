@@ -167,9 +167,12 @@ public sealed class FatAutoCaptureCoordinator
                     Slot = FatValueSlot.Value1
                 };
 
-            // Decision construction is intentionally pure. The controller journals the
-            // complete rolling-pair transition first and only then promotes both pointers.
-            // This prevents Value 1 from advancing in memory if durable evidence append fails.
+            // Advance the current projection before the controller promotes the newest V2.
+            // The shifted item is the already-journaled previous V2, so no process evidence
+            // is invented; this keeps current-pair assessment atomic for the live UI.
+            if (shiftedValue1 != null)
+                point.Runtime.SetFatValueEvidence(shiftedValue1);
+
             return new FatAutoCaptureDecision(
                 evidence,
                 FatAutoCaptureStage.Complete,
@@ -225,10 +228,6 @@ public sealed class FatAutoCaptureCoordinator
         if (Iec61850MonitorPoint.AreSemanticallyEquivalent(baseline ?? string.Empty, current ?? string.Empty))
             return true;
 
-        // Aggregate FAT rows such as "A=11, B=12, C=0" are one evidence value, not a
-        // scalar analog. Numeric tolerance is valid only when each side contains exactly
-        // one numeric token. Therefore changing phase C to 13 is always a new condition and
-        // advances Value 2 to the full newest aggregate "A=11, B=12, C=13".
         return TryParseScalarNumeric(baseline, out var left) &&
                TryParseScalarNumeric(current, out var right) &&
                Math.Abs(left - right) <= SettlingTolerance(right, baseline);
