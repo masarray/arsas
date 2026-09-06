@@ -14,7 +14,7 @@ public interface IIoTestEvidenceJournal : IDisposable
 
     // Existing test doubles and alternate journals keep working through this default
     // implementation. The production journal overrides it so a baseline batch performs
-    // one durable disk flush instead of one fsync per FAT point.
+    // one buffered writer flush instead of one flush per FAT point.
     IReadOnlyList<IoTestJournalEnvelope> AppendBatch(IEnumerable<IoTestJournalEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -47,7 +47,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             FileAccess.Write,
             FileShare.Read,
             4096,
-            FileOptions.WriteThrough);
+            FileOptions.SequentialScan);
         _writer = new StreamWriter(_stream, new UTF8Encoding(false)) { AutoFlush = false };
     }
 
@@ -78,7 +78,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             var envelope = AppendCore(entry);
-            FlushDurable();
+            FlushVisible();
             return envelope;
         }
     }
@@ -97,7 +97,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             }
 
             if (envelopes.Count > 0)
-                FlushDurable();
+                FlushVisible();
             return envelopes;
         }
     }
@@ -117,11 +117,11 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         return envelope;
     }
 
-    private void FlushDurable()
-    {
-        _writer.Flush();
-        _stream.Flush(flushToDisk: true);
-    }
+    // FAT interaction paths only need the append-only journal to be immediately visible to
+    // readers. A physical disk barrier on every report/recapture blocks the WPF dispatcher
+    // for no integrity benefit: the hash chain is already ordered under _sync. The journal
+    // is sealed durably once when the session is stopped/disposed, before verification.
+    private void FlushVisible() => _writer.Flush();
 
     public static IoTestJournalVerificationResult Verify(string filePath)
     {
@@ -172,8 +172,16 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             if (_disposed)
                 return;
             _disposed = true;
-            _writer.Dispose();
-            _stream.Dispose();
+            try
+            {
+                _writer.Flush();
+                _stream.Flush(flushToDisk: true);
+            }
+            finally
+            {
+                _writer.Dispose();
+                _stream.Dispose();
+            }
         }
     }
 
