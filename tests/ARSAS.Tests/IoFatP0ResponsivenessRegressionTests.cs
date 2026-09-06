@@ -72,9 +72,14 @@ public sealed class IoFatP0ResponsivenessRegressionTests
 
         Assert.Contains("CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2)", facade, StringComparison.Ordinal);
         Assert.Contains("PendingEventOriginWindow = TimeSpan.FromSeconds(1)", facade, StringComparison.Ordinal);
+        Assert.Contains("ActiveCommandExpectationWindow = TimeSpan.FromSeconds(30)", facade, StringComparison.Ordinal);
         Assert.Contains("_inner.PointUpdated += ForwardPointUpdate", facade, StringComparison.Ordinal);
         Assert.Contains("_inner.EventRaised += ForwardEventRaised", facade, StringComparison.Ordinal);
-        Assert.Contains("IsConfirmedCommandFeedback(snapshot)", facade, StringComparison.Ordinal);
+        Assert.Contains("RegisterActiveCommandExpectation(", facade, StringComparison.Ordinal);
+        Assert.Contains("request.Signal,", facade, StringComparison.Ordinal);
+        Assert.Contains("request.ValueText", facade, StringComparison.Ordinal);
+        Assert.Contains("IsConfirmedCommandFeedback(snapshot) &&", facade, StringComparison.Ordinal);
+        Assert.Contains("MatchesActiveCommandExpectation(key, snapshot.Value, nowUtc)", facade, StringComparison.Ordinal);
         Assert.Contains("_commandFeedbackFences[key] = new CommandFeedbackFence", facade, StringComparison.Ordinal);
         Assert.Contains("_pendingEventOrigins[key] = new PendingEventOrigin", facade, StringComparison.Ordinal);
         Assert.Contains("snapshot.IsReportTraffic", facade, StringComparison.Ordinal);
@@ -86,6 +91,7 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         Assert.Contains("withheld phantom MMS verification SOE", facade, StringComparison.Ordinal);
         Assert.Contains("P0_COMMAND_FRESHNESS: ", facade, StringComparison.Ordinal);
         Assert.Contains("ClearCommandFeedbackState(deviceId)", facade, StringComparison.Ordinal);
+        Assert.Contains("_activeCommandExpectations.TryRemove", facade, StringComparison.Ordinal);
         Assert.Contains("Report traffic remains process", facade, StringComparison.Ordinal);
         Assert.DoesNotContain("IsReportEvent(Iec61850EventEntry entry)", facade, StringComparison.Ordinal);
         Assert.DoesNotContain("using System.Windows", facade, StringComparison.Ordinal);
