@@ -1,3 +1,4 @@
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -73,6 +74,80 @@ public sealed class IoFatRelayBenchP0RegressionTests
         Assert.Contains("private void FlushVisible() => _writer.Flush();", source, StringComparison.Ordinal);
         Assert.Contains("_stream.Flush(flushToDisk: true);", source, StringComparison.Ordinal);
         Assert.Contains("FileOptions.SequentialScan", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AlreadyLiveEngineeringScope_UsesExactNoDiscoveryFastPath()
+    {
+        var point = new IoTestPointPlan
+        {
+            TestPointId = "FAST-POS",
+            IedName = "AA1E1F06R4",
+            IpAddress = "192.168.81.103",
+            SignalName = "Position",
+            ObjectReference = "AA1E1F06R4Q0/CSWI1.Pos.stVal",
+            FunctionalConstraint = "ST",
+            WorkspaceSelected = true,
+            TestEnabled = true,
+            ImportReady = true,
+            BindingStatus = IoTestSignalSelectionService.SclWorkspaceAuthorityBindingStatus
+        };
+        var ied = new IoTestIedPlan
+        {
+            IedName = point.IedName,
+            IpAddress = point.IpAddress,
+            TestPoints = { point }
+        };
+        var signal = new SignalDefinition
+        {
+            Name = point.SignalName,
+            ObjectReference = point.ObjectReference,
+            DisplayReference = point.ObjectReference,
+            FunctionalConstraint = point.FunctionalConstraint,
+            IsSelected = true
+        };
+        var device = new Iec61850MonitorDevice
+        {
+            DeviceId = "fast-live-device",
+            Name = point.IedName,
+            SclIedName = point.IedName,
+            IpAddress = point.IpAddress,
+            IsConnected = true,
+            IsMonitoring = true
+        };
+        device.Signals.Add(signal);
+        device.Points.Add(new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.Name,
+            IpAddress = device.IpAddress,
+            SignalName = point.SignalName,
+            IecReference = point.ObjectReference,
+            FunctionalConstraint = point.FunctionalConstraint,
+            Value = "Closed [10]",
+            Quality = "Good",
+            SourceMode = "BRCB"
+        });
+
+        var result = new IoTestSignalSelectionService().Resolve(ied, device);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Single(result.Matches);
+        Assert.Same(signal, result.Matches[0].Signal);
+        Assert.Contains("already-live Engineering acquisition session", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AlreadyLiveFastPath_PrecedesMandatoryInventoryMutation()
+    {
+        var source = File.ReadAllText(FindRepositoryFile(
+            Path.Combine("Services", "IoTesting", "IoTestSignalSelectionService.cs")));
+        var fastPath = source.IndexOf("TryResolveAlreadyLiveExactScope", StringComparison.Ordinal);
+        var mandatoryInventory = source.IndexOf("Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);", StringComparison.Ordinal);
+
+        Assert.True(fastPath >= 0);
+        Assert.True(mandatoryInventory > fastPath);
+        Assert.Contains("device.IsConnected && device.IsMonitoring", source, StringComparison.Ordinal);
     }
 
     private static IoTestPointPlan NewAnalogPoint(string id)
