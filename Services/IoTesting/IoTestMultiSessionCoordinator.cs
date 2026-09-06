@@ -366,36 +366,58 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         }
     }
 
+    /// <summary>
+    /// Forward only the selected leaf property that actually changed. The old implementation
+    /// amplified each leaf notification into the complete coordinator projection. During a
+    /// 58-point session that meant journal metadata and state transitions could generate tens
+    /// of thousands of WPF invalidations before the Dispatcher could repaint.
+    /// </summary>
     private void Child_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_disposed)
+        if (_disposed || sender is not IoTestSessionController controller)
             return;
 
-        // Relay-bench hot path: one journal append changes EvidenceRecordCount, LastJournalHash
-        // and JournalIntegrityText in sequence. Expanding every one of those child changes into
-        // the complete selected-session projection caused dozens of WPF notifications per FAT
-        // edge and made the shared Engineering Dispatcher stall for seconds. Forward only the
-        // property that actually changed; reserve the full projection refresh for structural
-        // session-state changes.
+        var selected = SelectedController;
+        if (!ReferenceEquals(controller, selected))
+        {
+            if (e.PropertyName is nameof(IoTestSessionController.IsSessionActive) or nameof(IoTestSessionController.State))
+            {
+                Raise(nameof(ActiveSessionCount));
+                Raise(nameof(HasActiveSessions));
+                if (selected == null)
+                    Raise(nameof(StatusText));
+            }
+            return;
+        }
+
         switch (e.PropertyName)
         {
-            case nameof(IoTestSessionController.EvidenceRecordCount):
-                Raise(nameof(EvidenceRecordCount));
+            case nameof(IoTestSessionController.IsSessionActive):
+                Raise(nameof(IsSessionActive));
+                Raise(nameof(IsSelectedSessionActive));
+                Raise(nameof(ActiveSessionCount));
+                Raise(nameof(HasActiveSessions));
                 break;
-            case nameof(IoTestSessionController.LastJournalHash):
-                Raise(nameof(LastJournalHash));
+            case nameof(IoTestSessionController.CanStart):
+                Raise(nameof(CanStart));
                 break;
-            case nameof(IoTestSessionController.JournalIntegrityText):
-                Raise(nameof(JournalIntegrityText));
+            case nameof(IoTestSessionController.CanPause):
+                Raise(nameof(CanPause));
                 break;
-            case nameof(IoTestSessionController.JournalPath):
-                Raise(nameof(JournalPath));
+            case nameof(IoTestSessionController.CanResume):
+                Raise(nameof(CanResume));
                 break;
-            case nameof(IoTestSessionController.ProgressText):
-                Raise(nameof(ProgressText));
+            case nameof(IoTestSessionController.CanStop):
+                Raise(nameof(CanStop));
                 break;
-            case nameof(IoTestSessionController.StatusText):
-                Raise(nameof(StatusText));
+            case nameof(IoTestSessionController.CanEditPlan):
+                Raise(nameof(CanEditPlan));
+                break;
+            case nameof(IoTestSessionController.State):
+                Raise(nameof(State));
+                break;
+            case nameof(IoTestSessionController.ActiveIed):
+                Raise(nameof(ActiveIed));
                 break;
             case nameof(IoTestSessionController.SessionId):
                 Raise(nameof(SessionId));
@@ -406,22 +428,29 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
             case nameof(IoTestSessionController.CompletedAtUtc):
                 Raise(nameof(CompletedAtUtc));
                 break;
-            case nameof(IoTestSessionController.State):
-            case nameof(IoTestSessionController.ActiveIed):
-            case nameof(IoTestSessionController.IsSessionActive):
-            case nameof(IoTestSessionController.CanStart):
-            case nameof(IoTestSessionController.CanPause):
-            case nameof(IoTestSessionController.CanResume):
-            case nameof(IoTestSessionController.CanStop):
-            case nameof(IoTestSessionController.CanEditPlan):
-            case nameof(IoTestSessionController.StateText):
-            case nameof(IoTestSessionController.ActiveIedText):
-                RaiseProjectionProperties();
+            case nameof(IoTestSessionController.StatusText):
+                Raise(nameof(StatusText));
                 break;
-            default:
-                // Unknown child properties are intentionally not amplified into every FAT
-                // binding. Explicit Start/Stop/Resume actions already refresh the complete
-                // projection once after the state transition.
+            case nameof(IoTestSessionController.JournalPath):
+                Raise(nameof(JournalPath));
+                break;
+            case nameof(IoTestSessionController.EvidenceRecordCount):
+                Raise(nameof(EvidenceRecordCount));
+                break;
+            case nameof(IoTestSessionController.LastJournalHash):
+                Raise(nameof(LastJournalHash));
+                break;
+            case nameof(IoTestSessionController.JournalIntegrityText):
+                Raise(nameof(JournalIntegrityText));
+                break;
+            case nameof(IoTestSessionController.StateText):
+                Raise(nameof(StateText));
+                break;
+            case nameof(IoTestSessionController.ActiveIedText):
+                Raise(nameof(ActiveIedText));
+                break;
+            case nameof(IoTestSessionController.ProgressText):
+                Raise(nameof(ProgressText));
                 break;
         }
     }
