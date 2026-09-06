@@ -16,19 +16,15 @@ public sealed record FatAutoCaptureDecision(
 }
 
 /// <summary>
-/// Automatic Value 1 / Value 2 latch. This coordinator never mutates the current
-/// evidence pointers: callers append the returned evidence first, then promote it.
-///
-/// Report-backed process values are event evidence already. The first good readable
-/// report-backed value is therefore latched immediately as Value 1, and the first
-/// meaningful different value is latched immediately as Value 2. Once both slots are
+/// Automatic Value 1 / Value 2 latch. The first good readable value is latched as
+/// Value 1 and the first meaningful different value as Value 2. Once both slots are
 /// populated, later meaningful changes keep a rolling pair: previous Value 2 becomes
 /// Value 1 and the newest process value becomes Value 2. This matches relay bench work
 /// where the operator may repeat False/True, Open/Close, or analog 0/1000 cycles.
 ///
-/// Polling fallback keeps the legacy three-sample analog settling guard so noisy cyclic
-/// reads are not mistaken for a meaningful condition change. Discrete/Other values are
-/// latched immediately after a good-quality observation.
+/// Report-backed process values are event evidence already, so they are accepted
+/// immediately. Polling fallback keeps the legacy three-sample analog settling guard so
+/// noisy cyclic reads are not mistaken for a meaningful condition change.
 /// </summary>
 public sealed class FatAutoCaptureCoordinator
 {
@@ -156,6 +152,12 @@ public sealed class FatAutoCaptureCoordinator
                     EvidenceId = Guid.NewGuid(),
                     Slot = FatValueSlot.Value1
                 };
+
+            // Advance the authoritative pair before the caller promotes the new Value 2.
+            // This is intentionally just a pointer promotion of evidence already journaled
+            // as the previous Value 2; the newly observed Value 2 is journaled by the caller.
+            if (shiftedValue1 != null)
+                point.Runtime.SetFatValueEvidence(shiftedValue1);
 
             return new FatAutoCaptureDecision(
                 evidence,
