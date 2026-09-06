@@ -120,7 +120,7 @@ public sealed class P0Build1888RecoveryRegressionTests
         var coordinator = File.ReadAllText(FindRepoFile("Services/IoTesting/FatAutoCaptureCoordinator.cs"));
 
         Assert.Contains("column.CellTemplate = BuildP0EvidenceValueTemplate", ux, StringComparison.Ordinal);
-        Assert.Contains("Intentionally no normal Capture button", ux, StringComparison.Ordinal);
+        Assert.DoesNotContain("new FrameworkElementFactory(typeof(Button))", ux, StringComparison.Ordinal);
         Assert.Contains("P0FatCanonicalValueConverter", ux, StringComparison.Ordinal);
         Assert.Contains("AnalogStableSampleCount = 3", coordinator, StringComparison.Ordinal);
         Assert.Contains("AnalogRelativeSettlingFraction = 0.0005d", coordinator, StringComparison.Ordinal);
@@ -141,14 +141,16 @@ public sealed class P0Build1888RecoveryRegressionTests
     }
 
     [Fact]
-    public void P0_HeaderUsesPrimaryAndSecondaryActionRows()
+    public void P0_HeaderUsesOneCompactActionRow()
     {
         var ux = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0BenchUx.cs"));
 
         Assert.Contains("_p0PrimaryHeaderActions", ux, StringComparison.Ordinal);
         Assert.Contains("_p0SecondaryHeaderActions", ux, StringComparison.Ordinal);
         Assert.Contains("ConfigureP0AdaptiveHeaderActions", ux, StringComparison.Ordinal);
-        Assert.Contains("_clockSyncEvidenceText", ux, StringComparison.Ordinal);
+        Assert.Contains("Visibility = Visibility.Collapsed", ux, StringComparison.Ordinal);
+        Assert.Contains("private bool IsP0SecondaryHeaderAction(UIElement element) => false;", ux, StringComparison.Ordinal);
+        Assert.Contains("actionPanel.Children.Add(_p0PrimaryHeaderActions);", ux, StringComparison.Ordinal);
     }
 
     [Fact]
