@@ -4,9 +4,9 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Appends controlled IED-level file-service evidence to the same layout consumed by
-/// native PDF output and WPF print preview. Existing signal pages are retained and their
-/// page totals are corrected after supplemental pages are added.
+/// Appends controlled IED-level file-service evidence and a mandatory final FAT acceptance
+/// sign-off page to the same layout consumed by native PDF output and WPF Print Preview.
+/// Existing page totals are corrected after all supplemental pages are added.
 /// </summary>
 internal static class IoFatSupplementalReportLayoutDecorator
 {
@@ -36,11 +36,11 @@ internal static class IoFatSupplementalReportLayoutDecorator
         var evidenceIeds = project.Ieds
             .Where(ied => ied.HasRemoteComtradeEvidence)
             .ToArray();
-        if (evidenceIeds.Length == 0)
-            return baseLayout;
+        var evidencePageCount = (int)Math.Ceiling(evidenceIeds.Length / (double)RowsPerPage);
 
-        var supplementalPageCount = (int)Math.Ceiling(evidenceIeds.Length / (double)RowsPerPage);
-        var totalPages = baseLayout.Pages.Count + supplementalPageCount;
+        // Sign-off is always the final report page, even when there is no COMTRADE evidence.
+        const int signOffPageCount = 1;
+        var totalPages = baseLayout.Pages.Count + evidencePageCount + signOffPageCount;
         var pages = new List<IoFatReportPagePlan>(totalPages);
 
         for (var index = 0; index < baseLayout.Pages.Count; index++)
@@ -52,7 +52,7 @@ internal static class IoFatSupplementalReportLayoutDecorator
             pages.Add(new IoFatReportPagePlan(index + 1, page.Width, page.Height, corrected));
         }
 
-        for (var pageIndex = 0; pageIndex < supplementalPageCount; pageIndex++)
+        for (var pageIndex = 0; pageIndex < evidencePageCount; pageIndex++)
         {
             var rows = evidenceIeds
                 .Skip(pageIndex * RowsPerPage)
@@ -61,6 +61,9 @@ internal static class IoFatSupplementalReportLayoutDecorator
             var pageNumber = baseLayout.Pages.Count + pageIndex + 1;
             pages.Add(BuildEvidencePage(project, rows, pageNumber, totalPages, baseLayout.CreatedAt, baseLayout.Draft));
         }
+
+        var signOffPageNumber = totalPages;
+        pages.Add(BuildSignOffPage(project, signOffPageNumber, totalPages, baseLayout.CreatedAt, baseLayout.Draft));
 
         return new IoFatReportLayoutPlan(
             baseLayout.ProjectId,
@@ -158,13 +161,98 @@ internal static class IoFatSupplementalReportLayoutDecorator
             y -= rowHeight;
         }
 
+        AddFooter(commands, pageNumber, totalPages, createdAt,
+            "Remote listing evidence is IED-scoped and persisted with the FAT project.");
+        return new IoFatReportPagePlan(pageNumber, PageWidth, PageHeight, commands);
+    }
+
+    private static IoFatReportPagePlan BuildSignOffPage(
+        IoTestProject project,
+        int pageNumber,
+        int totalPages,
+        DateTimeOffset createdAt,
+        bool draft)
+    {
+        var commands = new List<IoFatReportCommand>();
+        var projectName = FirstNonEmpty(project.DocumentControl.ClientProject, project.ProjectName, project.ProjectId);
+        var documentNumber = FirstNonEmpty(
+            project.DocumentControl.PurchaserDocumentNumber,
+            project.DocumentControl.CompanyProjectDocumentNumber,
+            project.ProjectId);
+        var revision = FirstNonEmpty(project.DocumentControl.Revision, "-");
+
+        Text(commands, Margin, 566d, 480d, projectName, IoFatReportFontKind.Bold, 7.2d, Muted);
+        Text(commands, Margin, 544d, 520d, "FAT Acceptance Sign-Off", IoFatReportFontKind.Bold, 17.2d, Navy);
+        Text(commands, Margin, 522d, 540d,
+            "Final acceptance record for the IEC 61850 FAT evidence contained in this report.",
+            IoFatReportFontKind.Regular, 8.0d, Muted);
+        Line(commands, Margin, 498d, PageWidth - Margin, 498d, Border, 0.8d);
+
+        Rect(commands, 590d, 568d, 222d, 64d, 4d, SoftBlue, Border, 0.7d);
+        Text(commands, 601d, 554d, 200d, "DOCUMENT CONTROL", IoFatReportFontKind.Bold, 5.9d, Muted);
+        Text(commands, 601d, 538d, 200d, documentNumber, IoFatReportFontKind.Bold, 8.2d, Navy);
+        Text(commands, 601d, 523d, 200d, $"REV {revision}  |  {(draft ? "PREVIEW" : "AS TESTED")}", IoFatReportFontKind.Bold, 6.7d, Navy);
+        Text(commands, 601d, 511d, 200d, draft ? "NOT FOR ISSUE" : "CUSTOMER FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
+
+        Text(commands, Margin, 470d, ContentWidth,
+            "By signing below, the parties acknowledge the FAT execution and evidence recorded in the preceding pages.",
+            IoFatReportFontKind.Regular, 7.2d, Ink);
+
+        const double gap = 14d;
+        var boxWidth = (ContentWidth - (gap * 2d)) / 3d;
+        var x = Margin;
+        foreach (var heading in new[] { "TESTED BY", "WITNESSED BY", "APPROVED BY" })
+        {
+            DrawSignOffBox(commands, x, 430d, boxWidth, 286d, heading);
+            x += boxWidth + gap;
+        }
+
+        AddFooter(commands, pageNumber, totalPages, createdAt,
+            "Final FAT acceptance signatures.");
+        return new IoFatReportPagePlan(pageNumber, PageWidth, PageHeight, commands);
+    }
+
+    private static void DrawSignOffBox(
+        ICollection<IoFatReportCommand> commands,
+        double x,
+        double top,
+        double width,
+        double height,
+        string heading)
+    {
+        Rect(commands, x, top, width, height, 4d, White, Border, 0.8d);
+        Rect(commands, x, top, width, 34d, 4d, SoftBlue, Border, 0.6d);
+        Text(commands, x + 12d, top - 21d, width - 24d, heading, IoFatReportFontKind.Bold, 8.3d, Navy);
+
+        var labelX = x + 12d;
+        var lineX = x + 12d;
+        var lineRight = x + width - 12d;
+
+        Text(commands, labelX, top - 63d, width - 24d, "Name", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Line(commands, lineX, top - 92d, lineRight, top - 92d, Border, 0.65d);
+
+        Text(commands, labelX, top - 115d, width - 24d, "Company / Organization", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Line(commands, lineX, top - 144d, lineRight, top - 144d, Border, 0.65d);
+
+        Text(commands, labelX, top - 168d, width - 24d, "Signature", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Rect(commands, lineX, top - 183d, width - 24d, 54d, 0d, White, Border, 0.55d);
+
+        Text(commands, labelX, top - 255d, width - 24d, "Date", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Line(commands, lineX, top - 275d, lineRight, top - 275d, Border, 0.65d);
+    }
+
+    private static void AddFooter(
+        ICollection<IoFatReportCommand> commands,
+        int pageNumber,
+        int totalPages,
+        DateTimeOffset createdAt,
+        string note)
+    {
         Line(commands, Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
-        Text(commands, Margin, 24d, 540d,
-            $"Generated {createdAt:yyyy-MM-dd HH:mm:ss zzz}  |  Remote listing evidence is IED-scoped and persisted with the FAT project.",
+        Text(commands, Margin, 24d, 590d,
+            $"Generated {createdAt:yyyy-MM-dd HH:mm:ss zzz}  |  {note}",
             IoFatReportFontKind.Regular, 6.1d, Muted);
         Text(commands, PageWidth - Margin - 118d, 24d, 118d, $"Page {pageNumber} / {totalPages}", IoFatReportFontKind.Regular, 6.1d, Muted);
-
-        return new IoFatReportPagePlan(pageNumber, PageWidth, PageHeight, commands);
     }
 
     private static IoFatReportCommand CorrectPageTotal(IoFatReportCommand command, int pageNumber, int totalPages)
