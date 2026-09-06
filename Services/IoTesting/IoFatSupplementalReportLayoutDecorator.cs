@@ -86,7 +86,7 @@ internal static class IoFatSupplementalReportLayoutDecorator
             project.DocumentControl.PurchaserDocumentNumber,
             project.DocumentControl.CompanyProjectDocumentNumber,
             project.ProjectId);
-        var revision = FirstNonEmpty(project.DocumentControl.Revision, "-");
+        var revision = string.IsNullOrWhiteSpace(project.DocumentControl.Revision) ? string.Empty : project.DocumentControl.Revision.Trim();
 
         Line(commands, Margin, 496d, PageWidth - Margin, 496d, Border, 0.8d);
         Text(commands, Margin, 566d, 480d, projectName, IoFatReportFontKind.Bold, 7.2d, Muted);
@@ -98,8 +98,10 @@ internal static class IoFatSupplementalReportLayoutDecorator
         Rect(commands, 590d, 568d, 222d, 64d, 4d, SoftBlue, Border, 0.7d);
         Text(commands, 601d, 554d, 200d, "DOCUMENT CONTROL", IoFatReportFontKind.Bold, 5.9d, Muted);
         Text(commands, 601d, 538d, 200d, documentNumber, IoFatReportFontKind.Bold, 8.2d, Navy);
-        Text(commands, 601d, 523d, 200d, $"REV {revision}  |  {(draft ? "PREVIEW" : "AS TESTED")}", IoFatReportFontKind.Bold, 6.7d, Navy);
-        Text(commands, 601d, 511d, 200d, draft ? "NOT FOR ISSUE" : "CUSTOMER FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
+        Text(commands, 601d, 523d, 200d,
+            string.IsNullOrWhiteSpace(revision) ? "FAT REPORT" : $"REV {revision}  |  FAT REPORT",
+            IoFatReportFontKind.Bold, 6.7d, Navy);
+        Text(commands, 601d, 511d, 200d, "FOR FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
 
         Rect(commands, Margin, 480d, ContentWidth, 42d, 5d, SoftPass, Border, 0.7d);
         Text(commands, Margin + 12d, 466d, 170d, "FILE SERVICE ACCEPTANCE BASIS", IoFatReportFontKind.Bold, 5.9d, Pass);
@@ -179,7 +181,7 @@ internal static class IoFatSupplementalReportLayoutDecorator
             project.DocumentControl.PurchaserDocumentNumber,
             project.DocumentControl.CompanyProjectDocumentNumber,
             project.ProjectId);
-        var revision = FirstNonEmpty(project.DocumentControl.Revision, "-");
+        var revision = string.IsNullOrWhiteSpace(project.DocumentControl.Revision) ? string.Empty : project.DocumentControl.Revision.Trim();
 
         Text(commands, Margin, 566d, 480d, projectName, IoFatReportFontKind.Bold, 7.2d, Muted);
         Text(commands, Margin, 544d, 520d, "FAT Acceptance Sign-Off", IoFatReportFontKind.Bold, 17.2d, Navy);
@@ -191,8 +193,10 @@ internal static class IoFatSupplementalReportLayoutDecorator
         Rect(commands, 590d, 568d, 222d, 64d, 4d, SoftBlue, Border, 0.7d);
         Text(commands, 601d, 554d, 200d, "DOCUMENT CONTROL", IoFatReportFontKind.Bold, 5.9d, Muted);
         Text(commands, 601d, 538d, 200d, documentNumber, IoFatReportFontKind.Bold, 8.2d, Navy);
-        Text(commands, 601d, 523d, 200d, $"REV {revision}  |  {(draft ? "PREVIEW" : "AS TESTED")}", IoFatReportFontKind.Bold, 6.7d, Navy);
-        Text(commands, 601d, 511d, 200d, draft ? "NOT FOR ISSUE" : "CUSTOMER FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
+        Text(commands, 601d, 523d, 200d,
+            string.IsNullOrWhiteSpace(revision) ? "FAT REPORT" : $"REV {revision}  |  FAT REPORT",
+            IoFatReportFontKind.Bold, 6.7d, Navy);
+        Text(commands, 601d, 511d, 200d, "FOR FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
 
         Text(commands, Margin, 470d, ContentWidth,
             "By signing below, the parties acknowledge the FAT execution and evidence recorded in the preceding pages.",
