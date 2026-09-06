@@ -29,16 +29,27 @@ public sealed class P0LifecycleAndTotPfRegressionTests
     }
 
     [Fact]
-    public void FatWindow_Close_KeepsUiBoundSessionMutationOnDispatcher_AndOffloadsPersistence()
+    public void FatWindow_Close_KeepsStateMutationOnDispatcher_AndOffloadsDurableIo()
     {
         var lifecycle = Read("IoListTestingWindow.P0Lifecycle.cs");
+        var journal = Read("Services/IoTesting/IoTestEvidenceJournal.cs");
 
         Assert.Contains("Closing -= Window_Closing", lifecycle, StringComparison.Ordinal);
         Assert.Contains("Closing += P0Window_Closing", lifecycle, StringComparison.Ordinal);
-        Assert.Contains("var stopAll = Session.StopAll(", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("using (IoTestEvidenceJournal.BeginDeferredSealScope())", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("stopAll = Session.StopAll(", lifecycle, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Run(() =>\n                    Session.StopAll", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("await IoTestEvidenceJournal.AwaitDeferredSealsAsync()", lifecycle, StringComparison.Ordinal);
         Assert.Contains("await Task.Run(Storage.SaveNow)", lifecycle, StringComparison.Ordinal);
         Assert.Contains("e.Cancel = true", lifecycle, StringComparison.Ordinal);
+
+        // Deferred sealing is close-only. Normal Stop still takes the synchronous durable
+        // barrier, while workspace close queues only the already-detached journal I/O.
+        Assert.Contains("DeferredSealScopeDepth.Value > 0", journal, StringComparison.Ordinal);
+        Assert.Contains("Task.Run(SealDurablyAndVerify)", journal, StringComparison.Ordinal);
+        Assert.Contains("return VerifyCore(filePath)", journal, StringComparison.Ordinal);
+        Assert.Contains("FlushDurable();", journal, StringComparison.Ordinal);
+        Assert.Contains("Task.WhenAll", journal, StringComparison.Ordinal);
     }
 
     [Fact]
