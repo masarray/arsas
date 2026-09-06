@@ -21,9 +21,10 @@ public sealed record FatAutoCaptureDecision(
 /// populated, later meaningful process changes keep a rolling pair: previous Value 2
 /// becomes Value 1 and the newest process value becomes Value 2.
 ///
-/// Explicit operator Snapshot/Recapture remains authoritative for the current pair until the
-/// operator changes it again. Fully automatic pairs keep rolling so repeated FAT operations
-/// cannot leave stale Value 1 / Value 2 in the report.
+/// The report-facing current pair always follows the latest meaningful process transition,
+/// regardless of whether an earlier pair came from automatic capture or operator Recapture.
+/// Operator actions remain immutable audit history in the journal; they do not freeze the
+/// replaceable current Value 1 / Value 2 projection.
 ///
 /// Report-backed process values are event evidence already, so they are accepted
 /// immediately. Polling fallback keeps the three-sample analog settling guard so noisy
@@ -71,17 +72,6 @@ public sealed class FatAutoCaptureCoordinator
         }
 
         var rollingPair = point.HasValue1Evidence && point.HasValue2Evidence;
-        var operatorOwnedPair = rollingPair &&
-            ((point.Runtime.Value1Evidence is { CaptureKind: not FatEvidenceCaptureKind.AutomaticValue }) ||
-             (point.Runtime.Value2Evidence is { CaptureKind: not FatEvidenceCaptureKind.AutomaticValue }));
-        if (operatorOwnedPair)
-        {
-            Clear(point);
-            return FatAutoCaptureDecision.None(
-                FatAutoCaptureStage.Complete,
-                "Current Value 1 / Value 2 contains explicit operator evidence; automatic rolling is paused until the operator recaptures it.");
-        }
-
         if (rollingPair && IsEquivalent(point.Value2Text, observation.RawValue))
         {
             Clear(point);
