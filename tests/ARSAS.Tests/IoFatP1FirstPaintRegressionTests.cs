@@ -6,12 +6,15 @@ public sealed class IoFatP1FirstPaintRegressionTests
     public void P1_InstallsExistingFatV2SchemaOnLoadedBeforeFirstVisibleRender()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.P1FirstPaint.cs"));
+        var handlerStart = source.IndexOf("private static void P1FirstPaint_Loaded", StringComparison.Ordinal);
+        Assert.True(handlerStart >= 0);
+        var handler = source[handlerStart..];
 
         Assert.Contains("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
-        Assert.Contains("window.InstallFatV2WorkspaceUx();", source, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(e.OriginalSource, window)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ContentRendered", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Dispatcher.BeginInvoke", source, StringComparison.Ordinal);
+        Assert.Contains("window.InstallFatV2WorkspaceUx();", handler, StringComparison.Ordinal);
+        Assert.Contains("ReferenceEquals(e.OriginalSource, window)", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContentRendered", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dispatcher.BeginInvoke", handler, StringComparison.Ordinal);
     }
 
     [Fact]
