@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +30,15 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
+
+    // Workspace close is the only path allowed to defer the physical disk barrier. The
+    // controller still performs every session-state mutation on the WPF Dispatcher; only
+    // the already-detached journal's durable flush/read-back verification runs on a worker.
+    // Verify() can therefore return the already-computed hash-chain snapshot while that
+    // close-only seal is pending, and P0Lifecycle awaits the real read-back before closing.
+    private static readonly AsyncLocal<int> DeferredSealScopeDepth = new();
+    private static readonly ConcurrentDictionary<string, DeferredSealState> DeferredSeals =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private readonly object _sync = new();
     private readonly FileStream _stream;
@@ -69,6 +79,51 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         var projectDirectory = SanitizePathPart(project.ProjectId);
         var fileName = $"{startedAtUtc:yyyyMMddTHHmmssfffZ}_{SanitizePathPart(ied.IedName)}_{sessionId:N}.evidence.jsonl";
         return new IoTestEvidenceJournal(Path.Combine(rootDirectory, projectDirectory, fileName));
+    }
+
+    /// <summary>
+    /// Enables close-only deferred durable sealing for journals disposed synchronously by
+    /// IoTestSessionController.Stop(). Normal operator Stop keeps its existing synchronous
+    /// durable seal + verification semantics.
+    /// </summary>
+    public static IDisposable BeginDeferredSealScope()
+    {
+        DeferredSealScopeDepth.Value++;
+        return new DeferredSealScopeLease();
+    }
+
+    /// <summary>
+    /// Waits for every close-only deferred journal to finish its physical flush and complete
+    /// hash-chain read-back. The FAT workspace must await this before saving/closing.
+    /// </summary>
+    public static async Task AwaitDeferredSealsAsync()
+    {
+        var snapshot = DeferredSeals.ToArray();
+        if (snapshot.Length == 0)
+            return;
+
+        IoTestJournalVerificationResult[] results;
+        try
+        {
+            results = await Task.WhenAll(snapshot.Select(item => item.Value.Completion));
+        }
+        catch (Exception ex)
+        {
+            foreach (var item in snapshot)
+                DeferredSeals.TryRemove(item.Key, out _);
+            throw new InvalidOperationException($"Evidence journal sealing failed: {ex.Message}", ex);
+        }
+
+        foreach (var item in snapshot)
+            DeferredSeals.TryRemove(item.Key, out _);
+
+        var failures = results.Where(result => !result.IsValid).ToArray();
+        if (failures.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "Evidence journal integrity verification failed after durable sealing: " +
+                string.Join(" | ", failures.Select(result => result.Error).Where(error => !string.IsNullOrWhiteSpace(error))));
+        }
     }
 
     public IoTestJournalEnvelope Append(IoTestJournalEntry entry)
@@ -131,6 +186,31 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
 
     public static IoTestJournalVerificationResult Verify(string filePath)
     {
+        var key = SealKey(filePath);
+        if (DeferredSeals.TryGetValue(key, out var deferred))
+        {
+            if (deferred.Completion.IsCompletedSuccessfully)
+                return deferred.Completion.Result;
+            if (deferred.Completion.IsFaulted)
+            {
+                return new IoTestJournalVerificationResult(
+                    false,
+                    deferred.Provisional.RecordCount,
+                    deferred.Provisional.LastHash,
+                    deferred.Completion.Exception?.GetBaseException().Message ?? "Deferred evidence journal sealing failed.");
+            }
+
+            // Stop() is still executing on the UI thread at this point. All journal bytes
+            // have already been writer-flushed on each append and the hash/count snapshot is
+            // final. P0Lifecycle waits for Completion before the workspace may close.
+            return deferred.Provisional;
+        }
+
+        return VerifyCore(filePath);
+    }
+
+    private static IoTestJournalVerificationResult VerifyCore(string filePath)
+    {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             return new IoTestJournalVerificationResult(false, 0, string.Empty, "Evidence journal was not found.");
 
@@ -178,15 +258,78 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             if (_disposed)
                 return;
             _disposed = true;
+
+            if (DeferredSealScopeDepth.Value > 0)
+            {
+                var provisional = _recordCount == 0
+                    ? new IoTestJournalVerificationResult(false, 0, _lastHash, "Evidence journal contains no records.")
+                    : new IoTestJournalVerificationResult(true, _recordCount, _lastHash, string.Empty);
+                var key = SealKey(FilePath);
+                var completion = Task.Run(SealDurablyAndVerify);
+                DeferredSeals[key] = new DeferredSealState(provisional, completion);
+                return;
+            }
+
             try
             {
                 FlushDurable();
             }
             finally
             {
-                _writer.Dispose();
-                _stream.Dispose();
+                try
+                {
+                    _writer.Dispose();
+                }
+                finally
+                {
+                    _stream.Dispose();
+                }
             }
+        }
+    }
+
+    private IoTestJournalVerificationResult SealDurablyAndVerify()
+    {
+        try
+        {
+            lock (_sync)
+            {
+                try
+                {
+                    FlushDurable();
+                }
+                finally
+                {
+                    try
+                    {
+                        _writer.Dispose();
+                    }
+                    finally
+                    {
+                        _stream.Dispose();
+                    }
+                }
+            }
+
+            return VerifyCore(FilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException)
+        {
+            return new IoTestJournalVerificationResult(false, _recordCount, _lastHash, ex.Message);
+        }
+    }
+
+    private static string SealKey(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return string.Empty;
+        try
+        {
+            return Path.GetFullPath(filePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return filePath.Trim();
         }
     }
 
@@ -202,4 +345,21 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         long JournalSequence,
         string PreviousHash,
         IoTestJournalEntry Entry);
+
+    private sealed record DeferredSealState(
+        IoTestJournalVerificationResult Provisional,
+        Task<IoTestJournalVerificationResult> Completion);
+
+    private sealed class DeferredSealScopeLease : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            DeferredSealScopeDepth.Value = Math.Max(0, DeferredSealScopeDepth.Value - 1);
+        }
+    }
 }
