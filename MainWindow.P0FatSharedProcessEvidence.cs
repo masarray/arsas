@@ -83,9 +83,6 @@ public partial class MainWindow
             {
                 ProjectSharedEngineeringPointToFat(pointIndex, point);
 
-                if (!activeDeviceIds.Contains(device.DeviceId))
-                    continue;
-
                 var key = string.IsNullOrWhiteSpace(point.PointKey)
                     ? $"{point.DeviceId}|{IoTestLiveBindingService.NormalizeReference(point.IecReference)}"
                     : point.PointKey.Trim();
@@ -93,6 +90,28 @@ public partial class MainWindow
                     continue;
 
                 _p0FatSharedProcessCursors.TryGetValue(key, out var previous);
+
+                // Prime and continuously maintain the shared process cursor even while the
+                // IED's FAT evidence session is inactive. Session.Start already captures its
+                // baseline from these exact live points. Without this priming, the first UI
+                // tick after Start treated all 58 current values as fresh events and queued a
+                // second full-workspace evidence burst immediately after the button changed
+                // to IED session active.
+                if (!activeDeviceIds.Contains(device.DeviceId))
+                {
+                    if (previous == null ||
+                        previous.Sequence != point.Sequence ||
+                        !Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) ||
+                        !string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
+                    {
+                        _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
+                            point.Sequence,
+                            point.Value,
+                            point.Quality);
+                    }
+                    continue;
+                }
+
                 if (previous != null &&
                     Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) &&
                     string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
