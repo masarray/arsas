@@ -3,12 +3,15 @@ namespace ARSAS.Tests;
 public sealed class IoFatP0ResponsivenessRegressionTests
 {
     [Fact]
-    public void ResumeAndStop_KeepWindowInteractive_AndMoveDiskBarriersOffHotPath()
+    public void StartResumeAndStop_KeepWindowInteractive_AndMoveDiskBarriersOffHotPath()
     {
         var actions = Read("IoListTestingWindow.P0RuntimeActions.cs");
         var journal = Read("Services/IoTesting/IoTestEvidenceJournal.cs");
 
+        Assert.Contains("FindButtonByContentBindingPath(this, nameof(SelectedStartWorkflowText))", actions, StringComparison.Ordinal);
         Assert.Contains("await Dispatcher.Yield(DispatcherPriority.Render)", actions, StringComparison.Ordinal);
+        Assert.Contains("StartSelectedIedSafely_Click(sender, e)", actions, StringComparison.Ordinal);
+        Assert.Contains("WaitForP0StartWorkflowCompletionAsync", actions, StringComparison.Ordinal);
         Assert.Contains("BeginCoalescedVisibleFlushScope", actions, StringComparison.Ordinal);
         Assert.Contains("result = Session.Resume()", actions, StringComparison.Ordinal);
         Assert.Contains("BeginDeferredSealScope", actions, StringComparison.Ordinal);
@@ -48,6 +51,18 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         Assert.Contains("device.IsMonitoring);", health, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Delay", health, StringComparison.Ordinal);
         Assert.DoesNotContain("ConnectAsync", health, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CommandBridge_EmitsLatencyDiagnostics_WithoutCreatingAnotherControlStack()
+    {
+        var bridge = Read("MainWindow.IoFatCommandBridge.cs");
+
+        Assert.Contains("Stopwatch.StartNew()", bridge, StringComparison.Ordinal);
+        Assert.Contains("Command completed in", bridge, StringComparison.Ordinal);
+        Assert.Contains("Command values refresh completed in", bridge, StringComparison.Ordinal);
+        Assert.Contains("await ExecuteClaimedControlAsync(signal, claim)", bridge, StringComparison.Ordinal);
+        Assert.DoesNotContain("new NativeIec61850Client", bridge, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
