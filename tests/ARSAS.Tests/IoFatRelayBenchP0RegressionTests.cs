@@ -110,13 +110,17 @@ public sealed class IoFatRelayBenchP0RegressionTests
     }
 
     [Fact]
-    public void EvidenceJournal_DoesNotForcePhysicalDiskBarrierOnEveryAppend()
+    public void EvidenceJournal_QueuesWritesAndKeepsDurableBarrierOffAppendPath()
     {
         var source = File.ReadAllText(FindRepositoryFile(
             Path.Combine("Services", "IoTesting", "IoTestEvidenceJournal.cs")));
 
         Assert.DoesNotContain("FileOptions.WriteThrough", source, StringComparison.Ordinal);
-        Assert.Contains("private void FlushVisible() => _writer.Flush();", source, StringComparison.Ordinal);
+        Assert.Contains("Channel<IoTestJournalEnvelope>", source, StringComparison.Ordinal);
+        Assert.Contains("Task.Run(ProcessPendingWritesAsync)", source, StringComparison.Ordinal);
+        Assert.Contains("QueueEnvelope(envelope);", source, StringComparison.Ordinal);
+        Assert.Contains("await _pendingWrites.Reader.WaitToReadAsync()", source, StringComparison.Ordinal);
+        Assert.Contains("_writer.Flush();", source, StringComparison.Ordinal);
         Assert.Contains("_stream.Flush(flushToDisk: true);", source, StringComparison.Ordinal);
         Assert.Contains("FileOptions.SequentialScan", source, StringComparison.Ordinal);
     }
