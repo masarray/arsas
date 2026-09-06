@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
+using ArIED61850Tester.Models;
 using Microsoft.Win32;
 
 namespace ArIED61850Tester;
@@ -48,7 +49,7 @@ public partial class RcbExportFilterWindow
     private void P0RcbSelectionChanged(object sender, RoutedEventArgs e)
     {
         if (e.OriginalSource is not System.Windows.Controls.CheckBox checkBox ||
-            checkBox.DataContext is not Models.RcbExportRow)
+            checkBox.DataContext is not RcbExportRow)
             return;
 
         _viewModel.NotifySelectionChanged();
