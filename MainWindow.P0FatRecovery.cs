@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.ComponentModel;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -74,8 +73,6 @@ public partial class MainWindow
         if (sender is not IoListTestingWindow fat || fat.Owner is not MainWindow engineering)
             return;
 
-        fat.Closing -= engineering.P0FatWindowClosing;
-        fat.Closing += engineering.P0FatWindowClosing;
         fat.Closed -= engineering.P0FatWindowClosed;
         fat.Closed += engineering.P0FatWindowClosed;
         Interlocked.Exchange(ref engineering._p0FatProjectionActive, 1);
@@ -95,18 +92,11 @@ public partial class MainWindow
         engineering.P0RefreshFatFromEngineeringImage(fat);
     }
 
-    private void P0FatWindowClosing(object? sender, CancelEventArgs e)
-    {
-        if (sender is IoListTestingWindow fat)
-            SuspendIoFatRuntimeProjection(fat);
-    }
-
     private void P0FatWindowClosed(object? sender, EventArgs e)
     {
         if (sender is not IoListTestingWindow fat)
             return;
 
-        fat.Closing -= P0FatWindowClosing;
         fat.Closed -= P0FatWindowClosed;
         SuspendIoFatRuntimeProjection(fat);
     }
