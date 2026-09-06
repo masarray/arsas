@@ -229,9 +229,32 @@ public sealed class FatAutoCaptureCoordinator
         if (Iec61850MonitorPoint.AreSemanticallyEquivalent(baseline ?? string.Empty, current ?? string.Empty))
             return true;
 
-        return TryParseNumeric(baseline, out var left) &&
-               TryParseNumeric(current, out var right) &&
+        // Aggregate FAT rows such as "A=12, B=13, C=0" are one evidence value, not a
+        // scalar analog. The legacy numeric fallback parsed only the first number; therefore
+        // A=12,B=13,C=0 and A=12,B=13,C=14 were incorrectly treated as equivalent because
+        // both started with 12. Numeric settling tolerance is valid only when each side has
+        // exactly one numeric token. Any phase/component change must roll Value 2.
+        return TryParseScalarNumeric(baseline, out var left) &&
+               TryParseScalarNumeric(current, out var right) &&
                Math.Abs(left - right) <= SettlingTolerance(right, baseline);
+    }
+
+    private static bool TryParseScalarNumeric(string? raw, out double value)
+    {
+        value = 0d;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var matches = NumericToken.Matches(raw.Trim());
+        if (matches.Count != 1)
+            return false;
+
+        var token = matches[0].Value;
+        if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            return true;
+
+        token = token.Replace(',', '.');
+        return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     private static double SettlingTolerance(double value, string? baseline)
