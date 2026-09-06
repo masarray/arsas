@@ -47,6 +47,7 @@ public sealed class IoFatRelayBenchP0RegressionTests
         var repeated = coordinator.Observe(point, Observation("0", 3, "BRCB"));
         Assert.NotNull(repeated.Evidence);
         Assert.NotNull(repeated.ShiftedValue1Evidence);
+        point.Runtime.SetFatValueEvidence(repeated.ShiftedValue1Evidence!);
         point.Runtime.SetFatValueEvidence(repeated.Evidence!);
 
         Assert.Equal(FatAutoCaptureStage.Complete, repeated.Stage);
