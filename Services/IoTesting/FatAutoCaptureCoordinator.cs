@@ -18,9 +18,10 @@ public sealed record FatAutoCaptureDecision(
 /// <summary>
 /// Automatic Value 1 / Value 2 latch. The first good readable value is latched as
 /// Value 1 and the first meaningful different value as Value 2. Once both slots are
-/// populated, later meaningful changes keep a rolling pair: previous Value 2 becomes
-/// Value 1 and the newest process value becomes Value 2. This matches relay bench work
-/// where the operator may repeat False/True, Open/Close, or analog 0/1000 cycles.
+/// populated by automatic capture, later meaningful changes keep a rolling pair:
+/// previous Value 2 becomes Value 1 and the newest process value becomes Value 2.
+/// Operator Snapshot/Recapture evidence is authoritative and suspends automatic rolling
+/// so a deliberate manual correction cannot be overwritten by subsequent live traffic.
 ///
 /// Report-backed process values are event evidence already, so they are accepted
 /// immediately. Polling fallback keeps the legacy three-sample analog settling guard so
@@ -68,6 +69,14 @@ public sealed class FatAutoCaptureCoordinator
         }
 
         var rollingPair = point.HasValue1Evidence && point.HasValue2Evidence;
+        if (rollingPair && HasOperatorOwnedCurrentPair(point))
+        {
+            Clear(point);
+            return FatAutoCaptureDecision.None(
+                FatAutoCaptureStage.Complete,
+                "Operator-captured Value 1 / Value 2 evidence is authoritative; automatic rolling will not overwrite the manual pair.");
+        }
+
         if (rollingPair && IsEquivalent(point.Value2Text, observation.RawValue))
         {
             Clear(point);
@@ -179,6 +188,12 @@ public sealed class FatAutoCaptureCoordinator
                     ? "Stable analog Value 2 captured immediately from the new report-backed process condition; later changes will keep the pair current."
                     : "Value 2 captured automatically from the new live condition; later changes will keep the pair current.");
     }
+
+    private static bool HasOperatorOwnedCurrentPair(IoTestPointPlan point)
+        => IsOperatorOwned(point.Runtime.Value1Evidence) || IsOperatorOwned(point.Runtime.Value2Evidence);
+
+    private static bool IsOperatorOwned(FatValueEvidence? evidence)
+        => evidence?.CaptureKind is FatEvidenceCaptureKind.OperatorSnapshot or FatEvidenceCaptureKind.OperatorRecapture;
 
     private static bool IsReportBacked(string? acquisitionSource)
     {
