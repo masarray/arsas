@@ -58,6 +58,7 @@ public partial class IoListTestingWindow
     {
         ConfigureP0StableFatColumns();
         ConfigureP0AdaptiveHeaderActions();
+        ConfigureP2CompactHeader();
     }
 
     private void ConfigureP0StableFatColumns()
