@@ -101,11 +101,11 @@ internal static class IoFatSupplementalReportLayoutDecorator
         Rect(commands, Margin, 480d, ContentWidth, 42d, 5d, SoftPass, Border, 0.7d);
         Text(commands, Margin + 12d, 466d, 170d, "FILE SERVICE ACCEPTANCE BASIS", IoFatReportFontKind.Bold, 5.9d, Pass);
         Text(commands, Margin + 12d, 450d, ContentWidth - 24d,
-            "PASS = the IED returned a supported COMTRADE/fault-record entry through IEC 61850 FileDirectory. FileOpen/FileRead download is optional additional verification.",
+            "PASS = the IED returned a supported COMTRADE/fault-record entry through IEC 61850 FileDirectory; remote file identity and relay-modified time are preserved as FAT evidence.",
             IoFatReportFontKind.Regular, 6.6d, Ink);
 
-        var widths = new[] { 105d, 58d, 284d, 108d, 127d, 100d };
-        var headers = new[] { "IED", "Result", "Latest remote COMTRADE file(s)", "Relay modified", "Evidence source", "Download" };
+        var widths = new[] { 105d, 58d, 334d, 125d, 160d };
+        var headers = new[] { "IED", "Result", "Latest remote COMTRADE file(s)", "Relay modified", "Evidence source" };
         var y = 426d;
         var x = Margin;
         for (var i = 0; i < headers.Length; i++)
@@ -133,7 +133,7 @@ internal static class IoFatSupplementalReportLayoutDecorator
             Text(commands, resultX + 5d, y - 24d, widths[1] - 10d, "PASS", IoFatReportFontKind.Bold, 7.2d, Pass);
 
             var fileX = resultX + widths[1];
-            var fileLines = Wrap(ied.LatestComtradeFiles, 52, 3);
+            var fileLines = Wrap(ied.LatestComtradeFiles, 60, 3);
             var fileY = y - 14d;
             foreach (var line in fileLines)
             {
@@ -141,7 +141,7 @@ internal static class IoFatSupplementalReportLayoutDecorator
                 fileY -= 10.5d;
             }
             if (!string.IsNullOrWhiteSpace(ied.LatestComtradeCompleteness))
-                Text(commands, fileX + 5d, y - 48d, widths[2] - 10d, Fit(ied.LatestComtradeCompleteness, 68), IoFatReportFontKind.Regular, 5.4d, Muted);
+                Text(commands, fileX + 5d, y - 48d, widths[2] - 10d, Fit(ied.LatestComtradeCompleteness, 78), IoFatReportFontKind.Regular, 5.4d, Muted);
 
             var modifiedX = fileX + widths[2];
             Text(commands, modifiedX + 5d, y - 21d, widths[3] - 10d,
@@ -154,10 +154,6 @@ internal static class IoFatSupplementalReportLayoutDecorator
             var sourceX = modifiedX + widths[3];
             Text(commands, sourceX + 5d, y - 20d, widths[4] - 10d, "IEC 61850", IoFatReportFontKind.Bold, 5.9d, Ink);
             Text(commands, sourceX + 5d, y - 34d, widths[4] - 10d, "FileDirectory", IoFatReportFontKind.Mono, 5.7d, Muted);
-
-            var downloadX = sourceX + widths[4];
-            Text(commands, downloadX + 5d, y - 20d, widths[5] - 10d, "OPTIONAL", IoFatReportFontKind.Bold, 5.9d, Blue);
-            Text(commands, downloadX + 5d, y - 34d, widths[5] - 10d, "not a FAT gate", IoFatReportFontKind.Regular, 5.4d, Muted);
 
             y -= rowHeight;
         }
