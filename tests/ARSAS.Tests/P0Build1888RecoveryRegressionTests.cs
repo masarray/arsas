@@ -62,6 +62,34 @@ public sealed class P0Build1888RecoveryRegressionTests
     }
 
     [Fact]
+    public void P0_EngineeringPlay_UsesPreparedSclModel_ThenStartsStaticDataSetMonitorWithoutDiscovery()
+    {
+        var main = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+        var playStart = main.IndexOf("private async void IedPlayAction_Click", StringComparison.Ordinal);
+        var playEnd = main.IndexOf("private async void IedStopAction_Click", playStart, StringComparison.Ordinal);
+        Assert.True(playStart >= 0 && playEnd > playStart);
+        var play = main[playStart..playEnd];
+
+        Assert.Contains("device.HasDiscoveryCache && device.Signals.Count > 0", play, StringComparison.Ordinal);
+        Assert.Contains("await ConnectUsingSavedModelAsync(device)", play, StringComparison.Ordinal);
+        Assert.Contains("await ConnectAndConfigureDeviceAsync(device, openWizard: discoveryWillOpenWizard)", play, StringComparison.Ordinal);
+        Assert.Contains("await StartDeviceMonitorAsync(device)", play, StringComparison.Ordinal);
+        Assert.True(
+            play.IndexOf("ConnectUsingSavedModelAsync(device)", StringComparison.Ordinal) <
+            play.IndexOf("ConnectAndConfigureDeviceAsync(device", StringComparison.Ordinal));
+
+        var runtime = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        var monitorStart = runtime.IndexOf("public async Task<IReadOnlyList<Iec61850MonitorPoint>> StartMonitoringAsync", StringComparison.Ordinal);
+        var monitorEnd = runtime.IndexOf("private ", monitorStart, StringComparison.Ordinal);
+        Assert.True(monitorStart >= 0 && monitorEnd > monitorStart);
+        var monitor = runtime[monitorStart..monitorEnd];
+
+        Assert.Contains("Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device)", monitor, StringComparison.Ordinal);
+        Assert.Contains("!staticDataSetReportOnly || !string.IsNullOrWhiteSpace(signal.DataSetReference)", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConnectAndDiscoverAsync", monitor, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void P0_CommandDefaults_EnableInterlockAndSynchronismOnce()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0CommandDefaults.cs"));
