@@ -15,8 +15,9 @@ namespace ArIED61850Tester;
 /// deliberately pre-emptive lane: it cancels the active operation first and invokes the
 /// runtime stop without waiting behind a hung Connect/Start gate. A cancelled/stale operation
 /// is never allowed to report success to its caller afterwards. Different IEDs stay fully
-/// independent. This facade changes lifecycle scheduling only; it does not add MMS polling,
-/// dynamic DataSet writes, or any acquisition fallback.
+/// independent. This facade also owns one bounded command-feedback freshness fence at the
+/// runtime/UI boundary; it does not add MMS polling, dynamic DataSet writes, or acquisition
+/// fallback.
 /// </summary>
 public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 {
@@ -47,7 +48,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         _inner.Diagnostic += entry => Diagnostic?.Invoke(entry);
         _inner.PointUpdated += ForwardPointUpdate;
-        _inner.EventRaised += entry => EventRaised?.Invoke(entry);
+        _inner.EventRaised += ForwardEventRaised;
     }
 
     public event Action<DiagnosticEntry>? Diagnostic;
@@ -107,10 +108,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
 
     public Task StopMonitoringAsync(string deviceId)
-        => RunPreemptiveStopAsync(deviceId, () => _inner.StopMonitoringAsync(deviceId));
+    {
+        ClearCommandFeedbackFences(deviceId);
+        return RunPreemptiveStopAsync(deviceId, () => _inner.StopMonitoringAsync(deviceId));
+    }
 
     public Task StopDeviceAsync(string deviceId)
-        => RunPreemptiveStopAsync(deviceId, () => _inner.StopDeviceAsync(deviceId));
+    {
+        ClearCommandFeedbackFences(deviceId);
+        return RunPreemptiveStopAsync(deviceId, () => _inner.StopDeviceAsync(deviceId));
+    }
 
     /// <summary>
     /// P0 command-feedback freshness fence.
@@ -122,14 +129,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     /// dchg arrives moments later.
     ///
     /// This is deliberately not a WPF debounce and it does not manufacture state. The
-    /// confirmed value itself opens a short per-point fence. Only contradictory non-report
-    /// snapshots are withheld during that bounded window. Matching or contradictory report
-    /// traffic remains authoritative, and polling becomes visible again automatically when
-    /// the window expires if no report confirms the command.
+    /// confirmed value itself opens a short per-point fence. Contradictory non-report
+    /// snapshots are withheld during that bounded window. Report traffic remains process
+    /// authority; a contradictory report is forwarded immediately. A matching report is
+    /// forwarded as confirmation while the short fence remains alive so a stale poll that
+    /// was already in flight cannot flash the process value or manufacture a duplicate SOE.
     /// </summary>
     private void ForwardPointUpdate(Iec61850PointSnapshot snapshot)
     {
-        var key = CommandFeedbackFenceKey(snapshot);
+        var key = CommandFeedbackFenceKey(snapshot.Point.DeviceId, snapshot.Point.IecReference);
         var nowUtc = DateTime.UtcNow;
 
         if (IsConfirmedCommandFeedback(snapshot))
@@ -157,10 +165,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var matchesConfirmed = CommandFeedbackValuesEquivalent(fence.ExpectedValue, snapshot.Value);
         if (snapshot.IsReportTraffic)
         {
-            // Report traffic is process authority. A matching dchg closes the fence; a
-            // contradictory report must also pass through immediately as a real process
-            // transition rather than being hidden by command freshness protection.
-            _commandFeedbackFences.TryRemove(key, out _);
+            // A contradictory report is a real process transition and must immediately
+            // release the fence. A matching report confirms the command; keep the fence
+            // until its short expiry so an already in-flight stale poll cannot flash back.
+            if (!matchesConfirmed)
+                _commandFeedbackFences.TryRemove(key, out _);
             PointUpdated?.Invoke(snapshot);
             return;
         }
@@ -171,22 +180,104 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             return;
         }
 
-        Diagnostic?.Invoke(new DiagnosticEntry
+        EmitFreshnessDiagnostic(
+            snapshot.Point.DeviceName,
+            $"withheld stale MMS verification {snapshot.Point.IecReference}={snapshot.Value} inside the command-confirmed {fence.ExpectedValue} freshness window. Report traffic remains authoritative.");
+    }
+
+    /// <summary>
+    /// The same freshness rule must cover SOE, not only the visible live value. Otherwise a
+    /// stale polling sample suppressed from the grid could still create a phantom Open/Close
+    /// event and a second synthetic return-to-command event when the matching report arrives.
+    /// </summary>
+    private void ForwardEventRaised(Iec61850EventEntry entry)
+    {
+        var key = CommandFeedbackFenceKey(entry.DeviceId, entry.IecReference);
+        if (!_commandFeedbackFences.TryGetValue(key, out var fence))
+        {
+            EventRaised?.Invoke(entry);
+            return;
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        if (nowUtc > fence.ExpiresUtc)
+        {
+            _commandFeedbackFences.TryRemove(key, out _);
+            EventRaised?.Invoke(entry);
+            return;
+        }
+
+        // The initial command-confirmed transition is legitimate process evidence and is
+        // the event that opened the fence through ForwardPointUpdate just before this call.
+        if (IsConfirmedCommandFeedback(entry.Reason))
+        {
+            EventRaised?.Invoke(entry);
+            return;
+        }
+
+        var matchesConfirmed = CommandFeedbackValuesEquivalent(fence.ExpectedValue, entry.NewValue);
+        if (IsReportEvent(entry))
+        {
+            if (!matchesConfirmed)
+            {
+                // A report-proven change away from the commanded state is real. Release the
+                // fence so all following report/SOE transitions flow normally.
+                _commandFeedbackFences.TryRemove(key, out _);
+                EventRaised?.Invoke(entry);
+                return;
+            }
+
+            EmitFreshnessDiagnostic(
+                entry.DeviceName,
+                $"suppressed duplicate report SOE {entry.IecReference}={entry.NewValue}; it only confirms the already-published command state {fence.ExpectedValue}.");
+            return;
+        }
+
+        if (matchesConfirmed)
+        {
+            EmitFreshnessDiagnostic(
+                entry.DeviceName,
+                $"suppressed duplicate MMS verification SOE {entry.IecReference}={entry.NewValue}; command-confirmed state is already {fence.ExpectedValue}.");
+            return;
+        }
+
+        EmitFreshnessDiagnostic(
+            entry.DeviceName,
+            $"withheld phantom MMS verification SOE {entry.IecReference}: {entry.OldValue} → {entry.NewValue} inside the command-confirmed {fence.ExpectedValue} freshness window.");
+    }
+
+    private void EmitFreshnessDiagnostic(string source, string message)
+        => Diagnostic?.Invoke(new DiagnosticEntry
         {
             Time = DateTime.Now,
             Level = "INFO",
-            Source = snapshot.Point.DeviceName,
-            Message = $"P0_COMMAND_FRESHNESS: withheld stale MMS verification {snapshot.Point.IecReference}={snapshot.Value} inside the command-confirmed {fence.ExpectedValue} freshness window. Report traffic remains authoritative."
+            Source = source,
+            Message = "P0_COMMAND_FRESHNESS: " + message
         });
-    }
 
     private static bool IsConfirmedCommandFeedback(Iec61850PointSnapshot snapshot)
-        => (snapshot.Reason ?? string.Empty).Contains(
+        => IsConfirmedCommandFeedback(snapshot.Reason);
+
+    private static bool IsConfirmedCommandFeedback(string? reason)
+        => (reason ?? string.Empty).Contains(
             "confirmed command feedback",
             StringComparison.OrdinalIgnoreCase);
 
-    private static string CommandFeedbackFenceKey(Iec61850PointSnapshot snapshot)
-        => $"{NormalizeDeviceKey(snapshot.Point.DeviceId)}|{NormalizeReference(snapshot.Point.IecReference)}";
+    private static bool IsReportEvent(Iec61850EventEntry entry)
+    {
+        var reason = (entry.Reason ?? string.Empty).Trim();
+        var source = (entry.SourceMode ?? string.Empty).Trim();
+        return reason.Contains("dchg", StringComparison.OrdinalIgnoreCase) ||
+               reason.Contains("data-change", StringComparison.OrdinalIgnoreCase) ||
+               reason.Contains("qchg", StringComparison.OrdinalIgnoreCase) ||
+               reason.Contains("quality-change", StringComparison.OrdinalIgnoreCase) ||
+               reason.Contains("dupd", StringComparison.OrdinalIgnoreCase) ||
+               reason.Contains("data-update", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("report", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string CommandFeedbackFenceKey(string? deviceId, string? reference)
+        => $"{NormalizeDeviceKey(deviceId)}|{NormalizeReference(reference)}";
 
     private static string NormalizeReference(string? reference)
         => (reference ?? string.Empty)
@@ -221,6 +312,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var open = value.LastIndexOf('[');
         var close = value.LastIndexOf(']');
         return open >= 0 && close > open ? value[(open + 1)..close].Trim() : string.Empty;
+    }
+
+    private void ClearCommandFeedbackFences(string? deviceId)
+    {
+        var prefix = NormalizeDeviceKey(deviceId) + "|";
+        foreach (var key in _commandFeedbackFences.Keys
+                     .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+        {
+            _commandFeedbackFences.TryRemove(key, out _);
+        }
     }
 
     private async Task RunDeviceOperationAsync(
