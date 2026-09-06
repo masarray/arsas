@@ -16,6 +16,8 @@ public sealed class FatAutoCaptureOperatorRollingTests
             SignalName = "ThdA",
             ObjectReference = "AA1E1F06R4VT3p1_THDHarmonics/I_MHAI1.ThdA",
             FunctionalConstraint = "MX",
+            ExpectedOnText = "Value 1",
+            ExpectedOffText = "Value 2",
             SignalKind = FatSignalKind.Analog,
             CaptureMode = FatCaptureMode.OperatorSnapshot,
             WorkspaceSelected = true,
