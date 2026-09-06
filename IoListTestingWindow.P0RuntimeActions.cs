@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ArIED61850Tester.Models.IoTesting;
@@ -12,9 +14,10 @@ namespace ArIED61850Tester;
 /// <summary>
 /// P0 operator-action responsiveness for the FAT bench.
 ///
-/// Resume can emit one evidence record per active point. Production journal writes remain
-/// ordered and hash-chained, but their visible StreamWriter flush is coalesced into one
-/// flush for the complete rebaseline transaction. Stop detaches the evidence journal on
+/// Start/Continue paints a local busy state before the existing safe preparation workflow
+/// begins. Resume can emit one evidence record per active point; production journal writes
+/// remain ordered and hash-chained, but their visible StreamWriter flush is coalesced into
+/// one flush for the complete rebaseline transaction. Stop detaches the evidence journal on
 /// the Dispatcher and performs the expensive durable disk barrier + full read-back on a
 /// worker. Only the pressed button is muted while work is in flight; the DataGrid, search,
 /// IED explorer and window chrome remain interactive.
@@ -24,8 +27,10 @@ public partial class IoListTestingWindow
     private static readonly bool P0RuntimeActionsRegistered = RegisterP0RuntimeActions();
 
     private bool _p0RuntimeActionsInstalled;
+    private bool _p0StartInProgress;
     private bool _p0ResumeInProgress;
     private bool _p0StopInProgress;
+    private Button? _p0StartButton;
     private Button? _p0ResumeButton;
     private Button? _p0StopButton;
 
@@ -51,6 +56,16 @@ public partial class IoListTestingWindow
 
     private void InstallP0RuntimeActionHandlers()
     {
+        _p0StartButton = FindButtonByContentBindingPath(this, nameof(SelectedStartWorkflowText));
+        if (_p0StartButton != null)
+        {
+            // Preserve the existing safe Start/Continue workflow, but insert one rendered
+            // frame before it begins. This avoids the Windows "not responding" impression
+            // even if the first preparation phase has synchronous setup before its await.
+            _p0StartButton.Click -= StartSelectedIedSafely_Click;
+            _p0StartButton.Click += P0StartSelectedIedSafely_Click;
+        }
+
         _p0ResumeButton = FindButtonByContent(this, "Resume");
         if (_p0ResumeButton != null)
         {
@@ -73,6 +88,11 @@ public partial class IoListTestingWindow
     private void P0RuntimeActions_Closed(object? sender, EventArgs e)
     {
         Closed -= P0RuntimeActions_Closed;
+        if (_p0StartButton != null)
+        {
+            _p0StartButton.Click -= P0StartSelectedIedSafely_Click;
+            _p0StartButton = null;
+        }
         if (_p0ResumeButton != null)
         {
             _p0ResumeButton.Click -= P0ResumeSession_Click;
@@ -82,6 +102,69 @@ public partial class IoListTestingWindow
         {
             _p0StopButton.Click -= P0StopSession_Click;
             _p0StopButton = null;
+        }
+    }
+
+    private async void P0StartSelectedIedSafely_Click(object sender, RoutedEventArgs e)
+    {
+        if (_p0StartInProgress || sender is not Button button)
+            return;
+
+        var targetIed = SelectedIed;
+        _p0StartInProgress = true;
+        var originalOpacity = button.Opacity;
+        button.IsHitTestVisible = false;
+        button.Opacity = 0.68;
+
+        // Content stays bound to SelectedStartWorkflowText. SetPreparingIed in the existing
+        // workflow therefore changes the same button naturally to "Connecting …" without
+        // replacing/breaking its binding.
+        await Dispatcher.Yield(DispatcherPriority.Render);
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            StartSelectedIedSafely_Click(sender, e);
+            await WaitForP0StartWorkflowCompletionAsync(targetIed);
+            Trace.WriteLine(
+                $"[IO FAT P0] Start/Continue workflow completed in {stopwatch.ElapsedMilliseconds} ms; " +
+                $"ied={targetIed?.IedName ?? "<none>"}; state={Session.State}; active={Session.IsSessionActive}.");
+        }
+        finally
+        {
+            button.Opacity = originalOpacity;
+            button.IsHitTestVisible = true;
+            _p0StartInProgress = false;
+            RaiseSelectedIedContextProperties();
+        }
+    }
+
+    private async Task WaitForP0StartWorkflowCompletionAsync(IoTestIedPlan? targetIed)
+    {
+        // The legacy handler is async void. Yield once so it can enter SetPreparingIed and
+        // reach its first asynchronous acquisition await. If preflight returned early there
+        // is nothing to wait for.
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        if (targetIed == null || !targetIed.IsPreparing)
+            return;
+
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PropertyChangedEventHandler? handler = null;
+        handler = (_, args) =>
+        {
+            if (args.PropertyName == nameof(IoTestIedPlan.IsPreparing) && !targetIed.IsPreparing)
+                completion.TrySetResult(true);
+        };
+
+        targetIed.PropertyChanged += handler;
+        try
+        {
+            if (!targetIed.IsPreparing)
+                return;
+            await completion.Task;
+        }
+        finally
+        {
+            targetIed.PropertyChanged -= handler;
         }
     }
 
@@ -188,6 +271,27 @@ public partial class IoListTestingWindow
             _p0StopInProgress = false;
             RaiseSelectedIedContextProperties();
         }
+    }
+
+    private static Button? FindButtonByContentBindingPath(DependencyObject root, string path)
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is Button button)
+            {
+                var binding = BindingOperations.GetBinding(button, ContentControl.ContentProperty);
+                if (string.Equals(binding?.Path?.Path, path, StringComparison.Ordinal))
+                    return button;
+            }
+
+            var nested = FindButtonByContentBindingPath(child, path);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 
     private static Button? FindButtonByContent(DependencyObject root, string content)
