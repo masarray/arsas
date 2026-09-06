@@ -18,6 +18,17 @@ public sealed class IoFatSharedProcessImageRegressionTests
     }
 
     [Fact]
+    public void SharedImageCursor_IsPrimedBeforeStartAndIgnoresSequenceOnlyChurn()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
+
+        Assert.Contains("if (!activeDeviceIds.Contains(device.DeviceId))", source, StringComparison.Ordinal);
+        Assert.Contains("_p0FatSharedProcessCursors[key] = new StableFatProcessCursor", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value)", source, StringComparison.Ordinal);
+        Assert.Contains("Point.Sequence is transport/evidence ordering metadata", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ParallelEvidenceWiring_UsesSharedProcessRouteInsteadOfRawPointSubscription()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.MultiSessionEvidence.cs"));
