@@ -100,26 +100,29 @@ public partial class IoListTestingWindow
         {
             if (Session.HasActiveSessions)
             {
-                IoTestSessionActionResult stopAll;
+                var stopSucceeded = false;
+                var stopMessage = string.Empty;
                 // StopAll still performs controller/project state mutation and UI-bound
                 // PropertyChanged notifications synchronously on this Dispatcher. The scope
                 // changes only production journal Dispose(): its durable flush + read-back
                 // verification are queued to a worker and awaited immediately afterwards.
                 using (IoTestEvidenceJournal.BeginDeferredSealScope())
                 {
-                    stopAll = Session.StopAll(
+                    var stopAll = Session.StopAll(
                         "Workspace closed by operator; per-IED evidence journal sealed.");
+                    stopSucceeded = stopAll.Succeeded;
+                    stopMessage = stopAll.Message;
                 }
 
                 // Do not allow project save or window close until every queued journal has
                 // completed its physical disk barrier and full hash-chain read-back.
                 await IoTestEvidenceJournal.AwaitDeferredSealsAsync();
 
-                if (!stopAll.Succeeded)
+                if (!stopSucceeded)
                 {
                     MessageBox.Show(
                         this,
-                        stopAll.Message,
+                        stopMessage,
                         "Evidence journals could not be sealed",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
