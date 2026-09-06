@@ -103,7 +103,7 @@ internal static class IoFatV2ReportLayoutEngine
             IoFatReportFontKind.Regular, 7.8d, Muted));
         page.Add(new IoFatReportRectCommand(PageWidth - Margin - 190d, 568d, 190d, 54d, 4d, SoftBlue, Border, 0.7d));
         page.Add(new IoFatReportTextCommand(PageWidth - Margin - 178d, 550d, 166d,
-            draft ? "PREVIEW" : "AS TESTED", IoFatReportFontKind.Bold, 7.2d, Blue));
+            "FAT REPORT", IoFatReportFontKind.Bold, 7.2d, Blue));
         page.Add(new IoFatReportTextCommand(PageWidth - Margin - 178d, 534d, 166d,
             $"{project.IncludedSignalCount} included · {project.RemovedSignalCount} removed",
             IoFatReportFontKind.Regular, 6.4d, Ink));
