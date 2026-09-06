@@ -4,14 +4,9 @@ namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
 /// Assesses the exact Value 1 / Value 2 pair currently presented by FAT v2.
-///
-/// The legacy transition state machine remains responsible for collecting historical
-/// OFF -> ON -> OFF evidence. Once generic FAT evidence overrides either current slot,
-/// this service becomes the assessment authority only while that pair belongs to the
-/// current connection generation. A purely automatic pair that predates or straddles a
-/// reconnect must not erase the legacy continuity verdict established by Resume/rebind.
-/// Explicit operator Recapture remains authoritative and therefore fails closed to REVIEW
-/// when its displayed pair is not coherent.
+/// A complete coherent pair proves the transition it contains even when the operator later
+/// resumes/reconnects the FAT workspace. Connection generation is a pair-coherency fence,
+/// not a requirement that historic completed evidence must equal the newest runtime generation.
 /// </summary>
 public static class FatCurrentEvidenceAssessmentService
 {
@@ -62,31 +57,15 @@ public static class FatCurrentEvidenceAssessmentService
                 "REVIEW: both displayed FAT value slots are required for a current-pair assessment.");
         }
 
-        var hasOperatorOverride = value1.IsOperatorOverride || value2.IsOperatorOverride;
-        var runtimeGeneration = point.Runtime.ConnectionGeneration;
-        var pairIsSameGeneration = value1.ConnectionGeneration == value2.ConnectionGeneration;
-        var pairMatchesCurrentGeneration =
-            pairIsSameGeneration &&
-            (runtimeGeneration <= 0 || value1.ConnectionGeneration == runtimeGeneration);
-
-        if (!pairMatchesCurrentGeneration)
+        // Resume/reconnect increments the live connection generation, but that must not turn
+        // an already-complete True/False or Open/Closed FAT pair into REVIEW. What matters is
+        // that V1 and V2 themselves belong to one coherent acquisition generation. A pair
+        // straddling two generations can have missed an edge and therefore still fails closed.
+        if (value1.ConnectionGeneration != value2.ConnectionGeneration)
         {
-            if (!hasOperatorOverride)
-            {
-                // Resume/rebind deliberately establishes a new continuity authority. Old
-                // automatic V1/V2 pointers may remain visible for audit, but they must not
-                // overwrite REVIEW after a potentially missed edge or overwrite a later
-                // PASS earned by a complete new legacy cycle. If no terminal continuity
-                // verdict exists yet, fail closed to REVIEW rather than showing COMPLETE
-                // with a blank/non-terminal Result.
-                return PreserveRuntimeAssessment(point, pairIsSameGeneration);
-            }
-
             return new FatCurrentEvidenceAssessment(
                 IoTestPointState.Review,
-                pairIsSameGeneration
-                    ? "REVIEW: the operator-selected Value 1 / Value 2 pair belongs to an earlier IED connection generation; recapture a coherent current pair."
-                    : "REVIEW: the operator-selected Value 1 and Value 2 belong to different IED connection generations; recapture a coherent current pair.");
+                "REVIEW: current Value 1 and Value 2 belong to different IED connection generations; capture one coherent transition pair.");
         }
 
         var value1Quality = IoTestTransitionEvaluator.EvaluateQuality(value1.Quality);
@@ -103,7 +82,7 @@ public static class FatCurrentEvidenceAssessmentService
         {
             return new FatCurrentEvidenceAssessment(
                 IoTestPointState.Review,
-                "REVIEW: current Value 2 does not follow current Value 1 in the live evidence sequence; recapture Value 2 after the intended condition change.");
+                "REVIEW: current Value 2 does not follow current Value 1 in the live evidence sequence; capture Value 2 after the intended condition change.");
         }
 
         var state1 = IoTestValueNormalizer.Normalize(point, value1.RawValue);
@@ -124,7 +103,7 @@ public static class FatCurrentEvidenceAssessmentService
 
         return new FatCurrentEvidenceAssessment(
             IoTestPointState.Passed,
-            $"PASS: current Value 1 -> Value 2 evidence proves a good-quality {StateLabel(state1.Value)} -> {StateLabel(state2.Value)} transition in one connection generation.");
+            $"PASS: current Value 1 -> Value 2 evidence proves a good-quality {StateLabel(state1.Value)} -> {StateLabel(state2.Value)} transition in one coherent connection generation.");
     }
 
     public static FatCurrentEvidenceAssessment Apply(IoTestPointPlan point)
@@ -137,27 +116,6 @@ public static class FatCurrentEvidenceAssessmentService
             point.Runtime.StatusReason = assessment.Reason;
         }
         return assessment;
-    }
-
-    private static FatCurrentEvidenceAssessment PreserveRuntimeAssessment(
-        IoTestPointPlan point,
-        bool pairIsSameGeneration)
-    {
-        var terminalState = point.Runtime.State is IoTestPointState.Passed or IoTestPointState.Failed or IoTestPointState.Review;
-        if (terminalState)
-        {
-            return new FatCurrentEvidenceAssessment(
-                point.Runtime.State,
-                string.IsNullOrWhiteSpace(point.Runtime.StatusReason)
-                    ? "Automatic current Value 1 / Value 2 evidence predates or straddles the active IED connection generation; the existing live transition continuity verdict remains authoritative."
-                    : point.Runtime.StatusReason);
-        }
-
-        return new FatCurrentEvidenceAssessment(
-            IoTestPointState.Review,
-            pairIsSameGeneration
-                ? "REVIEW: automatic current Value 1 / Value 2 evidence belongs to an earlier IED connection generation and no terminal live transition continuity verdict is available."
-                : "REVIEW: automatic current Value 1 and Value 2 belong to different IED connection generations and no terminal live transition continuity verdict is available.");
     }
 
     private static CurrentEvidence? EffectiveValue1(IoTestPointPlan point)
@@ -184,24 +142,21 @@ public static class FatCurrentEvidenceAssessmentService
         string RawValue,
         string Quality,
         long Sequence,
-        long ConnectionGeneration,
-        bool IsOperatorOverride)
+        long ConnectionGeneration)
     {
         public static CurrentEvidence From(FatValueEvidence evidence)
             => new(
                 evidence.RawValue,
                 evidence.Quality,
                 evidence.Sequence,
-                evidence.ConnectionGeneration,
-                evidence.CaptureKind != FatEvidenceCaptureKind.AutomaticValue);
+                evidence.ConnectionGeneration);
 
         public static CurrentEvidence From(IoTestTransitionEvidence evidence)
             => new(
                 evidence.RawValue,
                 evidence.Quality,
                 evidence.Sequence,
-                evidence.ConnectionGeneration,
-                false);
+                evidence.ConnectionGeneration);
     }
 }
 
