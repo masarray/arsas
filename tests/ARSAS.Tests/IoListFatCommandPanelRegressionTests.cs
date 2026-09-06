@@ -13,7 +13,7 @@ public sealed class IoListFatCommandPanelRegressionTests
         Assert.Contains("ResolveIoTestDevice(ied.IedName)", bridge, StringComparison.Ordinal);
         Assert.Contains("device.RefreshCommandSignalProjection()", bridge, StringComparison.Ordinal);
         Assert.Contains("_signalOwners[signal] = device", bridge, StringComparison.Ordinal);
-        Assert.Contains("device.CommandSignals", panel, StringComparison.Ordinal);
+        Assert.Contains("device?.CommandSignals.ToArray()", panel, StringComparison.Ordinal);
         Assert.Contains("shared Engineering command backend", panel, StringComparison.Ordinal);
 
         // FAT is only another operating surface. It must never construct a second MMS
@@ -22,6 +22,25 @@ public sealed class IoListFatCommandPanelRegressionTests
         Assert.DoesNotContain("_runtime.", panel, StringComparison.Ordinal);
         Assert.Contains("ExecuteIoFatControlClaimAsync", panel, StringComparison.Ordinal);
         Assert.Contains("return ExecuteClaimedControlAsync(signal, claim)", bridge, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FatCommandPanel_LiveUpdatesDoNotRebuildWholeRows()
+    {
+        var bridge = File.ReadAllText(FindRepoFile("MainWindow.IoFatCommandBridge.cs"));
+        var panel = File.ReadAllText(FindRepoFile("IoListTestingWindow.CommandPanel.cs"));
+
+        Assert.DoesNotContain("RebuildFatCommandRows", panel, StringComparison.Ordinal);
+        Assert.Contains("SynchronizeFatCommandRows", panel, StringComparison.Ordinal);
+        Assert.Contains("new Binding(nameof(SignalDefinition.ControlCurrentValue))", panel, StringComparison.Ordinal);
+        Assert.Contains("new Binding(nameof(SignalDefinition.ControlLastResult))", panel, StringComparison.Ordinal);
+        Assert.Contains("new Binding(nameof(SignalDefinition.ControlIsBusy))", panel, StringComparison.Ordinal);
+        Assert.Contains("RefreshFatCommandActions(signal)", panel, StringComparison.Ordinal);
+
+        Assert.Contains("ProjectIoFatCommandValuesFromSharedProcessImage(device)", bridge, StringComparison.Ordinal);
+        Assert.Contains("RebuildControlFeedbackIndex(device)", bridge, StringComparison.Ordinal);
+        Assert.Contains("RefreshControlValuesAsync(device, force: false)", bridge, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshControlValuesAsync(device, force: true)", bridge, StringComparison.Ordinal);
     }
 
     [Fact]
