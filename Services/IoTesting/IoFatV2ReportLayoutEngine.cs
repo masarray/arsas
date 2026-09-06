@@ -3,9 +3,9 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Native report layout for SCL-backed FAT v2. The legacy workbook executive layout stays
-/// unchanged so existing customer handovers remain stable; SCL projects use generic
-/// Value 1 / Value 2 terminology and never present operator-snapshot completion as PASS.
+/// Native report layout for SCL-backed FAT v2. IEC references are never truncated: long
+/// references wrap inside a variable-height row so the FC/DO/DA tail remains auditable in
+/// both WPF Print Preview and the native PDF report.
 /// </summary>
 internal static class IoFatV2ReportLayoutEngine
 {
@@ -15,7 +15,8 @@ internal static class IoFatV2ReportLayoutEngine
     private const double Margin = 30d;
     private const double ContentTop = 488d;
     private const double ContentBottom = 54d;
-    private const double RowHeight = 34d;
+    private const double MinimumRowHeight = 34d;
+    private const int ReferenceCharsPerLine = 62;
 
     private static readonly IoFatReportColor Navy = Color("0F172A");
     private static readonly IoFatReportColor Blue = Color("2563EB");
@@ -28,7 +29,8 @@ internal static class IoFatV2ReportLayoutEngine
     private static readonly IoFatReportColor Attention = Color("B45309");
     private static readonly IoFatReportColor Fail = Color("B91C1C");
 
-    private static readonly double[] Widths = [24d, 142d, 205d, 72d, 125d, 125d, 89d];
+    // Wider IEC-reference column is intentional. Total remains the 782 pt content width.
+    private static readonly double[] Widths = [24d, 115d, 280d, 60d, 105d, 105d, 93d];
 
     public static IoFatReportLayoutPlan Build(IoTestProject project, DateTimeOffset created, bool draft = false)
     {
@@ -48,14 +50,15 @@ internal static class IoFatV2ReportLayoutEngine
             foreach (var point in points)
             {
                 row++;
-                if (y - RowHeight < ContentBottom)
+                var rowHeight = GetPointRowHeight(point);
+                if (y - rowHeight < ContentBottom)
                 {
                     page = NewPage(pages, project, created, draft);
                     y = ContentTop;
                     DrawIedHeader(page, ied, points, ref y, continued: true);
                     DrawTableHeader(page, ref y);
                 }
-                DrawPointRow(page, point, row, ref y);
+                DrawPointRow(page, point, row, rowHeight, ref y);
             }
             y -= 12d;
         }
@@ -163,17 +166,24 @@ internal static class IoFatV2ReportLayoutEngine
         y -= height;
     }
 
+    private static double GetPointRowHeight(IoTestPointPlan point)
+    {
+        var referenceLineCount = WrapReference(point.ReportIecReference).Count;
+        return Math.Max(MinimumRowHeight, 12d + (referenceLineCount * 8.2d));
+    }
+
     private static void DrawPointRow(
         List<IoFatReportCommand> page,
         IoTestPointPlan point,
         int rowNumber,
+        double rowHeight,
         ref double y)
     {
         var cells = new[]
         {
             rowNumber.ToString(),
-            Short(point.SignalName, 32),
-            Short(point.ReportIecReference, 48),
+            Short(point.SignalName, 26),
+            string.Empty,
             point.SignalKind.ToString(),
             ValueCell(point, FatValueSlot.Value1),
             ValueCell(point, FatValueSlot.Value2),
@@ -200,10 +210,31 @@ internal static class IoFatV2ReportLayoutEngine
         var x = Margin;
         for (var index = 0; index < cells.Length; index++)
         {
-            page.Add(new IoFatReportRectCommand(x, y, Widths[index], RowHeight, 0d, White, Border, 0.35d));
+            page.Add(new IoFatReportRectCommand(x, y, Widths[index], rowHeight, 0d, White, Border, 0.35d));
             var color = index == cells.Length - 1 ? resultColor : Ink;
             var font = index is 0 or 2 ? IoFatReportFontKind.Mono : index is 1 or 6 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular;
-            page.Add(new IoFatReportTextCommand(x + 5d, y - 13d, Widths[index] - 10d, cells[index], font, 5.8d, color));
+
+            if (index == 2)
+            {
+                var lineY = y - 11d;
+                foreach (var referenceLine in WrapReference(point.ReportIecReference))
+                {
+                    page.Add(new IoFatReportTextCommand(
+                        x + 5d,
+                        lineY,
+                        Widths[index] - 10d,
+                        referenceLine,
+                        IoFatReportFontKind.Mono,
+                        4.9d,
+                        Ink));
+                    lineY -= 8.2d;
+                }
+            }
+            else
+            {
+                page.Add(new IoFatReportTextCommand(x + 5d, y - 13d, Widths[index] - 10d, cells[index], font, 5.8d, color));
+            }
+
             if (index is 4 or 5)
             {
                 var stamp = ValueTimestamp(point, index == 4 ? FatValueSlot.Value1 : FatValueSlot.Value2);
@@ -211,16 +242,41 @@ internal static class IoFatV2ReportLayoutEngine
             }
             x += Widths[index];
         }
-        y -= RowHeight;
+        y -= rowHeight;
+    }
+
+    private static IReadOnlyList<string> WrapReference(string? value)
+    {
+        var text = Clean(value);
+        if (text.Length <= ReferenceCharsPerLine)
+            return new[] { text };
+
+        var lines = new List<string>();
+        var offset = 0;
+        while (offset < text.Length)
+        {
+            var take = Math.Min(ReferenceCharsPerLine, text.Length - offset);
+            if (offset + take < text.Length)
+            {
+                var segment = text.AsSpan(offset, take);
+                var split = segment.LastIndexOfAny('/', '.', '$');
+                if (split >= ReferenceCharsPerLine / 2)
+                    take = split + 1;
+            }
+
+            lines.Add(text.Substring(offset, take));
+            offset += take;
+        }
+        return lines;
     }
 
     private static string ValueCell(IoTestPointPlan point, FatValueSlot slot)
-        => Short(slot == FatValueSlot.Value1 ? point.Value1Text : point.Value2Text, 25);
+        => Short(slot == FatValueSlot.Value1 ? point.Value1Text : point.Value2Text, 22);
 
     private static string ValueTimestamp(IoTestPointPlan point, FatValueSlot slot)
     {
         var text = slot == FatValueSlot.Value1 ? point.Value1RelayTimestampText : point.Value2RelayTimestampText;
-        return string.IsNullOrWhiteSpace(text) || text == "—" ? "IED time: -" : "IED " + Short(text, 28);
+        return string.IsNullOrWhiteSpace(text) || text == "—" ? "IED time: -" : "IED " + Short(text, 24);
     }
 
     private static string Clean(string? value)
