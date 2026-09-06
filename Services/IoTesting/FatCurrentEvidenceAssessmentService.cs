@@ -57,10 +57,12 @@ public static class FatCurrentEvidenceAssessmentService
                 "REVIEW: both displayed FAT value slots are required for a current-pair assessment.");
         }
 
-        // Resume/reconnect increments the live connection generation, but that must not turn
-        // an already-complete True/False or Open/Closed FAT pair into REVIEW. What matters is
-        // that V1 and V2 themselves belong to one coherent acquisition generation. A pair
-        // straddling two generations can have missed an edge and therefore still fails closed.
+        // Raw MMS/RCB sequence counters are source-local and may legitimately reset or jump
+        // across report instances, reconnects, or resume/rebaseline. They are diagnostic
+        // provenance, not the ordering authority for the application-owned rolling Value 1 /
+        // Value 2 pair. Pair coherence is fenced by connection generation; the coordinator
+        // itself owns V1 -> V2 ordering. Rejecting a good complete pair merely because the
+        // source sequence decreased creates a false REVIEW after a perfectly valid FAT edge.
         if (value1.ConnectionGeneration != value2.ConnectionGeneration)
         {
             return new FatCurrentEvidenceAssessment(
@@ -78,13 +80,6 @@ public static class FatCurrentEvidenceAssessmentService
                 $"REVIEW: current evidence quality is not fully accepted (V1: {value1Quality.Reason}; V2: {value2Quality.Reason}).");
         }
 
-        if (value2.Sequence <= value1.Sequence)
-        {
-            return new FatCurrentEvidenceAssessment(
-                IoTestPointState.Review,
-                "REVIEW: current Value 2 does not follow current Value 1 in the live evidence sequence; capture Value 2 after the intended condition change.");
-        }
-
         var state1 = IoTestValueNormalizer.Normalize(point, value1.RawValue);
         var state2 = IoTestValueNormalizer.Normalize(point, value2.RawValue);
         if (state1 is null || state2 is null)
@@ -98,7 +93,7 @@ public static class FatCurrentEvidenceAssessmentService
         {
             return new FatCurrentEvidenceAssessment(
                 IoTestPointState.Review,
-                $"REVIEW: Value 1 and Value 2 both resolve to {StateLabel(state1.Value)}; the current pair does not prove a state change.");
+                $"REVIEW: Value 1 and Value 2 resolve to the same discrete state; the current pair does not prove a state change.");
         }
 
         return new FatCurrentEvidenceAssessment(
