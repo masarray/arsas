@@ -88,7 +88,7 @@ public sealed class IoTestLiveBindingService
                     livePointCount++;
                     if (binding.LivePoint != null)
                     {
-                        point.Runtime.CurrentValue = binding.LivePoint.Value;
+                        point.Runtime.CurrentValue = CanonicalFatPresentationValue(binding.LivePoint.Value);
                         point.Runtime.CurrentQuality = binding.LivePoint.Quality;
                         point.Runtime.CurrentSource = binding.LivePoint.SourceMode;
                         point.Runtime.CurrentIedTimestamp = string.IsNullOrWhiteSpace(binding.LivePoint.DeviceTimestamp) || binding.LivePoint.DeviceTimestamp == "-"
@@ -174,16 +174,39 @@ public sealed class IoTestLiveBindingService
                 exactLivePoints[0]);
         }
 
+        // Static DataSet inventory has two deliberately different identities for structured
+        // members: DisplayReference is the exact FCDA/FCD membership presented to the user,
+        // while ObjectReference is ARIEC's resolved scalar runtime leaf. Match either exact
+        // identity, but bind/capture only through the unique runtime ObjectReference.
         var exactSignals = device.Signals
             .Where(item => IsSignalEligible(item, point) &&
-                           expectedReferences.Contains(NormalizeReference(item.ObjectReference)))
+                           ExactSignalIdentityMatches(item, expectedReferences))
             .ToList();
         if (exactSignals.Count == 1)
         {
+            var runtimeReference = NormalizeReference(exactSignals[0].ObjectReference);
+            if (runtimeReference.Length > 0)
+            {
+                var signalLivePoints = device.Points
+                    .Where(item => NormalizeReference(item.IecReference)
+                        .Equals(runtimeReference, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (signalLivePoints.Count == 1)
+                {
+                    return new PointBinding(
+                        IoTestLiveBindingState.LivePointReady,
+                        WithEngineEvidence(
+                            "Exact static DataSet member resolved to one active scalar runtime point.",
+                            enginePresentation),
+                        signalLivePoints[0].IecReference,
+                        signalLivePoints[0]);
+                }
+            }
+
             return new PointBinding(
                 IoTestLiveBindingState.BoundExact,
                 WithEngineEvidence(
-                    "Exact imported or prepared IEC 61850 reference is present in the ARSAS signal workspace.",
+                    "Exact imported/static DataSet identity is present in the ARSAS signal workspace; its resolved runtime leaf is retained for monitor preparation.",
                     enginePresentation),
                 exactSignals[0].ObjectReference,
                 null);
@@ -206,14 +229,32 @@ public sealed class IoTestLiveBindingService
                 livePointCandidates[0]);
         }
 
-        var signalCandidates = BestCandidates(
+        var signalCandidates = BestSignalCandidates(
             device.Signals.Where(item => IsSignalEligible(item, point)).ToList(),
-            item => item.ObjectReference,
             importedReferences,
             point,
             device);
         if (signalCandidates.Count == 1)
         {
+            var runtimeReference = NormalizeReference(signalCandidates[0].ObjectReference);
+            if (runtimeReference.Length > 0)
+            {
+                var signalLivePoints = device.Points
+                    .Where(item => NormalizeReference(item.IecReference)
+                        .Equals(runtimeReference, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (signalLivePoints.Count == 1)
+                {
+                    return new PointBinding(
+                        IoTestLiveBindingState.LivePointReady,
+                        WithEngineEvidence(
+                            "One uniquely matched static/runtime signal identity has one active scalar live point.",
+                            enginePresentation),
+                        signalLivePoints[0].IecReference,
+                        signalLivePoints[0]);
+                }
+            }
+
             return new PointBinding(
                 IoTestLiveBindingState.BoundNormalized,
                 WithEngineEvidence(
@@ -251,6 +292,18 @@ public sealed class IoTestLiveBindingService
             $"{localReason} {engineReason}",
             string.Empty,
             null);
+    }
+
+    private static bool ExactSignalIdentityMatches(
+        SignalDefinition signal,
+        IReadOnlySet<string> expectedReferences)
+    {
+        var runtime = NormalizeReference(signal.ObjectReference);
+        if (runtime.Length > 0 && expectedReferences.Contains(runtime))
+            return true;
+
+        var display = NormalizeReference(signal.DisplayReference);
+        return display.Length > 0 && expectedReferences.Contains(display);
     }
 
     private static Iec61850DesignLivePointReconciliation? FindEngineReconciliationPoint(
@@ -354,6 +407,42 @@ public sealed class IoTestLiveBindingService
         return scored.Where(item => item.Score == best).Select(item => item.Candidate).ToList();
     }
 
+    private static List<SignalDefinition> BestSignalCandidates(
+        IReadOnlyCollection<SignalDefinition> candidates,
+        IReadOnlyCollection<string> importedReferences,
+        IoTestPointPlan point,
+        Iec61850MonitorDevice device)
+    {
+        var scored = candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Score = importedReferences.Max(reference => Math.Max(
+                    IoTestReferenceMatcher.Score(
+                        reference,
+                        candidate.ObjectReference,
+                        point.IedName,
+                        device.Name,
+                        device.SclIedName,
+                        point.LogicalNode),
+                    IoTestReferenceMatcher.Score(
+                        reference,
+                        candidate.DisplayReference,
+                        point.IedName,
+                        device.Name,
+                        device.SclIedName,
+                        point.LogicalNode)))
+            })
+            .Where(item => item.Score > 0)
+            .ToList();
+
+        if (scored.Count == 0)
+            return new List<SignalDefinition>();
+
+        var best = scored.Max(item => item.Score);
+        return scored.Where(item => item.Score == best).Select(item => item.Candidate).ToList();
+    }
+
     internal static IReadOnlyList<string> ImportedReferences(IoTestPointPlan point)
     {
         ArgumentNullException.ThrowIfNull(point);
@@ -448,6 +537,14 @@ public sealed class IoTestLiveBindingService
         string? iedName,
         string? logicalNode)
         => IoTestReferenceMatcher.ImportedForms(reference, iedName, logicalNode);
+
+    private static string CanonicalFatPresentationValue(string? value)
+    {
+        var text = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        return bool.TryParse(text, out var boolean)
+            ? boolean ? "True" : "False"
+            : text;
+    }
 
     private sealed record EngineReconciliationContext(
         Iec61850DesignLiveReconciliationDocument? Document,
