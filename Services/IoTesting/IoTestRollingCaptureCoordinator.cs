@@ -49,6 +49,33 @@ public sealed class IoTestRollingCaptureCoordinator
         return ProjectResult(evaluation, point.Runtime, point.Runtime.StatusReason);
     }
 
+    /// <summary>
+    /// Re-arms a transition capture after an explicit pause/reconnect continuity gap.
+    /// Existing partial evidence remains visible for audit, but it cannot be completed
+    /// by an edge that may have occurred while capture was paused.
+    /// </summary>
+    public IoTestEvaluationResult RearmAfterContinuityGap(IoTestPointPlan point, IoTestObservation baseline)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        ArgumentNullException.ThrowIfNull(baseline);
+
+        var shadow = CreateShadow(point);
+        _evaluator.StartAttempt(shadow, baseline);
+        _slots[point] = new CaptureSlot(shadow, hasCurrentEvidence: true);
+
+        point.Runtime.Attempt++;
+        ApplyLiveObservation(point.Runtime, shadow.Runtime, baseline);
+        point.Runtime.State = IoTestPointState.Review;
+        point.Runtime.StatusReason =
+            "Capture continuity cannot be proven across pause/reconnect while only one transition edge was recorded; partial evidence is preserved and capture is re-armed from the current live baseline.";
+
+        return new IoTestEvaluationResult(
+            true,
+            point.Runtime.State,
+            null,
+            point.Runtime.StatusReason);
+    }
+
     public IoTestEvaluationResult Observe(IoTestPointPlan point, IoTestObservation observation)
     {
         ArgumentNullException.ThrowIfNull(point);
@@ -56,27 +83,6 @@ public sealed class IoTestRollingCaptureCoordinator
 
         if (!_slots.TryGetValue(point, out var slot))
             return _evaluator.Observe(point, observation);
-
-        // A pause/reconnect can hide the missing half of an in-progress OFF -> ON -> OFF
-        // sequence. Never allow a new-generation baseline to complete old partial evidence.
-        // Preserve the evidence for audit, mark the current result REVIEW, then re-arm from
-        // the new live image so a complete post-reconnect cycle can replace it later.
-        if (point.Runtime.ConnectionGeneration >= 0 &&
-            observation.ConnectionGeneration != point.Runtime.ConnectionGeneration &&
-            HasPartialTransitionEvidence(point.Runtime))
-        {
-            point.Runtime.ApplyObservation(observation);
-            point.Runtime.State = IoTestPointState.Review;
-            point.Runtime.StatusReason =
-                "Capture continuity cannot be proven across pause/reconnect while only one transition edge was recorded; partial evidence is preserved and capture is re-armed from the current live baseline.";
-            slot.HasCurrentEvidence = true;
-            Rearm(point, slot, observation);
-            return new IoTestEvaluationResult(
-                true,
-                point.Runtime.State,
-                null,
-                point.Runtime.StatusReason);
-        }
 
         if (slot.AttemptNeedsIncrement)
         {
@@ -159,9 +165,6 @@ public sealed class IoTestRollingCaptureCoordinator
 
     private static bool HasCurrentEvidence(IoTestPointRuntime runtime)
         => runtime.IsComplete || runtime.OnEvidence != null || runtime.OffEvidence != null;
-
-    private static bool HasPartialTransitionEvidence(IoTestPointRuntime runtime)
-        => (runtime.OnEvidence is null) != (runtime.OffEvidence is null);
 
     private static bool HasCompleteCycle(IoTestPointRuntime runtime)
         => runtime.IsComplete && runtime.OnEvidence != null && runtime.OffEvidence != null;
