@@ -14,13 +14,22 @@ public sealed class P0Build1888RecoveryRegressionTests
     }
 
     [Fact]
-    public void P0_LiveProjection_IsEventDriven_Canonical_AndNeverMutatesVirtualization()
+    public void P0_RuntimeObserver_IsEventDriven_FailIsolated_AndWpfFree()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatRecovery.cs"));
+        var start = source.IndexOf("private void P0FatRuntimePointUpdated", StringComparison.Ordinal);
+        var end = source.IndexOf("private void P0DrainFatRuntimeProjection", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var callback = source[start..end];
 
         Assert.Contains("_runtime.PointUpdated += P0FatRuntimePointUpdated", source, StringComparison.Ordinal);
-        Assert.Contains("DispatcherPriority.DataBind", source, StringComparison.Ordinal);
-        Assert.Contains("? boolean ? \"True\" : \"False\"", source, StringComparison.Ordinal);
+        Assert.Contains("snapshot.Point.PointKey", callback, StringComparison.Ordinal);
+        Assert.Contains("Volatile.Read(ref _p0FatProjectionActive)", callback, StringComparison.Ordinal);
+        Assert.Contains("Dispatcher.BeginInvoke", callback, StringComparison.Ordinal);
+        Assert.Contains("catch", callback, StringComparison.Ordinal);
+        Assert.DoesNotContain("_loadedIoFatWindow", callback, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsLoaded", callback, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataGrid", callback, StringComparison.Ordinal);
         Assert.DoesNotContain("_uiFlushTimer", source, StringComparison.Ordinal);
         Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SetVirtualizationMode", source, StringComparison.Ordinal);
@@ -54,16 +63,50 @@ public sealed class P0Build1888RecoveryRegressionTests
     }
 
     [Fact]
-    public void P0_AnalogCapture_RemainsAutomatic_AndNormalManualCaptureIsHidden()
+    public void P0_StructuredStaticMember_BindsThroughExactDisplayIdentityToRuntimeLeaf()
     {
-        var recovery = File.ReadAllText(FindRepoFile("MainWindow.P0FatRecovery.cs"));
+        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestLiveBindingService.cs"));
+
+        Assert.Contains("ExactSignalIdentityMatches", source, StringComparison.Ordinal);
+        Assert.Contains("signal.DisplayReference", source, StringComparison.Ordinal);
+        Assert.Contains("signal.ObjectReference", source, StringComparison.Ordinal);
+        Assert.Contains("Exact static DataSet member resolved to one active scalar runtime point", source, StringComparison.Ordinal);
+        Assert.Contains("CanonicalFatPresentationValue", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0_AnalogCapture_IsAutomatic_AndNormalCellCaptureTemplateIsRemoved()
+    {
+        var ux = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0BenchUx.cs"));
         var coordinator = File.ReadAllText(FindRepoFile("Services/IoTesting/FatAutoCaptureCoordinator.cs"));
 
-        Assert.Contains("FatAutoCaptureCoordinator", recovery, StringComparison.Ordinal);
-        Assert.Contains("\"✓ Capture\"", recovery, StringComparison.Ordinal);
-        Assert.Contains("button.Visibility = Visibility.Collapsed", recovery, StringComparison.Ordinal);
+        Assert.Contains("column.CellTemplate = BuildP0EvidenceValueTemplate", ux, StringComparison.Ordinal);
+        Assert.Contains("Intentionally no normal Capture button", ux, StringComparison.Ordinal);
+        Assert.Contains("P0FatCanonicalValueConverter", ux, StringComparison.Ordinal);
         Assert.Contains("AnalogStableSampleCount = 3", coordinator, StringComparison.Ordinal);
         Assert.Contains("AnalogRelativeSettlingFraction = 0.0005d", coordinator, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0_HeaderUsesPrimaryAndSecondaryActionRows()
+    {
+        var ux = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0BenchUx.cs"));
+
+        Assert.Contains("_p0PrimaryHeaderActions", ux, StringComparison.Ordinal);
+        Assert.Contains("_p0SecondaryHeaderActions", ux, StringComparison.Ordinal);
+        Assert.Contains("ConfigureP0AdaptiveHeaderActions", ux, StringComparison.Ordinal);
+        Assert.Contains("_clockSyncEvidenceText", ux, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0_CloseQuiescesLiveProjectionBeforeDurableSave()
+    {
+        var lifecycle = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0Lifecycle.cs"));
+
+        Assert.Contains("SuspendIoFatRuntimeProjection(this)", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("Dispatcher.Yield(DispatcherPriority.Render)", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("await Task.Run(Storage.SaveNow)", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("ResumeIoFatRuntimeProjection(this)", lifecycle, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
