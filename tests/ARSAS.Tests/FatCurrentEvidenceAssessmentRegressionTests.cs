@@ -24,11 +24,6 @@ public sealed class FatCurrentEvidenceAssessmentRegressionTests
     {
         var point = NewDiscretePoint("TRUE-FALSE");
         SetCurrentPair(point, "True", 20, "False", 21);
-
-        // This is the exact regression behind COMPLETE + blank Result in FAT v2:
-        // the old OFF -> ON -> OFF state machine would only regard TRUE -> FALSE as
-        // establishing an OFF baseline. Current V1/V2 assessment must instead assess
-        // the exact pair presented to the operator.
         point.Runtime.State = IoTestPointState.ArmedForOn;
 
         var assessment = FatCurrentEvidenceAssessmentService.Apply(point);
@@ -84,7 +79,7 @@ public sealed class FatCurrentEvidenceAssessmentRegressionTests
 
         Assert.Equal(IoTestPointState.Review, assessment.State);
         Assert.Equal("⚠ REVIEW", point.FatResultText);
-        Assert.Contains("does not follow current Value 1", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("does not prove a state change", assessment.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
