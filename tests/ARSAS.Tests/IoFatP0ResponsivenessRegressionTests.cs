@@ -65,6 +65,23 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         Assert.DoesNotContain("new NativeIec61850Client", bridge, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void CommandFeedbackFreshnessFence_WithholdsOnlyContradictoryPolling_AndNeverHidesReports()
+    {
+        var facade = Read("Services/UiResponsiveIec61850MonitorRuntimeFacade.cs");
+
+        Assert.Contains("CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2)", facade, StringComparison.Ordinal);
+        Assert.Contains("_inner.PointUpdated += ForwardPointUpdate", facade, StringComparison.Ordinal);
+        Assert.Contains("IsConfirmedCommandFeedback(snapshot)", facade, StringComparison.Ordinal);
+        Assert.Contains("_commandFeedbackFences[key] = new CommandFeedbackFence", facade, StringComparison.Ordinal);
+        Assert.Contains("if (snapshot.IsReportTraffic)", facade, StringComparison.Ordinal);
+        Assert.Contains("_commandFeedbackFences.TryRemove(key, out _)", facade, StringComparison.Ordinal);
+        Assert.Contains("if (matchesConfirmed)", facade, StringComparison.Ordinal);
+        Assert.Contains("P0_COMMAND_FRESHNESS: withheld stale MMS verification", facade, StringComparison.Ordinal);
+        Assert.Contains("Report traffic remains authoritative", facade, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dispatcher", facade, StringComparison.Ordinal);
+    }
+
     private static string Read(string relativePath)
         => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 
