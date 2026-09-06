@@ -145,8 +145,8 @@ public partial class IoListTestingWindow
             {
                 _p0CloseInProgress = false;
                 IsEnabled = true;
-                if (Owner is MainWindow engineeringWindow)
-                    engineeringWindow.ResumeIoFatRuntimeProjection(this);
+                if (Owner is MainWindow resumeOwner)
+                    resumeOwner.ResumeIoFatRuntimeProjection(this);
             }
         }
     }
