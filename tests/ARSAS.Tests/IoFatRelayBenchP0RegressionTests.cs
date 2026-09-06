@@ -197,6 +197,23 @@ public sealed class IoFatRelayBenchP0RegressionTests
         Assert.Contains("device.IsConnected && device.IsMonitoring", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void PreparationProgress_DoesNotWalkWholeVisualTreeOnHotDispatcherTick()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("IoListTestingWindow.RealPreparationProgress.cs"));
+        var tickStart = source.IndexOf("private void PreparationProgressTimer_Tick", StringComparison.Ordinal);
+        var cacheStart = source.IndexOf("private void RefreshPreparationProgressBarCache", StringComparison.Ordinal);
+
+        Assert.True(tickStart >= 0);
+        Assert.True(cacheStart > tickStart);
+        var tickBody = source[tickStart..cacheStart];
+        Assert.DoesNotContain("VisualDescendants<ProgressBar>", tickBody, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.Background", source, StringComparison.Ordinal);
+        Assert.Contains("Interval = TimeSpan.FromMilliseconds(100)", source, StringComparison.Ordinal);
+        Assert.Contains("if (!hasActivePreparation)", tickBody, StringComparison.Ordinal);
+        Assert.Contains("return;", tickBody, StringComparison.Ordinal);
+    }
+
     private static IoTestPointPlan NewAnalogPoint(string id)
         => new()
         {
