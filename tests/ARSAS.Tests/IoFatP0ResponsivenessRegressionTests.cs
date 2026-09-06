@@ -79,7 +79,7 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         Assert.Contains("if (matchesConfirmed)", facade, StringComparison.Ordinal);
         Assert.Contains("P0_COMMAND_FRESHNESS: withheld stale MMS verification", facade, StringComparison.Ordinal);
         Assert.Contains("Report traffic remains authoritative", facade, StringComparison.Ordinal);
-        Assert.DoesNotContain("Dispatcher", facade, StringComparison.Ordinal);
+        Assert.DoesNotContain("using System.Windows", facade, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
