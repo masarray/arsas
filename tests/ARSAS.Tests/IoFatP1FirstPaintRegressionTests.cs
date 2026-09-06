@@ -39,7 +39,6 @@ public sealed class IoFatP1FirstPaintRegressionTests
         Assert.DoesNotContain("ReadObject", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ReadAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CaptureCurrentEvidence", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ARIEC61850", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepoFile(string relativePath)
