@@ -15,14 +15,18 @@ public sealed record FatAutoCaptureDecision(
 }
 
 /// <summary>
-/// P3 automatic Value 1 / Value 2 latch. This coordinator never mutates the current
-/// evidence pointers: callers must durably append the returned evidence first, then
-/// promote it. That keeps the evidence journal authoritative when storage fails.
+/// Automatic Value 1 / Value 2 latch. This coordinator never mutates the current
+/// evidence pointers: callers append the returned evidence first, then promote it.
 ///
-/// Analog values use an intentionally small, deterministic settling window rather than
-/// capturing every transient MMS/report update. Three consecutive samples must remain
-/// inside an adaptive 0.05% band before the slot is accepted. Discrete/Other values use
-/// semantic change and are latched immediately after good-quality observation.
+/// Report-backed process values are event evidence already. The first good readable
+/// report-backed value is therefore latched immediately as Value 1, and the first
+/// meaningful different value is latched immediately as Value 2. This is important for
+/// Static DataSet / RCB acquisition where a stable analog value may produce only one
+/// InformationReport and must not wait for artificial repeat samples.
+///
+/// Polling fallback keeps the legacy three-sample analog settling guard so noisy cyclic
+/// reads are not mistaken for a meaningful condition change. Discrete/Other values are
+/// latched immediately after a good-quality observation.
 /// </summary>
 public sealed class FatAutoCaptureCoordinator
 {
@@ -82,15 +86,20 @@ public sealed class FatAutoCaptureCoordinator
                 "Value 1 is stable; waiting for a meaningful new condition.");
         }
 
-        if (point.SignalKind != FatSignalKind.Analog)
+        if (point.SignalKind != FatSignalKind.Analog || IsReportBacked(observation.AcquisitionSource))
         {
             Clear(point);
+            var reportBackedAnalog = point.SignalKind == FatSignalKind.Analog;
             return new FatAutoCaptureDecision(
                 CreateEvidence(slot, observation),
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
                 slot == FatValueSlot.Value1
-                    ? "Value 1 captured automatically; waiting for a meaningful change."
-                    : "Value 2 captured automatically from the new live condition.");
+                    ? reportBackedAnalog
+                        ? "Report-backed analog Value 1 captured immediately; waiting for a meaningful change."
+                        : "Value 1 captured automatically; waiting for a meaningful change."
+                    : reportBackedAnalog
+                        ? "Report-backed analog Value 2 captured immediately from the new live condition."
+                        : "Value 2 captured automatically from the new live condition.");
         }
 
         if (!TryParseNumeric(observation.RawValue, out var numeric))
@@ -98,7 +107,7 @@ public sealed class FatAutoCaptureCoordinator
             Clear(point);
             return FatAutoCaptureDecision.None(
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.WaitingChange,
-                "Analog value is not numerically stable enough for automatic capture; manual Recapture remains available.");
+                "Analog polling value is not numerically stable enough for automatic capture; manual Recapture remains available.");
         }
 
         var key = point.TestPointId;
@@ -110,7 +119,7 @@ public sealed class FatAutoCaptureCoordinator
             _analogCandidates[key] = new AnalogCandidate(slot, numeric, numeric, numeric, 1);
             return FatAutoCaptureDecision.None(
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing Value 1…" : "Stabilizing Value 2…");
+                slot == FatValueSlot.Value1 ? "Stabilizing polled Value 1…" : "Stabilizing polled Value 2…");
         }
 
         var next = candidate.Add(numeric);
@@ -120,7 +129,7 @@ public sealed class FatAutoCaptureCoordinator
         {
             return FatAutoCaptureDecision.None(
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing Value 1…" : "Stabilizing Value 2…");
+                slot == FatValueSlot.Value1 ? "Stabilizing polled Value 1…" : "Stabilizing polled Value 2…");
         }
 
         _analogCandidates.Remove(key);
@@ -128,8 +137,8 @@ public sealed class FatAutoCaptureCoordinator
             CreateEvidence(slot, observation),
             slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
             slot == FatValueSlot.Value1
-                ? "Stable analog Value 1 captured; waiting for a meaningful new condition."
-                : "Stable analog Value 2 captured; current evidence is complete.");
+                ? "Stable polled analog Value 1 captured; waiting for a meaningful new condition."
+                : "Stable polled analog Value 2 captured; current evidence is complete.");
     }
 
     public void Clear(IoTestPointPlan point)
@@ -139,6 +148,22 @@ public sealed class FatAutoCaptureCoordinator
     }
 
     public void Clear() => _analogCandidates.Clear();
+
+    private static bool IsReportBacked(string? acquisitionSource)
+    {
+        if (string.IsNullOrWhiteSpace(acquisitionSource))
+            return false;
+
+        var source = acquisitionSource.Trim();
+        if (source.Contains("POLL", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("RCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("REPORT", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("INFORMATIONREPORT", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static FatValueEvidence CreateEvidence(FatValueSlot slot, IoTestObservation observation)
         => new(
