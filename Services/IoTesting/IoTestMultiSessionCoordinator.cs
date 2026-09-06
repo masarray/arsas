@@ -367,7 +367,64 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
     }
 
     private void Child_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => RaiseProjectionProperties();
+    {
+        if (_disposed)
+            return;
+
+        // Relay-bench hot path: one journal append changes EvidenceRecordCount, LastJournalHash
+        // and JournalIntegrityText in sequence. Expanding every one of those child changes into
+        // the complete selected-session projection caused dozens of WPF notifications per FAT
+        // edge and made the shared Engineering Dispatcher stall for seconds. Forward only the
+        // property that actually changed; reserve the full projection refresh for structural
+        // session-state changes.
+        switch (e.PropertyName)
+        {
+            case nameof(IoTestSessionController.EvidenceRecordCount):
+                Raise(nameof(EvidenceRecordCount));
+                break;
+            case nameof(IoTestSessionController.LastJournalHash):
+                Raise(nameof(LastJournalHash));
+                break;
+            case nameof(IoTestSessionController.JournalIntegrityText):
+                Raise(nameof(JournalIntegrityText));
+                break;
+            case nameof(IoTestSessionController.JournalPath):
+                Raise(nameof(JournalPath));
+                break;
+            case nameof(IoTestSessionController.ProgressText):
+                Raise(nameof(ProgressText));
+                break;
+            case nameof(IoTestSessionController.StatusText):
+                Raise(nameof(StatusText));
+                break;
+            case nameof(IoTestSessionController.SessionId):
+                Raise(nameof(SessionId));
+                break;
+            case nameof(IoTestSessionController.StartedAtUtc):
+                Raise(nameof(StartedAtUtc));
+                break;
+            case nameof(IoTestSessionController.CompletedAtUtc):
+                Raise(nameof(CompletedAtUtc));
+                break;
+            case nameof(IoTestSessionController.State):
+            case nameof(IoTestSessionController.ActiveIed):
+            case nameof(IoTestSessionController.IsSessionActive):
+            case nameof(IoTestSessionController.CanStart):
+            case nameof(IoTestSessionController.CanPause):
+            case nameof(IoTestSessionController.CanResume):
+            case nameof(IoTestSessionController.CanStop):
+            case nameof(IoTestSessionController.CanEditPlan):
+            case nameof(IoTestSessionController.StateText):
+            case nameof(IoTestSessionController.ActiveIedText):
+                RaiseProjectionProperties();
+                break;
+            default:
+                // Unknown child properties are intentionally not amplified into every FAT
+                // binding. Explicit Start/Stop/Resume actions already refresh the complete
+                // projection once after the state transition.
+                break;
+        }
+    }
 
     private void RaiseProjectionProperties()
     {
