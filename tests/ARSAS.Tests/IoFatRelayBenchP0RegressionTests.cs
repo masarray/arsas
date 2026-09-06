@@ -29,6 +29,51 @@ public sealed class IoFatRelayBenchP0RegressionTests
     }
 
     [Fact]
+    public void CompletedPair_AdvancesToLatestTwoConditionsWhenTestIsRepeated()
+    {
+        var point = NewAnalogPoint("ROLLING-TOTVA");
+        var coordinator = new FatAutoCaptureCoordinator();
+
+        var first = coordinator.Observe(point, Observation("0", 1, "BRCB"));
+        Assert.NotNull(first.Evidence);
+        point.Runtime.SetFatValueEvidence(first.Evidence!);
+
+        var second = coordinator.Observe(point, Observation("1000", 2, "BRCB"));
+        Assert.NotNull(second.Evidence);
+        point.Runtime.SetFatValueEvidence(second.Evidence!);
+        Assert.Equal("0", point.Value1Text);
+        Assert.Equal("1000", point.Value2Text);
+
+        var repeated = coordinator.Observe(point, Observation("0", 3, "BRCB"));
+        Assert.NotNull(repeated.Evidence);
+        Assert.NotNull(repeated.ShiftedValue1Evidence);
+        point.Runtime.SetFatValueEvidence(repeated.Evidence!);
+
+        Assert.Equal(FatAutoCaptureStage.Complete, repeated.Stage);
+        Assert.Equal("1000", point.Value1Text);
+        Assert.Equal("0", point.Value2Text);
+    }
+
+    [Fact]
+    public void CompletedPair_DoesNotAdvanceWhenNewestConditionIsRepeatedWithoutChange()
+    {
+        var point = NewAnalogPoint("ROLLING-NO-EDGE");
+        var coordinator = new FatAutoCaptureCoordinator();
+
+        var first = coordinator.Observe(point, Observation("0", 1, "BRCB"));
+        point.Runtime.SetFatValueEvidence(first.Evidence!);
+        var second = coordinator.Observe(point, Observation("1000", 2, "BRCB"));
+        point.Runtime.SetFatValueEvidence(second.Evidence!);
+
+        var unchanged = coordinator.Observe(point, Observation("1000", 3, "BRCB"));
+
+        Assert.Null(unchanged.Evidence);
+        Assert.Equal(FatAutoCaptureStage.Complete, unchanged.Stage);
+        Assert.Equal("0", point.Value1Text);
+        Assert.Equal("1000", point.Value2Text);
+    }
+
+    [Fact]
     public void ReportBackedAnalog_EquivalentNoiseDoesNotConsumeValue2()
     {
         var point = NewAnalogPoint("TOTVA-NOISE");
