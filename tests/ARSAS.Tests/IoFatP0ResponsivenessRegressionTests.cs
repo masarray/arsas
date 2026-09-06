@@ -71,19 +71,23 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         var facade = Read("Services/UiResponsiveIec61850MonitorRuntimeFacade.cs");
 
         Assert.Contains("CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2)", facade, StringComparison.Ordinal);
+        Assert.Contains("PendingEventOriginWindow = TimeSpan.FromSeconds(1)", facade, StringComparison.Ordinal);
         Assert.Contains("_inner.PointUpdated += ForwardPointUpdate", facade, StringComparison.Ordinal);
         Assert.Contains("_inner.EventRaised += ForwardEventRaised", facade, StringComparison.Ordinal);
         Assert.Contains("IsConfirmedCommandFeedback(snapshot)", facade, StringComparison.Ordinal);
         Assert.Contains("_commandFeedbackFences[key] = new CommandFeedbackFence", facade, StringComparison.Ordinal);
-        Assert.Contains("if (snapshot.IsReportTraffic)", facade, StringComparison.Ordinal);
-        Assert.Contains("if (!matchesConfirmed)", facade, StringComparison.Ordinal);
+        Assert.Contains("_pendingEventOrigins[key] = new PendingEventOrigin", facade, StringComparison.Ordinal);
+        Assert.Contains("snapshot.IsReportTraffic", facade, StringComparison.Ordinal);
         Assert.Contains("ForwardEventRaised(Iec61850EventEntry entry)", facade, StringComparison.Ordinal);
-        Assert.Contains("IsReportEvent(entry)", facade, StringComparison.Ordinal);
+        Assert.Contains("TakePendingEventOrigin(key, entry.NewValue)", facade, StringComparison.Ordinal);
+        Assert.Contains("origin is { IsConfirmedCommandFeedback: true } && matchesConfirmed", facade, StringComparison.Ordinal);
+        Assert.Contains("origin is { IsReportTraffic: true }", facade, StringComparison.Ordinal);
         Assert.Contains("suppressed duplicate report SOE", facade, StringComparison.Ordinal);
         Assert.Contains("withheld phantom MMS verification SOE", facade, StringComparison.Ordinal);
         Assert.Contains("P0_COMMAND_FRESHNESS: ", facade, StringComparison.Ordinal);
-        Assert.Contains("ClearCommandFeedbackFences(deviceId)", facade, StringComparison.Ordinal);
-        Assert.Contains("Report traffic remains authoritative", facade, StringComparison.Ordinal);
+        Assert.Contains("ClearCommandFeedbackState(deviceId)", facade, StringComparison.Ordinal);
+        Assert.Contains("Report traffic remains process", facade, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsReportEvent(Iec61850EventEntry entry)", facade, StringComparison.Ordinal);
         Assert.DoesNotContain("using System.Windows", facade, StringComparison.Ordinal);
     }
 
