@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Threading;
 using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester;
@@ -38,21 +37,18 @@ public partial class IoListTestingWindow
             return;
 
         window._p0BenchUxInstalled = true;
-        window.ContentRendered += window.P0BenchUxContentRendered;
         window.Closed += window.P0BenchUxClosed;
-        window.Dispatcher.BeginInvoke(
-            new Action(window.ApplyP0BenchUx),
-            DispatcherPriority.ContextIdle);
-    }
 
-    private void P0BenchUxContentRendered(object? sender, EventArgs e)
-        => Dispatcher.BeginInvoke(new Action(ApplyP0BenchUx), DispatcherPriority.ContextIdle);
+        // P0 first-frame rule: install the final FAT V2 schema and its canonical/no-Capture
+        // templates synchronously while Loaded is being raised. Do not defer this work to
+        // ContentRendered/ContextIdle, otherwise the legacy template can become visible for
+        // one frame (lower-case Boolean text and the normal Capture button included).
+        window.InstallFatV2WorkspaceUx();
+        window.ApplyP0BenchUx();
+    }
 
     private void P0BenchUxClosed(object? sender, EventArgs e)
-    {
-        ContentRendered -= P0BenchUxContentRendered;
-        Closed -= P0BenchUxClosed;
-    }
+        => Closed -= P0BenchUxClosed;
 
     private void ApplyP0BenchUx()
     {
