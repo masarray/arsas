@@ -8,7 +8,8 @@ namespace ArIED61850Tester.Services.IoTesting;
 public sealed record FatAutoCaptureDecision(
     FatValueEvidence? Evidence,
     FatAutoCaptureStage Stage,
-    string Message)
+    string Message,
+    FatValueEvidence? ShiftedValue1Evidence = null)
 {
     public static FatAutoCaptureDecision None(FatAutoCaptureStage stage, string message)
         => new(null, stage, message);
@@ -20,9 +21,10 @@ public sealed record FatAutoCaptureDecision(
 ///
 /// Report-backed process values are event evidence already. The first good readable
 /// report-backed value is therefore latched immediately as Value 1, and the first
-/// meaningful different value is latched immediately as Value 2. This is important for
-/// Static DataSet / RCB acquisition where a stable analog value may produce only one
-/// InformationReport and must not wait for artificial repeat samples.
+/// meaningful different value is latched immediately as Value 2. Once both slots are
+/// populated, later meaningful changes keep a rolling pair: previous Value 2 becomes
+/// Value 1 and the newest process value becomes Value 2. This matches relay bench work
+/// where the operator may repeat False/True, Open/Close, or analog 0/1000 cycles.
 ///
 /// Polling fallback keeps the legacy three-sample analog settling guard so noisy cyclic
 /// reads are not mistaken for a meaningful condition change. Discrete/Other values are
@@ -52,14 +54,6 @@ public sealed class FatAutoCaptureCoordinator
                 "Automatic capture is outside the active FAT scope.");
         }
 
-        if (point.HasValue1Evidence && point.HasValue2Evidence)
-        {
-            Clear(point);
-            return FatAutoCaptureDecision.None(
-                FatAutoCaptureStage.Complete,
-                "Current Value 1 / Value 2 evidence is complete; explicit Recapture is required to replace it.");
-        }
-
         var (qualityVerdict, qualityReason) = IoTestTransitionEvaluator.EvaluateQuality(observation.Quality);
         if (qualityVerdict != IoEvidenceVerdict.Accepted)
         {
@@ -77,8 +71,18 @@ public sealed class FatAutoCaptureCoordinator
                 "Waiting for a readable live value.");
         }
 
+        var rollingPair = point.HasValue1Evidence && point.HasValue2Evidence;
+        if (rollingPair && IsEquivalent(point.Value2Text, observation.RawValue))
+        {
+            Clear(point);
+            return FatAutoCaptureDecision.None(
+                FatAutoCaptureStage.Complete,
+                "Current Value 1 / Value 2 pair is up to date; waiting for the next meaningful process change.");
+        }
+
         var slot = point.HasValue1Evidence ? FatValueSlot.Value2 : FatValueSlot.Value1;
-        if (slot == FatValueSlot.Value2 && IsEquivalent(point.Value1Text, observation.RawValue))
+        var comparisonBaseline = rollingPair ? point.Value2Text : point.Value1Text;
+        if (slot == FatValueSlot.Value2 && !rollingPair && IsEquivalent(point.Value1Text, observation.RawValue))
         {
             Clear(point);
             return FatAutoCaptureDecision.None(
@@ -90,16 +94,8 @@ public sealed class FatAutoCaptureCoordinator
         {
             Clear(point);
             var reportBackedAnalog = point.SignalKind == FatSignalKind.Analog;
-            return new FatAutoCaptureDecision(
-                CreateEvidence(slot, observation),
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
-                slot == FatValueSlot.Value1
-                    ? reportBackedAnalog
-                        ? "Stable analog Value 1 captured immediately from report-backed process data; waiting for a meaningful change."
-                        : "Value 1 captured automatically; waiting for a meaningful change."
-                    : reportBackedAnalog
-                        ? "Stable analog Value 2 captured immediately from the new report-backed process condition."
-                        : "Value 2 captured automatically from the new live condition.");
+            var evidence = CreateEvidence(slot, observation);
+            return BuildDecision(point, evidence, rollingPair, reportBackedAnalog);
         }
 
         if (!TryParseNumeric(observation.RawValue, out var numeric))
@@ -111,7 +107,7 @@ public sealed class FatAutoCaptureCoordinator
         }
 
         var key = point.TestPointId;
-        var tolerance = SettlingTolerance(numeric, point.Value1Text);
+        var tolerance = SettlingTolerance(numeric, comparisonBaseline);
         if (!_analogCandidates.TryGetValue(key, out var candidate) ||
             candidate.Slot != slot ||
             Math.Abs(numeric - candidate.Center) > tolerance)
@@ -124,7 +120,7 @@ public sealed class FatAutoCaptureCoordinator
 
         var next = candidate.Add(numeric);
         _analogCandidates[key] = next;
-        var nextTolerance = SettlingTolerance(next.Center, point.Value1Text);
+        var nextTolerance = SettlingTolerance(next.Center, comparisonBaseline);
         if (next.Count < AnalogStableSampleCount || next.Max - next.Min > nextTolerance)
         {
             return FatAutoCaptureDecision.None(
@@ -133,12 +129,7 @@ public sealed class FatAutoCaptureCoordinator
         }
 
         _analogCandidates.Remove(key);
-        return new FatAutoCaptureDecision(
-            CreateEvidence(slot, observation),
-            slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
-            slot == FatValueSlot.Value1
-                ? "Stable analog Value 1 captured from polled data; waiting for a meaningful new condition."
-                : "Stable analog Value 2 captured from polled data; current evidence is complete.");
+        return BuildDecision(point, CreateEvidence(slot, observation), rollingPair, reportBackedAnalog: false);
     }
 
     public void Clear(IoTestPointPlan point)
@@ -148,6 +139,44 @@ public sealed class FatAutoCaptureCoordinator
     }
 
     public void Clear() => _analogCandidates.Clear();
+
+    private static FatAutoCaptureDecision BuildDecision(
+        IoTestPointPlan point,
+        FatValueEvidence evidence,
+        bool rollingPair,
+        bool reportBackedAnalog)
+    {
+        if (rollingPair && evidence.Slot == FatValueSlot.Value2)
+        {
+            var previousValue2 = point.Runtime.Value2Evidence;
+            var shiftedValue1 = previousValue2 == null
+                ? null
+                : previousValue2 with
+                {
+                    EvidenceId = Guid.NewGuid(),
+                    Slot = FatValueSlot.Value1
+                };
+
+            return new FatAutoCaptureDecision(
+                evidence,
+                FatAutoCaptureStage.Complete,
+                reportBackedAnalog
+                    ? "Latest analog change captured from report-backed process data; Value 1 / Value 2 advanced to the newest transition pair."
+                    : "Latest live change captured; Value 1 / Value 2 advanced to the newest transition pair.",
+                shiftedValue1);
+        }
+
+        return new FatAutoCaptureDecision(
+            evidence,
+            evidence.Slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
+            evidence.Slot == FatValueSlot.Value1
+                ? reportBackedAnalog
+                    ? "Stable analog Value 1 captured immediately from report-backed process data; waiting for a meaningful change."
+                    : "Value 1 captured automatically; waiting for a meaningful change."
+                : reportBackedAnalog
+                    ? "Stable analog Value 2 captured immediately from the new report-backed process condition; later changes will keep the pair current."
+                    : "Value 2 captured automatically from the new live condition; later changes will keep the pair current.");
+    }
 
     private static bool IsReportBacked(string? acquisitionSource)
     {
