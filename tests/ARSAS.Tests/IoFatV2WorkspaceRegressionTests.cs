@@ -49,21 +49,28 @@ public sealed class IoFatV2WorkspaceRegressionTests
     }
 
     [Fact]
-    public void OperatorSnapshot_JournalFailure_DoesNotPromoteCurrentEvidencePointer()
+    public void OperatorSnapshot_JournalFailure_DoesNotPromoteReplacementEvidencePointer()
     {
         var fixture = ManualFixture(journalFactory: (_, _, _, _) => new FailAfterStartupJournal());
         using var controller = fixture.Controller;
         Assert.True(controller.Start(fixture.Ied).Succeeded);
+        var startupEvidence = fixture.Point.Runtime.Value1Evidence;
+        Assert.NotNull(startupEvidence);
+        Assert.Equal("12.34", startupEvidence!.RawValue);
 
+        fixture.LivePoint.Value = "13.01";
+        fixture.LivePoint.Sequence = 2;
         var result = controller.CaptureOperatorSnapshot(fixture.Point, FatValueSlot.Value1);
 
         Assert.False(result.Succeeded);
-        Assert.Null(fixture.Point.Runtime.Value1Evidence);
+        Assert.NotNull(fixture.Point.Runtime.Value1Evidence);
+        Assert.Equal(startupEvidence.EvidenceId, fixture.Point.Runtime.Value1Evidence!.EvidenceId);
+        Assert.Equal("12.34", fixture.Point.Runtime.Value1Evidence.RawValue);
         Assert.Equal(IoTestSessionState.Faulted, controller.State);
     }
 
     [Fact]
-    public void OperatorSnapshot_LiveRefreshDoesNotRaiseSessionProgressForEverySample()
+    public void OperatorSnapshot_EquivalentLiveRefreshDoesNotRaiseSessionProgressForEverySample()
     {
         var fixture = ManualFixture();
         using var controller = fixture.Controller;
@@ -82,13 +89,14 @@ public sealed class IoFatV2WorkspaceRegressionTests
             SignalName = fixture.LivePoint.SignalName,
             IecReference = fixture.LivePoint.IecReference,
             OldValue = "12.34",
-            NewValue = "12.35",
+            NewValue = "12.341",
             Quality = "Good",
             SourceMode = "BRCB",
             Reason = "periodic-refresh"
         });
 
-        Assert.Equal("12.35", fixture.Point.Runtime.CurrentValue);
+        Assert.Equal("12.341", fixture.Point.Runtime.CurrentValue);
+        Assert.Null(fixture.Point.Runtime.Value2Evidence);
         Assert.Equal(0, sessionNotifications);
     }
 
