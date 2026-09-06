@@ -39,8 +39,6 @@ public partial class IoListTestingWindow
         foreach (var ied in Project.Ieds)
             _preparationDisplayStates[ied] = new PreparationDisplayState();
 
-        // Preparation progress is presentation-only. Keep it below the report/control
-        // hot path and never walk the complete WPF visual tree at 20 FPS.
         _preparationProgressTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(100)
@@ -87,10 +85,7 @@ public partial class IoListTestingWindow
             state.AdvanceDisplay();
         }
 
-        // The old implementation traversed every visual descendant on every 50 ms tick,
-        // even while no IED was preparing. On relay benches this competed with report-backed
-        // LIVE VALUE/Start FAT work on the Dispatcher and could make Start/close look frozen.
-        // Idle ticks are now effectively free; active ticks update only cached progress bars.
+        // No visual-tree walk and no tooltip string creation on idle/hot ticks.
         if (!hasActivePreparation)
             return;
 
@@ -120,12 +115,10 @@ public partial class IoListTestingWindow
     {
         foreach (var progressBar in _preparationProgressBars)
         {
-            // The XAML fallback is indeterminate so old project binaries remain safe.
-            // Once this behavior is installed every instantiated IED-card bar becomes
-            // determinate and is driven by real connection/discovery/acquisition state.
             progressBar.IsIndeterminate = false;
             progressBar.Minimum = 0d;
             progressBar.Maximum = 100d;
+            progressBar.ToolTip = null;
 
             if (progressBar.DataContext is not IoTestIedPlan ied ||
                 !_preparationDisplayStates.TryGetValue(ied, out var state))
@@ -135,14 +128,6 @@ public partial class IoListTestingWindow
             }
 
             progressBar.Value = state.Display;
-            progressBar.ToolTip = string.Join(
-                " · ",
-                new[]
-                {
-                    state.Message,
-                    state.StepText,
-                    $"{state.Display:0}%"
-                }.Where(value => !string.IsNullOrWhiteSpace(value)));
         }
     }
 
@@ -202,9 +187,6 @@ public partial class IoListTestingWindow
                 return;
             }
 
-            // Same visual principle as Engineering discovery cards: ease-out movement,
-            // bounded minimum speed, and no artificial loop. This runs at 10 FPS so it
-            // cannot starve relay-backed acquisition/control work on the UI Dispatcher.
             var completing = Target >= 99.9d;
             var movement = Math.Clamp(
                 remaining * (completing ? 0.24d : 0.18d),
