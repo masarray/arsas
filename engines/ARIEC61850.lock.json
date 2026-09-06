@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "ref": "fix/p0-multi-rcb-legacy-export",
-  "commit": "1b12744653c3153cf02af9a4ff3822263d024c77",
+  "ref": "main",
+  "commit": "cdcaaa8f98116f399d99db9a92fc52df7e4dc902",
   "sourcePullRequest": 113,
-  "purpose": "Pins the exact field-proven ARIEC61850 acquisition/control engine lineage from 11ab2304482600c19ba979f4fc9021ddb46b9af9, plus the P0 Legacy SAS export extension that keeps single-RCB callers backward compatible while allowing several operator-selected ReportControls/DataSets to be retained in one CID. Acquisition, reporting activation, DataSet planning, control and FAT live-value behavior are otherwise unchanged."
+  "purpose": "Pins the exact field-proven ARIEC61850 acquisition/control engine lineage from 11ab2304482600c19ba979f4fc9021ddb46b9af9, plus the P0 Legacy SAS export extension that preserves the existing single-RCB behavior and allows several operator-selected ReportControls/DataSets to be retained in one CID. Acquisition, reporting activation, DataSet planning, control and FAT live-value behavior are otherwise unchanged."
 }
