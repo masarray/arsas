@@ -156,11 +156,9 @@ public sealed class FatAutoCaptureCoordinator
                     Slot = FatValueSlot.Value1
                 };
 
-            // Current report pointers advance atomically in memory. The prior evidence itself
-            // remains immutable in journal history; only the current pair projection changes.
-            if (shiftedValue1 != null)
-                point.Runtime.SetFatValueEvidence(shiftedValue1);
-
+            // Decision construction is intentionally pure. The controller journals the
+            // complete rolling-pair transition first and only then promotes both pointers.
+            // This prevents Value 1 from advancing in memory if durable evidence append fails.
             return new FatAutoCaptureDecision(
                 evidence,
                 FatAutoCaptureStage.Complete,
