@@ -9,13 +9,13 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Bench P0: evidence journal hashing / durable I/O must not monopolize the WPF Dispatcher.
+/// Bench P0: keep FAT evidence/session state transitions on the WPF Dispatcher.
 ///
-/// Connection preparation stays on its existing async path. Once the live capture scope is
-/// proven, the evidence controller can build/seal its journal on a worker while all visual
-/// updates continue through the existing PropertyChanged/Dispatcher routes. The same rule
-/// applies to Stop and workspace close. No IEC 61850 polling, RCB, DataSet, or live-value
-/// ownership is changed here.
+/// IoTestSessionController raises UI-bound PropertyChanged notifications and mutates
+/// the shared FAT project/session model, therefore Start/Stop/StopAll must stay on the
+/// owning Dispatcher. Only pure persistence work (Storage.SaveNow) is offloaded.
+/// No IEC 61850 polling, RCB, DataSet, live-value ownership, or virtualization behavior
+/// is changed here.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -77,8 +77,6 @@ public partial class IoListTestingWindow
             }
         }
 
-        // P0Lifecycle replaces Window_Closing during Loaded. Run after Loaded so this
-        // responsive edge is the only close handler that remains for the bench branch.
         Closing -= Window_Closing;
         Closing -= P0Window_Closing;
         Closing += P0ResponsiveWindow_Closing;
@@ -158,10 +156,9 @@ public partial class IoListTestingWindow
             RaiseSelectedIedContextProperties();
             await Dispatcher.Yield(DispatcherPriority.Render);
 
-            // The expensive baseline hash + WriteThrough journal flush is intentionally
-            // off Dispatcher. Existing session notifications already converge through the
-            // window's Dispatcher refresh path; no WPF control is accessed from this worker.
-            var result = await Task.Run(() => Session.Start(selectedIed, liveCaptureScope));
+            // Session.Start mutates UI-bound project/session state and raises PropertyChanged.
+            // Keep it on the owning Dispatcher. Do not wrap this call in Task.Run.
+            var result = Session.Start(selectedIed, liveCaptureScope);
 
             ShowActionResult(result, "FAT evidence session could not start");
             RaiseStatusProperties();
@@ -209,9 +206,9 @@ public partial class IoListTestingWindow
 
         try
         {
-            // Stop includes a final WriteThrough append, journal disposal, full hash-chain
-            // verification, and workspace save. Keep all durable work away from Dispatcher.
-            var result = await Task.Run(() => Session.Stop());
+            // Session.Stop also mutates UI-bound state. Keep the transition on Dispatcher;
+            // only the follow-up workspace persistence is worker-safe.
+            var result = Session.Stop();
             ShowActionResult(result, "FAT session could not stop");
             if (result.Succeeded && Storage != null)
                 await Task.Run(Storage.SaveNow);
@@ -280,8 +277,9 @@ public partial class IoListTestingWindow
         {
             if (Session.HasActiveSessions)
             {
-                var stopAll = await Task.Run(() => Session.StopAll(
-                    "Workspace closed by operator; per-IED evidence journal sealed."));
+                // StopAll raises UI-bound notifications and must remain on Dispatcher.
+                var stopAll = Session.StopAll(
+                    "Workspace closed by operator; per-IED evidence journal sealed.");
                 if (!stopAll.Succeeded)
                 {
                     MessageBox.Show(
