@@ -94,10 +94,19 @@ public partial class MainWindow
 
                 _p0FatSharedProcessCursors.TryGetValue(key, out var previous);
                 if (previous != null &&
-                    previous.Sequence == point.Sequence &&
-                    string.Equals(previous.Value, point.Value, StringComparison.Ordinal) &&
+                    Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) &&
                     string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
                 {
+                    // Point.Sequence is transport/evidence ordering metadata. A new sequence
+                    // with the same process value must not create another FAT evidence job.
+                    // Keep the cursor current without waking the evidence Dispatcher.
+                    if (previous.Sequence != point.Sequence)
+                    {
+                        _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
+                            point.Sequence,
+                            point.Value,
+                            point.Quality);
+                    }
                     continue;
                 }
 
