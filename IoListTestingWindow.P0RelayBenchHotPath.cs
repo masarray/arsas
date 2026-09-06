@@ -103,9 +103,9 @@ public partial class IoListTestingWindow
             }
 
             // Critical fast path: Engineering is already connected + monitoring. Do NOT run
-            // PrepareIoTestIedForFatAsync again, do NOT reconcile/reselect/restart reports,
-            // and do NOT touch the acquisition cadence. FAT only arms evidence on the live
-            // rows that are already proven by the shared process image.
+            // the legacy live-preparation routine again, do NOT reconcile/reselect/restart
+            // reports, and do NOT touch the acquisition cadence. FAT only arms evidence on
+            // the live rows already proven by the shared process image.
             var requested = ied.TestPoints
                 .Where(point =>
                     point.WorkspaceSelected &&
