@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
