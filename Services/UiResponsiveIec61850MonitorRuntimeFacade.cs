@@ -24,6 +24,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private static readonly TimeSpan DisposeBudget = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PendingEventOriginWindow = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan ActiveCommandExpectationWindow = TimeSpan.FromSeconds(30);
 
     private sealed class DeviceOperationSlot
     {
@@ -44,12 +45,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         bool IsConfirmedCommandFeedback,
         DateTime ExpiresUtc);
 
+    private sealed record ActiveCommandExpectation(
+        string ExpectedValue,
+        DateTime ExpiresUtc);
+
     private readonly Services.Iec61850MonitorRuntime _inner = new();
     private readonly ConcurrentDictionary<string, DeviceOperationSlot> _deviceSlots =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CommandFeedbackFence> _commandFeedbackFences =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PendingEventOrigin> _pendingEventOrigins =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ActiveCommandExpectation> _activeCommandExpectations =
         new(StringComparer.OrdinalIgnoreCase);
     private int _disposeStarted;
 
@@ -111,7 +118,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
-            token => _inner.ExecuteControlAsync(deviceId, request, token));
+            async token =>
+            {
+                var expectationKeys = RegisterActiveCommandExpectation(
+                    deviceId,
+                    request.Signal,
+                    request.ValueText);
+                try
+                {
+                    return await _inner.ExecuteControlAsync(deviceId, request, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    ClearActiveCommandExpectations(expectationKeys);
+                }
+            });
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
@@ -143,12 +164,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     /// authority; a contradictory report is forwarded immediately. A matching report is
     /// forwarded as confirmation while the short fence remains alive so a stale poll that
     /// was already in flight cannot flash the process value or manufacture a duplicate SOE.
+    ///
+    /// Reason strings are not trusted on their own: polling can inherit the last reason from
+    /// the runtime point state. A fence opens only when the confirmed-feedback reason also
+    /// matches the value and status-reference scope of the currently executing control.
     /// </summary>
     private void ForwardPointUpdate(Iec61850PointSnapshot snapshot)
     {
         var key = CommandFeedbackFenceKey(snapshot.Point.DeviceId, snapshot.Point.IecReference);
         var nowUtc = DateTime.UtcNow;
-        var confirmedCommandFeedback = IsConfirmedCommandFeedback(snapshot);
+        var confirmedCommandFeedback =
+            IsConfirmedCommandFeedback(snapshot) &&
+            MatchesActiveCommandExpectation(key, snapshot.Value, nowUtc);
 
         // ApplyValueUpdate raises PointUpdated synchronously before EventRaised. Preserve
         // the exact transport provenance of a discrete edge here so the SOE filter never
@@ -272,6 +299,49 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             $"withheld phantom MMS verification SOE {entry.IecReference}: {entry.OldValue} → {entry.NewValue} inside the command-confirmed {fence.ExpectedValue} freshness window.");
     }
 
+    private string[] RegisterActiveCommandExpectation(
+        string deviceId,
+        SignalDefinition signal,
+        string? expectedValue)
+    {
+        var value = (expectedValue ?? string.Empty).Trim();
+        if (value.Length == 0)
+            return Array.Empty<string>();
+
+        var references = new[]
+        {
+            signal.ControlStatusReference,
+            signal.ObjectReference
+        }
+        .Where(reference => !string.IsNullOrWhiteSpace(reference))
+        .Select(reference => CommandFeedbackFenceKey(deviceId, reference))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+        var expiresUtc = DateTime.UtcNow.Add(ActiveCommandExpectationWindow);
+        foreach (var key in references)
+            _activeCommandExpectations[key] = new ActiveCommandExpectation(value, expiresUtc);
+        return references;
+    }
+
+    private bool MatchesActiveCommandExpectation(string key, string? value, DateTime nowUtc)
+    {
+        if (!_activeCommandExpectations.TryGetValue(key, out var expectation))
+            return false;
+        if (expectation.ExpiresUtc < nowUtc)
+        {
+            _activeCommandExpectations.TryRemove(key, out _);
+            return false;
+        }
+        return CommandFeedbackValuesEquivalent(expectation.ExpectedValue, value);
+    }
+
+    private void ClearActiveCommandExpectations(IEnumerable<string> keys)
+    {
+        foreach (var key in keys)
+            _activeCommandExpectations.TryRemove(key, out _);
+    }
+
     private PendingEventOrigin? TakePendingEventOrigin(string key, string? eventValue)
     {
         if (!_pendingEventOrigins.TryRemove(key, out var origin))
@@ -352,6 +422,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                      .ToArray())
         {
             _pendingEventOrigins.TryRemove(key, out _);
+        }
+        foreach (var key in _activeCommandExpectations.Keys
+                     .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+        {
+            _activeCommandExpectations.TryRemove(key, out _);
         }
     }
 
@@ -571,6 +647,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Do not Dispose the per-device semaphores here. An uncooperative native operation
         // can still unwind after the bounded shutdown budget and its finally block must be
         // able to Release() safely. They become process-lifetime garbage with this facade.
+        _activeCommandExpectations.Clear();
         _pendingEventOrigins.Clear();
         _commandFeedbackFences.Clear();
         _deviceSlots.Clear();
