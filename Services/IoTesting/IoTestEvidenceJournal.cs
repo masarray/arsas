@@ -263,7 +263,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             {
                 var provisional = _recordCount == 0
                     ? new IoTestJournalVerificationResult(false, 0, _lastHash, "Evidence journal contains no records.")
-                    : new IoTestJournalVerificationResult(true, _recordCount, _lastHash, string.Empty);
+                    : new IoTestJournalVerificationResult(true, checked((int)_recordCount), _lastHash, string.Empty);
                 var key = SealKey(FilePath);
                 var completion = Task.Run(SealDurablyAndVerify);
                 DeferredSeals[key] = new DeferredSealState(provisional, completion);
@@ -315,7 +315,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException)
         {
-            return new IoTestJournalVerificationResult(false, _recordCount, _lastHash, ex.Message);
+            return new IoTestJournalVerificationResult(false, checked((int)_recordCount), _lastHash, ex.Message);
         }
     }
 
