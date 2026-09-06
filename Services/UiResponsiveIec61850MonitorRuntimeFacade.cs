@@ -21,6 +21,7 @@ namespace ArIED61850Tester;
 public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 {
     private static readonly TimeSpan DisposeBudget = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2);
 
     private sealed class DeviceOperationSlot
     {
@@ -31,15 +32,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public long Generation { get; set; }
     }
 
+    private sealed record CommandFeedbackFence(
+        string ExpectedValue,
+        DateTime ExpiresUtc);
+
     private readonly Services.Iec61850MonitorRuntime _inner = new();
     private readonly ConcurrentDictionary<string, DeviceOperationSlot> _deviceSlots =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CommandFeedbackFence> _commandFeedbackFences =
         new(StringComparer.OrdinalIgnoreCase);
     private int _disposeStarted;
 
     public Iec61850MonitorRuntime()
     {
         _inner.Diagnostic += entry => Diagnostic?.Invoke(entry);
-        _inner.PointUpdated += snapshot => PointUpdated?.Invoke(snapshot);
+        _inner.PointUpdated += ForwardPointUpdate;
         _inner.EventRaised += entry => EventRaised?.Invoke(entry);
     }
 
@@ -104,6 +111,117 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     public Task StopDeviceAsync(string deviceId)
         => RunPreemptiveStopAsync(deviceId, () => _inner.StopDeviceAsync(deviceId));
+
+    /// <summary>
+    /// P0 command-feedback freshness fence.
+    ///
+    /// The inner runtime publishes command-confirmed process feedback immediately, then its
+    /// report/poll monitor resumes. Some relays can return one pre-command MMS verification
+    /// sample before their status cache/report stream catches up, producing a visible
+    /// Closed → Open → Closed flash even though the command was accepted and the matching
+    /// dchg arrives moments later.
+    ///
+    /// This is deliberately not a WPF debounce and it does not manufacture state. The
+    /// confirmed value itself opens a short per-point fence. Only contradictory non-report
+    /// snapshots are withheld during that bounded window. Matching or contradictory report
+    /// traffic remains authoritative, and polling becomes visible again automatically when
+    /// the window expires if no report confirms the command.
+    /// </summary>
+    private void ForwardPointUpdate(Iec61850PointSnapshot snapshot)
+    {
+        var key = CommandFeedbackFenceKey(snapshot);
+        var nowUtc = DateTime.UtcNow;
+
+        if (IsConfirmedCommandFeedback(snapshot))
+        {
+            _commandFeedbackFences[key] = new CommandFeedbackFence(
+                snapshot.Value?.Trim() ?? string.Empty,
+                nowUtc.Add(CommandFeedbackFreshnessWindow));
+            PointUpdated?.Invoke(snapshot);
+            return;
+        }
+
+        if (!_commandFeedbackFences.TryGetValue(key, out var fence))
+        {
+            PointUpdated?.Invoke(snapshot);
+            return;
+        }
+
+        if (nowUtc > fence.ExpiresUtc)
+        {
+            _commandFeedbackFences.TryRemove(key, out _);
+            PointUpdated?.Invoke(snapshot);
+            return;
+        }
+
+        var matchesConfirmed = CommandFeedbackValuesEquivalent(fence.ExpectedValue, snapshot.Value);
+        if (snapshot.IsReportTraffic)
+        {
+            // Report traffic is process authority. A matching dchg closes the fence; a
+            // contradictory report must also pass through immediately as a real process
+            // transition rather than being hidden by command freshness protection.
+            _commandFeedbackFences.TryRemove(key, out _);
+            PointUpdated?.Invoke(snapshot);
+            return;
+        }
+
+        if (matchesConfirmed)
+        {
+            PointUpdated?.Invoke(snapshot);
+            return;
+        }
+
+        Diagnostic?.Invoke(new DiagnosticEntry
+        {
+            Time = DateTime.Now,
+            Level = "INFO",
+            Source = snapshot.Point.DeviceName,
+            Message = $"P0_COMMAND_FRESHNESS: withheld stale MMS verification {snapshot.Point.IecReference}={snapshot.Value} inside the command-confirmed {fence.ExpectedValue} freshness window. Report traffic remains authoritative."
+        });
+    }
+
+    private static bool IsConfirmedCommandFeedback(Iec61850PointSnapshot snapshot)
+        => (snapshot.Reason ?? string.Empty).Contains(
+            "confirmed command feedback",
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string CommandFeedbackFenceKey(Iec61850PointSnapshot snapshot)
+        => $"{NormalizeDeviceKey(snapshot.Point.DeviceId)}|{NormalizeReference(snapshot.Point.IecReference)}";
+
+    private static string NormalizeReference(string? reference)
+        => (reference ?? string.Empty)
+            .Trim()
+            .Replace('$', '.')
+            .Replace("..", ".", StringComparison.Ordinal)
+            .ToLowerInvariant();
+
+    private static bool CommandFeedbackValuesEquivalent(string? left, string? right)
+    {
+        var leftText = (left ?? string.Empty).Trim();
+        var rightText = (right ?? string.Empty).Trim();
+        if (leftText.Equals(rightText, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (bool.TryParse(leftText, out var leftBool) &&
+            bool.TryParse(rightText, out var rightBool))
+        {
+            return leftBool == rightBool;
+        }
+
+        var leftState = ExtractStateCode(leftText);
+        var rightState = ExtractStateCode(rightText);
+        return leftState.Length > 0 && rightState.Length > 0 &&
+               leftState.Equals(rightState, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ExtractStateCode(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+        var open = value.LastIndexOf('[');
+        var close = value.LastIndexOf(']');
+        return open >= 0 && close > open ? value[(open + 1)..close].Trim() : string.Empty;
+    }
 
     private async Task RunDeviceOperationAsync(
         string? deviceId,
@@ -321,6 +439,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Do not Dispose the per-device semaphores here. An uncooperative native operation
         // can still unwind after the bounded shutdown budget and its finally block must be
         // able to Release() safely. They become process-lifetime garbage with this facade.
+        _commandFeedbackFences.Clear();
         _deviceSlots.Clear();
     }
 
