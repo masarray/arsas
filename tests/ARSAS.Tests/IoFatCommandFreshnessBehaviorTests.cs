@@ -23,6 +23,22 @@ public sealed class IoFatCommandFreshnessBehaviorTests
             IecReference = "RelayA/CSWI1.Pos.stVal",
             IecDataType = "Dbpos"
         };
+        var control = new SignalDefinition
+        {
+            Name = "CSWI.Pos",
+            ObjectReference = "RelayA/CSWI1.Pos",
+            ControlStatusReference = point.IecReference
+        };
+
+        // The production facade registers this expectation immediately before entering the
+        // inner ExecuteControlAsync call. Keep it active here while replaying the exact
+        // PointUpdated/EventRaised sequence emitted by that transaction and monitor loop.
+        RegisterExpectationMethod.Invoke(runtime, new object[]
+        {
+            point.DeviceId,
+            control,
+            "Closed [10]"
+        });
 
         // 1. The command engine publishes the accepted/feedback-proven target immediately.
         InvokePoint(runtime, Snapshot(
@@ -46,8 +62,9 @@ public sealed class IoFatCommandFreshnessBehaviorTests
         Assert.Equal("Closed [10]", visibleEvents[0].NewValue);
 
         // 2. One old MMS verification sample arrives after the command. The inner runtime
-        // can inherit the previous command reason text here, so provenance must come from
-        // PointUpdated.IsReportTraffic rather than parsing Event.Reason.
+        // can inherit the previous command reason text here, so the reason alone must never
+        // re-open the fence around the stale Open value. It does not match the active control
+        // transaction's requested Closed state and its exact edge provenance is non-report.
         InvokePoint(runtime, Snapshot(
             point,
             previous: "Closed [10]",
@@ -127,7 +144,9 @@ public sealed class IoFatCommandFreshnessBehaviorTests
             Value = value,
             Quality = "Good",
             DeviceTimestamp = "2026-09-06T12:00:00Z",
-            SourceMode = report ? "Static: BRCB01" : "Static: BRCB01",
+            // Keep SourceMode deliberately identical between report and poll. This proves
+            // the fence follows IsReportTraffic provenance instead of label heuristics.
+            SourceMode = "Static: BRCB01",
             Reason = reason,
             Status = "Live",
             IsValueEdge = edge,
@@ -164,6 +183,10 @@ public sealed class IoFatCommandFreshnessBehaviorTests
 
     private static void InvokeEvent(UiRuntime runtime, Iec61850EventEntry entry)
         => ForwardEventMethod.Invoke(runtime, new object[] { entry });
+
+    private static MethodInfo RegisterExpectationMethod { get; } =
+        typeof(UiRuntime).GetMethod("RegisterActiveCommandExpectation", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new MissingMethodException(typeof(UiRuntime).FullName, "RegisterActiveCommandExpectation");
 
     private static MethodInfo ForwardPointMethod { get; } =
         typeof(UiRuntime).GetMethod("ForwardPointUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
