@@ -102,7 +102,7 @@ public sealed class FatAutoCaptureCoordinator
         {
             Clear(point);
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.WaitingChange,
+                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.WaitingChange,
                 "Analog polling value is not numerically stable enough for automatic capture; manual Recapture remains available.");
         }
 
@@ -114,8 +114,14 @@ public sealed class FatAutoCaptureCoordinator
         {
             _analogCandidates[key] = new AnalogCandidate(slot, numeric, numeric, numeric, 1);
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing polled Value 1…" : "Stabilizing polled Value 2…");
+                slot == FatValueSlot.Value1
+                    ? FatAutoCaptureStage.WaitingValue1
+                    : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.StabilizingValue2,
+                slot == FatValueSlot.Value1
+                    ? "Stabilizing polled Value 1…"
+                    : rollingPair
+                        ? "Current pair remains complete while a newer polled Value 2 candidate stabilizes."
+                        : "Stabilizing polled Value 2…");
         }
 
         var next = candidate.Add(numeric);
@@ -124,8 +130,14 @@ public sealed class FatAutoCaptureCoordinator
         if (next.Count < AnalogStableSampleCount || next.Max - next.Min > nextTolerance)
         {
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing polled Value 1…" : "Stabilizing polled Value 2…");
+                slot == FatValueSlot.Value1
+                    ? FatAutoCaptureStage.WaitingValue1
+                    : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.StabilizingValue2,
+                slot == FatValueSlot.Value1
+                    ? "Stabilizing polled Value 1…"
+                    : rollingPair
+                        ? "Current pair remains complete while a newer polled Value 2 candidate stabilizes."
+                        : "Stabilizing polled Value 2…");
         }
 
         _analogCandidates.Remove(key);
