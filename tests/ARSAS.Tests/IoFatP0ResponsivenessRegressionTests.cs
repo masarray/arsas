@@ -66,18 +66,23 @@ public sealed class IoFatP0ResponsivenessRegressionTests
     }
 
     [Fact]
-    public void CommandFeedbackFreshnessFence_WithholdsOnlyContradictoryPolling_AndNeverHidesReports()
+    public void CommandFeedbackFreshnessFence_PreventsValueFlickerAndPhantomSoe_WithoutHidingReports()
     {
         var facade = Read("Services/UiResponsiveIec61850MonitorRuntimeFacade.cs");
 
         Assert.Contains("CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2)", facade, StringComparison.Ordinal);
         Assert.Contains("_inner.PointUpdated += ForwardPointUpdate", facade, StringComparison.Ordinal);
+        Assert.Contains("_inner.EventRaised += ForwardEventRaised", facade, StringComparison.Ordinal);
         Assert.Contains("IsConfirmedCommandFeedback(snapshot)", facade, StringComparison.Ordinal);
         Assert.Contains("_commandFeedbackFences[key] = new CommandFeedbackFence", facade, StringComparison.Ordinal);
         Assert.Contains("if (snapshot.IsReportTraffic)", facade, StringComparison.Ordinal);
-        Assert.Contains("_commandFeedbackFences.TryRemove(key, out _)", facade, StringComparison.Ordinal);
-        Assert.Contains("if (matchesConfirmed)", facade, StringComparison.Ordinal);
-        Assert.Contains("P0_COMMAND_FRESHNESS: withheld stale MMS verification", facade, StringComparison.Ordinal);
+        Assert.Contains("if (!matchesConfirmed)", facade, StringComparison.Ordinal);
+        Assert.Contains("ForwardEventRaised(Iec61850EventEntry entry)", facade, StringComparison.Ordinal);
+        Assert.Contains("IsReportEvent(entry)", facade, StringComparison.Ordinal);
+        Assert.Contains("suppressed duplicate report SOE", facade, StringComparison.Ordinal);
+        Assert.Contains("withheld phantom MMS verification SOE", facade, StringComparison.Ordinal);
+        Assert.Contains("P0_COMMAND_FRESHNESS: ", facade, StringComparison.Ordinal);
+        Assert.Contains("ClearCommandFeedbackFences(deviceId)", facade, StringComparison.Ordinal);
         Assert.Contains("Report traffic remains authoritative", facade, StringComparison.Ordinal);
         Assert.DoesNotContain("using System.Windows", facade, StringComparison.Ordinal);
     }
