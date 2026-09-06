@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester.Services.IoTesting;
@@ -13,9 +14,6 @@ public interface IIoTestEvidenceJournal : IDisposable
     string LastHash { get; }
     IoTestJournalEnvelope Append(IoTestJournalEntry entry);
 
-    // Existing test doubles and alternate journals keep working through this default
-    // implementation. The production journal overrides it so a baseline batch performs
-    // one buffered writer flush instead of one flush per FAT point.
     IReadOnlyList<IoTestJournalEnvelope> AppendBatch(IEnumerable<IoTestJournalEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -23,6 +21,15 @@ public interface IIoTestEvidenceJournal : IDisposable
     }
 }
 
+/// <summary>
+/// Append-only, hash-chained FAT evidence journal.
+///
+/// Critical relay-bench rule: report callbacks and WPF lifecycle actions must never perform
+/// file I/O. Append/AppendBatch build the immutable hash-chain envelope in memory and enqueue
+/// it to a single-reader Channel. One background writer owns StreamWriter/FileStream and
+/// preserves exactly the enqueue order. Stop/close completes the queue, drains it, performs
+/// one durable disk barrier and verifies the complete hash chain before durable success.
+/// </summary>
 public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -31,25 +38,21 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         WriteIndented = false
     };
 
-    // A lifecycle caller may defer the physical disk barrier while keeping all controller
-    // state mutations on the WPF Dispatcher. Dispose() detaches the journal immediately;
-    // durable flush + read-back verification then run on a worker and must be awaited by
-    // AwaitDeferredSealsAsync before the caller reports the operation as completed.
     private static readonly AsyncLocal<int> DeferredSealScopeDepth = new();
     private static readonly ConcurrentDictionary<string, DeferredSealState> DeferredSeals =
         new(StringComparer.OrdinalIgnoreCase);
 
-    // Resume/rebaseline can append one audit record per FAT row. Those records are already
-    // serialized under this journal's lock and retain their strict hash-chain order; making
-    // StreamWriter.Flush() visible after every row only blocks the WPF Dispatcher. This
-    // execution-context scope coalesces those visible flushes into one flush at scope exit.
-    // Normal report/recapture traffic remains immediately visible because it does not enter
-    // this scope.
-    private static readonly AsyncLocal<CoalescedFlushState?> CoalescedFlushScope = new();
+    // Kept as a compatibility lifecycle scope. With the queued writer Append is already
+    // non-blocking and does not flush on the caller, so Resume no longer needs special disk
+    // behavior. The depth is retained to keep nested existing call sites harmless.
+    private static readonly AsyncLocal<int> CoalescedFlushScopeDepth = new();
 
     private readonly object _sync = new();
     private readonly FileStream _stream;
     private readonly StreamWriter _writer;
+    private readonly Channel<IoTestJournalEnvelope> _pendingWrites;
+    private readonly Task _writerPump;
+    private Exception? _writerFailure;
     private bool _disposed;
     private long _recordCount;
     private string _lastHash = new('0', 64);
@@ -66,6 +69,14 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             4096,
             FileOptions.SequentialScan);
         _writer = new StreamWriter(_stream, new UTF8Encoding(false)) { AutoFlush = false };
+        _pendingWrites = Channel.CreateUnbounded<IoTestJournalEnvelope>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                AllowSynchronousContinuations = false
+            });
+        _writerPump = Task.Run(ProcessPendingWritesAsync);
     }
 
     public string FilePath { get; }
@@ -88,40 +99,18 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         return new IoTestEvidenceJournal(Path.Combine(rootDirectory, projectDirectory, fileName));
     }
 
-    /// <summary>
-    /// Defers only the physical durable seal/read-back. The journal is detached from the
-    /// controller synchronously; the caller must await <see cref="AwaitDeferredSealsAsync"/>
-    /// before treating Stop/close as durably complete.
-    /// </summary>
     public static IDisposable BeginDeferredSealScope()
     {
         DeferredSealScopeDepth.Value++;
         return new DeferredSealScopeLease();
     }
 
-    /// <summary>
-    /// Coalesces production journal StreamWriter.Flush calls in one synchronous lifecycle
-    /// transaction, such as FAT Resume rebaseline. Hashing, ordering and in-memory journal
-    /// counters are still updated for every entry. The outermost scope flushes every touched
-    /// journal once before returning.
-    /// </summary>
     public static IDisposable BeginCoalescedVisibleFlushScope()
     {
-        var state = CoalescedFlushScope.Value;
-        if (state == null)
-        {
-            state = new CoalescedFlushState();
-            CoalescedFlushScope.Value = state;
-        }
-
-        state.Depth++;
-        return new CoalescedFlushScopeLease(state);
+        CoalescedFlushScopeDepth.Value++;
+        return new CoalescedFlushScopeLease();
     }
 
-    /// <summary>
-    /// Waits for every deferred journal to finish its physical flush and complete hash-chain
-    /// read-back. A FAT lifecycle operation must await this before reporting durable success.
-    /// </summary>
     public static async Task AwaitDeferredSealsAsync()
     {
         var snapshot = DeferredSeals.ToArray();
@@ -131,7 +120,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         IoTestJournalVerificationResult[] results;
         try
         {
-            results = await Task.WhenAll(snapshot.Select(item => item.Value.Completion));
+            results = await Task.WhenAll(snapshot.Select(item => item.Value.Completion)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -158,8 +147,9 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            var envelope = AppendCore(entry);
-            FlushVisibleOrDefer();
+            ThrowIfWriterFailed();
+            var envelope = CreateEnvelope(entry);
+            QueueEnvelope(envelope);
             return envelope;
         }
     }
@@ -170,20 +160,22 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            ThrowIfWriterFailed();
             var envelopes = new List<IoTestJournalEnvelope>();
             foreach (var entry in entries)
             {
                 ArgumentNullException.ThrowIfNull(entry);
-                envelopes.Add(AppendCore(entry));
+                var envelope = CreateEnvelope(entry);
+                QueueEnvelope(envelope);
+                envelopes.Add(envelope);
             }
-
-            if (envelopes.Count > 0)
-                FlushVisibleOrDefer();
             return envelopes;
         }
     }
 
-    private IoTestJournalEnvelope AppendCore(IoTestJournalEntry entry)
+    // Hashing and pointer mutation stay synchronous and deterministic; there is deliberately
+    // no StreamWriter/FileStream access anywhere on the Append caller path.
+    private IoTestJournalEnvelope CreateEnvelope(IoTestJournalEntry entry)
     {
         var sequence = checked(_recordCount + 1);
         var previousHash = _lastHash;
@@ -192,37 +184,49 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             JsonOptions);
         var hash = Convert.ToHexString(SHA256.HashData(hashInput)).ToLowerInvariant();
         var envelope = new IoTestJournalEnvelope(sequence, previousHash, hash, entry);
-        _writer.WriteLine(JsonSerializer.Serialize(envelope, JsonOptions));
         _recordCount = sequence;
         _lastHash = hash;
         return envelope;
     }
 
-    private void FlushVisibleOrDefer()
+    private void QueueEnvelope(IoTestJournalEnvelope envelope)
     {
-        var state = CoalescedFlushScope.Value;
-        if (state is { Depth: > 0 })
-        {
-            state.Journals.Add(this);
-            return;
-        }
-
-        FlushVisible();
+        if (!_pendingWrites.Writer.TryWrite(envelope))
+            throw new InvalidOperationException("FAT evidence writer is no longer accepting records.");
     }
 
-    // FAT interaction paths only need the append-only journal to be immediately visible to
-    // readers. A physical disk barrier on every report/recapture blocks the WPF dispatcher.
-    // The ordered hash chain remains authoritative and is sealed durably once at session
-    // disposal, before the controller verifies the closed evidence journal.
-    private void FlushVisible() => _writer.Flush();
-
-    private void FlushVisibleFromScope()
+    private async Task ProcessPendingWritesAsync()
     {
-        lock (_sync)
+        try
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            FlushVisible();
+            while (await _pendingWrites.Reader.WaitToReadAsync().ConfigureAwait(false))
+            {
+                var wroteAny = false;
+                while (_pendingWrites.Reader.TryRead(out var envelope))
+                {
+                    _writer.WriteLine(JsonSerializer.Serialize(envelope, JsonOptions));
+                    wroteAny = true;
+                }
+
+                // Flush only on the background writer. This makes newly written evidence
+                // visible to readers without ever stalling the WPF/report callback thread.
+                if (wroteAny)
+                    _writer.Flush();
+            }
         }
+        catch (Exception ex)
+        {
+            Volatile.Write(ref _writerFailure, ex);
+            _pendingWrites.Writer.TryComplete(ex);
+            throw;
+        }
+    }
+
+    private void ThrowIfWriterFailed()
+    {
+        var failure = Volatile.Read(ref _writerFailure);
+        if (failure != null)
+            throw new InvalidOperationException($"FAT evidence background writer failed: {failure.Message}", failure);
     }
 
     private void FlushDurable()
@@ -247,9 +251,8 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
                     deferred.Completion.Exception?.GetBaseException().Message ?? "Deferred evidence journal sealing failed.");
             }
 
-            // Stop() is still executing on the UI thread at this point. All journal bytes
-            // have already been writer-flushed on each append and the hash/count snapshot is
-            // final. The lifecycle caller waits for Completion before durable success.
+            // Structural snapshot only. Queue drain + durable flush + full read-back are
+            // still running and the lifecycle caller must await AwaitDeferredSealsAsync().
             return deferred.Provisional;
         }
 
@@ -300,70 +303,79 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
 
     public void Dispose()
     {
+        bool deferred;
+        IoTestJournalVerificationResult provisional;
+        string key;
+
         lock (_sync)
         {
             if (_disposed)
                 return;
             _disposed = true;
+            _pendingWrites.Writer.TryComplete();
 
-            if (DeferredSealScopeDepth.Value > 0)
-            {
-                var provisional = _recordCount == 0
-                    ? new IoTestJournalVerificationResult(false, 0, _lastHash, "Evidence journal contains no records.")
-                    : new IoTestJournalVerificationResult(true, checked((int)_recordCount), _lastHash, string.Empty);
-                var key = SealKey(FilePath);
-                var completion = Task.Run(SealDurablyAndVerify);
-                DeferredSeals[key] = new DeferredSealState(provisional, completion);
-                return;
-            }
-
-            try
-            {
-                FlushDurable();
-            }
-            finally
-            {
-                try
-                {
-                    _writer.Dispose();
-                }
-                finally
-                {
-                    _stream.Dispose();
-                }
-            }
+            provisional = _recordCount == 0
+                ? new IoTestJournalVerificationResult(false, 0, _lastHash, "Evidence journal contains no records.")
+                : new IoTestJournalVerificationResult(true, checked((int)_recordCount), _lastHash, string.Empty);
+            key = SealKey(FilePath);
+            deferred = DeferredSealScopeDepth.Value > 0;
         }
+
+        if (deferred)
+        {
+            // Queue drain and all physical disk work are guaranteed to happen on a worker.
+            var completion = Task.Run(SealDurablyAndVerify);
+            DeferredSeals[key] = new DeferredSealState(provisional, completion);
+            return;
+        }
+
+        SealDurablyAndVerify();
     }
 
     private IoTestJournalVerificationResult SealDurablyAndVerify()
     {
+        Exception? failure = null;
         try
         {
-            lock (_sync)
+            _writerPump.GetAwaiter().GetResult();
+            ThrowIfWriterFailed();
+            FlushDurable();
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            try
             {
-                try
-                {
-                    FlushDurable();
-                }
-                finally
-                {
-                    try
-                    {
-                        _writer.Dispose();
-                    }
-                    finally
-                    {
-                        _stream.Dispose();
-                    }
-                }
+                _writer.Dispose();
+            }
+            catch (Exception ex) when (failure == null)
+            {
+                failure = ex;
             }
 
-            return VerifyCore(FilePath);
+            try
+            {
+                _stream.Dispose();
+            }
+            catch (Exception ex) when (failure == null)
+            {
+                failure = ex;
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException)
+
+        if (failure != null)
         {
-            return new IoTestJournalVerificationResult(false, checked((int)_recordCount), _lastHash, ex.Message);
+            return new IoTestJournalVerificationResult(
+                false,
+                checked((int)_recordCount),
+                _lastHash,
+                failure.GetBaseException().Message);
         }
+
+        return VerifyCore(FilePath);
     }
 
     private static string SealKey(string? filePath)
@@ -397,37 +409,16 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
         IoTestJournalVerificationResult Provisional,
         Task<IoTestJournalVerificationResult> Completion);
 
-    private sealed class CoalescedFlushState
-    {
-        public int Depth { get; set; }
-        public HashSet<IoTestEvidenceJournal> Journals { get; } = new();
-    }
-
     private sealed class CoalescedFlushScopeLease : IDisposable
     {
-        private CoalescedFlushState? _state;
-
-        public CoalescedFlushScopeLease(CoalescedFlushState state)
-            => _state = state;
+        private bool _disposed;
 
         public void Dispose()
         {
-            var state = _state;
-            if (state == null)
+            if (_disposed)
                 return;
-            _state = null;
-
-            state.Depth = Math.Max(0, state.Depth - 1);
-            if (state.Depth != 0)
-                return;
-
-            if (ReferenceEquals(CoalescedFlushScope.Value, state))
-                CoalescedFlushScope.Value = null;
-
-            var journals = state.Journals.ToArray();
-            state.Journals.Clear();
-            foreach (var journal in journals)
-                journal.FlushVisibleFromScope();
+            _disposed = true;
+            CoalescedFlushScopeDepth.Value = Math.Max(0, CoalescedFlushScopeDepth.Value - 1);
         }
     }
 
