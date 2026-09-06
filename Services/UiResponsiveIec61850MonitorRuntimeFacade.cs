@@ -23,6 +23,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 {
     private static readonly TimeSpan DisposeBudget = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CommandFeedbackFreshnessWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PendingEventOriginWindow = TimeSpan.FromSeconds(1);
 
     private sealed class DeviceOperationSlot
     {
@@ -37,10 +38,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         string ExpectedValue,
         DateTime ExpiresUtc);
 
+    private sealed record PendingEventOrigin(
+        string NewValue,
+        bool IsReportTraffic,
+        bool IsConfirmedCommandFeedback,
+        DateTime ExpiresUtc);
+
     private readonly Services.Iec61850MonitorRuntime _inner = new();
     private readonly ConcurrentDictionary<string, DeviceOperationSlot> _deviceSlots =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CommandFeedbackFence> _commandFeedbackFences =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, PendingEventOrigin> _pendingEventOrigins =
         new(StringComparer.OrdinalIgnoreCase);
     private int _disposeStarted;
 
@@ -109,13 +118,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     public Task StopMonitoringAsync(string deviceId)
     {
-        ClearCommandFeedbackFences(deviceId);
+        ClearCommandFeedbackState(deviceId);
         return RunPreemptiveStopAsync(deviceId, () => _inner.StopMonitoringAsync(deviceId));
     }
 
     public Task StopDeviceAsync(string deviceId)
     {
-        ClearCommandFeedbackFences(deviceId);
+        ClearCommandFeedbackState(deviceId);
         return RunPreemptiveStopAsync(deviceId, () => _inner.StopDeviceAsync(deviceId));
     }
 
@@ -139,8 +148,22 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         var key = CommandFeedbackFenceKey(snapshot.Point.DeviceId, snapshot.Point.IecReference);
         var nowUtc = DateTime.UtcNow;
+        var confirmedCommandFeedback = IsConfirmedCommandFeedback(snapshot);
 
-        if (IsConfirmedCommandFeedback(snapshot))
+        // ApplyValueUpdate raises PointUpdated synchronously before EventRaised. Preserve
+        // the exact transport provenance of a discrete edge here so the SOE filter never
+        // tries to infer report-vs-poll origin from a reused reason string. In particular,
+        // MMS verification can legitimately inherit the last report/command reason text.
+        if (snapshot.IsValueEdge)
+        {
+            _pendingEventOrigins[key] = new PendingEventOrigin(
+                snapshot.Value?.Trim() ?? string.Empty,
+                snapshot.IsReportTraffic,
+                confirmedCommandFeedback,
+                nowUtc.Add(PendingEventOriginWindow));
+        }
+
+        if (confirmedCommandFeedback)
         {
             _commandFeedbackFences[key] = new CommandFeedbackFence(
                 snapshot.Value?.Trim() ?? string.Empty,
@@ -193,6 +216,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private void ForwardEventRaised(Iec61850EventEntry entry)
     {
         var key = CommandFeedbackFenceKey(entry.DeviceId, entry.IecReference);
+        var origin = TakePendingEventOrigin(key, entry.NewValue);
         if (!_commandFeedbackFences.TryGetValue(key, out var fence))
         {
             EventRaised?.Invoke(entry);
@@ -207,16 +231,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             return;
         }
 
-        // The initial command-confirmed transition is legitimate process evidence and is
-        // the event that opened the fence through ForwardPointUpdate just before this call.
-        if (IsConfirmedCommandFeedback(entry.Reason))
+        var matchesConfirmed = CommandFeedbackValuesEquivalent(fence.ExpectedValue, entry.NewValue);
+
+        // The initial command-confirmed transition is legitimate process evidence. Require
+        // both exact PointUpdated provenance and the commanded value; reason text alone is
+        // unsafe because a following MMS verification can inherit that same reason.
+        if (origin is { IsConfirmedCommandFeedback: true } && matchesConfirmed)
         {
             EventRaised?.Invoke(entry);
             return;
         }
 
-        var matchesConfirmed = CommandFeedbackValuesEquivalent(fence.ExpectedValue, entry.NewValue);
-        if (IsReportEvent(entry))
+        if (origin is { IsReportTraffic: true })
         {
             if (!matchesConfirmed)
             {
@@ -246,6 +272,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             $"withheld phantom MMS verification SOE {entry.IecReference}: {entry.OldValue} → {entry.NewValue} inside the command-confirmed {fence.ExpectedValue} freshness window.");
     }
 
+    private PendingEventOrigin? TakePendingEventOrigin(string key, string? eventValue)
+    {
+        if (!_pendingEventOrigins.TryRemove(key, out var origin))
+            return null;
+        if (origin.ExpiresUtc < DateTime.UtcNow)
+            return null;
+        if (!CommandFeedbackValuesEquivalent(origin.NewValue, eventValue))
+            return null;
+        return origin;
+    }
+
     private void EmitFreshnessDiagnostic(string source, string message)
         => Diagnostic?.Invoke(new DiagnosticEntry
         {
@@ -262,19 +299,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         => (reason ?? string.Empty).Contains(
             "confirmed command feedback",
             StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsReportEvent(Iec61850EventEntry entry)
-    {
-        var reason = (entry.Reason ?? string.Empty).Trim();
-        var source = (entry.SourceMode ?? string.Empty).Trim();
-        return reason.Contains("dchg", StringComparison.OrdinalIgnoreCase) ||
-               reason.Contains("data-change", StringComparison.OrdinalIgnoreCase) ||
-               reason.Contains("qchg", StringComparison.OrdinalIgnoreCase) ||
-               reason.Contains("quality-change", StringComparison.OrdinalIgnoreCase) ||
-               reason.Contains("dupd", StringComparison.OrdinalIgnoreCase) ||
-               reason.Contains("data-update", StringComparison.OrdinalIgnoreCase) ||
-               source.Contains("report", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static string CommandFeedbackFenceKey(string? deviceId, string? reference)
         => $"{NormalizeDeviceKey(deviceId)}|{NormalizeReference(reference)}";
@@ -314,7 +338,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return open >= 0 && close > open ? value[(open + 1)..close].Trim() : string.Empty;
     }
 
-    private void ClearCommandFeedbackFences(string? deviceId)
+    private void ClearCommandFeedbackState(string? deviceId)
     {
         var prefix = NormalizeDeviceKey(deviceId) + "|";
         foreach (var key in _commandFeedbackFences.Keys
@@ -322,6 +346,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                      .ToArray())
         {
             _commandFeedbackFences.TryRemove(key, out _);
+        }
+        foreach (var key in _pendingEventOrigins.Keys
+                     .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+        {
+            _pendingEventOrigins.TryRemove(key, out _);
         }
     }
 
@@ -541,6 +571,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Do not Dispose the per-device semaphores here. An uncooperative native operation
         // can still unwind after the bounded shutdown budget and its finally block must be
         // able to Release() safely. They become process-lifetime garbage with this facade.
+        _pendingEventOrigins.Clear();
         _commandFeedbackFences.Clear();
         _deviceSlots.Clear();
     }
