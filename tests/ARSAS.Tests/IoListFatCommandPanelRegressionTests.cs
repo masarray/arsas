@@ -21,7 +21,14 @@ public sealed class IoListFatCommandPanelRegressionTests
         Assert.DoesNotContain("ExecuteControlAsync", panel, StringComparison.Ordinal);
         Assert.DoesNotContain("_runtime.", panel, StringComparison.Ordinal);
         Assert.Contains("ExecuteIoFatControlClaimAsync", panel, StringComparison.Ordinal);
-        Assert.Contains("return ExecuteClaimedControlAsync(signal, claim)", bridge, StringComparison.Ordinal);
+        Assert.Contains("await ExecuteClaimedControlAsync(signal, claim)", bridge, StringComparison.Ordinal);
+
+        // P0 latency instrumentation may wrap the shared Engineering execution in an
+        // async method, but it must remain observational only: the same claimed command
+        // backend is awaited and failures are rethrown rather than converted to success.
+        Assert.Contains("[IO FAT P0] Command completed in", bridge, StringComparison.Ordinal);
+        Assert.Contains("[IO FAT P0] Command failed after", bridge, StringComparison.Ordinal);
+        Assert.Contains("throw;", bridge, StringComparison.Ordinal);
     }
 
     [Fact]
