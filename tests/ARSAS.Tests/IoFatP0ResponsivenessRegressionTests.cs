@@ -20,9 +20,10 @@ public sealed class IoFatP0ResponsivenessRegressionTests
         Assert.Contains("await Task.Run(Storage.SaveNow)", actions, StringComparison.Ordinal);
         Assert.DoesNotContain("IsEnabled = false", actions, StringComparison.Ordinal);
 
-        Assert.Contains("FlushVisibleOrDefer", journal, StringComparison.Ordinal);
-        Assert.Contains("state.Journals.Add(this)", journal, StringComparison.Ordinal);
-        Assert.Contains("journal.FlushVisibleFromScope()", journal, StringComparison.Ordinal);
+        Assert.Contains("Channel<IoTestJournalEnvelope>", journal, StringComparison.Ordinal);
+        Assert.Contains("Task.Run(ProcessPendingWritesAsync)", journal, StringComparison.Ordinal);
+        Assert.Contains("QueueEnvelope(envelope)", journal, StringComparison.Ordinal);
+        Assert.Contains("await _pendingWrites.Reader.WaitToReadAsync()", journal, StringComparison.Ordinal);
         Assert.Contains("Task.Run(SealDurablyAndVerify)", journal, StringComparison.Ordinal);
     }
 
