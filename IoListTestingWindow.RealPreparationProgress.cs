@@ -12,7 +12,9 @@ public partial class IoListTestingWindow
 {
     private static readonly bool RealPreparationProgressRegistered = RegisterRealPreparationProgress();
     private readonly Dictionary<IoTestIedPlan, PreparationDisplayState> _preparationDisplayStates = new();
+    private readonly List<ProgressBar> _preparationProgressBars = new();
     private DispatcherTimer? _preparationProgressTimer;
+    private int _preparationProgressBarCacheIedCount = -1;
 
     private static bool RegisterRealPreparationProgress()
     {
@@ -37,21 +39,28 @@ public partial class IoListTestingWindow
         foreach (var ied in Project.Ieds)
             _preparationDisplayStates[ied] = new PreparationDisplayState();
 
-        _preparationProgressTimer = new DispatcherTimer(DispatcherPriority.Render)
+        // Preparation progress is presentation-only. Keep it below the report/control
+        // hot path and never walk the complete WPF visual tree at 20 FPS.
+        _preparationProgressTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(50)
+            Interval = TimeSpan.FromMilliseconds(100)
         };
         _preparationProgressTimer.Tick += PreparationProgressTimer_Tick;
         _preparationProgressTimer.Start();
         Closed += RealPreparationProgress_Closed;
 
         Dispatcher.BeginInvoke(
-            new Action(ApplyDeterminateCardProgressBars),
+            new Action(() =>
+            {
+                RefreshPreparationProgressBarCache(force: true);
+                ApplyDeterminateCardProgressBars();
+            }),
             DispatcherPriority.Loaded);
     }
 
     private void PreparationProgressTimer_Tick(object? sender, EventArgs e)
     {
+        var hasActivePreparation = false;
         foreach (var ied in Project.Ieds)
         {
             if (!_preparationDisplayStates.TryGetValue(ied, out var state))
@@ -68,6 +77,7 @@ public partial class IoListTestingWindow
             if (!active)
                 continue;
 
+            hasActivePreparation = true;
             var snapshot = Owner is MainWindow engineeringWindow
                 ? engineeringWindow.GetIoFatPreparationProgressSnapshot(ied)
                 : BuildFallbackPreparationSnapshot(ied);
@@ -77,13 +87,38 @@ public partial class IoListTestingWindow
             state.AdvanceDisplay();
         }
 
+        // The old implementation traversed every visual descendant on every 50 ms tick,
+        // even while no IED was preparing. On relay benches this competed with report-backed
+        // LIVE VALUE/Start FAT work on the Dispatcher and could make Start/close look frozen.
+        // Idle ticks are now effectively free; active ticks update only cached progress bars.
+        if (!hasActivePreparation)
+            return;
+
+        RefreshPreparationProgressBarCache(force: false);
         ApplyDeterminateCardProgressBars();
+    }
+
+    private void RefreshPreparationProgressBarCache(bool force)
+    {
+        var iedCount = Project.Ieds.Count;
+        if (!force &&
+            _preparationProgressBarCacheIedCount == iedCount &&
+            _preparationProgressBars.Count > 0 &&
+            _preparationProgressBars.All(progress => progress.IsLoaded))
+        {
+            return;
+        }
+
+        _preparationProgressBars.Clear();
+        _preparationProgressBars.AddRange(
+            VisualDescendants<ProgressBar>(this)
+                .Where(progress => string.Equals(progress.Name, "CardProgress", StringComparison.Ordinal)));
+        _preparationProgressBarCacheIedCount = iedCount;
     }
 
     private void ApplyDeterminateCardProgressBars()
     {
-        foreach (var progressBar in VisualDescendants<ProgressBar>(this)
-                     .Where(progress => string.Equals(progress.Name, "CardProgress", StringComparison.Ordinal)))
+        foreach (var progressBar in _preparationProgressBars)
         {
             // The XAML fallback is indeterminate so old project binaries remain safe.
             // Once this behavior is installed every instantiated IED-card bar becomes
@@ -137,6 +172,7 @@ public partial class IoListTestingWindow
         _preparationProgressTimer.Stop();
         _preparationProgressTimer.Tick -= PreparationProgressTimer_Tick;
         _preparationProgressTimer = null;
+        _preparationProgressBars.Clear();
         _preparationDisplayStates.Clear();
     }
 
@@ -166,13 +202,14 @@ public partial class IoListTestingWindow
                 return;
             }
 
-            // Same visual principle as Engineering discovery cards: 20 FPS,
-            // ease-out movement, bounded minimum speed, and no artificial loop.
+            // Same visual principle as Engineering discovery cards: ease-out movement,
+            // bounded minimum speed, and no artificial loop. This runs at 10 FPS so it
+            // cannot starve relay-backed acquisition/control work on the UI Dispatcher.
             var completing = Target >= 99.9d;
             var movement = Math.Clamp(
-                remaining * (completing ? 0.16d : 0.115d),
-                0.10d,
-                completing ? 2.4d : 1.15d);
+                remaining * (completing ? 0.24d : 0.18d),
+                0.18d,
+                completing ? 3.4d : 1.8d);
             Display = Math.Min(Target, Display + movement);
         }
     }
