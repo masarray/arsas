@@ -18,14 +18,16 @@ public sealed record FatAutoCaptureDecision(
 /// <summary>
 /// Automatic Value 1 / Value 2 latch. The first good readable value is latched as
 /// Value 1 and the first meaningful different value as Value 2. Once both slots are
-/// populated by automatic capture, later meaningful changes keep a rolling pair:
-/// previous Value 2 becomes Value 1 and the newest process value becomes Value 2.
-/// Operator Snapshot/Recapture evidence is authoritative and suspends automatic rolling
-/// so a deliberate manual correction cannot be overwritten by subsequent live traffic.
+/// populated, later meaningful process changes keep a rolling pair: previous Value 2
+/// becomes Value 1 and the newest process value becomes Value 2.
+///
+/// Snapshot/Recapture remains immutable in the evidence journal, but it does not freeze the
+/// live report pair. The displayed/report Value 1 / Value 2 pair must always follow the two
+/// latest meaningful conditions so repeated FAT operations cannot produce stale reports.
 ///
 /// Report-backed process values are event evidence already, so they are accepted
-/// immediately. Polling fallback keeps the legacy three-sample analog settling guard so
-/// noisy cyclic reads are not mistaken for a meaningful condition change.
+/// immediately. Polling fallback keeps the three-sample analog settling guard so noisy
+/// cyclic reads are not mistaken for a meaningful condition change.
 /// </summary>
 public sealed class FatAutoCaptureCoordinator
 {
@@ -69,14 +71,6 @@ public sealed class FatAutoCaptureCoordinator
         }
 
         var rollingPair = point.HasValue1Evidence && point.HasValue2Evidence;
-        if (rollingPair && HasOperatorOwnedCurrentPair(point))
-        {
-            Clear(point);
-            return FatAutoCaptureDecision.None(
-                FatAutoCaptureStage.Complete,
-                "Operator-captured Value 1 / Value 2 evidence is authoritative; automatic rolling will not overwrite the manual pair.");
-        }
-
         if (rollingPair && IsEquivalent(point.Value2Text, observation.RawValue))
         {
             Clear(point);
@@ -162,9 +156,8 @@ public sealed class FatAutoCaptureCoordinator
                     Slot = FatValueSlot.Value1
                 };
 
-            // Advance the authoritative pair before the caller promotes the new Value 2.
-            // This is intentionally just a pointer promotion of evidence already journaled
-            // as the previous Value 2; the newly observed Value 2 is journaled by the caller.
+            // Current report pointers advance atomically in memory. The prior evidence itself
+            // remains immutable in journal history; only the current pair projection changes.
             if (shiftedValue1 != null)
                 point.Runtime.SetFatValueEvidence(shiftedValue1);
 
@@ -188,12 +181,6 @@ public sealed class FatAutoCaptureCoordinator
                     ? "Stable analog Value 2 captured immediately from the new report-backed process condition; later changes will keep the pair current."
                     : "Value 2 captured automatically from the new live condition; later changes will keep the pair current.");
     }
-
-    private static bool HasOperatorOwnedCurrentPair(IoTestPointPlan point)
-        => IsOperatorOwned(point.Runtime.Value1Evidence) || IsOperatorOwned(point.Runtime.Value2Evidence);
-
-    private static bool IsOperatorOwned(FatValueEvidence? evidence)
-        => evidence?.CaptureKind is FatEvidenceCaptureKind.OperatorSnapshot or FatEvidenceCaptureKind.OperatorRecapture;
 
     private static bool IsReportBacked(string? acquisitionSource)
     {
@@ -229,11 +216,10 @@ public sealed class FatAutoCaptureCoordinator
         if (Iec61850MonitorPoint.AreSemanticallyEquivalent(baseline ?? string.Empty, current ?? string.Empty))
             return true;
 
-        // Aggregate FAT rows such as "A=12, B=13, C=0" are one evidence value, not a
-        // scalar analog. The legacy numeric fallback parsed only the first number; therefore
-        // A=12,B=13,C=0 and A=12,B=13,C=14 were incorrectly treated as equivalent because
-        // both started with 12. Numeric settling tolerance is valid only when each side has
-        // exactly one numeric token. Any phase/component change must roll Value 2.
+        // Aggregate FAT rows such as "A=11, B=12, C=0" are one evidence value, not a
+        // scalar analog. Numeric tolerance is valid only when each side contains exactly
+        // one numeric token. Therefore changing phase C to 13 is always a new condition and
+        // advances Value 2 to the full newest aggregate "A=11, B=12, C=13".
         return TryParseScalarNumeric(baseline, out var left) &&
                TryParseScalarNumeric(current, out var right) &&
                Math.Abs(left - right) <= SettlingTolerance(right, baseline);
