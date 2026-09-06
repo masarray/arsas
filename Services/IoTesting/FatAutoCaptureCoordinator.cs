@@ -95,10 +95,10 @@ public sealed class FatAutoCaptureCoordinator
                 slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
                 slot == FatValueSlot.Value1
                     ? reportBackedAnalog
-                        ? "Report-backed analog Value 1 captured immediately; waiting for a meaningful change."
+                        ? "Stable analog Value 1 captured immediately from report-backed process data; waiting for a meaningful change."
                         : "Value 1 captured automatically; waiting for a meaningful change."
                     : reportBackedAnalog
-                        ? "Report-backed analog Value 2 captured immediately from the new live condition."
+                        ? "Stable analog Value 2 captured immediately from the new report-backed process condition."
                         : "Value 2 captured automatically from the new live condition.");
         }
 
@@ -137,8 +137,8 @@ public sealed class FatAutoCaptureCoordinator
             CreateEvidence(slot, observation),
             slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
             slot == FatValueSlot.Value1
-                ? "Stable polled analog Value 1 captured; waiting for a meaningful new condition."
-                : "Stable polled analog Value 2 captured; current evidence is complete.");
+                ? "Stable analog Value 1 captured from polled data; waiting for a meaningful new condition."
+                : "Stable analog Value 2 captured from polled data; current evidence is complete.");
     }
 
     public void Clear(IoTestPointPlan point)
