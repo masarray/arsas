@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "f1fa176158fd459c32f29379d1e474ff8004f1a5",
+  "commit": "9fa571a994c32c67e12dbc5b532bf48979b63abe",
   "sourcePullRequest": 113,
-  "purpose": "Pins the exact field-proven ARIEC61850 acquisition/control engine lineage from 11ab2304482600c19ba979f4fc9021ddb46b9af9, plus the P0 Legacy SAS export extension that preserves the existing single-RCB behavior and allows several operator-selected ReportControls/DataSets to be retained in one CID. Includes a regression test for separate Analog and Digital DataSets. Acquisition, reporting activation, DataSet planning, control and FAT live-value behavior are otherwise unchanged."
+  "purpose": "Pins the exact field-proven ARIEC61850 acquisition/control engine lineage from 11ab2304482600c19ba979f4fc9021ddb46b9af9, plus the P0 Legacy SAS export extension that preserves exact runtime RCB identities, preserves the existing single-RCB behavior, and allows several operator-selected ReportControls/DataSets to be retained in one CID. Includes a regression test for separate Analog and Digital DataSets. Acquisition, reporting activation, DataSet planning, control and FAT live-value behavior are otherwise unchanged."
 }
