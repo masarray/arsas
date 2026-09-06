@@ -1,17 +1,17 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace ArIED61850Tester;
 
 /// <summary>
 /// P0 responsiveness guard for the FAT workspace lifecycle.
 ///
-/// The legacy Closing handler flushed workspace persistence synchronously on the WPF
-/// Dispatcher. Keep confirmation and evidence-session state transitions on the Dispatcher
-/// (the session controllers publish UI-bound PropertyChanged notifications there), then move
-/// only the durable workspace save to a worker thread. Native IEC 61850 teardown is handled
-/// independently by the responsive runtime facade.
+/// Confirmation and evidence-session state transitions remain on the WPF Dispatcher, but
+/// the high-rate FAT live projection is quiesced before sealing/saving and durable workspace
+/// persistence runs on a worker thread. This prevents a closing window from competing with
+/// incoming report traffic while preserving UI-bound session state safety.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -23,9 +23,6 @@ public partial class IoListTestingWindow
 
     private static bool RegisterP0Lifecycle()
     {
-        // Avoid another Window lifecycle override in this already heavily split partial class.
-        // Loaded is a routed event, so one class handler can install the P0 Closing handler on
-        // every FAT workspace instance after XAML has wired its legacy Window_Closing handler.
         EventManager.RegisterClassHandler(
             typeof(IoListTestingWindow),
             FrameworkElement.LoadedEvent,
@@ -90,7 +87,13 @@ public partial class IoListTestingWindow
         }
 
         _p0CloseInProgress = true;
+        if (Owner is MainWindow engineeringWindow)
+            engineeringWindow.SuspendIoFatRuntimeProjection(this);
+
         IsEnabled = false;
+        // Let the disabled/closing visual state paint before journal sealing. The actual
+        // session mutation remains on Dispatcher; only durable workspace I/O is offloaded.
+        await Dispatcher.Yield(DispatcherPriority.Render);
 
         try
         {
@@ -142,6 +145,8 @@ public partial class IoListTestingWindow
             {
                 _p0CloseInProgress = false;
                 IsEnabled = true;
+                if (Owner is MainWindow resumeOwner)
+                    resumeOwner.ResumeIoFatRuntimeProjection(this);
             }
         }
     }

@@ -130,13 +130,27 @@ public partial class MainWindow
             // appended endpoints join Engineering and the loaded FAT explorer.
             SynchronizeImportedSclFatWithEngineering(window.Project, addedIeds);
             RegisterSharedSclSourcePaths(window.Project, addedIeds, import.SourceInputs);
-            if (selectionMode == SclSignalSelectionMode.Manual && !selectionAlreadyApplied)
+            if (selectionMode == SclSignalSelectionMode.Manual)
             {
-                await ApplyManualSelectionToFatProjectAsync(
-                    window.Project,
-                    addedIeds,
-                    window,
-                    resetSelection: true);
+                if (!selectionAlreadyApplied)
+                {
+                    await ApplyManualSelectionToFatProjectAsync(
+                        window.Project,
+                        addedIeds,
+                        window,
+                        resetSelection: true);
+                }
+                else
+                {
+                    foreach (var ied in addedIeds)
+                    {
+                        var device = ResolveIoTestDevice(ied.LiveDeviceId)
+                                     ?? ResolveIoTestDevice(ied.IpAddress)
+                                     ?? ResolveIoTestDevice(ied.IedName);
+                        if (device is not null)
+                            MarkSharedSelectionAuthority(device);
+                    }
+                }
             }
             else
             {
@@ -146,7 +160,7 @@ public partial class MainWindow
                                  ?? ResolveIoTestDevice(ied.IpAddress)
                                  ?? ResolveIoTestDevice(ied.IedName);
                     if (device is not null)
-                        MarkSharedSelectionAuthority(device);
+                        ApplyStaticDataSetSelection(device);
                 }
             }
             window.RegisterAddedIeds(addedIeds);

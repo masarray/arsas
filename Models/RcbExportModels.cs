@@ -57,7 +57,21 @@ public sealed class RcbExportRow : ObservableObject
     }
 
     public MmsRcbAvailabilityConfidence Confidence { get => _confidence; set => Set(ref _confidence, value); }
-    public string StatusText { get => _statusText; set => Set(ref _statusText, string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Trim()); }
+    public string StatusText
+    {
+        get => _statusText;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Trim();
+            if (normalized.Equals("Not checked", StringComparison.OrdinalIgnoreCase) &&
+                MemberCount == 0 &&
+                (string.IsNullOrWhiteSpace(DataSetName) || DataSetName == "—"))
+            {
+                normalized = "No DataSet";
+            }
+            Set(ref _statusText, normalized);
+        }
+    }
     public string Reason { get => _reason; set => Set(ref _reason, value?.Trim() ?? string.Empty); }
     public string Owner { get => _owner; set => Set(ref _owner, value?.Trim() ?? string.Empty); }
 
@@ -163,36 +177,94 @@ public sealed class RcbExportFilterViewModel : ObservableObject
         {
             if (ReferenceEquals(_selectedRow, value)) return;
             _selectedRow = value;
-            Raise(); Raise(nameof(SelectionSummary)); Raise(nameof(RemovalSummary)); Raise(nameof(CanExport));
+            Raise();
+            RaiseSelectionProperties();
         }
     }
 
+    public IReadOnlyList<RcbExportRow> SelectedRows => Rows.Where(row => row.IsSelected).ToArray();
     public string AvailabilityCheckedText { get => _availabilityCheckedText; set => Set(ref _availabilityCheckedText, value ?? string.Empty); }
-    public bool CanExport => SelectedRow != null;
-    public string SelectionSummary => SelectedRow == null
-        ? "No RCB selected"
-        : $"{SelectedRow.Name} • {SelectedRow.ScopeText} • {SelectedRow.Type} • {SelectedRow.DataSetName} • {SelectedRow.MemberCount:N0} members";
-    public string RemovalSummary => SelectedRow == null
-        ? $"0 retained • {Rows.Count} unchanged"
-        : $"1 retained • {Math.Max(0, Rows.Count - 1)} removed";
+    public bool CanExport => Rows.Any(row => row.IsSelected);
+    public string SelectionSummary
+    {
+        get
+        {
+            var selected = SelectedRows;
+            if (selected.Count == 0) return "No RCB selected";
+            var totalMembers = selected.Sum(row => row.MemberCount);
+            return selected.Count == 1
+                ? $"{selected[0].Name} • {selected[0].ScopeText} • {selected[0].Type} • {selected[0].DataSetName} • {selected[0].MemberCount:N0} members"
+                : $"{selected.Count} RCB selected • {selected.Select(row => row.DataSetName).Where(name => name != "—").Distinct(StringComparer.OrdinalIgnoreCase).Count()} DataSet • {totalMembers:N0} FCDA";
+        }
+    }
+    public string RemovalSummary
+    {
+        get
+        {
+            var selectedCount = SelectedRows.Count;
+            return $"{selectedCount} retained • {Math.Max(0, Rows.Count - selectedCount)} removed";
+        }
+    }
 
+    // Historical name retained for XAML/code-behind compatibility. P0 semantics are now
+    // additive: a checkbox check never clears another checked RCB. Automatic preferred-row
+    // selection only runs when the operator has no selection yet.
     public void SelectOnly(RcbExportRow? row)
     {
-        foreach (var candidate in Rows) candidate.IsSelected = ReferenceEquals(candidate, row);
-        SelectedRow = row;
+        if (row == null)
+        {
+            SelectedRow = null;
+            RaiseSelectionProperties();
+            return;
+        }
+
+        var anySelected = Rows.Any(candidate => candidate.IsSelected);
+        if (row.IsSelected || !anySelected)
+        {
+            row.IsSelected = true;
+            SelectedRow = row;
+        }
+        RaiseSelectionProperties();
     }
 
     public void ReplaceRows(IReadOnlyList<RcbExportRow> rows)
     {
-        var previous = SelectedRow?.SelectionIdentity;
+        var previousSelections = SelectedRows
+            .Select(row => row.SelectionIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var previousFocus = SelectedRow?.SelectionIdentity;
         Rows.Clear();
-        foreach (var row in SortRows(rows)) Rows.Add(row);
-        var restored = Rows.FirstOrDefault(row => row.SelectionIdentity.Equals(previous, StringComparison.OrdinalIgnoreCase));
-        SelectOnly(restored);
-        Raise(nameof(SelectionSummary)); Raise(nameof(RemovalSummary)); Raise(nameof(CanExport));
+        foreach (var row in SortRows(rows))
+        {
+            row.IsSelected = previousSelections.Contains(row.SelectionIdentity);
+            Rows.Add(row);
+        }
+        _selectedRow = Rows.FirstOrDefault(row =>
+            !string.IsNullOrWhiteSpace(previousFocus) &&
+            row.SelectionIdentity.Equals(previousFocus, StringComparison.OrdinalIgnoreCase))
+            ?? Rows.LastOrDefault(row => row.IsSelected);
+        Raise(nameof(SelectedRow));
+        RaiseSelectionProperties();
     }
 
-    public void ClearSelection() => SelectOnly(null);
+    public void ClearSelection()
+    {
+        foreach (var row in Rows) row.IsSelected = false;
+        _selectedRow = null;
+        Raise(nameof(SelectedRow));
+        RaiseSelectionProperties();
+    }
+
+    public void NotifySelectionChanged()
+        => RaiseSelectionProperties();
+
+    private void RaiseSelectionProperties()
+    {
+        Raise(nameof(SelectedRows));
+        Raise(nameof(SelectionSummary));
+        Raise(nameof(RemovalSummary));
+        Raise(nameof(CanExport));
+    }
 
     private static IEnumerable<RcbExportRow> SortRows(IEnumerable<RcbExportRow> rows)
         => rows.OrderByDescending(row => row.MemberCount > 0)

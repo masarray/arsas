@@ -27,6 +27,12 @@ public partial class MainWindow
     private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Prompted Static DataSet selection is consumed by the same number of IEDs that were
+    // presented in that decision. This closes the golden #1888 hole where the FAT import
+    // path called MarkSharedSelectionAuthority and accidentally downgraded an explicit
+    // Static DataSet choice back to Hybrid before the window was shown.
+    private int _pendingSharedStaticSelectionAssignments;
+
     private bool IsSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
         => _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId) ||
            Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
@@ -38,11 +44,18 @@ public partial class MainWindow
             Owner = owner
         };
         if (dialog.ShowDialog() != true)
+        {
+            _pendingSharedStaticSelectionAssignments = 0;
             return null;
+        }
 
-        return dialog.UseStaticDataSet
+        var mode = dialog.UseStaticDataSet
             ? SclSignalSelectionMode.StaticDataSet
             : SclSignalSelectionMode.Manual;
+        _pendingSharedStaticSelectionAssignments = mode == SclSignalSelectionMode.StaticDataSet
+            ? Math.Max(1, iedCount)
+            : 0;
+        return mode;
     }
 
     private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
@@ -72,6 +85,8 @@ public partial class MainWindow
         _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
         device.RefreshComputed();
+        if (_pendingSharedStaticSelectionAssignments > 0)
+            _pendingSharedStaticSelectionAssignments--;
 
         AddLog(
             "INFO",
@@ -101,6 +116,15 @@ public partial class MainWindow
 
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
+        // The initial FAT import historically reached this helper for both branches. If the
+        // immediately preceding operator decision was Static DataSet, preserve that explicit
+        // report-only authority instead of silently demoting it to Hybrid.
+        if (_pendingSharedStaticSelectionAssignments > 0)
+        {
+            ApplyStaticDataSetSelection(device);
+            return;
+        }
+
         // Manual selection restores the normal Smart/Hybrid acquisition contract.
         _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
         Iec61850MonitoringModeRegistry.UseHybrid(device);

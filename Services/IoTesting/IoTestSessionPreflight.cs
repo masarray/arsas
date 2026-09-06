@@ -9,20 +9,24 @@ public static class IoTestSessionPreflight
         if (ied == null)
             return IoTestSessionActionResult.Failure("Select an imported IED first.");
 
-        var unsafeEnabled = ied.TestPoints
+        // P0 bench rule: rows that still need import/binding review must not block the
+        // whole IED. StartSession builds an explicit safe capture scope after connection
+        // preparation and arms only ImportReady + uniquely live-bound rows. Review rows
+        // remain visible and TEST-selected, but are excluded from this evidence session.
+        var reviewRows = ied.TestPoints
             .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && !point.ImportReady)
             .ToList();
-        if (unsafeEnabled.Count > 0)
-        {
-            return IoTestSessionActionResult.Failure(
-                $"{unsafeEnabled.Count} shared-workspace-selected FAT signal(s) still require import/binding review. Disable their TEST scope or repair their mapping before starting FAT.");
-        }
 
         var enabledReady = ied.TestPoints
             .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && point.ImportReady)
             .ToList();
         if (enabledReady.Count == 0)
-            return IoTestSessionActionResult.Failure("No shared-workspace-selected, included, import-ready FAT signal has TEST enabled for this IED.");
+        {
+            return IoTestSessionActionResult.Failure(
+                reviewRows.Count == 0
+                    ? "No shared-workspace-selected, included, import-ready FAT signal has TEST enabled for this IED."
+                    : $"No safe import-ready FAT signal is available yet. {reviewRows.Count} TEST-selected row(s) still require import/binding review.");
+        }
 
         var duplicateReferences = enabledReady
             .GroupBy(
@@ -43,8 +47,11 @@ public static class IoTestSessionPreflight
                 $"One live IEC 61850 reference is assigned to multiple enabled test points in the shared included FAT scope ({ids}). Resolve the duplicate mapping before FAT so one edge cannot produce multiple results.");
         }
 
+        var suffix = reviewRows.Count == 0
+            ? string.Empty
+            : $" {reviewRows.Count} review row(s) will stay visible but will not block or enter the safe live capture scope.";
         return IoTestSessionActionResult.Success(
-            $"{enabledReady.Count} shared-workspace-selected FAT signal(s) passed session preflight.");
+            $"{enabledReady.Count} shared-workspace-selected FAT signal(s) are eligible for live preparation.{suffix}");
     }
 
     private static bool IsDistinctSclDataSetMembershipFanOut(IEnumerable<IoTestPointPlan> points)
