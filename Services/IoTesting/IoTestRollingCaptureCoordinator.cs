@@ -57,6 +57,27 @@ public sealed class IoTestRollingCaptureCoordinator
         if (!_slots.TryGetValue(point, out var slot))
             return _evaluator.Observe(point, observation);
 
+        // A pause/reconnect can hide the missing half of an in-progress OFF -> ON -> OFF
+        // sequence. Never allow a new-generation baseline to complete old partial evidence.
+        // Preserve the evidence for audit, mark the current result REVIEW, then re-arm from
+        // the new live image so a complete post-reconnect cycle can replace it later.
+        if (point.Runtime.ConnectionGeneration >= 0 &&
+            observation.ConnectionGeneration != point.Runtime.ConnectionGeneration &&
+            HasPartialTransitionEvidence(point.Runtime))
+        {
+            point.Runtime.ApplyObservation(observation);
+            point.Runtime.State = IoTestPointState.Review;
+            point.Runtime.StatusReason =
+                "Capture continuity cannot be proven across pause/reconnect while only one transition edge was recorded; partial evidence is preserved and capture is re-armed from the current live baseline.";
+            slot.HasCurrentEvidence = true;
+            Rearm(point, slot, observation);
+            return new IoTestEvaluationResult(
+                true,
+                point.Runtime.State,
+                null,
+                point.Runtime.StatusReason);
+        }
+
         if (slot.AttemptNeedsIncrement)
         {
             point.Runtime.Attempt++;
@@ -138,6 +159,9 @@ public sealed class IoTestRollingCaptureCoordinator
 
     private static bool HasCurrentEvidence(IoTestPointRuntime runtime)
         => runtime.IsComplete || runtime.OnEvidence != null || runtime.OffEvidence != null;
+
+    private static bool HasPartialTransitionEvidence(IoTestPointRuntime runtime)
+        => (runtime.OnEvidence is null) != (runtime.OffEvidence is null);
 
     private static bool HasCompleteCycle(IoTestPointRuntime runtime)
         => runtime.IsComplete && runtime.OnEvidence != null && runtime.OffEvidence != null;
