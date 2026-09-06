@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -36,6 +37,8 @@ public partial class MainWindow
     internal async Task RefreshIoFatCommandValuesAsync(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
+        var stopwatch = Stopwatch.StartNew();
+        var fallbackRead = false;
 
         // Preload is the same serialized live ctlModel authority used by the Engineering
         // Command Panel. StatusOnly stays read-only and never enters CommandSignals.
@@ -58,6 +61,7 @@ public partial class MainWindow
                 string.IsNullOrWhiteSpace(signal.ControlCurrentValue) ||
                 signal.ControlModelText == "Auto-detect"))
         {
+            fallbackRead = true;
             await RefreshControlValuesAsync(device, force: false);
         }
 
@@ -67,7 +71,10 @@ public partial class MainWindow
         // A report may have advanced the process image while the fallback inspection was
         // running. Re-apply the shared image last so LIVE VALUE always reflects the same
         // report-backed state that Engineering presents, not an older inspection sample.
-        ProjectIoFatCommandValuesFromSharedProcessImage(device);
+        var projected = ProjectIoFatCommandValuesFromSharedProcessImage(device);
+        Trace.WriteLine(
+            $"[IO FAT P0] Command values refresh completed in {stopwatch.ElapsedMilliseconds} ms; " +
+            $"device={device.Name}; projected={projected}; fallbackRead={fallbackRead}.");
     }
 
     private int ProjectIoFatCommandValuesFromSharedProcessImage(Iec61850MonitorDevice device)
@@ -104,10 +111,25 @@ public partial class MainWindow
         return projected;
     }
 
-    internal Task ExecuteIoFatControlClaimAsync(SignalDefinition signal, ControlCommandClaim claim)
+    internal async Task ExecuteIoFatControlClaimAsync(SignalDefinition signal, ControlCommandClaim claim)
     {
         ArgumentNullException.ThrowIfNull(signal);
         ArgumentNullException.ThrowIfNull(claim);
-        return ExecuteClaimedControlAsync(signal, claim);
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await ExecuteClaimedControlAsync(signal, claim);
+            Trace.WriteLine(
+                $"[IO FAT P0] Command completed in {stopwatch.ElapsedMilliseconds} ms; " +
+                $"signal={signal.DisplayReference}; current={signal.ControlCurrentValue}; model={signal.ControlModelText}.");
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine(
+                $"[IO FAT P0] Command failed after {stopwatch.ElapsedMilliseconds} ms; " +
+                $"signal={signal.DisplayReference}; error={ex.Message}.");
+            throw;
+        }
     }
 }
