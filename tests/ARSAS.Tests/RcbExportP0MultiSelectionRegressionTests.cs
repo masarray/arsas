@@ -51,13 +51,42 @@ public sealed class RcbExportP0MultiSelectionRegressionTests
             Rows = new[] { analog, digital }
         });
 
+        // Mirror the real WPF checkbox sequence: the TwoWay IsChecked binding updates
+        // IsSelected before the Checked routed handler calls SelectOnly/selection focus.
+        analog.IsSelected = true;
         viewModel.SelectOnly(analog);
+        digital.IsSelected = true;
         viewModel.SelectOnly(digital);
 
         Assert.Equal(2, viewModel.SelectedRows.Count);
         Assert.Contains(analog, viewModel.SelectedRows);
         Assert.Contains(digital, viewModel.SelectedRows);
         Assert.True(viewModel.CanExport);
+    }
+
+    [Fact]
+    public void ViewModel_AutomaticPreferredFocus_DoesNotAddAnUncheckedRcbWhenSelectionsExist()
+    {
+        var analog = Row("URCB_ANALOG", "Analog", 22);
+        var digital = Row("BRCB_DIGITAL", "Digital", 36);
+        var spare = Row("URCB_SPARE", "Spare", 1);
+        var viewModel = new RcbExportFilterViewModel(new RcbExportWindowOptions
+        {
+            IedName = "IED1",
+            Rows = new[] { analog, digital, spare }
+        });
+
+        analog.IsSelected = true;
+        viewModel.SelectOnly(analog);
+        digital.IsSelected = true;
+        viewModel.SelectOnly(digital);
+
+        // Availability refresh may ask SelectOnly to focus a preferred row. If that row
+        // is not checked, existing operator selections must remain authoritative.
+        viewModel.SelectOnly(spare);
+
+        Assert.Equal(2, viewModel.SelectedRows.Count);
+        Assert.DoesNotContain(spare, viewModel.SelectedRows);
     }
 
     [Fact]
