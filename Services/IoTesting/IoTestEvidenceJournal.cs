@@ -118,10 +118,16 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
     }
 
     // FAT interaction paths only need the append-only journal to be immediately visible to
-    // readers. A physical disk barrier on every report/recapture blocks the WPF dispatcher
-    // for no integrity benefit: the hash chain is already ordered under _sync. The journal
-    // is sealed durably once when the session is stopped/disposed, before verification.
+    // readers. A physical disk barrier on every report/recapture blocks the WPF dispatcher.
+    // The ordered hash chain remains authoritative and is sealed durably once at session
+    // disposal, before the controller verifies the closed evidence journal.
     private void FlushVisible() => _writer.Flush();
+
+    private void FlushDurable()
+    {
+        _writer.Flush();
+        _stream.Flush(flushToDisk: true);
+    }
 
     public static IoTestJournalVerificationResult Verify(string filePath)
     {
@@ -174,8 +180,7 @@ public sealed class IoTestEvidenceJournal : IIoTestEvidenceJournal
             _disposed = true;
             try
             {
-                _writer.Flush();
-                _stream.Flush(flushToDisk: true);
+                FlushDurable();
             }
             finally
             {
