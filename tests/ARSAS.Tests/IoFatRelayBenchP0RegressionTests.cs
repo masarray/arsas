@@ -87,6 +87,8 @@ public sealed class IoFatRelayBenchP0RegressionTests
             SignalName = "Position",
             ObjectReference = "AA1E1F06R4Q0/CSWI1.Pos.stVal",
             FunctionalConstraint = "ST",
+            ExpectedOnText = "Closed",
+            ExpectedOffText = "Open",
             WorkspaceSelected = true,
             TestEnabled = true,
             ImportReady = true,
