@@ -42,12 +42,23 @@ public sealed class P0Build1888RecoveryRegressionTests
         var recovery = File.ReadAllText(FindRepoFile("MainWindow.P0FatRecovery.cs"));
         var shared = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
         var append = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.SclAppend.cs"));
+        var autoConnect = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("device.HasDiscoveryCache = true", recovery, StringComparison.Ordinal);
         Assert.Contains("_pendingSharedStaticSelectionAssignments", shared, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection(device);", shared, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection(device);", append, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", shared, StringComparison.Ordinal);
+
+        // Direct SCL FAT import must remain one shared Engineering model: connect/associate
+        // with the imported ARIEC workspace and do not silently fall back to discovery.
+        Assert.Contains("AttachIoFatSclRuntimeAuthority(ied, device)", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("ConnectIoFatUsingPreparedSclAsync(device)", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("Full discovery was intentionally not started", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("sharedStaticDataSetAuthority", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("hasBlockingNonSclMiss", autoConnect, StringComparison.Ordinal);
+        Assert.Contains("!IoTestSignalSelectionService.IsDirectSclAuthority(point)", autoConnect, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -85,6 +96,20 @@ public sealed class P0Build1888RecoveryRegressionTests
         Assert.Contains("P0FatCanonicalValueConverter", ux, StringComparison.Ordinal);
         Assert.Contains("AnalogStableSampleCount = 3", coordinator, StringComparison.Ordinal);
         Assert.Contains("AnalogRelativeSettlingFraction = 0.0005d", coordinator, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0_FirstVisibleFatFrame_AlreadyUsesV2CanonicalNoCaptureTemplates()
+    {
+        var ux = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0BenchUx.cs"));
+        var install = ux.IndexOf("window.InstallFatV2WorkspaceUx();", StringComparison.Ordinal);
+        var apply = ux.IndexOf("window.ApplyP0BenchUx();", StringComparison.Ordinal);
+
+        Assert.True(install >= 0);
+        Assert.True(apply > install);
+        Assert.DoesNotContain("ContentRendered +=", ux, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherPriority.ContextIdle", ux, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dispatcher.BeginInvoke", ux, StringComparison.Ordinal);
     }
 
     [Fact]
