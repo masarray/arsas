@@ -43,6 +43,26 @@ public sealed class P0FinalRecoveryBehaviorTests
         Assert.False(point.TestEnabled);
     }
 
+    [Theory]
+    [InlineData(10, 10, true)]
+    [InlineData(11, 10, true)]
+    [InlineData(9, 10, false)]
+    public void LiveBeforeEvidence_RequiresVisibleSequenceAtOrBeyondEvidence(
+        long liveVisibleSequence,
+        long evidenceProcessSequence,
+        bool expected)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "CanPublishEvidenceForTest",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(typeof(MainWindow).FullName, "CanPublishEvidenceForTest");
+
+        var actual = Assert.IsType<bool>(method.Invoke(
+            null,
+            new object?[] { liveVisibleSequence, evidenceProcessSequence }));
+        Assert.Equal(expected, actual);
+    }
+
     [Fact]
     public void RcbSelection_NormalClicksRemainIndependent()
     {
