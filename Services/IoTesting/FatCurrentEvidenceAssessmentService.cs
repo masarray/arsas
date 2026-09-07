@@ -4,9 +4,12 @@ namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
 /// Assesses the exact Value 1 / Value 2 pair currently presented by FAT v2.
-/// A complete coherent pair proves the transition it contains even when the operator later
-/// resumes/reconnects the FAT workspace. Connection generation is a pair-coherency fence,
-/// not a requirement that historic completed evidence must equal the newest runtime generation.
+/// The displayed pair is an evidence-of-state contract: two accepted observations that
+/// normalize to opposite states prove the FAT state pair even if the observations were
+/// captured in different IEC 61850 association generations. Connection generation remains
+/// preserved in the immutable journal as provenance, but it must not turn a valid displayed
+/// Closed/Open or False/True pair into REVIEW merely because FAT was stopped, resumed or
+/// reconnected between observations.
 /// </summary>
 public static class FatCurrentEvidenceAssessmentService
 {
@@ -57,19 +60,11 @@ public static class FatCurrentEvidenceAssessmentService
                 "REVIEW: both displayed FAT value slots are required for a current-pair assessment.");
         }
 
-        // Raw MMS/RCB sequence counters are source-local and may legitimately reset or jump
-        // across report instances, reconnects, or resume/rebaseline. They are diagnostic
-        // provenance, not the ordering authority for the application-owned rolling Value 1 /
-        // Value 2 pair. Pair coherence is fenced by connection generation; the coordinator
-        // itself owns V1 -> V2 ordering. Rejecting a good complete pair merely because the
-        // source sequence decreased creates a false REVIEW after a perfectly valid FAT edge.
-        if (value1.ConnectionGeneration != value2.ConnectionGeneration)
-        {
-            return new FatCurrentEvidenceAssessment(
-                IoTestPointState.Review,
-                "REVIEW: current Value 1 and Value 2 belong to different IED connection generations; capture one coherent transition pair.");
-        }
-
+        // Sequence and connection-generation fields are retained as audit provenance only.
+        // The application-owned V1/V2 pointers define the current report pair. A FAT may be
+        // stopped overnight, resumed after a panel change, or capture the opposite state after
+        // a reconnect. If both observations are trustworthy and represent opposite states,
+        // that pair is valid FAT evidence and must remain PASS.
         var value1Quality = IoTestTransitionEvaluator.EvaluateQuality(value1.Quality);
         var value2Quality = IoTestTransitionEvaluator.EvaluateQuality(value2.Quality);
         if (value1Quality.Verdict != IoEvidenceVerdict.Accepted ||
@@ -93,12 +88,12 @@ public static class FatCurrentEvidenceAssessmentService
         {
             return new FatCurrentEvidenceAssessment(
                 IoTestPointState.Review,
-                $"REVIEW: Value 1 and Value 2 resolve to the same discrete state; the current pair does not prove a state change.");
+                "REVIEW: Value 1 and Value 2 resolve to the same discrete state; the current pair does not prove both FAT states.");
         }
 
         return new FatCurrentEvidenceAssessment(
             IoTestPointState.Passed,
-            $"PASS: current Value 1 -> Value 2 evidence proves a good-quality {StateLabel(state1.Value)} -> {StateLabel(state2.Value)} transition in one coherent connection generation.");
+            $"PASS: current Value 1 -> Value 2 evidence proves accepted {StateLabel(state1.Value)} -> {StateLabel(state2.Value)} FAT states. Association generation is retained as provenance only.");
     }
 
     public static FatCurrentEvidenceAssessment Apply(IoTestPointPlan point)
