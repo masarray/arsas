@@ -10,8 +10,8 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Owns the active FAT grid projection. TestPoints remains the retained project/evidence
 /// collection, while the visible grid contains only points whose FAT disposition is Included.
-/// This makes Remove from FAT a workspace-membership operation instead of a virtualized-row
-/// styling trick and works identically while online, offline, or while a FAT session is active.
+/// Remove/restore changes workspace membership only. TestEnabled is an operator-owned flag:
+/// no background projection, refresh, reconnect or FAT lifecycle is allowed to toggle it.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -74,11 +74,6 @@ public partial class IoListTestingWindow
         {
             point.PropertyChanged += ActiveFatView_PointPropertyChanged;
             _activeFatViewPoints.Add(point);
-
-            // Excluded points are not actionable test rows. Preserve their runtime/evidence
-            // history in TestPoints but make their TEST membership fail-closed immediately.
-            if (!point.IsIncludedInFat && point.TestEnabled)
-                point.TestEnabled = false;
         }
 
         _activeFatView = new ListCollectionView((IList)_activeFatViewIed.TestPoints)
@@ -101,11 +96,8 @@ public partial class IoListTestingWindow
             if (!_activeFatViewPoints.Contains(point))
                 return;
 
-            if (!point.IsIncludedInFat && point.TestEnabled)
-                point.TestEnabled = false;
-
-            // Refresh removes/restores the item from the view itself; DataGrid virtualization
-            // can no longer recycle a Collapsed row and accidentally show a removed signal.
+            // Only the active projection changes here. TestEnabled must never be changed as a
+            // side effect: checked/unchecked state belongs exclusively to explicit operator input.
             _activeFatView?.Refresh();
         }
 
