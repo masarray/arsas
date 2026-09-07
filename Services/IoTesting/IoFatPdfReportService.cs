@@ -32,9 +32,17 @@ public static class IoFatPdfReportService
         // the row even when it already owns completed historical evidence.
         var reportProject = IoFatReportScope.Create(project);
         var created = generatedAt ?? DateTimeOffset.Now;
-        var layout = reportProject.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase)
+        var isSclFat = reportProject.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase);
+        var layout = isSclFat
             ? IoFatV2ReportLayoutEngine.Build(reportProject, created, draft)
             : IoFatExecutiveReportLayoutEngine.Build(reportProject, created, draft);
+
+        // Presentation polish is deliberately downstream of the evidence engine. It may
+        // improve labels and typography, but it cannot alter scope, values, verdicts,
+        // relay timestamps or source identities.
+        if (isSclFat)
+            layout = IoFatReportProfessionalPolish.Apply(reportProject, layout);
+
         return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(reportProject, layout);
     }
 
