@@ -18,8 +18,6 @@ namespace ArIED61850Tester.Services.IoTesting;
 internal static class IoFatReportPreviewDocumentBuilder
 {
     private const double DipPerPdfPoint = 96d / 72d;
-    private static readonly FontFamily ReportFont = new("Inter, Segoe UI, Aptos, Arial");
-    private static readonly FontFamily MonoFont = new("Consolas, Cascadia Mono");
 
     public static FixedDocument Build(
         IoTestProject project,
@@ -123,7 +121,7 @@ internal static class IoFatReportPreviewDocumentBuilder
         var block = new TextBlock
         {
             Text = command.Text,
-            FontFamily = command.Font == IoFatReportFontKind.Mono ? MonoFont : ReportFont,
+            FontFamily = IoFatReportTypography.PreviewFontFamily,
             FontSize = fontSize,
             FontWeight = command.Font == IoFatReportFontKind.Bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = ToBrush(command.Color),
