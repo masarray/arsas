@@ -8,11 +8,11 @@ using System.Windows.Threading;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// One pointer-selection authority for the fault-record grid. Clicking either the SELECT
-/// checkbox or anywhere on a transferable record row toggles the same selection exactly once.
-/// Downloaded records use the staged-overwrite selection set; first-time records keep the
-/// existing model IsSelected flag. Visual checkbox state is committed after the input event so
-/// WPF's native CheckBox mouse-state transition cannot repaint over the operator's tick.
+/// Pointer-selection authority for the fault-record grid. Downloaded rows use the safe
+/// re-download selection set while first-download rows keep FaultRecordRow.IsSelected.
+/// The visible check state is repainted after the complete WPF input/layout cycle; an explicit
+/// check glyph is also shown for selected rows so the operator never gets a selected counter
+/// with an apparently empty checkbox.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -52,18 +52,38 @@ public partial class FaultRecordWindow
             row.IsSelected = !row.IsSelected;
         }
 
-        // Suppress the native checkbox/DataGrid toggle so one pointer action means exactly
-        // one selection change. Repaint after input processing; doing this synchronously in
-        // PreviewMouseDown lets the CheckBox template's pressed-state transition erase the
-        // visible tick even though the selection count already changed.
+        // One pointer action owns exactly one toggle. Repaint only after WPF has completed
+        // native CheckBox pressed/click layout; repainting at Input priority was still early
+        // enough for the theme to erase the glyph on the physical bench.
         e.Handled = true;
+        window.UpdateSmartSelectionUi();
         window.Dispatcher.BeginInvoke(
-            DispatcherPriority.Input,
-            new Action(() =>
-            {
-                window.ConfigureRecordRow(row);
-                window.UpdateSmartSelectionUi();
-            }));
+            DispatcherPriority.ContextIdle,
+            new Action(() => window.PaintTransferSelection(row)));
+    }
+
+    private void PaintTransferSelection(FaultRecordRow row)
+    {
+        ConfigureRecordRow(row);
+
+        if (FaultRecordsGrid.ItemContainerGenerator.ContainerFromItem(row) is not DataGridRow visualRow)
+            return;
+
+        var checkBox = FindVisualDescendants<CheckBox>(visualRow).FirstOrDefault();
+        if (checkBox == null)
+            return;
+
+        var selected = row.LocalState == FaultRecordLocalState.Downloaded
+            ? _redownloadSelections.Contains(row.Record.RecordId)
+            : row.IsSelected;
+
+        checkBox.IsChecked = selected;
+        checkBox.Content = selected ? "✓" : string.Empty;
+        checkBox.FontWeight = selected ? FontWeights.Bold : FontWeights.Normal;
+        checkBox.MinWidth = 28;
+        checkBox.HorizontalContentAlignment = HorizontalAlignment.Right;
+        checkBox.InvalidateVisual();
+        UpdateSmartSelectionUi();
     }
 
     private static bool TryResolveTransferRow(DependencyObject? source, out FaultRecordRow row)
