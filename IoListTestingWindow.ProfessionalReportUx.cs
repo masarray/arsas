@@ -391,19 +391,6 @@ public partial class IoListTestingWindow
         };
     }
 
-    private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < count; index++)
-        {
-            var child = VisualTreeHelper.GetChild(root, index);
-            if (child is T match)
-                yield return match;
-            foreach (var nested in VisualDescendants<T>(child))
-                yield return nested;
-        }
-    }
-
     private void ProfessionalReportUx_Closed(object? sender, EventArgs e)
     {
         Closed -= ProfessionalReportUx_Closed;
