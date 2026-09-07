@@ -17,16 +17,19 @@ public sealed class P0FieldBenchRound2RegressionTests
     [Fact]
     public void RcbProductionButton_ClassClickConsumesLegacyAndUsesMultiExporter()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.RcbExportClickAuthority.cs"));
+        var authority = File.ReadAllText(FindRepoFile("MainWindow.RcbExportClickAuthority.cs"));
+        var route = File.ReadAllText(FindRepoFile("MainWindow.MultiRcbExport.cs"));
         var window = File.ReadAllText(FindRepoFile("RcbMultiExportWindow.cs"));
 
-        Assert.Contains("Button.ClickEvent", source, StringComparison.Ordinal);
-        Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
-        Assert.Contains("window.IedEditRcbMulti_Click(button, e)", source, StringComparison.Ordinal);
-        Assert.Contains("button.Click -= window.IedEditRcb_Click", source, StringComparison.Ordinal);
-        Assert.Contains("button.Click += window.IedEditRcbMulti_Click", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("button.Tag == null", source, StringComparison.Ordinal);
-        Assert.Contains("select any number of native RCBs", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Button.ClickEvent", authority, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", authority, StringComparison.Ordinal);
+        Assert.Contains("var resolvedSender = new Button { Tag = device }", authority, StringComparison.Ordinal);
+        Assert.Contains("window.IedEditRcbMulti_Click(resolvedSender, e)", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("button.Tag == null", authority, StringComparison.Ordinal);
+
+        Assert.Contains("button.Click -= window.IedEditRcb_Click", route, StringComparison.Ordinal);
+        Assert.Contains("button.Click += window.IedEditRcbMulti_Click", route, StringComparison.Ordinal);
+        Assert.Contains("select any number of native RCBs", route, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Binding = new Binding(nameof(RcbExportRow.IsSelected))", window, StringComparison.Ordinal);
         Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(FindRepoRoot(), "MainWindow.RcbMultiSelectPointerAuthority.cs")));
@@ -35,16 +38,21 @@ public sealed class P0FieldBenchRound2RegressionTests
     [Fact]
     public void DownloadedComtrade_UsesOneNormalCheckboxWithoutExtraGlyph()
     {
-        var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
+        var authority = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
         var transfer = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadUx.cs"));
 
-        Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
-        Assert.Contains("FindRedownloadSelectionAncestor<CheckBox>(source) != null", source, StringComparison.Ordinal);
-        Assert.Contains("window.ConfigureRecordRow(row)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("PaintTransferSelection", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("checkBox.Content", source, StringComparison.Ordinal);
+        Assert.Contains("FindRedownloadSelectionAncestor<CheckBox>(source) != null", authority, StringComparison.Ordinal);
+        Assert.Contains("window.SetDownloadedTransferSelection(row, !window.IsDownloadedTransferSelected(row))", authority, StringComparison.Ordinal);
+        Assert.Contains("window.UpdateSmartSelectionUi()", authority, StringComparison.Ordinal);
+        Assert.Contains("window.RefreshFaultRecordHeaderSelection()", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("PaintTransferSelection", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("checkBox.Content", authority, StringComparison.Ordinal);
+
         Assert.Contains("RedownloadGrid_PreviewMouseLeftButtonDown", transfer, StringComparison.Ordinal);
         Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
+        Assert.Contains("_redownloadSelections.Add(row.Record.RecordId)", transfer, StringComparison.Ordinal);
+        Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
+        Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
     }
 
     [Fact]
