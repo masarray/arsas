@@ -59,6 +59,22 @@ public partial class IoListTestingWindow
         if (_fatSignalsGrid == null)
             return;
 
+        // Removed signals remain in the immutable project/evidence model so they can be
+        // restored from the dedicated Removed Signals UX, but they are not active FAT rows.
+        // Collapse them at the row-container layer so a removed point consumes no grid space
+        // and reappears automatically as soon as IsIncludedInFat becomes true again.
+        var activeFatRowStyle = new Style(typeof(DataGridRow), _fatSignalsGrid.RowStyle);
+        activeFatRowStyle.Triggers.Add(new DataTrigger
+        {
+            Binding = new Binding(nameof(IoTestPointPlan.IsIncludedInFat)),
+            Value = false,
+            Setters =
+            {
+                new Setter(UIElement.VisibilityProperty, Visibility.Collapsed)
+            }
+        });
+        _fatSignalsGrid.RowStyle = activeFatRowStyle;
+
         foreach (var column in _fatSignalsGrid.Columns.OfType<DataGridTemplateColumn>())
         {
             var header = column.Header?.ToString()?.Trim() ?? string.Empty;
