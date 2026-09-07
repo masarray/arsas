@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Xml.Linq;
 using ArIED61850Tester;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
@@ -61,6 +62,25 @@ public sealed class P0FinalRecoveryBehaviorTests
             null,
             new object?[] { liveVisibleSequence, evidenceProcessSequence }));
         Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void GenericSclContainment_RejectsArsasRuntimeDataSetButAcceptsNativeDataSet()
+    {
+        var validator = typeof(MainWindow).GetMethod(
+            "ValidateGenericMultiRcbDocument",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(typeof(MainWindow).FullName, "ValidateGenericMultiRcbDocument");
+
+        static XDocument Document(string dataSetName)
+            => XDocument.Parse($"<SCL><IED name='IED-A'><AccessPoint name='P1'><Server><LDevice inst='LD0'><LN0 lnClass='LLN0' inst=''><DataSet name='{dataSetName}' /></LN0></LDevice></Server></AccessPoint></IED></SCL>");
+
+        validator.Invoke(null, new object?[] { Document("ProtectionEvents"), 0 });
+
+        var failure = Assert.Throws<TargetInvocationException>(() =>
+            validator.Invoke(null, new object?[] { Document("ARIED_7A1B2C3D"), 0 }));
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Contains("runtime DataSet", failure.InnerException!.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
