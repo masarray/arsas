@@ -6,18 +6,16 @@ using System.Windows.Media;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Makes the SELECT column itself the hit target for an already-downloaded record. The
-/// legacy checkbox is initially disabled by its row model and may therefore never become the
-/// OriginalSource of the mouse event. A DataGrid class handler runs before the existing
-/// instance handler, remembers the initial re-download state, and on mouse-up supplies the
-/// toggle only when the existing handler did not. This preserves the safe staged overwrite
-/// workflow in RedownloadUx and removes first-click/virtualization races.
+/// Gives already-downloaded COMTRADE rows one deterministic selection authority. The legacy
+/// row model intentionally keeps Downloaded rows non-selectable for a first-time transfer,
+/// while RedownloadUx owns a separate multi-selection set for safe staged overwrite. This
+/// class handler intercepts the SELECT cell before the legacy grid handler so one pointer
+/// action produces exactly one toggle, including when the legacy CheckBox is disabled or a
+/// recycled DataGridRow is being used.
 /// </summary>
 public partial class FaultRecordWindow
 {
     private static readonly bool RedownloadSelectionAuthorityRegistered = RegisterRedownloadSelectionAuthority();
-    private readonly Dictionary<string, bool> _redownloadPointerInitialState =
-        new(StringComparer.OrdinalIgnoreCase);
 
     private static bool RegisterRedownloadSelectionAuthority()
     {
@@ -25,11 +23,6 @@ public partial class FaultRecordWindow
             typeof(DataGrid),
             UIElement.PreviewMouseLeftButtonDownEvent,
             new MouseButtonEventHandler(RedownloadSelectionAuthority_Down),
-            handledEventsToo: true);
-        EventManager.RegisterClassHandler(
-            typeof(DataGrid),
-            UIElement.PreviewMouseLeftButtonUpEvent,
-            new MouseButtonEventHandler(RedownloadSelectionAuthority_Up),
             handledEventsToo: true);
         return true;
     }
@@ -41,46 +34,23 @@ public partial class FaultRecordWindow
             !ReferenceEquals(grid, window.FaultRecordsGrid) ||
             window.IsBusy ||
             e.ChangedButton != MouseButton.Left ||
-            !TryResolveDownloadedSelectCell(grid, e.OriginalSource as DependencyObject, out var row))
-        {
-            return;
-        }
-
-        window._redownloadPointerInitialState[row.Record.RecordId] =
-            window._redownloadSelections.Contains(row.Record.RecordId);
-    }
-
-    private static void RedownloadSelectionAuthority_Up(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not DataGrid grid ||
-            Window.GetWindow(grid) is not FaultRecordWindow window ||
-            !ReferenceEquals(grid, window.FaultRecordsGrid) ||
-            e.ChangedButton != MouseButton.Left ||
-            !TryResolveDownloadedSelectCell(grid, e.OriginalSource as DependencyObject, out var row))
+            !TryResolveDownloadedSelectCell(e.OriginalSource as DependencyObject, out var row))
         {
             return;
         }
 
         var recordId = row.Record.RecordId;
-        if (!window._redownloadPointerInitialState.Remove(recordId, out var initialState))
-            return;
+        if (!window._redownloadSelections.Add(recordId))
+            window._redownloadSelections.Remove(recordId);
 
-        var currentState = window._redownloadSelections.Contains(recordId);
-        if (currentState == initialState)
-        {
-            // The older checkbox-only handler never saw this click (normally because the
-            // disabled checkbox was not the event source). Supply exactly one toggle here.
-            if (!window._redownloadSelections.Add(recordId))
-                window._redownloadSelections.Remove(recordId);
-        }
-
+        // Prevent RedownloadUx's older checkbox tunnelling handler from toggling the same
+        // record a second time. The overlay remains the sole writer for Downloaded rows.
         e.Handled = true;
         window.ConfigureRecordRow(row);
         window.UpdateSmartSelectionUi();
     }
 
     private static bool TryResolveDownloadedSelectCell(
-        DataGrid grid,
         DependencyObject? source,
         out FaultRecordRow row)
     {
