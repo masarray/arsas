@@ -133,8 +133,7 @@ public partial class MainWindow
                 // before giving up; never publish evidence against an unmapped LIVE row.
                 if (projectedPlans.Count == 0)
                 {
-                    InvalidateP0FatPointIndex();
-                    pointIndex = GetP0FatPointIndex(fat.Project);
+                    pointIndex = GetP0FatPointIndex(fat.Project, forceRebuild: true);
                     projectedPlans = ProjectSharedEngineeringPointToFat(pointIndex, point);
                 }
                 if (projectedPlans.Count == 0)
