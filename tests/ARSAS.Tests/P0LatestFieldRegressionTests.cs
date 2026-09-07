@@ -119,9 +119,12 @@ public sealed class P0LatestFieldRegressionTests
 
         Assert.Contains("projectedPlans.Count == 0", source, StringComparison.Ordinal);
         Assert.Contains("GetP0FatPointIndex(fat.Project, forceRebuild: true)", source, StringComparison.Ordinal);
+        Assert.Contains("_p0FatLiveVisibleSequences[plan.TestPointId] = processSequence", source, StringComparison.Ordinal);
         Assert.Contains("IsFatLiveCommitCurrent", source, StringComparison.Ordinal);
+        Assert.Contains("CanPublishEvidenceForTest(liveVisibleSequence, committed.ProcessSequence)", source, StringComparison.Ordinal);
         Assert.Contains("plan.Runtime.CurrentValue", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.Contains("coordinator.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherPriority.Background", source, StringComparison.Ordinal);
     }
 
     [Fact]
