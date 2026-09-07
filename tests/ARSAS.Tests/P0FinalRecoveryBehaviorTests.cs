@@ -18,6 +18,9 @@ public sealed class P0FinalRecoveryBehaviorTests
             IpAddress = "192.0.2.10",
             SignalName = "Trip",
             ObjectReference = "IED-ALD0/GGIO1.Ind1.stVal",
+            FunctionalConstraint = "ST",
+            ExpectedOnText = "True",
+            ExpectedOffText = "False",
             TestEnabled = true,
             WorkspaceSelected = true,
             ImportReady = true
