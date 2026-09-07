@@ -23,6 +23,7 @@ public partial class IoListTestingWindow
 {
     private static readonly bool ProfessionalReportUxRegistered = RegisterProfessionalReportUx();
     private bool _professionalReportUxInstalled;
+    private int _professionalReportUxInstallAttempts;
     private readonly HashSet<IoTestIedPlan> _iedCardStopsInProgress = new();
 
     private enum PreviewLucideIcon
@@ -64,7 +65,8 @@ public partial class IoListTestingWindow
             return;
         if (_printPreviewHost == null)
         {
-            Dispatcher.BeginInvoke(new Action(InstallProfessionalReportUx), DispatcherPriority.ContextIdle);
+            if (++_professionalReportUxInstallAttempts < 8)
+                Dispatcher.BeginInvoke(new Action(InstallProfessionalReportUx), DispatcherPriority.ContextIdle);
             return;
         }
 
@@ -95,7 +97,7 @@ public partial class IoListTestingWindow
             ["Refresh from current IED evidence"] = PreviewLucideIcon.RefreshCw
         };
 
-        foreach (var button in _printPreviewHost.Descendants<Button>())
+        foreach (var button in VisualDescendants<Button>(_printPreviewHost))
         {
             var toolTip = button.ToolTip?.ToString() ?? string.Empty;
             if (iconByToolTip.TryGetValue(toolTip, out var icon))
@@ -118,7 +120,7 @@ public partial class IoListTestingWindow
             button.ToolTip = "Save PDF for this IED only; other IED FAT sessions may keep running";
         }
 
-        var nativeLabel = _printPreviewHost.Descendants<TextBlock>()
+        var nativeLabel = VisualDescendants<TextBlock>(_printPreviewHost)
             .FirstOrDefault(text => string.Equals(text.Text, "Native preview", StringComparison.Ordinal));
         if (nativeLabel != null)
             nativeLabel.Text = "Selected IED report";
@@ -126,7 +128,7 @@ public partial class IoListTestingWindow
 
     private void ClarifyCombinedPdfAction()
     {
-        var globalPdf = this.Descendants<Button>()
+        var globalPdf = VisualDescendants<Button>(this)
             .FirstOrDefault(button => string.Equals(button.Content?.ToString(), "PDF", StringComparison.Ordinal));
         if (globalPdf == null)
             return;
@@ -143,8 +145,8 @@ public partial class IoListTestingWindow
 
     private void ProfessionalReportUx_SessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Session.ActiveSessionCount) or nameof(Session.HasActiveSessions) or
-            nameof(Session.IsSessionActive) or nameof(Session.State))
+        if (e.PropertyName is nameof(IoTestMultiSessionCoordinator.ActiveSessionCount) or nameof(IoTestMultiSessionCoordinator.HasActiveSessions) or
+            nameof(IoTestMultiSessionCoordinator.IsSessionActive) or nameof(IoTestMultiSessionCoordinator.State))
         {
             Dispatcher.BeginInvoke(new Action(RefreshIedCardCloseButtons), DispatcherPriority.Background);
         }
@@ -157,7 +159,7 @@ public partial class IoListTestingWindow
             if (FatIedList.ItemContainerGenerator.ContainerFromItem(ied) is not ListBoxItem container)
                 continue;
 
-            var headerGrid = container.Descendants<Grid>()
+            var headerGrid = VisualDescendants<Grid>(container)
                 .FirstOrDefault(grid => grid.Children.OfType<TextBlock>().Any(text =>
                     string.Equals(
                         BindingOperations.GetBinding(text, TextBlock.TextProperty)?.Path?.Path,
@@ -206,7 +208,7 @@ public partial class IoListTestingWindow
         {
             if (FatIedList.ItemContainerGenerator.ContainerFromItem(ied) is not ListBoxItem container)
                 continue;
-            var close = container.Descendants<Button>()
+            var close = VisualDescendants<Button>(container)
                 .FirstOrDefault(button => string.Equals(button.Tag?.ToString(), "ARSAS_IED_SESSION_CLOSE", StringComparison.Ordinal));
             if (close != null)
                 close.Visibility = Session.IsIedSessionActive(ied) ? Visibility.Visible : Visibility.Collapsed;
@@ -387,6 +389,19 @@ public partial class IoListTestingWindow
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };
+    }
+
+    private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < count; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+                yield return match;
+            foreach (var nested in VisualDescendants<T>(child))
+                yield return nested;
+        }
     }
 
     private void ProfessionalReportUx_Closed(object? sender, EventArgs e)
