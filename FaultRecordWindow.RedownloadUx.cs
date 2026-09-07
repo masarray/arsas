@@ -15,7 +15,7 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Adds an explicit re-download workflow without weakening the persistent local-state
 /// indication. A green row remains selectable, the fresh package is downloaded into a
-/// separate complete directory first, and only then replaces the known-good local copy.
+/// separate complete staging directory first, and only then replaces the known-good copy.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -40,6 +40,10 @@ public partial class FaultRecordWindow
         ToastHost.Margin = new Thickness(0);
 
         FaultRecordsGrid.LoadingRow += RedownloadUx_LoadingRow;
+        // A downloaded row is disabled by the legacy row model before the visual overlay is
+        // installed. Handle the tunnelling mouse event at the grid itself so re-download is
+        // reliable even with virtualization/recycled rows and even on the very first click.
+        FaultRecordsGrid.PreviewMouseLeftButtonDown += RedownloadGrid_PreviewMouseLeftButtonDown;
         Records.CollectionChanged += RedownloadUx_RecordsChanged;
         PropertyChanged += RedownloadUx_WindowPropertyChanged;
         Closed += RedownloadUx_Closed;
@@ -60,6 +64,7 @@ public partial class FaultRecordWindow
     private void RedownloadUx_Closed(object? sender, EventArgs e)
     {
         FaultRecordsGrid.LoadingRow -= RedownloadUx_LoadingRow;
+        FaultRecordsGrid.PreviewMouseLeftButtonDown -= RedownloadGrid_PreviewMouseLeftButtonDown;
         Records.CollectionChanged -= RedownloadUx_RecordsChanged;
         PropertyChanged -= RedownloadUx_WindowPropertyChanged;
 
@@ -72,6 +77,31 @@ public partial class FaultRecordWindow
         foreach (var pair in _redownloadRowHandlers)
             pair.Key.PropertyChanged -= pair.Value;
         _redownloadRowHandlers.Clear();
+    }
+
+    private void RedownloadGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (IsBusy || e.ChangedButton != MouseButton.Left ||
+            e.OriginalSource is not DependencyObject source)
+        {
+            return;
+        }
+
+        var checkBox = FindVisualAncestor<CheckBox>(source);
+        if (checkBox?.DataContext is not FaultRecordRow row ||
+            row.LocalState != FaultRecordLocalState.Downloaded ||
+            row.Record.Files.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var recordId = row.Record.RecordId;
+        if (!_redownloadSelections.Add(recordId))
+            _redownloadSelections.Remove(recordId);
+
+        ConfigureRecordRow(row);
+        UpdateSmartSelectionUi();
     }
 
     private void RedownloadUx_WindowPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -187,9 +217,9 @@ public partial class FaultRecordWindow
         {
             BindingOperations.ClearBinding(checkBox, ToggleButton.IsCheckedProperty);
             BindingOperations.ClearBinding(checkBox, UIElement.IsEnabledProperty);
-            checkBox.IsEnabled = row.Record.Files.Count > 0;
+            checkBox.IsEnabled = row.Record.Files.Count > 0 && !IsBusy;
             checkBox.IsChecked = _redownloadSelections.Contains(row.Record.RecordId);
-            checkBox.ToolTip = "Already downloaded. Select to download again and overwrite the local copy.";
+            checkBox.ToolTip = "Already downloaded. Select to download again and overwrite the existing local copy.";
             checkBox.Click += DownloadedRecordCheckBox_Click;
             return;
         }
@@ -339,11 +369,14 @@ public partial class FaultRecordWindow
                 var overwriteExisting = row.LocalState == FaultRecordLocalState.Downloaded &&
                                         !string.IsNullOrWhiteSpace(previousDirectory) &&
                                         Directory.Exists(previousDirectory);
+                var stagingRoot = overwriteExisting
+                    ? Path.Combine(Path.GetFullPath(DestinationDirectory), $".arsas-redownload-{Guid.NewGuid():N}")
+                    : DestinationDirectory;
 
                 row.Status = "Downloading";
                 row.Detail = string.Empty;
                 StatusText = overwriteExisting
-                    ? $"Downloading a fresh copy of {row.RecordName} ({index + 1}/{selected.Length})…"
+                    ? $"Downloading a fresh copy of {row.RecordName} before overwrite ({index + 1}/{selected.Length})…"
                     : $"Downloading {row.RecordName} ({index + 1}/{selected.Length})…";
 
                 var recordIndex = index;
@@ -358,14 +391,29 @@ public partial class FaultRecordWindow
                     StatusText = $"{row.RecordName}: {FormatBytes(item.BytesTransferred)} transferred, file {item.CompletedFiles}/{item.TotalFiles}.";
                 });
 
-                var result = await _client.DownloadAsync(
-                    row.Record,
-                    DestinationDirectory,
-                    progress,
-                    _operationCancellation.Token);
+                Iec61850FaultRecordDownloadResult result;
+                try
+                {
+                    if (overwriteExisting)
+                        Directory.CreateDirectory(stagingRoot);
+
+                    result = await _client.DownloadAsync(
+                        row.Record,
+                        stagingRoot,
+                        progress,
+                        _operationCancellation.Token);
+                }
+                catch
+                {
+                    if (overwriteExisting)
+                        TryRemoveDirectory(stagingRoot);
+                    throw;
+                }
 
                 if (!result.IsSuccess)
                 {
+                    if (overwriteExisting)
+                        TryRemoveDirectory(stagingRoot);
                     failedRecords++;
                     row.Status = "Failed";
                     row.Detail = result.Message;
@@ -399,8 +447,13 @@ public partial class FaultRecordWindow
                     failedRecords++;
                     row.Status = "Failed";
                     row.Detail =
-                        "The new relay copy downloaded successfully, but replacing the previous local record failed: " +
-                        $"{ex.GetType().Name}: {ex.Message}. The fresh copy remains at '{result.DestinationDirectory}'.";
+                        "The fresh relay copy downloaded successfully, but replacing the previous local record failed: " +
+                        $"{ex.GetType().Name}: {ex.Message}. The previous local record was preserved whenever rollback succeeded.";
+                }
+                finally
+                {
+                    if (overwriteExisting)
+                        TryRemoveDirectory(stagingRoot);
                 }
 
                 ProgressValue = ((index + 1d) / selected.Length) * 100d;
@@ -582,6 +635,19 @@ public partial class FaultRecordWindow
         ToastTranslate.BeginAnimation(TranslateTransform.YProperty, null);
         ToastHost.Visibility = Visibility.Collapsed;
         ToastHost.Opacity = 0;
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject? child)
+        where T : DependencyObject
+    {
+        var current = child;
+        while (current != null)
+        {
+            if (current is T match)
+                return match;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root)
