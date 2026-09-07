@@ -18,6 +18,7 @@ namespace ArIED61850Tester;
 internal static class MainWindowFieldPresentationFix
 {
     private const string IedTimestampHeader = "IED Timestamp";
+    private const string SignalHeader = "Signal";
 
     [ModuleInitializer]
     internal static void Register()
@@ -66,6 +67,7 @@ internal static class MainWindowFieldPresentationFix
     private static void Apply(MainWindow window)
     {
         ApplyIedTimestampColumns(window);
+        ApplySemanticSignalColumns(window);
         ApplyDarkCommandHeaderContrast(window);
     }
 
@@ -104,6 +106,46 @@ internal static class MainWindowFieldPresentationFix
         }
     }
 
+    /// <summary>
+    /// Put the semantic phase-aware binding on the DataGrid column itself. The previous
+    /// TextBlock.Loaded rewrite depended on WPF virtualization timing, so recycled rows could
+    /// keep the raw DO-only SignalName (A/A/A). A column-level MultiBinding is inherited by
+    /// every generated cell and is deterministic for phsA/phsB/phsC and THD phase branches.
+    /// Raw IEC identity, IecTelegram, report keys and FCDA membership are never modified.
+    /// </summary>
+    private static void ApplySemanticSignalColumns(MainWindow window)
+    {
+        foreach (var grid in VisualDescendants<DataGrid>(window))
+        {
+            foreach (var column in grid.Columns.OfType<DataGridTextColumn>())
+            {
+                if (!string.Equals(column.Header?.ToString(), SignalHeader, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (column.Binding is MultiBinding existingMulti &&
+                    ReferenceEquals(existingMulti.Converter, SemanticSignalNameConverter.Instance))
+                {
+                    continue;
+                }
+
+                if (column.Binding is not Binding existing ||
+                    !string.Equals(existing.Path?.Path, "SignalName", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                column.Binding = CreateSemanticSignalBinding("IecTelegram");
+
+                var style = new Style(typeof(TextBlock), column.ElementStyle);
+                style.Setters.Add(new Setter(
+                    FrameworkElement.ToolTipProperty,
+                    CreateSemanticSignalBinding("IecTelegram")));
+                style.Setters.Add(new Setter(ToolTipService.ShowDurationProperty, 60000));
+                column.ElementStyle = style;
+            }
+        }
+    }
+
     private static void ApplyDarkCommandHeaderContrast(MainWindow window)
     {
         if (window.FindName("CommandPanelExpander") is not Expander expander || expander.Header is not DependencyObject header)
@@ -115,10 +157,8 @@ internal static class MainWindowFieldPresentationFix
     }
 
     /// <summary>
-    /// Both active operator surfaces bind their signal column to SignalName. Engineering
-    /// points carry IecTelegram; FAT points carry ObjectReference. Replace only the rendered
-    /// text binding with a semantic MultiBinding so phase context is visible without changing
-    /// IEC identity, report binding, FCDA membership or PointKey.
+    /// Compatibility fallback for dynamically-created signal TextBlocks outside the main
+    /// Engineering grid. The production grid is handled deterministically at column level.
     /// </summary>
     private static void FieldPresentation_TextBlockLoaded(object sender, RoutedEventArgs e)
     {
