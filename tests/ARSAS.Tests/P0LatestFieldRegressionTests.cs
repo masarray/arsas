@@ -1,3 +1,4 @@
+using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
 
 namespace ARSAS.Tests;
@@ -15,7 +16,9 @@ public sealed class P0LatestFieldRegressionTests
         string reference,
         string expected)
     {
+        Assert.Equal(expected, IoSignalDisplayName.Format(signalName, reference));
         Assert.Equal(expected, IoFatSignalDisplayNameFormatter.Format(signalName, reference));
+        Assert.Equal(reference, reference); // presentation must never rewrite technical identity
     }
 
     [Fact]
@@ -29,20 +32,25 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void DownloadedFaultRecords_HaveOneVisibleSelectAuthorityForSafeRedownload()
+    public void DownloadedFaultRecords_UseTheSameRowSelectionAuthorityForSafeRedownload()
     {
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
         var transfer = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadUx.cs"));
+        var model = File.ReadAllText(FindRepoFile("FaultRecordWindow.xaml.cs"));
 
         Assert.Contains("TryResolveTransferRow", source, StringComparison.Ordinal);
-        Assert.Contains("row.LocalState == FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
-        Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
+        Assert.Contains("row.IsSelected = !row.IsSelected", source, StringComparison.Ordinal);
         Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
         Assert.Contains("ConfigureRecordRow(row)", source, StringComparison.Ordinal);
         Assert.Contains("UpdateSmartSelectionUi()", source, StringComparison.Ordinal);
-        Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
+        Assert.DoesNotContain("_redownloadSelections", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_redownloadSelections", transfer, StringComparison.Ordinal);
+        Assert.Contains("new Binding(nameof(FaultRecordRow.IsSelected))", transfer, StringComparison.Ordinal);
+        Assert.Contains("row.IsSelected && row.CanSelectForDownload", transfer, StringComparison.Ordinal);
+        Assert.Contains("ValidateFreshRecordDirectory", transfer, StringComparison.Ordinal);
         Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
         Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
+        Assert.Contains("public bool CanSelectForDownload => Record.Files.Count > 0", model, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -92,23 +100,26 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void LiveSignalPresentation_IsPhaseAwareAtEngineeringColumnLevel()
+    public void LiveSignalPresentation_UsesSharedSemanticNameAuthorityAtEngineeringColumnLevel()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.FieldPresentationFix.cs"));
 
         Assert.Contains("ApplySemanticSignalColumns", source, StringComparison.Ordinal);
         Assert.Contains("CreateSemanticSignalBinding(\"IecTelegram\")", source, StringComparison.Ordinal);
-        Assert.Contains("IoFatSignalDisplayNameFormatter.Format", source, StringComparison.Ordinal);
+        Assert.Contains("IoSignalDisplayName.Format", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IoFatSignalDisplayNameFormatter.Format", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FatIecReference_RemainsOperatorResizableBeyondCompactWidth()
+    public void FatIecReference_RemainsOperatorResizableAndPreservesSessionWidth()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ColumnSizing.cs"));
 
         Assert.Contains("_fatSignalsGrid.CanUserResizeColumns = true", source, StringComparison.Ordinal);
         Assert.Contains("\"IEC REFERENCE\"", source, StringComparison.Ordinal);
-        Assert.Contains("column.MaxWidth = 4096d", source, StringComparison.Ordinal);
+        Assert.Contains("MaximumFatIecReferenceWidth = 4096d", source, StringComparison.Ordinal);
+        Assert.Contains("_sessionFatIecReferenceWidth", source, StringComparison.Ordinal);
+        Assert.Contains("FatIecReferenceColumn_WidthChanged", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ApplicationIdle", source, StringComparison.Ordinal);
     }
 
