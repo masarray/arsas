@@ -18,10 +18,6 @@ public partial class MainWindow
     private readonly HashSet<SignalDefinition> _p0CommandDefaultsFinalized = new();
     private bool _p0CommandDefaultsAttached;
 
-    // A static field initializer on a partial WPF Window is not a reliable registration
-    // point because the type may be marked beforefieldinit. The physical relay bench showed
-    // Sync could remain false even though the compatibility code existed. Register at module
-    // load so every MainWindow Loaded event is observed deterministically.
     [ModuleInitializer]
     internal static void RegisterP0CommandDefaultsClassHandler()
     {
@@ -50,12 +46,33 @@ public partial class MainWindow
             AttachP0CommandDevice(device);
     }
 
+    /// <summary>
+    /// Called by the FAT command bridge immediately before CommandSignals is projected.
+    /// This deliberately initializes from the complete discovered Signals collection first,
+    /// eliminating the first-render race where FAT could see Sync=false before a command row
+    /// had entered CommandSignals.
+    /// </summary>
+    private void EnsureP0CommandDefaultsForDevice(Iec61850MonitorDevice device)
+    {
+        AttachP0CommandDefaults();
+        AttachP0CommandDevice(device);
+
+        foreach (var signal in device.Signals.Where(signal => signal.IsControlSignal))
+            InitializeP0CommandDefaults(signal);
+        foreach (var signal in device.CommandSignals)
+            InitializeP0CommandDefaults(signal);
+    }
+
     private void AttachP0CommandDevice(Iec61850MonitorDevice device)
     {
         if (!_p0CommandDefaultDevices.Add(device))
             return;
 
+        device.Signals.CollectionChanged += P0DiscoveredSignalsChanged;
         device.CommandSignals.CollectionChanged += P0CommandSignalsChanged;
+
+        foreach (var signal in device.Signals.Where(signal => signal.IsControlSignal))
+            InitializeP0CommandDefaults(signal);
         foreach (var signal in device.CommandSignals)
             InitializeP0CommandDefaults(signal);
     }
@@ -75,14 +92,30 @@ public partial class MainWindow
         }
     }
 
-    private void P0CommandSignalsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void P0DiscoveredSignalsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.OldItems != null)
         {
             foreach (var signal in e.OldItems.OfType<SignalDefinition>())
+            {
+                // A signal removed from the authoritative discovered collection is no longer
+                // an Engineering/FAT shared command candidate.
                 DetachP0CommandSignal(signal);
+            }
         }
 
+        if (e.NewItems == null)
+            return;
+
+        foreach (var signal in e.NewItems.OfType<SignalDefinition>().Where(signal => signal.IsControlSignal))
+            InitializeP0CommandDefaults(signal);
+    }
+
+    private void P0CommandSignalsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // CommandSignals is a projection of Signals. Do not detach defaults when a row leaves
+        // this projection during ctlModel refresh; the same SignalDefinition may still be the
+        // authoritative discovered control object and can re-enter milliseconds later.
         if (e.NewItems == null)
             return;
 
@@ -150,8 +183,9 @@ public partial class MainWindow
         if (!_p0CommandDefaultDevices.Remove(device))
             return;
 
+        device.Signals.CollectionChanged -= P0DiscoveredSignalsChanged;
         device.CommandSignals.CollectionChanged -= P0CommandSignalsChanged;
-        foreach (var signal in device.CommandSignals)
+        foreach (var signal in device.Signals.Concat(device.CommandSignals).Distinct().ToArray())
             DetachP0CommandSignal(signal);
     }
 
