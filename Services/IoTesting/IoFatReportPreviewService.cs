@@ -23,8 +23,8 @@ public static class IoFatReportPreviewService
         ArgumentNullException.ThrowIfNull(ieds);
 
         var selected = ieds
-            .Where(ied => ied != null)
-            .Distinct(ReferenceEqualityComparer.Instance)
+            .Where(static ied => ied is not null)
+            .Distinct()
             .ToArray();
         if (selected.Length == 0)
             throw new ArgumentException("Select at least one IED for the FAT report scope.", nameof(ieds));
