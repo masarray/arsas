@@ -67,16 +67,20 @@ public sealed class P2BlueSteelGreigeThemeTests
     }
 
     [Fact]
-    public void RelayFascia_IsLightBlueSteelInsteadOfNearBlack()
+    public void RelayFascia_UsesOperatorSuppliedSvgVectorAndKeepsSemanticStateRail()
     {
         var source = File.ReadAllText(FindRepoFile("Resources/ArvrelMiniIedFascia.xaml"));
+        var svg = File.ReadAllText(FindRepoFile("Assets/RelayFascia.svg"));
 
-        Assert.Contains("#A9B5BA", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#87979F", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#EDF3EE", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("#1B2328", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("#0A1013", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RelayFasciaArtwork", source, StringComparison.Ordinal);
+        Assert.Contains("#C0C0C0", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#F2F2F2", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#FF0000", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("{TemplateBinding Foreground}", source, StringComparison.Ordinal);
+        Assert.Contains("RelayStateRail", source, StringComparison.Ordinal);
+        Assert.Contains("width=\"424.99999999999994\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"svg_44\"", svg, StringComparison.Ordinal);
+        Assert.Contains("#00ff7f", svg, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepoFile(string relativePath)
