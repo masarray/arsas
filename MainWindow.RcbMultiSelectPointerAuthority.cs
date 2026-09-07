@@ -10,11 +10,13 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Physical pointer/keyboard authority for RCB export. Preview input is intercepted before
 /// the legacy XAML Click handler can run, so the production IED-card RCB action always opens
-/// the generic multi-select exporter. Inside that exporter every row independently toggles
-/// RcbExportRow.IsSelected; DataGrid row selection never limits export scope to one RCB.
+/// the generic multi-select exporter. Inside that exporter RcbExportRow.IsSelected is the
+/// inclusion authority; DataGrid row selection remains navigation/focus only.
 /// </summary>
 public partial class MainWindow
 {
+    private static readonly ConditionalWeakTable<DataGrid, RcbSelectionAnchor> RcbSelectionAnchors = new();
+
     [ModuleInitializer]
     internal static void RegisterRcbMultiSelectPointerAuthority()
     {
@@ -32,6 +34,11 @@ public partial class MainWindow
             typeof(DataGrid),
             UIElement.PreviewMouseLeftButtonDownEvent,
             new MouseButtonEventHandler(RcbMultiGrid_PreviewMouseLeftButtonDown),
+            handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(DataGrid),
+            UIElement.PreviewKeyDownEvent,
+            new KeyEventHandler(RcbMultiGrid_PreviewKeyDown),
             handledEventsToo: true);
     }
 
@@ -71,8 +78,14 @@ public partial class MainWindow
     private static void RcbMultiGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left || sender is not DataGrid grid ||
-            Window.GetWindow(grid) is not RcbMultiExportWindow ||
+            Window.GetWindow(grid) is not RcbMultiExportWindow window ||
             e.OriginalSource is not DependencyObject source)
+        {
+            return;
+        }
+
+        if (FindRcbAncestor<DataGridColumnHeader>(source) != null ||
+            FindRcbAncestor<Button>(source) != null)
         {
             return;
         }
@@ -81,11 +94,81 @@ public partial class MainWindow
         if (visualRow?.DataContext is not RcbExportRow row)
             return;
 
-        // Inclusion is an independent boolean per RCB. Clicking the checkbox OR any body
-        // cell toggles exactly that RCB and never clears selections on other rows.
-        row.IsSelected = !row.IsSelected;
+        var rows = window.Rows;
+        var targetIndex = rows.IndexOf(row);
+        if (targetIndex < 0)
+            return;
+
+        ApplyRcbPointerSelection(
+            grid,
+            rows,
+            targetIndex,
+            (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
         grid.SelectedItem = row;
+        visualRow.IsSelected = true;
+        window.RefreshSelection();
         e.Handled = true;
+    }
+
+    private static void RcbMultiGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || sender is not DataGrid grid ||
+            Window.GetWindow(grid) is not RcbMultiExportWindow window ||
+            grid.SelectedItem is not RcbExportRow row)
+        {
+            return;
+        }
+
+        var targetIndex = window.Rows.IndexOf(row);
+        if (targetIndex < 0)
+            return;
+
+        ApplyRcbPointerSelection(
+            grid,
+            window.Rows,
+            targetIndex,
+            (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+        window.RefreshSelection();
+        e.Handled = true;
+    }
+
+    internal static void ApplyRcbSelectionForTest(
+        IList<RcbExportRow> rows,
+        ref int anchorIndex,
+        ref bool anchorValue,
+        int targetIndex,
+        bool extendRange)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (targetIndex < 0 || targetIndex >= rows.Count)
+            throw new ArgumentOutOfRangeException(nameof(targetIndex));
+
+        if (extendRange && anchorIndex >= 0 && anchorIndex < rows.Count)
+        {
+            var first = Math.Min(anchorIndex, targetIndex);
+            var last = Math.Max(anchorIndex, targetIndex);
+            for (var index = first; index <= last; index++)
+                rows[index].IsSelected = anchorValue;
+            return;
+        }
+
+        rows[targetIndex].IsSelected = !rows[targetIndex].IsSelected;
+        anchorIndex = targetIndex;
+        anchorValue = rows[targetIndex].IsSelected;
+    }
+
+    private static void ApplyRcbPointerSelection(
+        DataGrid grid,
+        IList<RcbExportRow> rows,
+        int targetIndex,
+        bool extendRange)
+    {
+        var anchor = RcbSelectionAnchors.GetOrCreateValue(grid);
+        var anchorIndex = anchor.Index;
+        var anchorValue = anchor.Value;
+        ApplyRcbSelectionForTest(rows, ref anchorIndex, ref anchorValue, targetIndex, extendRange);
+        anchor.Index = anchorIndex;
+        anchor.Value = anchorValue;
     }
 
     private static T? FindRcbAncestor<T>(DependencyObject? source) where T : DependencyObject
@@ -110,5 +193,11 @@ public partial class MainWindow
             current = parent;
         }
         return null;
+    }
+
+    private sealed class RcbSelectionAnchor
+    {
+        public int Index { get; set; } = -1;
+        public bool Value { get; set; }
     }
 }
