@@ -7,9 +7,8 @@ namespace ArIED61850Tester;
 
 /// <summary>
 /// Physical-relay FAT consumes Engineering's coalesced process image, never a second raw
-/// runtime observer. LIVE VALUE is projected first on the Engineering UI flush. Evidence is
-/// then published one Dispatcher turn later, below DataBind/Render priority, so Value 1/2 can
-/// never become visible ahead of the process value that caused them.
+/// runtime observer. LIVE VALUE is projected first from the exact Engineering point and FAT
+/// evidence is emitted only after that same value has been committed to every mapped FAT row.
 /// </summary>
 public partial class MainWindow
 {
@@ -71,15 +70,16 @@ public partial class MainWindow
             .Where(device => device != null)
             .Select(device => device!.DeviceId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var publishAfterLiveCommit = new List<Iec61850EventEntry>();
+        var publishAfterLiveCommit = new List<CommittedFatProcessEvent>();
 
         foreach (var device in Devices)
         {
             foreach (var point in device.Points)
             {
-                // Process-image projection is always first. PropertyChanged is raised here
-                // on the Dispatcher that owns the FAT grid.
-                ProjectSharedEngineeringPointToFat(pointIndex, point);
+                // Resolve and commit the operator-facing LIVE row first. Evidence is not
+                // allowed to advance when a point cannot be mapped to its FAT row; showing
+                // Value2=N while LIVE=N-1 is an invalid process image and must fail closed.
+                var projectedPlans = ProjectSharedEngineeringPointToFat(pointIndex, point);
 
                 var key = string.IsNullOrWhiteSpace(point.PointKey)
                     ? $"{point.DeviceId}|{IoTestLiveBindingService.NormalizeReference(point.IecReference)}"
@@ -128,7 +128,19 @@ public partial class MainWindow
                     point.Value,
                     point.Quality);
 
-                publishAfterLiveCommit.Add(new Iec61850EventEntry
+                // An active FAT session may have a valid evidence binding even if a stale UI
+                // projection index was built before the live point became ready. Rebuild once
+                // before giving up; never publish evidence against an unmapped LIVE row.
+                if (projectedPlans.Count == 0)
+                {
+                    InvalidateP0FatPointIndex();
+                    pointIndex = GetP0FatPointIndex(fat.Project);
+                    projectedPlans = ProjectSharedEngineeringPointToFat(pointIndex, point);
+                }
+                if (projectedPlans.Count == 0)
+                    continue;
+
+                var entry = new Iec61850EventEntry
                 {
                     Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
                     DeviceId = point.DeviceId,
@@ -143,7 +155,8 @@ public partial class MainWindow
                     Quality = point.Quality,
                     SourceMode = point.SourceMode,
                     Reason = point.Reason
-                });
+                };
+                publishAfterLiveCommit.Add(new CommittedFatProcessEvent(entry, projectedPlans));
             }
         }
 
@@ -151,9 +164,8 @@ public partial class MainWindow
             return;
 
         // WPF DataBind (8) and Render (7) both outrank Background (4). Defer evidence one
-        // Dispatcher turn so the LIVE target has consumed the same process frame before
-        // Value 1/Value 2 can advance. This removes the impossible visible state where
-        // evidence=N while LIVE is still N-1, without adding another process-value writer.
+        // Dispatcher turn, then verify the actual runtime property bound by LIVE VALUE still
+        // contains the same process value. This is a frame barrier rather than a timing guess.
         var routeOwner = coordinator;
         Dispatcher.BeginInvoke(
             new Action(() =>
@@ -164,16 +176,19 @@ public partial class MainWindow
                     return;
                 }
 
-                foreach (var entry in publishAfterLiveCommit)
+                foreach (var committed in publishAfterLiveCommit)
                 {
-                    routeOwner.PrimaryController.Enqueue(entry);
-                    routeOwner.EnqueueAdditional(entry);
+                    if (!IsFatLiveCommitCurrent(committed))
+                        continue;
+
+                    routeOwner.PrimaryController.Enqueue(committed.Entry);
+                    routeOwner.EnqueueAdditional(committed.Entry);
                 }
             }),
             DispatcherPriority.Background);
     }
 
-    private static void ProjectSharedEngineeringPointToFat(
+    private static IReadOnlyList<IoTestPointPlan> ProjectSharedEngineeringPointToFat(
         IReadOnlyDictionary<string, List<IoTestPointPlan>> pointIndex,
         Iec61850MonitorPoint point)
     {
@@ -189,12 +204,37 @@ public partial class MainWindow
                 pointIndex.TryGetValue(fallback, out plans);
         }
 
-        if (plans == null)
-            return;
+        if (plans == null || plans.Count == 0)
+            return Array.Empty<IoTestPointPlan>();
 
         foreach (var plan in plans)
             ApplyP0FatLivePoint(plan.Runtime, point);
+        return plans;
+    }
+
+    private static bool IsFatLiveCommitCurrent(CommittedFatProcessEvent committed)
+    {
+        foreach (var plan in committed.Plans)
+        {
+            if (!Iec61850MonitorPoint.AreSemanticallyEquivalent(
+                    plan.Runtime.CurrentValue,
+                    committed.Entry.NewValue))
+            {
+                return false;
+            }
+
+            var expectedQuality = string.IsNullOrWhiteSpace(committed.Entry.Quality)
+                ? "Unknown"
+                : committed.Entry.Quality.Trim();
+            if (!string.Equals(plan.Runtime.CurrentQuality, expectedQuality, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private sealed record StableFatProcessCursor(long Sequence, string Value, string Quality);
+    private sealed record CommittedFatProcessEvent(
+        Iec61850EventEntry Entry,
+        IReadOnlyList<IoTestPointPlan> Plans);
 }
