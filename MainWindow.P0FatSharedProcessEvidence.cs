@@ -6,9 +6,16 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Physical-relay FAT consumes Engineering's coalesced process image, never a second raw
-/// runtime observer. LIVE VALUE is projected first from the exact Engineering point and FAT
-/// evidence is emitted only after that same value has been committed to every mapped FAT row.
+/// Physical-relay FAT keeps two deliberately different responsibilities:
+/// 1) operator-facing LIVE VALUE is a presentation-only mirror of the newest runtime
+///    PointUpdated snapshot, drained at DataBind priority; and
+/// 2) Value 1 / Value 2 evidence is authorized only from Engineering's coalesced process
+///    image. Evidence is emitted only after the exact same value is already committed to
+///    every mapped FAT LIVE row.
+///
+/// This separation removes the field regression where evidence could visibly advance while
+/// LIVE VALUE waited for the slower 200 ms Engineering UI flush. The raw mirror never writes
+/// evidence and the evidence controllers never write CurrentValue.
 /// </summary>
 public partial class MainWindow
 {
@@ -24,12 +31,15 @@ public partial class MainWindow
         _p0FatSharedProcessCoordinator = coordinator;
         _p0FatSharedProcessCursors.Clear();
 
-        // Primary/sibling legacy routes observe raw runtime frames before Engineering has
-        // coalesced them. P0FatRuntimePointUpdated is another raw presentation observer.
-        // Detach all three while FAT is open; the UI-flush route below is the single source.
+        // Primary/sibling legacy evidence routes observe raw runtime frames before
+        // Engineering has coalesced them, so they stay detached. P0FatRuntimePointUpdated is
+        // different: it is presentation-only and updates Runtime.CurrentValue/quality/source;
+        // keep exactly one subscription so FAT LIVE follows the report immediately rather
+        // than waiting for the Engineering 200 ms UI-flush cadence.
         _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
         _runtime.PointUpdated -= P0FatRuntimePointUpdated;
+        _runtime.PointUpdated += P0FatRuntimePointUpdated;
 
         if (_p0FatSharedProcessRouteAttached)
             return;
@@ -62,7 +72,9 @@ public partial class MainWindow
             return;
 
         // UiFlushTimer_Tick was registered before this handler. device.Points therefore
-        // already contains Engineering's exact visible process image for this frame.
+        // already contains Engineering's exact visible process image for this frame. The
+        // presentation-only raw mirror may already have shown the same value in FAT; this
+        // pass remains the evidence authority and reconfirms the committed process image.
         var pointIndex = GetP0FatPointIndex(fat.Project);
         var activeDeviceIds = coordinator.Project.Ieds
             .Where(coordinator.IsIedSessionActive)
