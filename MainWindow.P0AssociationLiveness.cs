@@ -120,10 +120,12 @@ public partial class MainWindow
                 continue;
             }
 
-            // Never declare an endpoint dead merely because a site blocks ICMP. The
-            // watchdog becomes authoritative for this IED only after at least one successful
-            // ping proved that ICMP is a valid liveness signal for the endpoint.
-            if (pingAlive == null || !_associationPingProven.Contains(device.DeviceId))
+            // Before the first successful ping, null means ICMP may simply be blocked by the
+            // site and must never declare the IED dead. After ICMP has been proven for this
+            // endpoint, however, both an explicit non-success reply and a PingException/general
+            // transport failure are real liveness failures. Physical cable/power loss on Windows
+            // commonly surfaces as PingException rather than a TimedOut reply.
+            if (!_associationPingProven.Contains(device.DeviceId))
                 continue;
 
             var failures = _associationLivenessFailures.TryGetValue(device.DeviceId, out var current)
@@ -243,7 +245,8 @@ public partial class MainWindow
         }
         catch (PingException)
         {
-            // null means ICMP availability is unknown, not that the IED is offline.
+            // null is only "unknown" until this endpoint has first proven ICMP support.
+            // RunAssociationLivenessPassAsync turns it into a failure after that proof.
             return null;
         }
         catch (InvalidOperationException)
