@@ -19,18 +19,17 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void RemovedFatSignals_AreFilteredFromActiveGridAndTestIsFailClosed()
+    public void RemovedFatSignals_AreFilteredFromActiveGridWithoutSilentlyUntickingTest()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ActiveFatView.cs"));
 
         Assert.Contains("Filter = item => item is IoTestPointPlan point && point.IsIncludedInFat", source, StringComparison.Ordinal);
-        Assert.Contains("if (!point.IsIncludedInFat && point.TestEnabled)", source, StringComparison.Ordinal);
-        Assert.Contains("point.TestEnabled = false", source, StringComparison.Ordinal);
         Assert.Contains("_activeFatView?.Refresh()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.TestEnabled = false", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void DownloadedFaultRecords_HaveASelectColumnFallbackIntoSafeRedownloadState()
+    public void DownloadedFaultRecords_HaveOneVisibleSelectAuthorityForSafeRedownload()
     {
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
         var transfer = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadUx.cs"));
@@ -38,6 +37,8 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Contains("cell.Column.DisplayIndex != 0", source, StringComparison.Ordinal);
         Assert.Contains("candidate.LocalState != FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
         Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
+        Assert.Contains("ConfigureRecordRow(row)", source, StringComparison.Ordinal);
+        Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
         Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
         Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
     }
@@ -70,19 +71,67 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void MultiRcbExport_MergesSelectedReportControlsAndNativeDataSetsOnly()
+    public void MultiRcbExport_ProductionClickUsesMultiSelectAndNativeDataSetsOnly()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.MultiRcbExport.cs"));
         var window = File.ReadAllText(FindRepoFile("RcbMultiExportWindow.cs"));
+        var authority = File.ReadAllText(FindRepoFile("MainWindow.RcbExportClickAuthority.cs"));
 
         Assert.Contains("IReadOnlyList<RcbExportRow> selectedRows", source, StringComparison.Ordinal);
         Assert.Contains("MergeScopedLnChildren(merged, additional, \"DataSet\")", source, StringComparison.Ordinal);
         Assert.Contains("MergeScopedLnChildren(merged, additional, \"ReportControl\")", source, StringComparison.Ordinal);
         Assert.Contains("ValidateGenericMultiRcbDocument", source, StringComparison.Ordinal);
         Assert.Contains("ExportLegacySasRcbAsync", source, StringComparison.Ordinal);
-        Assert.Contains("row.IsSelected", window, StringComparison.Ordinal);
+        Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
         Assert.Contains("select one or more native RCBs", window, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[ModuleInitializer]", authority, StringComparison.Ordinal);
+        Assert.Contains("window.IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateDynamic", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LiveSignalPresentation_IsPhaseAwareAtEngineeringColumnLevel()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.FieldPresentationFix.cs"));
+
+        Assert.Contains("ApplySemanticSignalColumns", source, StringComparison.Ordinal);
+        Assert.Contains("CreateSemanticSignalBinding(\"IecTelegram\")", source, StringComparison.Ordinal);
+        Assert.Contains("IoFatSignalDisplayNameFormatter.Format", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FatIecReference_RemainsOperatorResizableBeyondCompactWidth()
+    {
+        var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ColumnSizing.cs"));
+
+        Assert.Contains("FatSignalsGrid.CanUserResizeColumns = true", source, StringComparison.Ordinal);
+        Assert.Contains("\"IEC REFERENCE\"", source, StringComparison.Ordinal);
+        Assert.Contains("column.MaxWidth = 4096d", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FatEvidence_CannotAdvanceAheadOfCommittedLiveValue()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
+
+        Assert.Contains("projectedPlans.Count == 0", source, StringComparison.Ordinal);
+        Assert.Contains("InvalidateP0FatPointIndex()", source, StringComparison.Ordinal);
+        Assert.Contains("IsFatLiveCommitCurrent", source, StringComparison.Ordinal);
+        Assert.Contains("plan.Runtime.CurrentValue", source, StringComparison.Ordinal);
+        Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IedExplorerHeader_ReturnsHomeWithoutUnloadingEngineeringOrFatWorkspace()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.ExplorerHomeNavigation.cs"));
+
+        Assert.Contains("MainTabs.SelectedIndex = 0", source, StringComparison.Ordinal);
+        Assert.Contains("SelectedDevice = null", source, StringComparison.Ordinal);
+        Assert.Contains("InstallFirstRunTestingChoices()", source, StringComparison.Ordinal);
+        Assert.Contains("RestoreFirstRunLauncherContract()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Devices.Clear", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CloseIo", source, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepoFile(string relativePath)
