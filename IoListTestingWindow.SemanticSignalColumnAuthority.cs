@@ -11,12 +11,10 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Makes the FAT workspace SIGNAL column use the same IEC 61850 DO/DA phase-aware
-/// presentation as the report preview. The V2 FAT workspace rebuilds its DataGrid columns
-/// during Window.Loaded, so this authority deliberately reapplies the semantic template one
-/// Loaded dispatcher turn later. Row virtualization/recycling can therefore never fall back
-/// to the raw DO-only SignalName (A/A/A, ThdA/ThdA/ThdA, etc.). Raw IEC identities remain
-/// unchanged.
+/// Owns the operator-facing FAT SIGNAL column after the V2 column rebuild. ConfigureFatV2Columns
+/// creates SIGNAL as a DataGridTextColumn bound to SignalName, so merely looking for an existing
+/// DataGridTemplateColumn never touched the production column. This authority replaces the actual
+/// SIGNAL column in-place with a phase-aware template while preserving width constraints.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -40,10 +38,9 @@ public partial class IoListTestingWindow
         if (sender is not IoListTestingWindow window)
             return;
 
-        // InstallFatV2WorkspaceUx/ConfigureP0StableFatColumns run on the same Window.Loaded
-        // route. Defer one turn so our template is the final production column authority.
+        window.ApplySemanticFatSignalColumn();
         window.Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
+            DispatcherPriority.ApplicationIdle,
             new Action(window.ApplySemanticFatSignalColumn));
     }
 
@@ -52,8 +49,9 @@ public partial class IoListTestingWindow
         if (sender is not DataGrid grid || Window.GetWindow(grid) is not IoListTestingWindow window)
             return;
 
+        window.ApplySemanticFatSignalColumn();
         window.Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
+            DispatcherPriority.ApplicationIdle,
             new Action(window.ApplySemanticFatSignalColumn));
     }
 
@@ -62,14 +60,40 @@ public partial class IoListTestingWindow
         if (_fatSignalsGrid == null)
             return;
 
-        foreach (var column in _fatSignalsGrid.Columns.OfType<DataGridTemplateColumn>())
+        for (var index = 0; index < _fatSignalsGrid.Columns.Count; index++)
         {
-            if (!string.Equals(column.Header?.ToString(), "SIGNAL", StringComparison.OrdinalIgnoreCase))
+            var existing = _fatSignalsGrid.Columns[index];
+            if (!string.Equals(existing.Header?.ToString(), "SIGNAL", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            column.CellTemplate = BuildSemanticFatSignalTemplate();
+            if (existing is DataGridTemplateColumn template &&
+                ReferenceEquals(template.CellTemplate, _semanticFatSignalTemplate))
+            {
+                return;
+            }
+
+            var replacement = new DataGridTemplateColumn
+            {
+                Header = existing.Header,
+                Width = existing.Width,
+                MinWidth = existing.MinWidth,
+                MaxWidth = existing.MaxWidth,
+                CanUserResize = existing.CanUserResize,
+                CanUserReorder = existing.CanUserReorder,
+                CanUserSort = existing.CanUserSort,
+                SortMemberPath = nameof(IoTestPointPlan.SignalName),
+                IsReadOnly = true,
+                CellTemplate = SemanticFatSignalTemplate
+            };
+
+            _fatSignalsGrid.Columns[index] = replacement;
+            return;
         }
     }
+
+    private static DataTemplate? _semanticFatSignalTemplate;
+    private static DataTemplate SemanticFatSignalTemplate =>
+        _semanticFatSignalTemplate ??= BuildSemanticFatSignalTemplate();
 
     private static DataTemplate BuildSemanticFatSignalTemplate()
     {
@@ -91,6 +115,7 @@ public partial class IoListTestingWindow
         text.SetValue(TextBlock.FontSizeProperty, 12.2d);
         text.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
         text.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(38, 56, 79)));
+        text.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 4, 0));
 
         return new DataTemplate { VisualTree = text };
 #pragma warning restore CS0618
