@@ -104,6 +104,15 @@ public partial class MainWindow
             }
 
             var pingAlive = await TryPingEndpointAsync(device.IpAddress, cancellationToken).ConfigureAwait(true);
+
+            // A user may intentionally disconnect while the asynchronous probe is in flight.
+            // Never convert that explicit Stop into an automatic reconnect request.
+            if (!device.IsConnected || _associationReconnectWanted.Contains(device.DeviceId))
+            {
+                _associationLivenessFailures.Remove(device.DeviceId);
+                continue;
+            }
+
             if (pingAlive == true)
             {
                 _associationPingProven.Add(device.DeviceId);
