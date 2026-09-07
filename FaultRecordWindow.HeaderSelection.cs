@@ -11,8 +11,8 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Adds a tri-state select-all checkbox to the fault-record Get column. A record with relay
 /// files is selectable whether it is a first download or an intentional re-download. Native
-/// first-download rows use FaultRecordRow.IsSelected; Downloaded rows use the staged-overwrite
-/// selection set owned by RedownloadUx.
+/// first-download rows use FaultRecordRow.IsSelected; downloaded rows use the notifying
+/// re-download selection authority so the native WPF checkbox and transfer state cannot diverge.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -109,27 +109,22 @@ public partial class FaultRecordWindow
                 if (!HasTransferableFiles(row))
                 {
                     row.IsSelected = false;
-                    _redownloadSelections.Remove(row.Record.RecordId);
-                    continue;
-                }
-
-                if (!target)
-                {
-                    row.IsSelected = false;
-                    _redownloadSelections.Remove(row.Record.RecordId);
+                    if (row.LocalState == FaultRecordLocalState.Downloaded)
+                        SetDownloadedTransferSelection(row, false);
+                    else
+                        _redownloadSelections.Remove(row.Record.RecordId);
                     continue;
                 }
 
                 if (row.LocalState == FaultRecordLocalState.Downloaded)
                 {
                     row.IsSelected = false;
-                    _redownloadSelections.Add(row.Record.RecordId);
-                    ConfigureRecordRow(row);
+                    SetDownloadedTransferSelection(row, target);
                 }
                 else
                 {
                     _redownloadSelections.Remove(row.Record.RecordId);
-                    row.IsSelected = row.CanSelectForDownload;
+                    row.IsSelected = target && row.CanSelectForDownload;
                 }
             }
         }
@@ -208,7 +203,7 @@ public partial class FaultRecordWindow
 
     private bool IsSelectedForTransfer(FaultRecordRow row)
         => row.LocalState == FaultRecordLocalState.Downloaded
-            ? _redownloadSelections.Contains(row.Record.RecordId)
+            ? IsDownloadedTransferSelected(row)
             : row.IsSelected;
 
     private void FaultRecordHeaderSelectionWindow_Closed(object? sender, EventArgs e)
