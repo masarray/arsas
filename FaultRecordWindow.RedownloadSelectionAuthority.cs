@@ -10,9 +10,9 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Pointer-selection authority for the fault-record grid. Downloaded rows use the safe
 /// re-download selection set while first-download rows keep FaultRecordRow.IsSelected.
-/// The visible check state is repainted after the complete WPF input/layout cycle; an explicit
-/// check glyph is also shown for selected rows so the operator never gets a selected counter
-/// with an apparently empty checkbox.
+/// The visible check state is repainted after the complete WPF input/layout cycle and after
+/// row virtualization/recycling; an explicit check glyph is shown for selected rows so the
+/// operator never gets a selected counter with an apparently empty checkbox.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -24,6 +24,25 @@ public partial class FaultRecordWindow
             UIElement.PreviewMouseLeftButtonDownEvent,
             new MouseButtonEventHandler(RedownloadSelectionAuthority_Down),
             handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(DataGridRow),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(RedownloadSelectionRow_Loaded),
+            handledEventsToo: true);
+    }
+
+    private static void RedownloadSelectionRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not DataGridRow visualRow ||
+            visualRow.DataContext is not FaultRecordRow row ||
+            Window.GetWindow(visualRow) is not FaultRecordWindow window)
+        {
+            return;
+        }
+
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.ContextIdle,
+            new Action(() => window.PaintTransferSelection(row)));
     }
 
     private static void RedownloadSelectionAuthority_Down(object sender, MouseButtonEventArgs e)
