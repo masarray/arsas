@@ -3,56 +3,50 @@ namespace ARSAS.Tests;
 public sealed class IoFatSharedProcessImageRegressionTests
 {
     [Fact]
-    public void FatEvidence_DetachesRawRuntimeObserversAndSamplesEngineeringUiImage()
+    public void FatEvidence_UsesOneAtomicRawSnapshotRouteInsteadOfEngineeringUiTimer()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
         Assert.Contains("_runtime.PointUpdated -= Runtime_IoTestPointUpdated", source, StringComparison.Ordinal);
         Assert.Contains("_runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated", source, StringComparison.Ordinal);
         Assert.Contains("_runtime.PointUpdated -= P0FatRuntimePointUpdated", source, StringComparison.Ordinal);
-        Assert.Contains("_uiFlushTimer.Tick += P0FatSharedProcessEvidence_Tick", source, StringComparison.Ordinal);
-        Assert.Contains("device.Points", source, StringComparison.Ordinal);
-        Assert.Contains("ProjectSharedEngineeringPointToFat", source, StringComparison.Ordinal);
-        Assert.Contains("IsFatLiveCommitCurrent(committed)", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.EnqueueAdditional(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.Contains("_runtime.PointUpdated += P0FatAtomicPointUpdated", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.DataBind", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_uiFlushTimer.Tick +=", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("P0FatSharedProcessEvidence_Tick", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SharedImageCursor_IsPrimedBeforeStartAndIgnoresSequenceOnlyChurn()
+    public void AtomicRoute_CommitsLiveBeforePublishingEvidenceFromSameSnapshot()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
-        Assert.Contains("if (!activeDeviceIds.Contains(device.DeviceId))", source, StringComparison.Ordinal);
+        var apply = source.IndexOf("ApplyP0FatSnapshot(plan.Runtime, snapshot)", StringComparison.Ordinal);
+        var barrier = source.IndexOf("IsAtomicFatLiveCommitCurrent(plans, snapshot)", apply, StringComparison.Ordinal);
+        var primary = source.IndexOf("coordinator.PrimaryController.Enqueue(entry)", barrier, StringComparison.Ordinal);
+        var sibling = source.IndexOf("coordinator.EnqueueAdditional(entry)", primary, StringComparison.Ordinal);
+
+        Assert.True(apply >= 0, "The exact runtime snapshot must first update LIVE VALUE.");
+        Assert.True(barrier > apply, "The LIVE-bound runtime must be verified after commit.");
+        Assert.True(primary > barrier, "Primary Value 1/2 evidence must be downstream of the LIVE commit.");
+        Assert.True(sibling > primary, "Sibling evidence receives the same already-committed frame.");
+        Assert.Contains("NewValue = snapshot.Value", source, StringComparison.Ordinal);
+        Assert.Contains("DeviceTimestamp = snapshot.DeviceTimestamp", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AtomicCursor_IsPrimedBeforeStartAndIgnoresSequenceOnlyChurn()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
+
+        Assert.Contains("if (!activeDeviceIds.Contains(point.DeviceId))", source, StringComparison.Ordinal);
         Assert.Contains("_p0FatSharedProcessCursors[key] = new StableFatProcessCursor", source, StringComparison.Ordinal);
-        Assert.Contains("Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value)", source, StringComparison.Ordinal);
-        Assert.Contains("Sequence-only transport churn", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, snapshot.Value)", source, StringComparison.Ordinal);
+        Assert.Contains("previous.Sequence != snapshot.Sequence", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EvidencePublication_IsDeferredBelowDataBindAfterVerifiedLiveProjection()
-    {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
-
-        var liveProjection = source.IndexOf("ProjectSharedEngineeringPointToFat(pointIndex, point)", StringComparison.Ordinal);
-        Assert.True(liveProjection >= 0, "Shared LIVE projection must exist.");
-
-        var beginInvoke = source.IndexOf("Dispatcher.BeginInvoke(", liveProjection, StringComparison.Ordinal);
-        Assert.True(beginInvoke > liveProjection, "Evidence publication must be scheduled only after the LIVE projection.");
-
-        var liveBarrier = source.IndexOf("IsFatLiveCommitCurrent(committed)", beginInvoke, StringComparison.Ordinal);
-        Assert.True(liveBarrier > beginInvoke, "Deferred evidence must re-check the actual LIVE-bound runtime value.");
-
-        var evidenceEnqueue = source.IndexOf("routeOwner.PrimaryController.Enqueue(committed.Entry)", liveBarrier, StringComparison.Ordinal);
-        Assert.True(evidenceEnqueue > liveBarrier, "Value 1/2 enqueue must occur only after the LIVE commit barrier succeeds.");
-
-        var backgroundPriority = source.IndexOf("DispatcherPriority.Background", evidenceEnqueue, StringComparison.Ordinal);
-        Assert.True(backgroundPriority > evidenceEnqueue, "The deferred delegate must be scheduled at Background priority.");
-        Assert.Contains("DataBind (8) and Render (7) both outrank Background (4)", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ParallelEvidenceWiring_UsesSharedProcessRouteInsteadOfRawPointSubscription()
+    public void ParallelEvidenceWiring_UsesSharedProcessRouteInsteadOfLegacyAdditionalObserver()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.MultiSessionEvidence.cs"));
 
