@@ -46,11 +46,12 @@ public sealed class FatCurrentEvidenceAssessmentRegressionTests
 
         Assert.Equal(IoTestPointState.Review, assessment.State);
         Assert.Equal("⚠ REVIEW", point.FatResultText);
-        Assert.Contains("does not prove a state change", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("same discrete state", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("does not prove both FAT states", assessment.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void GenericCurrentPair_DifferentConnectionGeneration_IsReview()
+    public void GenericCurrentPair_DifferentConnectionGeneration_RemainsPassWhenStatesAreOpposite()
     {
         var point = NewDiscretePoint("GENERATION");
         point.Runtime.SetFatValueEvidence(Evidence(FatValueSlot.Value1, "False", 40, generation: 1));
@@ -58,8 +59,10 @@ public sealed class FatCurrentEvidenceAssessmentRegressionTests
 
         var assessment = FatCurrentEvidenceAssessmentService.Apply(point);
 
-        Assert.Equal(IoTestPointState.Review, assessment.State);
-        Assert.Contains("different IED connection generations", assessment.Reason, StringComparison.Ordinal);
+        Assert.Equal(IoTestPointState.Passed, assessment.State);
+        Assert.Equal("✔ PASS", point.FatResultText);
+        Assert.Contains("FALSE -> TRUE", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("provenance only", assessment.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,7 +82,8 @@ public sealed class FatCurrentEvidenceAssessmentRegressionTests
 
         Assert.Equal(IoTestPointState.Review, assessment.State);
         Assert.Equal("⚠ REVIEW", point.FatResultText);
-        Assert.Contains("does not prove a state change", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("same discrete state", assessment.Reason, StringComparison.Ordinal);
+        Assert.Contains("does not prove both FAT states", assessment.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
