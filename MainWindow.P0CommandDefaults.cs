@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using ArIED61850Tester.Models;
 
@@ -12,19 +13,23 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class MainWindow
 {
-    private static readonly bool P0CommandDefaultsClassHandlerRegistered = RegisterP0CommandDefaultsClassHandler();
     private readonly HashSet<Iec61850MonitorDevice> _p0CommandDefaultDevices = new();
     private readonly HashSet<SignalDefinition> _p0CommandDefaultsInitialized = new();
     private readonly HashSet<SignalDefinition> _p0CommandDefaultsFinalized = new();
     private bool _p0CommandDefaultsAttached;
 
-    private static bool RegisterP0CommandDefaultsClassHandler()
+    // A static field initializer on a partial WPF Window is not a reliable registration
+    // point because the type may be marked beforefieldinit. The physical relay bench showed
+    // Sync could remain false even though the compatibility code existed. Register at module
+    // load so every MainWindow Loaded event is observed deterministically.
+    [ModuleInitializer]
+    internal static void RegisterP0CommandDefaultsClassHandler()
     {
         EventManager.RegisterClassHandler(
             typeof(MainWindow),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(P0CommandDefaultsLoaded));
-        return true;
+            new RoutedEventHandler(P0CommandDefaultsLoaded),
+            handledEventsToo: true);
     }
 
     private static void P0CommandDefaultsLoaded(object sender, RoutedEventArgs e)
@@ -90,6 +95,8 @@ public partial class MainWindow
         if (!_p0CommandDefaultsInitialized.Add(signal))
             return;
 
+        // These are initial safety defaults, not permanent locks. Both Engineering and FAT
+        // bind the same SignalDefinition, so this one initialization is the shared authority.
         signal.ControlInterlockCheck = true;
         signal.ControlSynchroCheck = true;
         signal.PropertyChanged += P0CommandSignal_PropertyChanged;
