@@ -34,23 +34,24 @@ public sealed class P1RelayBenchHotfixRegressionTests
     }
 
     [Theory]
-    [InlineData(false, true, false, P1CommandFreshnessDecision.Suppress)]
-    [InlineData(false, true, true, P1CommandFreshnessDecision.ConfirmAndPublish)]
-    [InlineData(true, true, false, P1CommandFreshnessDecision.ReleaseAndPublish)]
-    [InlineData(false, false, false, P1CommandFreshnessDecision.Suppress)]
-    [InlineData(false, false, true, P1CommandFreshnessDecision.Publish)]
+    [InlineData(false, true, false, "Suppress")]
+    [InlineData(false, true, true, "ConfirmAndPublish")]
+    [InlineData(true, true, false, "ReleaseAndPublish")]
+    [InlineData(false, false, false, "Suppress")]
+    [InlineData(false, false, true, "Publish")]
     public void CommandFreshness_FirstContradictoryReportCannotRollbackConfirmedPosition(
         bool matchingReportSeen,
         bool reportTraffic,
         bool matchesExpected,
-        P1CommandFreshnessDecision expected)
+        string expected)
     {
         Assert.Equal(
             expected,
             MainWindow.P1DecideCommandFreshnessForTest(
-                matchingReportSeen,
-                reportTraffic,
-                matchesExpected));
+                    matchingReportSeen,
+                    reportTraffic,
+                    matchesExpected)
+                .ToString());
     }
 
     [Fact]
