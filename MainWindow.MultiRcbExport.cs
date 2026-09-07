@@ -9,21 +9,16 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Upgrades the legacy single-RCB export entry point to a multi-select generic SCL workflow
-/// without changing ARIEC61850. Each selected RCB is first rendered by the existing proven
-/// single-RCB exporter, then the resulting native DataSet/ReportControl elements are merged
-/// by their exact IED/LDevice/LN scope. This deliberately never derives DataSets from ARSAS
-/// runtime monitor selections or temporary dynamic acquisition state.
+/// Multi-select generic RCB export. Source-backed RCBs are sliced directly from the source
+/// SCL XML in ARSAS so XDocument/XElement never enters JSON serialization. Live-only RCBs
+/// retain the proven singular fallback and are merged into that XML by exact LN scope.
+/// ARIEC61850 remains immutable.
 /// </summary>
 public partial class MainWindow
 {
     [ModuleInitializer]
     internal static void RegisterMultiRcbExportButtonClassHandler()
     {
-        // ModuleInitializer is intentional. An unreferenced static bool on a beforefieldinit
-        // partial class is not a reliable WPF registration point and was the reason the relay
-        // bench could still open the legacy one-RCB dialog. Registration now happens when the
-        // assembly is loaded, before any MainWindow button can be realized.
         EventManager.RegisterClassHandler(
             typeof(Button),
             FrameworkElement.LoadedEvent,
@@ -98,10 +93,9 @@ public partial class MainWindow
                 : null,
             async (selected, schema, outputPath, cancellationToken) =>
             {
-                // Live-only RCBs may need the DataSet directory evidence that the original
-                // singular exporter already validates. Collect it automatically so users do
-                // not have to remember a separate Check Availability click before export.
-                if (latestAvailability == null && device.IsConnected)
+                // Availability is evidence only. Probe automatically for live-only rows so
+                // the export route does not need a separate warning/confirmation workflow.
+                if (latestAvailability == null && device.IsConnected && selected.Any(row => !row.IsSourceBacked))
                 {
                     latestAvailability = await _rcbAvailabilityProbe
                         .CheckAsync(device, cancellationToken)
@@ -141,17 +135,36 @@ public partial class MainWindow
             .GroupBy(row => row.SelectionIdentity, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .ToArray();
+        var sourceRows = uniqueRows.Where(row => row.IsSourceBacked).ToArray();
+        var liveOnlyRows = uniqueRows.Where(row => !row.IsSourceBacked).ToArray();
+        var hasSource = sourceRows.Length > 0 &&
+                        !string.IsNullOrWhiteSpace(device.SclSourcePath) &&
+                        File.Exists(device.SclSourcePath);
         var tempRoot = Path.Combine(Path.GetTempPath(), $"arsas-rcb-export-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
 
         try
         {
-            var singularFiles = new List<string>(uniqueRows.Length);
-            for (var index = 0; index < uniqueRows.Length; index++)
+            XDocument? merged = null;
+
+            if (hasSource)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var row = uniqueRows[index];
-                var tempPath = Path.Combine(tempRoot, $"selected-{index + 1:D3}.cid");
+                merged = BuildSourceBackedMultiRcbDocument(device, sourceRows, cancellationToken);
+            }
+            else if (sourceRows.Length > 0)
+            {
+                throw new InvalidOperationException("The selected source-backed RCBs require their original SCL file, but that file is no longer available.");
+            }
+
+            // Never send source-backed XML through the legacy exporter: that path can enter
+            // System.Text.Json and recurse through XAttribute linked-list ownership. Only
+            // genuinely live-only rows use the singular fallback.
+            for (var index = 0; index < liveOnlyRows.Length; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var row = liveOnlyRows[index];
+                var tempPath = Path.Combine(tempRoot, $"live-selected-{index + 1:D3}.cid");
                 var completion = await ExportLegacySasRcbAsync(
                         device,
                         row,
@@ -161,18 +174,22 @@ public partial class MainWindow
                         cancellationToken)
                     .ConfigureAwait(true);
                 if (string.IsNullOrWhiteSpace(completion.OutputPath) || !File.Exists(completion.OutputPath))
-                    throw new InvalidOperationException($"The single-RCB staging export for '{row.Name}' did not produce an SCL file.");
-                singularFiles.Add(completion.OutputPath);
+                    throw new InvalidOperationException($"The live-only staging export for '{row.Name}' did not produce an SCL file.");
+
+                var additional = XDocument.Load(
+                    completion.OutputPath,
+                    LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+                if (merged == null)
+                    merged = additional;
+                else
+                {
+                    MergeScopedLnChildren(merged, additional, "DataSet");
+                    MergeScopedLnChildren(merged, additional, "ReportControl");
+                }
             }
 
-            var merged = XDocument.Load(singularFiles[0], LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
-            for (var index = 1; index < singularFiles.Count; index++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var additional = XDocument.Load(singularFiles[index], LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
-                MergeScopedLnChildren(merged, additional, "DataSet");
-                MergeScopedLnChildren(merged, additional, "ReportControl");
-            }
+            if (merged == null)
+                throw new InvalidOperationException("No selected RCB could be projected into the generic SCL document.");
 
             ValidateGenericMultiRcbDocument(merged, uniqueRows.Length);
 
@@ -182,7 +199,7 @@ public partial class MainWindow
             merged.Save(outputPath, SaveOptions.DisableFormatting);
 
             AddLog("INFO", "RCB Export",
-                $"{device.Name}: generic multi-RCB SCL saved; selected RCB={uniqueRows.Length}; native/static DataSets retained from authoritative singular exports; output={outputPath}");
+                $"{device.Name}: generic multi-RCB SCL saved; selected RCB={uniqueRows.Length}; source-backed={sourceRows.Length}; live-only={liveOnlyRows.Length}; XML-only source slicing=true; output={outputPath}");
             SetStatus($"{device.Name}: generic SCL exported with {uniqueRows.Length} selected RCB(s).");
 
             return new RcbExportCompletion
@@ -190,7 +207,7 @@ public partial class MainWindow
                 OutputPath = outputPath,
                 SchemaDisplayName = schema.ToString(),
                 RetainedReportControl = string.Join(", ", uniqueRows.Select(row => row.Name)),
-                DataSetName = string.Join(", ", uniqueRows.Select(row => row.DataSetName).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase)),
+                DataSetName = string.Join(", ", uniqueRows.Select(row => row.DataSetName).Where(name => !string.IsNullOrWhiteSpace(name) && name != "—").Distinct(StringComparer.OrdinalIgnoreCase)),
                 DataSetMemberCount = uniqueRows.Sum(row => Math.Max(0, row.MemberCount)),
                 RemovedReportControlCount = Math.Max(0, BuildRcbExportRows(device, sourceInventory: null, availability).Count - uniqueRows.Length),
                 Message = $"Export complete: {uniqueRows.Length} selected RCB(s) retained with their native/static IED DataSets. No ARSAS runtime acquisition DataSet was generated."
@@ -200,6 +217,109 @@ public partial class MainWindow
         {
             TryDeleteMultiRcbTempDirectory(tempRoot);
         }
+    }
+
+    private XDocument BuildSourceBackedMultiRcbDocument(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<RcbExportRow> selectedRows,
+        CancellationToken cancellationToken)
+    {
+        var sourcePath = device.SclSourcePath;
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+            throw new InvalidOperationException("Source SCL is unavailable for source-backed RCB export.");
+
+        var document = XDocument.Load(sourcePath, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+        var targetIedName = EffectiveSclIedName(device);
+        var targetIed = document.Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "IED" &&
+                string.Equals(element.Attribute("name")?.Value, targetIedName, StringComparison.OrdinalIgnoreCase));
+        if (targetIed == null)
+            throw new InvalidOperationException($"IED '{targetIedName}' was not found in the source SCL.");
+
+        var selected = new HashSet<XElement>();
+        foreach (var row in selectedRows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var match = FindSourceReportControl(targetIed, row);
+            if (match == null)
+                throw new InvalidOperationException($"Selected RCB '{row.Reference}' could not be resolved uniquely in the source SCL.");
+            selected.Add(match);
+        }
+
+        // Capture the exact native DataSet identity before removing unselected RCBs.
+        var requiredDataSets = selected
+            .Select(reportControl => new
+            {
+                Parent = reportControl.Parent,
+                Name = reportControl.Attribute("datSet")?.Value?.Trim() ?? string.Empty
+            })
+            .Where(item => item.Parent != null && item.Name.Length > 0)
+            .ToArray();
+
+        foreach (var reportControl in document.Descendants()
+                     .Where(element => element.Name.LocalName == "ReportControl")
+                     .ToArray())
+        {
+            if (!selected.Contains(reportControl))
+                reportControl.Remove();
+        }
+
+        foreach (var dataSet in document.Descendants()
+                     .Where(element => element.Name.LocalName == "DataSet")
+                     .ToArray())
+        {
+            var name = dataSet.Attribute("name")?.Value?.Trim() ?? string.Empty;
+            var needed = requiredDataSets.Any(item =>
+                ReferenceEquals(item.Parent, dataSet.Parent) &&
+                string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (!needed)
+                dataSet.Remove();
+        }
+
+        return document;
+    }
+
+    private static XElement? FindSourceReportControl(XElement targetIed, RcbExportRow row)
+    {
+        var candidates = targetIed.Descendants()
+            .Where(element => element.Name.LocalName == "ReportControl")
+            .Where(element => string.Equals(
+                element.Attribute("name")?.Value,
+                row.ExportName,
+                StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(element.Attribute("name")?.Value, row.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(element =>
+            {
+                var buffered = bool.TryParse(element.Attribute("buffered")?.Value, out var value) && value;
+                return buffered == row.Buffered;
+            })
+            .ToArray();
+
+        if (candidates.Length == 1)
+            return candidates[0];
+
+        var normalizedTarget = NormalizeRcbReference(row.Reference);
+        var exact = candidates.Where(candidate =>
+            string.Equals(
+                NormalizeRcbReference(BuildSourceReportControlReference(candidate, row.Buffered)),
+                normalizedTarget,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+        return exact.Length == 1 ? exact[0] : null;
+    }
+
+    private static string BuildSourceReportControlReference(XElement reportControl, bool buffered)
+    {
+        var logicalNode = reportControl.Parent;
+        var ied = reportControl.Ancestors().FirstOrDefault(element => element.Name.LocalName == "IED");
+        var lDevice = reportControl.Ancestors().FirstOrDefault(element => element.Name.LocalName == "LDevice");
+        if (logicalNode == null || ied == null || lDevice == null)
+            return string.Empty;
+
+        var ln = logicalNode.Name.LocalName == "LN0"
+            ? "LLN0"
+            : $"{logicalNode.Attribute("prefix")?.Value}{logicalNode.Attribute("lnClass")?.Value}{logicalNode.Attribute("inst")?.Value}";
+        var service = buffered ? "BR" : "RP";
+        return $"{ied.Attribute("name")?.Value}{lDevice.Attribute("inst")?.Value}/{ln}.{service}.{reportControl.Attribute("name")?.Value}";
     }
 
     private static void MergeScopedLnChildren(XDocument target, XDocument source, string localName)
