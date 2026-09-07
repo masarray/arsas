@@ -6,9 +6,8 @@ using System.Windows.Threading;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Seeds FAT presentation from the already-running Engineering process image after the
-/// Engineering UI-flush window has settled. This is presentation-only: it never publishes
-/// Value1/Value2 evidence and never opens a second MMS/read path.
+/// Seeds FAT presentation from the shared Engineering process image. The seed is presentation
+/// only: it never publishes Value1/Value2 evidence and never opens a second MMS/read path.
 /// </summary>
 public partial class MainWindow
 {
@@ -36,19 +35,16 @@ public partial class MainWindow
     {
         var generation = Interlocked.Increment(ref _p0FatInitialSeedGeneration);
 
-        // Immediate projection covers an already-settled Engineering image.
         Dispatcher.BeginInvoke(
             DispatcherPriority.DataBind,
             new Action(() =>
             {
                 if (generation == Volatile.Read(ref _p0FatInitialSeedGeneration) && fat.IsLoaded)
-                    P0RefreshFatFromEngineeringImage(fat);
+                    P0SeedFatFromEngineeringImageWithAliases(fat);
             }));
 
-        // Engineering batches process-image updates on its UI flush. A FAT window can be
-        // opened between the report callback and that flush; in that case the first projection
-        // legitimately sees Unknown. Re-seed after the 200 ms flush boundary and once more
-        // after layout/virtualization stabilization. No evidence is emitted by this method.
+        // A window can open between report callback and Engineering UI flush. Re-seed after
+        // that boundary and after initial layout. Both passes copy only the process image.
         _ = SeedAfterDelayAsync(fat, generation, 275);
         _ = SeedAfterDelayAsync(fat, generation, 650);
     }
@@ -65,7 +61,7 @@ public partial class MainWindow
                 () =>
                 {
                     if (generation == Volatile.Read(ref _p0FatInitialSeedGeneration) && fat.IsLoaded)
-                        P0RefreshFatFromEngineeringImage(fat);
+                        P0SeedFatFromEngineeringImageWithAliases(fat);
                 },
                 DispatcherPriority.DataBind);
         }
