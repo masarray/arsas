@@ -77,12 +77,18 @@ public sealed class IoFatV2ReportRegressionTests
     }
 
     [Fact]
-    public void ReportPreview_PrefersInterForBrandedReportText()
+    public void ReportPreview_PrefersInterWithSegoeUiOnlyFallback()
     {
-        var source = File.ReadAllText(FindRepositoryFile(
+        var preview = File.ReadAllText(FindRepositoryFile(
             Path.Combine("Services", "IoTesting", "IoFatReportPreviewDocumentBuilder.cs")));
+        var typography = File.ReadAllText(FindRepositoryFile(
+            Path.Combine("Services", "IoTesting", "IoFatReportTypography.cs")));
 
-        Assert.Contains("new(\"Inter, Segoe UI, Aptos, Arial\")", source, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportTypography.PreviewFontFamily", preview, StringComparison.Ordinal);
+        Assert.Contains("PreferredFamilyName = \"Inter\"", typography, StringComparison.Ordinal);
+        Assert.Contains("FallbackFamilyName = \"Segoe UI\"", typography, StringComparison.Ordinal);
+        Assert.DoesNotContain("Aptos", typography, StringComparison.Ordinal);
+        Assert.DoesNotContain("Arial", typography, StringComparison.Ordinal);
     }
 
     [Fact]
