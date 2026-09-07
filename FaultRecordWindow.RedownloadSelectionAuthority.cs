@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,25 +7,21 @@ using System.Windows.Media;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Gives already-downloaded COMTRADE rows one deterministic selection authority. The legacy
-/// row model intentionally keeps Downloaded rows non-selectable for a first-time transfer,
-/// while RedownloadUx owns a separate multi-selection set for safe staged overwrite. This
-/// class handler intercepts the SELECT cell before the legacy grid handler so one pointer
-/// action produces exactly one toggle, including when the legacy CheckBox is disabled or a
-/// recycled DataGridRow is being used.
+/// One pointer-selection authority for the fault-record grid. Clicking either the SELECT
+/// checkbox or anywhere on a transferable record row toggles the same visible selection.
+/// Downloaded records use the staged-overwrite selection set; first-time records keep the
+/// existing model IsSelected flag. Exactly one toggle is performed per click.
 /// </summary>
 public partial class FaultRecordWindow
 {
-    private static readonly bool RedownloadSelectionAuthorityRegistered = RegisterRedownloadSelectionAuthority();
-
-    private static bool RegisterRedownloadSelectionAuthority()
+    [ModuleInitializer]
+    internal static void RegisterRedownloadSelectionAuthority()
     {
         EventManager.RegisterClassHandler(
             typeof(DataGrid),
             UIElement.PreviewMouseLeftButtonDownEvent,
             new MouseButtonEventHandler(RedownloadSelectionAuthority_Down),
             handledEventsToo: true);
-        return true;
     }
 
     private static void RedownloadSelectionAuthority_Down(object sender, MouseButtonEventArgs e)
@@ -34,37 +31,39 @@ public partial class FaultRecordWindow
             !ReferenceEquals(grid, window.FaultRecordsGrid) ||
             window.IsBusy ||
             e.ChangedButton != MouseButton.Left ||
-            !TryResolveDownloadedSelectCell(e.OriginalSource as DependencyObject, out var row))
+            !TryResolveTransferRow(e.OriginalSource as DependencyObject, out var row) ||
+            row.Record.Files.Count == 0)
         {
             return;
         }
 
-        var recordId = row.Record.RecordId;
-        if (!window._redownloadSelections.Add(recordId))
-            window._redownloadSelections.Remove(recordId);
+        if (row.LocalState == FaultRecordLocalState.Downloaded)
+        {
+            var recordId = row.Record.RecordId;
+            if (!window._redownloadSelections.Add(recordId))
+                window._redownloadSelections.Remove(recordId);
+        }
+        else
+        {
+            if (!row.CanSelectForDownload)
+                return;
+            row.IsSelected = !row.IsSelected;
+        }
 
-        // Prevent RedownloadUx's older checkbox tunnelling handler from toggling the same
-        // record a second time. The overlay remains the sole writer for Downloaded rows.
+        // Suppress the legacy CheckBox/DataGrid handlers so a checkbox click and a row-body
+        // click both mean exactly one toggle. Reconfigure the realized row immediately so the
+        // operator sees the check mark on the same pointer action.
         e.Handled = true;
         window.ConfigureRecordRow(row);
         window.UpdateSmartSelectionUi();
     }
 
-    private static bool TryResolveDownloadedSelectCell(
-        DependencyObject? source,
-        out FaultRecordRow row)
+    private static bool TryResolveTransferRow(DependencyObject? source, out FaultRecordRow row)
     {
         row = null!;
-        var cell = FindRedownloadSelectionAncestor<DataGridCell>(source);
-        if (cell == null || cell.Column == null || cell.Column.DisplayIndex != 0)
+        var dataGridRow = FindRedownloadSelectionAncestor<DataGridRow>(source);
+        if (dataGridRow?.DataContext is not FaultRecordRow candidate)
             return false;
-
-        if (cell.DataContext is not FaultRecordRow candidate ||
-            candidate.LocalState != FaultRecordLocalState.Downloaded ||
-            candidate.Record.Files.Count == 0)
-        {
-            return false;
-        }
 
         row = candidate;
         return true;
