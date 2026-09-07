@@ -202,130 +202,13 @@ public partial class FaultRecordWindow : Window, INotifyPropertyChanged
         ShowToast("Download folder updated and local files rechecked.", ToastKind.Information);
     }
 
-    private async void Download_Click(object sender, RoutedEventArgs e)
+    private void Download_Click(object sender, RoutedEventArgs e)
     {
-        if (IsBusy)
-            return;
-
-        var checkedRows = Records
-            .Where(row => row.IsSelected && row.Record.Files.Count > 0)
-            .ToArray();
-        var selected = checkedRows
-            .Where(row => row.CanSelectForDownload)
-            .ToArray();
-        var skippedRecords = checkedRows.Length - selected.Length;
-
-        if (selected.Length == 0)
-        {
-            StatusText = skippedRecords > 0
-                ? "The selected record already exists locally. Choose another record to download."
-                : "Select at least one available fault record.";
-            ShowToast(
-                skippedRecords > 0 ? "Already downloaded — no duplicate was created." : "Select a record first.",
-                ToastKind.Information);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(DestinationDirectory))
-        {
-            StatusText = "Choose a local destination directory before downloading.";
-            ShowToast("Choose a download folder first.", ToastKind.Information);
-            return;
-        }
-
-        ResetOperationCancellation();
-        IsBusy = true;
-        IsIndeterminate = false;
-        ProgressValue = 0;
-        var completedRecords = 0;
-        var failedRecords = 0;
-        long downloadedBytes = 0;
-
-        try
-        {
-            Directory.CreateDirectory(DestinationDirectory);
-            await _client.ConnectAsync(_host, _port, _operationCancellation!.Token);
-
-            for (var index = 0; index < selected.Length; index++)
-            {
-                _operationCancellation.Token.ThrowIfCancellationRequested();
-                var row = selected[index];
-                row.Status = "Downloading";
-                row.Detail = string.Empty;
-                StatusText = $"Downloading {row.RecordName} ({index + 1}/{selected.Length})…";
-
-                var recordIndex = index;
-                var progress = new Progress<Iec61850FaultRecordDownloadProgress>(item =>
-                {
-                    var withinRecord = item.ExpectedBytes is > 0
-                        ? Math.Clamp(item.BytesTransferred / (double)item.ExpectedBytes.Value, 0d, 1d)
-                        : item.TotalFiles > 0
-                            ? Math.Clamp(item.CompletedFiles / (double)item.TotalFiles, 0d, 1d)
-                            : 0d;
-                    ProgressValue = ((recordIndex + withinRecord) / selected.Length) * 100d;
-                    StatusText = $"{row.RecordName}: {FormatBytes(item.BytesTransferred)} transferred, file {item.CompletedFiles}/{item.TotalFiles}.";
-                });
-
-                var result = await _client.DownloadAsync(
-                    row.Record,
-                    DestinationDirectory,
-                    progress,
-                    _operationCancellation.Token);
-
-                if (result.IsSuccess)
-                {
-                    completedRecords++;
-                    downloadedBytes += result.BytesTransferred;
-                    row.MarkDownloaded(result.DestinationDirectory);
-                }
-                else
-                {
-                    failedRecords++;
-                    row.Status = "Failed";
-                    row.Detail = result.Message;
-                }
-
-                ProgressValue = ((index + 1d) / selected.Length) * 100d;
-            }
-
-            RefreshLocalDownloadStates(preserveFailureStatus: true);
-            StatusText = failedRecords == 0
-                ? $"Downloaded {completedRecords:N0} record(s), {FormatBytes(downloadedBytes)}, to '{DestinationDirectory}'."
-                : $"Downloaded {completedRecords:N0} record(s); {failedRecords:N0} failed. Select a failed row to review diagnostics.";
-
-            if (failedRecords == 0)
-            {
-                ShowToast(
-                    completedRecords == 1
-                        ? $"File downloaded — {selected[0].RecordName}"
-                        : $"{completedRecords:N0} fault records downloaded successfully.",
-                    ToastKind.Success);
-            }
-            else if (completedRecords > 0)
-            {
-                ShowToast($"{completedRecords:N0} downloaded, {failedRecords:N0} failed.", ToastKind.Warning);
-            }
-            else
-            {
-                ShowToast("Download failed. Transfer diagnostics opened automatically.", ToastKind.Error);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText = "Fault-record download cancelled. Partial temporary files were cleaned up.";
-            ShowToast("Download cancelled safely.", ToastKind.Information);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Fault-record download failed: {ex.Message}";
-            ShowToast("Download failed. Review transfer diagnostics.", ToastKind.Error);
-        }
-        finally
-        {
-            IsIndeterminate = false;
-            IsBusy = false;
-            RaiseSelectionState();
-        }
+        // P1 has one transfer path for both first-time downloads and re-downloads. The smart
+        // path stages an existing record beside the destination and commits only after the
+        // fresh package is complete, so programmatic Click invocation is as safe as pointer/
+        // keyboard activation intercepted by FaultRecordWindow.RedownloadUx.cs.
+        StartSmartDownload();
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
@@ -592,7 +475,9 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
             ? "PACKAGE"
             : file.Extension.TrimStart('.').ToUpperInvariant()));
 
-    public bool CanSelectForDownload => Record.Files.Count > 0 && LocalState != FaultRecordLocalState.Downloaded;
+    // P1: one transfer-selection authority. A complete local copy remains selectable so the
+    // operator can explicitly re-download it; local state describes storage, not permission.
+    public bool CanSelectForDownload => Record.Files.Count > 0;
 
     public bool IsSelected
     {
@@ -656,10 +541,7 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
                 return;
 
             _localState = value;
-            if (_localState == FaultRecordLocalState.Downloaded)
-                _isSelected = false;
             Raise();
-            Raise(nameof(IsSelected));
             Raise(nameof(CanSelectForDownload));
         }
     }
@@ -670,8 +552,8 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
         LocalState = FaultRecordLocalState.Downloaded;
         Status = "Downloaded";
         Detail = string.IsNullOrWhiteSpace(LocalDirectory)
-            ? "The complete record exists in the selected local folder."
-            : $"Downloaded to '{LocalDirectory}'.";
+            ? "The complete record exists in the selected local folder and may be selected again for staged re-download."
+            : $"Downloaded to '{LocalDirectory}'. Select again to replace it with a fresh relay copy.";
     }
 
     public void ApplyLocalState(
@@ -686,8 +568,8 @@ public sealed class FaultRecordRow : INotifyPropertyChanged
         {
             Status = "Downloaded";
             Detail = string.IsNullOrWhiteSpace(LocalDirectory)
-                ? "The complete record exists in the selected local folder."
-                : $"Already downloaded to '{LocalDirectory}'.";
+                ? "The complete record exists in the selected local folder and may be re-downloaded."
+                : $"Already downloaded to '{LocalDirectory}'. Select the row to replace it safely with a fresh relay copy.";
             return;
         }
 
