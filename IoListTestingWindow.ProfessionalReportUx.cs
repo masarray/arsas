@@ -36,7 +36,7 @@ public partial class IoListTestingWindow
         ChevronLeft,
         ChevronRight,
         RefreshCw,
-        FileDown,
+        Save,
         X
     }
 
@@ -116,7 +116,7 @@ public partial class IoListTestingWindow
             button.Width = 92;
             button.Height = 28;
             button.Padding = new Thickness(8, 0, 9, 0);
-            button.Content = BuildLucideLabeledContent(PreviewLucideIcon.FileDown, "Save PDF");
+            button.Content = BuildLucideLabeledContent(PreviewLucideIcon.Save, "Save PDF");
             button.ToolTip = "Save PDF for this IED only; other IED FAT sessions may keep running";
         }
 
@@ -348,6 +348,8 @@ public partial class IoListTestingWindow
 
     private static Viewbox BuildLucideIcon(PreviewLucideIcon icon)
     {
+        // Geometry follows the Lucide 24x24 source paths. Keep these as vectors so the
+        // toolbar remains crisp at Windows DPI scaling without shipping raster assets.
         var geometry = icon switch
         {
             PreviewLucideIcon.Printer => "M6,9 L6,2 L18,2 L18,9 M6,18 L4,18 C2.9,18 2,17.1 2,16 L2,11 C2,9.9 2.9,9 4,9 L20,9 C21.1,9 22,9.9 22,11 L22,16 C22,17.1 21.1,18 20,18 L18,18 M6,14 L18,14 L18,22 L6,22 Z",
@@ -357,8 +359,8 @@ public partial class IoListTestingWindow
             PreviewLucideIcon.Maximize2 => "M8,3 L3,3 L3,8 M16,3 L21,3 L21,8 M8,21 L3,21 L3,16 M16,21 L21,21 L21,16",
             PreviewLucideIcon.ChevronLeft => "M15,18 L9,12 L15,6",
             PreviewLucideIcon.ChevronRight => "M9,18 L15,12 L9,6",
-            PreviewLucideIcon.RefreshCw => "M20,6 L20,12 L14,12 M4,18 L4,12 L10,12 M18.5,9 C17.3,5.7 14.1,3.5 10.6,4 C7.3,4.4 4.8,6.8 4,10 M5.5,15 C6.7,18.3 9.9,20.5 13.4,20 C16.7,19.6 19.2,17.2 20,14",
-            PreviewLucideIcon.FileDown => "M14,2 L6,2 C4.9,2 4,2.9 4,4 L4,20 C4,21.1 4.9,22 6,22 L18,22 C19.1,22 20,21.1 20,20 L20,8 Z M14,2 L14,8 L20,8 M12,11 L12,17 M9,14 L12,17 L15,14",
+            PreviewLucideIcon.RefreshCw => "M3,12 A9,9 0 0 1 12,3 A9.75,9.75 0 0 1 18.74,5.74 L21,8 M21,3 L21,8 L16,8 M21,12 A9,9 0 0 1 12,21 A9.75,9.75 0 0 1 5.26,18.26 L3,16 M8,16 L3,16 L3,21",
+            PreviewLucideIcon.Save => "M15.2,3 A2,2 0 0 1 16.6,3.6 L20.4,7.4 A2,2 0 0 1 21,8.8 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M17,21 L17,14 A1,1 0 0 0 16,13 L8,13 A1,1 0 0 0 7,14 L7,21 M7,3 L7,7 A1,1 0 0 0 8,8 L15,8",
             PreviewLucideIcon.X => "M18,6 L6,18 M6,6 L18,18",
             _ => "M5,12 L19,12"
         };
