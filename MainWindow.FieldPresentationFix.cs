@@ -1,168 +1,111 @@
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Media;
-using System.Windows.Threading;
+using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Field-facing presentation fixes for the Engineering workspace.
-/// Keeps source/evidence values untouched while making the live workspace easier to read.
+/// Keeps IEC 61850 identity and UI presentation separate. The raw object/reference fields
+/// remain untouched; only SignalName text rendered in Engineering/FAT is phase-aware.
 /// </summary>
-internal static class MainWindowFieldPresentationFix
+public partial class MainWindow
 {
-    private const string IedTimestampHeader = "IED Timestamp";
+    private static readonly bool FieldPresentationFixClassHandlersRegistered = RegisterFieldPresentationFixClassHandlers();
 
-    [ModuleInitializer]
-    internal static void Register()
+    private static bool RegisterFieldPresentationFixClassHandlers()
     {
         EventManager.RegisterClassHandler(
-            typeof(MainWindow),
+            typeof(ListBoxItem),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnMainWindowLoaded));
+            new RoutedEventHandler(FieldPresentation_ListBoxItemLoaded),
+            handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(TextBlock),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(FieldPresentation_TextBlockLoaded),
+            handledEventsToo: true);
+        return true;
     }
 
-    private static void OnMainWindowLoaded(object sender, RoutedEventArgs e)
+    private static void FieldPresentation_ListBoxItemLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainWindow window)
+        if (sender is not ListBoxItem item)
             return;
 
-        if (window.FindName("MainTabs") is TabControl tabs)
+        if (item.DataContext is Models.FatIoSignalRow row)
         {
-            tabs.SelectionChanged -= MainTabs_SelectionChanged;
-            tabs.SelectionChanged += MainTabs_SelectionChanged;
+            if (item.Content is TextBlock text)
+                text.Text = IoFatSignalDisplayNameFormatter.Format(row.Name, row.DisplayReference);
         }
-
-        Apply(window);
-        window.Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
-            new Action(() => Apply(window)));
     }
 
-    private static void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private static void FieldPresentation_TextBlockLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not TabControl tabs || !ReferenceEquals(e.Source, tabs))
+        if (sender is not TextBlock text || text.DataContext == null)
             return;
 
-        if (Window.GetWindow(tabs) is MainWindow window)
-        {
-            window.Dispatcher.BeginInvoke(
-                DispatcherPriority.Loaded,
-                new Action(() => Apply(window)));
-        }
-    }
-
-    private static void Apply(MainWindow window)
-    {
-        ApplyIedTimestampColumns(window);
-        ApplyDarkCommandHeaderContrast(window);
-    }
-
-    private static void ApplyIedTimestampColumns(MainWindow window)
-    {
-        foreach (var grid in VisualDescendants<DataGrid>(window))
-        {
-            foreach (var column in grid.Columns.OfType<DataGridTextColumn>())
-            {
-                if (!string.Equals(column.Header?.ToString(), IedTimestampHeader, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (column.Binding is Binding existing &&
-                    ReferenceEquals(existing.Converter, RoundedIedTimestampConverter.Instance))
-                {
-                    continue;
-                }
-
-                column.Binding = new Binding("DeviceTimestamp")
-                {
-                    Mode = BindingMode.OneWay,
-                    Converter = RoundedIedTimestampConverter.Instance
-                };
-
-                var style = new Style(typeof(TextBlock), column.ElementStyle);
-                style.Setters.Add(new Setter(
-                    FrameworkElement.ToolTipProperty,
-                    new Binding("DeviceTimestamp")
-                    {
-                        Mode = BindingMode.OneWay,
-                        Converter = FullIedTimestampTooltipConverter.Instance
-                    }));
-                style.Setters.Add(new Setter(ToolTipService.ShowDurationProperty, 60000));
-                column.ElementStyle = style;
-            }
-        }
-    }
-
-    private static void ApplyDarkCommandHeaderContrast(MainWindow window)
-    {
-        if (window.FindName("CommandPanelExpander") is not Expander expander || expander.Header is not DependencyObject header)
+        // Both active operator surfaces bind their first column to SignalName:
+        // Engineering points carry IecTelegram, FAT rows carry ObjectReference. Replace
+        // only that presentation binding with a semantic MultiBinding. Virtualized/recycled
+        // rows therefore keep following their DataContext without mutating the source model.
+        var binding = BindingOperations.GetBinding(text, TextBlock.TextProperty);
+        if (!string.Equals(binding?.Path?.Path, "SignalName", StringComparison.Ordinal))
             return;
 
-        expander.Foreground = Brushes.White;
-        foreach (var text in VisualDescendants<TextBlock>(header).Prepend(header as TextBlock).OfType<TextBlock>())
-            text.Foreground = Brushes.White;
-    }
+        var referencePath = ResolveSemanticReferencePath(text.DataContext.GetType());
+        if (referencePath == null)
+            return;
 
-    private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
-    {
-        if (root is T self)
-            yield return self;
-
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < count; index++)
+        var semanticBinding = new MultiBinding
         {
-            var child = VisualTreeHelper.GetChild(root, index);
-            foreach (var descendant in VisualDescendants<T>(child))
-                yield return descendant;
-        }
-    }
+            Mode = BindingMode.OneWay,
+            Converter = SemanticSignalNameConverter.Instance
+        };
+        semanticBinding.Bindings.Add(new Binding("SignalName") { Mode = BindingMode.OneWay });
+        semanticBinding.Bindings.Add(new Binding(referencePath) { Mode = BindingMode.OneWay });
+        BindingOperations.SetBinding(text, TextBlock.TextProperty, semanticBinding);
 
-    private sealed class RoundedIedTimestampConverter : IValueConverter
-    {
-        internal static readonly RoundedIedTimestampConverter Instance = new();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            => Iec61850TimestampPresentation.FormatMilliseconds(value?.ToString());
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            => Binding.DoNothing;
-    }
-
-    private sealed class FullIedTimestampTooltipConverter : IValueConverter
-    {
-        internal static readonly FullIedTimestampTooltipConverter Instance = new();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        var toolTipBinding = new MultiBinding
         {
-            var text = value?.ToString()?.Trim() ?? string.Empty;
-            if (text.Length == 0 || text == "-")
-                return text.Length == 0 ? "-" : text;
+            Mode = BindingMode.OneWay,
+            Converter = SemanticSignalNameConverter.Instance
+        };
+        toolTipBinding.Bindings.Add(new Binding("SignalName") { Mode = BindingMode.OneWay });
+        toolTipBinding.Bindings.Add(new Binding(referencePath) { Mode = BindingMode.OneWay });
+        BindingOperations.SetBinding(text, FrameworkElement.ToolTipProperty, toolTipBinding);
+    }
 
-            if (DateTime.TryParse(
-                    text,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.RoundtripKind,
-                    out var dateTime))
-            {
-                return dateTime.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
-            }
+    private static string? ResolveSemanticReferencePath(Type dataContextType)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
+        if (dataContextType.GetProperty("ObjectReference", flags) != null)
+            return "ObjectReference";
+        if (dataContextType.GetProperty("IecTelegram", flags) != null)
+            return "IecTelegram";
+        if (dataContextType.GetProperty("DisplayReference", flags) != null)
+            return "DisplayReference";
+        return null;
+    }
 
-            if (DateTimeOffset.TryParse(
-                    text,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AllowWhiteSpaces,
-                    out var dateTimeOffset))
-            {
-                return dateTimeOffset.ToString("yyyy-MM-dd HH:mm:ss.fffffff zzz", CultureInfo.InvariantCulture);
-            }
+    private sealed class SemanticSignalNameConverter : IMultiValueConverter
+    {
+        public static readonly SemanticSignalNameConverter Instance = new();
 
-            return text;
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            var preferred = values.Length > 0 && values[0] != DependencyProperty.UnsetValue
+                ? values[0]?.ToString()
+                : string.Empty;
+            var reference = values.Length > 1 && values[1] != DependencyProperty.UnsetValue
+                ? values[1]?.ToString()
+                : string.Empty;
+            return IoFatSignalDisplayNameFormatter.Format(preferred, reference);
         }
 
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            => Binding.DoNothing;
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
     }
 }
