@@ -3,12 +3,13 @@ namespace ARSAS.Tests;
 public sealed class P0FieldBenchRound2RegressionTests
 {
     [Fact]
-    public void FatSignalColumn_UsesDeterministicPhaseAwareTemplate()
+    public void FatSignalColumn_UsesDeterministicPhaseAwareTemplateAfterV2Rebuild()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.SemanticSignalColumnAuthority.cs"));
 
         Assert.Contains("Window.GetWindow(grid) is not IoListTestingWindow", source, StringComparison.Ordinal);
-        Assert.Contains("column.CellTemplate = BuildSemanticSignalTemplate()", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.Loaded", source, StringComparison.Ordinal);
+        Assert.Contains("column.CellTemplate = BuildSemanticFatSignalTemplate()", source, StringComparison.Ordinal);
         Assert.Contains("IoFatSignalDisplayNameFormatter.Format(point)", source, StringComparison.Ordinal);
         Assert.Contains("new Binding(\".\")", source, StringComparison.Ordinal);
     }
