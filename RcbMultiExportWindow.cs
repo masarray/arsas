@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
 using Microsoft.Win32;
@@ -67,7 +69,7 @@ public sealed class RcbMultiExportWindow : Window
         });
         titleStack.Children.Add(new TextBlock
         {
-            Text = $"{_endpoint}  •  select one or more native RCBs",
+            Text = $"{_endpoint}  •  click a row or checkbox to select any number of native RCBs",
             Margin = new Thickness(0, 3, 0, 0),
             FontSize = 11.5,
             Opacity = 0.72
@@ -99,6 +101,7 @@ public sealed class RcbMultiExportWindow : Window
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
             ItemsSource = _rows
         };
+        _grid.PreviewMouseLeftButtonDown += Grid_PreviewMouseLeftButtonDown;
         _grid.Columns.Add(new DataGridCheckBoxColumn
         {
             Header = "SELECT",
@@ -164,16 +167,53 @@ public sealed class RcbMultiExportWindow : Window
 
         Content = root;
         ReplaceRows(rows, preserveSelection: false);
-        _status.Text = "Export keeps the IED's native/static DataSets and only the RCBs you select; ARSAS runtime acquisition DataSets are not synthesized into this file.";
+        _status.Text = "Availability is informational only. Export keeps selected native RCBs and their static DataSets; ARSAS runtime acquisition DataSets are never synthesized.";
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _grid.PreviewMouseLeftButtonDown -= Grid_PreviewMouseLeftButtonDown;
         _operation?.Cancel();
         _operation?.Dispose();
         foreach (var row in _rows)
             row.PropertyChanged -= Row_PropertyChanged;
         base.OnClosed(e);
+    }
+
+    private void Grid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_operation != null || e.ChangedButton != MouseButton.Left || e.OriginalSource is not DependencyObject source)
+            return;
+
+        // The real checkbox owns checkbox clicks. Row-body clicks toggle the same model once.
+        if (FindAncestor<CheckBox>(source) != null)
+            return;
+
+        var rowContainer = FindAncestor<DataGridRow>(source);
+        if (rowContainer?.DataContext is not RcbExportRow row)
+            return;
+
+        row.IsSelected = !row.IsSelected;
+        _grid.SelectedItem = row;
+        e.Handled = true;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
+    {
+        var current = source;
+        while (current != null)
+        {
+            if (current is T match)
+                return match;
+
+            DependencyObject? parent = null;
+            try { parent = VisualTreeHelper.GetParent(current); }
+            catch (InvalidOperationException) { }
+            if (parent == null && current is FrameworkElement element)
+                parent = element.Parent;
+            current = parent;
+        }
+        return null;
     }
 
     private static DataGridTextColumn TextColumn(string header, string path, DataGridLength width)
@@ -265,19 +305,9 @@ public sealed class RcbMultiExportWindow : Window
             return;
         }
 
-        if (selected.Any(row => row.RequiresConfirmation))
-        {
-            var answer = MessageBox.Show(
-                this,
-                "One or more selected RCBs are occupied, active in ARSAS, or not proven free. Availability is informational for engineering export; the SCL can still be generated.\n\nContinue?",
-                "Confirm RCB Export",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
-                return;
-        }
-
+        // Availability is intentionally informational. Do not interrupt engineering export
+        // with an alarming confirmation dialog simply because a live RCB is occupied or was
+        // not checked; export is read-only and never changes the relay.
         var editionDialog = new SaveSclWindow(
             _iedName,
             $"Generic RCB export • {selected.Length} selected RCB(s)",
