@@ -32,7 +32,7 @@ public sealed class IoFatRemoteComtradeEvidenceTests
     }
 
     [Fact]
-    public void FatPdf_IncludesLatestRemoteComtradeAsFileServiceEvidence()
+    public void FatPdf_IncludesConciseLatestRemoteComtradeFileServiceEvidence()
     {
         var project = BuildProject();
         var ied = project.Ieds[0];
@@ -49,9 +49,12 @@ public sealed class IoFatRemoteComtradeEvidenceTests
 
         Assert.Contains("File Service / COMTRADE Evidence", text, StringComparison.Ordinal);
         Assert.Contains("FRA00028.cfg + FRA00028.dat", text, StringComparison.Ordinal);
+        Assert.Contains("Relay modified", text, StringComparison.Ordinal);
+        Assert.Contains("Evidence source", text, StringComparison.Ordinal);
         Assert.Contains("FileDirectory", text, StringComparison.Ordinal);
-        Assert.Contains("OPTIONAL", text, StringComparison.Ordinal);
-        Assert.Contains("not a FAT gate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OPTIONAL", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("not a FAT gate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Download", text, StringComparison.Ordinal);
     }
 
     private static Iec61850FaultRecordSet BuildRecord(string baseName, DateTimeOffset modified)

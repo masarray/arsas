@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -12,11 +13,60 @@ namespace ArIED61850Tester;
 
 public partial class IoListTestingWindow
 {
+    private sealed class FatCommandRowView
+    {
+        public required Border Container { get; init; }
+        public required Grid Grid { get; init; }
+        public required FrameworkElement Actions { get; set; }
+    }
+
+    private sealed class FatCommandTextConverter : IValueConverter
+    {
+        public static FatCommandTextConverter Instance { get; } = new();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var text = value?.ToString()?.Trim() ?? string.Empty;
+            return string.IsNullOrWhiteSpace(text) ? "—" : text;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+
+    private sealed class FatCommandModelConverter : IValueConverter
+    {
+        public static FatCommandModelConverter Instance { get; } = new();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => FatCommandModelText(value?.ToString());
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+
+    private sealed class FatCommandCanOperateConverter : IMultiValueConverter
+    {
+        public static FatCommandCanOperateConverter Instance { get; } = new();
+
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            var supportsOperate = values.ElementAtOrDefault(0) is true;
+            var isBusy = values.ElementAtOrDefault(1) is true;
+            return supportsOperate && !isBusy;
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            => targetTypes.Select(_ => Binding.DoNothing).ToArray();
+    }
+
     private Border? _fatCommandPanelShell;
     private StackPanel? _fatCommandRows;
     private TextBlock? _fatCommandSummary;
+    private FrameworkElement? _fatCommandEmptyState;
     private Iec61850MonitorDevice? _fatCommandDevice;
     private readonly HashSet<SignalDefinition> _fatCommandSubscribedSignals = new();
+    private readonly Dictionary<SignalDefinition, FatCommandRowView> _fatCommandRowViews = new();
     private bool _fatCommandPanelLifecycleInstalled;
 
     // Register at class level rather than overriding OnInitialized. IoListTestingWindow
@@ -146,13 +196,13 @@ public partial class IoListTestingWindow
         {
             DetachFatCommandDevice();
             _fatCommandSummary.Text = "Engineering owner unavailable; control is disabled fail-closed.";
-            RebuildFatCommandRows();
+            SynchronizeFatCommandRows();
             return;
         }
 
         var device = engineeringWindow.ResolveIoFatCommandDevice(SelectedIed);
         AttachFatCommandDevice(device);
-        RebuildFatCommandRows();
+        SynchronizeFatCommandRows();
         if (device == null)
         {
             _fatCommandSummary.Text = "No shared Engineering IED is bound to the selected FAT device.";
@@ -165,12 +215,12 @@ public partial class IoListTestingWindow
             return;
         }
 
-        _fatCommandSummary.Text = $"{device.Name} · validating live ctlModel and command values…";
+        _fatCommandSummary.Text = $"{device.Name} · validating live ctlModel and shared process values…";
         try
         {
             await engineeringWindow.RefreshIoFatCommandValuesAsync(device);
             AttachFatCommandDevice(device);
-            RebuildFatCommandRows();
+            SynchronizeFatCommandRows();
         }
         catch (OperationCanceledException)
         {
@@ -182,15 +232,16 @@ public partial class IoListTestingWindow
         }
     }
 
-    private void AttachFatCommandDevice(Iec61850MonitorDevice? device)
+    private bool AttachFatCommandDevice(Iec61850MonitorDevice? device)
     {
         if (ReferenceEquals(_fatCommandDevice, device))
-            return;
+            return false;
 
         DetachFatCommandDevice();
         _fatCommandDevice = device;
         if (_fatCommandDevice != null)
             _fatCommandDevice.CommandSignals.CollectionChanged += FatCommandSignals_CollectionChanged;
+        return true;
     }
 
     private void DetachFatCommandDevice()
@@ -205,71 +256,113 @@ public partial class IoListTestingWindow
     }
 
     private void FatCommandSignals_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows), DispatcherPriority.Background);
+        => Dispatcher.BeginInvoke(new Action(SynchronizeFatCommandRows), DispatcherPriority.Background);
 
     private void FatCommandSignal_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SignalDefinition.ControlSetPointText)
-            or nameof(SignalDefinition.ControlInterlockCheck)
-            or nameof(SignalDefinition.ControlSynchroCheck)
-            or nameof(SignalDefinition.ControlTestMode))
-        {
+        if (sender is not SignalDefinition signal)
             return;
-        }
 
-        if (e.PropertyName is nameof(SignalDefinition.ControlCurrentValue)
-            or nameof(SignalDefinition.ControlLastResult)
-            or nameof(SignalDefinition.ControlConfirmationPending)
-            or nameof(SignalDefinition.ControlCommandBusy)
-            or nameof(SignalDefinition.ControlInspectionBusy)
-            or nameof(SignalDefinition.ControlModelText)
+        // LIVE VALUE, result text and busy/enabled state are WPF bindings on the existing
+        // row instance. Only a semantic action-layout transition needs to replace the small
+        // action cell; the row and the rest of the panel remain untouched.
+        if (e.PropertyName is nameof(SignalDefinition.ControlConfirmationPending)
             or nameof(SignalDefinition.ControlCdc)
-            or nameof(SignalDefinition.ControlSupportsOperate))
+            or nameof(SignalDefinition.ControlModelText)
+            or nameof(SignalDefinition.ControlModelResolved))
         {
-            Dispatcher.BeginInvoke(new Action(RebuildFatCommandRows), DispatcherPriority.Background);
+            Dispatcher.BeginInvoke(
+                new Action(() => RefreshFatCommandActions(signal)),
+                DispatcherPriority.Background);
         }
     }
 
-    private void RebuildFatCommandRows()
+    private void SynchronizeFatCommandRows()
     {
         if (_fatCommandRows == null || _fatCommandSummary == null)
             return;
 
-        foreach (var signal in _fatCommandSubscribedSignals)
-            signal.PropertyChanged -= FatCommandSignal_PropertyChanged;
-        _fatCommandSubscribedSignals.Clear();
-        _fatCommandRows.Children.Clear();
-
         var device = _fatCommandDevice;
-        if (device == null)
-        {
-            _fatCommandRows.Children.Add(FatCommandEmptyText("No FAT command device selected."));
-            return;
-        }
+        var commands = device?.CommandSignals.ToArray() ?? Array.Empty<SignalDefinition>();
+        var commandSet = commands.ToHashSet();
 
-        var commands = device.CommandSignals.ToArray();
-        _fatCommandSummary.Text = commands.Length == 0
-            ? $"{device.Name} · no operable control is proven by live ctlModel. Status-only controls remain read-only."
-            : $"{device.Name} · {commands.Length} operable DataSet control(s) · shared Engineering command backend";
+        foreach (var stale in _fatCommandRowViews.Keys.Where(signal => !commandSet.Contains(signal)).ToArray())
+            RemoveFatCommandRow(stale);
 
         if (commands.Length == 0)
         {
-            _fatCommandRows.Children.Add(FatCommandEmptyText(
-                "No command action is available. Controls appear only after live ctlModel proves Direct/SBO operation; StatusOnly and unsupported generic types stay fail-closed."));
+            _fatCommandSummary.Text = device == null
+                ? "No FAT command device selected."
+                : $"{device.Name} · no operable control is proven by live ctlModel. Status-only controls remain read-only.";
+
+            EnsureFatCommandEmptyState(device == null
+                ? "No FAT command device selected."
+                : "No command action is available. Controls appear only after live ctlModel proves Direct/SBO operation; StatusOnly and unsupported generic types stay fail-closed.");
             return;
         }
 
-        foreach (var signal in commands)
+        RemoveFatCommandEmptyState();
+        _fatCommandSummary.Text = $"{device!.Name} · {commands.Length} operable DataSet control(s) · shared Engineering command backend";
+
+        for (var index = 0; index < commands.Length; index++)
         {
-            signal.PropertyChanged += FatCommandSignal_PropertyChanged;
-            _fatCommandSubscribedSignals.Add(signal);
-            _fatCommandRows.Children.Add(BuildFatCommandRow(signal));
+            var signal = commands[index];
+            if (!_fatCommandRowViews.TryGetValue(signal, out var view))
+            {
+                signal.PropertyChanged += FatCommandSignal_PropertyChanged;
+                _fatCommandSubscribedSignals.Add(signal);
+                view = BuildFatCommandRow(signal);
+                _fatCommandRowViews[signal] = view;
+                _fatCommandRows.Children.Insert(Math.Min(index, _fatCommandRows.Children.Count), view.Container);
+            }
+
+            var currentIndex = _fatCommandRows.Children.IndexOf(view.Container);
+            if (currentIndex >= 0 && currentIndex != index)
+            {
+                _fatCommandRows.Children.RemoveAt(currentIndex);
+                _fatCommandRows.Children.Insert(Math.Min(index, _fatCommandRows.Children.Count), view.Container);
+            }
         }
     }
 
-    private FrameworkElement BuildFatCommandRow(SignalDefinition signal)
+    private void EnsureFatCommandEmptyState(string text)
     {
-        var row = new Grid { MinWidth = 960 };
+        if (_fatCommandRows == null)
+            return;
+
+        if (_fatCommandEmptyState is TextBlock existing)
+        {
+            existing.Text = text;
+            if (!_fatCommandRows.Children.Contains(existing))
+                _fatCommandRows.Children.Add(existing);
+            return;
+        }
+
+        _fatCommandEmptyState = FatCommandEmptyText(text);
+        _fatCommandRows.Children.Add(_fatCommandEmptyState);
+    }
+
+    private void RemoveFatCommandEmptyState()
+    {
+        if (_fatCommandRows == null || _fatCommandEmptyState == null)
+            return;
+        _fatCommandRows.Children.Remove(_fatCommandEmptyState);
+        _fatCommandEmptyState = null;
+    }
+
+    private void RemoveFatCommandRow(SignalDefinition signal)
+    {
+        if (_fatCommandSubscribedSignals.Remove(signal))
+            signal.PropertyChanged -= FatCommandSignal_PropertyChanged;
+
+        if (!_fatCommandRowViews.Remove(signal, out var view) || _fatCommandRows == null)
+            return;
+        _fatCommandRows.Children.Remove(view.Container);
+    }
+
+    private FatCommandRowView BuildFatCommandRow(SignalDefinition signal)
+    {
+        var row = new Grid { MinWidth = 960, DataContext = signal };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.25, GridUnitType.Star), MinWidth = 210 });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star), MinWidth = 82 });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.72, GridUnitType.Star), MinWidth = 70 });
@@ -282,18 +375,48 @@ public partial class IoListTestingWindow
         reference.ToolTip = signal.ObjectReference;
         AddFatCommandCell(row, reference, 0);
 
-        var current = FatCommandText(signal.ControlCurrentValue, 11.0, FontWeights.SemiBold);
-        current.ToolTip = signal.ControlLastResult;
+        var current = FatCommandText("—", 11.0, FontWeights.SemiBold);
+        current.SetBinding(TextBlock.TextProperty, new Binding(nameof(SignalDefinition.ControlCurrentValue))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay,
+            Converter = FatCommandTextConverter.Instance
+        });
+        current.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(SignalDefinition.ControlLastResult))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay
+        });
         AddFatCommandCell(row, current, 1);
-        AddFatCommandCell(row, FatCommandText(
-            string.IsNullOrWhiteSpace(signal.ControlCdc) ? "—" : signal.ControlCdc,
-            10.8,
-            FontWeights.SemiBold), 2);
-        AddFatCommandCell(row, FatCommandText(FatCommandModelText(signal.ControlModelText), 10.5, FontWeights.SemiBold), 3);
-        AddFatCommandCell(row, BuildFatCommandChecks(signal), 4);
-        AddFatCommandCell(row, BuildFatCommandActions(signal), 5);
 
-        return new Border
+        var cdc = FatCommandText("—", 10.8, FontWeights.SemiBold);
+        cdc.SetBinding(TextBlock.TextProperty, new Binding(nameof(SignalDefinition.ControlCdc))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay,
+            Converter = FatCommandTextConverter.Instance
+        });
+        AddFatCommandCell(row, cdc, 2);
+
+        var model = FatCommandText("Reading…", 10.5, FontWeights.SemiBold);
+        model.SetBinding(TextBlock.TextProperty, new Binding(nameof(SignalDefinition.ControlModelText))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay,
+            Converter = FatCommandModelConverter.Instance
+        });
+        model.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(SignalDefinition.ControlModelText))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay
+        });
+        AddFatCommandCell(row, model, 3);
+        AddFatCommandCell(row, BuildFatCommandChecks(signal), 4);
+
+        var actions = BuildFatCommandActions(signal);
+        AddFatCommandCell(row, actions, 5);
+
+        var container = new Border
         {
             Background = Brushes.White,
             BorderBrush = FatCommandBrush("#E2E8F1"),
@@ -303,6 +426,24 @@ public partial class IoListTestingWindow
             Margin = new Thickness(0, 0, 0, 6),
             Child = row
         };
+
+        return new FatCommandRowView
+        {
+            Container = container,
+            Grid = row,
+            Actions = actions
+        };
+    }
+
+    private void RefreshFatCommandActions(SignalDefinition signal)
+    {
+        if (!_fatCommandRowViews.TryGetValue(signal, out var view))
+            return;
+
+        var replacement = BuildFatCommandActions(signal);
+        view.Grid.Children.Remove(view.Actions);
+        AddFatCommandCell(view.Grid, replacement, 5);
+        view.Actions = replacement;
     }
 
     private FrameworkElement BuildFatCommandChecks(SignalDefinition signal)
@@ -342,28 +483,25 @@ public partial class IoListTestingWindow
             if (signal.ControlConfirmationPending)
             {
                 var confirm = FatCommandButton("Confirm", "PrimaryButton");
+                BindFatCommandEnabled(confirm, signal);
                 confirm.Click += async (_, _) => await ConfirmFatPositionControlAsync(signal);
                 panel.Children.Add(confirm);
 
                 var cancel = FatCommandButton("Cancel", "SoftButton");
                 cancel.Margin = new Thickness(6, 0, 0, 0);
-                cancel.Click += (_, _) =>
-                {
-                    signal.ClearControlConfirmation();
-                    RebuildFatCommandRows();
-                };
+                cancel.Click += (_, _) => signal.ClearControlConfirmation();
                 panel.Children.Add(cancel);
             }
             else
             {
                 var open = FatCommandButton("Open", "CommandOpenButton");
-                open.IsEnabled = signal.ControlSupportsOperate && !signal.ControlIsBusy;
+                BindFatCommandEnabled(open, signal);
                 open.Click += (_, _) => StageFatPositionControl(signal, "Open [01]", "Open");
                 panel.Children.Add(open);
 
                 var close = FatCommandButton("Close", "CommandCloseButton");
                 close.Margin = new Thickness(6, 0, 0, 0);
-                close.IsEnabled = signal.ControlSupportsOperate && !signal.ControlIsBusy;
+                BindFatCommandEnabled(close, signal);
                 close.Click += (_, _) => StageFatPositionControl(signal, "Closed [10]", "Close");
                 panel.Children.Add(close);
             }
@@ -415,7 +553,7 @@ public partial class IoListTestingWindow
             panel.Children.Add(target);
 
             var set = FatCommandButton("Set", "PrimaryButton");
-            set.IsEnabled = signal.ControlSupportsOperate && !signal.ControlIsBusy;
+            BindFatCommandEnabled(set, signal);
             set.Click += async (_, _) => await ExecuteFatQuickControlAsync(signal, signal.ControlSetPointText, "Set");
             panel.Children.Add(set);
             return panel;
@@ -428,9 +566,29 @@ public partial class IoListTestingWindow
     private Button FatQuickCommandButton(SignalDefinition signal, string label, string requestedValue, string styleKey)
     {
         var button = FatCommandButton(label, styleKey);
-        button.IsEnabled = signal.ControlSupportsOperate && !signal.ControlIsBusy;
+        BindFatCommandEnabled(button, signal);
         button.Click += async (_, _) => await ExecuteFatQuickControlAsync(signal, requestedValue, label);
         return button;
+    }
+
+    private static void BindFatCommandEnabled(Button button, SignalDefinition signal)
+    {
+        var binding = new MultiBinding
+        {
+            Converter = FatCommandCanOperateConverter.Instance,
+            Mode = BindingMode.OneWay
+        };
+        binding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlSupportsOperate))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay
+        });
+        binding.Bindings.Add(new Binding(nameof(SignalDefinition.ControlIsBusy))
+        {
+            Source = signal,
+            Mode = BindingMode.OneWay
+        });
+        BindingOperations.SetBinding(button, UIElement.IsEnabledProperty, binding);
     }
 
     private void StageFatPositionControl(SignalDefinition signal, string requestedValue, string actionLabel)
@@ -440,7 +598,8 @@ public partial class IoListTestingWindow
             signal.ControlLastResult = $"Command rejected: {rejectionReason}.";
             return;
         }
-        RebuildFatCommandRows();
+
+        RefreshFatCommandActions(signal);
     }
 
     private async Task ConfirmFatPositionControlAsync(SignalDefinition signal)
@@ -453,8 +612,9 @@ public partial class IoListTestingWindow
             return;
         }
 
+        RefreshFatCommandActions(signal);
         await engineeringWindow.ExecuteIoFatControlClaimAsync(signal, claim);
-        RebuildFatCommandRows();
+        RefreshFatCommandActions(signal);
     }
 
     private async Task ExecuteFatQuickControlAsync(SignalDefinition signal, string requestedValue, string actionLabel)
@@ -468,7 +628,6 @@ public partial class IoListTestingWindow
         }
 
         await engineeringWindow.ExecuteIoFatControlClaimAsync(signal, claim);
-        RebuildFatCommandRows();
     }
 
     private Button FatCommandButton(string text, string styleKey)

@@ -112,9 +112,6 @@ public partial class MainWindow
                     _applicationCancellation.Token);
             }
 
-            foreach (var ied in addedIeds)
-                window.Project.Ieds.Add(ied);
-
             var allSources = window.Project.Sources
                 .Concat(uniqueImportedSources)
                 .GroupBy(source => source.Sha256, StringComparer.OrdinalIgnoreCase)
@@ -123,13 +120,13 @@ public partial class MainWindow
                 .ToArray();
             window.Project.SetSources(allSources, IoFatSourceIdentity.ComputeSetFingerprint(allSources));
 
-            foreach (var point in addedIeds.SelectMany(ied => ied.TestPoints))
-                point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
-
-            // Existing running/preparing IEDs are deliberately untouched. Only the newly
-            // appended endpoints join Engineering and the loaded FAT explorer.
+            // Engineering is the single SCL/model/selection/acquisition authority. Establish
+            // the exact ARIEC workspace there before any imported IED becomes visible in FAT.
+            // This prevents the FAT-first path from briefly publishing UNKNOWN Engineering
+            // rows or creating a second acquisition owner for the same endpoint.
             SynchronizeImportedSclFatWithEngineering(window.Project, addedIeds);
             RegisterSharedSclSourcePaths(window.Project, addedIeds, import.SourceInputs);
+
             if (selectionMode == SclSignalSelectionMode.Manual)
             {
                 if (!selectionAlreadyApplied)
@@ -159,10 +156,33 @@ public partial class MainWindow
                     var device = ResolveIoTestDevice(ied.LiveDeviceId)
                                  ?? ResolveIoTestDevice(ied.IpAddress)
                                  ?? ResolveIoTestDevice(ied.IedName);
-                    if (device is not null)
-                        ApplyStaticDataSetSelection(device);
+                    if (device is null)
+                        continue;
+
+                    ApplyStaticDataSetSelection(device);
+
+                    // The new FAT IED has deliberately not been published yet, so project-wide
+                    // selection projection cannot see it. Project the authoritative Engineering
+                    // selection directly into this pending plan before the row is made visible.
+                    foreach (var signal in device.Signals)
+                    {
+                        IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
+                            signal,
+                            signal.IsSelected,
+                            ied,
+                            device);
+                    }
                 }
             }
+
+            foreach (var point in addedIeds.SelectMany(ied => ied.TestPoints))
+                point.PropertyChanged += IoFatSelectionPoint_PropertyChanged;
+
+            // Publish to FAT only after Engineering owns the ARIEC workspace and the chosen
+            // signal/acquisition authority has been projected into the pending plans.
+            foreach (var ied in addedIeds)
+                window.Project.Ieds.Add(ied);
+
             window.RegisterAddedIeds(addedIeds);
             window.Storage?.ScheduleSave();
 

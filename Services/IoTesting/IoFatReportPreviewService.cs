@@ -6,28 +6,17 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Creates an immutable report scope for the selected workbook IED. Native PDF and
-/// FixedDocument preview then consume the same shared layout engine.
+/// Creates point-in-time report scopes from the shared FAT project. A single IED is the
+/// canonical evidence artifact, while any operator-selected set of IEDs can be composed
+/// into one combined report without changing or sharing the underlying live per-IED state.
 /// </summary>
 public static class IoFatReportPreviewService
 {
     public static IoTestProject CreateIedScopedProject(IoTestProject project, IoTestIedPlan ied)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(ied);
-        if (!project.Ieds.Contains(ied))
-            throw new ArgumentException("The selected IED does not belong to this IO FAT project.", nameof(ied));
+        => IoFatReportScope.CreateForIed(project, ied);
 
-        return new IoTestProject
-        {
-            ProjectId = project.ProjectId,
-            SchemaVersion = project.SchemaVersion,
-            ProjectName = project.ProjectName,
-            SourceWorkbookName = project.SourceWorkbookName,
-            SourceWorkbookSha256 = project.SourceWorkbookSha256,
-            ImportedAt = project.ImportedAt,
-            DocumentControl = project.DocumentControl,
-            Ieds = new List<IoTestIedPlan> { ied }
-        };
-    }
+    public static IoTestProject CreateScopedProject(
+        IoTestProject project,
+        IEnumerable<IoTestIedPlan> ieds)
+        => IoFatReportScope.CreateForIeds(project, ieds);
 }

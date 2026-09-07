@@ -45,13 +45,6 @@ public sealed class IoTestSignalSelectionService
         ArgumentNullException.ThrowIfNull(ied);
         ArgumentNullException.ThrowIfNull(device);
 
-        // Physical FAT can start from an already-connected Engineering Workspace whose
-        // presentation inventory is intentionally narrower than the static DataSet scope.
-        // Restore ARIEC-owned mandatory DataSet descriptors before local matching so FAT
-        // never mistakes presentation pruning for protocol absence. This performs no IEC
-        // semantic inference in ARSAS; the engine remains the sole membership authority.
-        Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
-
         // P1 + shared workspace authority: direct-SCL connection/live acquisition follows
         // the Engineering/FAT workspace selection, not TEST. Legacy workbook rows retain
         // their historical TestEnabled gate because they do not have an independent
@@ -63,6 +56,27 @@ public sealed class IoTestSignalSelectionService
                 point.ImportReady &&
                 (point.TestEnabled || IsDirectSclAuthority(point)))
             .ToList();
+
+        // Relay-bench fast attach: when Engineering already owns a connected/monitoring
+        // SCL workspace, resolve only against exact identities already present in that
+        // process image. This path performs no discovery, no MMS read and no fuzzy scoring.
+        // It is accepted only when every requested row is proven exactly; otherwise the
+        // existing fail-safe resolver below runs unchanged.
+        if (device.IsConnected && device.IsMonitoring &&
+            TryResolveAlreadyLiveExactScope(requested, device, out var liveMatches))
+        {
+            return new IoTestSignalSelectionResult(
+                liveMatches,
+                Array.Empty<IoTestPointPlan>(),
+                Array.Empty<IoTestPointPlan>(),
+                $"Reused {liveMatches.Count} exact signal identity(s) from the already-live Engineering acquisition session.");
+        }
+
+        // Physical FAT can also start before Engineering has a complete presentation
+        // inventory. Restore ARIEC-owned mandatory DataSet descriptors only for the normal
+        // resolver; the exact already-live path above intentionally avoids catalog churn.
+        Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
+
         var matches = new List<IoTestSignalMatch>(requested.Count);
         var missing = new List<IoTestPointPlan>();
         var ambiguous = new List<IoTestPointPlan>();
@@ -166,6 +180,69 @@ public sealed class IoTestSignalSelectionService
             $"Resolved {matches.Count} FAT acquisition signal(s) to discovered model points.{smartText}");
     }
 
+    private static bool TryResolveAlreadyLiveExactScope(
+        IReadOnlyList<IoTestPointPlan> requested,
+        Iec61850MonitorDevice device,
+        out IReadOnlyList<IoTestSignalMatch> matches)
+    {
+        var result = new List<IoTestSignalMatch>(requested.Count);
+        if (requested.Count == 0 || device.Points.Count == 0 || device.Signals.Count == 0)
+        {
+            matches = Array.Empty<IoTestSignalMatch>();
+            return false;
+        }
+
+        var liveReferences = device.Points
+            .Select(point => IoTestLiveBindingService.NormalizeReference(point.IecReference))
+            .Where(reference => reference.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var point in requested)
+        {
+            var imported = IoTestLiveBindingService.ImportedReferences(point)
+                .Select(IoTestLiveBindingService.NormalizeReference)
+                .Where(reference => reference.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (imported.Count == 0)
+            {
+                matches = Array.Empty<IoTestSignalMatch>();
+                return false;
+            }
+
+            var exactMembership = device.Signals
+                .Where(signal => IsEligible(signal, point) && HasExactSclStaticMembershipIdentity(point, signal))
+                .ToList();
+            var candidates = exactMembership.Count > 0
+                ? exactMembership
+                : device.Signals
+                    .Where(signal =>
+                        IsEligible(signal, point) &&
+                        new[] { signal.ObjectReference, signal.DisplayReference }
+                            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+                            .Select(IoTestLiveBindingService.NormalizeReference)
+                            .Any(imported.Contains))
+                    .ToList();
+
+            if (candidates.Count != 1)
+            {
+                matches = Array.Empty<IoTestSignalMatch>();
+                return false;
+            }
+
+            var runtimeReference = IoTestLiveBindingService.NormalizeReference(candidates[0].ObjectReference);
+            if (runtimeReference.Length == 0 || !liveReferences.Contains(runtimeReference))
+            {
+                matches = Array.Empty<IoTestSignalMatch>();
+                return false;
+            }
+
+            result.Add(new IoTestSignalMatch(point, candidates[0], UsedNormalizedIedPrefix: false));
+        }
+
+        matches = result;
+        return true;
+    }
+
     internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
         => string.Equals(
             point.BindingStatus,
@@ -201,7 +278,7 @@ public sealed class IoTestSignalSelectionService
             return IoTestReferenceMatcher.ExactScore + SclStaticMembershipIdentityBonus;
 
         // ARIEC deliberately keeps static FCDA/FCD membership identity in
-        // DisplayReference while ObjectReference may remain the resolved runtime leaf.
+        // DisplayReference while ObjectReference is ARIEC's resolved scalar runtime leaf.
         // Manual SCL workspace rows also preserve DisplayReference as exact source identity.
         // Legacy workbook rows keep the old ObjectReference-only contract.
         var observedReferences = IsDirectSclAuthority(point)

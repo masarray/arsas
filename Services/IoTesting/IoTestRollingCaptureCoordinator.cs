@@ -11,6 +11,11 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// candidate ON/OFF evidence stays in the shadow until a complete cycle is available;
 /// only then is the current project evidence atomically replaced. An interrupted or
 /// rejected recapture therefore leaves the last completed/current evidence untouched.
+///
+/// LIVE VALUE is deliberately not owned here. The shared Engineering process image is the
+/// only authority for IoTestPointRuntime.CurrentValue/quality/source/timestamp. Evidence
+/// evaluation may be delayed on the Dispatcher, so replaying an older queued event into
+/// CurrentValue would otherwise overwrite a newer command/report projection.
 /// </summary>
 public sealed class IoTestRollingCaptureCoordinator
 {
@@ -35,7 +40,7 @@ public sealed class IoTestRollingCaptureCoordinator
         _slots[point] = slot;
 
         point.Runtime.Attempt++;
-        ApplyLiveObservation(point.Runtime, shadow.Runtime, baseline);
+        ApplyEvidenceObservationState(point.Runtime, shadow.Runtime);
 
         if (hadCurrentEvidence)
         {
@@ -47,6 +52,33 @@ public sealed class IoTestRollingCaptureCoordinator
         if (shadow.Runtime.IsComplete)
             CommitOrRearm(point, slot, baseline);
         return ProjectResult(evaluation, point.Runtime, point.Runtime.StatusReason);
+    }
+
+    /// <summary>
+    /// Re-arms a transition capture after an explicit pause/reconnect continuity gap.
+    /// Existing partial evidence remains visible for audit, but it cannot be completed
+    /// by an edge that may have occurred while capture was paused.
+    /// </summary>
+    public IoTestEvaluationResult RearmAfterContinuityGap(IoTestPointPlan point, IoTestObservation baseline)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        ArgumentNullException.ThrowIfNull(baseline);
+
+        var shadow = CreateShadow(point);
+        _evaluator.StartAttempt(shadow, baseline);
+        _slots[point] = new CaptureSlot(shadow, hasCurrentEvidence: true);
+
+        point.Runtime.Attempt++;
+        ApplyEvidenceObservationState(point.Runtime, shadow.Runtime);
+        point.Runtime.State = IoTestPointState.Review;
+        point.Runtime.StatusReason =
+            "Capture continuity cannot be proven across pause/reconnect while only one transition edge was recorded; partial evidence is preserved and capture is re-armed from the current live baseline.";
+
+        return new IoTestEvaluationResult(
+            true,
+            point.Runtime.State,
+            null,
+            point.Runtime.StatusReason);
     }
 
     public IoTestEvaluationResult Observe(IoTestPointPlan point, IoTestObservation observation)
@@ -64,7 +96,7 @@ public sealed class IoTestRollingCaptureCoordinator
         }
 
         var evaluation = _evaluator.Observe(slot.Shadow, observation);
-        ApplyLiveObservation(point.Runtime, slot.Shadow.Runtime, observation);
+        ApplyEvidenceObservationState(point.Runtime, slot.Shadow.Runtime);
 
         if (!slot.HasCurrentEvidence)
         {
@@ -151,12 +183,14 @@ public sealed class IoTestRollingCaptureCoordinator
         string reason)
         => new(evaluation.StateChanged, runtime.State, evaluation.Evidence, reason);
 
-    private static void ApplyLiveObservation(
+    private static void ApplyEvidenceObservationState(
         IoTestPointRuntime target,
-        IoTestPointRuntime shadow,
-        IoTestObservation observation)
+        IoTestPointRuntime shadow)
     {
-        target.ApplyObservation(observation);
+        // Do not copy RawValue/Quality/Source/Timestamp into the operator-facing live cells.
+        // MainWindow.P0FatRecovery projects the current shared process image independently
+        // at DataBind priority. Evidence drains can legitimately run later, so they may only
+        // advance evaluator continuity metadata here.
         target.LastObservedState = shadow.LastObservedState;
         target.LastSequence = shadow.LastSequence;
         target.ConnectionGeneration = shadow.ConnectionGeneration;

@@ -3,18 +3,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Threading;
 using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Bench-facing P0 UX corrections that are intentionally presentation-only.
-///
-/// - LIVE/VALUE1/VALUE2 always render canonical Boolean text without mutating raw evidence.
-/// - Normal per-cell Capture buttons are removed from the template; Recapture remains the
-///   explicit operator correction path while FatAutoCaptureCoordinator owns normal capture.
-/// - Primary session actions and secondary evidence/status actions use two adaptive rows.
+/// Bench-facing FAT UX corrections. FAT deliberately disables ToolTips so hover creation
+/// cannot compete with report-backed updates on relay benches; Engineering ToolTips live in
+/// MainWindow and are untouched. The FAT action strip is kept in one compact adaptive row.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -38,21 +34,18 @@ public partial class IoListTestingWindow
             return;
 
         window._p0BenchUxInstalled = true;
-        window.ContentRendered += window.P0BenchUxContentRendered;
         window.Closed += window.P0BenchUxClosed;
-        window.Dispatcher.BeginInvoke(
-            new Action(window.ApplyP0BenchUx),
-            DispatcherPriority.ContextIdle);
-    }
 
-    private void P0BenchUxContentRendered(object? sender, EventArgs e)
-        => Dispatcher.BeginInvoke(new Action(ApplyP0BenchUx), DispatcherPriority.ContextIdle);
+        // FAT-only. Do not touch MainWindow/Engineering ToolTips.
+        ToolTipService.SetIsEnabled(window, false);
+
+        // Final FAT V2 schema is installed before first visible render.
+        window.InstallFatV2WorkspaceUx();
+        window.ApplyP0BenchUx();
+    }
 
     private void P0BenchUxClosed(object? sender, EventArgs e)
-    {
-        ContentRendered -= P0BenchUxContentRendered;
-        Closed -= P0BenchUxClosed;
-    }
+        => Closed -= P0BenchUxClosed;
 
     private void ApplyP0BenchUx()
     {
@@ -65,6 +58,22 @@ public partial class IoListTestingWindow
     {
         if (_fatSignalsGrid == null)
             return;
+
+        // Removed signals remain in the immutable project/evidence model so they can be
+        // restored from the dedicated Removed Signals UX, but they are not active FAT rows.
+        // Collapse them at the row-container layer so a removed point consumes no grid space
+        // and reappears automatically as soon as IsIncludedInFat becomes true again.
+        var activeFatRowStyle = new Style(typeof(DataGridRow), _fatSignalsGrid.RowStyle);
+        activeFatRowStyle.Triggers.Add(new DataTrigger
+        {
+            Binding = new Binding(nameof(IoTestPointPlan.IsIncludedInFat)),
+            Value = false,
+            Setters =
+            {
+                new Setter(UIElement.VisibilityProperty, Visibility.Collapsed)
+            }
+        });
+        _fatSignalsGrid.RowStyle = activeFatRowStyle;
 
         foreach (var column in _fatSignalsGrid.Columns.OfType<DataGridTemplateColumn>())
         {
@@ -129,9 +138,6 @@ public partial class IoListTestingWindow
         value.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
         value.SetValue(TextBlock.FontSizeProperty, 11.4);
         value.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-        value.SetBinding(FrameworkElement.ToolTipProperty, new Binding(isValue1
-            ? nameof(IoTestPointPlan.Value1EvidenceToolTip)
-            : nameof(IoTestPointPlan.Value2EvidenceToolTip)));
         panel.AppendChild(value);
 
         var timestamp = new FrameworkElementFactory(typeof(TextBlock));
@@ -143,8 +149,6 @@ public partial class IoListTestingWindow
         timestamp.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(112, 126, 145)));
         panel.AppendChild(timestamp);
 
-        // Intentionally no normal Capture button. Automatic capture is the normal path;
-        // multi-row/context Recapture remains available for explicit evidence correction.
         return new DataTemplate { VisualTree = panel };
     }
 
@@ -166,36 +170,26 @@ public partial class IoListTestingWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0)
         };
+
+        // Retained as an empty compatibility panel because P2 helpers reference it. All FAT
+        // actions/status now share the one visible compact row instead of forcing a second row.
         _p0SecondaryHeaderActions = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 5, 0, 0)
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0)
         };
 
         foreach (var child in children)
-        {
-            if (IsP0SecondaryHeaderAction(child))
-                _p0SecondaryHeaderActions.Children.Add(child);
-            else
-                _p0PrimaryHeaderActions.Children.Add(child);
-        }
+            _p0PrimaryHeaderActions.Children.Add(child);
 
         actionPanel.Children.Add(_p0PrimaryHeaderActions);
-        if (_p0SecondaryHeaderActions.Children.Count > 0)
-            actionPanel.Children.Add(_p0SecondaryHeaderActions);
     }
 
-    private bool IsP0SecondaryHeaderAction(UIElement element)
-        => ReferenceEquals(element, WorkspacePreviewToggle) ||
-           ReferenceEquals(element, _timeSyncEvidenceButton) ||
-           ReferenceEquals(element, _comtradeEvidenceButton) ||
-           ReferenceEquals(element, _cleanSessionButton) ||
-           ReferenceEquals(element, _clockSyncGlobalStatusText) ||
-           ReferenceEquals(element, _clockSyncEvidenceText);
+    private bool IsP0SecondaryHeaderAction(UIElement element) => false;
 }
 
 public sealed class P0FatCanonicalValueConverter : IValueConverter

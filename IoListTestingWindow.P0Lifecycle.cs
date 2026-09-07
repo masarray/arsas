@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
 
@@ -9,9 +10,9 @@ namespace ArIED61850Tester;
 /// P0 responsiveness guard for the FAT workspace lifecycle.
 ///
 /// Confirmation and evidence-session state transitions remain on the WPF Dispatcher, but
-/// the high-rate FAT live projection is quiesced before sealing/saving and durable workspace
-/// persistence runs on a worker thread. This prevents a closing window from competing with
-/// incoming report traffic while preserving UI-bound session state safety.
+/// the high-rate FAT live projection is quiesced before sealing/saving. Close-only durable
+/// journal flush/read-back verification and workspace persistence run on worker threads so
+/// a closing window never blocks the Dispatcher on disk work.
 /// </summary>
 public partial class IoListTestingWindow
 {
@@ -91,24 +92,37 @@ public partial class IoListTestingWindow
             engineeringWindow.SuspendIoFatRuntimeProjection(this);
 
         IsEnabled = false;
-        // Let the disabled/closing visual state paint before journal sealing. The actual
-        // session mutation remains on Dispatcher; only durable workspace I/O is offloaded.
+        // Let the disabled/closing visual state paint before journal sealing. Session state
+        // remains Dispatcher-owned; only the physical seal/read-back work is deferred.
         await Dispatcher.Yield(DispatcherPriority.Render);
 
         try
         {
             if (Session.HasActiveSessions)
             {
-                // Session.StopAll mutates controller/project state and raises UI-bound
-                // PropertyChanged notifications. Keep that state transition on Dispatcher;
-                // offloading the whole coordinator would create a cross-thread WPF defect.
-                var stopAll = Session.StopAll(
-                    "Workspace closed by operator; per-IED evidence journal sealed.");
-                if (!stopAll.Succeeded)
+                var stopSucceeded = false;
+                var stopMessage = string.Empty;
+                // StopAll still performs controller/project state mutation and UI-bound
+                // PropertyChanged notifications synchronously on this Dispatcher. The scope
+                // changes only production journal Dispose(): its durable flush + read-back
+                // verification are queued to a worker and awaited immediately afterwards.
+                using (IoTestEvidenceJournal.BeginDeferredSealScope())
+                {
+                    var stopAll = Session.StopAll(
+                        "Workspace closed by operator; per-IED evidence journal sealed.");
+                    stopSucceeded = stopAll.Succeeded;
+                    stopMessage = stopAll.Message;
+                }
+
+                // Do not allow project save or window close until every queued journal has
+                // completed its physical disk barrier and full hash-chain read-back.
+                await IoTestEvidenceJournal.AwaitDeferredSealsAsync();
+
+                if (!stopSucceeded)
                 {
                     MessageBox.Show(
                         this,
-                        stopAll.Message,
+                        stopMessage,
                         "Evidence journals could not be sealed",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
@@ -116,8 +130,8 @@ public partial class IoListTestingWindow
                 }
             }
 
-            // Persistence is pure durable I/O after the session state is sealed and is the
-            // portion that must not occupy the WPF Dispatcher.
+            // Persistence is pure durable I/O after every session journal is actually sealed
+            // and verified, so it also stays away from the WPF Dispatcher.
             if (Storage != null)
                 await Task.Run(Storage.SaveNow);
 
@@ -128,8 +142,8 @@ public partial class IoListTestingWindow
         {
             var answer = MessageBox.Show(
                 this,
-                $"ARSAS could not save the latest IO FAT progress.\n\n{ex.Message}\n\nClose the workspace anyway?",
-                "Progress save failed",
+                $"ARSAS could not seal the FAT evidence or save the latest IO FAT progress.\n\n{ex.Message}\n\nClose the workspace anyway?",
+                "FAT close failed",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Error,
                 MessageBoxResult.No);

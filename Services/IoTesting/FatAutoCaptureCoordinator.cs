@@ -8,21 +8,27 @@ namespace ArIED61850Tester.Services.IoTesting;
 public sealed record FatAutoCaptureDecision(
     FatValueEvidence? Evidence,
     FatAutoCaptureStage Stage,
-    string Message)
+    string Message,
+    FatValueEvidence? ShiftedValue1Evidence = null)
 {
     public static FatAutoCaptureDecision None(FatAutoCaptureStage stage, string message)
         => new(null, stage, message);
 }
 
 /// <summary>
-/// P3 automatic Value 1 / Value 2 latch. This coordinator never mutates the current
-/// evidence pointers: callers must durably append the returned evidence first, then
-/// promote it. That keeps the evidence journal authoritative when storage fails.
+/// Automatic Value 1 / Value 2 latch. The first good readable value is latched as
+/// Value 1 and the first meaningful different value as Value 2. Once both slots are
+/// populated, later meaningful process changes keep a rolling pair: previous Value 2
+/// becomes Value 1 and the newest process value becomes Value 2.
 ///
-/// Analog values use an intentionally small, deterministic settling window rather than
-/// capturing every transient MMS/report update. Three consecutive samples must remain
-/// inside an adaptive 0.05% band before the slot is accepted. Discrete/Other values use
-/// semantic change and are latched immediately after good-quality observation.
+/// The report-facing current pair always follows the latest meaningful process transition,
+/// regardless of whether an earlier pair came from automatic capture or operator Recapture.
+/// Operator actions remain immutable audit history in the journal; they do not freeze the
+/// replaceable current Value 1 / Value 2 projection.
+///
+/// Report-backed process values are event evidence already, so they are accepted
+/// immediately. Polling fallback keeps the three-sample analog settling guard so noisy
+/// cyclic reads are not mistaken for a meaningful condition change.
 /// </summary>
 public sealed class FatAutoCaptureCoordinator
 {
@@ -48,14 +54,6 @@ public sealed class FatAutoCaptureCoordinator
                 "Automatic capture is outside the active FAT scope.");
         }
 
-        if (point.HasValue1Evidence && point.HasValue2Evidence)
-        {
-            Clear(point);
-            return FatAutoCaptureDecision.None(
-                FatAutoCaptureStage.Complete,
-                "Current Value 1 / Value 2 evidence is complete; explicit Recapture is required to replace it.");
-        }
-
         var (qualityVerdict, qualityReason) = IoTestTransitionEvaluator.EvaluateQuality(observation.Quality);
         if (qualityVerdict != IoEvidenceVerdict.Accepted)
         {
@@ -73,8 +71,18 @@ public sealed class FatAutoCaptureCoordinator
                 "Waiting for a readable live value.");
         }
 
+        var rollingPair = point.HasValue1Evidence && point.HasValue2Evidence;
+        if (rollingPair && IsEquivalent(point.Value2Text, observation.RawValue))
+        {
+            Clear(point);
+            return FatAutoCaptureDecision.None(
+                FatAutoCaptureStage.Complete,
+                "Current Value 1 / Value 2 pair is up to date; waiting for the next meaningful process change.");
+        }
+
         var slot = point.HasValue1Evidence ? FatValueSlot.Value2 : FatValueSlot.Value1;
-        if (slot == FatValueSlot.Value2 && IsEquivalent(point.Value1Text, observation.RawValue))
+        var comparisonBaseline = rollingPair ? point.Value2Text : point.Value1Text;
+        if (slot == FatValueSlot.Value2 && !rollingPair && IsEquivalent(point.Value1Text, observation.RawValue))
         {
             Clear(point);
             return FatAutoCaptureDecision.None(
@@ -82,54 +90,58 @@ public sealed class FatAutoCaptureCoordinator
                 "Value 1 is stable; waiting for a meaningful new condition.");
         }
 
-        if (point.SignalKind != FatSignalKind.Analog)
+        if (point.SignalKind != FatSignalKind.Analog || IsReportBacked(observation.AcquisitionSource))
         {
             Clear(point);
-            return new FatAutoCaptureDecision(
-                CreateEvidence(slot, observation),
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
-                slot == FatValueSlot.Value1
-                    ? "Value 1 captured automatically; waiting for a meaningful change."
-                    : "Value 2 captured automatically from the new live condition.");
+            var reportBackedAnalog = point.SignalKind == FatSignalKind.Analog;
+            var evidence = CreateEvidence(slot, observation);
+            return BuildDecision(point, evidence, rollingPair, reportBackedAnalog);
         }
 
         if (!TryParseNumeric(observation.RawValue, out var numeric))
         {
             Clear(point);
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.WaitingChange,
-                "Analog value is not numerically stable enough for automatic capture; manual Recapture remains available.");
+                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.WaitingChange,
+                "Analog polling value is not numerically stable enough for automatic capture; manual Recapture remains available.");
         }
 
         var key = point.TestPointId;
-        var tolerance = SettlingTolerance(numeric, point.Value1Text);
+        var tolerance = SettlingTolerance(numeric, comparisonBaseline);
         if (!_analogCandidates.TryGetValue(key, out var candidate) ||
             candidate.Slot != slot ||
             Math.Abs(numeric - candidate.Center) > tolerance)
         {
             _analogCandidates[key] = new AnalogCandidate(slot, numeric, numeric, numeric, 1);
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing Value 1…" : "Stabilizing Value 2…");
+                slot == FatValueSlot.Value1
+                    ? FatAutoCaptureStage.WaitingValue1
+                    : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.StabilizingValue2,
+                slot == FatValueSlot.Value1
+                    ? "Stabilizing polled Value 1…"
+                    : rollingPair
+                        ? "Current pair remains complete while a newer polled Value 2 candidate stabilizes."
+                        : "Stabilizing polled Value 2…");
         }
 
         var next = candidate.Add(numeric);
         _analogCandidates[key] = next;
-        var nextTolerance = SettlingTolerance(next.Center, point.Value1Text);
+        var nextTolerance = SettlingTolerance(next.Center, comparisonBaseline);
         if (next.Count < AnalogStableSampleCount || next.Max - next.Min > nextTolerance)
         {
             return FatAutoCaptureDecision.None(
-                slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingValue1 : FatAutoCaptureStage.StabilizingValue2,
-                slot == FatValueSlot.Value1 ? "Stabilizing Value 1…" : "Stabilizing Value 2…");
+                slot == FatValueSlot.Value1
+                    ? FatAutoCaptureStage.WaitingValue1
+                    : rollingPair ? FatAutoCaptureStage.Complete : FatAutoCaptureStage.StabilizingValue2,
+                slot == FatValueSlot.Value1
+                    ? "Stabilizing polled Value 1…"
+                    : rollingPair
+                        ? "Current pair remains complete while a newer polled Value 2 candidate stabilizes."
+                        : "Stabilizing polled Value 2…");
         }
 
         _analogCandidates.Remove(key);
-        return new FatAutoCaptureDecision(
-            CreateEvidence(slot, observation),
-            slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
-            slot == FatValueSlot.Value1
-                ? "Stable analog Value 1 captured; waiting for a meaningful new condition."
-                : "Stable analog Value 2 captured; current evidence is complete.");
+        return BuildDecision(point, CreateEvidence(slot, observation), rollingPair, reportBackedAnalog: false);
     }
 
     public void Clear(IoTestPointPlan point)
@@ -139,6 +151,66 @@ public sealed class FatAutoCaptureCoordinator
     }
 
     public void Clear() => _analogCandidates.Clear();
+
+    private static FatAutoCaptureDecision BuildDecision(
+        IoTestPointPlan point,
+        FatValueEvidence evidence,
+        bool rollingPair,
+        bool reportBackedAnalog)
+    {
+        if (rollingPair && evidence.Slot == FatValueSlot.Value2)
+        {
+            var previousValue2 = point.Runtime.Value2Evidence;
+            var shiftedValue1 = previousValue2 == null
+                ? null
+                : previousValue2 with
+                {
+                    EvidenceId = Guid.NewGuid(),
+                    Slot = FatValueSlot.Value1
+                };
+
+            // Advance the current projection before the controller promotes the newest V2.
+            // The shifted item is the already-journaled previous V2, so no process evidence
+            // is invented; this keeps current-pair assessment atomic for the live UI.
+            if (shiftedValue1 != null)
+                point.Runtime.SetFatValueEvidence(shiftedValue1);
+
+            return new FatAutoCaptureDecision(
+                evidence,
+                FatAutoCaptureStage.Complete,
+                reportBackedAnalog
+                    ? "Latest analog change captured from report-backed process data; Value 1 / Value 2 advanced to the newest transition pair."
+                    : "Latest live change captured; Value 1 / Value 2 advanced to the newest transition pair.",
+                shiftedValue1);
+        }
+
+        return new FatAutoCaptureDecision(
+            evidence,
+            evidence.Slot == FatValueSlot.Value1 ? FatAutoCaptureStage.WaitingChange : FatAutoCaptureStage.Complete,
+            evidence.Slot == FatValueSlot.Value1
+                ? reportBackedAnalog
+                    ? "Stable analog Value 1 captured immediately from report-backed process data; waiting for a meaningful change."
+                    : "Value 1 captured automatically; waiting for a meaningful change."
+                : reportBackedAnalog
+                    ? "Stable analog Value 2 captured immediately from the new report-backed process condition; later changes will keep the pair current."
+                    : "Value 2 captured automatically from the new live condition; later changes will keep the pair current.");
+    }
+
+    private static bool IsReportBacked(string? acquisitionSource)
+    {
+        if (string.IsNullOrWhiteSpace(acquisitionSource))
+            return false;
+
+        var source = acquisitionSource.Trim();
+        if (source.Contains("POLL", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return source.Contains("BRCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("URCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("RCB", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("REPORT", StringComparison.OrdinalIgnoreCase) ||
+               source.Contains("INFORMATIONREPORT", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static FatValueEvidence CreateEvidence(FatValueSlot slot, IoTestObservation observation)
         => new(
@@ -158,9 +230,27 @@ public sealed class FatAutoCaptureCoordinator
         if (Iec61850MonitorPoint.AreSemanticallyEquivalent(baseline ?? string.Empty, current ?? string.Empty))
             return true;
 
-        return TryParseNumeric(baseline, out var left) &&
-               TryParseNumeric(current, out var right) &&
+        return TryParseScalarNumeric(baseline, out var left) &&
+               TryParseScalarNumeric(current, out var right) &&
                Math.Abs(left - right) <= SettlingTolerance(right, baseline);
+    }
+
+    private static bool TryParseScalarNumeric(string? raw, out double value)
+    {
+        value = 0d;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var matches = NumericToken.Matches(raw.Trim());
+        if (matches.Count != 1)
+            return false;
+
+        var token = matches[0].Value;
+        if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            return true;
+
+        token = token.Replace(',', '.');
+        return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     private static double SettlingTolerance(double value, string? baseline)

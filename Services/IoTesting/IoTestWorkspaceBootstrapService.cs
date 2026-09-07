@@ -152,71 +152,110 @@ public static class IoTestWorkspaceBootstrapService
         RestoreIedLevelEvidence(project, savedIeds);
         RestoreMissingManualWorkspaceRows(project, savedIeds);
 
-        var savedPoints = savedIeds
-            .SelectMany(ied => RequiredArray(ied, "testPoints").EnumerateArray())
-            .ToDictionary(point => RequiredString(point, "testPointId"), StringComparer.OrdinalIgnoreCase);
+        // Phase B: progress is owned by one physical IED first, then one point inside it.
+        // TestPointId is not treated as a project-global key because different IEDs may use
+        // the same local point identifier. Duplicate endpoint identities fail closed.
+        var savedIedsByIdentity = savedIeds
+            .GroupBy(
+                ied => IoTestPerIedProgressIdentity.IedKey(
+                    OptionalString(ied, "iedName", string.Empty),
+                    OptionalString(ied, "ipAddress", string.Empty)),
+                StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+        var currentIedIdentityCounts = project.Ieds
+            .GroupBy(IoTestPerIedProgressIdentity.IedKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
-        foreach (var point in project.Ieds.SelectMany(ied => ied.TestPoints))
+        foreach (var ied in project.Ieds)
         {
-            if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
-                continue;
-
-            // Shared Engineering/FAT membership, FAT TEST scope, and FAT disposition are
-            // three independent operator authorities. Same-source continuation restores all
-            // three without allowing Remove/Restore to rewrite Engineering selection.
-            if (saved.TryGetProperty("workspaceSelected", out var workspaceSelected) &&
-                workspaceSelected.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            var iedKey = IoTestPerIedProgressIdentity.IedKey(ied);
+            if (!currentIedIdentityCounts.TryGetValue(iedKey, out var currentIdentityCount) ||
+                currentIdentityCount != 1 ||
+                !savedIedsByIdentity.TryGetValue(iedKey, out var savedIed))
             {
-                point.WorkspaceSelected = workspaceSelected.GetBoolean();
-            }
-            if (saved.TryGetProperty("testEnabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                point.TestEnabled = enabled.GetBoolean();
-            point.RestoreFatDisposition(OptionalEnum(saved, "fatDisposition", FatSignalDisposition.Included));
-
-            if (!saved.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
-                continue;
-
-            point.Runtime.Attempt = OptionalInt(runtime, "attempt", 0);
-            point.Runtime.OnEvidence = OptionalEvidence(runtime, "onEvidence");
-            point.Runtime.OffEvidence = OptionalEvidence(runtime, "offEvidence");
-            point.Runtime.Value1Evidence = OptionalFatEvidence(runtime, "value1Evidence");
-            point.Runtime.Value2Evidence = OptionalFatEvidence(runtime, "value2Evidence");
-            point.Runtime.LastObservedState = null;
-            point.Runtime.LastSequence = -1;
-            point.Runtime.ConnectionGeneration = -1;
-            point.Runtime.CurrentValue = "-";
-            point.Runtime.CurrentQuality = "Unknown";
-            point.Runtime.CurrentSource = "Restored · live baseline required";
-
-            if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
-            {
-                point.Runtime.State = IoTestPointState.NotStarted;
-                point.Runtime.StatusReason = point.IsFatEvidenceComplete
-                    ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
-                    : point.Runtime.Value1Evidence is not null || point.Runtime.Value2Evidence is not null
-                        ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
-                        : "Progress restored; reconnect live acquisition before operator snapshot capture.";
                 continue;
             }
 
-            var savedState = OptionalState(runtime, "state", IoTestPointState.NotStarted);
-            if (savedState is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
+            var savedPoints = RequiredArray(savedIed, "testPoints")
+                .EnumerateArray()
+                .GroupBy(point => RequiredString(point, "testPointId"), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var point in ied.TestPoints)
             {
-                point.Runtime.State = savedState;
-                point.Runtime.StatusReason = OptionalString(runtime, "statusReason", "Restored completed result");
-            }
-            else if (point.Runtime.OnEvidence != null && point.Runtime.OffEvidence == null)
-            {
-                point.Runtime.State = IoTestPointState.Review;
-                point.Runtime.StatusReason = "Progress was restored after the live session ended; OFF continuity after saved ON evidence cannot be proven.";
-            }
-            else
-            {
-                point.Runtime.State = IoTestPointState.NotStarted;
-                point.Runtime.StatusReason = "Progress restored; a new good-quality live baseline is required before continuing.";
+                if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
+                    continue;
+
+                // Never project old FAT evidence onto a newly imported point just because
+                // its TestPointId was reused. Evidence-critical IEC/configuration semantics
+                // must still match the deterministic Phase-B fingerprint.
+                if (!IoTestPerIedProgressIdentity.PointConfigurationMatches(point, saved))
+                    continue;
+
+                RestorePointProgress(point, saved);
             }
         }
         project.InitializeRuntimeNotifications();
+    }
+
+    private static void RestorePointProgress(IoTestPointPlan point, JsonElement saved)
+    {
+        // Shared Engineering/FAT membership, FAT TEST scope, and FAT disposition are
+        // three independent operator authorities. Same-source continuation restores all
+        // three without allowing Remove/Restore to rewrite Engineering selection.
+        if (saved.TryGetProperty("workspaceSelected", out var workspaceSelected) &&
+            workspaceSelected.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            point.WorkspaceSelected = workspaceSelected.GetBoolean();
+        }
+        if (saved.TryGetProperty("testEnabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            point.TestEnabled = enabled.GetBoolean();
+        point.RestoreFatDisposition(OptionalEnum(saved, "fatDisposition", FatSignalDisposition.Included));
+
+        if (!saved.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
+            return;
+
+        point.Runtime.Attempt = OptionalInt(runtime, "attempt", 0);
+        point.Runtime.OnEvidence = OptionalEvidence(runtime, "onEvidence");
+        point.Runtime.OffEvidence = OptionalEvidence(runtime, "offEvidence");
+        point.Runtime.Value1Evidence = OptionalFatEvidence(runtime, "value1Evidence");
+        point.Runtime.Value2Evidence = OptionalFatEvidence(runtime, "value2Evidence");
+        point.Runtime.LastObservedState = null;
+        point.Runtime.LastSequence = -1;
+        point.Runtime.ConnectionGeneration = -1;
+        point.Runtime.CurrentValue = "-";
+        point.Runtime.CurrentQuality = "Unknown";
+        point.Runtime.CurrentSource = "Restored · live baseline required";
+
+        if (point.CaptureMode == FatCaptureMode.OperatorSnapshot)
+        {
+            point.Runtime.State = IoTestPointState.NotStarted;
+            point.Runtime.StatusReason = point.IsFatEvidenceComplete
+                ? "Value 1 and Value 2 evidence restored; reconnect live acquisition to recapture either value."
+                : point.Runtime.Value1Evidence is not null || point.Runtime.Value2Evidence is not null
+                    ? "Partial Value 1 / Value 2 evidence restored; reconnect live acquisition to capture the remaining value."
+                    : "Progress restored; reconnect live acquisition before operator snapshot capture.";
+            return;
+        }
+
+        var savedState = OptionalState(runtime, "state", IoTestPointState.NotStarted);
+        if (savedState is IoTestPointState.Passed or IoTestPointState.Review or IoTestPointState.Failed)
+        {
+            point.Runtime.State = savedState;
+            point.Runtime.StatusReason = OptionalString(runtime, "statusReason", "Restored completed result");
+        }
+        else if (point.Runtime.OnEvidence != null && point.Runtime.OffEvidence == null)
+        {
+            point.Runtime.State = IoTestPointState.Review;
+            point.Runtime.StatusReason = "Progress was restored after the live session ended; OFF continuity after saved ON evidence cannot be proven.";
+        }
+        else
+        {
+            point.Runtime.State = IoTestPointState.NotStarted;
+            point.Runtime.StatusReason = "Progress restored; a new good-quality live baseline is required before continuing.";
+        }
     }
 
     private static bool SnapshotSourceMatches(JsonElement savedProject, IoTestProject project)

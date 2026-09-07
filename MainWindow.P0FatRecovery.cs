@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -22,6 +23,10 @@ public partial class MainWindow
     private static readonly bool P0FatRecoveryClassHandlersRegistered = RegisterP0FatRecoveryClassHandlers();
     private readonly ConcurrentDictionary<string, Iec61850PointSnapshot> _p0FatLatestSnapshots =
         new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, List<IoTestPointPlan>> _p0FatPointIndex =
+        new(StringComparer.OrdinalIgnoreCase);
+    private IoTestProject? _p0FatPointIndexProject;
+    private int _p0FatPointIndexVersion = int.MinValue;
     private int _p0FatDrainScheduled;
     private int _p0FatProjectionActive;
     private bool _p0FatRuntimeProjectionAttached;
@@ -60,6 +65,7 @@ public partial class MainWindow
         Closed -= P0MainWindowClosed;
         Interlocked.Exchange(ref _p0FatProjectionActive, 0);
         _p0FatLatestSnapshots.Clear();
+        ClearP0FatPointIndex();
 
         if (!_p0FatRuntimeProjectionAttached)
             return;
@@ -99,6 +105,7 @@ public partial class MainWindow
 
         fat.Closed -= P0FatWindowClosed;
         SuspendIoFatRuntimeProjection(fat);
+        ClearP0FatPointIndex();
     }
 
     internal void SuspendIoFatRuntimeProjection(IoListTestingWindow fat)
@@ -177,10 +184,10 @@ public partial class MainWindow
             if (latest.Length == 0)
                 return;
 
-            // Resolve against the exact live-point identity on the Dispatcher. This also
-            // bridges an engine-owned structured static member (for example MMXU A.phsA)
-            // to its one resolved scalar runtime ObjectReference when that bridge is unique.
-            var index = BuildP0FatPointIndex(fat.Project);
+            // The expensive plan -> live-point resolution is cached across report frames.
+            // A cheap structural version check rebuilds it only when an IED/model/monitor
+            // point inventory actually changes (for example first monitor start/reconnect).
+            var index = GetP0FatPointIndex(fat.Project);
             foreach (var pair in latest)
             {
                 if (!index.TryGetValue(pair.Key, out var plans))
@@ -216,7 +223,9 @@ public partial class MainWindow
 
     private void P0RefreshFatFromEngineeringImage(IoListTestingWindow fat)
     {
-        var index = BuildP0FatPointIndex(fat.Project);
+        // A deliberate full refresh is a lifecycle boundary. Rebuild once here so any
+        // changed static-member -> scalar-runtime bridge is repaired before applying image.
+        var index = GetP0FatPointIndex(fat.Project, forceRebuild: true);
         var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var device in Devices)
@@ -242,6 +251,56 @@ public partial class MainWindow
                 }
             }
         }
+    }
+
+    private Dictionary<string, List<IoTestPointPlan>> GetP0FatPointIndex(
+        IoTestProject project,
+        bool forceRebuild = false)
+    {
+        var version = ComputeP0FatPointIndexVersion(project);
+        if (!forceRebuild &&
+            ReferenceEquals(_p0FatPointIndexProject, project) &&
+            _p0FatPointIndexVersion == version)
+        {
+            return _p0FatPointIndex;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var rebuilt = BuildP0FatPointIndex(project);
+        _p0FatPointIndex = rebuilt;
+        _p0FatPointIndexProject = project;
+        _p0FatPointIndexVersion = ComputeP0FatPointIndexVersion(project);
+        Trace.WriteLine(
+            $"[IO FAT P0] Live projection index rebuilt: {rebuilt.Count} key(s) in {stopwatch.ElapsedMilliseconds} ms.");
+        return rebuilt;
+    }
+
+    private int ComputeP0FatPointIndexVersion(IoTestProject project)
+    {
+        var hash = new HashCode();
+        hash.Add(project.Ieds.Count);
+        foreach (var ied in project.Ieds)
+        {
+            hash.Add(ied.IedName, StringComparer.OrdinalIgnoreCase);
+            hash.Add(ied.LiveDeviceId, StringComparer.OrdinalIgnoreCase);
+            hash.Add(ied.TestPoints.Count);
+        }
+
+        hash.Add(Devices.Count);
+        foreach (var device in Devices)
+        {
+            hash.Add(device.DeviceId, StringComparer.OrdinalIgnoreCase);
+            hash.Add(device.Signals.Count);
+            hash.Add(device.Points.Count);
+        }
+        return hash.ToHashCode();
+    }
+
+    private void ClearP0FatPointIndex()
+    {
+        _p0FatPointIndex.Clear();
+        _p0FatPointIndexProject = null;
+        _p0FatPointIndexVersion = int.MinValue;
     }
 
     private Dictionary<string, List<IoTestPointPlan>> BuildP0FatPointIndex(IoTestProject project)

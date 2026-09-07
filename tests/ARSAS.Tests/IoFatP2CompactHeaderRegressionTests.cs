@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatP2CompactHeaderRegressionTests
 {
     [Fact]
-    public void P2_ReusesP0PrimaryAndSecondaryHeaderHierarchy()
+    public void P2_ReusesP0SingleRowHeaderWithCollapsedCompatibilityPanel()
     {
         var p0 = File.ReadAllText(FindRepoFile("IoListTestingWindow.P0BenchUx.cs"));
 
@@ -11,12 +11,10 @@ public sealed class IoFatP2CompactHeaderRegressionTests
         Assert.Contains("ConfigureP2CompactHeader();", p0, StringComparison.Ordinal);
         Assert.Contains("_p0PrimaryHeaderActions", p0, StringComparison.Ordinal);
         Assert.Contains("_p0SecondaryHeaderActions", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, WorkspacePreviewToggle)", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, _timeSyncEvidenceButton)", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, _comtradeEvidenceButton)", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, _cleanSessionButton)", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, _clockSyncGlobalStatusText)", p0, StringComparison.Ordinal);
-        Assert.Contains("ReferenceEquals(element, _clockSyncEvidenceText)", p0, StringComparison.Ordinal);
+        Assert.Contains("Visibility = Visibility.Collapsed", p0, StringComparison.Ordinal);
+        Assert.Contains("foreach (var child in children)", p0, StringComparison.Ordinal);
+        Assert.Contains("_p0PrimaryHeaderActions.Children.Add(child);", p0, StringComparison.Ordinal);
+        Assert.Contains("private bool IsP0SecondaryHeaderAction(UIElement element) => false;", p0, StringComparison.Ordinal);
     }
 
     [Fact]
