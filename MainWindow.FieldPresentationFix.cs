@@ -18,11 +18,6 @@ public partial class MainWindow
     private static bool RegisterFieldPresentationFixClassHandlers()
     {
         EventManager.RegisterClassHandler(
-            typeof(ListBoxItem),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(FieldPresentation_ListBoxItemLoaded),
-            handledEventsToo: true);
-        EventManager.RegisterClassHandler(
             typeof(TextBlock),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(FieldPresentation_TextBlockLoaded),
@@ -30,24 +25,12 @@ public partial class MainWindow
         return true;
     }
 
-    private static void FieldPresentation_ListBoxItemLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ListBoxItem item)
-            return;
-
-        if (item.DataContext is Models.FatIoSignalRow row)
-        {
-            if (item.Content is TextBlock text)
-                text.Text = IoFatSignalDisplayNameFormatter.Format(row.Name, row.DisplayReference);
-        }
-    }
-
     private static void FieldPresentation_TextBlockLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not TextBlock text || text.DataContext == null)
             return;
 
-        // Both active operator surfaces bind their first column to SignalName:
+        // Both active operator surfaces bind their signal column to SignalName:
         // Engineering points carry IecTelegram, FAT rows carry ObjectReference. Replace
         // only that presentation binding with a semantic MultiBinding. Virtualized/recycled
         // rows therefore keep following their DataContext without mutating the source model.
