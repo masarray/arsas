@@ -44,15 +44,19 @@ internal static class IoFatReportScope
         if (selected.Any(ied => !project.Ieds.Contains(ied)))
             throw new ArgumentException("Every selected IED must belong to this IO FAT project.", nameof(ieds));
 
-        // The Phase-B identity contract is Technical Key + IP. A duplicated endpoint is
-        // ambiguous evidence ownership, so reporting fails closed rather than choosing one.
-        var duplicateIdentity = selected
+        // The Phase-B identity contract is Technical Key + IP. Report ownership is
+        // ambiguous if the project itself contains more than one IED with a selected
+        // identity, even when the caller happens to pass only one of those instances.
+        var projectIdentityCounts = project.Ieds
             .GroupBy(IoTestPerIedProgressIdentity.IedKey, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1);
-        if (duplicateIdentity != null)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var duplicateIdentity = selected
+            .Select(IoTestPerIedProgressIdentity.IedKey)
+            .FirstOrDefault(key => projectIdentityCounts.TryGetValue(key, out var count) && count != 1);
+        if (!string.IsNullOrWhiteSpace(duplicateIdentity))
         {
             throw new InvalidDataException(
-                $"The FAT report scope contains duplicate IED identity '{duplicateIdentity.Key}'. Resolve the Technical Key/IP conflict before reporting.");
+                $"The FAT project contains duplicate IED identity '{duplicateIdentity}'. Resolve the Technical Key/IP conflict before reporting.");
         }
 
         return CreateCore(project, selected);
