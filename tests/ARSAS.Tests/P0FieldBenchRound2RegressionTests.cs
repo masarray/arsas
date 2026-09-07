@@ -3,67 +3,70 @@ namespace ARSAS.Tests;
 public sealed class P0FieldBenchRound2RegressionTests
 {
     [Fact]
-    public void FatSignalColumn_UsesDeterministicPhaseAwareTemplateAfterV2Rebuild()
+    public void FatSignalColumn_ReplacesActualV2TextColumnWithSemanticTemplate()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.SemanticSignalColumnAuthority.cs"));
 
-        Assert.Contains("Window.GetWindow(grid) is not IoListTestingWindow", source, StringComparison.Ordinal);
-        Assert.Contains("DispatcherPriority.Loaded", source, StringComparison.Ordinal);
-        Assert.Contains("column.CellTemplate = BuildSemanticFatSignalTemplate()", source, StringComparison.Ordinal);
+        Assert.Contains("_fatSignalsGrid.Columns[index] = replacement", source, StringComparison.Ordinal);
+        Assert.Contains("existing is DataGridTemplateColumn", source, StringComparison.Ordinal);
+        Assert.Contains("SortMemberPath = nameof(IoTestPointPlan.SignalName)", source, StringComparison.Ordinal);
         Assert.Contains("IoFatSignalDisplayNameFormatter.Format(point)", source, StringComparison.Ordinal);
-        Assert.Contains("new Binding(\".\")", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.ApplicationIdle", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void RcbProductionPointer_OpensMultiExporterAndRowsToggleIndependently()
+    public void RcbProductionButton_RemovesLegacyInstanceHandlerAndUsesMultiExporter()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.RcbMultiSelectPointerAuthority.cs"));
+        var source = File.ReadAllText(FindRepoFile("MainWindow.RcbExportClickAuthority.cs"));
+        var window = File.ReadAllText(FindRepoFile("RcbMultiExportWindow.cs"));
 
-        Assert.Contains("PreviewMouseLeftButtonDownEvent", source, StringComparison.Ordinal);
-        Assert.Contains("window.IedEditRcbMulti_Click(button, e)", source, StringComparison.Ordinal);
-        Assert.Contains("Window.GetWindow(grid) is not RcbMultiExportWindow", source, StringComparison.Ordinal);
-        Assert.Contains("row.IsSelected = !row.IsSelected", source, StringComparison.Ordinal);
-        Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
+        Assert.Contains("button.Click -= IedEditRcb_Click", source, StringComparison.Ordinal);
+        Assert.Contains("button.Click += IedEditRcbMulti_Click", source, StringComparison.Ordinal);
+        Assert.Contains("select any number of native RCBs", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Binding = new Binding(nameof(RcbExportRow.IsSelected))", window, StringComparison.Ordinal);
+        Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(FindRepoRoot(), "MainWindow.RcbMultiSelectPointerAuthority.cs")));
     }
 
     [Fact]
-    public void DownloadedComtrade_SelectionTickIsRepaintedAfterPreviewInput()
+    public void DownloadedComtrade_SelectionTickIsRepaintedAfterFullInputCycle()
     {
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
 
         Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
-        Assert.Contains("DispatcherPriority.Input", source, StringComparison.Ordinal);
-        Assert.Contains("window.ConfigureRecordRow(row)", source, StringComparison.Ordinal);
-        Assert.Contains("window.UpdateSmartSelectionUi()", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.ContextIdle", source, StringComparison.Ordinal);
+        Assert.Contains("PaintTransferSelection", source, StringComparison.Ordinal);
+        Assert.Contains("checkBox.IsChecked = selected", source, StringComparison.Ordinal);
+        Assert.Contains("checkBox.Content = selected ? \"✓\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FatLiveMirror_IsImmediateWhileEvidenceRemainsEngineeringAuthorized()
+    public void FatLiveAndEvidence_UseSameRuntimeSnapshotAndDispatcherTurn()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
-        var detach = source.IndexOf("_runtime.PointUpdated -= P0FatRuntimePointUpdated", StringComparison.Ordinal);
-        var attach = source.IndexOf("_runtime.PointUpdated += P0FatRuntimePointUpdated", StringComparison.Ordinal);
-        var liveProjection = source.IndexOf("ProjectSharedEngineeringPointToFat(pointIndex, point)", StringComparison.Ordinal);
-        var evidence = source.IndexOf("routeOwner.PrimaryController.Enqueue(committed.Entry)", StringComparison.Ordinal);
+        var live = source.IndexOf("ApplyP0FatSnapshot(plan.Runtime, snapshot)", StringComparison.Ordinal);
+        var barrier = source.IndexOf("IsAtomicFatLiveCommitCurrent(plans, snapshot)", live, StringComparison.Ordinal);
+        var evidence = source.IndexOf("coordinator.PrimaryController.Enqueue(entry)", barrier, StringComparison.Ordinal);
 
-        Assert.True(detach >= 0 && attach > detach, "Presentation-only raw LIVE mirror must be re-armed exactly after de-duplication.");
-        Assert.Contains("presentation-only", source, StringComparison.OrdinalIgnoreCase);
-        Assert.True(liveProjection >= 0 && evidence > liveProjection, "Engineering-authorized evidence must remain downstream of LIVE projection.");
-        Assert.Contains("IsFatLiveCommitCurrent", source, StringComparison.Ordinal);
-        Assert.Contains("DispatcherPriority.Background", source, StringComparison.Ordinal);
+        Assert.True(live >= 0 && barrier > live && evidence > barrier);
+        Assert.Contains("_runtime.PointUpdated += P0FatAtomicPointUpdated", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.DataBind", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_uiFlushTimer.Tick +=", source, StringComparison.Ordinal);
     }
 
-    private static string FindRepoFile(string relativePath)
+    private static string FindRepoRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory != null)
         {
-            var candidate = Path.Combine(directory.FullName, relativePath);
-            if (File.Exists(candidate))
-                return candidate;
+            if (File.Exists(Path.Combine(directory.FullName, "ArIED61850Tester.csproj")))
+                return directory.FullName;
             directory = directory.Parent;
         }
-        throw new FileNotFoundException(relativePath);
+        throw new DirectoryNotFoundException("Repository root not found.");
     }
+
+    private static string FindRepoFile(string relativePath)
+        => Path.Combine(FindRepoRoot(), relativePath);
 }
