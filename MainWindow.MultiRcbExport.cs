@@ -87,7 +87,7 @@ public partial class MainWindow
                 {
                     latestAvailability = await _rcbAvailabilityProbe
                         .CheckAsync(device, cancellationToken)
-                        .ConfigureAwait(false);
+                        .ConfigureAwait(true);
                     return BuildRcbExportRows(device, sourceInventory, latestAvailability);
                 }
                 : null,
@@ -100,7 +100,7 @@ public partial class MainWindow
                 {
                     latestAvailability = await _rcbAvailabilityProbe
                         .CheckAsync(device, cancellationToken)
-                        .ConfigureAwait(false);
+                        .ConfigureAwait(true);
                 }
 
                 return await ExportGenericMultiRcbAsync(
@@ -110,7 +110,7 @@ public partial class MainWindow
                         outputPath,
                         latestAvailability,
                         cancellationToken)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(true);
             })
         {
             Owner = this
@@ -154,7 +154,7 @@ public partial class MainWindow
                         tempPath,
                         availability,
                         cancellationToken)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(true);
                 if (string.IsNullOrWhiteSpace(completion.OutputPath) || !File.Exists(completion.OutputPath))
                     throw new InvalidOperationException($"The single-RCB staging export for '{row.Name}' did not produce an SCL file.");
                 singularFiles.Add(completion.OutputPath);
