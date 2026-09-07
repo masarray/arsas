@@ -83,9 +83,11 @@ public sealed class IoFatProfessionalReportRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ProfessionalReportUx.cs"));
 
-        Assert.Contains("PreviewLucideIcon.FileDown", source, StringComparison.Ordinal);
+        Assert.Contains("PreviewLucideIcon.Save", source, StringComparison.Ordinal);
+        Assert.Contains("PreviewLucideIcon.RefreshCw", source, StringComparison.Ordinal);
         Assert.Contains("\"Save PDF\"", source, StringComparison.Ordinal);
         Assert.Contains("PreviewLucideIcon.X", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PreviewLucideIcon.FileDown", source, StringComparison.Ordinal);
         Assert.Contains("StopIedSessionWithoutChangingExplorer", source, StringComparison.Ordinal);
         Assert.Contains("Other IED FAT sessions may remain active", source, StringComparison.Ordinal);
     }
