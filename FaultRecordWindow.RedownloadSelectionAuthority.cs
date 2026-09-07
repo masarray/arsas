@@ -9,10 +9,9 @@ namespace ArIED61850Tester;
 
 /// <summary>
 /// One pointer-selection authority for the fault-record grid. Clicking either the SELECT
-/// checkbox or anywhere on a transferable record row toggles the same selection exactly once.
-/// Downloaded records use the staged-overwrite selection set; first-time records keep the
-/// existing model IsSelected flag. Visual checkbox state is committed after the input event so
-/// WPF's native CheckBox mouse-state transition cannot repaint over the operator's tick.
+/// checkbox or anywhere on a transferable record row toggles FaultRecordRow.IsSelected exactly
+/// once. Local Downloaded state never owns a second selection set; it only changes transfer
+/// semantics from first download to staged atomic replacement.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -34,28 +33,17 @@ public partial class FaultRecordWindow
             window.IsBusy ||
             e.ChangedButton != MouseButton.Left ||
             !TryResolveTransferRow(e.OriginalSource as DependencyObject, out var row) ||
-            row.Record.Files.Count == 0)
+            !row.CanSelectForDownload)
         {
             return;
         }
 
-        if (row.LocalState == FaultRecordLocalState.Downloaded)
-        {
-            var recordId = row.Record.RecordId;
-            if (!window._redownloadSelections.Add(recordId))
-                window._redownloadSelections.Remove(recordId);
-        }
-        else
-        {
-            if (!row.CanSelectForDownload)
-                return;
-            row.IsSelected = !row.IsSelected;
-        }
+        row.IsSelected = !row.IsSelected;
 
         // Suppress the native checkbox/DataGrid toggle so one pointer action means exactly
         // one selection change. Repaint after input processing; doing this synchronously in
         // PreviewMouseDown lets the CheckBox template's pressed-state transition erase the
-        // visible tick even though the selection count already changed.
+        // visible tick even though the model already changed.
         e.Handled = true;
         window.Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
