@@ -38,8 +38,8 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Contains("row.LocalState == FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
         Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
         Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
-        Assert.Contains("ConfigureRecordRow(row)", source, StringComparison.Ordinal);
-        Assert.Contains("UpdateSmartSelectionUi()", source, StringComparison.Ordinal);
+        Assert.Contains("PaintTransferSelection", source, StringComparison.Ordinal);
+        Assert.Contains("checkBox.IsChecked = selected", source, StringComparison.Ordinal);
         Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
         Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
         Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
@@ -86,8 +86,8 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Contains("ExportLegacySasRcbAsync", source, StringComparison.Ordinal);
         Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
         Assert.Contains("select one or more native RCBs", window, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("[ModuleInitializer]", authority, StringComparison.Ordinal);
-        Assert.Contains("window.IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
+        Assert.Contains("button.Click -= IedEditRcb_Click", authority, StringComparison.Ordinal);
+        Assert.Contains("button.Click += IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateDynamic", source, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -117,11 +117,14 @@ public sealed class P0LatestFieldRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
-        Assert.Contains("projectedPlans.Count == 0", source, StringComparison.Ordinal);
-        Assert.Contains("GetP0FatPointIndex(fat.Project, forceRebuild: true)", source, StringComparison.Ordinal);
-        Assert.Contains("IsFatLiveCommitCurrent", source, StringComparison.Ordinal);
+        var apply = source.IndexOf("ApplyP0FatSnapshot(plan.Runtime, snapshot)", StringComparison.Ordinal);
+        var verify = source.IndexOf("IsAtomicFatLiveCommitCurrent(plans, snapshot)", apply, StringComparison.Ordinal);
+        var enqueue = source.IndexOf("coordinator.PrimaryController.Enqueue(entry)", verify, StringComparison.Ordinal);
+
+        Assert.True(apply >= 0 && verify > apply && enqueue > verify);
+        Assert.Contains("NewValue = snapshot.Value", source, StringComparison.Ordinal);
         Assert.Contains("plan.Runtime.CurrentValue", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_uiFlushTimer.Tick +=", source, StringComparison.Ordinal);
     }
 
     [Fact]
