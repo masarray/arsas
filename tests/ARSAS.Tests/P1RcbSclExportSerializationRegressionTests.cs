@@ -32,7 +32,7 @@ public sealed class P1RcbSclExportSerializationRegressionTests
             RemovedDataSetCount = 0
         };
 
-        var json = LegacySasSclExporter.SerializeSafeReportForTest(result);
+        var json = ArIED61850Tester.LegacySasSclExporter.SerializeSafeReportForTest(result);
 
         Assert.DoesNotContain("\"document\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("firstAttribute", json, StringComparison.OrdinalIgnoreCase);
