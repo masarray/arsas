@@ -9,9 +9,10 @@ using System.Windows.Threading;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Adds a tri-state select-all checkbox to the fault-record Get column. Selecting all
-/// affects only rows that are currently eligible for download; clearing always clears
-/// every row so stale disabled selections cannot remain hidden.
+/// Adds a tri-state select-all checkbox to the fault-record Get column. A record with relay
+/// files is selectable whether it is a first download or an intentional re-download. Native
+/// first-download rows use FaultRecordRow.IsSelected; Downloaded rows use the staged-overwrite
+/// selection set owned by RedownloadUx.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -75,7 +76,7 @@ public partial class FaultRecordWindow
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = Cursors.Hand,
             Focusable = true,
-            ToolTip = "Check / uncheck all downloadable fault records"
+            ToolTip = "Check / uncheck all downloadable or re-downloadable fault records"
         };
         AutomationProperties.SetName(headerCheckBox, "Toggle all downloadable fault records");
         headerCheckBox.Click += FaultRecordHeaderSelectionCheckBox_Click;
@@ -105,10 +106,31 @@ public partial class FaultRecordWindow
         {
             foreach (var row in Records)
             {
-                if (target)
-                    row.IsSelected = row.CanSelectForDownload;
-                else
+                if (!HasTransferableFiles(row))
+                {
                     row.IsSelected = false;
+                    _redownloadSelections.Remove(row.Record.RecordId);
+                    continue;
+                }
+
+                if (!target)
+                {
+                    row.IsSelected = false;
+                    _redownloadSelections.Remove(row.Record.RecordId);
+                    continue;
+                }
+
+                if (row.LocalState == FaultRecordLocalState.Downloaded)
+                {
+                    row.IsSelected = false;
+                    _redownloadSelections.Add(row.Record.RecordId);
+                    ConfigureRecordRow(row);
+                }
+                else
+                {
+                    _redownloadSelections.Remove(row.Record.RecordId);
+                    row.IsSelected = row.CanSelectForDownload;
+                }
             }
         }
         finally
@@ -117,6 +139,7 @@ public partial class FaultRecordWindow
         }
 
         RaiseSelectionState();
+        UpdateSmartSelectionUi();
         RefreshFaultRecordHeaderSelection();
     }
 
@@ -161,24 +184,32 @@ public partial class FaultRecordWindow
         if (header == null)
             return;
 
-        var eligibleCount = Records.Count(row => row.CanSelectForDownload);
+        var eligibleCount = Records.Count(HasTransferableFiles);
         header.IsEnabled = !IsBusy && eligibleCount > 0;
         header.IsChecked = GetFaultRecordHeaderSelectionState();
     }
 
     private bool? GetFaultRecordHeaderSelectionState()
     {
-        var eligible = Records.Where(row => row.CanSelectForDownload).ToArray();
+        var eligible = Records.Where(HasTransferableFiles).ToArray();
         if (eligible.Length == 0)
             return false;
 
-        var selected = eligible.Count(row => row.IsSelected);
+        var selected = eligible.Count(IsSelectedForTransfer);
         if (selected == 0)
             return false;
         if (selected == eligible.Length)
             return true;
         return null;
     }
+
+    private static bool HasTransferableFiles(FaultRecordRow row)
+        => row.Record.Files.Count > 0;
+
+    private bool IsSelectedForTransfer(FaultRecordRow row)
+        => row.LocalState == FaultRecordLocalState.Downloaded
+            ? _redownloadSelections.Contains(row.Record.RecordId)
+            : row.IsSelected;
 
     private void FaultRecordHeaderSelectionWindow_Closed(object? sender, EventArgs e)
     {
