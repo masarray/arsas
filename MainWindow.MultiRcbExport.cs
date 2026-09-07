@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,15 +17,18 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class MainWindow
 {
-    private static readonly bool MultiRcbExportButtonClassHandlerRegistered = RegisterMultiRcbExportButtonClassHandler();
-
-    private static bool RegisterMultiRcbExportButtonClassHandler()
+    [ModuleInitializer]
+    internal static void RegisterMultiRcbExportButtonClassHandler()
     {
+        // ModuleInitializer is intentional. An unreferenced static bool on a beforefieldinit
+        // partial class is not a reliable WPF registration point and was the reason the relay
+        // bench could still open the legacy one-RCB dialog. Registration now happens when the
+        // assembly is loaded, before any MainWindow button can be realized.
         EventManager.RegisterClassHandler(
             typeof(Button),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(MultiRcbExportButton_Loaded));
-        return true;
+            new RoutedEventHandler(MultiRcbExportButton_Loaded),
+            handledEventsToo: true);
     }
 
     private static void MultiRcbExportButton_Loaded(object sender, RoutedEventArgs e)
@@ -33,13 +37,14 @@ public partial class MainWindow
             return;
 
         var toolTip = button.ToolTip?.ToString() ?? string.Empty;
-        if (!toolTip.Contains("RCB Export Filter", StringComparison.OrdinalIgnoreCase))
+        if (!toolTip.Contains("RCB Export Filter", StringComparison.OrdinalIgnoreCase) &&
+            !toolTip.Contains("RCB Export", StringComparison.OrdinalIgnoreCase))
             return;
 
         button.Click -= window.IedEditRcb_Click;
         button.Click -= window.IedEditRcbMulti_Click;
         button.Click += window.IedEditRcbMulti_Click;
-        button.ToolTip = "RCB Export — select one or more native RCBs and export generic interoperable IEC 61850 SCL";
+        button.ToolTip = "RCB Export — select any number of native RCBs and export generic interoperable IEC 61850 SCL";
     }
 
     private void IedEditRcbMulti_Click(object sender, RoutedEventArgs e)
