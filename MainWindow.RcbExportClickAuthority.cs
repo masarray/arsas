@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -10,16 +11,18 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class MainWindow
 {
-    private static readonly bool RcbExportClickAuthorityRegistered = RegisterRcbExportClickAuthority();
-
-    private static bool RegisterRcbExportClickAuthority()
+    // A normal static-field initializer on a partial Window type is not a reliable WPF
+    // registration point: MainWindow is eligible for beforefieldinit and the routed Click
+    // can be raised before that field is touched. Register at module load so the production
+    // RCB button can never fall through to the legacy one-RCB XAML handler.
+    [ModuleInitializer]
+    internal static void RegisterRcbExportClickAuthority()
     {
         EventManager.RegisterClassHandler(
             typeof(Button),
             Button.ClickEvent,
             new RoutedEventHandler(RcbExportClickAuthority_Click),
             handledEventsToo: false);
-        return true;
     }
 
     private static void RcbExportClickAuthority_Click(object sender, RoutedEventArgs e)
