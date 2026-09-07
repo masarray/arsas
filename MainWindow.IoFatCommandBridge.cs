@@ -95,42 +95,29 @@ public partial class MainWindow
         var projected = 0;
         foreach (var signal in device.CommandSignals)
         {
-            var point = ResolveExactCommandFeedbackPoint(signal, latestByReference);
-            if (point == null)
-                continue;
+            foreach (var reference in ExactCommandFeedbackCandidates(signal))
+            {
+                var key = NormalizeReference(reference);
+                if (!latestByReference.TryGetValue(key, out var point))
+                    continue;
 
-            var value = point.Value?.Trim() ?? string.Empty;
-            if (value.Length == 0 || value == "-")
-                continue;
+                var value = point.Value?.Trim() ?? string.Empty;
+                if (value.Length == 0 || value == "-")
+                    continue;
 
-            signal.ControlCurrentValue = value;
-            projected++;
+                signal.ControlCurrentValue = value;
+                projected++;
+                break;
+            }
         }
 
         return projected;
     }
 
-    private static Iec61850MonitorPoint? ResolveExactCommandFeedbackPoint(
-        SignalDefinition signal,
-        IReadOnlyDictionary<string, Iec61850MonitorPoint> latestByReference)
-    {
-        foreach (var reference in ExactCommandFeedbackCandidates(signal))
-        {
-            var key = NormalizeReference(reference);
-            if (latestByReference.TryGetValue(key, out var point))
-                return point;
-        }
-
-        return null;
-    }
-
     private static IEnumerable<string> ExactCommandFeedbackCandidates(SignalDefinition signal)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        static bool HasValue(string? value) => !string.IsNullOrWhiteSpace(value);
-
-        IEnumerable<string?> candidates = new[]
+        var candidates = new[]
         {
             signal.ControlStatusReference,
             signal.ObjectReference,
@@ -139,9 +126,9 @@ public partial class MainWindow
 
         foreach (var candidate in candidates)
         {
-            if (!HasValue(candidate))
+            if (string.IsNullOrWhiteSpace(candidate))
                 continue;
-            var value = candidate!.Trim();
+            var value = candidate.Trim();
             if (seen.Add(value))
                 yield return value;
         }
