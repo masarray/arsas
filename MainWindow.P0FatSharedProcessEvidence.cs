@@ -6,14 +6,10 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Physical-relay FAT must be a consumer of Engineering's process image, not a second raw
-/// runtime observer. Engineering already coalesces runtime traffic, applies the CSWI position
-/// stability guard, and updates device.Points on its UI flush. FAT samples that exact image
-/// immediately after the Engineering flush, so LIVE VALUE and evidence use one authority.
-///
-/// This also removes two high-rate raw PointUpdated consumers while FAT is open. A 57-point
-/// relay therefore produces one coalesced shared-image pass per Engineering UI frame instead
-/// of three independent WPF projection/evidence pipelines.
+/// Physical-relay FAT consumes Engineering's coalesced process image, never a second raw
+/// runtime observer. LIVE VALUE is projected first on the Engineering UI flush. Evidence is
+/// then published one Dispatcher turn later, below DataBind/Render priority, so Value 1/2 can
+/// never become visible ahead of the process value that caused them.
 /// </summary>
 public partial class MainWindow
 {
@@ -66,9 +62,8 @@ public partial class MainWindow
         if (fat is not { IsLoaded: true } || coordinator == null)
             return;
 
-        // UiFlushTimer_Tick was registered in MainWindow's constructor. This handler is
-        // appended later when FAT opens, therefore device.Points already contains the exact
-        // value visible in Engineering for this frame.
+        // UiFlushTimer_Tick was registered before this handler. device.Points therefore
+        // already contains Engineering's exact visible process image for this frame.
         var pointIndex = GetP0FatPointIndex(fat.Project);
         var activeDeviceIds = coordinator.Project.Ieds
             .Where(coordinator.IsIedSessionActive)
@@ -76,11 +71,14 @@ public partial class MainWindow
             .Where(device => device != null)
             .Select(device => device!.DeviceId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var publishAfterLiveCommit = new List<Iec61850EventEntry>();
 
         foreach (var device in Devices)
         {
             foreach (var point in device.Points)
             {
+                // Process-image projection is always first. PropertyChanged is raised here
+                // on the Dispatcher that owns the FAT grid.
                 ProjectSharedEngineeringPointToFat(pointIndex, point);
 
                 var key = string.IsNullOrWhiteSpace(point.PointKey)
@@ -93,10 +91,7 @@ public partial class MainWindow
 
                 // Prime and continuously maintain the shared process cursor even while the
                 // IED's FAT evidence session is inactive. Session.Start already captures its
-                // baseline from these exact live points. Without this priming, the first UI
-                // tick after Start treated all 58 current values as fresh events and queued a
-                // second full-workspace evidence burst immediately after the button changed
-                // to IED session active.
+                // baseline from these exact live points.
                 if (!activeDeviceIds.Contains(device.DeviceId))
                 {
                     if (previous == null ||
@@ -116,9 +111,7 @@ public partial class MainWindow
                     Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) &&
                     string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
                 {
-                    // Point.Sequence is transport/evidence ordering metadata. A new sequence
-                    // with the same process value must not create another FAT evidence job.
-                    // Keep the cursor current without waking the evidence Dispatcher.
+                    // Sequence-only transport churn must not create another FAT evidence job.
                     if (previous.Sequence != point.Sequence)
                     {
                         _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
@@ -135,7 +128,7 @@ public partial class MainWindow
                     point.Value,
                     point.Quality);
 
-                var entry = new Iec61850EventEntry
+                publishAfterLiveCommit.Add(new Iec61850EventEntry
                 {
                     Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
                     DeviceId = point.DeviceId,
@@ -150,12 +143,34 @@ public partial class MainWindow
                     Quality = point.Quality,
                     SourceMode = point.SourceMode,
                     Reason = point.Reason
-                };
-
-                coordinator.PrimaryController.Enqueue(entry);
-                coordinator.EnqueueAdditional(entry);
+                });
             }
         }
+
+        if (publishAfterLiveCommit.Count == 0)
+            return;
+
+        // WPF DataBind (8) and Render (7) both outrank Background (4). Defer evidence one
+        // Dispatcher turn so the LIVE target has consumed the same process frame before
+        // Value 1/Value 2 can advance. This removes the impossible visible state where
+        // evidence=N while LIVE is still N-1, without adding another process-value writer.
+        var routeOwner = coordinator;
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                if (!ReferenceEquals(_p0FatSharedProcessCoordinator, routeOwner) ||
+                    _loadedIoFatWindow is not { IsLoaded: true })
+                {
+                    return;
+                }
+
+                foreach (var entry in publishAfterLiveCommit)
+                {
+                    routeOwner.PrimaryController.Enqueue(entry);
+                    routeOwner.EnqueueAdditional(entry);
+                }
+            }),
+            DispatcherPriority.Background);
     }
 
     private static void ProjectSharedEngineeringPointToFat(
