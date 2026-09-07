@@ -29,32 +29,41 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void DownloadedFaultRecords_HaveOneVisibleSelectAuthorityForSafeRedownload()
+    public void DownloadedFaultRecords_UseNormalCheckboxAndRowClickWithoutSyntheticGlyph()
     {
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
         var transfer = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadUx.cs"));
 
+        Assert.Contains("FindRedownloadSelectionAncestor<CheckBox>(source) != null", source, StringComparison.Ordinal);
         Assert.Contains("TryResolveTransferRow", source, StringComparison.Ordinal);
         Assert.Contains("row.LocalState == FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
         Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
-        Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
-        Assert.Contains("PaintTransferSelection", source, StringComparison.Ordinal);
-        Assert.Contains("checkBox.IsChecked = selected", source, StringComparison.Ordinal);
+        Assert.Contains("window.ConfigureRecordRow(row)", source, StringComparison.Ordinal);
+        Assert.Contains("window.RefreshFaultRecordHeaderSelection()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("checkBox.Content", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PaintTransferSelection", source, StringComparison.Ordinal);
+
+        // The actual checkbox remains owned by RedownloadUx and the safe staged overwrite
+        // backend remains unchanged.
+        Assert.Contains("RedownloadGrid_PreviewMouseLeftButtonDown", transfer, StringComparison.Ordinal);
         Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
         Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
         Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void CommandDefaults_KeepInterlockAndSyncCheckedUntilCtlModelIsResolved()
+    public void CommandDefaults_RegisterAtModuleLoadAndStartInterlockAndSyncChecked()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0CommandDefaults.cs"));
 
+        Assert.Contains("[ModuleInitializer]", source, StringComparison.Ordinal);
+        Assert.Contains("handledEventsToo: true", source, StringComparison.Ordinal);
         Assert.Contains("signal.ControlInterlockCheck = true", source, StringComparison.Ordinal);
         Assert.Contains("signal.ControlSynchroCheck = true", source, StringComparison.Ordinal);
         Assert.Contains("ControlModelResolved", source, StringComparison.Ordinal);
         Assert.Contains("FinalizeP0CommandDefaults", source, StringComparison.Ordinal);
         Assert.Contains("signal.PropertyChanged -= P0CommandSignal_PropertyChanged", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("P0CommandDefaultsClassHandlerRegistered", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,7 +82,7 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void MultiRcbExport_ProductionClickUsesMultiSelectAndNativeDataSetsOnly()
+    public void MultiRcbExport_ProductionClickCannotFallThroughToLegacySingleSelect()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.MultiRcbExport.cs"));
         var window = File.ReadAllText(FindRepoFile("RcbMultiExportWindow.cs"));
@@ -86,8 +95,14 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Contains("ExportLegacySasRcbAsync", source, StringComparison.Ordinal);
         Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
         Assert.Contains("select one or more native RCBs", window, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("button.Click -= IedEditRcb_Click", authority, StringComparison.Ordinal);
-        Assert.Contains("button.Click += IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
+
+        Assert.Contains("typeof(Button)", authority, StringComparison.Ordinal);
+        Assert.Contains("Button.ClickEvent", authority, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", authority, StringComparison.Ordinal);
+        Assert.Contains("window.IedEditRcbMulti_Click(button, e)", authority, StringComparison.Ordinal);
+        Assert.Contains("button.Click -= window.IedEditRcb_Click", authority, StringComparison.Ordinal);
+        Assert.Contains("button.Click += window.IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
+        Assert.DoesNotContain("button.Tag == null", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateDynamic", source, StringComparison.OrdinalIgnoreCase);
     }
 
