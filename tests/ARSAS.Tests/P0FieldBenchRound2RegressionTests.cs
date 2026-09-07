@@ -32,14 +32,15 @@ public sealed class P0FieldBenchRound2RegressionTests
     }
 
     [Fact]
-    public void DownloadedComtrade_SelectionTickIsRepaintedAfterPreviewInput()
+    public void DownloadedComtrade_SelectionTickUsesRowAuthorityAndRepaintsAfterPreviewInput()
     {
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
 
-        Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
+        Assert.Contains("row.IsSelected = !row.IsSelected", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Input", source, StringComparison.Ordinal);
         Assert.Contains("window.ConfigureRecordRow(row)", source, StringComparison.Ordinal);
         Assert.Contains("window.UpdateSmartSelectionUi()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_redownloadSelections", source, StringComparison.Ordinal);
     }
 
     [Fact]
