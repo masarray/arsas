@@ -3,14 +3,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace ArIED61850Tester;
 
 /// <summary>
 /// One pointer-selection authority for the fault-record grid. Clicking either the SELECT
-/// checkbox or anywhere on a transferable record row toggles the same visible selection.
+/// checkbox or anywhere on a transferable record row toggles the same selection exactly once.
 /// Downloaded records use the staged-overwrite selection set; first-time records keep the
-/// existing model IsSelected flag. Exactly one toggle is performed per click.
+/// existing model IsSelected flag. Visual checkbox state is committed after the input event so
+/// WPF's native CheckBox mouse-state transition cannot repaint over the operator's tick.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -50,12 +52,18 @@ public partial class FaultRecordWindow
             row.IsSelected = !row.IsSelected;
         }
 
-        // Suppress the legacy CheckBox/DataGrid handlers so a checkbox click and a row-body
-        // click both mean exactly one toggle. Reconfigure the realized row immediately so the
-        // operator sees the check mark on the same pointer action.
+        // Suppress the native checkbox/DataGrid toggle so one pointer action means exactly
+        // one selection change. Repaint after input processing; doing this synchronously in
+        // PreviewMouseDown lets the CheckBox template's pressed-state transition erase the
+        // visible tick even though the selection count already changed.
         e.Handled = true;
-        window.ConfigureRecordRow(row);
-        window.UpdateSmartSelectionUi();
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                window.ConfigureRecordRow(row);
+                window.UpdateSmartSelectionUi();
+            }));
     }
 
     private static bool TryResolveTransferRow(DependencyObject? source, out FaultRecordRow row)
