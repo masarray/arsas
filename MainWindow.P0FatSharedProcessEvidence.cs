@@ -1,4 +1,3 @@
-using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services.IoTesting;
@@ -8,19 +7,22 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Physical-relay FAT keeps two deliberately different responsibilities:
 /// 1) operator-facing LIVE VALUE is a presentation-only mirror of the newest runtime
-///    PointUpdated snapshot, drained at DataBind priority; and
+///    PointUpdated snapshot; and
 /// 2) Value 1 / Value 2 evidence is authorized only from Engineering's coalesced process
-///    image. Evidence is emitted only after the exact same value is already committed to
-///    every mapped FAT LIVE row.
+///    image. Evidence is emitted only after the exact same value has been committed to
+///    every mapped FAT LIVE row and a monotonic publication sequence proves that commit.
 ///
-/// This separation removes the field regression where evidence could visibly advance while
-/// LIVE VALUE waited for the slower 200 ms Engineering UI flush. The raw mirror never writes
-/// evidence and the evidence controllers never write CurrentValue.
+/// The ordering contract is deterministic: evidence sequence N may publish only when every
+/// mapped LIVE row has already committed publication sequence N or newer. Dispatcher priority,
+/// render timing, delay/retry loops, and source callback ordering are not evidence authority.
 /// </summary>
 public partial class MainWindow
 {
     private readonly Dictionary<string, StableFatProcessCursor> _p0FatSharedProcessCursors =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _p0FatLiveVisibleSequences =
+        new(StringComparer.OrdinalIgnoreCase);
+    private long _p0FatVisiblePublicationSequence;
     private IoTestMultiSessionCoordinator? _p0FatSharedProcessCoordinator;
     private bool _p0FatSharedProcessRouteAttached;
 
@@ -30,12 +32,13 @@ public partial class MainWindow
 
         _p0FatSharedProcessCoordinator = coordinator;
         _p0FatSharedProcessCursors.Clear();
+        _p0FatLiveVisibleSequences.Clear();
+        _p0FatVisiblePublicationSequence = 0;
 
         // Primary/sibling legacy evidence routes observe raw runtime frames before
         // Engineering has coalesced them, so they stay detached. P0FatRuntimePointUpdated is
-        // different: it is presentation-only and updates Runtime.CurrentValue/quality/source;
-        // keep exactly one subscription so FAT LIVE follows the report immediately rather
-        // than waiting for the Engineering 200 ms UI-flush cadence.
+        // presentation-only and updates Runtime.CurrentValue/quality/source; keep exactly one
+        // subscription so FAT LIVE follows the report immediately.
         _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
         _runtime.PointUpdated -= P0FatRuntimePointUpdated;
@@ -56,6 +59,8 @@ public partial class MainWindow
 
         _p0FatSharedProcessCoordinator = null;
         _p0FatSharedProcessCursors.Clear();
+        _p0FatLiveVisibleSequences.Clear();
+        _p0FatVisiblePublicationSequence = 0;
 
         if (!_p0FatSharedProcessRouteAttached)
             return;
@@ -72,9 +77,8 @@ public partial class MainWindow
             return;
 
         // UiFlushTimer_Tick was registered before this handler. device.Points therefore
-        // already contains Engineering's exact visible process image for this frame. The
-        // presentation-only raw mirror may already have shown the same value in FAT; this
-        // pass remains the evidence authority and reconfirms the committed process image.
+        // contains Engineering's coalesced process image for this frame. The raw mirror may
+        // already have shown the same value in FAT, but only this pass authorizes evidence.
         var pointIndex = GetP0FatPointIndex(fat.Project);
         var activeDeviceIds = coordinator.Project.Ieds
             .Where(coordinator.IsIedSessionActive)
@@ -151,6 +155,12 @@ public partial class MainWindow
                 if (projectedPlans.Count == 0)
                     continue;
 
+                // Allocate our own monotonic publication epoch. Runtime point sequence may be
+                // reset by a fresh association; the presentation/evidence epoch must not.
+                var processSequence = Interlocked.Increment(ref _p0FatVisiblePublicationSequence);
+                foreach (var plan in projectedPlans)
+                    _p0FatLiveVisibleSequences[plan.TestPointId] = processSequence;
+
                 var entry = new Iec61850EventEntry
                 {
                     Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
@@ -167,36 +177,25 @@ public partial class MainWindow
                     SourceMode = point.SourceMode,
                     Reason = point.Reason
                 };
-                publishAfterLiveCommit.Add(new CommittedFatProcessEvent(entry, projectedPlans));
+                publishAfterLiveCommit.Add(new CommittedFatProcessEvent(
+                    entry,
+                    projectedPlans,
+                    processSequence));
             }
         }
 
-        if (publishAfterLiveCommit.Count == 0)
-            return;
+        // No Dispatcher priority race is involved here. LIVE properties were committed above
+        // on this same Dispatcher turn. Evidence can therefore update in the same render frame,
+        // but never in an earlier one, and the sequence gate fails closed if a mapped row did
+        // not receive this exact process publication.
+        foreach (var committed in publishAfterLiveCommit)
+        {
+            if (!IsFatLiveCommitCurrent(committed))
+                continue;
 
-        // WPF DataBind (8) and Render (7) both outrank Background (4). Defer evidence one
-        // Dispatcher turn, then verify the actual runtime property bound by LIVE VALUE still
-        // contains the same process value. This is a frame barrier rather than a timing guess.
-        var routeOwner = coordinator;
-        Dispatcher.BeginInvoke(
-            new Action(() =>
-            {
-                if (!ReferenceEquals(_p0FatSharedProcessCoordinator, routeOwner) ||
-                    _loadedIoFatWindow is not { IsLoaded: true })
-                {
-                    return;
-                }
-
-                foreach (var committed in publishAfterLiveCommit)
-                {
-                    if (!IsFatLiveCommitCurrent(committed))
-                        continue;
-
-                    routeOwner.PrimaryController.Enqueue(committed.Entry);
-                    routeOwner.EnqueueAdditional(committed.Entry);
-                }
-            }),
-            DispatcherPriority.Background);
+            coordinator.PrimaryController.Enqueue(committed.Entry);
+            coordinator.EnqueueAdditional(committed.Entry);
+        }
     }
 
     private static IReadOnlyList<IoTestPointPlan> ProjectSharedEngineeringPointToFat(
@@ -223,10 +222,16 @@ public partial class MainWindow
         return plans;
     }
 
-    private static bool IsFatLiveCommitCurrent(CommittedFatProcessEvent committed)
+    private bool IsFatLiveCommitCurrent(CommittedFatProcessEvent committed)
     {
         foreach (var plan in committed.Plans)
         {
+            if (!_p0FatLiveVisibleSequences.TryGetValue(plan.TestPointId, out var liveVisibleSequence) ||
+                !CanPublishEvidenceForTest(liveVisibleSequence, committed.ProcessSequence))
+            {
+                return false;
+            }
+
             if (!Iec61850MonitorPoint.AreSemanticallyEquivalent(
                     plan.Runtime.CurrentValue,
                     committed.Entry.NewValue))
@@ -244,8 +249,12 @@ public partial class MainWindow
         return true;
     }
 
+    internal static bool CanPublishEvidenceForTest(long liveVisibleSequence, long evidenceProcessSequence)
+        => liveVisibleSequence >= evidenceProcessSequence;
+
     private sealed record StableFatProcessCursor(long Sequence, string Value, string Quality);
     private sealed record CommittedFatProcessEvent(
         Iec61850EventEntry Entry,
-        IReadOnlyList<IoTestPointPlan> Plans);
+        IReadOnlyList<IoTestPointPlan> Plans,
+        long ProcessSequence);
 }
