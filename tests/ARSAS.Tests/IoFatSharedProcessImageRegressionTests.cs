@@ -14,8 +14,8 @@ public sealed class IoFatSharedProcessImageRegressionTests
         Assert.Contains("device.Points", source, StringComparison.Ordinal);
         Assert.Contains("ProjectSharedEngineeringPointToFat", source, StringComparison.Ordinal);
         Assert.Contains("IsFatLiveCommitCurrent(committed)", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
-        Assert.Contains("routeOwner.EnqueueAdditional(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.Contains("coordinator.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
+        Assert.Contains("coordinator.EnqueueAdditional(committed.Entry)", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -30,25 +30,35 @@ public sealed class IoFatSharedProcessImageRegressionTests
     }
 
     [Fact]
-    public void EvidencePublication_IsDeferredBelowDataBindAfterVerifiedLiveProjection()
+    public void EvidencePublication_UsesMonotonicLiveCommitBarrierWithoutDispatcherRace()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
         var liveProjection = source.IndexOf("ProjectSharedEngineeringPointToFat(pointIndex, point)", StringComparison.Ordinal);
         Assert.True(liveProjection >= 0, "Shared LIVE projection must exist.");
 
-        var beginInvoke = source.IndexOf("Dispatcher.BeginInvoke(", liveProjection, StringComparison.Ordinal);
-        Assert.True(beginInvoke > liveProjection, "Evidence publication must be scheduled only after the LIVE projection.");
+        var publicationEpoch = source.IndexOf(
+            "var processSequence = Interlocked.Increment(ref _p0FatVisiblePublicationSequence)",
+            liveProjection,
+            StringComparison.Ordinal);
+        Assert.True(publicationEpoch > liveProjection, "A publication epoch must be allocated only after LIVE projection.");
 
-        var liveBarrier = source.IndexOf("IsFatLiveCommitCurrent(committed)", beginInvoke, StringComparison.Ordinal);
-        Assert.True(liveBarrier > beginInvoke, "Deferred evidence must re-check the actual LIVE-bound runtime value.");
+        var visibleSequenceCommit = source.IndexOf(
+            "_p0FatLiveVisibleSequences[plan.TestPointId] = processSequence",
+            publicationEpoch,
+            StringComparison.Ordinal);
+        Assert.True(visibleSequenceCommit > publicationEpoch, "Every mapped LIVE row must receive the publication epoch before evidence is queued.");
 
-        var evidenceEnqueue = source.IndexOf("routeOwner.PrimaryController.Enqueue(committed.Entry)", liveBarrier, StringComparison.Ordinal);
+        var liveBarrier = source.IndexOf("if (!IsFatLiveCommitCurrent(committed))", visibleSequenceCommit, StringComparison.Ordinal);
+        Assert.True(liveBarrier > visibleSequenceCommit, "Evidence must pass the committed LIVE barrier after visible sequence publication.");
+
+        var evidenceEnqueue = source.IndexOf("coordinator.PrimaryController.Enqueue(committed.Entry)", liveBarrier, StringComparison.Ordinal);
         Assert.True(evidenceEnqueue > liveBarrier, "Value 1/2 enqueue must occur only after the LIVE commit barrier succeeds.");
 
-        var backgroundPriority = source.IndexOf("DispatcherPriority.Background", evidenceEnqueue, StringComparison.Ordinal);
-        Assert.True(backgroundPriority > evidenceEnqueue, "The deferred delegate must be scheduled at Background priority.");
-        Assert.Contains("DataBind (8) and Render (7) both outrank Background (4)", source, StringComparison.Ordinal);
+        Assert.Contains("CanPublishEvidenceForTest(liveVisibleSequence, committed.ProcessSequence)", source, StringComparison.Ordinal);
+        Assert.Contains("liveVisibleSequence >= evidenceProcessSequence", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherPriority.Background", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.Delay", source, StringComparison.Ordinal);
     }
 
     [Fact]
