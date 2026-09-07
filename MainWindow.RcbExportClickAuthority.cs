@@ -1,15 +1,15 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Rewires the realized production IED-card RCB button itself. The previous implementation
-/// intercepted routed input while the XAML instance still owned IedEditRcb_Click, which left
-/// a legacy single-RCB route alive. After InitializeComponent/Loaded the legacy instance
-/// handler is explicitly removed and the multi-select handler becomes the only Click owner.
+/// Production authority for the IED-card RCB action. The legacy XAML still carries the old
+/// singular instance handler, so the routed Click is intercepted at Button class level before
+/// any instance handler can run. Realized RCB buttons are also rewired on Loaded as a second
+/// deterministic guard. No Tag/DataContext requirement is used because the physical bench
+/// proved that relying on a bound Tag could leave the Legacy SAS route active.
 /// </summary>
 public partial class MainWindow
 {
@@ -17,54 +17,57 @@ public partial class MainWindow
     internal static void RegisterRcbExportClickAuthority()
     {
         EventManager.RegisterClassHandler(
-            typeof(MainWindow),
+            typeof(Button),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(RcbExportMainWindow_Loaded),
+            new RoutedEventHandler(RcbExportButton_Loaded),
+            handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(Button),
+            Button.ClickEvent,
+            new RoutedEventHandler(RcbExportButton_Click),
             handledEventsToo: true);
     }
 
-    private static void RcbExportMainWindow_Loaded(object sender, RoutedEventArgs e)
+    private static void RcbExportButton_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainWindow window)
+        if (sender is not Button button ||
+            Window.GetWindow(button) is not MainWindow window ||
+            !IsProductionRcbExportButton(button))
+        {
             return;
+        }
 
-        window.RewireProductionRcbButtons();
+        // Instance handlers are already attached when Loaded is raised. Remove the singular
+        // handler from the realized production control itself and install the generic multi
+        // workflow. This is intentionally repeated-safe for virtualized/reloaded templates.
+        button.Click -= window.IedEditRcb_Click;
+        button.Click -= window.IedEditRcbMulti_Click;
+        button.Click += window.IedEditRcbMulti_Click;
+        button.ToolTip = "RCB Export — select any number of native RCBs and export generic interoperable IEC 61850 SCL";
     }
 
-    private void RewireProductionRcbButtons()
+    private static void RcbExportButton_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var button in EnumerateRcbButtons(this))
+        if (sender is not Button button ||
+            Window.GetWindow(button) is not MainWindow window ||
+            !IsProductionRcbExportButton(button))
         {
-            if (!IsProductionRcbExportButton(button))
-                continue;
-
-            button.Click -= IedEditRcb_Click;
-            button.Click -= IedEditRcbMulti_Click;
-            button.Click += IedEditRcbMulti_Click;
-            button.ToolTip = "RCB Export — select any number of native RCBs and export generic interoperable IEC 61850 SCL";
+            return;
         }
+
+        // WPF invokes class handlers before normal instance Click handlers. Consume the
+        // event and open the multi-select workflow exactly once, making it impossible for
+        // IedEditRcb_Click to surface the Legacy SAS single-RCB dialog.
+        e.Handled = true;
+        window.IedEditRcbMulti_Click(button, e);
     }
 
     private static bool IsProductionRcbExportButton(Button button)
     {
-        if (button.Tag == null)
-            return false;
-
         var toolTip = button.ToolTip?.ToString() ?? string.Empty;
-        return toolTip.Contains("RCB Export", StringComparison.OrdinalIgnoreCase);
-    }
+        if (toolTip.Contains("RCB Export", StringComparison.OrdinalIgnoreCase))
+            return true;
 
-    private static IEnumerable<Button> EnumerateRcbButtons(DependencyObject root)
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < count; index++)
-        {
-            var child = VisualTreeHelper.GetChild(root, index);
-            if (child is Button button)
-                yield return button;
-
-            foreach (var nested in EnumerateRcbButtons(child))
-                yield return nested;
-        }
+        return string.Equals(button.Content?.ToString()?.Trim(), "RCB", StringComparison.OrdinalIgnoreCase);
     }
 }
