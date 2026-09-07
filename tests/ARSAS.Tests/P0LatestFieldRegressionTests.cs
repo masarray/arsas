@@ -34,10 +34,12 @@ public sealed class P0LatestFieldRegressionTests
         var source = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadSelectionAuthority.cs"));
         var transfer = File.ReadAllText(FindRepoFile("FaultRecordWindow.RedownloadUx.cs"));
 
-        Assert.Contains("cell.Column.DisplayIndex != 0", source, StringComparison.Ordinal);
-        Assert.Contains("candidate.LocalState != FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
+        Assert.Contains("TryResolveTransferRow", source, StringComparison.Ordinal);
+        Assert.Contains("row.LocalState == FaultRecordLocalState.Downloaded", source, StringComparison.Ordinal);
         Assert.Contains("_redownloadSelections.Add(recordId)", source, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", source, StringComparison.Ordinal);
         Assert.Contains("ConfigureRecordRow(row)", source, StringComparison.Ordinal);
+        Assert.Contains("UpdateSmartSelectionUi()", source, StringComparison.Ordinal);
         Assert.Contains("checkBox.IsChecked = _redownloadSelections.Contains", transfer, StringComparison.Ordinal);
         Assert.Contains(".arsas-redownload-", transfer, StringComparison.Ordinal);
         Assert.Contains("CommitFreshRecordDirectory", transfer, StringComparison.Ordinal);
@@ -104,9 +106,10 @@ public sealed class P0LatestFieldRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.ColumnSizing.cs"));
 
-        Assert.Contains("FatSignalsGrid.CanUserResizeColumns = true", source, StringComparison.Ordinal);
+        Assert.Contains("_fatSignalsGrid.CanUserResizeColumns = true", source, StringComparison.Ordinal);
         Assert.Contains("\"IEC REFERENCE\"", source, StringComparison.Ordinal);
         Assert.Contains("column.MaxWidth = 4096d", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.ApplicationIdle", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -115,7 +118,7 @@ public sealed class P0LatestFieldRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
         Assert.Contains("projectedPlans.Count == 0", source, StringComparison.Ordinal);
-        Assert.Contains("InvalidateP0FatPointIndex()", source, StringComparison.Ordinal);
+        Assert.Contains("GetP0FatPointIndex(fat.Project, forceRebuild: true)", source, StringComparison.Ordinal);
         Assert.Contains("IsFatLiveCommitCurrent", source, StringComparison.Ordinal);
         Assert.Contains("plan.Runtime.CurrentValue", source, StringComparison.Ordinal);
         Assert.Contains("routeOwner.PrimaryController.Enqueue(committed.Entry)", source, StringComparison.Ordinal);
