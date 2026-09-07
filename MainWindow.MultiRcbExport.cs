@@ -17,6 +17,12 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class MainWindow
 {
+    private static readonly string[] ArsasRuntimeDataSetPrefixes =
+    {
+        "ARIED_",
+        "AR_G24_"
+    };
+
     [ModuleInitializer]
     internal static void RegisterMultiRcbExportButtonClassHandler()
     {
@@ -251,6 +257,22 @@ public partial class MainWindow
                 $"Generic SCL validation failed: expected {expectedReportControls} selected ReportControl element(s), found {reportControls.Length}.");
         }
 
+        // Runtime acquisition DataSets are association-scoped state, never engineering
+        // configuration. Reject known ARSAS temporary namespaces even if a staging exporter
+        // or live RCB inventory accidentally carries one into the merged XML.
+        var leakedRuntimeDataSets = document.Descendants()
+            .Where(element => element.Name.LocalName == "DataSet")
+            .Select(element => element.Attribute("name")?.Value?.Trim() ?? string.Empty)
+            .Where(IsArsasRuntimeDataSetNameForTest)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (leakedRuntimeDataSets.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "Generic SCL validation failed: transient ARSAS runtime DataSet(s) must not be exported: " +
+                string.Join(", ", leakedRuntimeDataSets));
+        }
+
         foreach (var reportControl in reportControls)
         {
             var dataSetName = reportControl.Attribute("datSet")?.Value?.Trim() ?? string.Empty;
@@ -270,6 +292,13 @@ public partial class MainWindow
                     $"Generic SCL validation failed: ReportControl '{reportControl.Attribute("name")?.Value}' references missing DataSet '{dataSetName}'.");
             }
         }
+    }
+
+    internal static bool IsArsasRuntimeDataSetNameForTest(string? name)
+    {
+        var normalized = name?.Trim() ?? string.Empty;
+        return normalized.Length > 0 && ArsasRuntimeDataSetPrefixes.Any(prefix =>
+            normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void TryDeleteMultiRcbTempDirectory(string path)
