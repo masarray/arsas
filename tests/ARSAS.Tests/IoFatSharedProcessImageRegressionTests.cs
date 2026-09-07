@@ -13,8 +13,8 @@ public sealed class IoFatSharedProcessImageRegressionTests
         Assert.Contains("_uiFlushTimer.Tick += P0FatSharedProcessEvidence_Tick", source, StringComparison.Ordinal);
         Assert.Contains("device.Points", source, StringComparison.Ordinal);
         Assert.Contains("ProjectSharedEngineeringPointToFat", source, StringComparison.Ordinal);
-        Assert.Contains("coordinator.PrimaryController.Enqueue(entry)", source, StringComparison.Ordinal);
-        Assert.Contains("coordinator.EnqueueAdditional(entry)", source, StringComparison.Ordinal);
+        Assert.Contains("routeOwner.PrimaryController.Enqueue(entry)", source, StringComparison.Ordinal);
+        Assert.Contains("routeOwner.EnqueueAdditional(entry)", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -34,12 +34,14 @@ public sealed class IoFatSharedProcessImageRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.P0FatSharedProcessEvidence.cs"));
 
         var liveProjection = source.IndexOf("ProjectSharedEngineeringPointToFat(pointIndex, point)", StringComparison.Ordinal);
-        var deferredPublication = source.IndexOf("DispatcherPriority.Background", StringComparison.Ordinal);
-        var evidenceEnqueue = source.IndexOf("routeOwner.PrimaryController.Enqueue(entry)", StringComparison.Ordinal);
+        var beginInvoke = source.IndexOf("Dispatcher.BeginInvoke(", liveProjection, StringComparison.Ordinal);
+        var evidenceEnqueue = source.IndexOf("routeOwner.PrimaryController.Enqueue(entry)", beginInvoke, StringComparison.Ordinal);
+        var backgroundPriority = source.IndexOf("DispatcherPriority.Background", evidenceEnqueue, StringComparison.Ordinal);
 
         Assert.True(liveProjection >= 0, "Shared LIVE projection must exist.");
-        Assert.True(deferredPublication > liveProjection, "Evidence must be deferred only after the LIVE projection.");
-        Assert.True(evidenceEnqueue > deferredPublication, "Value 1/2 enqueue must happen inside the deferred publication turn.");
+        Assert.True(beginInvoke > liveProjection, "Evidence publication must be scheduled only after the LIVE projection.");
+        Assert.True(evidenceEnqueue > beginInvoke, "Value 1/2 enqueue must be inside the deferred Dispatcher delegate.");
+        Assert.True(backgroundPriority > evidenceEnqueue, "The deferred delegate must be scheduled at Background priority.");
         Assert.Contains("DataBind (8) and Render (7) both outrank Background (4)", source, StringComparison.Ordinal);
     }
 
