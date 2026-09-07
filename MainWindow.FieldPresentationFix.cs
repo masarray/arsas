@@ -6,7 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
-using ArIED61850Tester.Services.IoTesting;
+using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester;
 
@@ -274,7 +274,7 @@ internal static class MainWindowFieldPresentationFix
             var reference = values.Length > 1 && values[1] != DependencyProperty.UnsetValue
                 ? values[1]?.ToString()
                 : string.Empty;
-            return IoFatSignalDisplayNameFormatter.Format(preferred, reference);
+            return IoSignalDisplayName.Format(preferred, reference);
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
