@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
@@ -6,23 +8,20 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Physical-relay FAT keeps two deliberately different responsibilities:
-/// 1) operator-facing LIVE VALUE is a presentation-only mirror of the newest runtime
-///    PointUpdated snapshot, drained at DataBind priority; and
-/// 2) Value 1 / Value 2 evidence is authorized only from Engineering's coalesced process
-///    image. Evidence is emitted only after the exact same value is already committed to
-///    every mapped FAT LIVE row.
-///
-/// This separation removes the field regression where evidence could visibly advance while
-/// LIVE VALUE waited for the slower 200 ms Engineering UI flush. The raw mirror never writes
-/// evidence and the evidence controllers never write CurrentValue.
+/// One physical-relay process-frame route for FAT. The exact runtime PointUpdated snapshot is
+/// queued on the worker callback, then one DataBind-priority Dispatcher drain commits LIVE VALUE
+/// to every mapped FAT row first and publishes Value 1 / Value 2 evidence from that same snapshot
+/// immediately afterwards. FAT evidence no longer waits for Engineering's 200 ms UI flush and
+/// therefore cannot visibly advance ahead of LIVE VALUE.
 /// </summary>
 public partial class MainWindow
 {
+    private readonly ConcurrentQueue<Iec61850PointSnapshot> _p0FatAtomicSnapshots = new();
     private readonly Dictionary<string, StableFatProcessCursor> _p0FatSharedProcessCursors =
         new(StringComparer.OrdinalIgnoreCase);
     private IoTestMultiSessionCoordinator? _p0FatSharedProcessCoordinator;
     private bool _p0FatSharedProcessRouteAttached;
+    private int _p0FatAtomicDrainScheduled;
 
     internal void AttachIoFatSharedProcessEvidenceRoute(IoTestMultiSessionCoordinator coordinator)
     {
@@ -30,23 +29,18 @@ public partial class MainWindow
 
         _p0FatSharedProcessCoordinator = coordinator;
         _p0FatSharedProcessCursors.Clear();
+        while (_p0FatAtomicSnapshots.TryDequeue(out _)) { }
 
-        // Primary/sibling legacy evidence routes observe raw runtime frames before
-        // Engineering has coalesced them, so they stay detached. P0FatRuntimePointUpdated is
-        // different: it is presentation-only and updates Runtime.CurrentValue/quality/source;
-        // keep exactly one subscription so FAT LIVE follows the report immediately rather
-        // than waiting for the Engineering 200 ms UI-flush cadence.
+        // The FAT session owns one report-frame route. Legacy evidence observers and the older
+        // presentation-only mirror are detached so no second writer or slower 200 ms path can
+        // race this atomic LIVE -> evidence commit.
         _runtime.PointUpdated -= Runtime_IoTestPointUpdated;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
         _runtime.PointUpdated -= P0FatRuntimePointUpdated;
-        _runtime.PointUpdated += P0FatRuntimePointUpdated;
-
-        if (_p0FatSharedProcessRouteAttached)
-            return;
+        _runtime.PointUpdated -= P0FatAtomicPointUpdated;
+        _runtime.PointUpdated += P0FatAtomicPointUpdated;
 
         _p0FatSharedProcessRouteAttached = true;
-        _uiFlushTimer.Tick -= P0FatSharedProcessEvidence_Tick;
-        _uiFlushTimer.Tick += P0FatSharedProcessEvidence_Tick;
     }
 
     internal void DetachIoFatSharedProcessEvidenceRoute(IoTestMultiSessionCoordinator coordinator)
@@ -56,99 +50,127 @@ public partial class MainWindow
 
         _p0FatSharedProcessCoordinator = null;
         _p0FatSharedProcessCursors.Clear();
+        while (_p0FatAtomicSnapshots.TryDequeue(out _)) { }
+        Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 0);
 
-        if (!_p0FatSharedProcessRouteAttached)
-            return;
+        _runtime.PointUpdated -= P0FatAtomicPointUpdated;
 
-        _uiFlushTimer.Tick -= P0FatSharedProcessEvidence_Tick;
+        // FAT may remain open after Stop. Restore the presentation-only live mirror so the
+        // workspace continues showing the relay process image while no evidence session runs.
+        _runtime.PointUpdated -= P0FatRuntimePointUpdated;
+        _runtime.PointUpdated += P0FatRuntimePointUpdated;
         _p0FatSharedProcessRouteAttached = false;
     }
 
-    private void P0FatSharedProcessEvidence_Tick(object? sender, EventArgs e)
+    /// <summary>
+    /// Runtime worker callback: queue immutable snapshots only. Never touch WPF here.
+    /// </summary>
+    private void P0FatAtomicPointUpdated(Iec61850PointSnapshot snapshot)
     {
-        var fat = _loadedIoFatWindow;
-        var coordinator = _p0FatSharedProcessCoordinator;
-        if (fat is not { IsLoaded: true } || coordinator == null)
+        if (Volatile.Read(ref _p0FatProjectionActive) == 0 || !_p0FatSharedProcessRouteAttached)
             return;
 
-        // UiFlushTimer_Tick was registered before this handler. device.Points therefore
-        // already contains Engineering's exact visible process image for this frame. The
-        // presentation-only raw mirror may already have shown the same value in FAT; this
-        // pass remains the evidence authority and reconfirms the committed process image.
-        var pointIndex = GetP0FatPointIndex(fat.Project);
-        var activeDeviceIds = coordinator.Project.Ieds
-            .Where(coordinator.IsIedSessionActive)
-            .Select(ResolveP0FatDevice)
-            .Where(device => device != null)
-            .Select(device => device!.DeviceId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var publishAfterLiveCommit = new List<CommittedFatProcessEvent>();
+        _p0FatAtomicSnapshots.Enqueue(snapshot);
+        if (Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 1) != 0)
+            return;
 
-        foreach (var device in Devices)
+        try
         {
-            foreach (var point in device.Points)
-            {
-                // Resolve and commit the operator-facing LIVE row first. Evidence is not
-                // allowed to advance when a point cannot be mapped to its FAT row; showing
-                // Value2=N while LIVE=N-1 is an invalid process image and must fail closed.
-                var projectedPlans = ProjectSharedEngineeringPointToFat(pointIndex, point);
+            Dispatcher.BeginInvoke(new Action(P0DrainAtomicFatProcessFrames), DispatcherPriority.DataBind);
+        }
+        catch (InvalidOperationException)
+        {
+            Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 0);
+            while (_p0FatAtomicSnapshots.TryDequeue(out _)) { }
+        }
+    }
 
+    private void P0DrainAtomicFatProcessFrames()
+    {
+        try
+        {
+            var fat = _loadedIoFatWindow;
+            var coordinator = _p0FatSharedProcessCoordinator;
+            if (Volatile.Read(ref _p0FatProjectionActive) == 0 ||
+                fat is not { IsLoaded: true } ||
+                coordinator == null)
+            {
+                while (_p0FatAtomicSnapshots.TryDequeue(out _)) { }
+                return;
+            }
+
+            var pointIndex = GetP0FatPointIndex(fat.Project);
+            var activeDeviceIds = coordinator.Project.Ieds
+                .Where(coordinator.IsIedSessionActive)
+                .Select(ResolveP0FatDevice)
+                .Where(device => device != null)
+                .Select(device => device!.DeviceId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var processed = 0;
+            while (processed < 4096 && _p0FatAtomicSnapshots.TryDequeue(out var snapshot))
+            {
+                processed++;
+                var point = snapshot.Point;
                 var key = string.IsNullOrWhiteSpace(point.PointKey)
-                    ? $"{point.DeviceId}|{IoTestLiveBindingService.NormalizeReference(point.IecReference)}"
+                    ? P0FatKey(point.DeviceId, point.IecReference)
                     : point.PointKey.Trim();
                 if (key.Length == 0)
                     continue;
 
-                _p0FatSharedProcessCursors.TryGetValue(key, out var previous);
-
-                // Prime and continuously maintain the shared process cursor even while the
-                // IED's FAT evidence session is inactive. Session.Start already captures its
-                // baseline from these exact live points.
-                if (!activeDeviceIds.Contains(device.DeviceId))
+                var plans = ResolveAtomicFatPlans(pointIndex, key, snapshot);
+                if (plans.Count == 0)
                 {
-                    if (previous == null ||
-                        previous.Sequence != point.Sequence ||
-                        !Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) ||
-                        !string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
-                    {
-                        _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
-                            point.Sequence,
-                            point.Value,
-                            point.Quality);
-                    }
+                    pointIndex = GetP0FatPointIndex(fat.Project, forceRebuild: true);
+                    plans = ResolveAtomicFatPlans(pointIndex, key, snapshot);
+                }
+                if (plans.Count == 0)
+                    continue;
+
+                // Atomic frame contract: this is the first mutation made from the report
+                // snapshot. The properties bound by LIVE VALUE are committed before any
+                // capture controller sees the observation.
+                foreach (var plan in plans)
+                    ApplyP0FatSnapshot(plan.Runtime, snapshot);
+
+                _p0FatSharedProcessCursors.TryGetValue(key, out var previous);
+                var currentQuality = string.IsNullOrWhiteSpace(snapshot.Quality)
+                    ? "Unknown"
+                    : snapshot.Quality.Trim();
+
+                if (!activeDeviceIds.Contains(point.DeviceId))
+                {
+                    _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
+                        snapshot.Sequence,
+                        snapshot.Value,
+                        currentQuality);
                     continue;
                 }
 
                 if (previous != null &&
-                    Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, point.Value) &&
-                    string.Equals(previous.Quality, point.Quality, StringComparison.Ordinal))
+                    Iec61850MonitorPoint.AreSemanticallyEquivalent(previous.Value, snapshot.Value) &&
+                    string.Equals(previous.Quality, currentQuality, StringComparison.Ordinal))
                 {
-                    // Sequence-only transport churn must not create another FAT evidence job.
-                    if (previous.Sequence != point.Sequence)
+                    if (previous.Sequence != snapshot.Sequence)
                     {
                         _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
-                            point.Sequence,
-                            point.Value,
-                            point.Quality);
+                            snapshot.Sequence,
+                            snapshot.Value,
+                            currentQuality);
                     }
                     continue;
                 }
 
-                var previousValue = previous?.Value ?? point.Value;
-                _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
-                    point.Sequence,
-                    point.Value,
-                    point.Quality);
+                var previousValue = previous?.Value;
+                if (string.IsNullOrWhiteSpace(previousValue))
+                    previousValue = string.IsNullOrWhiteSpace(snapshot.PreviousValue) ? snapshot.Value : snapshot.PreviousValue;
 
-                // An active FAT session may have a valid evidence binding even if a stale UI
-                // projection index was built before the live point became ready. Rebuild once
-                // before giving up; never publish evidence against an unmapped LIVE row.
-                if (projectedPlans.Count == 0)
-                {
-                    pointIndex = GetP0FatPointIndex(fat.Project, forceRebuild: true);
-                    projectedPlans = ProjectSharedEngineeringPointToFat(pointIndex, point);
-                }
-                if (projectedPlans.Count == 0)
+                _p0FatSharedProcessCursors[key] = new StableFatProcessCursor(
+                    snapshot.Sequence,
+                    snapshot.Value,
+                    currentQuality);
+
+                if (!IsAtomicFatLiveCommitCurrent(plans, snapshot))
                     continue;
 
                 var entry = new Iec61850EventEntry
@@ -156,87 +178,69 @@ public partial class MainWindow
                     Sequence = Interlocked.Increment(ref _ioTestObservationSequence),
                     DeviceId = point.DeviceId,
                     PointKey = point.PointKey,
-                    DeviceTimestamp = point.DeviceTimestamp,
+                    DeviceTimestamp = snapshot.DeviceTimestamp,
                     DeviceName = point.DeviceName,
                     IpAddress = point.IpAddress,
                     SignalName = point.SignalName,
                     IecReference = point.IecReference,
                     OldValue = previousValue,
-                    NewValue = point.Value,
-                    Quality = point.Quality,
-                    SourceMode = point.SourceMode,
-                    Reason = point.Reason
+                    NewValue = snapshot.Value,
+                    Quality = currentQuality,
+                    SourceMode = snapshot.SourceMode,
+                    Reason = snapshot.Reason
                 };
-                publishAfterLiveCommit.Add(new CommittedFatProcessEvent(entry, projectedPlans));
+
+                // Same Dispatcher turn, same report snapshot, LIVE already committed above.
+                coordinator.PrimaryController.Enqueue(entry);
+                coordinator.EnqueueAdditional(entry);
             }
         }
-
-        if (publishAfterLiveCommit.Count == 0)
-            return;
-
-        // WPF DataBind (8) and Render (7) both outrank Background (4). Defer evidence one
-        // Dispatcher turn, then verify the actual runtime property bound by LIVE VALUE still
-        // contains the same process value. This is a frame barrier rather than a timing guess.
-        var routeOwner = coordinator;
-        Dispatcher.BeginInvoke(
-            new Action(() =>
+        finally
+        {
+            Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 0);
+            if (_p0FatSharedProcessRouteAttached &&
+                !_p0FatAtomicSnapshots.IsEmpty &&
+                Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 1) == 0)
             {
-                if (!ReferenceEquals(_p0FatSharedProcessCoordinator, routeOwner) ||
-                    _loadedIoFatWindow is not { IsLoaded: true })
+                try
                 {
-                    return;
+                    Dispatcher.BeginInvoke(new Action(P0DrainAtomicFatProcessFrames), DispatcherPriority.DataBind);
                 }
-
-                foreach (var committed in publishAfterLiveCommit)
+                catch (InvalidOperationException)
                 {
-                    if (!IsFatLiveCommitCurrent(committed))
-                        continue;
-
-                    routeOwner.PrimaryController.Enqueue(committed.Entry);
-                    routeOwner.EnqueueAdditional(committed.Entry);
+                    Interlocked.Exchange(ref _p0FatAtomicDrainScheduled, 0);
+                    while (_p0FatAtomicSnapshots.TryDequeue(out _)) { }
                 }
-            }),
-            DispatcherPriority.Background);
+            }
+        }
     }
 
-    private static IReadOnlyList<IoTestPointPlan> ProjectSharedEngineeringPointToFat(
+    private static IReadOnlyList<IoTestPointPlan> ResolveAtomicFatPlans(
         IReadOnlyDictionary<string, List<IoTestPointPlan>> pointIndex,
-        Iec61850MonitorPoint point)
+        string key,
+        Iec61850PointSnapshot snapshot)
     {
-        List<IoTestPointPlan>? plans = null;
-        var pointKey = point.PointKey?.Trim() ?? string.Empty;
-        if (pointKey.Length > 0)
-            pointIndex.TryGetValue(pointKey, out plans);
+        if (pointIndex.TryGetValue(key, out var plans) && plans.Count > 0)
+            return plans;
 
-        if (plans == null)
-        {
-            var fallback = P0FatKey(point.DeviceId, point.IecReference);
-            if (fallback.Length > 0)
-                pointIndex.TryGetValue(fallback, out plans);
-        }
+        var fallback = P0FatKey(snapshot.Point.DeviceId, snapshot.Point.IecReference);
+        return fallback.Length > 0 && pointIndex.TryGetValue(fallback, out plans) && plans.Count > 0
+            ? plans
+            : Array.Empty<IoTestPointPlan>();
+    }
 
-        if (plans == null || plans.Count == 0)
-            return Array.Empty<IoTestPointPlan>();
+    private static bool IsAtomicFatLiveCommitCurrent(
+        IReadOnlyList<IoTestPointPlan> plans,
+        Iec61850PointSnapshot snapshot)
+    {
+        var expectedQuality = string.IsNullOrWhiteSpace(snapshot.Quality)
+            ? "Unknown"
+            : snapshot.Quality.Trim();
 
         foreach (var plan in plans)
-            ApplyP0FatLivePoint(plan.Runtime, point);
-        return plans;
-    }
-
-    private static bool IsFatLiveCommitCurrent(CommittedFatProcessEvent committed)
-    {
-        foreach (var plan in committed.Plans)
         {
-            if (!Iec61850MonitorPoint.AreSemanticallyEquivalent(
-                    plan.Runtime.CurrentValue,
-                    committed.Entry.NewValue))
-            {
+            if (!Iec61850MonitorPoint.AreSemanticallyEquivalent(plan.Runtime.CurrentValue, snapshot.Value))
                 return false;
-            }
-
-            var expectedQuality = string.IsNullOrWhiteSpace(committed.Entry.Quality)
-                ? "Unknown"
-                : committed.Entry.Quality.Trim();
             if (!string.Equals(plan.Runtime.CurrentQuality, expectedQuality, StringComparison.Ordinal))
                 return false;
         }
@@ -245,7 +249,4 @@ public partial class MainWindow
     }
 
     private sealed record StableFatProcessCursor(long Sequence, string Value, string Quality);
-    private sealed record CommittedFatProcessEvent(
-        Iec61850EventEntry Entry,
-        IReadOnlyList<IoTestPointPlan> Plans);
 }
