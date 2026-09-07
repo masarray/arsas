@@ -7,10 +7,9 @@ using System.Windows.Media;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Row-body selection authority for the fault-record grid. The real CheckBox remains owned
-/// by RedownloadUx so WPF renders one normal check mark; this class handles only clicks on
-/// the rest of a transferable row. Downloaded rows use the safe staged-overwrite selection
-/// set while first-download rows keep FaultRecordRow.IsSelected.
+/// Row-body selection authority for the fault-record grid. Native WPF CheckBoxes own checkbox
+/// clicks. This class handles only clicks on the rest of a transferable row and routes downloaded
+/// rows through the same notifying selection proxy used by the checkbox and header selection.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -36,9 +35,8 @@ public partial class FaultRecordWindow
             return;
         }
 
-        // The checkbox itself has one production owner in RedownloadUx. Do not toggle it
-        // here as well; two PreviewMouseDown authorities caused the physical-bench state to
-        // be repainted inconsistently and led to the extra check-glyph workaround.
+        // Native checkbox binding owns checkbox clicks. Row-body clicks are a fast-workflow
+        // convenience and must not create a second toggle for the same pointer action.
         if (FindRedownloadSelectionAncestor<CheckBox>(source) != null)
             return;
 
@@ -47,9 +45,7 @@ public partial class FaultRecordWindow
 
         if (row.LocalState == FaultRecordLocalState.Downloaded)
         {
-            var recordId = row.Record.RecordId;
-            if (!window._redownloadSelections.Add(recordId))
-                window._redownloadSelections.Remove(recordId);
+            window.SetDownloadedTransferSelection(row, !window.IsDownloadedTransferSelected(row));
         }
         else
         {
@@ -58,10 +54,7 @@ public partial class FaultRecordWindow
             row.IsSelected = !row.IsSelected;
         }
 
-        // Row click owns exactly one toggle. ConfigureRecordRow writes the selected state to
-        // the normal WPF CheckBox; no synthetic Content/glyph is injected into the control.
         e.Handled = true;
-        window.ConfigureRecordRow(row);
         window.UpdateSmartSelectionUi();
         window.RefreshFaultRecordHeaderSelection();
     }
