@@ -23,10 +23,10 @@ public partial class MainWindow
         if (device is null)
             return null;
 
-        // CommandSignals contains only controls whose live ctlModel has proved that
-        // operation is allowed and whose UI command semantics are supported. Keep an
-        // explicit owner mapping so a FAT command cannot accidentally fall back to the
-        // Engineering tab's currently selected IED in a multi-IED workspace.
+        // Initialize safety defaults from the complete discovered signal collection before
+        // CommandSignals is rebuilt. This closes the first-frame FAT race where Sync could
+        // otherwise be rendered from the model's old false value before the projection event.
+        EnsureP0CommandDefaultsForDevice(device);
         device.RefreshCommandSignalProjection();
         foreach (var signal in device.Signals.Where(signal => signal.IsControlSignal && signal.IsValidControlObject))
             _signalOwners[signal] = device;
@@ -39,6 +39,8 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(device);
         var stopwatch = Stopwatch.StartNew();
         var fallbackRead = false;
+
+        EnsureP0CommandDefaultsForDevice(device);
 
         // Preload is the same serialized live ctlModel authority used by the Engineering
         // Command Panel. StatusOnly stays read-only and never enters CommandSignals.
@@ -93,11 +95,8 @@ public partial class MainWindow
         var projected = 0;
         foreach (var signal in device.CommandSignals)
         {
-            if (string.IsNullOrWhiteSpace(signal.ControlStatusReference))
-                continue;
-
-            var key = NormalizeReference(signal.ControlStatusReference);
-            if (!latestByReference.TryGetValue(key, out var point))
+            var point = ResolveExactCommandFeedbackPoint(signal, latestByReference);
+            if (point == null)
                 continue;
 
             var value = point.Value?.Trim() ?? string.Empty;
@@ -109,6 +108,56 @@ public partial class MainWindow
         }
 
         return projected;
+    }
+
+    private static Iec61850MonitorPoint? ResolveExactCommandFeedbackPoint(
+        SignalDefinition signal,
+        IReadOnlyDictionary<string, Iec61850MonitorPoint> latestByReference)
+    {
+        foreach (var reference in ExactCommandFeedbackCandidates(signal))
+        {
+            var key = NormalizeReference(reference);
+            if (latestByReference.TryGetValue(key, out var point))
+                return point;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> ExactCommandFeedbackCandidates(SignalDefinition signal)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        static bool HasValue(string? value) => !string.IsNullOrWhiteSpace(value);
+
+        IEnumerable<string?> candidates = new[]
+        {
+            signal.ControlStatusReference,
+            signal.ObjectReference,
+            signal.DisplayReference
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (!HasValue(candidate))
+                continue;
+            var value = candidate!.Trim();
+            if (seen.Add(value))
+                yield return value;
+        }
+
+        // Some static DataSets report a composite CDC object such as CSWI1.Pos while the
+        // control inspector records the status leaf CSWI1.Pos.stVal. Only that exact parent
+        // is accepted; deliberately do not use prefix/Contains matching because XCBR1.Pos
+        // and CSWI1.Pos can coexist in the same IED and must never cross-feed each other.
+        var statusReference = signal.ControlStatusReference?.Trim();
+        if (!string.IsNullOrWhiteSpace(statusReference) &&
+            statusReference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = statusReference[..^".stVal".Length];
+            if (seen.Add(parent))
+                yield return parent;
+        }
     }
 
     internal async Task ExecuteIoFatControlClaimAsync(SignalDefinition signal, ControlCommandClaim claim)
