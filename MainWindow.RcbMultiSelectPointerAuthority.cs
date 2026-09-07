@@ -78,7 +78,7 @@ public partial class MainWindow
     private static void RcbMultiGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left || sender is not DataGrid grid ||
-            Window.GetWindow(grid) is not RcbMultiExportWindow window ||
+            Window.GetWindow(grid) is not RcbMultiExportWindow ||
             e.OriginalSource is not DependencyObject source)
         {
             return;
@@ -94,7 +94,9 @@ public partial class MainWindow
         if (visualRow?.DataContext is not RcbExportRow row)
             return;
 
-        var rows = window.Rows;
+        var rows = grid.Items.Cast<object>()
+            .OfType<RcbExportRow>()
+            .ToList();
         var targetIndex = rows.IndexOf(row);
         if (targetIndex < 0)
             return;
@@ -106,29 +108,30 @@ public partial class MainWindow
             (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
         grid.SelectedItem = row;
         visualRow.IsSelected = true;
-        window.RefreshSelection();
         e.Handled = true;
     }
 
     private static void RcbMultiGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Space || sender is not DataGrid grid ||
-            Window.GetWindow(grid) is not RcbMultiExportWindow window ||
+            Window.GetWindow(grid) is not RcbMultiExportWindow ||
             grid.SelectedItem is not RcbExportRow row)
         {
             return;
         }
 
-        var targetIndex = window.Rows.IndexOf(row);
+        var rows = grid.Items.Cast<object>()
+            .OfType<RcbExportRow>()
+            .ToList();
+        var targetIndex = rows.IndexOf(row);
         if (targetIndex < 0)
             return;
 
         ApplyRcbPointerSelection(
             grid,
-            window.Rows,
+            rows,
             targetIndex,
             (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
-        window.RefreshSelection();
         e.Handled = true;
     }
 
