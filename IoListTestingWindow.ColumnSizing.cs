@@ -26,18 +26,22 @@ public partial class IoListTestingWindow
         if (sender is not IoListTestingWindow window)
             return;
 
+        // FAT V2 rebuilds the runtime columns from ContentRendered. Apply this operator
+        // sizing contract after that rebuild rather than relying on the original XAML
+        // column instances, which would be replaced a moment later.
         window.Dispatcher.BeginInvoke(
             new Action(window.ApplyOperatorFatColumnSizing),
-            DispatcherPriority.Loaded);
+            DispatcherPriority.ApplicationIdle);
     }
 
     private void ApplyOperatorFatColumnSizing()
     {
-        if (FatSignalsGrid == null)
+        _fatSignalsGrid ??= FindVisualDescendant<DataGrid>(this);
+        if (_fatSignalsGrid == null)
             return;
 
-        FatSignalsGrid.CanUserResizeColumns = true;
-        foreach (var column in FatSignalsGrid.Columns)
+        _fatSignalsGrid.CanUserResizeColumns = true;
+        foreach (var column in _fatSignalsGrid.Columns)
         {
             if (!string.Equals(column.Header?.ToString(), "IEC REFERENCE", StringComparison.OrdinalIgnoreCase))
                 continue;
