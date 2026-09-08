@@ -93,6 +93,63 @@ public static class IoFatSourceIdentity
         return string.Empty;
     }
 
+    /// <summary>
+    /// Content-only fingerprint used exclusively for SCL workspace continuation.
+    /// File names and SourceId values are presentation/staging metadata and must not make
+    /// the same IEC 61850 source bytes look like a different FAT project after reopening
+    /// Engineering and switching back to FAT.
+    ///
+    /// Do not use this fingerprint for workbook identity or package integrity. Those paths
+    /// retain the strict source-set contract above.
+    /// </summary>
+    public static string ComputeContentFingerprint(IEnumerable<IoFatSourceDescriptor> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        var canonical = sources
+            .Select(Normalize)
+            .OrderBy(source => source.Kind, StringComparer.Ordinal)
+            .ThenBy(source => source.Sha256, StringComparer.Ordinal)
+            .Select(source => $"{source.Kind}\t{source.Sha256}")
+            .ToArray();
+        if (canonical.Length == 0)
+            return string.Empty;
+        var bytes = Encoding.UTF8.GetBytes(string.Join("\n", canonical));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    public static bool SameSclContentSet(
+        IEnumerable<IoFatSourceDescriptor> left,
+        IEnumerable<IoFatSourceDescriptor> right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+
+        var leftSources = left.Select(Normalize).ToArray();
+        var rightSources = right.Select(Normalize).ToArray();
+        if (leftSources.Length == 0 || rightSources.Length == 0 ||
+            leftSources.Length != rightSources.Length ||
+            leftSources.Any(source => !source.Kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase)) ||
+            rightSources.Any(source => !source.Kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        return ComputeContentFingerprint(leftSources)
+            .Equals(ComputeContentFingerprint(rightSources), StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool CompatibleContinuationSchema(string? savedSchema, string? currentSchema)
+    {
+        var saved = (savedSchema ?? string.Empty).Trim();
+        var current = (currentSchema ?? string.Empty).Trim();
+        if (saved.Equals(current, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return TryGetSclSchemaMajor(saved, out var savedMajor) &&
+               TryGetSclSchemaMajor(current, out var currentMajor) &&
+               savedMajor == currentMajor;
+    }
+
     public static string ProjectStorageFingerprint(IoTestProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -202,6 +259,23 @@ public static class IoFatSourceIdentity
         if (normalized.Length != 64 || normalized.Any(character => !Uri.IsHexDigit(character)))
             throw new InvalidDataException("A FAT source SHA-256 value is missing or invalid.");
         return normalized;
+    }
+
+    private static bool TryGetSclSchemaMajor(string schema, out int major)
+    {
+        major = 0;
+        const string prefix = "ARSAS-FAT-SCL-";
+        if (!schema.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var version = schema[prefix.Length..].Trim();
+        var separator = version.IndexOf('.');
+        var majorText = separator >= 0 ? version[..separator] : version;
+        return int.TryParse(
+            majorText,
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out major);
     }
 
     private static string SafeFileName(string? value, string fallback)

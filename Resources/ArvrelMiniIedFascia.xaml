@@ -3,87 +3,86 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-      ARSAS premium IED fascia. This is the WPF vector runtime counterpart of
-      Assets/RelayFascia.svg. The app installs this template into the existing
-      IedRelayFrontPanelTemplate key at startup, so no SVG runtime dependency is
-      required and the artwork remains sharp at every DPI.
-
-      The three right-side lamps intentionally represent connectivity as requested:
-      red = offline/disconnected, green = online/connected. They bind directly to
-      Iec61850MonitorDevice.IsConnected and use a restrained opacity pulse so the
-      indication reads as live without adding expensive per-frame animation.
+      Runtime WPF transcription of Assets/black-fascia-ied.svg.
+      The source SVG is the visual authority. WPF keeps the card dependency-free and
+      exposes LED1 / LED2 / LED3 as live template parts so connection state is readable
+      even when the relay fascia is rendered at 50 x 50 px.
     -->
 
-    <Style x:Key="ArsasIedConnectionLed" TargetType="Ellipse">
-        <Setter Property="Width" Value="13.2"/>
-        <Setter Property="Height" Value="13.2"/>
-        <Setter Property="Opacity" Value="0.92"/>
-        <Setter Property="Stroke" Value="#5E0B0B"/>
-        <Setter Property="StrokeThickness" Value="0.55"/>
+    <Style x:Key="ArsasIedConnectionLed" TargetType="{x:Type Ellipse}">
+        <!-- Matches the enlarged lamp geometry from black-fascia-ied.svg. -->
+        <Setter Property="Width" Value="22.4"/>
+        <Setter Property="Height" Value="18.4"/>
+        <Setter Property="Opacity" Value="0.98"/>
+        <Setter Property="Stroke" Value="#7A0909"/>
+        <Setter Property="StrokeThickness" Value="1.1"/>
         <Setter Property="Fill">
             <Setter.Value>
-                <RadialGradientBrush Center="0.46,0.40" GradientOrigin="0.38,0.30" RadiusX="0.64" RadiusY="0.64">
+                <RadialGradientBrush Center="0.48,0.42" GradientOrigin="0.34,0.28" RadiusX="0.64" RadiusY="0.64">
                     <GradientStop Color="#FFF3DF" Offset="0"/>
-                    <GradientStop Color="#FFB175" Offset="0.20"/>
-                    <GradientStop Color="#FF5538" Offset="0.38"/>
-                    <GradientStop Color="#AA1010" Offset="0.72"/>
-                    <GradientStop Color="#450000" Offset="1"/>
+                    <GradientStop Color="#FFB175" Offset="0.18"/>
+                    <GradientStop Color="#FF5538" Offset="0.36"/>
+                    <GradientStop Color="#D51616" Offset="0.66"/>
+                    <GradientStop Color="#520000" Offset="1"/>
                 </RadialGradientBrush>
             </Setter.Value>
         </Setter>
         <Setter Property="Effect">
             <Setter.Value>
-                <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.72" Color="#FF3B30"/>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.95" Color="#FF2A2A"/>
             </Setter.Value>
         </Setter>
         <Style.Triggers>
             <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                <Setter Property="Stroke" Value="#07562E"/>
+                <Setter Property="Stroke" Value="#0A7A35"/>
                 <Setter Property="Fill">
                     <Setter.Value>
-                        <RadialGradientBrush Center="0.46,0.40" GradientOrigin="0.38,0.30" RadiusX="0.64" RadiusY="0.64">
-                            <GradientStop Color="#F0FFF5" Offset="0"/>
-                            <GradientStop Color="#A2FFCA" Offset="0.20"/>
-                            <GradientStop Color="#2DE57A" Offset="0.42"/>
-                            <GradientStop Color="#0A8544" Offset="0.76"/>
-                            <GradientStop Color="#003A1C" Offset="1"/>
+                        <RadialGradientBrush Center="0.48,0.42" GradientOrigin="0.34,0.28" RadiusX="0.64" RadiusY="0.64">
+                            <GradientStop Color="#F7FFF9" Offset="0"/>
+                            <GradientStop Color="#B7FFC9" Offset="0.17"/>
+                            <GradientStop Color="#55FF79" Offset="0.36"/>
+                            <GradientStop Color="#2DE57A" Offset="0.62"/>
+                            <GradientStop Color="#00933F" Offset="0.82"/>
+                            <GradientStop Color="#003516" Offset="1"/>
                         </RadialGradientBrush>
                     </Setter.Value>
                 </Setter>
                 <Setter Property="Effect">
                     <Setter.Value>
-                        <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.72" Color="#23D975"/>
+                        <DropShadowEffect BlurRadius="9" ShadowDepth="0" Opacity="1" Color="#32FF75"/>
                     </Setter.Value>
                 </Setter>
             </DataTrigger>
-            <!-- IO/FAT cards use IoTestIedPlan, whose equivalent live flag has a different name. -->
             <DataTrigger Binding="{Binding IsLiveConnected}" Value="True">
-                <Setter Property="Stroke" Value="#07562E"/>
+                <Setter Property="Stroke" Value="#0A7A35"/>
                 <Setter Property="Fill">
                     <Setter.Value>
-                        <RadialGradientBrush Center="0.46,0.40" GradientOrigin="0.38,0.30" RadiusX="0.64" RadiusY="0.64">
-                            <GradientStop Color="#F0FFF5" Offset="0"/>
-                            <GradientStop Color="#A2FFCA" Offset="0.20"/>
-                            <GradientStop Color="#2DE57A" Offset="0.42"/>
-                            <GradientStop Color="#0A8544" Offset="0.76"/>
-                            <GradientStop Color="#003A1C" Offset="1"/>
+                        <RadialGradientBrush Center="0.48,0.42" GradientOrigin="0.34,0.28" RadiusX="0.64" RadiusY="0.64">
+                            <GradientStop Color="#F7FFF9" Offset="0"/>
+                            <GradientStop Color="#B7FFC9" Offset="0.17"/>
+                            <GradientStop Color="#55FF79" Offset="0.36"/>
+                            <GradientStop Color="#2DE57A" Offset="0.62"/>
+                            <GradientStop Color="#00933F" Offset="0.82"/>
+                            <GradientStop Color="#003516" Offset="1"/>
                         </RadialGradientBrush>
                     </Setter.Value>
                 </Setter>
                 <Setter Property="Effect">
                     <Setter.Value>
-                        <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.72" Color="#23D975"/>
+                        <DropShadowEffect BlurRadius="9" ShadowDepth="0" Opacity="1" Color="#32FF75"/>
                     </Setter.Value>
                 </Setter>
             </DataTrigger>
             <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                 <BeginStoryboard>
                     <Storyboard>
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                         From="0.82" To="1"
-                                         Duration="0:0:0.9"
-                                         AutoReverse="True"
-                                         RepeatBehavior="Forever"/>
+                        <DoubleAnimation
+                            Storyboard.TargetProperty="Opacity"
+                            From="0.90"
+                            To="1"
+                            Duration="0:0:0.85"
+                            AutoReverse="True"
+                            RepeatBehavior="Forever"/>
                     </Storyboard>
                 </BeginStoryboard>
             </EventTrigger>
@@ -94,6 +93,8 @@
         <Grid Width="50" Height="50" SnapsToDevicePixels="True" UseLayoutRounding="True">
             <Viewbox Stretch="Uniform">
                 <Canvas Width="256" Height="256" Background="Transparent">
+
+                    <!-- Black premium chassis from Assets/black-fascia-ied.svg -->
                     <Rectangle Canvas.Left="12" Canvas.Top="8" Width="232" Height="240" RadiusX="26" RadiusY="26">
                         <Rectangle.Fill>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -105,163 +106,121 @@
                             </LinearGradientBrush>
                         </Rectangle.Fill>
                         <Rectangle.Effect>
-                            <DropShadowEffect BlurRadius="7" ShadowDepth="3" Opacity="0.32" Color="#000000"/>
+                            <DropShadowEffect BlurRadius="7" ShadowDepth="3" Opacity="0.40" Color="#000000"/>
                         </Rectangle.Effect>
                     </Rectangle>
-                    <Rectangle Canvas.Left="16" Canvas.Top="12" Width="224" Height="232" RadiusX="22" RadiusY="22"
-                               Fill="Transparent" Stroke="#3894A0AB" StrokeThickness="1.2"/>
+                    <Rectangle Canvas.Left="16" Canvas.Top="12" Width="224" Height="232"
+                               RadiusX="22" RadiusY="22" Fill="Transparent"
+                               Stroke="#3894A0AB" StrokeThickness="1.2"/>
+                    <Rectangle Canvas.Left="19.4" Canvas.Top="15.4" Width="216.9" Height="224.8"
+                               RadiusX="19" RadiusY="19" Fill="Transparent"
+                               Stroke="#94FFFFFF" StrokeThickness="1"/>
 
-                    <Path Data="M24,22 H48 L41,33 V223 L48,234 H24 Q18,234 18,228 V28 Q18,22 24,22 Z"
-                          Stroke="#6B7680" StrokeThickness="0.8">
-                        <Path.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#4A5560" Offset="0"/>
-                                <GradientStop Color="#1A2025" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Path.Fill>
-                    </Path>
-                    <Path Data="M232,22 H208 L215,33 V223 L208,234 H232 Q238,234 238,228 V28 Q238,22 232,22 Z"
-                          Stroke="#6B7680" StrokeThickness="0.8">
-                        <Path.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#4A5560" Offset="0"/>
-                                <GradientStop Color="#1A2025" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Path.Fill>
-                    </Path>
+                    <!-- Four visible screw heads -->
+                    <Ellipse Canvas.Left="20.3" Canvas.Top="16.2" Width="15.6" Height="15.6" Fill="#161B20"/>
+                    <Ellipse Canvas.Left="22.1" Canvas.Top="18.0" Width="12" Height="12" Fill="#A8B0B8" Stroke="#545D66" StrokeThickness="0.8"/>
+                    <Line X1="25.4" Y1="23" X2="30.6" Y2="25" Stroke="#49525A" StrokeThickness="1.3"/>
+                    <Ellipse Canvas.Left="219.5" Canvas.Top="16.0" Width="15.6" Height="15.6" Fill="#161B20"/>
+                    <Ellipse Canvas.Left="221.3" Canvas.Top="17.8" Width="12" Height="12" Fill="#A8B0B8" Stroke="#545D66" StrokeThickness="0.8"/>
+                    <Line X1="224.6" Y1="22.8" X2="229.8" Y2="24.8" Stroke="#49525A" StrokeThickness="1.3"/>
+                    <Ellipse Canvas.Left="20.3" Canvas.Top="224.1" Width="15.6" Height="15.6" Fill="#161B20"/>
+                    <Ellipse Canvas.Left="22.1" Canvas.Top="225.9" Width="12" Height="12" Fill="#A8B0B8" Stroke="#545D66" StrokeThickness="0.8"/>
+                    <Ellipse Canvas.Left="220.9" Canvas.Top="223.3" Width="15.6" Height="15.6" Fill="#161B20"/>
+                    <Ellipse Canvas.Left="222.7" Canvas.Top="225.1" Width="12" Height="12" Fill="#A8B0B8" Stroke="#545D66" StrokeThickness="0.8"/>
 
-                    <Rectangle Canvas.Left="34" Canvas.Top="18" Width="188" Height="220" RadiusX="22" RadiusY="22"
-                               Stroke="#14181C" StrokeThickness="1.6">
+                    <Rectangle Canvas.Left="42.7" Canvas.Top="23.3" Width="4" Height="12.8" RadiusX="2" RadiusY="2">
                         <Rectangle.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#F1F2F4" Offset="0"/>
-                                <GradientStop Color="#DADDE1" Offset="0.35"/>
-                                <GradientStop Color="#C4C9D0" Offset="0.72"/>
-                                <GradientStop Color="#ADB4BB" Offset="1"/>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#8AF2FF" Offset="0"/>
+                                <GradientStop Color="#49D3FF" Offset="0.45"/>
+                                <GradientStop Color="#1577FF" Offset="1"/>
                             </LinearGradientBrush>
                         </Rectangle.Fill>
                     </Rectangle>
-                    <Rectangle Canvas.Left="38" Canvas.Top="22" Width="180" Height="212" RadiusX="19" RadiusY="19"
-                               Fill="Transparent" Stroke="#94FFFFFF" StrokeThickness="1"/>
-                    <Path Data="M38,22 H218 V56 Q128,68 38,52 Z" Fill="#29FFFFFF"/>
-                    <Line X1="48" Y1="228" X2="206" Y2="228" Stroke="#616970" StrokeThickness="1.1" Opacity="0.5"/>
-                    <Line X1="48" Y1="229" X2="206" Y2="229" Stroke="#FFFFFF" StrokeThickness="0.55" Opacity="0.25"/>
+                    <TextBlock Canvas.Left="50.6" Canvas.Top="20.2" Text="ARSAS"
+                               Foreground="White" FontFamily="Segoe UI" FontSize="11.5" FontWeight="Bold"/>
+                    <TextBlock Canvas.Left="50.5" Canvas.Top="33.5" Text="IED"
+                               Foreground="{TemplateBinding Foreground}" FontFamily="Segoe UI" FontSize="4.5"
+                               FontWeight="SemiBold" Opacity="0.55"/>
 
-                    <Ellipse Canvas.Left="22.2" Canvas.Top="24.2" Width="15.6" Height="15.6" Fill="#161B20"/>
-                    <Ellipse Canvas.Left="24" Canvas.Top="26" Width="12" Height="12" Stroke="#545D66" StrokeThickness="0.8">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFCFD" Offset="0"/><GradientStop Color="#707983" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-                    <Line X1="27.4" Y1="31" X2="32.6" Y2="33" Stroke="#49525A" StrokeThickness="1.35"/>
-                    <Line X1="29" Y1="34.6" X2="31" Y2="29.4" Stroke="#49525A" StrokeThickness="1.35"/>
-                    <Ellipse Canvas.Left="218.2" Canvas.Top="24.2" Width="15.6" Height="15.6" Fill="#161B20"/>
-                    <Ellipse Canvas.Left="220" Canvas.Top="26" Width="12" Height="12" Stroke="#545D66" StrokeThickness="0.8">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFCFD" Offset="0"/><GradientStop Color="#707983" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-                    <Line X1="223.4" Y1="31" X2="228.6" Y2="33" Stroke="#49525A" StrokeThickness="1.35"/>
-                    <Line X1="225" Y1="34.6" X2="227" Y2="29.4" Stroke="#49525A" StrokeThickness="1.35"/>
-                    <Ellipse Canvas.Left="22.2" Canvas.Top="216.2" Width="15.6" Height="15.6" Fill="#161B20"/>
-                    <Ellipse Canvas.Left="24" Canvas.Top="218" Width="12" Height="12" Stroke="#545D66" StrokeThickness="0.8">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFCFD" Offset="0"/><GradientStop Color="#707983" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-                    <Ellipse Canvas.Left="218.2" Canvas.Top="216.2" Width="15.6" Height="15.6" Fill="#161B20"/>
-                    <Ellipse Canvas.Left="220" Canvas.Top="218" Width="12" Height="12" Stroke="#545D66" StrokeThickness="0.8">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFCFD" Offset="0"/><GradientStop Color="#707983" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-
-                    <Rectangle Canvas.Left="50" Canvas.Top="31" Width="3.8" Height="18" RadiusX="1.9" RadiusY="1.9">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#8AF2FF" Offset="0"/><GradientStop Color="#49D3FF" Offset="0.45"/><GradientStop Color="#1577FF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                    </Rectangle>
-                    <TextBlock Canvas.Left="60" Canvas.Top="33" Text="ARSAS" FontFamily="Segoe UI" FontSize="11.5" FontWeight="Bold" Foreground="#24303A"/>
-                    <TextBlock Canvas.Left="60" Canvas.Top="45" Text="IED PREMIUM" FontFamily="Segoe UI" FontSize="4.6" FontWeight="Bold" Foreground="#5F6871"/>
-                    <TextBlock Canvas.Left="177" Canvas.Top="34" Width="21" Text="P618" TextAlignment="Right" FontFamily="Segoe UI" FontSize="8.5" FontWeight="Bold" Foreground="#2E3640"/>
-                    <TextBlock Canvas.Left="166" Canvas.Top="46" Width="32" Text="PROTECTION" TextAlignment="Right" FontFamily="Segoe UI" FontSize="4.2" FontWeight="Bold" Foreground="#5F6871"/>
-
-                    <Rectangle Canvas.Left="50" Canvas.Top="64" Width="114" Height="88" RadiusX="10" RadiusY="10" Stroke="#66717B" StrokeThickness="1.5">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#59636D" Offset="0"/><GradientStop Color="#252C33" Offset="0.22"/><GradientStop Color="#0A0E12" Offset="0.7"/><GradientStop Color="#040608" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                        <Rectangle.Effect><DropShadowEffect BlurRadius="2.4" ShadowDepth="1.5" Opacity="0.42" Color="#000000"/></Rectangle.Effect>
-                    </Rectangle>
-                    <Rectangle Canvas.Left="56" Canvas.Top="70" Width="102" Height="76" RadiusX="6" RadiusY="6" Fill="#090D10" Stroke="#11161A" StrokeThickness="1"/>
-                    <Rectangle Canvas.Left="60" Canvas.Top="74" Width="94" Height="68" RadiusX="4" RadiusY="4" Stroke="#6D818D" StrokeThickness="0.8">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#EFF8FB" Offset="0"/><GradientStop Color="#D4E5EE" Offset="0.45"/><GradientStop Color="#B5C9D4" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                    </Rectangle>
-                    <Path Data="M63,76 H154 L117,110 H63 Z" Fill="#55FFFFFF"/>
-                    <TextBlock Canvas.Left="72" Canvas.Top="77" Text="BAY 1" FontSize="7.3" FontWeight="Bold" Foreground="#1B2831"/>
-                    <TextBlock Canvas.Left="126" Canvas.Top="77" Width="21" Text="33kV" TextAlignment="Right" FontSize="7.3" FontWeight="Bold" Foreground="#1B2831"/>
-                    <Line X1="69" Y1="92" X2="145" Y2="92" Stroke="#1B2831" StrokeThickness="0.8" Opacity="0.7"/>
-                    <Line X1="82" Y1="98" X2="132" Y2="98" Stroke="#1B2831" StrokeThickness="3.1"/>
-                    <Line X1="107" Y1="100" X2="107" Y2="114" Stroke="#1B2831" StrokeThickness="3.1"/>
-                    <Line X1="98" Y1="116" X2="107" Y2="133" Stroke="#1B2831" StrokeThickness="3.1"/>
-                    <Line X1="107" Y1="133" X2="107" Y2="140" Stroke="#1B2831" StrokeThickness="3.1"/>
-                    <Line X1="72" Y1="131" X2="90" Y2="131" Stroke="#1B2831" StrokeThickness="1.5" Opacity="0.4"/>
-                    <Line X1="124" Y1="131" X2="142" Y2="131" Stroke="#1B2831" StrokeThickness="1.5" Opacity="0.4"/>
-
-                    <Rectangle Canvas.Left="177" Canvas.Top="72" Width="26" Height="20" RadiusX="5" RadiusY="5" Stroke="#5D6770" StrokeThickness="0.9">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#414851" Offset="0"/><GradientStop Color="#20262C" Offset="0.33"/><GradientStop Color="#0D1114" Offset="0.75"/><GradientStop Color="#050708" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                    </Rectangle>
-                    <Ellipse Canvas.Left="183.4" Canvas.Top="75.4" Style="{StaticResource ArsasIedConnectionLed}"/>
-                    <Ellipse Canvas.Left="186" Canvas.Top="77" Width="4" Height="2.6" Fill="#54FFFFFF" IsHitTestVisible="False"/>
-                    <TextBlock Canvas.Left="208" Canvas.Top="78" Text="TRIP" FontSize="4" FontWeight="Bold" Foreground="#2F3942"/>
-                    <Rectangle Canvas.Left="177" Canvas.Top="98" Width="26" Height="20" RadiusX="5" RadiusY="5" Stroke="#5D6770" StrokeThickness="0.9">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#414851" Offset="0"/><GradientStop Color="#20262C" Offset="0.33"/><GradientStop Color="#0D1114" Offset="0.75"/><GradientStop Color="#050708" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                    </Rectangle>
-                    <Ellipse Canvas.Left="183.4" Canvas.Top="101.4" Style="{StaticResource ArsasIedConnectionLed}"/>
-                    <Ellipse Canvas.Left="186" Canvas.Top="103" Width="4" Height="2.6" Fill="#54FFFFFF" IsHitTestVisible="False"/>
-                    <TextBlock Canvas.Left="208" Canvas.Top="104" Text="ALM" FontSize="4" FontWeight="Bold" Foreground="#2F3942"/>
-                    <Rectangle Canvas.Left="177" Canvas.Top="124" Width="26" Height="20" RadiusX="5" RadiusY="5" Stroke="#5D6770" StrokeThickness="0.9">
-                        <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#414851" Offset="0"/><GradientStop Color="#20262C" Offset="0.33"/><GradientStop Color="#0D1114" Offset="0.75"/><GradientStop Color="#050708" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-                    </Rectangle>
-                    <Ellipse Canvas.Left="183.4" Canvas.Top="127.4" Style="{StaticResource ArsasIedConnectionLed}"/>
-                    <Ellipse Canvas.Left="186" Canvas.Top="129" Width="4" Height="2.6" Fill="#54FFFFFF" IsHitTestVisible="False"/>
-                    <TextBlock Canvas.Left="208" Canvas.Top="130" Text="PKP" FontSize="4" FontWeight="Bold" Foreground="#2F3942"/>
-
-                    <Ellipse Canvas.Left="69" Canvas.Top="157" Width="70" Height="70" Fill="#4D8E98A1"/>
-                    <Ellipse Canvas.Left="73" Canvas.Top="161" Width="62" Height="62" Fill="#181D22" Stroke="#66717B" StrokeThickness="1.3"/>
-                    <Path Data="M90,162 Q90,156 96,156 H112 Q118,156 118,162 V177 L111,184 H97 L90,177 Z" Stroke="#6A7580" StrokeThickness="1">
-                        <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#414851" Offset="0"/><GradientStop Color="#050708" Offset="1"/></LinearGradientBrush></Path.Fill>
-                    </Path>
-                    <Path Data="M76,177 Q70,177 70,183 V201 Q70,207 76,207 H91 L98,200 V184 L91,177 Z" Fill="#11161A" Stroke="#6A7580" StrokeThickness="1"/>
-                    <Path Data="M118,177 H133 Q139,177 139,183 V201 Q139,207 133,207 H118 L111,200 V184 Z" Fill="#11161A" Stroke="#6A7580" StrokeThickness="1"/>
-                    <Path Data="M90,206 L97,199 H111 L118,206 V221 Q118,227 112,227 H96 Q90,227 90,221 Z" Fill="#11161A" Stroke="#6A7580" StrokeThickness="1"/>
-                    <Rectangle Canvas.Left="96" Canvas.Top="160" Width="16" Height="4" RadiusX="2" RadiusY="2" Fill="#49D3FF"/>
-                    <Rectangle Canvas.Left="73" Canvas.Top="184" Width="4" Height="16" RadiusX="2" RadiusY="2" Fill="#49D3FF"/>
-                    <Rectangle Canvas.Left="132" Canvas.Top="184" Width="4" Height="16" RadiusX="2" RadiusY="2" Fill="#49D3FF"/>
-                    <Rectangle Canvas.Left="96" Canvas.Top="219" Width="16" Height="4" RadiusX="2" RadiusY="2" Fill="#49D3FF"/>
-                    <Ellipse Canvas.Left="89.8" Canvas.Top="177.8" Width="28.4" Height="28.4" Stroke="#0F1316" StrokeThickness="1.4">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFCFD" Offset="0"/><GradientStop Color="#5D6670" Offset="0.55"/><GradientStop Color="#707983" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-                    <Ellipse Canvas.Left="93" Canvas.Top="181" Width="22" Height="22" Stroke="#616B73" StrokeThickness="0.9">
-                        <Ellipse.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#2D3740" Offset="0"/><GradientStop Color="#0E1216" Offset="1"/></LinearGradientBrush></Ellipse.Fill>
-                    </Ellipse>
-                    <Path Data="M98,174 L104,165 L110,174 Z" Fill="#F4F7FA"/>
-                    <Path Data="M122,186 L131,192 L122,198 Z" Fill="#F4F7FA"/>
-                    <Path Data="M98,210 L104,219 L110,210 Z" Fill="#F4F7FA"/>
-                    <Path Data="M87,186 L78,192 L87,198 Z" Fill="#F4F7FA"/>
-                    <TextBlock Canvas.Left="97" Canvas.Top="187" Width="14" Text="OK" TextAlignment="Center" FontSize="7.8" FontWeight="Bold" Foreground="#EEF2F6"/>
-
-                    <Rectangle Canvas.Left="174" Canvas.Top="170" Width="30" Height="28" RadiusX="6" RadiusY="6" Fill="#11161A" Stroke="#66717B" StrokeThickness="1"/>
-                    <Ellipse Canvas.Left="182" Canvas.Top="176" Width="14" Height="14" Fill="#11161A" Stroke="#FF5D5D" StrokeThickness="2.4"/>
-                    <Rectangle Canvas.Left="174" Canvas.Top="204" Width="30" Height="28" RadiusX="6" RadiusY="6" Fill="#11161A" Stroke="#66717B" StrokeThickness="1"/>
-                    <Rectangle Canvas.Left="186" Canvas.Top="210" Width="6" Height="15" RadiusX="3" RadiusY="3">
+                    <!-- Large display -->
+                    <Rectangle Canvas.Left="40" Canvas.Top="41" Width="125" Height="102"
+                               RadiusX="8" RadiusY="8" Stroke="#66717B" StrokeThickness="1.5">
                         <Rectangle.Fill>
-                            <RadialGradientBrush Center="0.46,0.40" GradientOrigin="0.38,0.30" RadiusX="0.64" RadiusY="0.64">
-                                <GradientStop Color="#F0FFF5" Offset="0"/>
-                                <GradientStop Color="#A2FFCA" Offset="0.20"/>
-                                <GradientStop Color="#2DE57A" Offset="0.42"/>
-                                <GradientStop Color="#0A8544" Offset="0.76"/>
-                                <GradientStop Color="#003A1C" Offset="1"/>
-                            </RadialGradientBrush>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#59636D" Offset="0"/>
+                                <GradientStop Color="#252C33" Offset="0.22"/>
+                                <GradientStop Color="#0A0E12" Offset="0.70"/>
+                                <GradientStop Color="#040608" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                        <Rectangle.Effect>
+                            <DropShadowEffect BlurRadius="3" ShadowDepth="1" Opacity="0.5" Color="#000000"/>
+                        </Rectangle.Effect>
+                    </Rectangle>
+                    <Rectangle Canvas.Left="44" Canvas.Top="45" Width="117" Height="94"
+                               RadiusX="6" RadiusY="6" Fill="#090D10" Stroke="#11161A"/>
+                    <Rectangle Canvas.Left="47" Canvas.Top="48" Width="111" Height="88"
+                               RadiusX="4" RadiusY="4" Stroke="#6D818D" StrokeThickness="0.8">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#EFF8FB" Offset="0"/>
+                                <GradientStop Color="#D4E5EE" Offset="0.45"/>
+                                <GradientStop Color="#B5C9D4" Offset="1"/>
+                            </LinearGradientBrush>
                         </Rectangle.Fill>
                     </Rectangle>
+                    <Path Data="M50,51 H155 L116,91 H50 Z" Fill="#66FFFFFF"/>
+                    <TextBlock Canvas.Left="56" Canvas.Top="54" Text="BAY 1" FontSize="7.3" FontWeight="Bold" Foreground="#1B2831"/>
+                    <TextBlock Canvas.Left="127" Canvas.Top="54" Width="25" Text="33kV" TextAlignment="Right"
+                               FontSize="7.3" FontWeight="Bold" Foreground="#1B2831"/>
+                    <Line X1="55" Y1="69" X2="150" Y2="69" Stroke="#1B2831" StrokeThickness="0.9" Opacity="0.7"/>
+                    <Line X1="72" Y1="77" X2="132" Y2="77" Stroke="#1B2831" StrokeThickness="3.2"/>
+                    <Line X1="102" Y1="79" X2="102" Y2="96" Stroke="#1B2831" StrokeThickness="3.2"/>
+                    <Line X1="92" Y1="99" X2="102" Y2="119" Stroke="#1B2831" StrokeThickness="3.2"/>
+                    <Line X1="102" Y1="119" X2="102" Y2="129" Stroke="#1B2831" StrokeThickness="3.2"/>
+
+                    <!-- Enlarged SVG LED rail: red offline, bright green online -->
+                    <Canvas x:Name="RelayStateRail" Width="72" Height="86" Canvas.Left="168" Canvas.Top="42">
+                        <Ellipse x:Name="LED1" Style="{StaticResource ArsasIedConnectionLed}" Canvas.Left="8" Canvas.Top="5"/>
+                        <Ellipse Canvas.Left="14" Canvas.Top="8" Width="5.5" Height="3.2" Fill="#88FFFFFF" IsHitTestVisible="False"/>
+                        <TextBlock Canvas.Left="34" Canvas.Top="7" Text="TRIP" Foreground="White" FontSize="8" FontWeight="Bold"/>
+
+                        <Ellipse x:Name="LED2" Style="{StaticResource ArsasIedConnectionLed}" Canvas.Left="8" Canvas.Top="32"/>
+                        <Ellipse Canvas.Left="14" Canvas.Top="35" Width="5.5" Height="3.2" Fill="#88FFFFFF" IsHitTestVisible="False"/>
+                        <TextBlock Canvas.Left="34" Canvas.Top="34" Text="ALM" Foreground="White" FontSize="8" FontWeight="Bold"/>
+
+                        <Ellipse x:Name="LED3" Style="{StaticResource ArsasIedConnectionLed}" Canvas.Left="8" Canvas.Top="59"/>
+                        <Ellipse Canvas.Left="14" Canvas.Top="62" Width="5.5" Height="3.2" Fill="#88FFFFFF" IsHitTestVisible="False"/>
+                        <TextBlock Canvas.Left="34" Canvas.Top="61" Text="PU" Foreground="White" FontSize="8" FontWeight="Bold"/>
+                    </Canvas>
+
+                    <!-- Direction pad -->
+                    <Ellipse Canvas.Left="63" Canvas.Top="150" Width="82" Height="82" Fill="#222222" Opacity="0.35"/>
+                    <Ellipse Canvas.Left="72" Canvas.Top="159" Width="64" Height="64" Fill="#0481FF" Stroke="#66717B" StrokeThickness="1.3"/>
+                    <Path Data="M92,159 Q92,154 98,154 H112 Q118,154 118,160 V174 L111,181 H99 L92,174 Z"
+                          Fill="#171C21" Stroke="#6A7580"/>
+                    <Path Data="M69,178 Q64,178 64,184 V199 Q64,205 70,205 H86 L93,198 V185 L86,178 Z"
+                          Fill="#171C21" Stroke="#6A7580"/>
+                    <Path Data="M119,178 H135 Q141,178 141,184 V199 Q141,205 135,205 H119 L112,198 V185 Z"
+                          Fill="#171C21" Stroke="#6A7580"/>
+                    <Path Data="M92,207 L99,200 H111 L118,207 V221 Q118,227 112,227 H98 Q92,227 92,221 Z"
+                          Fill="#171C21" Stroke="#6A7580"/>
+                    <Ellipse Canvas.Left="91" Canvas.Top="179" Width="28" Height="28" Fill="#AAB2BA" Stroke="#0F1316" StrokeThickness="1.4"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="183" Width="20" Height="20" Fill="#11161A" Stroke="#616B73"/>
+                    <TextBlock Canvas.Left="98" Canvas.Top="188" Width="14" Text="OK" TextAlignment="Center"
+                               Foreground="#EEF2F6" FontSize="7.8" FontWeight="Bold"/>
+
+                    <!-- Lower action keys from source SVG -->
+                    <Rectangle Canvas.Left="174" Canvas.Top="157" Width="34" Height="31" RadiusX="6" RadiusY="6"
+                               Fill="#171C21" Stroke="#66717B"/>
+                    <Ellipse Canvas.Left="181" Canvas.Top="163" Width="20" Height="20" Fill="#11161A"
+                             Stroke="#FF5D5D" StrokeThickness="2.4"/>
+                    <Rectangle Canvas.Left="174" Canvas.Top="195" Width="34" Height="31" RadiusX="6" RadiusY="6"
+                               Fill="#171C21" Stroke="#66717B"/>
+                    <Rectangle Canvas.Left="190" Canvas.Top="201" Width="3.2" Height="19" Fill="#7CF75C"/>
                 </Canvas>
             </Viewbox>
-
-            <Border x:Name="RelayStateRail"
-                    Height="2.2"
-                    Margin="6,0,6,1.4"
-                    VerticalAlignment="Bottom"
-                    Background="{TemplateBinding Foreground}"
-                    CornerRadius="1.1"
-                    Opacity="0.92"/>
         </Grid>
     </ControlTemplate>
 </ResourceDictionary>
