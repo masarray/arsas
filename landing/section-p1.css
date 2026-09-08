@@ -1,0 +1,267 @@
+/* ARSAS landing P1 refinement.
+   Section rhythm and lower-page visual hierarchy only. Loaded after polish.css and hero-p0.css.
+   No content, SEO, download, analytics or release authority is changed here. */
+
+:root {
+  --p1-section-space: clamp(4.8rem, 6.2vw, 6rem);
+  --p1-section-space-tight: clamp(3.3rem, 4.5vw, 4.25rem);
+  --p1-card-radius: 20px;
+  --p1-surface-border: rgba(190, 221, 255, .135);
+  --p1-surface-border-hover: rgba(117, 207, 255, .25);
+  --p1-divider: rgba(177, 214, 255, .09);
+}
+
+.section {
+  position: relative;
+  padding-block: var(--p1-section-space);
+}
+
+.section-tight {
+  padding-block: var(--p1-section-space-tight);
+}
+
+.section + .section::before,
+.section + .section-tight::before,
+.section-tight + .section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(1180px, calc(100% - 2rem));
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--p1-divider) 18%, rgba(107, 199, 255, .15) 50%, var(--p1-divider) 82%, transparent);
+  pointer-events: none;
+}
+
+.hero + .section,
+.hero + .section-tight {
+  padding-top: clamp(3.9rem, 5vw, 4.8rem);
+}
+
+.section-head {
+  max-width: 800px;
+  margin-bottom: clamp(2rem, 3vw, 2.6rem);
+}
+
+.section-head h2 {
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.section-head.center h2 {
+  margin-inline: auto;
+}
+
+.section-head p {
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  letter-spacing: .085em;
+}
+
+.substation-scene {
+  border-radius: 26px;
+  border-color: rgba(126, 208, 252, .2);
+  box-shadow:
+    0 26px 68px rgba(0, 8, 25, .26),
+    0 0 0 1px rgba(255,255,255,.018),
+    inset 0 1px 0 rgba(255,255,255,.032);
+}
+
+.substation-copy {
+  max-width: 46rem;
+}
+
+.substation-copy h2 {
+  text-wrap: balance;
+}
+
+.substation-copy p {
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.card,
+.panel,
+.comparison-panel {
+  border-color: var(--p1-surface-border);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(75, 173, 255, .055), transparent 15rem),
+    linear-gradient(180deg, rgba(17, 36, 61, .72), rgba(8, 22, 42, .59));
+  box-shadow:
+    0 14px 40px rgba(0, 8, 24, .12),
+    inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+.card {
+  padding: clamp(1.45rem, 2vw, 1.7rem);
+  border-radius: var(--p1-card-radius);
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+
+.card:hover {
+  border-color: var(--p1-surface-border-hover);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(76, 188, 255, .085), transparent 16rem),
+    linear-gradient(180deg, rgba(20, 43, 72, .77), rgba(9, 25, 46, .63));
+  box-shadow:
+    0 20px 50px rgba(0, 8, 25, .18),
+    inset 0 1px 0 rgba(255,255,255,.045);
+  transform: translateY(-2px);
+}
+
+.card h3 {
+  margin-bottom: .55rem;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+
+.card p,
+.card li,
+.panel p,
+.comparison-panel p,
+.comparison-panel li {
+  text-wrap: pretty;
+}
+
+.card:focus-within,
+.panel:focus-within,
+.comparison-panel:focus-within {
+  border-color: rgba(101, 203, 255, .31);
+  box-shadow:
+    0 18px 46px rgba(0, 8, 25, .17),
+    0 0 0 3px rgba(78, 183, 255, .075),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.metric-grid {
+  overflow: hidden;
+  border-color: rgba(188, 221, 255, .12);
+  background: linear-gradient(180deg, rgba(255,255,255,.047), rgba(255,255,255,.028));
+  box-shadow: 0 16px 42px rgba(0, 8, 24, .13), inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.metric {
+  padding: 1.35rem 1.5rem;
+  border-color: rgba(190, 222, 255, .085);
+}
+
+.metric strong {
+  line-height: 1.28;
+}
+
+.metric span {
+  margin-top: .28rem;
+  max-width: 28ch;
+}
+
+.callout {
+  border-color: rgba(105, 203, 255, .21);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(56,189,248,.145), transparent 21rem),
+    radial-gradient(circle at 92% 92%, rgba(139,92,246,.09), transparent 22rem),
+    linear-gradient(135deg, rgba(27, 73, 133, .13), rgba(67, 43, 118, .075));
+  box-shadow: 0 24px 62px rgba(0, 8, 25, .21), inset 0 1px 0 rgba(255,255,255,.028);
+}
+
+.site-footer {
+  margin-top: clamp(3.4rem, 5vw, 4.2rem);
+  padding-top: 3.25rem;
+  border-top-color: rgba(196, 224, 255, .105);
+}
+
+.footer-grid {
+  align-items: start;
+  row-gap: 2.15rem;
+}
+
+.footer-title {
+  margin-bottom: .72rem;
+}
+
+.footer-links a {
+  text-underline-offset: .18em;
+}
+
+@media (max-width: 980px) {
+  :root {
+    --p1-section-space: clamp(4.2rem, 8vw, 5.2rem);
+    --p1-section-space-tight: clamp(3rem, 6vw, 3.8rem);
+  }
+
+  .hero + .section,
+  .hero + .section-tight {
+    padding-top: 3.7rem;
+  }
+
+  .section-head h2,
+  .substation-copy h2 {
+    max-width: 22ch;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --p1-section-space: 4.15rem;
+    --p1-section-space-tight: 3.15rem;
+  }
+
+  .section + .section::before,
+  .section + .section-tight::before,
+  .section-tight + .section::before {
+    width: calc(100% - 2rem);
+  }
+
+  .hero + .section,
+  .hero + .section-tight {
+    padding-top: 3.35rem;
+  }
+
+  .section-head {
+    margin-bottom: 1.9rem;
+  }
+
+  .section-head h2,
+  .substation-copy h2 {
+    max-width: none;
+  }
+
+  .card {
+    padding: 1.4rem;
+    border-radius: 18px;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+
+  .callout {
+    border-radius: 20px;
+  }
+
+  .site-footer {
+    margin-top: 3rem;
+    padding-top: 3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}
