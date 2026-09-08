@@ -1,7 +1,7 @@
 /* ARSAS Overview page composition.
-   This file owns homepage-only hero and section layout. It is loaded only by
-   the English and Indonesian overview templates. Shared components live in
-   design-system.css. */
+   This file owns homepage-only hero and section layout. It may be loaded by the
+   shared header, but every rule is scoped to body[data-page="overview"].
+   Shared components live in design-system.css. */
 
 body[data-page="overview"] {
   --overview-divider: rgba(177, 214, 255, .09);
@@ -67,32 +67,35 @@ body[data-page="overview"] .hero-actions .btn {
   font-size: .88rem;
 }
 
-body[data-page="overview"] .hero-tertiary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .45rem 1rem;
-  margin-top: .82rem;
+/* Keep only Download + Learn at button weight. Later actions remain available
+   but read as tertiary navigation instead of competing CTAs. */
+body[data-page="overview"] .hero-actions .btn:nth-child(n+3) {
+  min-height: auto;
+  padding: .42rem .18rem;
+  border-color: transparent;
+  border-radius: 8px;
   color: var(--subtle);
-  font-size: .84rem;
+  background: transparent;
+  box-shadow: none;
+  font-size: .82rem;
   font-weight: 680;
 }
 
-body[data-page="overview"] .hero-tertiary a {
-  color: inherit;
-  text-decoration: none;
-  text-underline-offset: .2em;
-}
-
-body[data-page="overview"] .hero-tertiary a:hover,
-body[data-page="overview"] .hero-tertiary a:focus-visible {
+body[data-page="overview"] .hero-actions .btn:nth-child(n+3):hover,
+body[data-page="overview"] .hero-actions .btn:nth-child(n+3):focus-visible {
   color: #dbeeff;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
   text-decoration: underline;
+  text-underline-offset: .2em;
 }
 
 body[data-page="overview"] .hero-proof {
   flex-wrap: wrap;
   gap: .72rem 1rem;
-  margin-top: 1.15rem;
+  margin-top: 1.1rem;
   font-size: .78rem;
 }
 
@@ -325,9 +328,5 @@ body[data-page="overview"] .metric span {
   body[data-page="overview"] .section-head h2,
   body[data-page="overview"] .substation-copy h2 {
     max-width: none;
-  }
-
-  body[data-page="overview"] .hero-tertiary {
-    margin-top: .72rem;
   }
 }
