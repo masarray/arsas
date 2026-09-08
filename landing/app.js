@@ -1,4 +1,15 @@
 (() => {
+  const latestInstallerUrl = 'https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe';
+
+  // Keep the Download Center as the no-JavaScript fallback, but make the prominent
+  // download CTAs resolve the immutable public asset name on GitHub's latest stable
+  // release. The release workflow always republishes this exact asset name.
+  document.querySelectorAll('a.nav-cta, .hero-actions a.btn-primary[href="download.html"], .hero-actions a.btn-primary[href="unduh.html"]').forEach(link => {
+    if (!(link instanceof HTMLAnchorElement)) return;
+    link.href = latestInstallerUrl;
+    link.setAttribute('download', '');
+  });
+
   const toggle = document.querySelector('[data-menu-toggle]');
   const links = document.querySelector('[data-nav-links]');
 

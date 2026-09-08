@@ -1,38 +1,34 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.33",
-  "title": "Fast, unified and responsive IEC 61850 FAT workspace",
-  "titleId": "Workspace IEC 61850 FAT yang cepat, terpadu, dan responsif",
-  "summary": "ARSAS 1.6.33 unifies Engineering and FAT around the imported SCL model, shortens direct-SCL connection readiness, projects structured THD and demand-energy values correctly, and keeps operator input responsive during continuous live acquisition.",
-  "summaryId": "ARSAS 1.6.33 menyatukan Engineering dan FAT pada model SCL yang diimpor, mempercepat kesiapan koneksi direct-SCL, memproyeksikan THD terstruktur dan demand-energy dengan benar, serta menjaga input operator tetap responsif saat akuisisi live terus berjalan.",
+  "version": "1.6.35",
+  "title": "Field-stable FAT continuity, semantic signals and relay fascia",
+  "titleId": "Kontinuitas FAT, semantic signal, dan relay fascia yang lebih stabil",
+  "summary": "ARSAS 1.6.35 carries the field-accepted relay fascia and monitoring-state LEDs, context-aware IEC 61850 signal presentation, Engineering-to-FAT progress continuation for the same SCL content, and persistent multi-RCB selection across virtualized scrolling.",
+  "summaryId": "ARSAS 1.6.35 membawa relay fascia dan LED status monitoring yang sudah diterima di field, presentasi signal IEC 61850 context-aware, kelanjutan progress Engineering-ke-FAT untuk konten SCL yang sama, serta pilihan multi-RCB yang tetap tersimpan saat grid virtualized di-scroll.",
   "highlights": [
-    "Direct-SCL FAT connection reuses the imported model and reaches monitoring after the MMS association and bounded point setup without a discovery-from-zero or legacy settle delay.",
-    "Engineering and FAT share SCL signal identity and operator selection; switching workspace no longer creates an isolated signal universe.",
-    "Additional CID, SCD, ICD or IID sources can be added to an existing FAT project, including while another IED evidence session remains active.",
-    "Structured ThdA and ThdPPV parent values preserve their phase A/B/C or AB/BC/CA members, while DmdWhMV uses the exact MMS value authority exposed by the relay.",
-    "Windows taskbar grouping uses the embedded ARSAS icon and a stable explicit application identity."
+    "The IED card uses the black relay fascia with monitoring-state LEDs: LIVE is green and the first Stop state is red.",
+    "Engineering, FAT and report preview share context-aware signal naming, including phase-aware analog names and logical-node-qualified switching positions.",
+    "Opening FAT again from Engineering can restore local progress for the same SCL content while incompatible point evidence remains fail-closed.",
+    "Legacy SAS multi-RCB selections remain durable while the WPF DataGrid virtualizes and recycles rows during scrolling."
   ],
   "highlightsId": [
-    "Koneksi FAT direct-SCL menggunakan kembali model hasil import dan masuk ke monitoring setelah association MMS serta bounded point setup tanpa discovery dari nol atau legacy settle delay.",
-    "Engineering dan FAT berbagi identitas serta pilihan signal SCL; perpindahan workspace tidak lagi membentuk signal universe yang terpisah.",
-    "Source CID, SCD, ICD, atau IID tambahan dapat dimasukkan ke project FAT yang sedang digunakan, termasuk ketika evidence session IED lain masih aktif.",
-    "Parent value ThdA dan ThdPPV terstruktur mempertahankan member phase A/B/C atau AB/BC/CA, sedangkan DmdWhMV menggunakan exact MMS value authority yang diberikan relay.",
-    "Grouping taskbar Windows menggunakan icon ARSAS yang tertanam dan explicit application identity yang stabil."
+    "IED card menggunakan black relay fascia dengan LED mengikuti status monitoring: LIVE berwarna hijau dan kondisi Stop pertama berwarna merah.",
+    "Engineering, FAT, dan report preview memakai context-aware signal naming yang sama, termasuk nama analog berbasis phase dan switching position yang dibedakan berdasarkan logical node.",
+    "Saat FAT dibuka kembali dari Engineering, progress lokal untuk konten SCL yang sama dapat direstore sementara evidence point yang tidak kompatibel tetap fail-closed.",
+    "Pilihan multi-RCB Legacy SAS tetap tersimpan saat WPF DataGrid melakukan virtualisasi dan recycle row ketika di-scroll."
   ],
   "improvements": [
-    "Live FAT observations are coalesced in bounded dispatcher batches below mouse and keyboard input priority, while the dedicated digital-edge queue remains lossless.",
-    "Steady telemetry updates only visible value cells; it no longer re-filters the entire DataGrid or resets autosave for every poll.",
-    "Capture progress and workspace summaries update only when evidence or test state actually changes.",
-    "Adding an IED synchronizes only the new endpoints, leaving the active IED's capture map and evidence scope immutable.",
-    "The Windows release remains gated by the full ARSAS regression suite, portable smoke validation, checksums, SPDX SBOM, provenance and GitHub attestations."
+    "Canonical IEC references remain unchanged for binding, report identity, evidence and persistence while operator-facing labels gain useful phase and logical-node context.",
+    "FAT continuation can recognize the same SCL content across compatible source presentation changes without weakening per-point configuration matching.",
+    "RCB selection state is owned by the row model rather than transient visual containers, preventing scroll-induced selection loss.",
+    "The stable Windows release is gated by full regression tests, portable and installer smoke tests, SHA-256 checksums, SPDX SBOM, provenance and GitHub attestations."
   ],
   "improvementsId": [
-    "Observasi live FAT di-coalesce dalam bounded dispatcher batch di bawah prioritas input mouse dan keyboard, sementara queue digital-edge khusus tetap lossless.",
-    "Telemetry steady hanya mengubah cell value yang terlihat; seluruh DataGrid tidak lagi di-filter ulang dan timer autosave tidak lagi di-reset pada setiap poll.",
-    "Progress capture dan ringkasan workspace hanya diperbarui ketika evidence atau test state benar-benar berubah.",
-    "Penambahan IED hanya menyinkronkan endpoint baru sehingga capture map dan evidence scope IED aktif tetap immutable.",
-    "Release Windows tetap digate oleh regression suite ARSAS lengkap, portable smoke validation, checksum, SPDX SBOM, provenance, dan GitHub attestation."
+    "Canonical IEC reference tetap tidak berubah untuk binding, report identity, evidence, dan persistence sementara label operator mendapat konteks phase dan logical node yang lebih jelas.",
+    "FAT continuation dapat mengenali konten SCL yang sama pada perubahan presentasi source yang kompatibel tanpa melemahkan per-point configuration matching.",
+    "State pilihan RCB dimiliki oleh row model, bukan visual container sementara, sehingga scrolling tidak lagi menghilangkan selection.",
+    "Stable release Windows digate oleh regression test lengkap, portable dan installer smoke test, checksum SHA-256, SPDX SBOM, provenance, serta GitHub attestation."
   ],
   "knownLimitations": [
     "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
@@ -59,11 +55,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.33 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.33",
-    "caption": "ARSAS 1.6.33 shares imported SCL signal identity between Engineering and FAT while bounded background refresh keeps operator interaction responsive.",
-    "captionId": "ARSAS 1.6.33 berbagi identitas signal SCL antara Engineering dan FAT sementara bounded background refresh menjaga interaksi operator tetap responsif."
+    "alt": "ARSAS 1.6.35 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.35",
+    "caption": "ARSAS 1.6.35 keeps IEC 61850 engineering identity consistent across Engineering, FAT and report evidence while preserving field-tested operator continuity.",
+    "captionId": "ARSAS 1.6.35 menjaga identitas engineering IEC 61850 tetap konsisten di Engineering, FAT, dan report evidence sekaligus mempertahankan kontinuitas operator yang sudah diuji di field."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.33"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.35"
 }
