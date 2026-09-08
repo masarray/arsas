@@ -22,16 +22,53 @@ public static class IoTestPerIedProgressIdentity
         => $"{NormalizeIdentity(iedName)}|{NormalizeIp(ipAddress)}";
 
     public static string PointConfigurationFingerprint(IoTestPointPlan point)
+        => PointConfigurationFingerprintCore(point, includeSignalAddress: true);
+
+    public static string SnapshotPointConfigurationFingerprint(JsonElement savedPoint)
+        => SnapshotPointConfigurationFingerprintCore(savedPoint, includeSignalAddress: true);
+
+    public static bool PointConfigurationMatches(IoTestPointPlan currentPoint, JsonElement savedPoint)
+        => PointConfigurationFingerprint(currentPoint)
+            .Equals(SnapshotPointConfigurationFingerprint(savedPoint), StringComparison.OrdinalIgnoreCase);
+
+    public static bool PointConfigurationMatchesForSclContinuation(
+        IoTestPointPlan currentPoint,
+        JsonElement savedPoint)
+    {
+        ArgumentNullException.ThrowIfNull(currentPoint);
+        var savedBindingStatus = OptionalString(savedPoint, "bindingStatus", string.Empty);
+        if (!IsSclAuthorityBinding(currentPoint.BindingStatus) ||
+            !IsSclAuthorityBinding(savedBindingStatus))
+        {
+            return false;
+        }
+
+        // SignalAddress on static SCL rows is source staging identity. It may change when
+        // the same SCL bytes are reopened through a different filename/SourceId, while the
+        // IEC object, DataSet membership and evidence semantics remain identical.
+        return PointConfigurationFingerprintCore(currentPoint, includeSignalAddress: false)
+            .Equals(
+                SnapshotPointConfigurationFingerprintCore(savedPoint, includeSignalAddress: false),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string PointConfigurationFingerprintCore(
+        IoTestPointPlan point,
+        bool includeSignalAddress)
     {
         ArgumentNullException.ThrowIfNull(point);
-        return HashCanonical(new[]
+        var values = new List<string>
         {
             Pair("objectReference", point.ObjectReference),
             Pair("functionalConstraint", point.FunctionalConstraint, upper: true),
             Pair("expectedOnRaw", point.ExpectedOnRaw.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("expectedOffRaw", point.ExpectedOffRaw.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            Pair("dataType", point.DataType, upper: true),
-            Pair("signalAddress", point.SignalAddress),
+            Pair("dataType", point.DataType, upper: true)
+        };
+        if (includeSignalAddress)
+            values.Add(Pair("signalAddress", point.SignalAddress));
+        values.AddRange(new[]
+        {
             Pair("dataSetName", point.DataSetName),
             Pair("logicalDevice", point.LogicalDevice),
             Pair("logicalNode", point.LogicalNode),
@@ -46,17 +83,25 @@ public static class IoTestPerIedProgressIdentity
             Pair("captureMode", ((int)point.CaptureMode).ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("importReady", point.ImportReady ? "True" : "False")
         });
+        return HashCanonical(values);
     }
 
-    public static string SnapshotPointConfigurationFingerprint(JsonElement savedPoint)
-        => HashCanonical(new[]
+    private static string SnapshotPointConfigurationFingerprintCore(
+        JsonElement savedPoint,
+        bool includeSignalAddress)
+    {
+        var values = new List<string>
         {
             Pair("objectReference", RequiredString(savedPoint, "objectReference")),
             Pair("functionalConstraint", OptionalString(savedPoint, "functionalConstraint", string.Empty), upper: true),
             Pair("expectedOnRaw", OptionalInt(savedPoint, "expectedOnRaw", 1).ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("expectedOffRaw", OptionalInt(savedPoint, "expectedOffRaw", 0).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            Pair("dataType", OptionalString(savedPoint, "dataType", "SDI"), upper: true),
-            Pair("signalAddress", OptionalString(savedPoint, "signalAddress", string.Empty)),
+            Pair("dataType", OptionalString(savedPoint, "dataType", "SDI"), upper: true)
+        };
+        if (includeSignalAddress)
+            values.Add(Pair("signalAddress", OptionalString(savedPoint, "signalAddress", string.Empty)));
+        values.AddRange(new[]
+        {
             Pair("dataSetName", OptionalString(savedPoint, "dataSetName", string.Empty)),
             Pair("logicalDevice", OptionalString(savedPoint, "logicalDevice", string.Empty)),
             Pair("logicalNode", OptionalString(savedPoint, "logicalNode", string.Empty)),
@@ -71,10 +116,11 @@ public static class IoTestPerIedProgressIdentity
             Pair("captureMode", ((int)OptionalEnum(savedPoint, "captureMode", FatCaptureMode.AutomaticTransition)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("importReady", OptionalBool(savedPoint, "importReady", true) ? "True" : "False")
         });
+        return HashCanonical(values);
+    }
 
-    public static bool PointConfigurationMatches(IoTestPointPlan currentPoint, JsonElement savedPoint)
-        => PointConfigurationFingerprint(currentPoint)
-            .Equals(SnapshotPointConfigurationFingerprint(savedPoint), StringComparison.OrdinalIgnoreCase);
+    private static bool IsSclAuthorityBinding(string? bindingStatus)
+        => (bindingStatus ?? string.Empty).Trim().StartsWith("SCL_", StringComparison.OrdinalIgnoreCase);
 
     public static string IedConfigurationFingerprint(IoTestIedPlan ied)
     {

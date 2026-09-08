@@ -53,18 +53,29 @@ public static class IoTestWorkspaceBootstrapService
         var warnings = new List<string>();
         var restored = false;
         var movedSnapshot = false;
+        var restoreSnapshotPath = File.Exists(snapshotPath)
+            ? snapshotPath
+            : FindCompatibleSclSnapshot(localProjectsRoot, importedProject);
 
         try
         {
-            if (File.Exists(snapshotPath))
+            if (!string.IsNullOrWhiteSpace(restoreSnapshotPath) && File.Exists(restoreSnapshotPath))
             {
                 try
                 {
-                    ApplySnapshotProgress(importedProject, snapshotPath);
+                    ApplySnapshotProgress(importedProject, restoreSnapshotPath);
                     restored = true;
-                    Directory.CreateDirectory(localDirectory);
-                    File.Move(snapshotPath, backupPath, true);
-                    movedSnapshot = true;
+
+                    // The snapshot at the canonical current path is temporarily moved so
+                    // persistence cannot replace the freshly imported IEC model wholesale.
+                    // A compatible SCL snapshot discovered under an older staging/project
+                    // identity is read-only input; the new current path is saved normally.
+                    if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Directory.CreateDirectory(localDirectory);
+                        File.Move(snapshotPath, backupPath, true);
+                        movedSnapshot = true;
+                    }
                 }
                 catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
                 {
@@ -132,6 +143,60 @@ public static class IoTestWorkspaceBootstrapService
             opened.Warnings);
     }
 
+    private static string? FindCompatibleSclSnapshot(
+        string localProjectsRoot,
+        IoTestProject project)
+    {
+        if (!IsSclContinuationProject(project) || !Directory.Exists(localProjectsRoot))
+            return null;
+
+        string? match = null;
+        foreach (var directory in Directory.EnumerateDirectories(localProjectsRoot, "*", SearchOption.TopDirectoryOnly))
+        {
+            var candidate = Path.Combine(directory, "project.snapshot.json");
+            if (!File.Exists(candidate))
+                continue;
+
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllBytes(candidate));
+                var root = document.RootElement;
+                if (!RequiredString(root, "snapshotVersion")
+                        .Equals(IoTestWorkspacePersistence.SnapshotVersion, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var savedProject = RequiredObject(root, "project");
+                if (!IoFatSourceIdentity.CompatibleContinuationSchema(
+                        RequiredString(savedProject, "schemaVersion"),
+                        project.SchemaVersion) ||
+                    !SnapshotSourceMatches(savedProject, project))
+                {
+                    continue;
+                }
+
+                // Ambiguous compatible snapshots fail closed instead of guessing which
+                // operator history owns the reopened source.
+                if (match != null)
+                    return null;
+                match = candidate;
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
+            {
+                // A corrupt/unrelated local snapshot must not block normal FAT launch.
+            }
+        }
+
+        return match;
+    }
+
+    private static bool IsSclContinuationProject(IoTestProject project)
+        => project.SchemaVersion.StartsWith("ARSAS-FAT-SCL-", StringComparison.OrdinalIgnoreCase) &&
+           project.Sources.Count > 0 &&
+           project.Sources.All(source =>
+               source.Kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase));
+
     private static void ApplySnapshotProgress(IoTestProject project, string snapshotPath)
     {
         using var document = JsonDocument.Parse(File.ReadAllBytes(snapshotPath));
@@ -141,9 +206,20 @@ public static class IoTestWorkspaceBootstrapService
             throw new InvalidDataException($"Unsupported local snapshot version '{version}'.");
 
         var savedProject = RequiredObject(root, "project");
-        if (!RequiredString(savedProject, "projectId").Equals(project.ProjectId, StringComparison.OrdinalIgnoreCase) ||
-            !RequiredString(savedProject, "schemaVersion").Equals(project.SchemaVersion, StringComparison.OrdinalIgnoreCase) ||
-            !SnapshotSourceMatches(savedProject, project))
+        var schemaMatches = IoFatSourceIdentity.CompatibleContinuationSchema(
+            RequiredString(savedProject, "schemaVersion"),
+            project.SchemaVersion);
+        var sourceMatches = SnapshotSourceMatches(savedProject, project);
+        var projectIdMatches = RequiredString(savedProject, "projectId")
+            .Equals(project.ProjectId, StringComparison.OrdinalIgnoreCase);
+
+        // Historical SCL ProjectId values include filename-derived source identity. For
+        // Engineering -> FAT continuation the exact SCL bytes + compatible schema are the
+        // authority; per-point IEC fingerprints below still fail closed before evidence
+        // can be projected onto a fresh row.
+        if (!schemaMatches ||
+            !sourceMatches ||
+            (!projectIdMatches && !IsSclContinuationProject(project)))
         {
             throw new InvalidDataException("The local snapshot belongs to a different FAT source set or schema.");
         }
@@ -177,22 +253,50 @@ public static class IoTestWorkspaceBootstrapService
                 continue;
             }
 
-            var savedPoints = RequiredArray(savedIed, "testPoints")
+            var savedPointArray = RequiredArray(savedIed, "testPoints")
                 .EnumerateArray()
+                .ToArray();
+            var savedPoints = savedPointArray
                 .GroupBy(point => RequiredString(point, "testPointId"), StringComparer.OrdinalIgnoreCase)
                 .Where(group => group.Count() == 1)
                 .ToDictionary(group => group.Key, group => group.Single(), StringComparer.OrdinalIgnoreCase);
+            var sclContinuation = project.SchemaVersion.StartsWith(
+                "ARSAS-FAT-SCL-",
+                StringComparison.OrdinalIgnoreCase);
 
             foreach (var point in ied.TestPoints)
             {
-                if (!savedPoints.TryGetValue(point.TestPointId, out var saved))
-                    continue;
+                var hasExactId = savedPoints.TryGetValue(point.TestPointId, out var saved);
+                if (!hasExactId && sclContinuation)
+                {
+                    // SourceId is filename-derived on historical static SCL rows, so the
+                    // same IEC member may receive a different TestPointId after reopening
+                    // identical SCL bytes through another Engineering staging identity.
+                    // Accept only one unique IEC/configuration match; duplicates fail closed.
+                    var candidates = savedPointArray
+                        .Where(candidate =>
+                            IoTestPerIedProgressIdentity.PointConfigurationMatchesForSclContinuation(
+                                point,
+                                candidate))
+                        .Take(2)
+                        .ToArray();
+                    if (candidates.Length == 1)
+                        saved = candidates[0];
+                    else
+                        continue;
+                }
 
                 // Never project old FAT evidence onto a newly imported point just because
                 // its TestPointId was reused. Evidence-critical IEC/configuration semantics
-                // must still match the deterministic Phase-B fingerprint.
-                if (!IoTestPerIedProgressIdentity.PointConfigurationMatches(point, saved))
+                // must still match the deterministic Phase-B fingerprint. SCL continuation
+                // may ignore source staging address only; all IEC/DataSet semantics remain
+                // part of the fingerprint.
+                if (!IoTestPerIedProgressIdentity.PointConfigurationMatches(point, saved) &&
+                    !(sclContinuation &&
+                      IoTestPerIedProgressIdentity.PointConfigurationMatchesForSclContinuation(point, saved)))
+                {
                     continue;
+                }
 
                 RestorePointProgress(point, saved);
             }
@@ -262,12 +366,62 @@ public static class IoTestWorkspaceBootstrapService
     {
         var expectedSet = IoFatSourceIdentity.ProjectSourceFingerprint(project);
         var savedSet = OptionalString(savedProject, "sourceSetSha256", string.Empty);
-        if (!string.IsNullOrWhiteSpace(savedSet))
-            return savedSet.Equals(expectedSet, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(savedSet) &&
+            savedSet.Equals(expectedSet, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Engineering and FAT are two views over one SCL authority. Across compatible
+        // ARSAS revisions the same SCL bytes may carry different filename/SourceId staging
+        // metadata, so continuation falls back to content SHA-256 only for SCL-only sets.
+        // Point evidence is still gated later by PointConfigurationMatches().
+        if (TrySnapshotSources(savedProject, out var savedSources) &&
+            IoFatSourceIdentity.SameSclContentSet(savedSources, project.Sources))
+        {
+            return true;
+        }
 
         var legacyWorkbookSha = OptionalString(savedProject, "sourceWorkbookSha256", string.Empty);
         return !string.IsNullOrWhiteSpace(legacyWorkbookSha) &&
                legacyWorkbookSha.Equals(project.SourceWorkbookSha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TrySnapshotSources(
+        JsonElement savedProject,
+        out IReadOnlyList<IoFatSourceDescriptor> sources)
+    {
+        sources = Array.Empty<IoFatSourceDescriptor>();
+        if (!savedProject.TryGetProperty("sources", out var array) ||
+            array.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var parsed = new List<IoFatSourceDescriptor>();
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                return false;
+
+            var kind = OptionalString(item, "kind", string.Empty);
+            var sha256 = OptionalString(item, "sha256", string.Empty);
+            if (!kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(sha256))
+            {
+                return false;
+            }
+
+            parsed.Add(new IoFatSourceDescriptor(
+                SourceId: string.Empty,
+                Kind: IoFatSourceKinds.Scl,
+                FileName: "snapshot.scl",
+                Sha256: sha256,
+                Length: 0));
+        }
+
+        sources = parsed;
+        return parsed.Count > 0;
     }
 
     private static void RestoreMissingManualWorkspaceRows(
