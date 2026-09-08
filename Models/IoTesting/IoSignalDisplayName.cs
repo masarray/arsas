@@ -86,7 +86,7 @@ public static partial class IoSignalDisplayName
         }
         else
         {
-            var tokenEnd = remainder.IndexOfAny('.', '$', '[', '(');
+            var tokenEnd = remainder.IndexOfAny(new[] { '.', '$', '[', '(' });
             var token = tokenEnd >= 0 ? remainder[..tokenEnd] : remainder;
             dataObject = NormalizeDataObjectToken(token);
         }
@@ -132,7 +132,7 @@ public static partial class IoSignalDisplayName
     private static string NormalizeDataObjectToken(string token)
     {
         var value = token.Trim();
-        var end = value.IndexOfAny('.', '$', '[', '(');
+        var end = value.IndexOfAny(new[] { '.', '$', '[', '(' });
         return (end >= 0 ? value[..end] : value).Trim();
     }
 
