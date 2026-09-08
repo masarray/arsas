@@ -29,16 +29,27 @@ public sealed class P0LifecycleAndTotPfRegressionTests
     }
 
     [Fact]
-    public void FatWindow_Close_KeepsUiBoundSessionMutationOnDispatcher_AndOffloadsPersistence()
+    public void FatWindow_Close_KeepsStateMutationOnDispatcher_AndOffloadsDurableIo()
     {
         var lifecycle = Read("IoListTestingWindow.P0Lifecycle.cs");
+        var journal = Read("Services/IoTesting/IoTestEvidenceJournal.cs");
 
         Assert.Contains("Closing -= Window_Closing", lifecycle, StringComparison.Ordinal);
         Assert.Contains("Closing += P0Window_Closing", lifecycle, StringComparison.Ordinal);
-        Assert.Contains("var stopAll = Session.StopAll(", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("using (IoTestEvidenceJournal.BeginDeferredSealScope())", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("stopAll = Session.StopAll(", lifecycle, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Run(() =>\n                    Session.StopAll", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("await IoTestEvidenceJournal.AwaitDeferredSealsAsync()", lifecycle, StringComparison.Ordinal);
         Assert.Contains("await Task.Run(Storage.SaveNow)", lifecycle, StringComparison.Ordinal);
         Assert.Contains("e.Cancel = true", lifecycle, StringComparison.Ordinal);
+
+        // Deferred sealing is close-only. Normal Stop still takes the synchronous durable
+        // barrier, while workspace close queues only the already-detached journal I/O.
+        Assert.Contains("DeferredSealScopeDepth.Value > 0", journal, StringComparison.Ordinal);
+        Assert.Contains("Task.Run(SealDurablyAndVerify)", journal, StringComparison.Ordinal);
+        Assert.Contains("return VerifyCore(filePath)", journal, StringComparison.Ordinal);
+        Assert.Contains("FlushDurable();", journal, StringComparison.Ordinal);
+        Assert.Contains("Task.WhenAll", journal, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,7 +61,11 @@ public sealed class P0LifecycleAndTotPfRegressionTests
         var projection = Read("Services/StaticDataSetReportProjectionAccumulator.cs");
 
         Assert.Contains("\"sourcePullRequest\": 111", engineLock, StringComparison.Ordinal);
-        Assert.Contains("69bfe70e2c779c7e8268af087bd1a3a38986c0fc", engineLock, StringComparison.Ordinal);
+        Assert.Contains("11ab2304482600c19ba979f4fc9021ddb46b9af9", engineLock, StringComparison.Ordinal);
+        Assert.Contains("P1 hardening", engineLock, StringComparison.Ordinal);
+        Assert.Contains("report-value position", engineLock, StringComparison.Ordinal);
+        Assert.Contains("omits MemberReference", engineLock, StringComparison.Ordinal);
+        Assert.Contains("client-compatible", engineLock, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MmsSemanticReportValueProjector.Project", semanticBridge, StringComparison.Ordinal);
         Assert.Contains("session.StaticReportProjection.Project", runtime, StringComparison.Ordinal);
         Assert.Contains("MMS process fallback is disabled", runtime, StringComparison.Ordinal);

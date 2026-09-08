@@ -366,8 +366,94 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         }
     }
 
+    /// <summary>
+    /// Forward only the selected leaf property that actually changed. The old implementation
+    /// amplified each leaf notification into the complete coordinator projection. During a
+    /// 58-point session that meant journal metadata and state transitions could generate tens
+    /// of thousands of WPF invalidations before the Dispatcher could repaint.
+    /// </summary>
     private void Child_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => RaiseProjectionProperties();
+    {
+        if (_disposed || sender is not IoTestSessionController controller)
+            return;
+
+        var selected = SelectedController;
+        if (!ReferenceEquals(controller, selected))
+        {
+            if (e.PropertyName is nameof(IoTestSessionController.IsSessionActive) or nameof(IoTestSessionController.State))
+            {
+                Raise(nameof(ActiveSessionCount));
+                Raise(nameof(HasActiveSessions));
+                if (selected == null)
+                    Raise(nameof(StatusText));
+            }
+            return;
+        }
+
+        switch (e.PropertyName)
+        {
+            case nameof(IoTestSessionController.IsSessionActive):
+                Raise(nameof(IsSessionActive));
+                Raise(nameof(IsSelectedSessionActive));
+                Raise(nameof(ActiveSessionCount));
+                Raise(nameof(HasActiveSessions));
+                break;
+            case nameof(IoTestSessionController.CanStart):
+                Raise(nameof(CanStart));
+                break;
+            case nameof(IoTestSessionController.CanPause):
+                Raise(nameof(CanPause));
+                break;
+            case nameof(IoTestSessionController.CanResume):
+                Raise(nameof(CanResume));
+                break;
+            case nameof(IoTestSessionController.CanStop):
+                Raise(nameof(CanStop));
+                break;
+            case nameof(IoTestSessionController.CanEditPlan):
+                Raise(nameof(CanEditPlan));
+                break;
+            case nameof(IoTestSessionController.State):
+                Raise(nameof(State));
+                break;
+            case nameof(IoTestSessionController.ActiveIed):
+                Raise(nameof(ActiveIed));
+                break;
+            case nameof(IoTestSessionController.SessionId):
+                Raise(nameof(SessionId));
+                break;
+            case nameof(IoTestSessionController.StartedAtUtc):
+                Raise(nameof(StartedAtUtc));
+                break;
+            case nameof(IoTestSessionController.CompletedAtUtc):
+                Raise(nameof(CompletedAtUtc));
+                break;
+            case nameof(IoTestSessionController.StatusText):
+                Raise(nameof(StatusText));
+                break;
+            case nameof(IoTestSessionController.JournalPath):
+                Raise(nameof(JournalPath));
+                break;
+            case nameof(IoTestSessionController.EvidenceRecordCount):
+                Raise(nameof(EvidenceRecordCount));
+                break;
+            case nameof(IoTestSessionController.LastJournalHash):
+                Raise(nameof(LastJournalHash));
+                break;
+            case nameof(IoTestSessionController.JournalIntegrityText):
+                Raise(nameof(JournalIntegrityText));
+                break;
+            case nameof(IoTestSessionController.StateText):
+                Raise(nameof(StateText));
+                break;
+            case nameof(IoTestSessionController.ActiveIedText):
+                Raise(nameof(ActiveIedText));
+                break;
+            case nameof(IoTestSessionController.ProgressText):
+                Raise(nameof(ProgressText));
+                break;
+        }
+    }
 
     private void RaiseProjectionProperties()
     {

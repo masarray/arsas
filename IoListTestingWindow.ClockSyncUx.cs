@@ -40,9 +40,9 @@ public partial class IoListTestingWindow
             Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(2, 0, 2, 0),
             FontSize = 11.2,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Medium,
             Foreground = TryFindResource("Ink") as Brush ?? Brushes.DimGray,
-            Text = "Global SNTP",
+            Text = "SNTP · —",
             ToolTip = "Global SNTP is controlled from the ARSAS header. It is not owned by FAT and continues running when the FAT window closes while the global server toggle remains enabled."
         };
 
@@ -54,7 +54,7 @@ public partial class IoListTestingWindow
             FontSize = 10.4,
             FontWeight = FontWeights.Medium,
             Foreground = TryFindResource("MutedInk") as Brush ?? Brushes.SlateGray,
-            Text = "SNTP: waiting"
+            Text = "Clock · waiting"
         };
 
         _clockSyncGlobalStatusText = globalStatus;
@@ -104,25 +104,22 @@ public partial class IoListTestingWindow
             SntpClockTransportMode.UdpSocket => "UDP",
             _ => "—"
         };
-        var localAddress = snapshot.Binding?.LocalAddress.ToString();
 
-        _clockSyncGlobalStatusText.Text = !enabled
-            ? "Global SNTP · Off"
-            : snapshot.State == SntpClockServiceState.Serving
-                ? $"Global SNTP · {localAddress ?? "Active"}"
-                : "Global SNTP · Enabled";
+        _clockSyncGlobalStatusText.Text = enabled
+            ? "SNTP · ON"
+            : "SNTP · OFF";
 
         _clockSyncEvidenceText.Text = !enabled
-            ? "SNTP: off"
+            ? "Clock · idle"
             : snapshot.State switch
             {
                 SntpClockServiceState.Serving =>
-                    $"{transport} · B {snapshot.BroadcastCount} · Req {snapshot.ClientRequestCount} · Reply {snapshot.ReplyCount} · sync not proven",
-                SntpClockServiceState.Starting => "SNTP: starting…",
-                SntpClockServiceState.Stopped => "SNTP: waiting for connected IED",
-                SntpClockServiceState.PortUnavailable => "SNTP: unavailable",
-                SntpClockServiceState.Faulted => "SNTP: fault",
-                _ => $"SNTP: {snapshot.State}"
+                    $"{transport} · B {snapshot.BroadcastCount} · Req {snapshot.ClientRequestCount} · Rep {snapshot.ReplyCount}",
+                SntpClockServiceState.Starting => "Clock · starting…",
+                SntpClockServiceState.Stopped => "Clock · waiting",
+                SntpClockServiceState.PortUnavailable => "Clock · unavailable",
+                SntpClockServiceState.Faulted => "Clock · fault",
+                _ => $"Clock · {snapshot.State}"
             };
 
         var toolTip = BuildClockSyncEvidenceToolTip(snapshot, transport, enabled);

@@ -14,13 +14,17 @@ public sealed class FastWorkflowRegressionTests
     }
 
     [Fact]
-    public void FatCardPreparationProgress_IsRealDeterminateAndSmoothed()
+    public void FatCardPreparationProgress_IsRealDeterminateSmoothedAndLowPriority()
     {
         var source = File.ReadAllText(FindRepoFile("IoListTestingWindow.RealPreparationProgress.cs"));
         var engineering = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.Progress.cs"));
         Assert.Contains("progressBar.IsIndeterminate = false", source, StringComparison.Ordinal);
-        Assert.Contains("TimeSpan.FromMilliseconds(50)", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.Background", source, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromMilliseconds(100)", source, StringComparison.Ordinal);
+        Assert.Contains("RefreshPreparationProgressBarCache", source, StringComparison.Ordinal);
+        Assert.Contains("if (!hasActivePreparation)", source, StringComparison.Ordinal);
         Assert.Contains("AdvanceDisplay", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSpan.FromMilliseconds(50)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RepeatBehavior", source, StringComparison.Ordinal);
         Assert.Contains("device.DiscoveryProgressPercent", engineering, StringComparison.Ordinal);
         Assert.Contains("LivePointReady", engineering, StringComparison.Ordinal);

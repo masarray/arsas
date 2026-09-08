@@ -1,3 +1,4 @@
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
 
@@ -9,9 +10,10 @@ namespace ArIED61850Tester.Services;
 /// Static mode already has complete configuration authority in the opened/live SCL model:
 /// exact DataSet membership and configured RCB -> DataSet bindings. Do not run those facts
 /// through the adaptive Hybrid acquisition planner. The live association is used only to
-/// verify that the exact configured RCB and exact DataSet directory exist, then ARIEC's
-/// persistent monitor installs the InformationReport receiver, enables RptEna and requests
-/// GI. No dynamic DataSet write and no cyclic process-value MMS read is permitted here.
+/// verify that the configured RCB (or a concrete indexed instance of that configured family)
+/// and exact DataSet directory exist, then ARIEC's persistent monitor installs the
+/// InformationReport receiver, enables RptEna and requests GI. No dynamic DataSet write and
+/// no cyclic process-value MMS read is permitted here.
 /// </summary>
 public sealed partial class NativeIec61850Client
 {
@@ -30,8 +32,10 @@ public sealed partial class NativeIec61850Client
         _deterministicStaticSubscriptions.Clear();
         ResetSemanticReportProjectionContext();
 
-        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
-        if (model is null)
+        // Opened SCL is the semantic and configuration authority. A live model is authoritative
+        // only for online-only operation where no CID/SCD workspace is open.
+        var projectionModel = device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel;
+        if (projectionModel is null)
         {
             return StaticPlanningUnavailable(
                 points,
@@ -45,12 +49,22 @@ public sealed partial class NativeIec61850Client
                 $"Static DataSet report-only requires an initiated MMS association. Current state: {_session.State}.");
         }
 
-        SetSemanticReportProjectionAuthority(model);
+        SetSemanticReportProjectionAuthority(projectionModel);
+
+        // P0 authority rule: when an SCL workspace exists, only ReportControls from that
+        // design model may authorize static acquisition. Fresh live discovery is verification
+        // and concrete-instance evidence; it must never introduce a peer RCB that can displace
+        // an explicit SCL binding such as Digital -> Buffer02.
+        var configurationModel = projectionModel;
+        var configurationAuthorityLabel = device.SclWorkspace?.DesignModel is not null
+            ? "opened SCL design model"
+            : "live discovery model (online-only)";
 
         // Fresh report discovery is verification, not permission policy. In particular we
-        // deliberately do NOT classify a configured BRCB through the Hybrid availability
-        // confidence gate. Some perfectly usable servers expose RptEna and DatSet but omit
-        // enough reservation metadata for that adaptive gate to call the RCB 'Available'.
+        // deliberately do NOT require the adaptive Hybrid availability gate to classify a
+        // configured BRCB as Available. Some perfectly usable servers omit enough reservation
+        // metadata to remain Unknown. Explicit enabled/reserved/owner evidence is still used
+        // to avoid stealing an occupied RCB.
         var discovery = await EnsureDiscoveryForReportingAsync(cancellationToken).ConfigureAwait(false);
         if (discovery is null)
         {
@@ -60,6 +74,11 @@ public sealed partial class NativeIec61850Client
                     ? "Fresh report discovery was unavailable."
                     : LastErrorMessage);
         }
+
+        var callerOwnedRcbReferences = _reportMonitorSessions.Values
+            .Select(session => NormalizeStaticReference(session.ReportControl.Reference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var reportPlans = new List<ReportControlPlan>();
         var warnings = new List<string>();
@@ -76,8 +95,13 @@ public sealed partial class NativeIec61850Client
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var configuredReports = model.ReportControls
+            var dataSetReference = dataSetGroup.First().DataSetReference.Trim();
+            var configuredReports = configurationModel.ReportControls
                 .Where(report => SameStaticReference(report.DataSetReference, dataSetGroup.Key))
+                .GroupBy(
+                    report => $"{NormalizeStaticReference(report.Reference)}|{NormalizeStaticReference(report.DataSetReference)}",
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
                 .OrderByDescending(report => report.Buffered)
                 .ThenBy(report => report.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -85,42 +109,129 @@ public sealed partial class NativeIec61850Client
             if (configuredReports.Length == 0)
             {
                 warnings.Add(
-                    $"{dataSetGroup.First().DataSetReference}: no configured BRCB/URCB in the SCL model; {dataSetGroup.Count()} selected point(s) remain explicitly unavailable. No MMS process polling was substituted.");
+                    $"{dataSetReference}: no configured BRCB/URCB in the authoritative {configurationAuthorityLabel}; {dataSetGroup.Count()} selected point(s) remain explicitly unavailable. No MMS process polling was substituted.");
                 continue;
             }
 
-            if (configuredReports.Length > 1)
-            {
-                warnings.Add(
-                    $"{dataSetGroup.First().DataSetReference}: {configuredReports.Length} configured RCBs reference this DataSet; deterministic Static mode selected {configuredReports[0].Reference} (BRCB preferred, then literal reference order)." );
-            }
-
-            var configured = configuredReports[0];
-            var liveCandidates = discovery.ReportInventory.ReportControls
-                .Where(candidate => SameStaticReference(candidate.Reference, configured.Reference))
+            // Evaluate every authoritative configured RCB instead of selecting only the first.
+            // If several SCL ReportControls legitimately reference the same DataSet, one
+            // missing/occupied RCB must not hide another configured option. A configured family
+            // may resolve only to decimal indexed instances of that same literal family;
+            // arbitrary same-DataSet substitution remains forbidden.
+            var matchedLiveCandidates = configuredReports
+                .SelectMany(configured => discovery.ReportInventory.ReportControls
+                    .Select(candidate => new
+                    {
+                        Configured = configured,
+                        Candidate = candidate,
+                        Rank = Iec61850StaticRcbReferenceMatcher.MatchRank(
+                            configured.Reference,
+                            candidate.Reference)
+                    })
+                    .Where(item => item.Rank != int.MaxValue)
+                    .Where(item =>
+                        string.IsNullOrWhiteSpace(item.Candidate.DataSetReference) ||
+                        SameStaticReference(item.Candidate.DataSetReference, dataSetReference)))
+                .OrderBy(item => item.Rank)
+                .ThenByDescending(item => item.Configured.Buffered)
+                .ThenBy(item => item.Configured.Reference, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Candidate.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            if (liveCandidates.Length != 1)
+            // Use ARIEC's operational evaluator so Owner is part of the same occupancy
+            // decision as RptEna/Resv/ResvTms. Directory evidence is intentionally omitted at
+            // this stage: Unknown is still eligible and the exact DataSet directory is verified
+            // before the plan is armed. If a currently active session already owns the RCB,
+            // preserve that fact as UsedByCaller instead of misclassifying it as foreign use.
+            var evaluatedLiveCandidates = matchedLiveCandidates
+                .Select(item => new
+                {
+                    item.Configured,
+                    item.Candidate,
+                    item.Rank,
+                    Availability = ArMms.MmsRcbAvailabilityEvaluator.Evaluate(
+                        item.Candidate,
+                        dataSetDirectory: null,
+                        callerOwned: callerOwnedRcbReferences.Contains(
+                            NormalizeStaticReference(item.Candidate.Reference)))
+                })
+                .ToArray();
+
+            // An indexed family can expose several concrete RCBs. Literal instance order is
+            // not an activation policy: Buffer01 may already be enabled/reserved/owned while
+            // Buffer02 is the usable instance. Reject only explicit operational blockers;
+            // Unknown remains eligible because some relays omit reservation metadata. Among
+            // equally matched candidates prefer exact identity, caller-owned/known-safe state,
+            // BRCB, explicitly disabled state, and finally stable literal order.
+            var liveCandidates = evaluatedLiveCandidates
+                .Where(item => StaticRcbAvailabilityRank(item.Availability.Availability) != int.MaxValue)
+                .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsExplicitlyEnabled(item.Candidate))
+                .Where(item => !ArMms.MmsReportSubscriptionPlanner.IsReservedByOtherClient(item.Candidate))
+                .OrderBy(item => item.Rank)
+                .ThenBy(item => StaticRcbAvailabilityRank(item.Availability.Availability))
+                .ThenByDescending(item => item.Configured.Buffered)
+                .ThenByDescending(item => ArMms.MmsReportSubscriptionPlanner.IsExplicitlyDisabled(item.Candidate))
+                .ThenBy(item => item.Configured.Reference, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Candidate.Reference, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (liveCandidates.Length == 0)
             {
+                if (evaluatedLiveCandidates.Length > 0)
+                {
+                    var occupied = string.Join(
+                        ", ",
+                        evaluatedLiveCandidates.Take(8).Select(item =>
+                            $"{item.Configured.Reference}->{item.Candidate.Reference}[availability={item.Availability.Availability}, RptEna={item.Candidate.EnabledState}, Resv={item.Candidate.ReservationState}, ResvTms={item.Candidate.ReservationTimeSeconds}, Owner={item.Candidate.Owner}]"));
+                    warnings.Add(
+                        $"{dataSetReference}: exact/indexed-family RCB objects were found for authoritative configuration, but every concrete instance was explicitly unavailable/in-use ({occupied}). Static mode will not steal an occupied RCB and did not poll process values.");
+                    continue;
+                }
+
+                var configuredNames = string.Join(", ", configuredReports
+                    .Select(report => report.Reference)
+                    .Where(reference => !string.IsNullOrWhiteSpace(reference))
+                    .Take(8));
+                var sameDataSet = discovery.ReportInventory.ReportControls
+                    .Where(candidate =>
+                        !string.IsNullOrWhiteSpace(candidate.DataSetReference) &&
+                        SameStaticReference(candidate.DataSetReference, dataSetReference))
+                    .Select(candidate => candidate.Reference)
+                    .Where(reference => !string.IsNullOrWhiteSpace(reference))
+                    .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase)
+                    .Take(8)
+                    .ToArray();
+                var observed = sameDataSet.Length == 0
+                    ? "none"
+                    : string.Join(", ", sameDataSet);
                 warnings.Add(
-                    $"{configured.Reference}: configured RCB was proven by SCL but exact live MMS discovery returned {liveCandidates.Length} matching RCB object(s). Static mode refused to guess and did not poll process values.");
+                    $"{dataSetReference}: authoritative configured RCB(s) [{configuredNames}] had no exact/indexed-family live instance. Same-DataSet live RCBs: {observed}. Static mode refused arbitrary substitution and did not poll process values.");
                 continue;
             }
 
-            var liveRcb = CloneReportControlForPlanning(liveCandidates[0]);
-            var dataSetReference = dataSetGroup.First().DataSetReference.Trim();
+            var selected = liveCandidates[0];
+            var configured = selected.Configured;
+            var liveSource = selected.Candidate;
+            var liveAvailability = selected.Availability;
+            var liveRcb = CloneReportControlForPlanning(liveSource);
+
+            if (configuredReports.Length > 1 || liveCandidates.Length > 1)
+            {
+                warnings.Add(
+                    $"{dataSetReference}: evaluated {configuredReports.Length} authoritative configured RCB(s) and {liveCandidates.Length} non-occupied exact/indexed live match(es); selected {configured.Reference} -> {liveSource.Reference} ({liveAvailability.Availability}). {configurationAuthorityLabel} remained authoritative.");
+            }
 
             if (!string.IsNullOrWhiteSpace(liveRcb.DataSetReference) &&
                 !SameStaticReference(liveRcb.DataSetReference, dataSetReference))
             {
                 warnings.Add(
-                    $"{configured.Reference}: SCL binds {dataSetReference}, but live DatSet reports {liveRcb.DataSetReference}. Static mode refused the mismatch instead of guessing or polling.");
+                    $"{configured.Reference}: authoritative configuration binds {dataSetReference}, but live DatSet reports {liveRcb.DataSetReference}. Static mode refused the mismatch instead of guessing or polling.");
                 continue;
             }
 
-            // Missing live DatSet text is not treated as a reason to discard correct SCL
-            // configuration. The exact DataSet directory below is still required and is the
-            // ordered mapping authority for InformationReport values.
+            // Missing live DatSet text is not treated as a reason to discard correct
+            // authoritative configuration. The exact DataSet directory below is still required
+            // and is the ordered mapping authority for InformationReport values.
             if (string.IsNullOrWhiteSpace(liveRcb.DataSetReference))
                 liveRcb.DataSetReference = dataSetReference;
 
@@ -149,13 +260,16 @@ public sealed partial class NativeIec61850Client
             if (bindings.Count == 0)
                 continue;
 
+            var concreteReportReference = string.IsNullOrWhiteSpace(liveRcb.Reference)
+                ? configured.Reference
+                : liveRcb.Reference;
             var plan = new ReportControlPlan
             {
                 RelayId = device.DeviceId,
                 RelayName = device.Name,
                 RelayIpAddress = device.IpAddress,
                 IedName = device.Name,
-                ReportControlReference = configured.Reference,
+                ReportControlReference = concreteReportReference,
                 DataSetReference = dataSetReference,
                 Mode = "Static DataSet • deterministic configured RCB",
                 AllowDynamicDataSetWrites = false,
@@ -171,10 +285,20 @@ public sealed partial class NativeIec61850Client
             };
 
             var subscriptionWarnings = new List<string>();
-            if (string.IsNullOrWhiteSpace(liveCandidates[0].DataSetReference))
+            if (!Iec61850StaticRcbReferenceMatcher.IsExact(configured.Reference, concreteReportReference))
             {
                 subscriptionWarnings.Add(
-                    "Live RCB DatSet text was not returned; exact SCL RCB->DataSet configuration plus the successfully read live DataSet directory are the deterministic authority.");
+                    $"Configured ReportControl family {configured.Reference} resolved to concrete live indexed instance {concreteReportReference}.");
+            }
+            if (liveAvailability.Availability == ArMms.MmsRcbOperationalAvailability.Unknown)
+            {
+                subscriptionWarnings.Add(
+                    $"Live RCB availability for {concreteReportReference} remains Unknown ({liveAvailability.Reason}). Static mode permits this because identity/configuration are authoritative and no explicit in-use evidence was observed.");
+            }
+            if (string.IsNullOrWhiteSpace(liveSource.DataSetReference))
+            {
+                subscriptionWarnings.Add(
+                    "Live RCB DatSet text was not returned; exact authoritative RCB->DataSet configuration plus the successfully read live DataSet directory are the deterministic authority.");
             }
 
             var subscription = new ArMms.MmsReportSubscriptionPlan
@@ -187,10 +311,10 @@ public sealed partial class NativeIec61850Client
                 DynamicPoints = Array.Empty<ArMms.MmsFcResolvedPoint>(),
                 Steps = new[]
                 {
-                    $"Verify exact configured RCB {configured.Reference} exists on the live association.",
+                    $"Verify authoritative configured RCB {configured.Reference} as live object {concreteReportReference}.",
                     $"Use exact ordered live DataSet directory {dataSetReference} ({directory.Members.Count} members).",
                     "Install InformationReport receiver before enabling the RCB.",
-                    "Write RptEna=true, then request GI=true.",
+                    "Use client-compatible BRCB reservation when ResvTms is exposed, enable RptEna, then request GI after receiver registration.",
                     "Map report values by ordered DataSet member index; never substitute cyclic MMS process reads."
                 },
                 Warnings = subscriptionWarnings
@@ -300,7 +424,7 @@ public sealed partial class NativeIec61850Client
 
         var coveredReferences = ExtractSubscriptionMemberReferences(subscription.Members);
         var attempt = await RunMmsOperationAsync(
-            () => _session.StartPersistentReportMonitorWithAttemptEvidenceAsync(
+            () => _session.StartPersistentReportMonitorClientCompatibleAsync(
                 subscription,
                 triggerGeneralInterrogation: true,
                 deleteDynamicDataSetOnStop: false,
@@ -384,6 +508,15 @@ public sealed partial class NativeIec61850Client
             UncoveredSignalCount = points.Count
         };
 
+    private static int StaticRcbAvailabilityRank(ArMms.MmsRcbOperationalAvailability availability)
+        => availability switch
+        {
+            ArMms.MmsRcbOperationalAvailability.UsedByCaller => 0,
+            ArMms.MmsRcbOperationalAvailability.Available => 1,
+            ArMms.MmsRcbOperationalAvailability.Unknown => 2,
+            _ => int.MaxValue
+        };
+
     private static bool SameStaticReference(string? left, string? right)
         => string.Equals(
             NormalizeStaticReference(left),
@@ -391,7 +524,7 @@ public sealed partial class NativeIec61850Client
             StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeStaticReference(string? reference)
-        => (reference ?? string.Empty).Trim().Replace('$', '.');
+        => Iec61850StaticRcbReferenceMatcher.Normalize(reference);
 
     private static int ParseStaticInteger(string? value)
         => int.TryParse(value, out var parsed) && parsed > 0 ? parsed : 0;

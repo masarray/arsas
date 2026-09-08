@@ -9,9 +9,9 @@ using System.Windows.Threading;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Adds a tri-state select-all checkbox to the fault-record Get column. Selecting all
-/// affects only rows that are currently eligible for download; clearing always clears
-/// every row so stale disabled selections cannot remain hidden.
+/// Adds a tri-state select-all checkbox to the fault-record Get column. A record with relay
+/// files is selectable whether it is a first download or an intentional re-download.
+/// FaultRecordRow.IsSelected is the single transfer-selection authority for every row.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -75,7 +75,7 @@ public partial class FaultRecordWindow
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = Cursors.Hand,
             Focusable = true,
-            ToolTip = "Check / uncheck all downloadable fault records"
+            ToolTip = "Check / uncheck all downloadable or re-downloadable fault records"
         };
         AutomationProperties.SetName(headerCheckBox, "Toggle all downloadable fault records");
         headerCheckBox.Click += FaultRecordHeaderSelectionCheckBox_Click;
@@ -104,12 +104,7 @@ public partial class FaultRecordWindow
         try
         {
             foreach (var row in Records)
-            {
-                if (target)
-                    row.IsSelected = row.CanSelectForDownload;
-                else
-                    row.IsSelected = false;
-            }
+                row.IsSelected = target && row.CanSelectForDownload;
         }
         finally
         {
@@ -117,6 +112,8 @@ public partial class FaultRecordWindow
         }
 
         RaiseSelectionState();
+        UpdateSmartSelectionUi();
+        ConfigureVisibleRecordRows();
         RefreshFaultRecordHeaderSelection();
     }
 

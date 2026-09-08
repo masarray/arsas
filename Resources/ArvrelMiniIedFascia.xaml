@@ -3,207 +3,94 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-      Compact IED-card adaptation of the ARVREL VirtualRelay visual language.
-      P2 moves the enclosure toward the lighter blue-steel / powder-coated gray
-      used by modern protection relays so the fascia stays industrial without
-      becoming a black visual block on the Light Greige workspace.
-
-      Only hardware identity that survives at 46-50 px is rendered: enclosure,
-      LED bank, bright LCD, compact keypad and the data-driven state rail.
+      P1 relay-bench fascia. This template is a direct WPF vector transcription of
+      Assets/RelayFascia.svg supplied during physical relay testing. Keeping it as WPF vector
+      geometry avoids a new SVG runtime dependency while preserving the uploaded artwork at
+      every DPI/zoom level. RelayStateRail remains semantic and data-driven.
     -->
-
-    <LinearGradientBrush x:Key="ArvrelMiniShellBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#A9B5BA" Offset="0"/>
-        <GradientStop Color="#87979F" Offset="0.48"/>
-        <GradientStop Color="#6E8089" Offset="1"/>
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="ArvrelMiniFaceBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#B4BEC2" Offset="0"/>
-        <GradientStop Color="#98A6AC" Offset="0.58"/>
-        <GradientStop Color="#7F9098" Offset="1"/>
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="ArvrelMiniModuleBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#74848B" Offset="0"/>
-        <GradientStop Color="#5B6B72" Offset="1"/>
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="ArvrelMiniLcdBezelBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#596970" Offset="0"/>
-        <GradientStop Color="#829198" Offset="0.46"/>
-        <GradientStop Color="#4D5D64" Offset="1"/>
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="ArvrelMiniLcdFaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#EDF3EE" Offset="0"/>
-        <GradientStop Color="#CEDBD2" Offset="1"/>
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="ArvrelMiniKeyBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#93A0A5" Offset="0"/>
-        <GradientStop Color="#748289" Offset="1"/>
-    </LinearGradientBrush>
-
     <ControlTemplate x:Key="ArvrelMiniIedRelayFrontPanelTemplate" TargetType="{x:Type Control}">
         <Grid Width="50" Height="50" SnapsToDevicePixels="True" UseLayoutRounding="True">
-            <!-- Light blue-steel powder-coated enclosure with darker recessed seams. -->
-            <Border x:Name="ArvrelMiniShell"
-                    Margin="1"
-                    CornerRadius="3.4"
-                    Background="{StaticResource ArvrelMiniShellBrush}"
-                    BorderBrush="#C8D0D3"
-                    BorderThickness="0.8">
-                <Border Margin="1.8"
-                        CornerRadius="2.5"
-                        Background="#65757C"
-                        BorderBrush="#AAB5B9"
-                        BorderThickness="0.6">
-                    <Border Margin="1.3"
-                            CornerRadius="1.8"
-                            Background="{StaticResource ArvrelMiniFaceBrush}"
-                            BorderBrush="#D3D9DB"
-                            BorderThickness="0.5">
-                        <Grid Margin="2.4,2.5,2.4,4.8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="4"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
+            <Viewbox x:Name="RelayFasciaArtwork" Stretch="Uniform">
+                <Canvas Width="425" Height="425" Background="Transparent">
+                    <Rectangle Canvas.Left="36.73" Canvas.Top="8.54" Width="352.94" Height="409"
+                               Fill="#C0C0C0" Stroke="#000000" StrokeThickness="5"/>
 
-                            <!-- Keep the original ARVREL blue identity accent for regression
-                                 compatibility while the rest of the enclosure is much lighter. -->
-                            <Grid Grid.Row="0">
-                                <Border Height="1.15" Width="13"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Top"
-                                        Background="#2E6F9E"
-                                        CornerRadius="0.6"/>
-                                <Border Height="1" Width="5"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Top"
-                                        Background="#D4DADC"
-                                        CornerRadius="0.5"/>
-                            </Grid>
+                    <Canvas RenderTransformOrigin="0,0">
+                        <Canvas.RenderTransform>
+                            <MatrixTransform Matrix="0.984335,0,0,0.984335,-162.177,-31.1365"/>
+                        </Canvas.RenderTransform>
 
-                            <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="2"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="2"/>
-                                    <ColumnDefinition Width="8"/>
-                                </Grid.ColumnDefinitions>
+                        <Canvas RenderTransformOrigin="0,0">
+                            <Canvas.RenderTransform>
+                                <MatrixTransform Matrix="1,0,0,1,64.19,-12.41"/>
+                            </Canvas.RenderTransform>
+                            <Path Fill="#000000" StrokeThickness="0"
+                                  Data="M188.56,343.64 L239.79,343.64 L239.79,292.41 L292.34,292.41 L292.34,343.64 L343.57,343.64 L343.57,396.19 L292.34,396.19 L292.34,447.42 L239.79,447.42 L239.79,396.19 L188.56,396.19 Z"/>
+                        </Canvas>
 
-                                <!-- Status lamps are brighter than the enclosure so they remain
-                                     readable at card size. First lamp follows live card state. -->
-                                <Border x:Name="ArvrelMiniLedBank"
-                                        Grid.Column="0"
-                                        CornerRadius="1.5"
-                                        Background="{StaticResource ArvrelMiniModuleBrush}"
-                                        BorderBrush="#C2CACE"
-                                        BorderThickness="0.55">
-                                    <Grid Margin="1.5,2">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                        </Grid.RowDefinitions>
-                                        <Ellipse Grid.Row="0" Width="2.8" Height="2.8"
-                                                 HorizontalAlignment="Center"
-                                                 Fill="{TemplateBinding Foreground}"
-                                                 Stroke="#EDF2F1" StrokeThickness="0.4"/>
-                                        <Ellipse Grid.Row="1" Width="2.55" Height="2.55"
-                                                 HorizontalAlignment="Center"
-                                                 Fill="#E6B54C" Opacity="0.96"
-                                                 Stroke="#EEF1EF" StrokeThickness="0.32"/>
-                                        <Ellipse Grid.Row="2" Width="2.55" Height="2.55"
-                                                 HorizontalAlignment="Center"
-                                                 Fill="#768D98"
-                                                 Stroke="#D5DDDF" StrokeThickness="0.3"/>
-                                        <Ellipse Grid.Row="3" Width="2.55" Height="2.55"
-                                                 HorizontalAlignment="Center"
-                                                 Fill="#768D98"
-                                                 Stroke="#D5DDDF" StrokeThickness="0.3"/>
-                                    </Grid>
-                                </Border>
+                        <Canvas RenderTransformOrigin="0,0">
+                            <Canvas.RenderTransform>
+                                <TransformGroup>
+                                    <RotateTransform Angle="-45" CenterX="330.25" CenterY="357.5"/>
+                                    <MatrixTransform Matrix="1,0,0,1,-229.75,86"/>
+                                </TransformGroup>
+                            </Canvas.RenderTransform>
+                            <Rectangle Canvas.Left="493" Canvas.Top="267" Width="134" Height="9" Fill="#C0C0C0"/>
+                            <Rectangle Canvas.Left="494" Canvas.Top="267" Width="134" Height="9" Fill="#C0C0C0">
+                                <Rectangle.RenderTransform>
+                                    <RotateTransform Angle="90" CenterX="561" CenterY="271.5"/>
+                                </Rectangle.RenderTransform>
+                            </Rectangle>
+                        </Canvas>
+                    </Canvas>
 
-                                <!-- Brighter pale-green LCD and blue header create the visual focus
-                                     expected from SIPROTEC / ABB / Reyrolle-class protection relays. -->
-                                <Border x:Name="ArvrelMiniLcd"
-                                        Grid.Column="2"
-                                        CornerRadius="1.4"
-                                        Background="{StaticResource ArvrelMiniLcdBezelBrush}"
-                                        BorderBrush="#D2DADC"
-                                        BorderThickness="0.65"
-                                        Padding="1.15">
-                                    <Border CornerRadius="0.8"
-                                            Background="{StaticResource ArvrelMiniLcdFaceBrush}"
-                                            BorderBrush="#506168"
-                                            BorderThickness="0.4">
-                                        <Grid ClipToBounds="True">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="4.2"/>
-                                                <RowDefinition Height="*"/>
-                                                <RowDefinition Height="3.4"/>
-                                            </Grid.RowDefinitions>
-                                            <Border Grid.Row="0" Background="#5B8297"/>
-                                            <Grid Grid.Row="1" Margin="2.2,2,2.2,1.6">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="*"/>
-                                                    <RowDefinition Height="*"/>
-                                                    <RowDefinition Height="*"/>
-                                                </Grid.RowDefinitions>
-                                                <Border Grid.Row="0" Height="1" Width="9"
-                                                        HorizontalAlignment="Left"
-                                                        Background="#60797A" CornerRadius="0.5"/>
-                                                <Border Grid.Row="1" Height="1" Width="12"
-                                                        HorizontalAlignment="Left"
-                                                        Background="#78908E" CornerRadius="0.5"/>
-                                                <Border Grid.Row="2" Height="1" Width="7"
-                                                        HorizontalAlignment="Left"
-                                                        Background="#60797A" CornerRadius="0.5"/>
-                                            </Grid>
-                                            <Grid Grid.Row="2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0" Background="#4F7B95"/>
-                                                <Border Grid.Column="1" Background="#D4DDD7" BorderBrush="#93A19D" BorderThickness="0.4,0,0,0"/>
-                                                <Border Grid.Column="2" Background="#D4DDD7" BorderBrush="#93A19D" BorderThickness="0.4,0,0,0"/>
-                                            </Grid>
-                                        </Grid>
-                                    </Border>
-                                </Border>
+                    <Rectangle Canvas.Left="77.73" Canvas.Top="48.54" Width="176.35" Height="176"
+                               Fill="#F2F2F2" Stroke="#000000" StrokeThickness="1"/>
 
-                                <!-- Tactile keys remain steel-gray; the lower-left blue key gives
-                                     just enough instrument identity without turning the relay dark. -->
-                                <Border x:Name="ArvrelMiniKeypad"
-                                        Grid.Column="4"
-                                        CornerRadius="1.5"
-                                        Background="{StaticResource ArvrelMiniModuleBrush}"
-                                        BorderBrush="#C2CACE"
-                                        BorderThickness="0.55">
-                                    <UniformGrid Rows="3" Columns="2" Margin="1.15">
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="#557F98" BorderBrush="#D7E0E3" BorderThickness="0.35"/>
-                                        <Border Margin="0.45" CornerRadius="0.65" Background="{StaticResource ArvrelMiniKeyBrush}" BorderBrush="#D4DADC" BorderThickness="0.35"/>
-                                    </UniformGrid>
-                                </Border>
-                            </Grid>
-                        </Grid>
-                    </Border>
-                </Border>
-            </Border>
+                    <Canvas RenderTransformOrigin="0,0">
+                        <Canvas.RenderTransform>
+                            <MatrixTransform Matrix="1,0,0,1,-103.182,-24.4604"/>
+                        </Canvas.RenderTransform>
+                        <Line X1="226" Y1="85.5" X2="308" Y2="84.5" Stroke="#000000" StrokeThickness="3"/>
+                        <Line X1="266.67" Y1="84.46" X2="266.67" Y2="102.3" Stroke="#000000" StrokeThickness="3"/>
+                        <Line X1="266.67" Y1="138.26" X2="266.67" Y2="154.48" Stroke="#000000" StrokeThickness="3"/>
+                        <Line X1="247.23" Y1="108.95" X2="266.89" Y2="138.82" Stroke="#000000" StrokeThickness="3"/>
+                        <Ellipse Canvas.Left="247.45" Canvas.Top="154.84" Width="38.38" Height="38.9"
+                                 Fill="Transparent" Stroke="#000000" StrokeThickness="3"/>
+                        <Ellipse Canvas.Left="247.97" Canvas.Top="178.32" Width="38.38" Height="38.9"
+                                 Fill="Transparent" Stroke="#000000" StrokeThickness="3"/>
+                        <Line X1="266.67" Y1="217.45" X2="266.67" Y2="241.72" Stroke="#000000" StrokeThickness="3"/>
+                    </Canvas>
 
-            <!-- Data-driven status rail stays semantic and independent from the shell. -->
+                    <Canvas RenderTransformOrigin="0,0">
+                        <Canvas.RenderTransform>
+                            <MatrixTransform Matrix="0.857143,0,0,0.857143,-59.9451,25.1036"/>
+                        </Canvas.RenderTransform>
+                        <Rectangle Canvas.Left="401.25" Canvas.Top="272.52" Width="63.38" Height="63.38" Fill="#000000"/>
+                        <Rectangle Canvas.Left="401.25" Canvas.Top="354" Width="63.38" Height="63.38" Fill="#000000"/>
+                        <Ellipse Canvas.Left="414.85" Canvas.Top="286.12" Width="36.18" Height="36.18"
+                                 Fill="#000000" Stroke="#FF5656" StrokeThickness="3"/>
+                        <Line X1="432.94" Y1="365.6" X2="432.94" Y2="405.78" Stroke="#00FF7F" StrokeThickness="3"/>
+                    </Canvas>
+
+                    <Canvas RenderTransformOrigin="0,0">
+                        <Canvas.RenderTransform>
+                            <MatrixTransform Matrix="1.36613,0,0,1.36613,-274.122,-51.6847"/>
+                        </Canvas.RenderTransform>
+                        <Rectangle Canvas.Left="413.41" Canvas.Top="73" Width="30" Height="30" Fill="#FF0000"/>
+                        <Rectangle Canvas.Left="413.41" Canvas.Top="122" Width="30" Height="30" Fill="#FF0000"/>
+                        <Rectangle Canvas.Left="413.41" Canvas.Top="172" Width="30" Height="30" Fill="#FF0000"/>
+                    </Canvas>
+                </Canvas>
+            </Viewbox>
+
             <Border x:Name="RelayStateRail"
                     Height="2.2"
-                    Margin="6,0,6,2.2"
+                    Margin="6,0,6,1.4"
                     VerticalAlignment="Bottom"
                     Background="{TemplateBinding Foreground}"
                     CornerRadius="1.1"
-                    Opacity="0.96"/>
+                    Opacity="0.92"/>
         </Grid>
     </ControlTemplate>
 </ResourceDictionary>

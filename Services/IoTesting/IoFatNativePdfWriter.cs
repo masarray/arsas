@@ -10,7 +10,8 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// <summary>
 /// Dependency-free PDF 1.4 serializer for the shared IO FAT report layout plan.
 /// The WPF preview consumes the same command stream through
-/// IoFatReportPreviewDocumentBuilder.
+/// IoFatReportPreviewDocumentBuilder. FAT typography is intentionally unified:
+/// Inter is embedded when available, otherwise Segoe UI is embedded as the only fallback.
 /// </summary>
 internal static class IoFatNativePdfWriter
 {
@@ -21,28 +22,32 @@ internal static class IoFatNativePdfWriter
         if (layout.Pages.Count == 0)
             throw new InvalidOperationException("At least one PDF page is required.");
 
+        var fonts = IoFatReportTypography.ResolvePdfFonts();
         var objects = new List<byte[]>();
+
         int AddObject(string body)
+            => AddObjectBytes(Encoding.ASCII.GetBytes(body));
+
+        int AddObjectBytes(byte[] bytes)
         {
-            objects.Add(Encoding.ASCII.GetBytes(body));
+            objects.Add(bytes);
             return objects.Count;
         }
 
         var catalogId = AddObject("<< /Type /Catalog /Pages 2 0 R >>");
         var pagesId = AddObject("__PAGES__");
-        var fontRegularId = AddObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-        var fontBoldId = AddObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
-        var fontMonoId = AddObject("<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>");
+        var fontRegularId = AddEmbeddedTrueTypeFont(fonts.Regular, AddObject, AddObjectBytes);
+        var fontBoldId = AddEmbeddedTrueTypeFont(fonts.Bold, AddObject, AddObjectBytes);
         var pageIds = new List<int>();
 
         foreach (var page in layout.Pages)
         {
             var content = BuildPageContent(page);
             var contentBytes = Encoding.ASCII.GetBytes(content);
-            var contentId = AddObject($"<< /Length {contentBytes.Length.ToString(CultureInfo.InvariantCulture)} >>\nstream\n{content}endstream");
+            var contentId = AddObjectBytes(BuildStreamObject(contentBytes));
             var pageId = AddObject(
                 $"<< /Type /Page /Parent {pagesId} 0 R /MediaBox [0 0 {Number(page.Width)} {Number(page.Height)}] " +
-                $"/Resources << /Font << /F1 {fontRegularId} 0 R /F2 {fontBoldId} 0 R /F3 {fontMonoId} 0 R >> >> " +
+                $"/Resources << /Font << /F1 {fontRegularId} 0 R /F2 {fontBoldId} 0 R >> >> " +
                 $"/Contents {contentId} 0 R >>");
             pageIds.Add(pageId);
         }
@@ -57,9 +62,9 @@ internal static class IoFatNativePdfWriter
         var infoId = AddObject(
             $"<< /Title ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(title))}) " +
             $"/Subject ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(subject))}) " +
-            "/Keywords (IEC 61850 FAT OFF ON OFF ARSAS) " +
+            "/Keywords (IEC 61850 FAT evidence ARSAS) " +
             "/Author (ARSAS) " +
-            "/Creator (ARSAS Native PDF and FixedDocument Engine, adapted from ARIEC60870) " +
+            $"/Creator (ARSAS FAT Evidence PDF Engine - {EscapeLiteral(fonts.FamilyName)}) " +
             "/Producer (ARSAS Native PDF Engine) " +
             $"/CreationDate ({PdfDate(layout.CreatedAt)}) >>");
 
@@ -87,6 +92,41 @@ internal static class IoFatNativePdfWriter
             stream,
             $"trailer\n<< /Size {objects.Count + 1} /Root {catalogId} 0 R /Info {infoId} 0 R >>\n" +
             $"startxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
+        return stream.ToArray();
+    }
+
+    private static int AddEmbeddedTrueTypeFont(
+        IoFatPdfFontFace face,
+        Func<string, int> addTextObject,
+        Func<byte[], int> addBinaryObject)
+    {
+        var fontFileId = addBinaryObject(BuildFontStreamObject(face.FontBytes));
+        var descriptorId = addTextObject(
+            $"<< /Type /FontDescriptor /FontName /{face.PdfName} /Flags 32 " +
+            $"/FontBBox [-500 {face.Descent} 2000 {Math.Max(face.Ascent, face.CapHeight) + 250}] " +
+            $"/ItalicAngle 0 /Ascent {face.Ascent} /Descent {face.Descent} /CapHeight {face.CapHeight} " +
+            $"/StemV {face.StemV} /FontFile2 {fontFileId} 0 R >>");
+        var widths = string.Join(" ", face.Widths.Select(width => width.ToString(CultureInfo.InvariantCulture)));
+        return addTextObject(
+            $"<< /Type /Font /Subtype /TrueType /BaseFont /{face.PdfName} " +
+            "/FirstChar 32 /LastChar 126 " +
+            $"/Widths [{widths}] /FontDescriptor {descriptorId} 0 R /Encoding /WinAnsiEncoding >>");
+    }
+
+    private static byte[] BuildStreamObject(byte[] payload)
+        => BuildBinaryStreamObject(payload, $"<< /Length {payload.Length.ToString(CultureInfo.InvariantCulture)} >>\nstream\n");
+
+    private static byte[] BuildFontStreamObject(byte[] payload)
+        => BuildBinaryStreamObject(
+            payload,
+            $"<< /Length {payload.Length.ToString(CultureInfo.InvariantCulture)} /Length1 {payload.Length.ToString(CultureInfo.InvariantCulture)} >>\nstream\n");
+
+    private static byte[] BuildBinaryStreamObject(byte[] payload, string header)
+    {
+        using var stream = new MemoryStream(payload.Length + 128);
+        WriteAscii(stream, header);
+        stream.Write(payload, 0, payload.Length);
+        WriteAscii(stream, "\nendstream");
         return stream.ToArray();
     }
 
@@ -192,12 +232,8 @@ internal static class IoFatNativePdfWriter
     private static string Channel(byte value)
         => (value / 255d).ToString("0.###", CultureInfo.InvariantCulture);
 
-    private static string ResourceName(IoFatReportFontKind font) => font switch
-    {
-        IoFatReportFontKind.Bold => "F2",
-        IoFatReportFontKind.Mono => "F3",
-        _ => "F1"
-    };
+    private static string ResourceName(IoFatReportFontKind font)
+        => font == IoFatReportFontKind.Bold ? "F2" : "F1";
 
     private static string EscapeLiteral(string value)
         => value.Replace("\\", "\\\\", StringComparison.Ordinal)

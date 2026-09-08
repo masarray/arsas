@@ -51,6 +51,28 @@ public sealed class IoFatSclAppendWorkflowRegressionTests
         Assert.DoesNotContain("Session.Stop", append, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void P04_EngineeringOwnsImportedSclBeforeFatRowsArePublished()
+    {
+        var append = ReadRepoFile("MainWindow.IoTesting.SclAppend.cs");
+
+        var synchronizeIndex = append.IndexOf(
+            "SynchronizeImportedSclFatWithEngineering(window.Project, addedIeds)",
+            StringComparison.Ordinal);
+        var staticSelectionIndex = append.IndexOf("ApplyStaticDataSetSelection(device)", StringComparison.Ordinal);
+        var publishIndex = append.IndexOf("window.Project.Ieds.Add(ied)", StringComparison.Ordinal);
+        var registerIndex = append.IndexOf("window.RegisterAddedIeds(addedIeds)", StringComparison.Ordinal);
+
+        Assert.True(synchronizeIndex >= 0, "Engineering synchronization must be present.");
+        Assert.True(publishIndex > synchronizeIndex,
+            "The exact ARIEC workspace must be established in Engineering before FAT publishes the imported IED row.");
+        Assert.True(staticSelectionIndex > synchronizeIndex && staticSelectionIndex < publishIndex,
+            "Static DataSet authority must be chosen in Engineering before the pending FAT plan is published.");
+        Assert.True(registerIndex > publishIndex,
+            "The FAT explorer may register new rows only after authority-first publication completes.");
+        Assert.Contains("IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection", append, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);

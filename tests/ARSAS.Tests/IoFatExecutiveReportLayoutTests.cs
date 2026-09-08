@@ -46,6 +46,7 @@ public sealed class IoFatExecutiveReportLayoutTests
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatExecutiveReportLayoutEngine.cs"));
         var preview = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportPreviewDocumentBuilder.cs"));
+        var typography = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportTypography.cs"));
 
         Assert.Contains("IEC 61850 / event-log reference", source, StringComparison.Ordinal);
         Assert.Contains("point.ReportIecReference", source, StringComparison.Ordinal);
@@ -58,7 +59,11 @@ public sealed class IoFatExecutiveReportLayoutTests
         Assert.Contains("yyyy-MM-dd\\nHH:mm:ss.fff", source, StringComparison.Ordinal);
         Assert.Contains("IoFatReportFontKind.Bold, 16.8d", source, StringComparison.Ordinal);
         Assert.Contains("var issueStatus = _draft ? \"PREVIEW\" : \"AS TESTED\"", source, StringComparison.Ordinal);
-        Assert.Contains("Inter, Segoe UI, Aptos, Arial", preview, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportTypography.PreviewFontFamily", preview, StringComparison.Ordinal);
+        Assert.Contains("PreferredFamilyName = \"Inter\"", typography, StringComparison.Ordinal);
+        Assert.Contains("FallbackFamilyName = \"Segoe UI\"", typography, StringComparison.Ordinal);
+        Assert.DoesNotContain("Aptos", typography, StringComparison.Ordinal);
+        Assert.DoesNotContain("Arial", typography, StringComparison.Ordinal);
         Assert.DoesNotContain("DEVICE RESULT", source, StringComparison.Ordinal);
         Assert.DoesNotContain("reviewIssue", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CharacterEllipsis", source, StringComparison.Ordinal);

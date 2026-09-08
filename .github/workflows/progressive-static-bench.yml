@@ -1,0 +1,114 @@
+name: Build Progressive Static IED Bench
+
+on:
+  push:
+    branches:
+      - fix/static-dataset-rcb-backed-acquisition
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-progressive-static:
+    name: Build Progressive Static portable EXE
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve immutable ARIEC engine pin
+        shell: powershell
+        run: |
+          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 integration lock.'
+          }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact ARIEC engine revision
+        shell: powershell
+        run: |
+          $engineRoot = Join-Path $env:RUNNER_TEMP 'ARIEC61850'
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" $engineRoot
+          git -C $engineRoot fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C $engineRoot checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C $engineRoot rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "Engine pin mismatch: expected $env:ARIEC61850_COMMIT, got $actual"
+          }
+          $engineProject = Join-Path $engineRoot 'src\AR.Iec61850\AR.Iec61850.csproj'
+          $npcapProject = Join-Path $engineRoot 'src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj'
+          "ENGINE_PROJECT=$engineProject" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPCAP_PROJECT=$npcapProject" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Apply Progressive Static bench policy
+        shell: powershell
+        run: |
+          .\scripts\apply-progressive-static-bench.ps1 -ProjectRoot $env:GITHUB_WORKSPACE
+          $runtime = Get-Content .\Services\Iec61850MonitorRuntime.cs -Raw
+          $selection = Get-Content .\Services\Iec61850StaticDataSetAuthoritySelection.cs -Raw
+          if ($runtime -notmatch 'Progressive Static acquisition ready' -or
+              $runtime -notmatch 'Static DataSet: MMS polling fallback' -or
+              $runtime -notmatch 'uncovered MX measurement' -or
+              $selection -match 'reportBackedDataSets.Contains') {
+            throw 'Progressive Static bench source verification failed.'
+          }
+
+      - name: Build patched bench source
+        shell: powershell
+        run: |
+          dotnet restore .\ArIED61850Tester.csproj `
+            -p:ArIec61850Project="$env:ENGINE_PROJECT" `
+            -p:ArIec61850NpcapProject="$env:NPCAP_PROJECT"
+          if ($LASTEXITCODE -ne 0) { throw "restore failed: $LASTEXITCODE" }
+
+          dotnet build .\ArIED61850Tester.csproj -c Release --no-restore `
+            -p:ArIec61850Project="$env:ENGINE_PROJECT" `
+            -p:ArIec61850NpcapProject="$env:NPCAP_PROJECT"
+          if ($LASTEXITCODE -ne 0) { throw "build failed: $LASTEXITCODE" }
+
+      - name: Publish portable Progressive Static EXE
+        shell: powershell
+        run: |
+          .\scripts\publish-windows-portable.ps1 `
+            -Version '1.6.33-progressive-static' `
+            -Runtime 'win-x64' `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject $env:ENGINE_PROJECT `
+            -NpcapProject $env:NPCAP_PROJECT
+
+          $source = '.\dist\ARSAS-1.6.33-progressive-static-win-x64-portable.exe'
+          $target = '.\dist\ARSAS-1.6.33-Progressive-Static-IED-Test.exe'
+          if (!(Test-Path $source -PathType Leaf)) {
+            throw "Portable EXE was not produced: $source"
+          }
+          Move-Item $source $target -Force
+          $hash = (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant()
+          $head = (git rev-parse HEAD).Trim()
+          @(
+            "ARSAS head: $head",
+            "ARIEC engine: $env:ARIEC61850_COMMIT",
+            'Bench policy: configured RCB first; uncovered MX/measurement -> bounded MMS polling; uncovered discrete -> fail-closed; dynamic DataSet writes -> disabled.',
+            "SHA256: $hash"
+          ) | Set-Content .\dist\Progressive-Static-build-info.txt -Encoding utf8
+          Write-Host "SHA256=$hash"
+
+      - name: Upload Progressive Static IED test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-Progressive-Static-IED-Test
+          path: |
+            dist/ARSAS-1.6.33-Progressive-Static-IED-Test.exe
+            dist/Progressive-Static-build-info.txt
+          if-no-files-found: error
+          retention-days: 14

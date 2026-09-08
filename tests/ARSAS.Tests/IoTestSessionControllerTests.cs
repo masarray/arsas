@@ -52,12 +52,13 @@ public sealed class IoTestSessionControllerTests
     }
 
     [Fact]
-    public void ResumeAfterOnEvidence_ForcesReviewBecausePausedEdgesCouldBeMissedButCaptureRemainsRunning()
+    public void ResumeAfterOnEvidence_PreservesEvidenceAndKeepsCaptureRunning()
     {
         var fixture = CreateFixture();
         using var controller = fixture.Controller;
         controller.Start(fixture.Ied);
         controller.Enqueue(Event(fixture, "False", "True", 1));
+        var onEvidence = fixture.Point.Runtime.OnEvidence?.EvidenceId;
         fixture.LivePoint.Value = "True";
         fixture.LivePoint.Sequence = 1;
 
@@ -65,9 +66,9 @@ public sealed class IoTestSessionControllerTests
         var resumed = controller.Resume();
 
         Assert.True(resumed.Succeeded, resumed.Message);
-        Assert.Equal(IoTestPointState.Review, fixture.Point.Runtime.State);
         Assert.Equal(IoTestSessionState.Running, controller.State);
-        Assert.Contains("continuity cannot be proven", fixture.Point.Runtime.StatusReason, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(onEvidence);
+        Assert.Equal(onEvidence, fixture.Point.Runtime.OnEvidence?.EvidenceId);
     }
 
     [Fact]

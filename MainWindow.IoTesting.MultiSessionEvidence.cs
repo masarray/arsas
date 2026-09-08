@@ -9,10 +9,9 @@ public partial class MainWindow
 
     /// <summary>
     /// P2 attaches the FAT window's additional per-IED evidence leaves to the same
-    /// Engineering IEC 61850 runtime. The existing primary controller keeps its legacy
-    /// Runtime_IoTestPointUpdated route; only sibling leaves use the additional route so a
-    /// primary live observation can never be journaled twice. Every isolated controller is
-    /// also registered with commissioning recovery so reconnect/auto-resume works per IED.
+    /// Engineering IEC 61850 runtime. Physical-relay P0 no longer gives FAT a second raw
+    /// PointUpdated stream: all primary/sibling leaves consume the already-coalesced
+    /// Engineering process image after UiFlushTimer_Tick instead.
     /// </summary>
     internal void AttachIoTestParallelEvidenceSessions(
         IoTestMultiSessionCoordinator coordinator,
@@ -31,20 +30,28 @@ public partial class MainWindow
         });
 
         _activeIoTestMultiSessionCoordinator = coordinator;
+
+        // Legacy direct route intentionally disabled for FAT P0 because it observes raw
+        // frames before Engineering's process image is settled:
+        // _runtime.PointUpdated += Runtime_IoTestAdditionalPointUpdated;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
-        _runtime.PointUpdated += Runtime_IoTestAdditionalPointUpdated;
+        AttachIoFatSharedProcessEvidenceRoute(coordinator);
     }
 
     internal void DetachIoTestParallelEvidenceSessions(IoTestMultiSessionCoordinator coordinator)
     {
         if (coordinator == null)
             return;
+
+        DetachIoFatSharedProcessEvidenceRoute(coordinator);
         if (ReferenceEquals(_activeIoTestMultiSessionCoordinator, coordinator))
             _activeIoTestMultiSessionCoordinator = null;
         _runtime.PointUpdated -= Runtime_IoTestAdditionalPointUpdated;
         ClearFatCommissioningControllers();
     }
 
+    // Retained as a compatibility implementation for older tests/source branches. The P0
+    // relay-bench route above deliberately does not subscribe this raw callback.
     private void Runtime_IoTestAdditionalPointUpdated(Iec61850PointSnapshot snapshot)
     {
         var coordinator = _activeIoTestMultiSessionCoordinator;

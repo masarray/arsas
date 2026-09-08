@@ -10,7 +10,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatReportPreviewServiceTests
 {
     [Fact]
-    public void CreateIedScopedProject_PreservesIdentityAndOnlySelectedIed()
+    public void CreateIedScopedProject_CreatesIsolatedSnapshotWithOnlySelectedIed()
     {
         var first = BuildIed("IED_A", "192.168.1.10", "TP-A");
         var second = BuildIed("IED_B", "192.168.1.11", "TP-B");
@@ -18,10 +18,16 @@ public sealed class IoFatReportPreviewServiceTests
 
         var scoped = IoFatReportPreviewService.CreateIedScopedProject(project, second);
 
+        Assert.NotSame(project, scoped);
         Assert.Equal(project.ProjectId, scoped.ProjectId);
         Assert.Equal(project.SourceWorkbookSha256, scoped.SourceWorkbookSha256);
+        Assert.Equal(2, project.Ieds.Count);
         Assert.Single(scoped.Ieds);
-        Assert.Same(second, scoped.Ieds[0]);
+        Assert.NotSame(second, scoped.Ieds[0]);
+        Assert.Equal(second.IedName, scoped.Ieds[0].IedName);
+        Assert.Single(scoped.Ieds[0].TestPoints);
+        Assert.NotSame(second.TestPoints[0], scoped.Ieds[0].TestPoints[0]);
+        Assert.Equal(second.TestPoints[0].TestPointId, scoped.Ieds[0].TestPoints[0].TestPointId);
     }
 
     [Fact]

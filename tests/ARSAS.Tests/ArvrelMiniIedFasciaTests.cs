@@ -27,16 +27,24 @@ public sealed class ArvrelMiniIedFasciaTests
             .Cast<string>()
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains("ArvrelMiniShell", namedParts);
-        Assert.Contains("ArvrelMiniLedBank", namedParts);
-        Assert.Contains("ArvrelMiniLcd", namedParts);
-        Assert.Contains("ArvrelMiniKeypad", namedParts);
+        Assert.Contains("RelayFasciaArtwork", namedParts);
         Assert.Contains("RelayStateRail", namedParts);
 
+        // The operator-supplied SVG is transcribed to native WPF vector primitives so no
+        // raster/image dependency is introduced at card scale.
         Assert.Empty(template.Descendants(presentation + "Image"));
         Assert.Empty(template.Descendants(presentation + "TextBlock"));
-        Assert.Contains("{TemplateBinding Foreground}", template.ToString(), StringComparison.Ordinal);
-        Assert.Contains("#2E6F9E", document.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.NotEmpty(template.Descendants(presentation + "Rectangle"));
+        Assert.NotEmpty(template.Descendants(presentation + "Ellipse"));
+        Assert.NotEmpty(template.Descendants(presentation + "Line"));
+        Assert.NotEmpty(template.Descendants(presentation + "Path"));
+
+        var templateText = template.ToString();
+        Assert.Contains("{TemplateBinding Foreground}", templateText, StringComparison.Ordinal);
+        Assert.Contains("#C0C0C0", templateText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#F2F2F2", templateText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#FF0000", templateText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#00FF7F", templateText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

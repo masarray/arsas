@@ -6,14 +6,18 @@ namespace ARSAS.Tests;
 public sealed class OfflineDataSetSignalSelectionRegressionTests
 {
     [Fact]
-    public void DeviceInventoryMerge_FallsBackToOfflineSclDesignModel()
+    public void DeviceInventoryMerge_PreservesOpenedSclAuthorityAcrossFastReconnect()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850DataSetSignalInventoryService.cs"));
 
         Assert.Contains(
-            "device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel",
+            "device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel",
             source,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "partial live discovery",
+            source,
+            StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
             "if (device.LiveDiscoveryModel is null)\n            return EmptyResult();",
             source,

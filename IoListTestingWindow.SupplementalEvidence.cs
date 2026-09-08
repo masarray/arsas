@@ -36,13 +36,13 @@ public partial class IoListTestingWindow
         if (_comtradeEvidenceButton != null || WorkspacePreviewToggle.Parent is not Panel actionPanel)
             return;
 
-        _timeSyncEvidenceButton = CreateEvidenceButton("Time Sync · —", RefreshTimeSyncEvidence_Click);
+        _timeSyncEvidenceButton = CreateEvidenceButton("Sync · —", RefreshTimeSyncEvidence_Click);
         _timeSyncEvidenceButton.ToolTip = "Capture IEC 61850 time-synchronization evidence for the selected IED";
 
         _comtradeEvidenceButton = CreateEvidenceButton("COMTRADE · —", OpenComtradeEvidence_Click);
         _comtradeEvidenceButton.ToolTip = "Browse relay fault records. A remote COMTRADE listing is sufficient File Service FAT evidence; download is optional.";
 
-        _cleanSessionButton = CreateEvidenceButton("New Clean FAT", NewCleanFatSession_Click);
+        _cleanSessionButton = CreateEvidenceButton("Clean FAT", NewCleanFatSession_Click);
         _cleanSessionButton.ToolTip = "Archive all current FAT evidence and reset the project to a zero-evidence retest session";
 
         var insertionIndex = actionPanel.Children.IndexOf(WorkspacePreviewToggle) + 1;
@@ -57,9 +57,9 @@ public partial class IoListTestingWindow
         var button = new Button
         {
             Content = content,
-            Padding = new Thickness(10, 8, 10, 8),
+            Padding = new Thickness(8, 6, 8, 6),
             Margin = new Thickness(0, 0, 6, 0),
-            MinWidth = 92
+            MinWidth = 0
         };
         if (TryFindResource("SoftButton") is Style style)
             button.Style = style;
@@ -75,7 +75,7 @@ public partial class IoListTestingWindow
         var ied = SelectedIed;
         if (ied == null)
         {
-            _timeSyncEvidenceButton.Content = "Time Sync · —";
+            _timeSyncEvidenceButton.Content = "Sync · —";
             _timeSyncEvidenceButton.ToolTip = "Select an IED first";
             _comtradeEvidenceButton.Content = "COMTRADE · —";
             _comtradeEvidenceButton.ToolTip = "Select an IED first";
@@ -87,8 +87,8 @@ public partial class IoListTestingWindow
             ied.IedName,
             IoFatSupplementalEvidenceService.TimeSyncKind);
         _timeSyncEvidenceButton.Content = timeSync == null
-            ? "Time Sync · —"
-            : $"Time Sync · {timeSync.Verdict}";
+            ? "Sync · —"
+            : $"Sync · {timeSync.Verdict}";
         _timeSyncEvidenceButton.ToolTip = timeSync == null
             ? "No time-sync evidence captured yet. It will be captured automatically after FAT connection."
             : $"{timeSync.DisplayText}\n{timeSync.Reason}\nCaptured {timeSync.RecordedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
