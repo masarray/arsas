@@ -1,0 +1,131 @@
+<UserControl x:Class="ArIED61850Tester.IntegratedFatWorkspaceControl"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Grid>
+  <Grid x:Name="WorkspaceView">
+   <Grid.ColumnDefinitions>
+    <ColumnDefinition Width="230"/>
+    <ColumnDefinition Width="10"/>
+    <ColumnDefinition Width="*"/>
+   </Grid.ColumnDefinitions>
+   <Border Grid.Column="0" Style="{StaticResource WorkspaceCard}" Padding="10">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top" Margin="2,1,2,9">
+      <TextBlock Text="FAT IED" Style="{StaticResource SectionTitle}"/>
+      <TextBlock Text="Shared SCL and live connection from Engineering" Style="{StaticResource Caption}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+     </StackPanel>
+     <ListBox ItemsSource="{Binding EngineeringIeds}" SelectedItem="{Binding SelectedEngineeringIed, Mode=TwoWay}"
+              IsEnabled="{Binding Session.CanSelectIed}"
+              BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+      <ListBox.ItemTemplate>
+       <DataTemplate>
+        <Border Padding="9" Margin="0,0,0,7" Background="#F8FAFC" BorderBrush="#D8E1EE" BorderThickness="1" CornerRadius="10">
+         <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Viewbox Width="38" Height="38">
+           <Control Width="50" Height="50" Template="{StaticResource IedRelayFrontPanelTemplate}">
+            <Control.Style>
+             <Style TargetType="Control">
+              <Setter Property="Foreground" Value="#EF4444"/>
+              <Style.Triggers>
+               <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                <Setter Property="Foreground" Value="#20B26B"/>
+               </DataTrigger>
+              </Style.Triggers>
+             </Style>
+            </Control.Style>
+           </Control>
+          </Viewbox>
+          <StackPanel Grid.Column="1" Margin="7,0,0,0" VerticalAlignment="Center">
+           <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+           <TextBlock Text="{Binding EndpointText}" FontSize="9.8" Foreground="{StaticResource Muted}"/>
+           <TextBlock Text="{Binding ActivityText}" FontSize="9.2" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,2,0,0"/>
+          </StackPanel>
+         </Grid>
+        </Border>
+       </DataTemplate>
+      </ListBox.ItemTemplate>
+     </ListBox>
+    </DockPanel>
+   </Border>
+   <Border Grid.Column="2" Style="{StaticResource WorkspaceCard}" Padding="10">
+    <Grid>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="8"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+     <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel>
+       <TextBlock Text="{Binding SelectedIed.IedName, StringFormat=FAT · {0}}" Style="{StaticResource WorkspaceTitle}"/>
+       <TextBlock Text="{Binding Session.StatusText}" Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+      </StackPanel>
+      <WrapPanel Grid.Column="1">
+       <Button Content="Start FAT" Style="{StaticResource PrimaryButton}" Click="StartFat_Click" Margin="0,0,6,0"
+               IsEnabled="{Binding Session.CanStart}"/>
+       <Button Content="Stop" Style="{StaticResource SoftButton}" Click="StopFat_Click" Margin="0,0,6,0"
+               IsEnabled="{Binding Session.CanStop}"/>
+       <Button Content="Value 1" Style="{StaticResource SoftButton}" Click="CaptureValue1_Click" Margin="0,0,6,0"/>
+       <Button Content="Value 2" Style="{StaticResource SoftButton}" Click="CaptureValue2_Click" Margin="0,0,6,0"/>
+       <Button Content="Print Preview" Style="{StaticResource SoftButton}" Click="OpenPreview_Click"/>
+      </WrapPanel>
+     </Grid>
+     <DataGrid x:Name="FatSignalsGrid" Grid.Row="2" ItemsSource="{Binding SelectedIed.TestPoints}"
+               AutoGenerateColumns="False" SelectionMode="Extended" SelectionUnit="FullRow"
+               Style="{StaticResource ModernDataGrid}" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+               ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+      <DataGrid.Columns>
+       <DataGridCheckBoxColumn Header="TEST" Binding="{Binding TestEnabled, Mode=TwoWay}" Width="52"/>
+       <DataGridTextColumn Header="SIGNAL" Binding="{Binding DisplaySignalName}" Width="1.2*" MinWidth="145" IsReadOnly="True"/>
+       <DataGridTextColumn Header="IEC REFERENCE" Binding="{Binding ReportIecReference}" Width="1.65*" MinWidth="210" IsReadOnly="True"/>
+       <DataGridTextColumn Header="TYPE" Binding="{Binding SignalKind}" Width="74" IsReadOnly="True"/>
+       <DataGridTemplateColumn Header="LIVE VALUE" Width="108" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate><DataTemplate>
+         <StackPanel><TextBlock Text="{Binding Runtime.CurrentValue}" FontSize="11.8" FontWeight="SemiBold" Foreground="#1E3C64"/>
+          <TextBlock Text="{Binding Runtime.CurrentQuality}" FontSize="8.8" Foreground="#69798F"/></StackPanel>
+        </DataTemplate></DataGridTemplateColumn.CellTemplate>
+       </DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="VALUE 1" Width="116" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate><DataTemplate>
+         <StackPanel><TextBlock Text="{Binding Value1Text}" FontSize="11.4" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding Value1RelayTimestampText}" FontSize="8.2" Foreground="#707E91"/></StackPanel>
+        </DataTemplate></DataGridTemplateColumn.CellTemplate>
+       </DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="VALUE 2" Width="116" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate><DataTemplate>
+         <StackPanel><TextBlock Text="{Binding Value2Text}" FontSize="11.4" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding Value2RelayTimestampText}" FontSize="8.2" Foreground="#707E91"/></StackPanel>
+        </DataTemplate></DataGridTemplateColumn.CellTemplate>
+       </DataGridTemplateColumn>
+       <DataGridTextColumn Header="STATUS" Binding="{Binding FatStatusText}" Width="104" IsReadOnly="True"/>
+       <DataGridTextColumn Header="RESULT" Binding="{Binding FatResultText}" Width="98" IsReadOnly="True"/>
+      </DataGrid.Columns>
+     </DataGrid>
+     <Grid Grid.Row="3" Margin="0,8,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}"/>
+      <TextBlock Grid.Column="1" Text="{Binding Session.ProgressText}" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Accent}"/>
+     </Grid>
+    </Grid>
+   </Border>
+  </Grid>
+  <Border x:Name="PreviewView" Visibility="Collapsed" Style="{StaticResource WorkspaceCard}" Padding="0">
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Border Background="#F3F7FC" BorderBrush="#DDE6F2" BorderThickness="0,0,0,1" Padding="10,7">
+     <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel Orientation="Horizontal">
+       <Button Content="← Back to FAT" Style="{StaticResource SoftButton}" Click="ClosePreview_Click" Margin="0,0,8,0"/>
+       <Button Content="Print" Style="{StaticResource PrimaryButton}" Click="PrintPreview_Click" Margin="0,0,8,0"/>
+       <Button Content="Refresh" Style="{StaticResource SoftButton}" Click="RefreshPreview_Click"/>
+      </StackPanel>
+      <TextBlock Grid.Column="1" Text="{Binding SelectedIed.IedName, StringFormat=Print Preview · {0}}" FontSize="11" FontWeight="SemiBold"
+                 Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+     </Grid>
+    </Border>
+    <DocumentViewer x:Name="PreviewDocument" Grid.Row="1" Background="#EEF3F9" BorderThickness="0" ShowPageBorders="True"/>
+   </Grid>
+  </Border>
+ </Grid>
+</UserControl>

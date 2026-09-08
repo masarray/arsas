@@ -31,6 +31,27 @@ public sealed class IoFatReportPreviewServiceTests
     }
 
     [Fact]
+    public void ScopedPreview_PreservesLivePhaseReferenceForSemanticSignalName()
+    {
+        var ied = BuildIed(
+            "IED_A",
+            "192.168.1.10",
+            "A",
+            "IED_ALD/MMXU1.A",
+            "IED_ALD/MMXU1.A");
+        var point = ied.TestPoints[0];
+        point.ApplyLiveBinding(
+            IoTestLiveBindingState.LivePointReady,
+            "shared Engineering live point",
+            "DEVICE-A",
+            "IED_ALD/MMXU1.A.phsB.cVal.mag.f");
+
+        var scoped = IoFatReportPreviewService.CreateIedScopedProject(BuildProject(ied), ied);
+
+        Assert.Equal("A Phs B", scoped.Ieds[0].TestPoints[0].DisplaySignalName);
+    }
+
+    [Fact]
     public void NativePerIedPdf_IsScopedToSelectedIed()
     {
         var selected = BuildIed("IED_A", "192.168.1.10", "TP-A");
@@ -195,7 +216,12 @@ public sealed class IoFatReportPreviewServiceTests
         Ieds = ieds.ToList()
     };
 
-    private static IoTestIedPlan BuildIed(string name, string ip, string signalName) => new()
+    private static IoTestIedPlan BuildIed(
+        string name,
+        string ip,
+        string signalName,
+        string? sourceIecReference = null,
+        string? eventLogSearchReference = null) => new()
     {
         IedName = name,
         IpAddress = ip,
@@ -208,6 +234,8 @@ public sealed class IoFatReportPreviewServiceTests
                 IpAddress = ip,
                 SignalName = signalName,
                 ObjectReference = $"{name}LD/GGIO1.Ind1.stVal",
+                SourceIecReference = sourceIecReference ?? string.Empty,
+                EventLogSearchReference = eventLogSearchReference ?? string.Empty,
                 FunctionalConstraint = "ST",
                 ExpectedOnText = "ON Operated",
                 ExpectedOffText = "OFF Normal"

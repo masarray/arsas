@@ -12,7 +12,7 @@ public static class IoFatSignalDisplayNameFormatter
     public static string Format(IoTestPointPlan point)
     {
         ArgumentNullException.ThrowIfNull(point);
-        return IoSignalDisplayName.Format(point.SignalName, point.ReportIecReference);
+        return point.DisplaySignalName;
     }
 
     public static string Format(string? signalName, string? iecReference)

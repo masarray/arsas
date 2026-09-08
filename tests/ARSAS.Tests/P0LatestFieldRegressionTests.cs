@@ -6,11 +6,12 @@ namespace ARSAS.Tests;
 public sealed class P0LatestFieldRegressionTests
 {
     [Theory]
-    [InlineData("A", "IEDLD/MMXU1.A.phsA.cVal.mag.f", "A PhsA")]
-    [InlineData("A", "IEDLD/MMXU1.A.phsB.cVal.mag.f", "A PhsB")]
-    [InlineData("A", "IEDLD/MMXU1.A.phsC.cVal.mag.f", "A PhsC")]
-    [InlineData("ThdA", "IEDLD/MMXU1.ThdA.phsA.instMag.f", "ThdA PhsA")]
-    [InlineData("ThdPPV", "IEDLD/MMXU1.ThdPPV.phsAB.instMag.f", "ThdPPV PhsAB")]
+    [InlineData("A", "IEDLD/MMXU1.A.phsA.cVal.mag.f", "A Phs A")]
+    [InlineData("A", "IEDLD/MMXU1.A.phsB.cVal.mag.f", "A Phs B")]
+    [InlineData("A", "IEDLD/MMXU1.A.phsC.cVal.mag.f", "A Phs C")]
+    [InlineData("ThdA", "IEDLD/MMXU1.ThdA.phsA.instMag.f", "Thd Phs A")]
+    [InlineData("PPV", "IEDLD/MMXU1.PPV.phsAB.instMag.f", "PPV Phs AB")]
+    [InlineData("ThdPPV", "IEDLD/MMXU1.ThdPPV.phsAB.instMag.f", "ThdPPV Phs AB")]
     public void FatSignalDisplayName_PreservesDoFamilyAndAddsCompactPhaseContext(
         string signalName,
         string reference,
@@ -19,6 +20,17 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Equal(expected, IoSignalDisplayName.Format(signalName, reference));
         Assert.Equal(expected, IoFatSignalDisplayNameFormatter.Format(signalName, reference));
         Assert.Equal(reference, reference); // presentation must never rewrite technical identity
+    }
+
+    [Fact]
+    public void FatSignalDisplayName_UsesLiveReferenceWhenReportIdentityLostPhaseContext()
+    {
+        var actual = IoSignalDisplayName.FormatFromCandidates(
+            "A",
+            "IEDLD/MMXU1.A.phsB.cVal.mag.f",
+            "IEDLD/MMXU1.A");
+
+        Assert.Equal("A Phs B", actual);
     }
 
     [Fact]

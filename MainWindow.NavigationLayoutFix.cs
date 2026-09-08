@@ -10,11 +10,11 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Owns the responsive geometry of the MainWindow workflow header.
 ///
-/// The original XAML used a 760 px shell split into six equal columns while the
+/// The original XAML used a 760 px shell split into equal columns while the
 /// selection pill moved in hard-coded 150 px steps. That was barely large enough for
 /// short labels and clipped "IEC 61850 Explorer" / "GOOSE Subscriber" once the center
 /// workspace switch and live connection/status chips were also present. This behavior
-/// keeps the header single-line at normal desktop sizes, deliberately compacts labels
+/// keeps all seven destinations on one line at normal desktop sizes, deliberately compacts labels
 /// at smaller widths, and derives the selection pill from the real nav cell width.
 /// </summary>
 internal static class MainWindowNavigationLayoutFix
@@ -31,7 +31,9 @@ internal static class MainWindowNavigationLayoutFix
         "Live Monitor",
         "Event Log",
         "Alarm",
-        "GOOSE Subscriber"
+        "GOOSE Subscriber",
+        "Diagnostics",
+        "FAT"
     ];
 
     private static readonly string[] CompactLabels =
@@ -40,7 +42,9 @@ internal static class MainWindowNavigationLayoutFix
         "Live",
         "Events",
         "Alarm",
-        "GOOSE"
+        "GOOSE",
+        "Diagnostics",
+        "FAT"
     ];
 
     [ModuleInitializer]
@@ -93,7 +97,7 @@ internal static class MainWindowNavigationLayoutFix
         if (sender is not MainWindow window || e.Source is not Button button)
             return;
 
-        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton"))
+        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavFatButton"))
             return;
 
         // A repeated click on the already-selected tab does not raise SelectionChanged,
@@ -169,7 +173,10 @@ internal static class MainWindowNavigationLayoutFix
             // Diagnostics owns a StackPanel containing its text plus the red alert
             // badge. Never replace that Content tree while changing layout density.
             if (index < labels.Length)
-                button.Content = labels[index];
+            {
+                if (index != 5)
+                    button.Content = labels[index];
+            }
 
             button.MinHeight = 40;
             button.MinWidth = 0;
@@ -195,7 +202,8 @@ internal static class MainWindowNavigationLayoutFix
             window.FindName("NavEventsButton") as Button,
             window.FindName("NavAlarmButton") as Button,
             window.FindName("NavGooseButton") as Button,
-            window.FindName("NavDiagnosticsButton") as Button
+            window.FindName("NavDiagnosticsButton") as Button,
+            window.FindName("NavFatButton") as Button
         ];
 
     private static void UpdatePillGeometry(MainWindow window, double shellWidth)
@@ -204,9 +212,9 @@ internal static class MainWindowNavigationLayoutFix
             return;
 
         // Border padding owns 10 px horizontally. The nav grid itself is divided into
-        // six equal star columns, so this is the exact width used by each button cell.
+        // seven equal star columns, so this is the exact width used by each button cell.
         var contentWidth = Math.Max(0d, shellWidth - 10d);
-        var cellWidth = contentWidth / 6d;
+        var cellWidth = contentWidth / 7d;
         pill.Width = Math.Max(1d, cellWidth - 2d);
         pill.Height = 36;
         pill.HorizontalAlignment = HorizontalAlignment.Left;
@@ -279,8 +287,8 @@ internal static class MainWindowNavigationLayoutFix
         if (contentWidth <= 0d)
             contentWidth = Math.Max(0d, shell.Width - shell.Padding.Left - shell.Padding.Right);
 
-        var cellWidth = contentWidth / 6d;
-        var target = Math.Clamp(tabs.SelectedIndex, 0, 5) * cellWidth;
+        var cellWidth = contentWidth / 7d;
+        var target = Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth;
         pill.Width = Math.Max(1d, cellWidth - 2d);
 
         translate.BeginAnimation(TranslateTransform.XProperty, null);

@@ -16,26 +16,48 @@ public static partial class IoSignalDisplayName
     {
         var name = string.IsNullOrWhiteSpace(signalName) ? "Signal" : signalName.Trim();
         var reference = iecReference?.Trim() ?? string.Empty;
-
         var phaseMatch = PhaseToken().Match(reference);
         if (phaseMatch.Success)
         {
             var phase = phaseMatch.Groups["phase"].Value.ToUpperInvariant();
-            var suffix = $"Phs{phase}";
-            if (name.EndsWith($" {suffix}", StringComparison.OrdinalIgnoreCase))
-                return name;
+            if (phase.Length == 1 &&
+                name.Equals($"Thd{phase}", StringComparison.OrdinalIgnoreCase))
+            {
+                name = "Thd";
+            }
+
+            var suffix = $"Phs {phase}";
+            if (name.EndsWith($" {suffix}", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith($" Phs{phase}", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{name[..name.LastIndexOf(' ')]} {suffix}";
+            }
 
             return $"{name} {suffix}";
         }
 
-        if (TryExtractLogicalNodeContext(reference, out var logicalNodeClass, out var dataObject)
-            && RequiresLogicalNodeOwner(dataObject)
-            && name.Equals(dataObject, StringComparison.OrdinalIgnoreCase))
+        if (TryExtractLogicalNodeContext(reference, out var logicalNodeClass, out var dataObject) &&
+            RequiresLogicalNodeOwner(dataObject) &&
+            name.Equals(dataObject, StringComparison.OrdinalIgnoreCase))
         {
             return $"{logicalNodeClass} {name}";
         }
 
         return name;
+    }
+
+    /// <summary>
+    /// Formats from the first candidate that still carries an IEC phase token. Runtime,
+    /// event-log and report identities are allowed to differ, but presentation must not
+    /// silently fall back to a DO-only name such as A/A/A when any canonical identity still
+    /// proves phsA/phsB/phsC or a phase-to-phase branch.
+    /// </summary>
+    public static string FormatFromCandidates(string? signalName, params string?[] references)
+    {
+        references ??= Array.Empty<string?>();
+        var phaseReference = references.FirstOrDefault(reference =>
+            !string.IsNullOrWhiteSpace(reference) && PhaseToken().IsMatch(reference));
+        return Format(signalName, phaseReference ?? references.FirstOrDefault());
     }
 
     private static bool TryExtractLogicalNodeContext(
@@ -45,7 +67,6 @@ public static partial class IoSignalDisplayName
     {
         logicalNodeClass = string.Empty;
         dataObject = string.Empty;
-
         if (string.IsNullOrWhiteSpace(reference))
             return false;
 
@@ -53,7 +74,6 @@ public static partial class IoSignalDisplayName
         var tail = slashIndex >= 0 && slashIndex + 1 < reference.Length
             ? reference[(slashIndex + 1)..]
             : reference;
-
         var dotIndex = tail.IndexOf('.');
         var dollarIndex = tail.IndexOf('$');
         var separatorIndex = dotIndex switch
@@ -62,7 +82,6 @@ public static partial class IoSignalDisplayName
             >= 0 => dotIndex,
             _ => dollarIndex
         };
-
         if (separatorIndex <= 0 || separatorIndex + 1 >= tail.Length)
             return false;
 
@@ -77,11 +96,9 @@ public static partial class IoSignalDisplayName
             var tokens = remainder.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (tokens.Length == 0)
                 return false;
-
             var dataObjectIndex = IsFunctionalConstraint(tokens[0]) ? 1 : 0;
             if (dataObjectIndex >= tokens.Length)
                 return false;
-
             dataObject = NormalizeDataObjectToken(tokens[dataObjectIndex]);
         }
         else
@@ -110,7 +127,6 @@ public static partial class IoSignalDisplayName
         var end = token.Length;
         while (end > 0 && char.IsDigit(token[end - 1]))
             end--;
-
         if (end == 0)
             return false;
 

@@ -150,6 +150,11 @@ internal static class IoFatReportScope
             BindingStatus = source.BindingStatus,
             BindingEvidence = source.BindingEvidence
         };
+        clone.ApplyLiveBinding(
+            source.LiveBindingState,
+            source.LiveBindingReason,
+            source.LiveDeviceId,
+            source.LiveSignalReference);
         clone.RestoreFatDisposition(source.FatDisposition);
         CloneRuntime(source.Runtime, clone.Runtime);
         return clone;

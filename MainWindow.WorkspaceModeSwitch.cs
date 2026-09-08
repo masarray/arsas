@@ -138,6 +138,11 @@ public partial class MainWindow
 
     private async void OpenOrResumeIoFatWorkspace_Click(object sender, RoutedEventArgs e)
     {
+        if (_integratedFatWorkspace != null)
+        {
+            MainTabs.SelectedIndex = 6;
+            return;
+        }
         if (ShowLoadedIoFatWorkspace())
             return;
 
@@ -285,7 +290,7 @@ public partial class MainWindow
         if (_workspaceFatButton == null)
             return;
 
-        var loaded = _loadedIoFatWindow is { IsLoaded: true };
+        var loaded = _integratedFatWorkspace != null || _loadedIoFatWindow is { IsLoaded: true };
         _workspaceFatButton.Content = loaded ? "IO LIST FAT · LOADED" : "IO LIST FAT";
         _workspaceFatButton.ToolTip = loaded
             ? "Return instantly to the loaded IO List FAT workspace"

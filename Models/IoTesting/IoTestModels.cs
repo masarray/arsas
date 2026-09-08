@@ -493,7 +493,23 @@ public sealed class IoTestPointPlan : ObservableObject
 
     public string LiveBindingReason { get => _liveBindingReason; private set => Set(ref _liveBindingReason, value ?? string.Empty); }
     public string LiveDeviceId { get => _liveDeviceId; private set => Set(ref _liveDeviceId, value ?? string.Empty); }
-    public string LiveSignalReference { get => _liveSignalReference; private set => Set(ref _liveSignalReference, value ?? string.Empty); }
+    public string LiveSignalReference
+    {
+        get => _liveSignalReference;
+        private set
+        {
+            if (Set(ref _liveSignalReference, value ?? string.Empty))
+                Raise(nameof(DisplaySignalName));
+        }
+    }
+    [JsonIgnore]
+    public string DisplaySignalName => IoSignalDisplayName.FormatFromCandidates(
+        SignalName,
+        LiveSignalReference,
+        EventLogSearchReference,
+        SourceIecReference,
+        ReportDisplayReference,
+        ObjectReference);
     public bool IsLiveBound => LiveBindingState is IoTestLiveBindingState.BoundExact or IoTestLiveBindingState.BoundNormalized or IoTestLiveBindingState.LivePointReady;
     public string LiveBindingText => LiveBindingState switch
     {

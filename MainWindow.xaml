@@ -121,8 +121,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="6" Width="148" Height="34"
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="7" Width="126" Height="34"
                             HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
                             Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
@@ -151,12 +152,14 @@
                             </Border>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="NavFatButton" Grid.Column="6" Content="FAT" Tag="6"
+                            Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                 </Grid>
             </Border>
 
             <!-- Runtime counts intentionally live only in the bottom status bar.
                  Keeping the header free of duplicate status chips reduces visual noise
-                 and reserves width for the six workflow destinations. -->
+                 and reserves width for the seven workflow destinations. -->
         </Grid>
 
         <TabControl x:Name="MainTabs" Grid.Row="1" SelectedIndex="0"
@@ -1683,6 +1686,22 @@
                         </DataGrid>
                     </DockPanel>
                 </Border>
+            </TabItem>
+            <TabItem Header="FAT">
+                <Grid x:Name="IntegratedFatHost">
+                    <Border Style="{StaticResource WorkspaceCard}" Padding="22"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560">
+                        <StackPanel>
+                            <TextBlock Text="FAT uses the active Engineering SCL" Style="{StaticResource WorkspaceTitle}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Open an SCL in IEC 61850 Explorer first. The FAT tab will reuse its IED model, connection, selected signals and live values without opening another window."
+                                       Style="{StaticResource WorkspaceSubtitle}" TextWrapping="Wrap"
+                                       TextAlignment="Center" Margin="0,8,0,14"/>
+                            <Button Content="Build FAT from current SCL" Style="{StaticResource PrimaryButton}"
+                                    HorizontalAlignment="Center" Click="OpenIntegratedFatFromCurrentScl_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </TabItem>
                 </TabControl>
 

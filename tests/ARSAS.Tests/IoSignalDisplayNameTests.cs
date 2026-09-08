@@ -5,9 +5,9 @@ namespace ARSAS.Tests;
 public sealed class IoSignalDisplayNameTests
 {
     [Theory]
-    [InlineData("IED1MEAS/MMXU1.A.phsA.cVal.mag.f", "A PhsA")]
-    [InlineData("IED1MEAS/MMXU1.A.phsB.cVal.mag.f", "A PhsB")]
-    [InlineData("IED1MEAS/MMXU1.A.phsC.cVal.mag.f", "A PhsC")]
+    [InlineData("IED1MEAS/MMXU1.A.phsA.cVal.mag.f", "A Phs A")]
+    [InlineData("IED1MEAS/MMXU1.A.phsB.cVal.mag.f", "A Phs B")]
+    [InlineData("IED1MEAS/MMXU1.A.phsC.cVal.mag.f", "A Phs C")]
     public void Format_AppendsPhaseContextWithoutAddingMeasurementOwner(string reference, string expected)
     {
         Assert.Equal(expected, IoSignalDisplayName.Format("A", reference));

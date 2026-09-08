@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class MainWindowTopBarLayoutRegressionTests
 {
     [Fact]
-    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSixDestinationLabels()
+    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSevenDestinationLabels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
@@ -14,16 +14,17 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         Assert.Contains("\"Alarm\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
         Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"FAT\"", source, StringComparison.Ordinal);
         Assert.Contains("var labels = wide ? FullLabels : CompactLabels", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SelectionPill_IsDerivedFromActualSixCellNavWidth_NotFixed150Pixels()
+    public void SelectionPill_IsDerivedFromActualSevenCellNavWidth_NotFixed150Pixels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("var cellWidth = contentWidth / 6d", source, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 5) * cellWidth", source, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 7d", source, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth", source, StringComparison.Ordinal);
         Assert.Contains("pill.Width = Math.Max(1d, cellWidth - 2d)", source, StringComparison.Ordinal);
         Assert.Contains("FindName(\"WorkflowPillTranslate\") as TranslateTransform", source, StringComparison.Ordinal);
         Assert.Contains("pill.RenderTransform is TransformGroup", source, StringComparison.Ordinal);

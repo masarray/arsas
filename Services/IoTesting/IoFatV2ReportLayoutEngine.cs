@@ -189,7 +189,7 @@ internal static class IoFatV2ReportLayoutEngine
         var cells = new[]
         {
             rowNumber.ToString(),
-            Short(IoSignalDisplayName.Format(point.SignalName, point.ReportIecReference), 26),
+            Short(point.DisplaySignalName, 26),
             string.Empty,
             point.SignalKind.ToString(),
             ValueCell(point, FatValueSlot.Value1),

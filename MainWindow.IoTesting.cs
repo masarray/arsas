@@ -471,6 +471,7 @@ public partial class MainWindow
 
     private Task ShowIoTestingWorkspaceAsync(IoTestWorkspaceLaunchResult launch, int importWarningCount)
     {
+        DisposeIntegratedFatWorkspace();
         AttachIoFatSelectionBridge(launch.Project);
         var binding = _ioTestLiveBindingService.Bind(launch.Project, Devices);
         var restoredText = launch.RestoredProgress ? "saved progress restored" : "new project";
@@ -490,6 +491,14 @@ public partial class MainWindow
 
         _pollingIntervalBeforeIoFat ??= PollingIntervalMs;
         PollingIntervalMs = Math.Min(PollingIntervalMs, IoFatPollingIntervalMs);
+
+        if (launch.Project.Sources.Count > 0 &&
+            launch.Project.Sources.All(source =>
+                source.Kind.Equals(IoFatSourceKinds.Scl, StringComparison.OrdinalIgnoreCase)))
+        {
+            ShowIntegratedFatWorkspace(launch);
+            return Task.CompletedTask;
+        }
 
         var controller = launch.Session;
         var persistence = launch.Workspace;

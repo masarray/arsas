@@ -89,6 +89,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RaiseWorkspaceCounts();
             TryAutoExpandCommandPanelOnce(_selectedDevice);
             ApplyExplorerLiveSearchFilter();
+            _integratedFatWorkspace?.SelectEngineeringIed(
+                _selectedDevice?.DeviceId,
+                _selectedDevice?.Name,
+                _selectedDevice?.IpAddress);
             // ctlModel inspection is preloaded independently of the Expander. Avoid
             // changing the row set after the panel's first frame has already painted.
         }
@@ -620,7 +624,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, 5);
+        index = Math.Clamp(index, 0, 6);
         MainTabs.SelectedIndex = index;
         UpdateNavigationVisuals(index, animate: true);
     }
@@ -654,7 +658,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        var target = Math.Clamp(index, 0, 5) * 150d;
+        var target = Math.Clamp(index, 0, 6) * 128d;
         if (animate)
         {
             var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(190))
@@ -669,7 +673,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             WorkflowPillTranslate.X = target;
         }
 
-        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavAlarmButton, NavGooseButton, NavDiagnosticsButton };
+        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavAlarmButton, NavGooseButton, NavDiagnosticsButton, NavFatButton };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));
     }
@@ -2268,6 +2272,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _uiFlushTimer.Stop();
             _progressAnimationTimer.Stop();
+            DisposeIntegratedFatWorkspace();
 
             foreach (var device in Devices)
             {
