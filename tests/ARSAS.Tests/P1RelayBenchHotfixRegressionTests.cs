@@ -76,13 +76,13 @@ public sealed class P1RelayBenchHotfixRegressionTests
         var fascia = Read("Resources/ArvrelMiniIedFascia.xaml");
         var svg = Read("Assets/RelayFascia.svg");
 
-        Assert.Contains("direct WPF vector transcription", fascia, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("x:Name=\"RelayFasciaArtwork\"", fascia, StringComparison.Ordinal);
+        Assert.Contains("WPF vector runtime counterpart", fascia, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("x:Key=\"ArsasIedConnectionLed\"", fascia, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"RelayStateRail\"", fascia, StringComparison.Ordinal);
-        Assert.Contains("#C0C0C0", fascia, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#FF0000", fascia, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("id=\"svg_1\"", svg, StringComparison.Ordinal);
-        Assert.Contains("id=\"svg_44\"", svg, StringComparison.Ordinal);
+        Assert.Contains("#FF5538", fascia, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#2DE57A", fascia, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ARSAS Premium IED Icon", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"ledGreen\"", svg, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)

@@ -79,6 +79,8 @@ public static class FatDataSetSignalProjectionService
             staticReference);
         var dataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown");
         var signalKind = Classify(descriptor.FunctionalConstraint, dataType);
+        var rawSignalName = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, staticReference);
+        var displayReference = FirstNonEmpty(runtimeReference, staticReference);
 
         return new FatVerificationSignal
         {
@@ -94,7 +96,7 @@ public static class FatDataSetSignalProjectionService
             DataSetMemberIndex = membership.MemberIndex,
             StaticMemberReference = staticReference,
             RuntimeReference = runtimeReference,
-            SignalName = FirstNonEmpty(descriptor.DataObject, descriptor.DataAttributePath, staticReference),
+            SignalName = IoFatSignalDisplayNameFormatter.Format(rawSignalName, displayReference),
             FunctionalConstraint = descriptor.FunctionalConstraint,
             DataType = dataType,
             SignalKind = signalKind,
