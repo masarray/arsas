@@ -72,15 +72,14 @@ public sealed class P2BlueSteelGreigeThemeTests
         var source = File.ReadAllText(FindRepoFile("Resources/ArvrelMiniIedFascia.xaml"));
         var svg = File.ReadAllText(FindRepoFile("Assets/RelayFascia.svg"));
 
-        Assert.Contains("RelayFasciaArtwork", source, StringComparison.Ordinal);
-        Assert.Contains("#C0C0C0", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#F2F2F2", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#FF0000", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ArsasIedConnectionLed", source, StringComparison.Ordinal);
+        Assert.Contains("#FF5538", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#2DE57A", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("{TemplateBinding Foreground}", source, StringComparison.Ordinal);
         Assert.Contains("RelayStateRail", source, StringComparison.Ordinal);
-        Assert.Contains("width=\"424.99999999999994\"", svg, StringComparison.Ordinal);
-        Assert.Contains("id=\"svg_44\"", svg, StringComparison.Ordinal);
-        Assert.Contains("#00ff7f", svg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("width=\"256\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"ledRed\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"ledGreen\"", svg, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)

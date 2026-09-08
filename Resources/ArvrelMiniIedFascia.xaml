@@ -56,6 +56,26 @@
                     </Setter.Value>
                 </Setter>
             </DataTrigger>
+            <!-- IO/FAT cards use IoTestIedPlan, whose equivalent live flag has a different name. -->
+            <DataTrigger Binding="{Binding IsLiveConnected}" Value="True">
+                <Setter Property="Stroke" Value="#07562E"/>
+                <Setter Property="Fill">
+                    <Setter.Value>
+                        <RadialGradientBrush Center="0.46,0.40" GradientOrigin="0.38,0.30" RadiusX="0.64" RadiusY="0.64">
+                            <GradientStop Color="#F0FFF5" Offset="0"/>
+                            <GradientStop Color="#A2FFCA" Offset="0.20"/>
+                            <GradientStop Color="#2DE57A" Offset="0.42"/>
+                            <GradientStop Color="#0A8544" Offset="0.76"/>
+                            <GradientStop Color="#003A1C" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Effect">
+                    <Setter.Value>
+                        <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.72" Color="#23D975"/>
+                    </Setter.Value>
+                </Setter>
+            </DataTrigger>
             <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                 <BeginStoryboard>
                     <Storyboard>
