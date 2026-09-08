@@ -39,12 +39,14 @@ public sealed class ArvrelMiniIedFasciaTests
         Assert.NotEmpty(template.Descendants(presentation + "Path"));
 
         var templateText = template.ToString();
+        var documentText = document.ToString();
         Assert.Contains("{TemplateBinding Foreground}", templateText, StringComparison.Ordinal);
-        Assert.Contains("ArsasIedConnectionLed", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("{Binding IsConnected}", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("{Binding IsLiveConnected}", document.ToString(), StringComparison.Ordinal);
-        Assert.Contains("#FF5538", document.ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#2DE57A", document.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ArsasIedConnectionLed", documentText, StringComparison.Ordinal);
+        Assert.Contains("{Binding IsMonitoring}", documentText, StringComparison.Ordinal);
+        Assert.Contains("{Binding IsLiveConnected}", documentText, StringComparison.Ordinal);
+        Assert.DoesNotContain("{Binding IsConnected}", documentText, StringComparison.Ordinal);
+        Assert.Contains("#FF5538", documentText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#2DE57A", documentText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
