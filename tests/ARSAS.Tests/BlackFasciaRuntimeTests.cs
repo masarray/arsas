@@ -38,8 +38,9 @@ public sealed class BlackFasciaRuntimeTests
 
         var source = document.ToString();
         Assert.Contains("black-fascia-ied.svg", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("{Binding IsConnected}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding IsMonitoring}", source, StringComparison.Ordinal);
         Assert.Contains("{Binding IsLiveConnected}", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("{Binding IsConnected}", source, StringComparison.Ordinal);
         Assert.Contains("#FF5538", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#55FF79", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#2DE57A", source, StringComparison.OrdinalIgnoreCase);
