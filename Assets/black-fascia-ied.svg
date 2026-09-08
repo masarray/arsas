@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc" xmlns:bx="https://boxy-svg.com">
+  <title id="title">ARSAS Premium IED Icon</title>
+  <desc id="desc">Premium vector icon of a protection relay front fascia for ARSAS IED cards.</desc>
+  <defs>
+    <linearGradient id="frameGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#77828c"/>
+      <stop offset="0.16" stop-color="#3e4750"/>
+      <stop offset="0.5" stop-color="#13181d"/>
+      <stop offset="0.82" stop-color="#39424b"/>
+      <stop offset="1" stop-color="#0a0d10"/>
+    </linearGradient>
+    <linearGradient id="displayBezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#59636d"/>
+      <stop offset="0.22" stop-color="#252c33"/>
+      <stop offset="0.7" stop-color="#0a0e12"/>
+      <stop offset="1" stop-color="#040608"/>
+    </linearGradient>
+    <linearGradient id="displayFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eff8fb"/>
+      <stop offset="0.45" stop-color="#d4e5ee"/>
+      <stop offset="1" stop-color="#b5c9d4"/>
+    </linearGradient>
+    <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="0.34" stop-color="#ffffff" stop-opacity="0.13"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="plasticGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#414851"/>
+      <stop offset="0.33" stop-color="#20262c"/>
+      <stop offset="0.75" stop-color="#0d1114"/>
+      <stop offset="1" stop-color="#050708"/>
+    </linearGradient>
+    <linearGradient id="buttonBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8af2ff"/>
+      <stop offset="0.45" stop-color="#49d3ff"/>
+      <stop offset="1" stop-color="#1577ff"/>
+    </linearGradient>
+    <linearGradient id="buttonBlueDim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2d3740"/>
+      <stop offset="1" stop-color="#0e1216"/>
+    </linearGradient>
+    <radialGradient id="ledRed" cx="48%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#fff3df"/>
+      <stop offset="0.2" stop-color="#ffb175"/>
+      <stop offset="0.38" stop-color="#ff5538"/>
+      <stop offset="0.72" stop-color="#aa1010"/>
+      <stop offset="1" stop-color="#450000"/>
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfcfd"/>
+      <stop offset="0.25" stop-color="#a9b1b7"/>
+      <stop offset="0.55" stop-color="#5d6670"/>
+      <stop offset="0.8" stop-color="#d2d7dc"/>
+      <stop offset="1" stop-color="#707983"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+    <filter id="smallShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.4" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="glow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="2.4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <g id="screwHead">
+      <circle r="7.8" fill="#161b20"/>
+      <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+      <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+    </g>
+    <g id="up">
+      <path d="M0 7 L6 -2 L12 7 Z"/>
+    </g>
+    <g id="right">
+      <path d="M5 0 L14 6 L5 12 Z"/>
+    </g>
+    <g id="down">
+      <path d="M0 0 L6 9 L12 0 Z"/>
+    </g>
+    <g id="left">
+      <path d="M9 0 L0 6 L9 12 Z"/>
+    </g>
+    <linearGradient id="gradient-1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#414851"/>
+      <stop offset="0.33" stop-color="#20262c"/>
+      <stop offset="0.75" stop-color="#0d1114"/>
+      <stop offset="1" stop-color="#050708"/>
+    </linearGradient>
+    <filter id="drop-shadow-filter-0" bx:preset="drop-shadow 1 0 0 3 1 rgba(0,0,0,0.3)" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="0"/>
+      <feComponentTransfer result="offsetblur">
+        <feFuncA id="spread-ctrl" type="linear" slope="2"/>
+      </feComponentTransfer>
+      <feFlood flood-color="rgba(0,0,0,0.3)"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="drop-shadow-filter-1" bx:preset="drop-shadow 1 0 0 3 1 rgba(0,0,0,0.3)" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="0"/>
+      <feComponentTransfer result="offsetblur">
+        <feFuncA id="spread-ctrl" type="linear" slope="2"/>
+      </feComponentTransfer>
+      <feFlood flood-color="rgba(0,0,0,0.3)"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="12" y="8" width="232" height="240" rx="26" fill="url(#frameGrad)"/>
+    <rect x="16" y="12" width="224" height="232" rx="22" fill="none" stroke="#94a0ab" stroke-opacity="0.22" stroke-width="1.2"/>
+    <rect x="19.433" y="15.389" width="216.89" height="224.785" rx="19" fill="none" stroke="#ffffff" stroke-opacity="0.58" stroke-width="1" style=""/>
+    <g transform="matrix(1, 0, 0, 1, 28.117648, 24.052285)">
+      <g>
+        <circle r="7.8" fill="#161b20"/>
+        <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+        <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g transform="matrix(1, 0, 0, 1, 227.254905, 23.843138)">
+      <g>
+        <circle r="7.8" fill="#161b20"/>
+        <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+        <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g transform="matrix(1, 0, 0, 1, 28.117648, 231.947715)">
+      <g>
+        <circle r="7.8" fill="#161b20"/>
+        <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+        <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g transform="matrix(1, 0, 0, 1, 228.71897, 231.111121)">
+      <g>
+        <circle r="7.8" fill="#161b20"/>
+        <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+        <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+      </g>
+    </g>
+    <rect x="42.679" y="23.262" width="4.009" height="12.771" rx="1.9" fill="url(#buttonBlue)" style=""/>
+    <text style="fill: rgb(255, 255, 255); font-family: &quot;Segoe UI&quot;, Arial, sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 2.2px; white-space: pre;" x="50.588" y="33.216">ARSAS</text>
+    <g filter="url(#smallShadow)" transform="matrix(1.097237, 0, 0, 1.159239, -14.691885, -32.988717)" style="">
+      <rect x="50" y="64" width="114" height="88" rx="7.252" fill="url(#displayBezel)" stroke="#66717b" stroke-width="1.5" ry="7.252"/>
+      <rect x="53.252" y="67.139" width="107.221" height="81.202" rx="6" fill="#090d10" stroke="#11161a" stroke-width="1" style=""/>
+      <rect x="55.602" y="69.316" width="102.935" height="77.627" rx="4" fill="url(#displayFill)" stroke="#6d818d" stroke-width="0.8" style=""/>
+      <path d="M63 76 H154 L117 110 H63 Z" fill="url(#glassShine)" opacity="0.56"/>
+    </g>
+    <g font-family="Segoe UI, Arial, sans-serif" fill="#1b2831" stroke="#1b2831" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1.097237, 0, 0, 1.243363, -14.691886, -39.259111)" style="">
+      <text x="72" y="86" font-size="7.3" font-weight="700" stroke="none" style="white-space: pre;" transform="matrix(1, 0, 0, 1.170213, 0, -16.958729)">BAY 1</text>
+      <text x="147" y="86" font-size="7.3" font-weight="700" stroke="none" text-anchor="end" style="white-space: pre;" transform="matrix(1, 0, 0, 1.170213, 0, -16.958729)">33kV</text>
+      <line x1="70.882" y1="87.399" x2="146.882" y2="87.399" stroke-width="0.8" opacity="0.7"/>
+      <line x1="82.209" y1="91.725" x2="132.209" y2="91.725" stroke-width="3.1"/>
+      <line x1="107.209" y1="93.725" x2="107.209" y2="107.725" stroke-width="3.1"/>
+      <line x1="98.209" y1="109.725" x2="107.209" y2="126.725" stroke-width="3.1"/>
+      <line x1="107.209" y1="126.725" x2="107.209" y2="133.725" stroke-width="3.1"/>
+      <line x1="72" y1="131" x2="90" y2="131" stroke-width="1.5" opacity="0.4"/>
+      <line x1="124" y1="131" x2="142" y2="131" stroke-width="1.5" opacity="0.4"/>
+    </g>
+    <g font-family="Segoe UI, Arial, sans-serif" font-size="4" font-weight="700" fill="#2f3942" style="" transform="matrix(1.094581, 0, 0, 1.371207, -18.623162, -57.845953)">
+      <g transform="matrix(1, 0, 0, 1, 177, 72)" filter="url(#smallShadow)" id="LED1">
+        <circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)" style="" transform="matrix(1.681323, 0, 0, 1.364429, -8.75263, -3.78924)"/>
+        <ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/>
+      </g>
+      <text style="fill: rgb(255, 255, 255); font-size: 7px; white-space: pre;" transform="matrix(1.235684, 0, 0, 1, -48.982465, 0)" x="208" y="84">TRIP</text>
+      <g transform="translate(177 98)" filter="url(#smallShadow)" id="LED2">
+        <circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)" style="" transform="matrix(1.697168, 0, 0, 1.366799, -9.108939, -3.417558)"/>
+        <ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/>
+      </g>
+      <text style="fill: rgb(255, 255, 255); font-size: 7px; white-space: pre;" transform="matrix(1.235684, 0, 0, 1, -48.982465, 0)" x="208" y="110">ALM</text>
+      <g transform="translate(177 124)" filter="url(#smallShadow)" id="LED3">
+        <circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)" style="" transform="matrix(1.728858, 0, 0, 1.379447, -9.684298, -3.627506)"/>
+        <ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/>
+      </g>
+      <text style="fill: rgb(255, 255, 255); font-size: 7px; white-space: pre;" transform="matrix(1.235684, 0, 0, 1, -48.982465, 0)" x="208" y="136">PU</text>
+    </g>
+    <g filter="url(#smallShadow)" style="" transform="matrix(1.082482, 0, 0, 1.082482, -11.566559, -15.767086)">
+      <circle cx="104" cy="192" r="35" opacity="0.3" style="fill: rgb(34, 34, 34);"/>
+      <circle cx="104" cy="192" r="31" stroke="#66717b" stroke-width="1.3" style="fill: rgb(4, 129, 255);" transform="matrix(0.805179, 0, 0, 0.817839, 20.473759, 35.138681)"/>
+      <path d="M90 162 Q90 156 96 156 H112 Q118 156 118 162 V177 L111 184 H97 L90 177 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M76 177 Q70 177 70 183 V201 Q70 207 76 207 H91 L98 200 V184 L91 177 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M118 177 H133 Q139 177 139 183 V201 Q139 207 133 207 H118 L111 200 V184 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M90 206 L97 199 H111 L118 206 V221 Q118 227 112 227 H96 Q90 227 90 221 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <rect x="96" y="160" width="16" height="4" rx="2" fill="url(#buttonBlue)" opacity="0.9"/>
+      <rect x="73" y="184" width="4" height="16" rx="2" fill="url(#buttonBlue)" opacity="0.9"/>
+      <rect x="132" y="184" width="4" height="16" rx="2" fill="url(#buttonBlue)" opacity="0.9"/>
+      <rect x="96" y="219" width="16" height="4" rx="2" fill="url(#buttonBlue)" opacity="0.9"/>
+      <circle cx="104" cy="192" r="14.2" fill="url(#ringGrad)" stroke="#0f1316" stroke-width="1.4"/>
+      <circle cx="104" cy="192" r="11" fill="url(#buttonBlueDim)" stroke="#616b73" stroke-width="0.9"/>
+    </g>
+    <g fill="#f4f7fa" opacity="0.96" style="" transform="matrix(1.082482, 0, 0, 1.082482, -11.566559, -15.767086)">
+      <g transform="translate(98 167)">
+        <g>
+          <path d="M0 7 L6 -2 L12 7 Z"/>
+        </g>
+      </g>
+      <g transform="translate(117 186)">
+        <g>
+          <path d="M5 0 L14 6 L5 12 Z"/>
+        </g>
+      </g>
+      <g transform="translate(98 209)">
+        <g>
+          <path d="M0 0 L6 9 L12 0 Z"/>
+        </g>
+      </g>
+      <g transform="translate(78 186)">
+        <g>
+          <path d="M9 0 L0 6 L9 12 Z"/>
+        </g>
+      </g>
+    </g>
+    <text x="103.791" y="190.817" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.8" font-weight="700" fill="#eef2f6" style="white-space: pre; font-size: 7.8px;" transform="matrix(1.206468, 0, 0, 1.244898, -24.580908, -41.934708)">OK</text>
+    <g filter="url(#smallShadow)" font-family="Segoe UI, Arial, sans-serif" text-anchor="middle" transform="matrix(1.138309, 0, 0, 1.138309, -23.85661, -38.153058)" style="">
+      <g transform="matrix(1, 0, 0, 1, 173.885409, 170.000003)" style="filter: url(&quot;#drop-shadow-filter-1&quot;);">
+        <rect width="30" height="28" rx="6" fill="url(#plasticGrad)" stroke="#66717b" stroke-width="1"/>
+        <circle cx="15" cy="14" r="9.938" fill="#11161a" stroke="#ff5d5d" stroke-width="2.4" style=""/>
+      </g>
+      <g transform="matrix(1, 0, 0, 1, 173.885409, 204.073108)" style="filter: url(&quot;#drop-shadow-filter-0&quot;);">
+        <rect width="30" height="28" rx="6" fill="url(#gradient-1)" stroke="#66717b" stroke-width="1"/>
+        <rect x="14.166" y="4.101" width="2.445" height="18.641" style="stroke: rgb(0, 0, 0); fill: rgb(124, 247, 92); paint-order: fill; stroke-opacity: 0; stroke-width: 0px;"/>
+      </g>
+    </g>
+  </g>
+</svg>
