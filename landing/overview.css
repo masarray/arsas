@@ -1,0 +1,333 @@
+/* ARSAS Overview page composition.
+   This file owns homepage-only hero and section layout. It is loaded only by
+   the English and Indonesian overview templates. Shared components live in
+   design-system.css. */
+
+body[data-page="overview"] {
+  --overview-divider: rgba(177, 214, 255, .09);
+}
+
+body[data-page="overview"] .hero {
+  padding: 5.25rem 0 3.35rem;
+}
+
+body[data-page="overview"] .hero > .container {
+  width: min(calc(100% - 2rem), 1280px);
+}
+
+body[data-page="overview"] .hero-grid {
+  grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+  gap: clamp(2rem, 3vw, 2.75rem);
+}
+
+body[data-page="overview"] .hero-grid > div:first-child {
+  min-width: 0;
+}
+
+body[data-page="overview"] .eyebrow {
+  max-width: 100%;
+  white-space: normal;
+  font-size: .72rem;
+  letter-spacing: .048em;
+  line-height: 1.35;
+}
+
+body[data-page="overview"] .hero h1 {
+  max-width: min(38rem, 100%);
+  margin-top: 1.18rem;
+  font-size: clamp(3.55rem, 4.15vw, 4.02rem);
+  line-height: 1.025;
+  letter-spacing: -.046em;
+}
+
+body[data-page="overview"] .hero h1 .gradient-text {
+  display: block;
+  max-inline-size: 100%;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+body[data-page="overview"] .hero-copy {
+  max-width: 35rem;
+  margin-top: 1.3rem;
+  font-size: 1.06rem;
+  line-height: 1.6;
+}
+
+body[data-page="overview"] .hero-actions {
+  flex-wrap: wrap;
+  gap: .62rem;
+  margin-top: 1.45rem;
+}
+
+body[data-page="overview"] .hero-actions .btn {
+  min-height: 48px;
+  padding: .72rem .96rem;
+  white-space: nowrap;
+  font-size: .88rem;
+}
+
+body[data-page="overview"] .hero-tertiary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem 1rem;
+  margin-top: .82rem;
+  color: var(--subtle);
+  font-size: .84rem;
+  font-weight: 680;
+}
+
+body[data-page="overview"] .hero-tertiary a {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: .2em;
+}
+
+body[data-page="overview"] .hero-tertiary a:hover,
+body[data-page="overview"] .hero-tertiary a:focus-visible {
+  color: #dbeeff;
+  text-decoration: underline;
+}
+
+body[data-page="overview"] .hero-proof {
+  flex-wrap: wrap;
+  gap: .72rem 1rem;
+  margin-top: 1.15rem;
+  font-size: .78rem;
+}
+
+body[data-page="overview"] .hero-proof span {
+  white-space: normal;
+}
+
+body[data-page="overview"] .hero-visual {
+  width: 103%;
+  justify-self: end;
+}
+
+body[data-page="overview"] .hero-window {
+  position: relative;
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  box-shadow:
+    0 26px 70px rgba(0, 5, 18, .34),
+    0 0 0 1px rgba(255,255,255,.018);
+  transform: perspective(1500px) rotateY(-2deg) rotateX(.8deg);
+}
+
+body[data-page="overview"] .hero-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(4, 12, 25, .06), rgba(4, 12, 25, .015) 58%, rgba(4, 12, 25, .08));
+}
+
+body[data-page="overview"] .hero-window img {
+  filter: brightness(.88) saturate(.92) contrast(.98);
+}
+
+body[data-page="overview"] .floating-chip {
+  padding: .64rem .78rem;
+  font-size: .78rem;
+  box-shadow: 0 16px 36px rgba(0,0,0,.28);
+}
+
+body[data-page="overview"] .floating-chip.one {
+  left: -.7rem;
+  top: 14%;
+  border-color: rgba(126, 211, 252, .24);
+  background: rgba(8, 24, 45, .94);
+}
+
+body[data-page="overview"] .floating-chip.two {
+  right: -.45rem;
+  bottom: 10%;
+  opacity: .76;
+  transform: scale(.96);
+  transform-origin: right bottom;
+  border-color: rgba(255,255,255,.11);
+  background: rgba(8, 21, 39, .82);
+}
+
+body[data-page="overview"] .section {
+  position: relative;
+  padding-block: var(--section-space);
+}
+
+body[data-page="overview"] .section-tight {
+  padding-block: var(--section-space-tight);
+}
+
+body[data-page="overview"] .section + .section::before,
+body[data-page="overview"] .section + .section-tight::before,
+body[data-page="overview"] .section-tight + .section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(1180px, calc(100% - 2rem));
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--overview-divider) 18%, rgba(107, 199, 255, .15) 50%, var(--overview-divider) 82%, transparent);
+  pointer-events: none;
+}
+
+body[data-page="overview"] .hero + .section,
+body[data-page="overview"] .hero + .section-tight {
+  padding-top: clamp(3.8rem, 4.8vw, 4.6rem);
+}
+
+body[data-page="overview"] .section-head {
+  max-width: 800px;
+  margin-bottom: clamp(2rem, 3vw, 2.6rem);
+}
+
+body[data-page="overview"] .section-head h2 {
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+body[data-page="overview"] .section-head.center h2 {
+  margin-inline: auto;
+}
+
+body[data-page="overview"] .section-head p {
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+
+body[data-page="overview"] .substation-scene {
+  border-radius: 26px;
+  border-color: rgba(126, 208, 252, .2);
+  box-shadow:
+    0 26px 68px rgba(0, 8, 25, .26),
+    0 0 0 1px rgba(255,255,255,.018),
+    inset 0 1px 0 rgba(255,255,255,.032);
+}
+
+body[data-page="overview"] .substation-copy {
+  max-width: 46rem;
+}
+
+body[data-page="overview"] .substation-copy h2 {
+  text-wrap: balance;
+}
+
+body[data-page="overview"] .substation-copy p {
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+body[data-page="overview"] .metric-grid {
+  overflow: hidden;
+  border-color: rgba(188, 221, 255, .12);
+  background: linear-gradient(180deg, rgba(255,255,255,.047), rgba(255,255,255,.028));
+  box-shadow: 0 16px 42px rgba(0, 8, 24, .13), inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+body[data-page="overview"] .metric {
+  padding: 1.35rem 1.5rem;
+  border-color: rgba(190, 222, 255, .085);
+}
+
+body[data-page="overview"] .metric strong {
+  line-height: 1.28;
+}
+
+body[data-page="overview"] .metric span {
+  margin-top: .28rem;
+  max-width: 28ch;
+}
+
+@media (min-width: 981px) {
+  body[data-page="overview"] .hero:lang(id) .hero-grid {
+    grid-template-columns: minmax(0, 1.03fr) minmax(0, .97fr);
+    gap: clamp(1.8rem, 2.6vw, 2.45rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) h1 {
+    max-width: min(39rem, 100%);
+    font-size: clamp(3.38rem, 3.9vw, 3.78rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-copy {
+    max-width: 36rem;
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-visual {
+    width: 101%;
+  }
+}
+
+@media (min-width: 981px) and (max-width: 1180px) {
+  body[data-page="overview"] .hero {
+    padding-top: 4.7rem;
+  }
+
+  body[data-page="overview"] .hero h1 {
+    font-size: clamp(3.18rem, 5vw, 3.58rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) h1 {
+    font-size: clamp(3.05rem, 4.6vw, 3.42rem);
+  }
+
+  body[data-page="overview"] .hero-visual,
+  body[data-page="overview"] .hero:lang(id) .hero-visual {
+    width: 100%;
+  }
+}
+
+@media (max-width: 980px) {
+  body[data-page="overview"] {
+    --section-space: clamp(4.2rem, 8vw, 5.2rem);
+    --section-space-tight: clamp(3rem, 6vw, 3.8rem);
+  }
+
+  body[data-page="overview"] .hero + .section,
+  body[data-page="overview"] .hero + .section-tight {
+    padding-top: 3.7rem;
+  }
+
+  body[data-page="overview"] .section-head h2,
+  body[data-page="overview"] .substation-copy h2 {
+    max-width: 22ch;
+  }
+
+  body[data-page="overview"] .floating-chip.two {
+    opacity: .86;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  body[data-page="overview"] {
+    --section-space: 4.15rem;
+    --section-space-tight: 3.15rem;
+  }
+
+  body[data-page="overview"] .section + .section::before,
+  body[data-page="overview"] .section + .section-tight::before,
+  body[data-page="overview"] .section-tight + .section::before {
+    width: calc(100% - 2rem);
+  }
+
+  body[data-page="overview"] .hero + .section,
+  body[data-page="overview"] .hero + .section-tight {
+    padding-top: 3.35rem;
+  }
+
+  body[data-page="overview"] .section-head {
+    margin-bottom: 1.9rem;
+  }
+
+  body[data-page="overview"] .section-head h2,
+  body[data-page="overview"] .substation-copy h2 {
+    max-width: none;
+  }
+
+  body[data-page="overview"] .hero-tertiary {
+    margin-top: .72rem;
+  }
+}
