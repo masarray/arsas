@@ -71,18 +71,21 @@ public sealed class P1RelayBenchHotfixRegressionTests
     }
 
     [Fact]
-    public void RelayFascia_UsesUploadedSvgArtworkAsVectorSource()
+    public void RelayFascia_UsesBlackSvgArtworkAsVectorSource()
     {
         var fascia = Read("Resources/ArvrelMiniIedFascia.xaml");
-        var svg = Read("Assets/RelayFascia.svg");
+        var svg = Read("Assets/black-fascia-ied.svg");
 
-        Assert.Contains("WPF vector runtime counterpart", fascia, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Runtime WPF transcription", fascia, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("black-fascia-ied.svg", fascia, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("x:Key=\"ArsasIedConnectionLed\"", fascia, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"RelayStateRail\"", fascia, StringComparison.Ordinal);
         Assert.Contains("#FF5538", fascia, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#2DE57A", fascia, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ARSAS Premium IED Icon", svg, StringComparison.Ordinal);
-        Assert.Contains("id=\"ledGreen\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"LED1\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"LED2\"", svg, StringComparison.Ordinal);
+        Assert.Contains("id=\"LED3\"", svg, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
