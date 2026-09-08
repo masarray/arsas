@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: sync-release-documentation
@@ -179,18 +180,27 @@ jobs:
               if not re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")) or int(item.get("sizeBytes", 0)) < 1_000_000:
                   raise SystemExit(f"Invalid {key} evidence")
 
-      - name: Update public landing release record
+      - name: Synchronize landing release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/sync-landing-release.py \
+            --evidence _release-sync/published.json \
+            --release _release-sync/release.json \
+            --notes landing/release-notes.json
+
+      - name: Update public landing release records
         shell: bash
         run: |
           set -euo pipefail
           cp _release-sync/published.json landing/latest.json
-          if git diff --quiet -- landing/latest.json; then
-            echo "Public landing release record is already synchronized."
+          if git diff --quiet -- landing/latest.json landing/release-notes.json; then
+            echo "Public landing release records are already synchronized."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add landing/latest.json
-            git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release evidence"
+            git add landing/latest.json landing/release-notes.json
+            git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release landing"
             git fetch origin main
             git rebase origin/main
             git push origin HEAD:main
@@ -216,6 +226,15 @@ jobs:
           PY
           )"
           printf '%s' "$body" | gh api --method PUT "$api_path" --input - >/dev/null
+
+      - name: Dispatch synchronized product website
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Dispatched Pages deployment for synchronized stable release ${{ steps.version.outputs.version }}."
 
       - name: Summarize synchronized release
         shell: python
