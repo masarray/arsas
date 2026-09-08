@@ -20,7 +20,7 @@ public static partial class IoSignalDisplayName
     [GeneratedRegex(@"(?:^|[.$/])phs(?<phase>AB|BC|CA|A|B|C)(?:$|[.$/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PhaseToken();
 
-    [GeneratedRegex(@"(?<class>[A-Z]{4})(?<instance>\d*)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?<class>[A-Z]{4})(?<instance>\d*)$", RegexOptions.CultureInvariant)]
     private static partial Regex LogicalNodeClassToken();
 
     public static string Format(string? signalName, string? iecReference)
