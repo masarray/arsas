@@ -33,7 +33,9 @@
             </Setter.Value>
         </Setter>
         <Style.Triggers>
-            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+            <!-- Engineering cards follow the same operational state as the LIVE / STOP badge.
+                 A retained MMS association after Stop must not keep the fascia LEDs green. -->
+            <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
                 <Setter Property="Stroke" Value="#0A7A35"/>
                 <Setter Property="Fill">
                     <Setter.Value>
@@ -53,6 +55,7 @@
                     </Setter.Value>
                 </Setter>
             </DataTrigger>
+            <!-- IO/FAT cards expose their equivalent active live state separately. -->
             <DataTrigger Binding="{Binding IsLiveConnected}" Value="True">
                 <Setter Property="Stroke" Value="#0A7A35"/>
                 <Setter Property="Fill">
