@@ -1,47 +1,156 @@
-<?xml version="1.0"?>
-<svg width="424.99999999999994" height="424.99999999999994" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
- <!-- Created with SVG-edit - https://github.com/SVG-Edit/svgedit-->
- <g class="layer">
-  <title>Layer 1</title>
-  <rect fill="#c0c0c0" stroke="#000000" stroke-width="5" x="36.73" y="8.54" width="352.94" height="409" id="svg_1"/>
-  <path/>
-  <path/>
-  <path/>
-  <path/>
-  <path/>
-  <path/>
-  <g id="svg_9" transform="matrix(0.984335 0 0 0.984335 -162.177 -31.1365)">
-   <g id="svg_8" transform="matrix(1 0 0 1 64.19 -12.41)">
-    <path stroke-width="0"/>
-    <path stroke-width="0"/>
-    <path stroke-width="0"/>
-    <path fill="#000000" stroke="#000000" stroke-width="0" d="m188.56,343.64l51.23,0l0,-51.23l52.55,0l0,51.23l51.23,0l0,52.55l-51.23,0l0,51.23l-52.55,0l0,-51.23l-51.23,0z" id="svg_27"/>
-   </g>
-   <g id="svg_7" transform="rotate(-45 330.25 357.5) matrix(1 0 0 1 -229.75 86)">
-    <rect fill="#c0c0c0" stroke="#00e2e2" stroke-width="0" x="493" y="267" width="134" height="9" id="svg_5"/>
-    <rect fill="#c0c0c0" stroke="#00e2e2" stroke-width="0" x="494" y="267" width="134" height="9" id="svg_6" transform="rotate(90 561 271.5)"/>
-   </g>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">ARSAS Premium IED Icon</title>
+  <desc id="desc">Premium vector icon of a protection relay front fascia for ARSAS IED cards.</desc>
+  <defs>
+    <linearGradient id="frameGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#77828c"/>
+      <stop offset="0.16" stop-color="#3e4750"/>
+      <stop offset="0.5" stop-color="#13181d"/>
+      <stop offset="0.82" stop-color="#39424b"/>
+      <stop offset="1" stop-color="#0a0d10"/>
+    </linearGradient>
+    <linearGradient id="railGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a5560"/>
+      <stop offset="1" stop-color="#1a2025"/>
+    </linearGradient>
+    <linearGradient id="faceGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1f2f4"/>
+      <stop offset="0.35" stop-color="#dadde1"/>
+      <stop offset="0.72" stop-color="#c4c9d0"/>
+      <stop offset="1" stop-color="#adb4bb"/>
+    </linearGradient>
+    <linearGradient id="displayBezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#59636d"/>
+      <stop offset="0.22" stop-color="#252c33"/>
+      <stop offset="0.7" stop-color="#0a0e12"/>
+      <stop offset="1" stop-color="#040608"/>
+    </linearGradient>
+    <linearGradient id="displayFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eff8fb"/>
+      <stop offset="0.45" stop-color="#d4e5ee"/>
+      <stop offset="1" stop-color="#b5c9d4"/>
+    </linearGradient>
+    <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="0.34" stop-color="#ffffff" stop-opacity="0.13"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="plasticGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#414851"/>
+      <stop offset="0.33" stop-color="#20262c"/>
+      <stop offset="0.75" stop-color="#0d1114"/>
+      <stop offset="1" stop-color="#050708"/>
+    </linearGradient>
+    <linearGradient id="buttonBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8af2ff"/>
+      <stop offset="0.45" stop-color="#49d3ff"/>
+      <stop offset="1" stop-color="#1577ff"/>
+    </linearGradient>
+    <linearGradient id="buttonBlueDim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2d3740"/>
+      <stop offset="1" stop-color="#0e1216"/>
+    </linearGradient>
+    <radialGradient id="ledRed" cx="48%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#fff3df"/>
+      <stop offset="0.2" stop-color="#ffb175"/>
+      <stop offset="0.38" stop-color="#ff5538"/>
+      <stop offset="0.72" stop-color="#aa1010"/>
+      <stop offset="1" stop-color="#450000"/>
+    </radialGradient>
+    <radialGradient id="ledGreen" cx="48%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#f0fff5"/>
+      <stop offset="0.2" stop-color="#a2ffca"/>
+      <stop offset="0.42" stop-color="#2de57a"/>
+      <stop offset="0.76" stop-color="#0a8544"/>
+      <stop offset="1" stop-color="#003a1c"/>
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfcfd"/>
+      <stop offset="0.25" stop-color="#a9b1b7"/>
+      <stop offset="0.55" stop-color="#5d6670"/>
+      <stop offset="0.8" stop-color="#d2d7dc"/>
+      <stop offset="1" stop-color="#707983"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+    <filter id="smallShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.4" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="glow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="2.4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <g id="screwHead">
+      <circle r="7.8" fill="#161b20"/>
+      <circle r="6" fill="url(#ringGrad)" stroke="#545d66" stroke-width="0.8"/>
+      <path d="M-2.6,-1 L2.6,1 M-1,2.6 L1,-2.6" stroke="#49525a" stroke-width="1.35" stroke-linecap="round"/>
+    </g>
+    <g id="up"><path d="M0 7 L6 -2 L12 7 Z"/></g>
+    <g id="right"><path d="M5 0 L14 6 L5 12 Z"/></g>
+    <g id="down"><path d="M0 0 L6 9 L12 0 Z"/></g>
+    <g id="left"><path d="M9 0 L0 6 L9 12 Z"/></g>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="12" y="8" width="232" height="240" rx="26" fill="url(#frameGrad)"/>
+    <rect x="16" y="12" width="224" height="232" rx="22" fill="none" stroke="#94a0ab" stroke-opacity="0.22" stroke-width="1.2"/>
+    <path d="M24 22 H48 L41 33 V223 L48 234 H24 Q18 234 18 228 V28 Q18 22 24 22Z" fill="url(#railGrad)" stroke="#6b7680" stroke-width="0.8"/>
+    <path d="M232 22 H208 L215 33 V223 L208 234 H232 Q238 234 238 228 V28 Q238 22 232 22Z" fill="url(#railGrad)" stroke="#6b7680" stroke-width="0.8"/>
+    <rect x="34" y="18" width="188" height="220" rx="22" fill="url(#faceGrad)" stroke="#14181c" stroke-width="1.6"/>
+    <rect x="38" y="22" width="180" height="212" rx="19" fill="none" stroke="#ffffff" stroke-opacity="0.58" stroke-width="1"/>
+    <path d="M38 22 H218 V56 Q128 68 38 52 Z" fill="#ffffff" opacity="0.16"/>
+    <path d="M48 228 H206" stroke="#616970" stroke-width="1.1" opacity="0.5"/>
+    <path d="M48 229 H206" stroke="#ffffff" stroke-width="0.55" opacity="0.25"/>
+    <g transform="translate(30 32)"><use href="#screwHead"/></g>
+    <g transform="translate(226 32)"><use href="#screwHead"/></g>
+    <g transform="translate(30 224)"><use href="#screwHead"/></g>
+    <g transform="translate(226 224)"><use href="#screwHead"/></g>
+    <rect x="50" y="31" width="3.8" height="18" rx="1.9" fill="url(#buttonBlue)"/>
+    <text x="60" y="42" font-family="Segoe UI, Arial, sans-serif" font-size="11.5" font-weight="700" letter-spacing="2.2" fill="#24303a">ARSAS</text>
+    <text x="60" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="4.6" font-weight="700" letter-spacing="1.8" fill="#5f6871">IED PREMIUM</text>
+    <text x="198" y="42" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="8.5" font-weight="700" fill="#2e3640">P618</text>
+    <text x="198" y="52" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="4.2" font-weight="700" letter-spacing="0.9" fill="#5f6871">PROTECTION</text>
+    <g filter="url(#smallShadow)">
+      <rect x="50" y="64" width="114" height="88" rx="10" fill="url(#displayBezel)" stroke="#66717b" stroke-width="1.5"/>
+      <rect x="56" y="70" width="102" height="76" rx="6" fill="#090d10" stroke="#11161a" stroke-width="1"/>
+      <rect x="60" y="74" width="94" height="68" rx="4" fill="url(#displayFill)" stroke="#6d818d" stroke-width="0.8"/>
+      <path d="M63 76 H154 L117 110 H63 Z" fill="url(#glassShine)" opacity="0.56"/>
+    </g>
+    <g font-family="Segoe UI, Arial, sans-serif" fill="#1b2831" stroke="#1b2831" stroke-linecap="round" stroke-linejoin="round">
+      <text x="72" y="86" font-size="7.3" font-weight="700" stroke="none">BAY 1</text>
+      <text x="147" y="86" font-size="7.3" font-weight="700" stroke="none" text-anchor="end">33kV</text>
+      <line x1="69" y1="92" x2="145" y2="92" stroke-width="0.8" opacity="0.7"/>
+      <line x1="82" y1="98" x2="132" y2="98" stroke-width="3.1"/>
+      <line x1="107" y1="100" x2="107" y2="114" stroke-width="3.1"/>
+      <line x1="98" y1="116" x2="107" y2="133" stroke-width="3.1"/>
+      <line x1="107" y1="133" x2="107" y2="140" stroke-width="3.1"/>
+      <line x1="72" y1="131" x2="90" y2="131" stroke-width="1.5" opacity="0.4"/>
+      <line x1="124" y1="131" x2="142" y2="131" stroke-width="1.5" opacity="0.4"/>
+    </g>
+    <g font-family="Segoe UI, Arial, sans-serif" font-size="4" font-weight="700" fill="#2f3942">
+      <g transform="translate(177 72)" filter="url(#smallShadow)"><rect width="26" height="20" rx="5" fill="url(#plasticGrad)" stroke="#5d6770" stroke-width="0.9"/><circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)"/><ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/></g>
+      <text x="208" y="84">TRIP</text>
+      <g transform="translate(177 98)" filter="url(#smallShadow)"><rect width="26" height="20" rx="5" fill="url(#plasticGrad)" stroke="#5d6770" stroke-width="0.9"/><circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)"/><ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/></g>
+      <text x="208" y="110">ALM</text>
+      <g transform="translate(177 124)" filter="url(#smallShadow)"><rect width="26" height="20" rx="5" fill="url(#plasticGrad)" stroke="#5d6770" stroke-width="0.9"/><circle cx="13" cy="10" r="6.6" fill="url(#ledRed)" filter="url(#glow)"/><ellipse cx="11" cy="8" rx="2" ry="1.3" fill="#ffffff" opacity="0.33"/></g>
+      <text x="208" y="136">PKP</text>
+    </g>
+    <g filter="url(#smallShadow)">
+      <circle cx="104" cy="192" r="35" fill="#8e98a1" opacity="0.3"/><circle cx="104" cy="192" r="31" fill="#181d22" stroke="#66717b" stroke-width="1.3"/>
+      <path d="M90 162 Q90 156 96 156 H112 Q118 156 118 162 V177 L111 184 H97 L90 177 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M76 177 Q70 177 70 183 V201 Q70 207 76 207 H91 L98 200 V184 L91 177 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M118 177 H133 Q139 177 139 183 V201 Q139 207 133 207 H118 L111 200 V184 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <path d="M90 206 L97 199 H111 L118 206 V221 Q118 227 112 227 H96 Q90 227 90 221 Z" fill="url(#plasticGrad)" stroke="#6a7580" stroke-width="1"/>
+      <rect x="96" y="160" width="16" height="4" rx="2" fill="url(#buttonBlue)" opacity="0.9"/><rect x="73" y="184" width="4" height="16" rx="2" fill="url(#buttonBlue)" opacity="0.9"/><rect x="132" y="184" width="4" height="16" rx="2" fill="url(#buttonBlue)" opacity="0.9"/><rect x="96" y="219" width="16" height="4" rx="2" fill="url(#buttonBlue)" opacity="0.9"/>
+      <circle cx="104" cy="192" r="14.2" fill="url(#ringGrad)" stroke="#0f1316" stroke-width="1.4"/><circle cx="104" cy="192" r="11" fill="url(#buttonBlueDim)" stroke="#616b73" stroke-width="0.9"/>
+    </g>
+    <g fill="#f4f7fa" opacity="0.96"><g transform="translate(98 167)"><use href="#up"/></g><g transform="translate(117 186)"><use href="#right"/></g><g transform="translate(98 209)"><use href="#down"/></g><g transform="translate(78 186)"><use href="#left"/></g></g>
+    <text x="104" y="195" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.8" font-weight="700" fill="#eef2f6">OK</text>
+    <g filter="url(#smallShadow)" font-family="Segoe UI, Arial, sans-serif" text-anchor="middle"><g transform="translate(174 170)"><rect width="30" height="28" rx="6" fill="url(#plasticGrad)" stroke="#66717b" stroke-width="1"/><circle cx="15" cy="13" r="7" fill="#11161a" stroke="#ff5d5d" stroke-width="2.4"/></g><g transform="translate(174 204)"><rect width="30" height="28" rx="6" fill="url(#plasticGrad)" stroke="#66717b" stroke-width="1"/><rect x="12" y="6" width="6" height="15" rx="3" fill="url(#ledGreen)" filter="url(#glow)"/></g></g>
   </g>
-  <rect fill="#f2f2f2" stroke="#000000" x="77.73" y="48.54" width="176.35" height="176" id="svg_2"/>
-  <g id="svg_35" transform="matrix(1 0 0 1 -103.182 -24.4604)">
-   <line fill="none" stroke="#000000" stroke-width="3" x1="226" y1="85.5" x2="308" y2="84.5" id="svg_28"/>
-   <line fill="none" stroke="#000000" stroke-width="3" x1="266.67" y1="84.46" x2="266.67" y2="102.3" id="svg_29"/>
-   <line fill="none" stroke="#000000" stroke-width="3" x1="266.67" y1="138.26" x2="266.67" y2="154.48" id="svg_30"/>
-   <line fill="none" stroke="#000000" stroke-width="3" x1="247.23" y1="108.95" x2="266.89" y2="138.82" id="svg_31"/>
-   <ellipse fill="none" stroke="#000000" stroke-width="3" cx="266.64" cy="174.29" rx="19.19" ry="19.45" id="svg_32"/>
-   <ellipse fill="none" stroke="#000000" stroke-width="3" cx="267.16" cy="197.77" rx="19.19" ry="19.45" id="svg_33"/>
-   <line fill="none" stroke="#000000" stroke-width="3" x1="266.67" y1="217.45" x2="266.67" y2="241.72" id="svg_34"/>
-  </g>
-  <g id="svg_39" transform="matrix(0.857143 0 0 0.857143 -59.9451 25.1036)">
-   <rect fill="#000000" stroke="#000000" stroke-width="0" x="401.25" y="272.52" width="63.38" height="63.38" id="svg_37"/>
-   <rect fill="#000000" stroke="#000000" stroke-width="0" x="401.25" y="354" width="63.38" height="63.38" id="svg_38"/>
-   <ellipse fill="#000000" stroke="#ff5656" stroke-width="3" cx="432.94" cy="304.21" rx="18.09" ry="18.09" id="svg_41"/>
-   <line fill="none" stroke="#00ff7f" x1="432.94" y1="365.6" x2="432.94" y2="405.78" id="svg_42" stroke-width="3"/>
-  </g>
-  <g id="svg_44" transform="matrix(1.36613 0 0 1.36613 -274.122 -51.6847)">
-   <rect fill="#ff0000" stroke="#000000" stroke-width="0" x="413.41" y="73" width="30" height="30" id="svg_19"/>
-   <rect fill="#ff0000" stroke="#000000" stroke-width="0" x="413.41" y="122" width="30" height="30" id="svg_24"/>
-   <rect fill="#ff0000" stroke="#000000" stroke-width="0" x="413.41" y="172" width="30" height="30" id="svg_25"/>
-  </g>
- </g>
 </svg>
