@@ -1,0 +1,282 @@
+/* ARSAS overview-page composition.
+   Every selector is scoped to body[data-page="overview"] so homepage layout cannot
+   leak into Learning, Capabilities, IO FAT, Solutions, Guides or Download pages. */
+
+body[data-page="overview"] {
+  --home-hero-max: 1280px;
+}
+
+body[data-page="overview"] .hero + .section,
+body[data-page="overview"] .hero + .section-tight {
+  padding-top: clamp(3.9rem, 5vw, 4.8rem);
+}
+
+body[data-page="overview"] .substation-scene {
+  border-radius: 26px;
+  border-color: rgba(126, 208, 252, .2);
+  box-shadow:
+    0 26px 68px rgba(0, 8, 25, .26),
+    0 0 0 1px rgba(255,255,255,.018),
+    inset 0 1px 0 rgba(255,255,255,.032);
+}
+
+body[data-page="overview"] .substation-copy {
+  max-width: 46rem;
+}
+
+body[data-page="overview"] .substation-copy h2 {
+  text-wrap: balance;
+}
+
+body[data-page="overview"] .substation-copy p {
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+@media (min-width: 981px) {
+  body[data-page="overview"] .hero {
+    padding: 5.25rem 0 3.35rem;
+  }
+
+  body[data-page="overview"] .hero > .container {
+    width: min(calc(100% - 2rem), var(--home-hero-max));
+  }
+
+  body[data-page="overview"] .hero-grid {
+    grid-template-columns: minmax(0, .96fr) minmax(0, 1.04fr);
+    gap: clamp(2rem, 3vw, 2.75rem);
+  }
+
+  body[data-page="overview"] .hero-grid > div:first-child {
+    min-width: 0;
+  }
+
+  body[data-page="overview"] .eyebrow {
+    max-width: none;
+    white-space: nowrap;
+    font-size: .72rem;
+    letter-spacing: .048em;
+  }
+
+  body[data-page="overview"] .hero h1 {
+    max-width: min(38.5rem, 100%);
+    margin-top: 1.18rem;
+    font-size: clamp(3.58rem, 4.1vw, 4.02rem);
+    line-height: 1.025;
+    letter-spacing: -.046em;
+  }
+
+  /* Localized copy length is never part of the layout contract. */
+  body[data-page="overview"] .hero h1 .gradient-text {
+    display: block;
+    max-inline-size: 100%;
+    white-space: normal;
+    text-wrap: balance;
+  }
+
+  body[data-page="overview"] .hero-copy {
+    max-width: 35.5rem;
+    margin-top: 1.3rem;
+    font-size: 1.06rem;
+    line-height: 1.6;
+  }
+
+  body[data-page="overview"] .hero-actions {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: .62rem .78rem;
+    margin-top: 1.45rem;
+  }
+
+  body[data-page="overview"] .hero-actions .btn {
+    min-height: 48px;
+    padding: .72rem .94rem;
+    white-space: nowrap;
+    font-size: .88rem;
+  }
+
+  /* The first two actions are decisions; the remaining quiet actions are navigation. */
+  body[data-page="overview"] .hero-actions .btn-quiet {
+    min-height: auto;
+    padding: .42rem .1rem;
+    color: #9fb2c8;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: .84rem;
+    font-weight: 610;
+    text-decoration: none;
+  }
+
+  body[data-page="overview"] .hero-actions .btn-quiet::after {
+    content: " →";
+    color: #6ed6ff;
+  }
+
+  body[data-page="overview"] .hero-actions .btn-quiet:hover,
+  body[data-page="overview"] .hero-actions .btn-quiet:focus-visible {
+    color: #ecf8ff;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-actions .btn-quiet:last-child {
+    margin-left: .1rem;
+    color: #7f93aa;
+    font-size: .78rem;
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-actions .btn-quiet:last-child::after {
+    content: "";
+  }
+
+  body[data-page="overview"] .hero-proof {
+    flex-wrap: nowrap;
+    gap: .8rem 1rem;
+    margin-top: 1.22rem;
+    font-size: .79rem;
+  }
+
+  body[data-page="overview"] .hero-proof span {
+    white-space: nowrap;
+  }
+
+  body[data-page="overview"] .hero-visual {
+    width: 103%;
+    justify-self: end;
+  }
+
+  body[data-page="overview"] .hero-window {
+    position: relative;
+    overflow: hidden;
+    transform: perspective(1500px) rotateY(-2deg) rotateX(.8deg);
+  }
+
+  /* Keep the real product readable while preventing its white workspace from
+     overpowering the message column on dark landing-page backgrounds. */
+  body[data-page="overview"] .hero-window img {
+    display: block;
+    filter: brightness(.92) saturate(.96) contrast(.985);
+  }
+
+  body[data-page="overview"] .hero-window::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(5, 15, 29, .045), transparent 28%, transparent 74%, rgba(5, 15, 29, .055)),
+      linear-gradient(180deg, rgba(7, 17, 31, .025), transparent 58%, rgba(7, 17, 31, .04));
+  }
+
+  body[data-page="overview"] .hero-visual::before {
+    opacity: .74;
+  }
+
+  body[data-page="overview"] .floating-chip.one {
+    left: -.85rem;
+    top: 16%;
+    padding: .58rem .74rem;
+    border-color: rgba(172, 222, 255, .2);
+    background: rgba(7, 20, 39, .9);
+    box-shadow: 0 14px 32px rgba(0, 5, 18, .31);
+  }
+
+  body[data-page="overview"] .floating-chip.two {
+    right: -.35rem;
+    bottom: 11%;
+    padding: .52rem .68rem;
+    color: #adc0d4;
+    border-color: rgba(191, 220, 246, .11);
+    background: rgba(7, 20, 39, .77);
+    box-shadow: 0 10px 26px rgba(0, 5, 18, .24);
+    opacity: .78;
+    font-size: .72rem;
+  }
+
+  /* Indonesian copy needs slightly more message authority than English. */
+  body[data-page="overview"] .hero:lang(id) .hero-grid {
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
+    gap: clamp(1.75rem, 2.6vw, 2.4rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) h1 {
+    max-width: min(39rem, 100%);
+    font-size: clamp(3.38rem, 3.85vw, 3.82rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-copy {
+    max-width: 36.5rem;
+  }
+
+  body[data-page="overview"] .hero:lang(id) .eyebrow {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-visual {
+    width: 101%;
+  }
+}
+
+@media (min-width: 981px) and (max-width: 1180px) {
+  body[data-page="overview"] .hero h1 {
+    font-size: clamp(3.25rem, 5vw, 3.68rem);
+  }
+
+  body[data-page="overview"] .eyebrow {
+    font-size: .68rem;
+  }
+
+  body[data-page="overview"] .hero-actions {
+    flex-wrap: wrap;
+  }
+
+  body[data-page="overview"] .hero-actions .btn {
+    padding-inline: .8rem;
+    font-size: .84rem;
+  }
+
+  body[data-page="overview"] .hero-proof {
+    flex-wrap: wrap;
+    font-size: .75rem;
+    gap: .7rem;
+  }
+
+  body[data-page="overview"] .hero-visual {
+    width: 101%;
+  }
+
+  body[data-page="overview"] .hero:lang(id) h1 {
+    font-size: clamp(3.18rem, 4.55vw, 3.5rem);
+  }
+
+  body[data-page="overview"] .hero:lang(id) .hero-visual {
+    width: 100%;
+  }
+}
+
+@media (max-width: 980px) {
+  body[data-page="overview"] .hero + .section,
+  body[data-page="overview"] .hero + .section-tight {
+    padding-top: 3.7rem;
+  }
+
+  body[data-page="overview"] .substation-copy h2 {
+    max-width: 22ch;
+  }
+}
+
+@media (max-width: 760px) {
+  body[data-page="overview"] .hero + .section,
+  body[data-page="overview"] .hero + .section-tight {
+    padding-top: 3.35rem;
+  }
+
+  body[data-page="overview"] .substation-copy h2 {
+    max-width: none;
+  }
+}
