@@ -23,6 +23,19 @@ public sealed class BlackFasciaRuntimeTests
             Assert.Equal("{StaticResource ArsasIedConnectionLed}", (string?)led.Attribute("Style"));
         }
 
+        var ledStyle = document
+            .Descendants(presentation + "Style")
+            .Single(node => (string?)node.Attribute(x + "Key") == "ArsasIedConnectionLed");
+        var setters = ledStyle
+            .Elements(presentation + "Setter")
+            .ToDictionary(
+                node => (string?)node.Attribute("Property") ?? string.Empty,
+                node => (string?)node.Attribute("Value") ?? string.Empty,
+                StringComparer.Ordinal);
+
+        Assert.Equal("22.4", setters["Width"]);
+        Assert.Equal("18.4", setters["Height"]);
+
         var source = document.ToString();
         Assert.Contains("black-fascia-ied.svg", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("{Binding IsConnected}", source, StringComparison.Ordinal);
@@ -30,8 +43,6 @@ public sealed class BlackFasciaRuntimeTests
         Assert.Contains("#FF5538", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#55FF79", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#2DE57A", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Width=\"22.4\"", source, StringComparison.Ordinal);
-        Assert.Contains("Height=\"18.4\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
