@@ -12,9 +12,28 @@ public static class IoFatSignalDisplayNameFormatter
     public static string Format(IoTestPointPlan point)
     {
         ArgumentNullException.ThrowIfNull(point);
-        return IoSignalDisplayName.Format(point.SignalName, point.ReportIecReference);
+
+        // Presentation needs the richest original IEC context, not necessarily the reference
+        // selected for event-log/report lookup. SourceIecReference and DA metadata preserve
+        // phsA/phsB/phsC and LN ownership even when a lookup alias was normalized shorter.
+        var semanticReference = FirstNonBlank(
+            point.SourceIecReference,
+            point.ReportDisplayReference,
+            point.ObjectReference,
+            point.EventLogSearchReference,
+            point.ReportIecReference);
+
+        return IoSignalDisplayName.Format(
+            point.SignalName,
+            semanticReference,
+            point.LogicalNode,
+            point.DataObject,
+            point.DataAttribute);
     }
 
     public static string Format(string? signalName, string? iecReference)
         => IoSignalDisplayName.Format(signalName, iecReference);
+
+    private static string FirstNonBlank(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 }
