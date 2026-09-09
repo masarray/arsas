@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -42,7 +43,34 @@ public sealed class ArdIrecNativeBridgeIntegrationTests
             var timestamps = record.ReadRawTimestamps(0, readCount);
             Assert.Equal(readCount, timestamps.Length);
             Assert.True(timestamps[^1] >= timestamps[0]);
+
+            // This small binary fixture may not contain a complete power-frequency cycle, but
+            // invoking both P1C exports here proves the managed delegate/struct boundary against
+            // the exact DLL that will be packaged. Numeric analysis accuracy is covered by the
+            // ArdIrec bridge smoke using its 1 kHz / 50 Hz distance_p1 fixture.
+            var referenceFrame = record.Info.FrameCount - 1;
+            var phasor = record.ReadPhasor(0, referenceFrame);
+            Assert.True(phasor.WindowStartFrame <= phasor.WindowEndExclusive);
+            Assert.True(phasor.WindowEndExclusive <= record.Info.FrameCount);
+
+            var harmonics = record.ReadHarmonicSpectrum(0, referenceFrame, 15);
+            Assert.True(harmonics.WindowStartFrame <= harmonics.WindowEndExclusive);
+            Assert.True(harmonics.WindowEndExclusive <= record.Info.FrameCount);
+            if (harmonics.Valid)
+            {
+                Assert.NotEmpty(harmonics.Bins);
+                Assert.Equal(1, harmonics.Bins[0].Order);
+                Assert.InRange(harmonics.Bins[0].PercentOfFundamental, 0.0, 100.000001);
+            }
         }
+    }
+
+    [Fact]
+    public void P1CNativeAnalysisStructLayout_MatchesCAbiOnWindowsX64()
+    {
+        Assert.Equal(56, Marshal.SizeOf<ArdIrecNativeBridge.NativePhasorInfo>());
+        Assert.Equal(32, Marshal.SizeOf<ArdIrecNativeBridge.NativeHarmonicBin>());
+        Assert.Equal(88, Marshal.SizeOf<ArdIrecNativeBridge.NativeHarmonicSpectrumInfo>());
     }
 
     [Fact]
