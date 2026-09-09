@@ -267,14 +267,21 @@ public sealed class RcbMultiExportWindow : Window
 
         if (selected.Any(row => row.RequiresConfirmation))
         {
+            var advisoryRows = selected.Where(row => row.RequiresConfirmation).ToArray();
+            var advisoryNames = string.Join(", ", advisoryRows.Select(row => row.Name));
+            var message =
+                $"Availability could not be fully confirmed for {advisoryRows.Length} selected RCB(s): {advisoryNames}.\n\n" +
+                "The SCL export itself is read-only. ARSAS will not reserve, enable, disable, or modify any RCB during export. " +
+                "Availability is commissioning information only; confirm ownership before another SAS client reserves or enables these RCBs.\n\n" +
+                "Continue generating the SCL export?";
             var answer = MessageBox.Show(
                 this,
-                "One or more selected RCBs are occupied, active in ARSAS, or not proven free. Availability is informational for engineering export; the SCL can still be generated.\n\nContinue?",
-                "Confirm RCB Export",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
+                message,
+                "RCB Export Note",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information,
+                MessageBoxResult.OK);
+            if (answer != MessageBoxResult.OK)
                 return;
         }
 
