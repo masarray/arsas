@@ -21,6 +21,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
     private double? _triggerMilliseconds;
     private Rect _lastPlot;
     private bool _isPanning;
+    private bool _preserveAnalogPoints;
     private Point _panStartPoint;
     private ComtradeFrameWindow _panStartWindow;
 
@@ -33,7 +34,14 @@ public sealed class ComtradeWaveformView : FrameworkElement
         ToolTip = "Wheel: zoom • Shift+wheel: pan • Alt+drag/middle-drag: pan • Click: Cursor A • Ctrl+click/right-click: Cursor B • Double-click: reset";
     }
 
-    internal void ShowAnalog(string title, string subtitle, string units, double[] values, uint[] timestamps, double timeMultiplier)
+    internal void ShowAnalog(
+        string title,
+        string subtitle,
+        string units,
+        double[] values,
+        uint[] timestamps,
+        double timeMultiplier,
+        bool preserveAllPoints = false)
     {
         _title = title;
         _subtitle = subtitle;
@@ -42,6 +50,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
         _status = null;
         _timestamps = timestamps;
         _timeMultiplier = NormalizeTimeMultiplier(timeMultiplier);
+        _preserveAnalogPoints = preserveAllPoints;
         ResetNavigationCore();
         InvalidateVisual();
         RaiseNavigationChanged();
@@ -56,6 +65,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
         _status = values;
         _timestamps = timestamps;
         _timeMultiplier = NormalizeTimeMultiplier(timeMultiplier);
+        _preserveAnalogPoints = false;
         ResetNavigationCore();
         InvalidateVisual();
         RaiseNavigationChanged();
@@ -70,6 +80,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
         _status = null;
         _timestamps = null;
         _timeMultiplier = 1.0;
+        _preserveAnalogPoints = false;
         _window = default;
         _cursorA = null;
         _cursorB = null;
@@ -331,8 +342,11 @@ public sealed class ComtradeWaveformView : FrameworkElement
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
+            // Raw series can still be thinned to the available pixel density. A P1B.2 envelope
+            // is already the final bounded representation and must keep every boundary/extrema
+            // point; applying a second stride could hide a narrow fault spike.
             var maxPoints = Math.Max(64, (int)Math.Ceiling(plot.Width * 2));
-            var stride = Math.Max(1, _window.Count / maxPoints);
+            var stride = _preserveAnalogPoints ? 1 : Math.Max(1, _window.Count / maxPoints);
             var started = false;
             for (var i = start; i < end; i += stride)
             {
