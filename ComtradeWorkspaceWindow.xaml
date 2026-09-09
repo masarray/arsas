@@ -113,39 +113,51 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="#F8FAFD" BorderBrush="#E1E8F1" BorderThickness="0,0,0,1" Padding="11,7">
+
+                    <Border Grid.Row="0" Background="#F8FAFD" BorderBrush="#E1E8F1" BorderThickness="0,0,0,1" Padding="10,7">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="WaveformModeButton" Content="Waveform" Height="27" MinWidth="82" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="WaveformMode_Click"/>
+                                <Button x:Name="PhasorModeButton" Content="Phasor" Height="27" MinWidth="72" Margin="6,0,0,0" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorMode_Click"/>
+                                <Button x:Name="HarmonicsModeButton" Content="Harmonics" Height="27" MinWidth="86" Margin="6,0,0,0" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsMode_Click"/>
+                            </StackPanel>
+                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="2" Text="Analysis reference: trigger / viewport center"
+                                       FontSize="9.8" Foreground="#7A8BA0" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="#FBFCFE" BorderBrush="#E8EDF4" BorderThickness="0,0,0,1" Padding="11,6">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="NavigationTextBlock"
-                                       Text="Wheel zoom • Shift+wheel pan • Click Cursor A • Ctrl/right-click Cursor B"
-                                       FontSize="10.5"
-                                       Foreground="#64778F"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <Button x:Name="ResetViewButton"
-                                    Grid.Column="1"
-                                    Content="Reset view"
-                                    Height="25"
-                                    MinWidth="78"
-                                    Margin="12,0,0,0"
-                                    Padding="10,0"
-                                    FontSize="10.2"
-                                    FontWeight="SemiBold"
-                                    Foreground="#365D88"
-                                    Background="White"
-                                    BorderBrush="#CBD8E7"
-                                    BorderThickness="1"
-                                    Cursor="Hand"
-                                    ToolTip="Reset zoom, pan and cursors to the full loaded record."
-                                    Click="ResetView_Click"/>
+                                       Text="Wheel zoom • Shift+wheel pan • Alt/middle-drag pan • Click Cursor A • Ctrl/right-click Cursor B"
+                                       FontSize="10.2" Foreground="#64778F" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Button x:Name="ResetViewButton" Grid.Column="1" Content="Reset view" Height="25" MinWidth="78" Margin="12,0,0,0"
+                                    Padding="10,0" FontSize="10.2" FontWeight="SemiBold" Foreground="#365D88" Background="White"
+                                    BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                    ToolTip="Reset waveform zoom, pan and cursors to the full loaded record." Click="ResetView_Click"/>
                         </Grid>
                     </Border>
-                    <controls:ComtradeWaveformView x:Name="WaveformView" Grid.Row="1" MinHeight="330"/>
+
+                    <Grid Grid.Row="2">
+                        <controls:ComtradeWaveformView x:Name="WaveformView" MinHeight="330"/>
+                        <controls:ComtradePhasorView x:Name="PhasorView" MinHeight="330" Visibility="Collapsed"/>
+                        <controls:ComtradeHarmonicsView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
@@ -158,23 +170,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="StatusTextBlock" FontSize="10.5" Foreground="#687B92" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <Button x:Name="FullAnalysisButton"
-                        Grid.Column="1"
-                        Content="Full analysis"
-                        Height="27"
-                        MinWidth="96"
-                        Margin="12,0,14,0"
-                        Padding="12,0"
-                        FontSize="10.5"
-                        FontWeight="SemiBold"
-                        Foreground="#315D91"
-                        Background="#F5F9FF"
-                        BorderBrush="#C5D8EE"
-                        BorderThickness="1"
-                        Cursor="Hand"
-                        ToolTip="Open the complete COMTRADE analysis workspace while native P1 analysis parity is still in progress."
+                <Button x:Name="FullAnalysisButton" Grid.Column="1" Content="Full analysis" Height="27" MinWidth="96" Margin="12,0,14,0"
+                        Padding="12,0" FontSize="10.5" FontWeight="SemiBold" Foreground="#315D91" Background="#F5F9FF"
+                        BorderBrush="#C5D8EE" BorderThickness="1" Cursor="Hand"
+                        ToolTip="Open the complete Qt analysis workspace while native WPF analysis parity is still being field-validated."
                         Click="FullAnalysis_Click"/>
-                <TextBlock Grid.Column="2" Text="P1B.1 • waveform navigation" FontSize="10" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="P1C • native waveform + phasor + harmonics" FontSize="10" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>
