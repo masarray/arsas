@@ -76,10 +76,11 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
 
         DrawSummary(dc, bounds, dpi, body, semibold);
         var chartTop = 126.0;
-        var detailHeight = 58.0;
-        _barsRect = new Rect(54, chartTop, Math.Max(100, bounds.Width - 78), Math.Max(80, bounds.Height - chartTop - detailHeight - 26));
-        DrawGrid(dc, _barsRect, dpi, body);
-        DrawBars(dc, _barsRect, dpi, body, semibold);
+        var detailHeight = 62.0;
+        _barsRect = new Rect(58, chartTop, Math.Max(100, bounds.Width - 82), Math.Max(80, bounds.Height - chartTop - detailHeight - 26));
+        var axisMaximum = HarmonicAxisMaximum(_spectrum.Bins);
+        DrawGrid(dc, _barsRect, axisMaximum, dpi, body);
+        DrawBars(dc, _barsRect, axisMaximum, dpi, body, semibold);
         DrawSelectedDetail(dc, new Rect(18, bounds.Bottom - detailHeight, bounds.Width - 36, detailHeight - 8), dpi, body, semibold);
     }
 
@@ -118,7 +119,20 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
             Color.FromRgb(139, 150, 164), new Point(18, 108), dpi);
     }
 
-    private static void DrawGrid(DrawingContext dc, Rect plot, double dpi, Typeface body)
+    private static double HarmonicAxisMaximum(IReadOnlyList<ComtradeHarmonicDisplayBin> bins)
+    {
+        var measured = bins.Count == 0 ? 100.0 : bins.Max(bin =>
+            double.IsFinite(bin.PercentOfFundamental) ? Math.Max(0.0, bin.PercentOfFundamental) : 0.0);
+        measured = Math.Max(100.0, measured);
+        var roughStep = measured / 4.0;
+        var exponent = Math.Pow(10.0, Math.Floor(Math.Log10(Math.Max(roughStep, 1e-9))));
+        var normalized = roughStep / exponent;
+        var step = normalized <= 1.0 ? 1.0 : normalized <= 2.0 ? 2.0 : normalized <= 5.0 ? 5.0 : 10.0;
+        step *= exponent;
+        return Math.Ceiling(measured / step) * step;
+    }
+
+    private static void DrawGrid(DrawingContext dc, Rect plot, double axisMaximum, double dpi, Typeface body)
     {
         var gridPen = FrozenPen(Color.FromRgb(231, 236, 242), 1);
         var borderPen = FrozenPen(Color.FromRgb(190, 200, 213), 1);
@@ -126,8 +140,8 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
         {
             var y = plot.Bottom - plot.Height * i / 4.0;
             dc.DrawLine(gridPen, new Point(plot.Left, y), new Point(plot.Right, y));
-            var value = i * 25;
-            var text = new FormattedText($"{value}%", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            var value = axisMaximum * i / 4.0;
+            var text = new FormattedText($"{value:G4}%", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 body, 8.8, new SolidColorBrush(Color.FromRgb(132, 144, 158)), dpi)
             { TextAlignment = TextAlignment.Right };
             dc.DrawText(text, new Point(plot.Left - 8, y - 6));
@@ -135,11 +149,10 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
         dc.DrawRectangle(null, borderPen, plot);
     }
 
-    private void DrawBars(DrawingContext dc, Rect plot, double dpi, Typeface body, Typeface semibold)
+    private void DrawBars(DrawingContext dc, Rect plot, double axisMaximum, double dpi, Typeface body, Typeface semibold)
     {
         if (_spectrum is null) return;
         var bins = _spectrum.Bins;
-        var maxPercent = Math.Max(100.0, bins.Max(b => double.IsFinite(b.PercentOfFundamental) ? b.PercentOfFundamental : 0.0));
         var slot = plot.Width / Math.Max(1, bins.Count);
         var barWidth = Math.Clamp(slot * 0.62, 3.0, 24.0);
 
@@ -147,7 +160,7 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
         {
             var bin = bins[i];
             var percent = double.IsFinite(bin.PercentOfFundamental) ? Math.Max(0, bin.PercentOfFundamental) : 0;
-            var height = Math.Clamp(percent / maxPercent, 0, 1) * plot.Height;
+            var height = Math.Clamp(percent / axisMaximum, 0, 1) * plot.Height;
             var x = plot.Left + slot * (i + 0.5) - barWidth * 0.5;
             var selected = bin.Order == _selectedOrder;
             var color = bin.Order == 1
@@ -180,10 +193,11 @@ public sealed class ComtradeHarmonicsView : FrameworkElement
         var bg = new SolidColorBrush(Color.FromRgb(248, 250, 253)); bg.Freeze();
         var border = FrozenPen(Color.FromRgb(222, 230, 239), 1);
         dc.DrawRoundedRectangle(bg, border, rect, 6, 6);
-        DrawText(dc, $"H{selected.Order}", 11.5, semibold, Color.FromRgb(46, 65, 88), new Point(rect.Left + 12, rect.Top + 8), dpi);
-        DrawText(dc, $"{selected.MagnitudeRms:G6}{unit} RMS", 10, body, Color.FromRgb(87, 105, 126), new Point(rect.Left + 58, rect.Top + 8), dpi);
-        DrawText(dc, $"{selected.PercentOfFundamental:G5}% of fundamental", 10, body, Color.FromRgb(87, 105, 126), new Point(rect.Left + 205, rect.Top + 8), dpi);
-        DrawText(dc, $"∠ {selected.AngleDegrees:+0.##;-0.##;0}°", 10, body, Color.FromRgb(87, 105, 126), new Point(rect.Left + 390, rect.Top + 8), dpi);
+        DrawText(dc, $"H{selected.Order}", 11.5, semibold, Color.FromRgb(46, 65, 88), new Point(rect.Left + 12, rect.Top + 7), dpi);
+        DrawText(dc, $"{selected.MagnitudeRms:G6}{unit} RMS  •  {selected.PercentOfFundamental:G5}% of fundamental",
+            9.9, body, Color.FromRgb(87, 105, 126), new Point(rect.Left + 58, rect.Top + 8), dpi);
+        DrawText(dc, $"Phase ∠ {selected.AngleDegrees:+0.##;-0.##;0}°",
+            9.6, body, Color.FromRgb(111, 126, 145), new Point(rect.Left + 58, rect.Top + 27), dpi);
     }
 
     private static Pen FrozenPen(Color color, double thickness)
