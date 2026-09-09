@@ -54,6 +54,8 @@ internal readonly record struct ComtradeDigitalTransition(
 internal sealed record ComtradeDigitalTransitionSet(
     ComtradeFrameRange Range,
     ulong ScannedFrameCount,
+    uint FirstTimestamp,
+    uint LastTimestamp,
     IReadOnlyList<ComtradeDigitalTransition> Transitions,
     bool IsTruncated);
 
@@ -157,7 +159,7 @@ internal static class ComtradeRangeDecimator
         ArgumentNullException.ThrowIfNull(source);
         var range = NormalizeRange(source.FrameCount, startFrame, frameCount);
         if (range.FrameCount == 0)
-            return new ComtradeDigitalTransitionSet(range, 0, Array.Empty<ComtradeDigitalTransition>(), false);
+            return new ComtradeDigitalTransitionSet(range, 0, 0, 0, Array.Empty<ComtradeDigitalTransition>(), false);
 
         maxTransitions = Math.Max(1, maxTransitions);
         chunkFrames = NormalizeChunkFrames(chunkFrames);
@@ -166,6 +168,8 @@ internal static class ComtradeRangeDecimator
         var havePrevious = false;
         byte previousState = 0;
         ulong processed = 0;
+        uint firstTimestamp = 0;
+        uint lastTimestamp = 0;
 
         while (processed < range.FrameCount)
         {
@@ -180,6 +184,9 @@ internal static class ComtradeRangeDecimator
             {
                 var state = states[i] == 0 ? (byte)0 : (byte)1;
                 var absoluteFrame = absoluteStart + checked((ulong)i);
+                if (!havePrevious)
+                    firstTimestamp = timestamps[i];
+                lastTimestamp = timestamps[i];
 
                 if (!havePrevious)
                 {
@@ -194,8 +201,14 @@ internal static class ComtradeRangeDecimator
 
                 if (transitions.Count >= maxTransitions)
                 {
-                    var scanned = processed + checked((ulong)i);
-                    return new ComtradeDigitalTransitionSet(range, scanned, transitions, true);
+                    var scanned = processed + checked((ulong)i) + 1;
+                    return new ComtradeDigitalTransitionSet(
+                        range,
+                        scanned,
+                        firstTimestamp,
+                        lastTimestamp,
+                        transitions,
+                        true);
                 }
 
                 transitions.Add(new ComtradeDigitalTransition(absoluteFrame, timestamps[i], state));
@@ -205,7 +218,13 @@ internal static class ComtradeRangeDecimator
             processed += checked((ulong)take);
         }
 
-        return new ComtradeDigitalTransitionSet(range, processed, transitions, false);
+        return new ComtradeDigitalTransitionSet(
+            range,
+            processed,
+            firstTimestamp,
+            lastTimestamp,
+            transitions,
+            false);
     }
 
     internal static ComtradeFrameRange NormalizeRange(ulong totalFrames, ulong startFrame, ulong frameCount)
