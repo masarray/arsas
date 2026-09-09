@@ -8,24 +8,28 @@ on:
       - "scripts/build-windows-installer.ps1"
       - "scripts/create-windows-release-checksums.ps1"
       - "scripts/publish-windows-portable.ps1"
+      - "scripts/stage-ardirec-viewer.ps1"
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
       - "engines/ARIEC61850.lock.json"
+      - "engines/ARDIREC.lock.json"
   pull_request:
     paths:
       - "installer/**"
       - "scripts/build-windows-installer.ps1"
       - "scripts/create-windows-release-checksums.ps1"
       - "scripts/publish-windows-portable.ps1"
+      - "scripts/stage-ardirec-viewer.ps1"
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
       - "engines/ARIEC61850.lock.json"
+      - "engines/ARDIREC.lock.json"
   workflow_dispatch:
 
 permissions:
@@ -42,7 +46,7 @@ jobs:
         with:
           path: ArIED61850Tester
 
-      - name: Resolve application version and immutable engine lock
+      - name: Resolve application version and immutable engine locks
         shell: powershell
         run: |
           [xml]$versionProps = Get-Content ".\ArIED61850Tester\Directory.Build.props" -Raw
@@ -56,16 +60,29 @@ jobs:
             throw "ARSAS version metadata is inconsistent: props=$version project=$projectVersion VERSION=$versionFile"
           }
 
-          $lock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
-          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $lock.ref -ne 'main' -or
-              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+          $iecLock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($iecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $iecLock.ref -ne 'main' -or
+              $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ARIEC61850 lock metadata is invalid."
           }
 
+          $ardirecLock = Get-Content ".\ArIED61850Tester\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
+          if ($ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $ardirecLock.ref -ne 'main' -or
+              $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirecLock.qt.version -ne '6.8.3' -or
+              $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
+              $ardirecLock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
+              $ardirecLock.runtime.launchArgument -ne '--arsas-open') {
+            throw "ArdIrec lock metadata is invalid."
+          }
+
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_REPOSITORY=$($iecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($iecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REPOSITORY=$($ardirecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($ardirecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout immutable ARIEC61850 engine revision
         shell: powershell
@@ -78,10 +95,28 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
+      - name: Checkout immutable ArdIrec viewer revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Install Qt 6.8.3 for COMTRADE Viewer
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
 
       - name: Restore, build and test application solution
         shell: powershell
@@ -103,6 +138,14 @@ jobs:
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Stage pinned ArdIrec COMTRADE Viewer
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+            -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-installer-build"
 
       - name: Install Inno Setup compiler
         shell: powershell
@@ -136,7 +179,18 @@ jobs:
           ) -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)." }
 
-          foreach ($file in @("ARSAS.exe", "AR.Iec61850.Transports.Npcap.dll", "SharpPcap.dll", "PacketDotNet.dll")) {
+          foreach ($file in @(
+            "ARSAS.exe",
+            "AR.Iec61850.Transports.Npcap.dll",
+            "SharpPcap.dll",
+            "PacketDotNet.dll",
+            "Tools\ArdIrec\ardirec.exe",
+            "Tools\ArdIrec\Qt6Core.dll",
+            "Tools\ArdIrec\Qt6Gui.dll",
+            "Tools\ArdIrec\Qt6Qml.dll",
+            "Tools\ArdIrec\Qt6Quick.dll",
+            "Tools\ArdIrec\platforms\qwindows.dll"
+          )) {
             $installedFile = Join-Path $installRoot $file
             if (-not (Test-Path $installedFile -PathType Leaf)) { throw "Missing installed file: $installedFile" }
           }

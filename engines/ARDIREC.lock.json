@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "repository": "masarray/ardirec",
+  "ref": "main",
+  "commit": "1c9c2b9230e216eda76c508b11fff705c04349dc",
+  "qt": {
+    "version": "6.8.3",
+    "arch": "win64_msvc2022_64"
+  },
+  "runtime": {
+    "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
+    "launchArgument": "--arsas-open"
+  },
+  "purpose": "Pinned P0 COMTRADE viewer runtime for ARSAS Fault Records integration. This commit is the merged ArdIrec main revision validated by ARSAS; change it only through a deliberate viewer upgrade."
+}
