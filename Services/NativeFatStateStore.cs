@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ArIED61850Tester.Models;
 
@@ -48,7 +50,10 @@ public sealed class NativeFatStateStore
         ArgumentNullException.ThrowIfNull(device);
         Directory.CreateDirectory(_rootDirectory);
 
-        var preferredPath = GetPreferredPath(device.Name);
+        // New native FAT files include a short deterministic hash of stable DeviceId.
+        // Two relays may legitimately share the same display IEDName, so a name-only
+        // filename is not a safe multi-IED persistence identity.
+        var preferredPath = GetPreferredPath(device.Name, device.DeviceId);
         var candidate = await TryReadAsync(preferredPath, cancellationToken).ConfigureAwait(false);
         if (IsForDevice(candidate, device))
         {
@@ -57,18 +62,38 @@ public sealed class NativeFatStateStore
             return candidate;
         }
 
+        // P2 preview builds used name-only filenames. Read them once for compatibility,
+        // but migrate the next save to the collision-safe preferred path. The old file is
+        // intentionally left untouched as recoverable commissioning evidence.
+        var legacyPath = GetLegacyPath(device.Name);
+        if (!legacyPath.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
+        {
+            var legacy = await TryReadAsync(legacyPath, cancellationToken).ConfigureAwait(false);
+            if (IsForDevice(legacy, device))
+            {
+                legacy!.StoragePath = preferredPath;
+                Normalize(legacy, device);
+                return legacy;
+            }
+        }
+
         // IED display names can change. Resolve by stable DeviceId before creating a new
         // state so a harmless rename cannot strand the operator's previous FAT evidence.
         foreach (var path in Directory.EnumerateFiles(_rootDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (path.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
+            if (path.Equals(preferredPath, StringComparison.OrdinalIgnoreCase) ||
+                path.Equals(legacyPath, StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             var probed = await TryReadAsync(path, cancellationToken).ConfigureAwait(false);
             if (!IsForDevice(probed, device))
                 continue;
 
+            // Preserve an already collision-safe file across display-name changes rather
+            // than creating a duplicate file every time the user renames an IED card.
             probed!.StoragePath = path;
             Normalize(probed, device);
             return probed;
@@ -92,7 +117,7 @@ public sealed class NativeFatStateStore
         state.SchemaVersion = Math.Max(1, state.SchemaVersion);
 
         var path = string.IsNullOrWhiteSpace(state.StoragePath)
-            ? GetPreferredPath(state.IedName)
+            ? GetPreferredPath(state.IedName, state.DeviceId)
             : state.StoragePath;
         var tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
 
@@ -326,8 +351,25 @@ public sealed class NativeFatStateStore
         }
     }
 
-    private string GetPreferredPath(string? iedName)
+    private string GetPreferredPath(string? iedName, string? deviceId)
+    {
+        var stem = SanitizeFileStem(iedName);
+        var deviceHash = StableDeviceHash(deviceId);
+        var fileStem = string.IsNullOrWhiteSpace(deviceHash) ? stem : $"{stem}__{deviceHash}";
+        return Path.Combine(_rootDirectory, fileStem + ".json");
+    }
+
+    private string GetLegacyPath(string? iedName)
         => Path.Combine(_rootDirectory, SanitizeFileStem(iedName) + ".json");
+
+    private static string StableDeviceHash(string? deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+            return string.Empty;
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(deviceId.Trim()));
+        return Convert.ToHexString(bytes.AsSpan(0, 6));
+    }
 
     private static string SanitizeFileStem(string? value)
     {
