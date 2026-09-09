@@ -41,6 +41,8 @@ internal readonly record struct ComtradeAnalogEnvelopeBucket(
     uint LastTimestamp,
     double FirstValue,
     double LastValue,
+    ulong MinimumFrame,
+    ulong MaximumFrame,
     uint MinimumTimestamp,
     uint MaximumTimestamp,
     double Minimum,
@@ -94,6 +96,8 @@ internal static class ComtradeRangeDecimator
         var lastTimestamp = new uint[bucketCount];
         var firstValue = new double[bucketCount];
         var lastValue = new double[bucketCount];
+        var minimumFrame = new ulong[bucketCount];
+        var maximumFrame = new ulong[bucketCount];
         var minimumTimestamp = new uint[bucketCount];
         var maximumTimestamp = new uint[bucketCount];
         var initialized = new bool[bucketCount];
@@ -133,11 +137,13 @@ internal static class ComtradeRangeDecimator
                 if (value < minimum[bucket])
                 {
                     minimum[bucket] = value;
+                    minimumFrame[bucket] = absoluteFrame;
                     minimumTimestamp[bucket] = timestamps[i];
                 }
                 if (value > maximum[bucket])
                 {
                     maximum[bucket] = value;
+                    maximumFrame[bucket] = absoluteFrame;
                     maximumTimestamp[bucket] = timestamps[i];
                 }
             }
@@ -160,6 +166,8 @@ internal static class ComtradeRangeDecimator
                 lastTimestamp[bucket],
                 firstValue[bucket],
                 lastValue[bucket],
+                minimumFrame[bucket],
+                maximumFrame[bucket],
                 minimumTimestamp[bucket],
                 maximumTimestamp[bucket],
                 min,
@@ -186,9 +194,6 @@ internal static class ComtradeRangeDecimator
         maxTransitions = Math.Max(2, maxTransitions);
         chunkFrames = NormalizeChunkFrames(chunkFrames);
 
-        // The first state is always retained. Subsequent transitions are sampled adaptively.
-        // When the cap is reached we double the sampling stride and compact already-stored
-        // transitions by their original change ordinal, then continue scanning the full range.
         var sampled = new List<SampledDigitalTransition>(Math.Min(maxTransitions, 4096));
         var havePrevious = false;
         byte previousState = 0;
@@ -248,8 +253,6 @@ internal static class ComtradeRangeDecimator
             processed += checked((ulong)take);
         }
 
-        // Keep the actual final state transition so the trace terminates in the correct state,
-        // even when adaptive sampling omitted the last change.
         if (lastActualTransition is { } lastActual &&
             sampled[^1].Transition.Frame != lastActual.Frame)
         {
@@ -262,7 +265,7 @@ internal static class ComtradeRangeDecimator
             .Select(item => item.Transition)
             .OrderBy(item => item.Frame)
             .ToArray();
-        var exactTransitionCount = changeOrdinal + 1; // initial state + actual changes
+        var exactTransitionCount = changeOrdinal + 1;
         var isTruncated = checked((ulong)transitions.Length) < exactTransitionCount;
 
         return new ComtradeDigitalTransitionSet(
@@ -288,7 +291,7 @@ internal static class ComtradeRangeDecimator
         if (sampled.Count <= 1)
             return;
 
-        var write = 1; // Preserve initial state at ordinal zero.
+        var write = 1;
         for (var read = 1; read < sampled.Count; read++)
         {
             if (sampled[read].ChangeOrdinal % stride != 0)
@@ -307,8 +310,6 @@ internal static class ComtradeRangeDecimator
         if (bucketCount <= 1 || frameCount <= 1)
             return 0;
 
-        // Use floating-point only for the bucket mapping to avoid ulong multiplication overflow.
-        // COMTRADE frame indices themselves stay integral and exact throughout the range reader.
         var fraction = relativeFrame / (double)frameCount;
         return Math.Clamp((int)(fraction * bucketCount), 0, bucketCount - 1);
     }
