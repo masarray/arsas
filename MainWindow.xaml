@@ -121,8 +121,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="6" Width="148" Height="34"
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="7" Width="112" Height="34"
                             HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
                             Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
@@ -151,6 +152,7 @@
                             </Border>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Content="FAT" Tag="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                 </Grid>
             </Border>
 
@@ -1684,7 +1686,12 @@
                     </DockPanel>
                 </Border>
             </TabItem>
-                </TabControl>
+
+            <!-- FAT: permanent seventh Engineering workspace host. Production presentation is mounted here. -->
+            <TabItem x:Name="NativeFatTab" Header="FAT">
+                <Grid/>
+            </TabItem>
+        </TabControl>
 
         <Border Grid.Row="2" Margin="0,10,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF" BorderThickness="1" CornerRadius="14" Padding="11,7">
             <Grid>

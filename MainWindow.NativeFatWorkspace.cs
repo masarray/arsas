@@ -102,18 +102,16 @@ public partial class MainWindow
         _nativeFatInstallRetry?.Stop();
         _nativeFatInstalled = true;
 
-        _nativeFatTab = new TabItem
-        {
-            Header = "FAT",
-            Content = BuildNativeFatWorkspaceContent()
-        };
-        MainTabs.Items.Add(_nativeFatTab);
+        // M1: MainWindow.xaml owns the seventh tab and navigation button. The native
+        // FAT implementation temporarily supplies only content/state until the production
+        // reusable FAT surface replaces it in M2; it no longer creates workstation shell UI.
+        _nativeFatTab = NativeFatTab;
+        _nativeFatNavButton = NavNativeFatButton;
+        _nativeFatTab.Content = BuildNativeFatWorkspaceContent();
 
         // The command dock is deliberately shared, not cloned. FAT is command-centric,
         // therefore start with the same expanded behavior as Explorer/Event Log.
         _persistentWorkbench.DockExpandedByWorkspace[NativeFatWorkspaceIndex] = true;
-
-        InstallNativeFatNavigationButton();
         InstallNativeFatTimers();
         AttachNativeFatObservedDevice(SelectedDevice);
 
@@ -450,30 +448,6 @@ public partial class MainWindow
         return button;
     }
 
-    private void InstallNativeFatNavigationButton()
-    {
-        if (_nativeFatNavButton != null)
-            return;
-
-        while (WorkflowNavGrid.ColumnDefinitions.Count < 7)
-            WorkflowNavGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        Grid.SetColumnSpan(WorkflowPill, 7);
-        _nativeFatNavButton = new Button
-        {
-            Name = "NavNativeFatButton",
-            Content = "FAT",
-            Tag = NativeFatWorkspaceIndex,
-            MinWidth = 0,
-            ToolTip = "Continuous FAT testing using the selected IED and live Explorer signal authority"
-        };
-        if (TryFindResource("SegmentedNavButton") is Style navStyle)
-            _nativeFatNavButton.Style = navStyle;
-        _nativeFatNavButton.Click += NativeFatNavButton_Click;
-        Grid.SetColumn(_nativeFatNavButton, 6);
-        WorkflowNavGrid.Children.Add(_nativeFatNavButton);
-    }
-
     private void InstallNativeFatTimers()
     {
         _nativeFatReconcileTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -518,64 +492,10 @@ public partial class MainWindow
     {
         if (!_nativeFatInstalled)
             return;
+
         Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
-            new Action(ApplyNativeFatNavigationGeometry));
-    }
-
-    private void ApplyNativeFatNavigationGeometry()
-    {
-        if (!_nativeFatInstalled || _nativeFatNavButton == null)
-            return;
-
-        var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
-        var wide = availableWidth >= 1700d;
-        var medium = availableWidth >= 1380d;
-        var shellWidth = wide ? 1085d : medium ? 995d : 805d;
-
-        WorkflowNavShell.Width = shellWidth;
-        WorkflowNavShell.MinWidth = shellWidth;
-        WorkflowNavShell.Height = 60;
-        WorkflowNavShell.Padding = new Thickness(5, 6, 5, 6);
-        WorkflowNavGrid.ClipToBounds = false;
-
-        while (WorkflowNavGrid.ColumnDefinitions.Count < 7)
-            WorkflowNavGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        foreach (var column in WorkflowNavGrid.ColumnDefinitions)
-            column.Width = new GridLength(1, GridUnitType.Star);
-
-        var buttons = new[]
-        {
-            NavExplorerButton,
-            NavLiveButton,
-            NavEventsButton,
-            NavAlarmButton,
-            NavGooseButton,
-            NavDiagnosticsButton,
-            _nativeFatNavButton
-        };
-        for (var index = 0; index < buttons.Length; index++)
-        {
-            var button = buttons[index];
-            button.MinHeight = 40;
-            button.MinWidth = 0;
-            button.Margin = new Thickness(1);
-            button.Padding = wide ? new Thickness(9, 7, 9, 7) : new Thickness(5, 7, 5, 7);
-            button.HorizontalContentAlignment = HorizontalAlignment.Center;
-            button.VerticalContentAlignment = VerticalAlignment.Center;
-            button.Foreground = index == MainTabs.SelectedIndex
-                ? Brushes.White
-                : ResourceBrush("Muted", Color.FromRgb(0x5F, 0x6B, 0x7A));
-        }
-
-        Grid.SetColumnSpan(WorkflowPill, 7);
-        var contentWidth = Math.Max(0d, shellWidth - WorkflowNavShell.Padding.Left - WorkflowNavShell.Padding.Right);
-        var cellWidth = contentWidth / 7d;
-        WorkflowPill.Width = Math.Max(1d, cellWidth - 2d);
-        WorkflowPill.Height = 36;
-
-        WorkflowPillTranslate.BeginAnimation(TranslateTransform.XProperty, null);
-        WorkflowPillTranslate.X = Math.Clamp(MainTabs.SelectedIndex, 0, NativeFatWorkspaceIndex) * cellWidth;
+            new Action(() => UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: false)));
     }
 
     private void NativeFat_MainWindowPropertyChanged(object? sender, PropertyChangedEventArgs e)
