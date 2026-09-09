@@ -1,8 +1,12 @@
 {
-  "schema": 1,
+  "schema": 2,
   "repository": "masarray/ardirec",
   "ref": "main",
-  "commit": "1c9c2b9230e216eda76c508b11fff705c04349dc",
+  "commit": "d7f8702adce3d3f35ad9d426c65eaf50f741c55c",
+  "bridge": {
+    "abi": 1,
+    "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll"
+  },
   "qt": {
     "version": "6.8.3",
     "arch": "win64_msvc2022_64"
@@ -11,5 +15,5 @@
     "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
     "launchArgument": "--arsas-open"
   },
-  "purpose": "Pinned P0 COMTRADE viewer runtime for ARSAS Fault Records integration. This commit is the merged ArdIrec main revision validated by ARSAS; change it only through a deliberate viewer upgrade."
+  "purpose": "Pinned ArdIrec P1 engine for ARSAS COMTRADE integration. The native bridge is the preferred in-process path; the Qt runtime remains a compatibility fallback until WPF analysis parity is complete. Change this commit only through a deliberate engine upgrade."
 }

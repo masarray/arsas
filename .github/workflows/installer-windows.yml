@@ -12,7 +12,20 @@ on:
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
+      - "ComtradeWorkspaceWindow.xaml"
+      - "ComtradeWorkspaceWindow.xaml.cs"
+      - "Controls/ComtradeWaveformView.cs"
+      - "Services/ArdIrecNativeBridge.cs"
       - "Services/ArdIrecViewerLauncher.cs"
+      - "Services/ComtradeNavigationMath.cs"
+      - "Services/ComtradeTimeMath.cs"
+      - "Services/ComtradeRangeDecimator.cs"
+      - "Services/ComtradeDecimatedSeriesBuilder.cs"
+      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
+      - "tests/ARSAS.Tests/ComtradeNavigationMathTests.cs"
+      - "tests/ARSAS.Tests/ComtradeTimeMathTests.cs"
+      - "tests/ARSAS.Tests/ComtradeRangeDecimatorTests.cs"
+      - "tests/ARSAS.Tests/ComtradeDecimatedSeriesBuilderTests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
@@ -28,7 +41,20 @@ on:
       - ".github/workflows/installer-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
+      - "ComtradeWorkspaceWindow.xaml"
+      - "ComtradeWorkspaceWindow.xaml.cs"
+      - "Controls/ComtradeWaveformView.cs"
+      - "Services/ArdIrecNativeBridge.cs"
       - "Services/ArdIrecViewerLauncher.cs"
+      - "Services/ComtradeNavigationMath.cs"
+      - "Services/ComtradeTimeMath.cs"
+      - "Services/ComtradeRangeDecimator.cs"
+      - "Services/ComtradeDecimatedSeriesBuilder.cs"
+      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
+      - "tests/ARSAS.Tests/ComtradeNavigationMathTests.cs"
+      - "tests/ARSAS.Tests/ComtradeTimeMathTests.cs"
+      - "tests/ARSAS.Tests/ComtradeRangeDecimatorTests.cs"
+      - "tests/ARSAS.Tests/ComtradeDecimatedSeriesBuilderTests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
@@ -72,14 +98,17 @@ jobs:
           }
 
           $ardirecLock = Get-Content ".\ArIED61850Tester\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
-          if ($ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+          if ($ardirecLock.schema -ne 2 -or
+              $ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
               $ardirecLock.ref -ne 'main' -or
               $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirecLock.bridge.abi -ne 1 -or
+              $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll' -or
               $ardirecLock.qt.version -ne '6.8.3' -or
               $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
               $ardirecLock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
               $ardirecLock.runtime.launchArgument -ne '--arsas-open') {
-            throw "ArdIrec lock metadata is invalid."
+            throw "ArdIrec P1 lock metadata is invalid."
           }
 
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -99,7 +128,7 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
-      - name: Checkout immutable ArdIrec viewer revision
+      - name: Checkout immutable ArdIrec P1 engine revision
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
@@ -115,7 +144,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Install Qt 6.8.3 for COMTRADE Viewer
+      - name: Install Qt 6.8.3 for COMTRADE fallback
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
@@ -143,13 +172,32 @@ jobs:
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 
-      - name: Stage pinned ArdIrec COMTRADE Viewer
+      - name: Stage pinned ArdIrec P1 native bridge and Qt fallback
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
             -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
             -BuildDirectory "$env:RUNNER_TEMP\ardirec-installer-build"
+
+      - name: Exercise managed P1 bridge against real COMTRADE fixture
+        shell: powershell
+        run: |
+          $publish = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64"
+          $bridge = Join-Path $publish "Tools\ArdIrec\ardirec_bridge.dll"
+          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not staged: $bridge" }
+
+          $fixtureDirectory = Join-Path $env:RUNNER_TEMP "ARSAS native COMTRADE üñîçødé 日本 with spaces"
+          New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
+          Copy-Item ".\ArdIrec\tests\data\binary.cfg" (Join-Path $fixtureDirectory "binary.cfg") -Force
+          Copy-Item ".\ArdIrec\tests\data\binary.dat" (Join-Path $fixtureDirectory "binary.dat") -Force
+
+          $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridge
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = Join-Path $fixtureDirectory "binary.cfg"
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
+            -c Release --no-build --no-restore `
+            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests"
+          if ($LASTEXITCODE -ne 0) { throw "Managed ArdIrec P1 bridge integration test failed." }
 
       - name: Install Inno Setup compiler
         shell: powershell
@@ -188,6 +236,7 @@ jobs:
             "AR.Iec61850.Transports.Npcap.dll",
             "SharpPcap.dll",
             "PacketDotNet.dll",
+            "Tools\ArdIrec\ardirec_bridge.dll",
             "Tools\ArdIrec\ardirec.exe",
             "Tools\ArdIrec\Qt6Core.dll",
             "Tools\ArdIrec\Qt6Gui.dll",
