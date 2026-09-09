@@ -44,18 +44,47 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     }
 
     [Fact]
-    public void SeventhFatDestination_HasOnlyOneSevenSlotCompatibilityOwner()
+    public void SeventhFatDestination_IsCanonicalMainWindowSiblingWithOneNavigationOwner()
     {
+        var xaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
+        var mainSource = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
         var nativeSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
+        var productionSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
         var repoRoot = FindRepoRoot();
 
-        Assert.Contains("NavNativeFatButton", nativeSource, StringComparison.Ordinal);
-        Assert.Contains("TryFindResource(\"SegmentedNavButton\")", nativeSource, StringComparison.Ordinal);
-        Assert.Contains("var cellWidth = contentWidth / 7d", nativeSource, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(MainTabs.SelectedIndex, 0, NativeFatWorkspaceIndex)", nativeSource, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"NavNativeFatButton\" Grid.Column=\"6\" Content=\"FAT\" Tag=\"6\" Click=\"NavButton_Click\" Style=\"{StaticResource SegmentedNavButton}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.ColumnSpan=\"7\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("Math.Clamp(index, 0, NativeFatWorkspaceIndex)", mainSource, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 7d", mainSource, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton", mainSource, StringComparison.Ordinal);
+
+        Assert.Contains("_nativeFatTab = NativeFatTab", nativeSource, StringComparison.Ordinal);
+        Assert.Contains("_nativeFatNavButton = NavNativeFatButton", nativeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainTabs.Items.Add(_nativeFatTab)", nativeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("InstallNativeFatNavigationButton", nativeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Name = \"NavNativeFatButton\"", nativeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("var cellWidth = contentWidth / 7d", nativeSource, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("ProductionFatNavButton_Click", productionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatNavButton.Style =", productionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatNavButton.Click +=", productionSource, StringComparison.Ordinal);
+
         Assert.False(
             File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatNavigationParity.cs")),
-            "Do not reintroduce a second ApplicationIdle navigation parity owner. Seven-slot navigation must converge toward one canonical owner.");
+            "Do not reintroduce a second ApplicationIdle navigation parity owner. MainWindow is the seven-slot navigation authority.");
+    }
+
+    [Fact]
+    public void ExistingWorkspaceSelectionSideEffects_RemainProtectedWhileAddingFat()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+
+        Assert.Contains("device.ClearUnreadEvents()", source, StringComparison.Ordinal);
+        Assert.Contains("ActivateGooseSubscriberWorkspace()", source, StringComparison.Ordinal);
+        Assert.Contains("ClearDiagnosticAlert()", source, StringComparison.Ordinal);
+        Assert.Contains("UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true)", source, StringComparison.Ordinal);
     }
 
     [Fact]
