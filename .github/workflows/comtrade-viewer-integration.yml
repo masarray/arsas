@@ -6,7 +6,10 @@ on:
       - "FaultRecordWindow.ComtradeOpen.cs"
       - "ComtradeWorkspaceWindow.xaml"
       - "ComtradeWorkspaceWindow.xaml.cs"
+      - "ComtradeWorkspaceWindow.Analysis.cs"
       - "Controls/ComtradeWaveformView.cs"
+      - "Controls/ComtradePhasorView.cs"
+      - "Controls/ComtradeHarmonicsView.cs"
       - "Services/ArdIrecNativeBridge.cs"
       - "Services/ArdIrecViewerLauncher.cs"
       - "Services/ComtradeNavigationMath.cs"
@@ -33,7 +36,7 @@ permissions:
 
 jobs:
   windows-viewer-integration:
-    name: Build pinned ArdIrec P1 engine and smoke compatibility launch
+    name: Build pinned ArdIrec P1C engine and smoke compatibility launch
     runs-on: windows-latest
     timeout-minutes: 35
 
@@ -87,7 +90,7 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true
 
-      - name: Build, test and stage ArdIrec P1 engine
+      - name: Build, test and stage ArdIrec P1C engine
         shell: powershell
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "arsas-viewer-publish"
@@ -116,7 +119,7 @@ jobs:
           )) {
             $path = Join-Path $env:VIEWER_PUBLISH $relative
             if (-not (Test-Path $path -PathType Leaf)) {
-              throw "Missing staged ArdIrec P1 runtime file: $path"
+              throw "Missing staged ArdIrec P1C runtime file: $path"
             }
           }
 
@@ -145,4 +148,4 @@ jobs:
 
           Stop-Process -Id $process.Id -Force
           $process.WaitForExit()
-          Write-Host "P1 native bridge is staged; P0 compatibility launch also passed with a Unicode COMTRADE path containing spaces."
+          Write-Host "P1C native bridge is staged; compatibility Qt launch also passed with a Unicode COMTRADE path containing spaces."
