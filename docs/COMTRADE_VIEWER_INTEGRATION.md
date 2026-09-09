@@ -71,17 +71,32 @@ P1A establishes the native boundary and the first ARSAS-native WPF workspace:
 
 For initial field validation, the WPF workspace limits one selected-channel preview to the first 500,000 frames. This is an explicit P1A boundary rather than a parser limitation.
 
-### P1B target
+### P1B.1 — waveform navigation
 
-P1B should add workstation interaction parity without changing the bridge ownership model:
+P1B.1 adds operator navigation on top of the P1A native record ownership model without changing the bridge ABI:
 
-- stacked multi-track waveform layout,
-- shared time axis,
-- trigger reference,
-- cursor A/B measurements,
-- zoom and pan,
-- efficient full-record range/decimation access for large records,
-- digital transition navigation.
+- bounded zoom/pan/reset viewport math,
+- COMTRADE timestamp-based X positioning rather than assuming uniform frame spacing,
+- `TIMEMULT`-aware time readout,
+- trigger reference derived from COMTRADE start/trigger timestamps,
+- Cursor A/B placement and measurements,
+- Δt and analog Δvalue readout,
+- wheel zoom, Shift+wheel pan, Alt/middle drag pan and double-click reset,
+- compact navigation toolbar with live readout and explicit **Reset view**,
+- transition-driven digital rendering so steady records do not emit one WPF draw command per frame.
+
+The P1A 500,000-frame loaded-preview boundary intentionally remains in P1B.1. Navigation correctness and interaction are separated from the large-record transport/decimation problem so the two concerns can be validated independently.
+
+### P1B.2 target — full-record and multi-track workstation
+
+P1B.2 should reuse the P1B.1 navigation/time primitives while removing the loaded-preview limitation:
+
+- efficient native full-record range access and display-oriented decimation for large records,
+- stacked multi-track analog/digital waveform layout,
+- one shared time viewport across visible tracks,
+- shared trigger and Cursor A/B references across tracks,
+- digital transition navigation,
+- bounded memory use so opening a long disturbance record does not require copying every visible channel into managed memory at once.
 
 ### P1C target
 
@@ -156,3 +171,16 @@ P1A is ready for field testing when:
 - the installer contains both native bridge and compatibility runtime,
 - the installer builder refuses a package with an invalid P1 lock or missing native bridge,
 - Build ARSAS, COMTRADE integration, SV regression and Windows installer validation are green on the final P1A head.
+
+## P1B.1 acceptance criteria
+
+P1B.1 is ready when:
+
+- zoom and pan never escape the loaded frame range,
+- cursor placement is based on the nearest COMTRADE timestamp in the visible window,
+- trigger and cursor time readouts respect `TIMEMULT`,
+- multi-rate/non-uniform timestamp spacing is reflected on the X axis,
+- Reset view restores the full loaded preview and clears cursors,
+- steady digital channels render transition-first rather than frame-first,
+- existing P1A native-open/fallback/installer behavior remains green,
+- Build ARSAS, COMTRADE integration, SV regression and Windows installer validation are green on the final P1B.1 head.
