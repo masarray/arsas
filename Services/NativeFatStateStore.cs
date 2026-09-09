@@ -61,6 +61,7 @@ public sealed class NativeFatStateStore
             Normalize(candidate, device);
             return candidate;
         }
+        var preferredPathOccupied = File.Exists(preferredPath);
 
         // P2 preview builds used name-only filenames. Read them once for compatibility,
         // but migrate the next save to the collision-safe preferred path. The old file is
@@ -71,7 +72,9 @@ public sealed class NativeFatStateStore
             var legacy = await TryReadAsync(legacyPath, cancellationToken).ConfigureAwait(false);
             if (IsForDevice(legacy, device))
             {
-                legacy!.StoragePath = preferredPath;
+                legacy!.StoragePath = preferredPathOccupied
+                    ? GetNonDestructiveRecoveryPath(preferredPath)
+                    : preferredPath;
                 Normalize(legacy, device);
                 return legacy;
             }
@@ -99,13 +102,19 @@ public sealed class NativeFatStateStore
             return probed;
         }
 
+        // An occupied preferred path that is unreadable or belongs to a different device
+        // is evidence, not scratch space. Start a recovery state beside it; never overwrite
+        // the original simply because deserialization failed.
+        var storagePath = preferredPathOccupied
+            ? GetNonDestructiveRecoveryPath(preferredPath)
+            : preferredPath;
         return new NativeFatDeviceState
         {
             DeviceId = device.DeviceId,
             IedName = device.Name,
             CreatedUtc = DateTimeOffset.UtcNow,
             UpdatedUtc = DateTimeOffset.UtcNow,
-            StoragePath = preferredPath
+            StoragePath = storagePath
         };
     }
 
@@ -361,6 +370,21 @@ public sealed class NativeFatStateStore
 
     private string GetLegacyPath(string? iedName)
         => Path.Combine(_rootDirectory, SanitizeFileStem(iedName) + ".json");
+
+    private static string GetNonDestructiveRecoveryPath(string preferredPath)
+    {
+        var directory = Path.GetDirectoryName(preferredPath) ?? string.Empty;
+        var stem = Path.GetFileNameWithoutExtension(preferredPath);
+        var extension = Path.GetExtension(preferredPath);
+        for (var index = 1; index <= 999; index++)
+        {
+            var candidate = Path.Combine(directory, $"{stem}__RECOVERY_{index:000}{extension}");
+            if (!File.Exists(candidate))
+                return candidate;
+        }
+
+        return Path.Combine(directory, $"{stem}__RECOVERY_{Guid.NewGuid():N}{extension}");
+    }
 
     private static string StableDeviceHash(string? deviceId)
     {
