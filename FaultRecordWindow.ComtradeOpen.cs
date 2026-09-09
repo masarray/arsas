@@ -1,12 +1,74 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
 public partial class FaultRecordWindow
 {
+    private bool _comtradeOpenColumnInstalled;
+
+    private void EnsureComtradeOpenColumn()
+    {
+        if (_comtradeOpenColumnInstalled || FaultRecordsGrid is null)
+            return;
+
+        var buttonFactory = new FrameworkElementFactory(typeof(Button));
+        buttonFactory.SetValue(ContentControl.ContentProperty, "Open");
+        buttonFactory.SetValue(FrameworkElement.HeightProperty, 27d);
+        buttonFactory.SetValue(FrameworkElement.MinWidthProperty, 60d);
+        buttonFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 3, 6, 3));
+        buttonFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        buttonFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        buttonFactory.SetValue(Control.PaddingProperty, new Thickness(12, 0, 12, 0));
+        buttonFactory.SetValue(Control.FontSizeProperty, 11.5d);
+        buttonFactory.SetValue(Control.FontWeightProperty, FontWeights.SemiBold);
+        buttonFactory.SetValue(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(35, 86, 153)));
+        buttonFactory.SetValue(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(244, 248, 255)));
+        buttonFactory.SetValue(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(166, 190, 221)));
+        buttonFactory.SetValue(Control.BorderThicknessProperty, new Thickness(1));
+        buttonFactory.SetValue(FrameworkElement.ToolTipProperty, "Open in COMTRADE Viewer");
+        buttonFactory.SetValue(ToolTipService.InitialShowDelayProperty, 650);
+        buttonFactory.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+        buttonFactory.SetBinding(
+            UIElement.VisibilityProperty,
+            new Binding(nameof(FaultRecordRow.LocalState))
+            {
+                Mode = BindingMode.OneWay,
+                Converter = DownloadedFaultRecordVisibilityConverter.Instance
+            });
+        buttonFactory.AddHandler(Button.ClickEvent, new RoutedEventHandler(OpenComtrade_Click));
+
+        var cellTemplate = new DataTemplate
+        {
+            VisualTree = buttonFactory
+        };
+
+        FaultRecordsGrid.Columns.Add(new DataGridTemplateColumn
+        {
+            Header = new TextBlock
+            {
+                Text = "Open",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            },
+            Width = new DataGridLength(82),
+            MinWidth = 78,
+            MaxWidth = 92,
+            IsReadOnly = true,
+            CanUserSort = false,
+            CanUserResize = false,
+            CellTemplate = cellTemplate
+        });
+
+        _comtradeOpenColumnInstalled = true;
+    }
+
     private async void OpenComtrade_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: FaultRecordRow row } button)
@@ -55,10 +117,9 @@ public partial class FaultRecordWindow
 
             using (process)
             {
-                // A successful Process.Start only proves Windows created a process. Qt/QML or
-                // graphics-runtime failures can still close the viewer immediately. Give the
-                // process a short bounded startup window and report that failure back to the
-                // operator instead of making the Open button appear inert.
+                // Process.Start only proves Windows created a process. Qt/QML or graphics-runtime
+                // failures can still close the viewer immediately. Observe a short bounded startup
+                // period so Open never appears to do nothing on a real workstation.
                 var activated = false;
                 for (var attempt = 0; attempt < 6; attempt++)
                 {
@@ -104,4 +165,15 @@ public partial class FaultRecordWindow
             button.IsEnabled = true;
         }
     }
+}
+
+internal sealed class DownloadedFaultRecordVisibilityConverter : IValueConverter
+{
+    public static DownloadedFaultRecordVisibilityConverter Instance { get; } = new();
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is FaultRecordLocalState.Downloaded ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => Binding.DoNothing;
 }
