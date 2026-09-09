@@ -24,9 +24,10 @@ ArdIrec responsibilities:
 
 1. Keep standalone launch compatibility with `ardirec.exe <record.cfg>` and `ardirec.exe --open <record.cfg>`.
 2. Accept `ardirec.exe --arsas-open <record.cfg>` for the ARSAS-hosted P0 workflow.
-3. In ARSAS-hosted mode, present the window as **ARSAS — COMTRADE Viewer** instead of exposing a second product identity.
-4. Route startup loading through the existing `DocumentController::openCfg()` path.
-5. Keep CFG/DAT validation, parsing, waveform loading and analysis inside ArdIrec/`ardirec_core`.
+3. Read startup paths through Qt's Unicode-safe application argument API.
+4. In ARSAS-hosted mode, present the window as **ARSAS — COMTRADE Viewer** instead of exposing a second product identity.
+5. Route startup loading through the existing `DocumentController::openCfg()` path.
+6. Keep CFG/DAT validation, parsing, waveform loading and analysis inside ArdIrec/`ardirec_core`.
 
 ## Runtime discovery
 
@@ -39,7 +40,7 @@ Development lookup order:
 5. `ardirec.exe` beside ARSAS
 6. Common build outputs from a sibling `ardirec` repository
 
-The supported release layout is:
+The supported installer/folder release layout is:
 
 ```text
 ARSAS/
@@ -53,33 +54,38 @@ ARSAS/
       ...windeployqt runtime...
 ```
 
-## Release reproducibility
+The legacy portable single-EXE distribution remains a separate compatibility artifact in P0 and does not pretend to embed the Qt viewer runtime. The installer/folder distribution is the complete P0 COMTRADE Viewer experience.
 
-The ARSAS release pipeline must not download an unpinned "latest" ArdIrec build.
+## Reproducible integration
 
-Before P0 is marked release-ready:
+The ARSAS release pipeline must never resolve an unpinned "latest" ArdIrec build.
 
-1. Merge and validate the ArdIrec CLI-open seam.
-2. Pin an exact ArdIrec commit in `engines/ARDIREC.lock.json`.
-3. Build that commit with the same Windows recipe as ArdIrec: Qt 6.8.3 / MSVC 2022, Release configuration, then `windeployqt --release --compiler-runtime --no-translations --qmldir apps/desktop/qml`.
-4. Use `scripts/stage-ardirec-viewer.ps1` to stage the deployed runtime under `Tools/ArdIrec/` in the ARSAS publish directory before Inno Setup runs.
-5. Extend installer smoke tests to verify `Tools/ArdIrec/ardirec.exe` and its deployed Qt runtime exist.
-6. Add an integration smoke fixture that launches a known-good CFG/DAT pair through the same ARSAS launcher contract.
+Current P0 contract:
+
+1. The ArdIrec CLI/hosted-open seam is merged to `masarray/ardirec` `main`.
+2. `engines/ARDIREC.lock.json` pins an exact merged `main` commit and requires `ref=main`.
+3. Qt is pinned to 6.8.3 / `win64_msvc2022_64`.
+4. `scripts/stage-ardirec-viewer.ps1` configures and builds ArdIrec Release, runs its regression tests, then performs `windeployqt --release --compiler-runtime --no-translations --qmldir apps/desktop/qml`.
+5. The deployed runtime is staged under `Tools/ArdIrec/` before Inno Setup runs.
+6. The dedicated integration workflow smoke-launches a known-good CFG/DAT pair from a Unicode path containing spaces using the same `--arsas-open` argument contract as ARSAS.
+7. The Windows installer validation workflow requires the installed ArdIrec executable, core Qt DLLs, and `platforms/qwindows.dll`.
+8. The production Windows release workflow uses the same pinned ArdIrec revision and staging script and records the COMTRADE Viewer repository/commit in release provenance.
 
 ## P0 acceptance criteria
 
-P0 is complete when all of the following are true:
+P0 is complete when all of the following are true on the final ARSAS PR head:
 
 - Existing Fault Records scan/download/re-download tests remain green.
 - A complete downloaded COMTRADE row exposes **Open**.
 - A non-downloaded or partial row does not expose an actionable **Open** control.
 - Missing CFG is rejected locally.
 - CFG without same-stem DAT is rejected locally.
-- Paths containing spaces launch correctly.
+- Paths containing spaces and Unicode characters launch correctly.
 - ArdIrec opens the supplied CFG automatically and displays the loaded record.
 - ARSAS-hosted launch is branded **ARSAS — COMTRADE Viewer**.
 - ARSAS installer includes the pinned ArdIrec runtime under `Tools/ArdIrec/`.
 - Installer smoke testing verifies the viewer component is present.
+- ARSAS build/regression tests, COMTRADE cross-repo smoke, and installer validation are green against the merged pinned ArdIrec `main` revision.
 
 ## P1 direction
 
