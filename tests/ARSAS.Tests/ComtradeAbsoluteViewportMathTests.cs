@@ -44,16 +44,18 @@ public sealed class ComtradeAbsoluteViewportMathTests
     }
 
     [Fact]
-    public void FromPlotWindow_MapsReducedPointsBackToAbsoluteSourceFrames()
+    public void FromPlotWindow_MapsEndExclusivePlotRangeBackToAbsoluteSourceFrames()
     {
         var sourceFrames = new ulong[] { 0, 10, 25, 60, 99 };
 
+        // ComtradeFrameWindow is [Start, EndExclusive), so (1, 3) contains
+        // reduced points at source frames 10 and 25 only.
         var viewport = ComtradeAbsoluteViewportMath.FromPlotWindow(
             sourceFrames,
             new ComtradeFrameWindow(1, 3),
             totalFrames: 100);
 
-        Assert.Equal(new ComtradeSourceViewport(10, 51), viewport);
+        Assert.Equal(new ComtradeSourceViewport(10, 16), viewport);
     }
 
     [Theory]
