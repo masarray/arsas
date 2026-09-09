@@ -39,6 +39,8 @@ internal readonly record struct ComtradeAnalogEnvelopeBucket(
     ulong EndExclusive,
     uint FirstTimestamp,
     uint LastTimestamp,
+    uint MinimumTimestamp,
+    uint MaximumTimestamp,
     double Minimum,
     double Maximum);
 
@@ -88,6 +90,8 @@ internal static class ComtradeRangeDecimator
         var bucketEnds = new ulong[bucketCount];
         var firstTimestamp = new uint[bucketCount];
         var lastTimestamp = new uint[bucketCount];
+        var minimumTimestamp = new uint[bucketCount];
+        var maximumTimestamp = new uint[bucketCount];
         var initialized = new bool[bucketCount];
 
         ulong processed = 0;
@@ -117,10 +121,19 @@ internal static class ComtradeRangeDecimator
                 lastTimestamp[bucket] = timestamps[i];
 
                 var value = values[i];
-                if (double.IsFinite(value))
+                if (!double.IsFinite(value))
+                    continue;
+
+                if (value < minimum[bucket])
                 {
-                    minimum[bucket] = Math.Min(minimum[bucket], value);
-                    maximum[bucket] = Math.Max(maximum[bucket], value);
+                    minimum[bucket] = value;
+                    minimumTimestamp[bucket] = timestamps[i];
+                }
+
+                if (value > maximum[bucket])
+                {
+                    maximum[bucket] = value;
+                    maximumTimestamp[bucket] = timestamps[i];
                 }
             }
 
@@ -135,11 +148,15 @@ internal static class ComtradeRangeDecimator
 
             var min = double.IsPositiveInfinity(minimum[bucket]) ? double.NaN : minimum[bucket];
             var max = double.IsNegativeInfinity(maximum[bucket]) ? double.NaN : maximum[bucket];
+            var minTimestamp = double.IsFinite(min) ? minimumTimestamp[bucket] : firstTimestamp[bucket];
+            var maxTimestamp = double.IsFinite(max) ? maximumTimestamp[bucket] : lastTimestamp[bucket];
             buckets.Add(new ComtradeAnalogEnvelopeBucket(
                 bucketStarts[bucket],
                 bucketEnds[bucket],
                 firstTimestamp[bucket],
                 lastTimestamp[bucket],
+                minTimestamp,
+                maxTimestamp,
                 min,
                 max));
         }
