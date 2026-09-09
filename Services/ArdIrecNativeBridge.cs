@@ -39,6 +39,35 @@ internal sealed record ComtradeStatusChannelInfo(
     string Circuit,
     int NormalState);
 
+internal sealed record ComtradePhasor(
+    bool Valid,
+    double MagnitudeRms,
+    double AngleDegrees,
+    double Real,
+    double Imag,
+    ulong WindowStartFrame,
+    ulong WindowEndExclusive);
+
+internal sealed record ComtradeHarmonicBin(
+    int Order,
+    double MagnitudeRms,
+    double PercentOfFundamental,
+    double AngleDegrees);
+
+internal sealed record ComtradeHarmonicSpectrum(
+    bool Valid,
+    double DcComponent,
+    double FundamentalRms,
+    double ThdPercent,
+    int DominantOrder,
+    double DominantRms,
+    double DominantPercent,
+    double EstimatedSampleRateHz,
+    int MaximumResolvableOrder,
+    ulong WindowStartFrame,
+    ulong WindowEndExclusive,
+    IReadOnlyList<ComtradeHarmonicBin> Bins);
+
 internal static class ArdIrecNativeBridge
 {
     internal const uint ExpectedAbiVersion = 1;
@@ -211,6 +240,8 @@ internal static class ArdIrecNativeBridge
             CopyAnalog = Export<RecordCopyAnalogDelegate>("ardirec_record_copy_analog");
             CopyStatus = Export<RecordCopyStatusDelegate>("ardirec_record_copy_status");
             CopyRawTimestamps = Export<RecordCopyRawTimestampsDelegate>("ardirec_record_copy_raw_timestamps");
+            GetPhasor = Export<RecordGetPhasorDelegate>("ardirec_record_get_phasor");
+            GetHarmonicSpectrum = Export<RecordGetHarmonicSpectrumDelegate>("ardirec_record_get_harmonic_spectrum");
         }
 
         internal string LibraryPath { get; }
@@ -223,6 +254,8 @@ internal static class ArdIrecNativeBridge
         internal RecordCopyAnalogDelegate CopyAnalog { get; }
         internal RecordCopyStatusDelegate CopyStatus { get; }
         internal RecordCopyRawTimestampsDelegate CopyRawTimestamps { get; }
+        internal RecordGetPhasorDelegate GetPhasor { get; }
+        internal RecordGetHarmonicSpectrumDelegate GetHarmonicSpectrum { get; }
 
         private T Export<T>(string name) where T : Delegate
         {
@@ -247,6 +280,8 @@ internal static class ArdIrecNativeBridge
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyAnalogDelegate(IntPtr handle, uint channel, ulong start, ulong count, [Out] double[] destination);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyStatusDelegate(IntPtr handle, uint channel, ulong start, ulong count, [Out] byte[] destination);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyRawTimestampsDelegate(IntPtr handle, ulong start, ulong count, [Out] uint[] destination);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetPhasorDelegate(IntPtr handle, uint channel, ulong referenceFrame, ref NativePhasorInfo info);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetHarmonicSpectrumDelegate(IntPtr handle, uint channel, ulong referenceFrame, int maximumOrder, ref NativeHarmonicSpectrumInfo info, IntPtr bins, uint binCapacity);
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct NativeRecordInfo
@@ -318,6 +353,44 @@ internal static class ArdIrecNativeBridge
             Circuit = new byte[128]
         };
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativePhasorInfo
+    {
+        internal int Valid;
+        internal double MagnitudeRms;
+        internal double AngleDegrees;
+        internal double Real;
+        internal double Imag;
+        internal ulong WindowStartFrame;
+        internal ulong WindowEndExclusive;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeHarmonicBin
+    {
+        internal int Order;
+        internal double MagnitudeRms;
+        internal double PercentOfFundamental;
+        internal double AngleDegrees;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeHarmonicSpectrumInfo
+    {
+        internal int Valid;
+        internal double DcComponent;
+        internal double FundamentalRms;
+        internal double ThdPercent;
+        internal int DominantOrder;
+        internal double DominantRms;
+        internal double DominantPercent;
+        internal double EstimatedSampleRateHz;
+        internal int MaximumResolvableOrder;
+        internal uint BinCount;
+        internal ulong WindowStartFrame;
+        internal ulong WindowEndExclusive;
+    }
 }
 
 internal sealed class ArdIrecNativeRecord : IDisposable
@@ -385,6 +458,71 @@ internal sealed class ArdIrecNativeRecord : IDisposable
         EnsureSuccess(_api.CopyRawTimestamps(_handle, startFrame, checked((ulong)frameCount), values), "read timestamps");
         return values;
     }
+
+    internal ComtradePhasor ReadPhasor(uint channelIndex, ulong referenceFrame)
+    {
+        EnsureOpen();
+        var native = new ArdIrecNativeBridge.NativePhasorInfo();
+        EnsureSuccess(_api.GetPhasor(_handle, channelIndex, referenceFrame, ref native), "calculate phasor");
+        return new ComtradePhasor(
+            native.Valid != 0,
+            native.MagnitudeRms,
+            native.AngleDegrees,
+            native.Real,
+            native.Imag,
+            native.WindowStartFrame,
+            native.WindowEndExclusive);
+    }
+
+    internal ComtradeHarmonicSpectrum ReadHarmonicSpectrum(uint channelIndex, ulong referenceFrame, int maximumOrder = 15)
+    {
+        EnsureOpen();
+        if (maximumOrder < 1) throw new ArgumentOutOfRangeException(nameof(maximumOrder));
+
+        var native = new ArdIrecNativeBridge.NativeHarmonicSpectrumInfo();
+        EnsureSuccess(_api.GetHarmonicSpectrum(_handle, channelIndex, referenceFrame, maximumOrder, ref native, IntPtr.Zero, 0),
+            "query harmonic spectrum");
+        if (native.Valid == 0 || native.BinCount == 0)
+            return MapSpectrum(native, Array.Empty<ComtradeHarmonicBin>());
+
+        var nativeSize = Marshal.SizeOf<ArdIrecNativeBridge.NativeHarmonicBin>();
+        var bytes = checked(nativeSize * checked((int)native.BinCount));
+        var buffer = Marshal.AllocHGlobal(bytes);
+        try
+        {
+            EnsureSuccess(_api.GetHarmonicSpectrum(_handle, channelIndex, referenceFrame, maximumOrder, ref native, buffer, native.BinCount),
+                "read harmonic spectrum");
+            var bins = new List<ComtradeHarmonicBin>(checked((int)native.BinCount));
+            for (var i = 0; i < native.BinCount; i++)
+            {
+                var pointer = IntPtr.Add(buffer, checked((int)i) * nativeSize);
+                var bin = Marshal.PtrToStructure<ArdIrecNativeBridge.NativeHarmonicBin>(pointer);
+                bins.Add(new ComtradeHarmonicBin(bin.Order, bin.MagnitudeRms, bin.PercentOfFundamental, bin.AngleDegrees));
+            }
+            return MapSpectrum(native, bins);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static ComtradeHarmonicSpectrum MapSpectrum(
+        ArdIrecNativeBridge.NativeHarmonicSpectrumInfo native,
+        IReadOnlyList<ComtradeHarmonicBin> bins)
+        => new(
+            native.Valid != 0,
+            native.DcComponent,
+            native.FundamentalRms,
+            native.ThdPercent,
+            native.DominantOrder,
+            native.DominantRms,
+            native.DominantPercent,
+            native.EstimatedSampleRateHz,
+            native.MaximumResolvableOrder,
+            native.WindowStartFrame,
+            native.WindowEndExclusive,
+            bins);
 
     private ComtradeAnalogChannelInfo ReadAnalogChannelInfo(int index)
     {
