@@ -104,12 +104,21 @@ public partial class FaultRecordWindow
             }
 
             StatusText = $"Opening {Path.GetFileName(cfgPath)} in the native COMTRADE workspace…";
+            ShowToast("Loading COMTRADE record with native ArdIrec core…", ToastKind.Information);
 
-            if (ArdIrecNativeBridge.TryOpen(cfgPath, out var nativeRecord, out var nativeError) && nativeRecord is not null)
+            // P1A's reference DatReader eagerly decodes the record while opening. Keep that work
+            // off WPF's dispatcher thread so large field records do not freeze the Fault Records UI.
+            var nativeOpen = await Task.Run(() =>
+            {
+                var opened = ArdIrecNativeBridge.TryOpen(cfgPath, out var record, out var error);
+                return (Opened: opened, Record: record, Error: error);
+            }).ConfigureAwait(true);
+
+            if (nativeOpen.Opened && nativeOpen.Record is not null)
             {
                 try
                 {
-                    var workspace = new ComtradeWorkspaceWindow(nativeRecord)
+                    var workspace = new ComtradeWorkspaceWindow(nativeOpen.Record)
                     {
                         Owner = this
                     };
@@ -120,10 +129,12 @@ public partial class FaultRecordWindow
                 }
                 catch
                 {
-                    nativeRecord.Dispose();
+                    nativeOpen.Record.Dispose();
                     throw;
                 }
             }
+
+            var nativeError = nativeOpen.Error;
 
             // P1 rolls out native-first while preserving the proven P0 viewer as a compatibility
             // fallback. This keeps field workflows available if the native DLL is absent or a
