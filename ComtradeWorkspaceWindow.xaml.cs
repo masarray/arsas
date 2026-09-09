@@ -9,11 +9,14 @@ namespace ArIED61850Tester;
 
 public partial class ComtradeWorkspaceWindow : Window
 {
-    private const int MaxPreviewFrames = 500_000;
+    private const int ExactSignalFrameLimit = 500_000;
+    private const int FullRecordAnalogBuckets = 4_096;
+    private const int FullRecordDigitalTransitionCap = 100_000;
     private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Click Cursor A • Ctrl/right-click Cursor B";
     private readonly ArdIrecNativeRecord _record;
     private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private CancellationTokenSource? _signalLoadCts;
+    private bool _isReducedView;
 
     internal ComtradeWorkspaceWindow(ArdIrecNativeRecord record)
     {
@@ -120,6 +123,7 @@ public partial class ComtradeWorkspaceWindow : Window
         _signalLoadCts = new CancellationTokenSource();
         var token = _signalLoadCts.Token;
 
+        _isReducedView = false;
         ResetViewButton.IsEnabled = false;
         NavigationTextBlock.Text = NavigationHint;
         StatusTextBlock.Text = $"Loading {signal.Title} from native ArdIrec core…";
@@ -131,32 +135,32 @@ public partial class ComtradeWorkspaceWindow : Window
             if (token.IsCancellationRequested)
                 return;
 
+            _isReducedView = preview.IsReduced;
             if (preview.Analog is not null)
             {
                 var metadata = _record.AnalogChannels[checked((int)signal.Index)];
                 WaveformView.ShowAnalog(
                     signal.Title,
-                    BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.IsTruncated),
+                    BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.DisplayMode),
                     metadata.Units,
                     preview.Analog,
                     preview.Timestamps,
-                    _record.Info.TimeMultiplier);
+                    _record.Info.TimeMultiplier,
+                    preserveAllPoints: preview.IsReduced);
             }
             else if (preview.Status is not null)
             {
                 var metadata = _record.StatusChannels[checked((int)signal.Index)];
                 WaveformView.ShowStatus(
                     signal.Title,
-                    BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.IsTruncated),
+                    BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.DisplayMode),
                     preview.Status,
                     preview.Timestamps,
                     _record.Info.TimeMultiplier);
             }
 
             ResetViewButton.IsEnabled = preview.Timestamps.Length > 1;
-            StatusTextBlock.Text = preview.IsTruncated
-                ? $"Showing the first {preview.Timestamps.Length:N0} of {_record.Info.FrameCount:N0} frames • P1B navigation preview limit"
-                : $"{preview.Timestamps.Length:N0} frames • native navigation • trigger/cursor time from COMTRADE timestamps";
+            StatusTextBlock.Text = BuildLoadStatus(preview);
         }
         catch (OperationCanceledException)
         {
@@ -167,6 +171,7 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         catch (Exception ex)
         {
+            _isReducedView = false;
             ResetViewButton.IsEnabled = false;
             NavigationTextBlock.Text = NavigationHint;
             WaveformView.ShowMessage("Signal load failed", ex.Message);
@@ -180,16 +185,7 @@ public partial class ComtradeWorkspaceWindow : Window
         try
         {
             token.ThrowIfCancellationRequested();
-            var count = checked((int)Math.Min(_record.Info.FrameCount, (ulong)MaxPreviewFrames));
-            var isTruncated = _record.Info.FrameCount > (ulong)count;
-            return await Task.Run(() =>
-            {
-                token.ThrowIfCancellationRequested();
-                var timestamps = _record.ReadRawTimestamps(0, count);
-                if (signal.IsAnalog)
-                    return new SignalPreview(_record.ReadAnalog(signal.Index, 0, count), null, timestamps, isTruncated);
-                return new SignalPreview(null, _record.ReadStatus(signal.Index, 0, count), timestamps, isTruncated);
-            }, token).ConfigureAwait(false);
+            return await Task.Run(() => BuildSignalPreview(signal, token), token).ConfigureAwait(false);
         }
         finally
         {
@@ -197,9 +193,97 @@ public partial class ComtradeWorkspaceWindow : Window
         }
     }
 
+    private SignalPreview BuildSignalPreview(ComtradeSignalItem signal, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var frameCount = _record.Info.FrameCount;
+
+        if (frameCount <= ExactSignalFrameLimit)
+        {
+            var count = checked((int)frameCount);
+            var timestamps = _record.ReadRawTimestamps(0, count);
+            if (signal.IsAnalog)
+            {
+                return new SignalPreview(
+                    _record.ReadAnalog(signal.Index, 0, count),
+                    null,
+                    timestamps,
+                    frameCount,
+                    false,
+                    false,
+                    "full record • exact samples");
+            }
+
+            return new SignalPreview(
+                null,
+                _record.ReadStatus(signal.Index, 0, count),
+                timestamps,
+                frameCount,
+                false,
+                false,
+                "full record • exact samples");
+        }
+
+        var source = new ArdIrecRangeSource(_record);
+        if (signal.IsAnalog)
+        {
+            var envelope = ComtradeRangeDecimator.BuildAnalogEnvelope(
+                source,
+                signal.Index,
+                0,
+                frameCount,
+                FullRecordAnalogBuckets,
+                cancellationToken: token);
+            var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
+            return new SignalPreview(
+                series.Values,
+                null,
+                series.Timestamps,
+                frameCount,
+                true,
+                false,
+                "full record • bounded min/max envelope");
+        }
+
+        var transitions = ComtradeRangeDecimator.BuildDigitalTransitions(
+            source,
+            signal.Index,
+            0,
+            frameCount,
+            FullRecordDigitalTransitionCap,
+            cancellationToken: token);
+        var digitalSeries = ComtradeDecimatedSeriesBuilder.BuildDigital(transitions);
+        return new SignalPreview(
+            null,
+            digitalSeries.States,
+            digitalSeries.Timestamps,
+            frameCount,
+            true,
+            digitalSeries.IsTruncated,
+            digitalSeries.IsTruncated
+                ? "full record • adaptively sampled transitions"
+                : "full record • exact transitions");
+    }
+
+    private static string BuildLoadStatus(SignalPreview preview)
+    {
+        if (!preview.IsReduced)
+            return $"{preview.SourceFrameCount:N0} frames • exact native samples • trigger/cursor time from COMTRADE timestamps";
+
+        var detail = preview.IsLossy
+            ? "adaptive transition sampling active"
+            : preview.Analog is not null
+                ? "min/max envelope preserves bucket extrema"
+                : "all digital transitions preserved";
+        return $"Full record {preview.SourceFrameCount:N0} frames scanned in bounded native chunks • " +
+               $"{preview.Timestamps.Length:N0} plot points • {detail}";
+    }
+
     private void WaveformView_NavigationChanged(object? sender, ComtradeNavigationChangedEventArgs e)
     {
-        NavigationTextBlock.Text = e.Summary;
+        NavigationTextBlock.Text = _isReducedView
+            ? e.Summary + "  |  reduced full-record overview"
+            : e.Summary;
     }
 
     private void ResetView_Click(object sender, RoutedEventArgs e)
@@ -274,12 +358,12 @@ public partial class ComtradeWorkspaceWindow : Window
         }
     }
 
-    private static string BuildSignalSubtitle(string phase, string circuit, bool truncated)
+    private static string BuildSignalSubtitle(string phase, string circuit, string displayMode)
     {
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(phase)) parts.Add($"phase {phase}");
         if (!string.IsNullOrWhiteSpace(circuit)) parts.Add(circuit);
-        parts.Add(truncated ? "preview" : "full record");
+        parts.Add(displayMode);
         return string.Join(" • ", parts);
     }
 
@@ -293,5 +377,12 @@ public partial class ComtradeWorkspaceWindow : Window
     };
 
     private sealed record ComtradeSignalItem(bool IsAnalog, uint Index, string Title, string Subtitle, Brush Accent);
-    private sealed record SignalPreview(double[]? Analog, byte[]? Status, uint[] Timestamps, bool IsTruncated);
+    private sealed record SignalPreview(
+        double[]? Analog,
+        byte[]? Status,
+        uint[] Timestamps,
+        ulong SourceFrameCount,
+        bool IsReduced,
+        bool IsLossy,
+        string DisplayMode);
 }
