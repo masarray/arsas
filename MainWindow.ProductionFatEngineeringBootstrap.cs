@@ -135,6 +135,23 @@ public partial class MainWindow
             token.ThrowIfCancellationRequested();
 
             SynchronizeImportedSclFatWithEngineering(launch.Project);
+
+            // This automatic entry path is explicitly Static DataSet FAT. Engineering may
+            // also expose selected scalar aliases outside the DataSet, and older saved P2
+            // projects may contain scl-manual-* rows created from those aliases. Keep such
+            // rows/evidence in the project for audit continuity, but do not arm them in the
+            // shared workspace here. Otherwise a static member and its scalar alias can both
+            // resolve to the same live primary leaf and correctly trip session preflight.
+            var retiredManualRows = launch.Project.Ieds.Sum(
+                IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode);
+            if (retiredManualRows > 0)
+            {
+                AddLog(
+                    "INFO",
+                    "FAT",
+                    $"Automatic Static DataSet scope retired {retiredManualRows} manual SCL workspace overlay(s); static membership remains authoritative.");
+            }
+
             RegisterSharedSclSourcePaths(launch.Project, launch.Project.Ieds, projection.SourceInputs);
             foreach (var ied in launch.Project.Ieds)
             {
