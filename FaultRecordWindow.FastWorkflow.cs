@@ -9,14 +9,14 @@ public partial class FaultRecordWindow
     /// <summary>
     /// The Loaded handler starts discovery automatically. The first transient failure is
     /// kept quiet while one bounded reconnect/rescan is attempted; only a final failure is
-    /// surfaced to the user. This also installs centered toast and safe re-download UX.
-    /// The downloaded COMTRADE Open action is declared directly in XAML so it shares the
-    /// same visual and event lifecycle as the rest of the records grid.
+    /// surfaced to the user. This also installs centered toast, safe re-download UX and the
+    /// downloaded COMTRADE Open action.
     /// </summary>
     protected override async void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
         InstallRedownloadUx();
+        EnsureComtradeOpenColumn();
 
         if (_initialFastWorkflowObserved)
             return;
