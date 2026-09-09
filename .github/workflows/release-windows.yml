@@ -42,7 +42,7 @@ jobs:
           path: ArIED61850Tester
           fetch-depth: 0
 
-      - name: Resolve release identity and immutable engine lock
+      - name: Resolve release identity and immutable engine locks
         id: release
         shell: powershell
         run: |
@@ -83,19 +83,32 @@ jobs:
             throw "Release version $version does not match canonical ARSAS metadata: props=$canonicalVersion project=$projectVersion VERSION=$versionFile."
           }
 
-          $lock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
-          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $lock.ref -ne 'main' -or
-              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+          $iecLock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($iecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $iecLock.ref -ne 'main' -or
+              $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ARIEC61850 lock metadata is invalid."
+          }
+
+          $ardirecLock = Get-Content ".\ArIED61850Tester\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
+          if ($ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $ardirecLock.ref -ne 'main' -or
+              $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirecLock.qt.version -ne '6.8.3' -or
+              $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
+              $ardirecLock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
+              $ardirecLock.runtime.launchArgument -ne '--arsas-open') {
+            throw "ArdIrec lock metadata is invalid."
           }
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_REPOSITORY=$($iecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($iecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REPOSITORY=$($ardirecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($ardirecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout immutable ARIEC61850 engine revision
         shell: powershell
@@ -108,6 +121,17 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
+      - name: Checkout immutable ArdIrec viewer revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -117,6 +141,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Install Qt 6.8.3 for COMTRADE Viewer
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
 
       - name: Verify source and licensing boundaries
         shell: powershell
@@ -155,6 +186,14 @@ jobs:
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Stage pinned ArdIrec COMTRADE Viewer
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+            -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64" `
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-release-build"
 
       - name: Publish real portable single EXE
         shell: powershell
@@ -222,7 +261,13 @@ jobs:
             "ARSAS.exe",
             "AR.Iec61850.Transports.Npcap.dll",
             "SharpPcap.dll",
-            "PacketDotNet.dll"
+            "PacketDotNet.dll",
+            "Tools\ArdIrec\ardirec.exe",
+            "Tools\ArdIrec\Qt6Core.dll",
+            "Tools\ArdIrec\Qt6Gui.dll",
+            "Tools\ArdIrec\Qt6Qml.dll",
+            "Tools\ArdIrec\Qt6Quick.dll",
+            "Tools\ArdIrec\platforms\qwindows.dll"
           )
           foreach ($file in $requiredInstalledFiles) {
             $path = Join-Path $installRoot $file
@@ -285,6 +330,8 @@ jobs:
             applicationCommit = $env:GITHUB_SHA
             engineRepository = $env:ARIEC61850_REPOSITORY
             engineCommit = $env:ARIEC61850_COMMIT
+            comtradeViewerRepository = $env:ARDIREC_REPOSITORY
+            comtradeViewerCommit = $env:ARDIREC_COMMIT
             workflow = "release-windows.yml"
           }
           $evidence | ConvertTo-Json -Depth 4 | Set-Content `
@@ -309,8 +356,9 @@ jobs:
           }
           $provenance = Get-Content (Join-Path $dist "ARSAS-Windows-x64-PROVENANCE.json") -Raw | ConvertFrom-Json
           if ($provenance.applicationCommit -ne $env:GITHUB_SHA -or
-              $provenance.engineCommit -ne $env:ARIEC61850_COMMIT) {
-            throw "Release provenance does not match the tested app and engine revisions."
+              $provenance.engineCommit -ne $env:ARIEC61850_COMMIT -or
+              $provenance.comtradeViewerCommit -ne $env:ARDIREC_COMMIT) {
+            throw "Release provenance does not match the tested app, IEC engine and COMTRADE viewer revisions."
           }
 
       - name: Attest installer artifact digest
@@ -402,6 +450,11 @@ jobs:
             engine = [ordered]@{
               repository = $env:ARIEC61850_REPOSITORY
               commit = $env:ARIEC61850_COMMIT
+            }
+            comtradeViewer = [ordered]@{
+              repository = $env:ARDIREC_REPOSITORY
+              commit = $env:ARDIREC_COMMIT
+              relativeExecutable = "Tools/ArdIrec/ardirec.exe"
             }
             installer = [ordered]@{
               name = "ARSAS-Windows-x64-Setup.exe"
