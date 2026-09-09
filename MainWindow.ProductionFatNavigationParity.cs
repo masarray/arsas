@@ -15,6 +15,17 @@ namespace ArIED61850Tester;
 /// </summary>
 internal static class MainWindowProductionFatNavigationParity
 {
+    private static readonly string[] NavigationButtonNames =
+    [
+        "NavExplorerButton",
+        "NavLiveButton",
+        "NavEventsButton",
+        "NavAlarmButton",
+        "NavGooseButton",
+        "NavDiagnosticsButton",
+        "NavNativeFatButton"
+    ];
+
     [ModuleInitializer]
     internal static void Register()
     {
@@ -47,10 +58,11 @@ internal static class MainWindowProductionFatNavigationParity
 
     private static void OnButtonClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainWindow window || e.Source is not Button button)
+        if (sender is not MainWindow window || e.Source is not Button button ||
+            !NavigationButtonNames.Contains(button.Name, StringComparer.Ordinal))
+        {
             return;
-        if (button.Tag is not int index || index is < 0 or > 6)
-            return;
+        }
         Queue(window, animate: true);
     }
 
@@ -90,12 +102,20 @@ internal static class MainWindowProductionFatNavigationParity
             return;
         }
 
-        var buttons = grid.Children
+        var fatButton = grid.Children
             .OfType<Button>()
-            .Where(button => button.Tag is int index && index is >= 0 and <= 6)
-            .OrderBy(button => (int)button.Tag)
-            .ToArray();
-        if (buttons.Length != 7)
+            .FirstOrDefault(button => button.Name.Equals("NavNativeFatButton", StringComparison.Ordinal));
+        var buttons = new Button?[]
+        {
+            window.FindName("NavExplorerButton") as Button,
+            window.FindName("NavLiveButton") as Button,
+            window.FindName("NavEventsButton") as Button,
+            window.FindName("NavAlarmButton") as Button,
+            window.FindName("NavGooseButton") as Button,
+            window.FindName("NavDiagnosticsButton") as Button,
+            fatButton
+        };
+        if (buttons.Any(button => button == null))
             return;
 
         while (grid.ColumnDefinitions.Count < 7)
@@ -104,12 +124,12 @@ internal static class MainWindowProductionFatNavigationParity
             column.Width = new GridLength(1, GridUnitType.Star);
 
         // FAT must use the exact same button style and density as its siblings.
-        var reference = buttons[5];
+        var reference = buttons[5]!;
         var muted = window.TryFindResource("Muted") as Brush ?? new SolidColorBrush(Color.FromRgb(0x5F, 0x6B, 0x7A));
         var selectedIndex = Math.Clamp(tabs.SelectedIndex, 0, 6);
-        foreach (var button in buttons)
+        for (var index = 0; index < buttons.Length; index++)
         {
-            var index = (int)button.Tag;
+            var button = buttons[index]!;
             button.Style ??= reference.Style;
             button.MinHeight = reference.MinHeight;
             button.MinWidth = 0;
