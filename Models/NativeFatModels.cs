@@ -5,8 +5,8 @@ namespace ArIED61850Tester.Models;
 
 /// <summary>
 /// Persistent, acquisition-independent FAT state layered on top of the canonical
-/// Engineering/IED Explorer monitor point model.  Nothing in this file owns MMS,
-/// report-control, polling, or command runtime state.
+/// Engineering/IED Explorer signal model. Nothing here owns MMS, report-control,
+/// polling, or command runtime state.
 /// </summary>
 public sealed class NativeFatDeviceState
 {
@@ -24,7 +24,7 @@ public sealed class NativeFatDeviceState
 public sealed class NativeFatSignalState
 {
     /// <summary>
-    /// Stable per-IED identity: normalized IEC object reference + FC.  Display labels
+    /// Stable per-IED identity: normalized IEC object reference + FC. Display labels
     /// are deliberately excluded so a signal rename does not erase commissioning work.
     /// </summary>
     public string Key { get; set; } = string.Empty;
@@ -71,6 +71,9 @@ public static class NativeFatResult
 
 public static class NativeFatIdentity
 {
+    public static string BuildKey(SignalDefinition signal)
+        => BuildKey(signal.ObjectReference, signal.FunctionalConstraint);
+
     public static string BuildKey(Iec61850MonitorPoint point)
         => BuildKey(point.IecReference, point.FunctionalConstraint);
 
@@ -92,61 +95,78 @@ public static class NativeFatIdentity
 }
 
 /// <summary>
-/// A lightweight UI projection that forwards current value/quality directly from the
-/// canonical Explorer point while keeping FAT captures/results in a separate persistent
-/// state object. Historical rows intentionally have no SourcePoint.
+/// Lightweight FAT projection. Engineering identity and current value come directly
+/// from the Explorer's SignalDefinition, with a monitor point used when available for
+/// the richer IEC telegram/acquisition metadata. FAT captures/results remain separate.
+/// Historical rows intentionally have neither live source.
 /// </summary>
 public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
 {
+    private SignalDefinition? _sourceSignal;
     private Iec61850MonitorPoint? _sourcePoint;
 
-    public NativeFatSignalRow(NativeFatSignalState state, Iec61850MonitorPoint? sourcePoint)
+    public NativeFatSignalRow(
+        NativeFatSignalState state,
+        SignalDefinition? sourceSignal,
+        Iec61850MonitorPoint? sourcePoint)
     {
         State = state ?? throw new ArgumentNullException(nameof(state));
-        AttachSource(sourcePoint);
+        AttachSources(sourceSignal, sourcePoint);
     }
 
     public NativeFatSignalState State { get; }
+    public SignalDefinition? SourceSignal => _sourceSignal;
     public Iec61850MonitorPoint? SourcePoint => _sourcePoint;
     public string Key => State.Key;
-    public string SignalName => _sourcePoint?.SignalName ?? State.SignalName;
-    public string IecReference => _sourcePoint?.IecReference ?? State.IecReference;
-    public string IecTelegram => _sourcePoint?.IecTelegram ?? State.IecReference;
-    public string DataType => _sourcePoint?.IecDataType ?? State.DataType;
-    public string FunctionalConstraint => _sourcePoint?.FunctionalConstraint ?? State.FunctionalConstraint;
-    public string LiveValue => _sourcePoint?.DisplayValue ?? "-";
-    public string Quality => _sourcePoint?.Quality ?? "Historical";
-    public string DeviceTimestamp => _sourcePoint?.DeviceTimestamp ?? "-";
+    public string SignalName => _sourceSignal?.Name ?? _sourcePoint?.SignalName ?? State.SignalName;
+    public string IecReference => _sourceSignal?.ObjectReference ?? _sourcePoint?.IecReference ?? State.IecReference;
+    public string IecTelegram => _sourcePoint?.IecTelegram ?? _sourceSignal?.DisplayReference ?? State.IecReference;
+    public string DataType => _sourceSignal?.DataType ?? _sourcePoint?.IecDataType ?? State.DataType;
+    public string FunctionalConstraint => _sourceSignal?.FunctionalConstraint ?? _sourcePoint?.FunctionalConstraint ?? State.FunctionalConstraint;
+    public string LiveValue => _sourcePoint?.DisplayValue ?? _sourceSignal?.Value ?? "-";
+    public string Quality => _sourcePoint?.Quality ?? _sourceSignal?.Quality ?? (IsHistorical ? "Historical" : "Unknown");
+    public string DeviceTimestamp => _sourcePoint?.DeviceTimestamp ?? _sourceSignal?.DeviceTimestamp ?? "-";
     public string Value1Text => State.Value1?.Value ?? "-";
     public string Value2Text => State.Value2?.Value ?? "-";
     public string Result => string.IsNullOrWhiteSpace(State.Result) ? NativeFatResult.Untested : State.Result;
-    public bool IsHistorical => _sourcePoint == null || State.IsHistorical;
+    public bool IsHistorical => _sourceSignal == null && _sourcePoint == null || State.IsHistorical;
     public string StatusText => IsHistorical ? "HISTORICAL" : State.Value1 == null && State.Value2 == null ? "READY" : "CAPTURED";
     public int HistoryCount => State.History?.Count ?? 0;
     public string HistoryText => HistoryCount == 0 ? "—" : $"{HistoryCount} record{(HistoryCount == 1 ? string.Empty : "s")}";
-    public bool CanCapture => _sourcePoint != null;
+    public bool CanCapture => _sourceSignal != null || _sourcePoint != null;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? StateChanged;
 
-    public void AttachSource(Iec61850MonitorPoint? point)
+    public void AttachSources(SignalDefinition? signal, Iec61850MonitorPoint? point)
     {
-        if (ReferenceEquals(_sourcePoint, point))
-            return;
-        if (_sourcePoint != null)
-            _sourcePoint.PropertyChanged -= SourcePoint_PropertyChanged;
-        _sourcePoint = point;
-        if (_sourcePoint != null)
-            _sourcePoint.PropertyChanged += SourcePoint_PropertyChanged;
+        if (!ReferenceEquals(_sourceSignal, signal))
+        {
+            if (_sourceSignal != null)
+                _sourceSignal.PropertyChanged -= SourceSignal_PropertyChanged;
+            _sourceSignal = signal;
+            if (_sourceSignal != null)
+                _sourceSignal.PropertyChanged += SourceSignal_PropertyChanged;
+        }
+
+        if (!ReferenceEquals(_sourcePoint, point))
+        {
+            if (_sourcePoint != null)
+                _sourcePoint.PropertyChanged -= SourcePoint_PropertyChanged;
+            _sourcePoint = point;
+            if (_sourcePoint != null)
+                _sourcePoint.PropertyChanged += SourcePoint_PropertyChanged;
+        }
+
         RaiseAll();
     }
 
     public bool CaptureValue(int slot)
     {
-        if (_sourcePoint == null || slot is < 1 or > 2)
+        if (!CanCapture || slot is < 1 or > 2)
             return false;
 
-        var capture = Capture(_sourcePoint);
+        var capture = CaptureCurrent();
         if (slot == 1)
             State.Value1 = capture;
         else
@@ -204,14 +224,14 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private static NativeFatCapture Capture(Iec61850MonitorPoint point)
+    private NativeFatCapture CaptureCurrent()
         => new()
         {
-            Value = point.DisplayValue,
-            Quality = point.Quality,
-            DeviceTimestamp = point.DeviceTimestamp,
-            SourceMode = point.SourceMode,
-            Sequence = point.Sequence,
+            Value = LiveValue,
+            Quality = Quality,
+            DeviceTimestamp = DeviceTimestamp,
+            SourceMode = _sourcePoint?.SourceMode ?? _sourceSignal?.ReportPlan ?? "Explorer",
+            Sequence = _sourcePoint?.Sequence ?? 0,
             CapturedUtc = DateTimeOffset.UtcNow
         };
 
@@ -238,6 +258,24 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
             Sequence = source.Sequence,
             CapturedUtc = source.CapturedUtc
         };
+
+    private void SourceSignal_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(SignalDefinition.Value):
+                if (_sourcePoint == null) Raise(nameof(LiveValue));
+                break;
+            case nameof(SignalDefinition.Quality):
+                if (_sourcePoint == null) Raise(nameof(Quality));
+                break;
+            case nameof(SignalDefinition.DeviceTimestamp):
+                if (_sourcePoint == null) Raise(nameof(DeviceTimestamp));
+                break;
+            default:
+                return;
+        }
+    }
 
     private void SourcePoint_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -278,8 +316,11 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        if (_sourceSignal != null)
+            _sourceSignal.PropertyChanged -= SourceSignal_PropertyChanged;
         if (_sourcePoint != null)
             _sourcePoint.PropertyChanged -= SourcePoint_PropertyChanged;
+        _sourceSignal = null;
         _sourcePoint = null;
     }
 }
