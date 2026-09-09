@@ -21,18 +21,19 @@ public partial class FaultRecordWindow
         var buttonFactory = new FrameworkElementFactory(typeof(Button));
         buttonFactory.SetValue(ContentControl.ContentProperty, "Open");
         buttonFactory.SetValue(FrameworkElement.HeightProperty, 27d);
-        buttonFactory.SetValue(FrameworkElement.MinWidthProperty, 56d);
-        buttonFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 2, 4, 2));
+        buttonFactory.SetValue(FrameworkElement.MinWidthProperty, 60d);
+        buttonFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 3, 6, 3));
         buttonFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         buttonFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        buttonFactory.SetValue(Control.PaddingProperty, new Thickness(10, 0, 10, 0));
+        buttonFactory.SetValue(Control.PaddingProperty, new Thickness(12, 0, 12, 0));
         buttonFactory.SetValue(Control.FontSizeProperty, 11.5d);
         buttonFactory.SetValue(Control.FontWeightProperty, FontWeights.SemiBold);
-        buttonFactory.SetValue(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(37, 82, 145)));
-        buttonFactory.SetValue(Control.BackgroundProperty, Brushes.White);
-        buttonFactory.SetValue(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(184, 201, 224)));
+        buttonFactory.SetValue(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(35, 86, 153)));
+        buttonFactory.SetValue(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(244, 248, 255)));
+        buttonFactory.SetValue(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(166, 190, 221)));
         buttonFactory.SetValue(Control.BorderThicknessProperty, new Thickness(1));
-        buttonFactory.SetValue(FrameworkElement.ToolTipProperty, "Open the downloaded COMTRADE record in the ARSAS COMTRADE Viewer");
+        buttonFactory.SetValue(FrameworkElement.ToolTipProperty, "Open in COMTRADE Viewer");
+        buttonFactory.SetValue(ToolTipService.InitialShowDelayProperty, 650);
         buttonFactory.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
         buttonFactory.SetBinding(
             UIElement.VisibilityProperty,
@@ -50,10 +51,15 @@ public partial class FaultRecordWindow
 
         FaultRecordsGrid.Columns.Add(new DataGridTemplateColumn
         {
-            Header = "Open",
-            Width = new DataGridLength(72),
-            MinWidth = 68,
-            MaxWidth = 82,
+            Header = new TextBlock
+            {
+                Text = "Open",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            },
+            Width = new DataGridLength(82),
+            MinWidth = 78,
+            MaxWidth = 92,
             IsReadOnly = true,
             CanUserSort = false,
             CanUserResize = false,
@@ -63,9 +69,9 @@ public partial class FaultRecordWindow
         _comtradeOpenColumnInstalled = true;
     }
 
-    private void OpenComtrade_Click(object sender, RoutedEventArgs e)
+    private async void OpenComtrade_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: FaultRecordRow row })
+        if (sender is not Button { DataContext: FaultRecordRow row } button)
             return;
 
         e.Handled = true;
@@ -76,32 +82,88 @@ public partial class FaultRecordWindow
             return;
         }
 
-        if (!ArdIrecViewerLauncher.TryResolveComtradeCfg(
-                row.LocalDirectory,
-                row.RecordName,
-                out var cfgPath,
-                out var resolveError))
-        {
-            StatusText = $"COMTRADE open failed for {row.RecordName}: {resolveError}";
-            ShowToast(resolveError, ToastKind.Error);
-            return;
-        }
+        var originalContent = button.Content;
+        button.IsEnabled = false;
+        button.Content = "Opening…";
 
-        if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var launchError))
+        try
         {
-            StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}: {launchError}";
-            ShowToast("COMTRADE Viewer is unavailable in this build.", ToastKind.Error);
+            if (!ArdIrecViewerLauncher.TryResolveComtradeCfg(
+                    row.LocalDirectory,
+                    row.RecordName,
+                    out var cfgPath,
+                    out var resolveError))
+            {
+                StatusText = $"COMTRADE open failed for {row.RecordName}: {resolveError}";
+                ShowToast(resolveError, ToastKind.Error);
+                return;
+            }
+
+            StatusText = $"Opening {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE Viewer…";
+            ShowToast("Starting COMTRADE Viewer…", ToastKind.Information);
+
+            if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var process, out var launchError) || process is null)
+            {
+                StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}: {launchError}";
+                ShowToast("COMTRADE Viewer could not be started.", ToastKind.Error);
+                MessageBox.Show(
+                    this,
+                    launchError,
+                    "COMTRADE Viewer",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            using (process)
+            {
+                // Process.Start only proves Windows created a process. Qt/QML or graphics-runtime
+                // failures can still close the viewer immediately. Observe a short bounded startup
+                // period so Open never appears to do nothing on a real workstation.
+                var activated = false;
+                for (var attempt = 0; attempt < 6; attempt++)
+                {
+                    await Task.Delay(attempt == 0 ? 350 : 220).ConfigureAwait(true);
+
+                    process.Refresh();
+                    if (process.HasExited)
+                    {
+                        var earlyExitError = ArdIrecViewerLauncher.DescribeEarlyExit(process, cfgPath);
+                        StatusText = $"COMTRADE viewer failed for {Path.GetFileName(cfgPath)}: {earlyExitError}";
+                        ShowToast("COMTRADE Viewer closed during startup.", ToastKind.Error);
+                        MessageBox.Show(
+                            this,
+                            earlyExitError,
+                            "COMTRADE Viewer startup failed",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                        return;
+                    }
+
+                    if (!activated)
+                        activated = ArdIrecViewerLauncher.TryActivateViewerWindow(process);
+                }
+
+                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE Viewer.";
+                ShowToast("COMTRADE record opened.", ToastKind.Success);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            StatusText = $"COMTRADE viewer startup failed for {row.RecordName}: {ex.Message}";
+            ShowToast("COMTRADE Viewer startup failed.", ToastKind.Error);
             MessageBox.Show(
                 this,
-                launchError,
-                "COMTRADE Viewer",
+                ex.Message,
+                "COMTRADE Viewer startup failed",
                 MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
+                MessageBoxImage.Error);
         }
-
-        StatusText = $"Opening {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE Viewer…";
-        ShowToast("Opening downloaded COMTRADE record.", ToastKind.Success);
+        finally
+        {
+            button.Content = originalContent;
+            button.IsEnabled = true;
+        }
     }
 }
 
