@@ -10,7 +10,7 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow : Window
 {
     private const int ExactSignalFrameLimit = 500_000;
-    private const int FullRecordAnalogBuckets = 8_000;
+    private const int FullRecordAnalogBuckets = 4_096;
     private const int FullRecordDigitalTransitionCap = 100_000;
     private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Click Cursor A • Ctrl/right-click Cursor B";
     private readonly ArdIrecNativeRecord _record;
@@ -145,7 +145,8 @@ public partial class ComtradeWorkspaceWindow : Window
                     metadata.Units,
                     preview.Analog,
                     preview.Timestamps,
-                    _record.Info.TimeMultiplier);
+                    _record.Info.TimeMultiplier,
+                    preserveAllPoints: preview.IsReduced);
             }
             else if (preview.Status is not null)
             {
