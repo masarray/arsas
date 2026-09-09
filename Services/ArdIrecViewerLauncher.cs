@@ -97,7 +97,7 @@ internal static class ArdIrecViewerLauncher
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory
             };
-            startInfo.ArgumentList.Add("--open");
+            startInfo.ArgumentList.Add("--arsas-open");
             startInfo.ArgumentList.Add(Path.GetFullPath(cfgPath));
 
             if (Process.Start(startInfo) is null)
