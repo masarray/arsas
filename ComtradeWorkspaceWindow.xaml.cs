@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
@@ -12,17 +13,26 @@ public partial class ComtradeWorkspaceWindow : Window
     private const int ExactSignalFrameLimit = 500_000;
     private const int FullRecordAnalogBuckets = 4_096;
     private const int FullRecordDigitalTransitionCap = 100_000;
-    private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Click Cursor A • Ctrl/right-click Cursor B";
+    private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Alt/middle-drag pan • Click Cursor A • Ctrl/right-click Cursor B";
     private readonly ArdIrecNativeRecord _record;
     private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private CancellationTokenSource? _signalLoadCts;
+    private ComtradeSignalItem? _activeSignal;
+    private ComtradeSourceViewport _loadedSourceViewport;
+    private bool _sourceNavigationEnabled;
     private bool _isReducedView;
+    private bool _sourcePanGesture;
+    private Point _sourcePanStartPoint;
+    private ComtradeSourceViewport _sourcePanStartViewport;
 
     internal ComtradeWorkspaceWindow(ArdIrecNativeRecord record)
     {
         _record = record;
         InitializeComponent();
         WaveformView.NavigationChanged += WaveformView_NavigationChanged;
+        WaveformView.PreviewMouseWheel += WaveformView_PreviewMouseWheel;
+        WaveformView.PreviewMouseDown += WaveformView_PreviewMouseDown;
+        WaveformView.PreviewMouseUp += WaveformView_PreviewMouseUp;
         ConfigureTriggerReference();
         ResetViewButton.IsEnabled = false;
         PopulateHeader();
@@ -32,8 +42,6 @@ public partial class ComtradeWorkspaceWindow : Window
 
     private async void ComtradeWorkspaceWindow_Closed(object? sender, EventArgs e)
     {
-        // A selected-channel copy may still be executing on a worker thread. Cancel any queued
-        // load, then wait for the native gate before freeing the opaque record handle.
         _signalLoadCts?.Cancel();
         try
         {
@@ -50,6 +58,9 @@ public partial class ComtradeWorkspaceWindow : Window
         finally
         {
             WaveformView.NavigationChanged -= WaveformView_NavigationChanged;
+            WaveformView.PreviewMouseWheel -= WaveformView_PreviewMouseWheel;
+            WaveformView.PreviewMouseDown -= WaveformView_PreviewMouseDown;
+            WaveformView.PreviewMouseUp -= WaveformView_PreviewMouseUp;
             _signalLoadCts?.Dispose();
             _signalLoadCts = null;
             _nativeGate.Dispose();
@@ -118,6 +129,17 @@ public partial class ComtradeWorkspaceWindow : Window
         if (SignalList.SelectedItem is not ComtradeSignalItem signal)
             return;
 
+        _activeSignal = signal;
+        _sourceNavigationEnabled = _record.Info.FrameCount > ExactSignalFrameLimit;
+        var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
+        await LoadAndDisplaySignalAsync(signal, full, initialSelection: true).ConfigureAwait(true);
+    }
+
+    private async Task LoadAndDisplaySignalAsync(
+        ComtradeSignalItem signal,
+        ComtradeSourceViewport sourceViewport,
+        bool initialSelection)
+    {
         _signalLoadCts?.Cancel();
         _signalLoadCts?.Dispose();
         _signalLoadCts = new CancellationTokenSource();
@@ -126,15 +148,19 @@ public partial class ComtradeWorkspaceWindow : Window
         _isReducedView = false;
         ResetViewButton.IsEnabled = false;
         NavigationTextBlock.Text = NavigationHint;
-        StatusTextBlock.Text = $"Loading {signal.Title} from native ArdIrec core…";
-        WaveformView.ShowMessage(signal.Title, "Loading signal samples…");
+        StatusTextBlock.Text = initialSelection
+            ? $"Loading {signal.Title} from native ArdIrec core…"
+            : $"Refining {signal.Title} from native frames {sourceViewport.StartFrame:N0}…{SourceEndFrame(sourceViewport):N0}…";
+        if (initialSelection)
+            WaveformView.ShowMessage(signal.Title, "Loading signal samples…");
 
         try
         {
-            var preview = await LoadSignalAsync(signal, token).ConfigureAwait(true);
-            if (token.IsCancellationRequested)
+            var preview = await LoadSignalAsync(signal, sourceViewport, token).ConfigureAwait(true);
+            if (token.IsCancellationRequested || !Equals(_activeSignal, signal))
                 return;
 
+            _loadedSourceViewport = preview.SourceViewport;
             _isReducedView = preview.IsReduced;
             if (preview.Analog is not null)
             {
@@ -167,7 +193,6 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         catch (ObjectDisposedException)
         {
-            // Window shutdown can dispose the native lifetime after the load was cancelled.
         }
         catch (Exception ex)
         {
@@ -179,13 +204,18 @@ public partial class ComtradeWorkspaceWindow : Window
         }
     }
 
-    private async Task<SignalPreview> LoadSignalAsync(ComtradeSignalItem signal, CancellationToken token)
+    private async Task<SignalPreview> LoadSignalAsync(
+        ComtradeSignalItem signal,
+        ComtradeSourceViewport requestedViewport,
+        CancellationToken token)
     {
         await _nativeGate.WaitAsync(token).ConfigureAwait(false);
         try
         {
             token.ThrowIfCancellationRequested();
-            return await Task.Run(() => BuildSignalPreview(signal, token), token).ConfigureAwait(false);
+            return await Task.Run(
+                () => BuildSignalPreview(signal, requestedViewport, token),
+                token).ConfigureAwait(false);
         }
         finally
         {
@@ -193,35 +223,50 @@ public partial class ComtradeWorkspaceWindow : Window
         }
     }
 
-    private SignalPreview BuildSignalPreview(ComtradeSignalItem signal, CancellationToken token)
+    private SignalPreview BuildSignalPreview(
+        ComtradeSignalItem signal,
+        ComtradeSourceViewport requestedViewport,
+        CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var frameCount = _record.Info.FrameCount;
-
-        if (frameCount <= ExactSignalFrameLimit)
+        var totalFrameCount = _record.Info.FrameCount;
+        var viewport = ComtradeAbsoluteViewportMath.Normalize(requestedViewport, totalFrameCount);
+        if (viewport.FrameCount == 0)
         {
-            var count = checked((int)frameCount);
-            var timestamps = _record.ReadRawTimestamps(0, count);
+            return new SignalPreview(
+                null, null, Array.Empty<uint>(), totalFrameCount, viewport,
+                false, false, "empty range");
+        }
+
+        if (viewport.FrameCount <= ExactSignalFrameLimit)
+        {
+            var count = checked((int)viewport.FrameCount);
+            var timestamps = _record.ReadRawTimestamps(viewport.StartFrame, count);
+            var mode = viewport.FrameCount == totalFrameCount
+                ? "full record • exact samples"
+                : $"native detail • exact {viewport.FrameCount:N0} frames";
             if (signal.IsAnalog)
             {
                 return new SignalPreview(
-                    _record.ReadAnalog(signal.Index, 0, count),
+                    _record.ReadAnalog(signal.Index, viewport.StartFrame, count),
                     null,
                     timestamps,
-                    frameCount,
+                    totalFrameCount,
+                    viewport,
                     false,
                     false,
-                    "full record • exact samples");
+                    mode);
             }
 
             return new SignalPreview(
                 null,
-                _record.ReadStatus(signal.Index, 0, count),
+                _record.ReadStatus(signal.Index, viewport.StartFrame, count),
                 timestamps,
-                frameCount,
+                totalFrameCount,
+                viewport,
                 false,
                 false,
-                "full record • exact samples");
+                mode);
         }
 
         var source = new ArdIrecRangeSource(_record);
@@ -230,8 +275,8 @@ public partial class ComtradeWorkspaceWindow : Window
             var envelope = ComtradeRangeDecimator.BuildAnalogEnvelope(
                 source,
                 signal.Index,
-                0,
-                frameCount,
+                viewport.StartFrame,
+                viewport.FrameCount,
                 FullRecordAnalogBuckets,
                 cancellationToken: token);
             var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
@@ -239,17 +284,20 @@ public partial class ComtradeWorkspaceWindow : Window
                 series.Values,
                 null,
                 series.Timestamps,
-                frameCount,
+                totalFrameCount,
+                viewport,
                 true,
                 false,
-                "full record • bounded min/max envelope");
+                viewport.FrameCount == totalFrameCount
+                    ? "full record • bounded min/max envelope"
+                    : $"native detail • bounded envelope • {viewport.FrameCount:N0} source frames");
         }
 
         var transitions = ComtradeRangeDecimator.BuildDigitalTransitions(
             source,
             signal.Index,
-            0,
-            frameCount,
+            viewport.StartFrame,
+            viewport.FrameCount,
             FullRecordDigitalTransitionCap,
             cancellationToken: token);
         var digitalSeries = ComtradeDecimatedSeriesBuilder.BuildDigital(transitions);
@@ -257,39 +305,166 @@ public partial class ComtradeWorkspaceWindow : Window
             null,
             digitalSeries.States,
             digitalSeries.Timestamps,
-            frameCount,
+            totalFrameCount,
+            viewport,
             true,
             digitalSeries.IsTruncated,
             digitalSeries.IsTruncated
-                ? "full record • adaptively sampled transitions"
-                : "full record • exact transitions");
+                ? "native range • adaptively sampled transitions"
+                : "native range • exact transitions");
     }
 
     private static string BuildLoadStatus(SignalPreview preview)
     {
+        var fullRange = preview.SourceViewport.StartFrame == 0 &&
+                        preview.SourceViewport.FrameCount == preview.TotalSourceFrameCount;
+        var rangeText = fullRange
+            ? $"Full record {preview.TotalSourceFrameCount:N0} frames"
+            : $"Native frames {preview.SourceViewport.StartFrame:N0}…{SourceEndFrame(preview.SourceViewport):N0} " +
+              $"of {preview.TotalSourceFrameCount:N0}";
+
         if (!preview.IsReduced)
-            return $"{preview.SourceFrameCount:N0} frames • exact native samples • trigger/cursor time from COMTRADE timestamps";
+            return $"{rangeText} • exact native samples • {preview.Timestamps.Length:N0} plot points";
 
         var detail = preview.IsLossy
             ? "adaptive transition sampling active"
             : preview.Analog is not null
                 ? "min/max envelope preserves bucket extrema"
                 : "all digital transitions preserved";
-        return $"Full record {preview.SourceFrameCount:N0} frames scanned in bounded native chunks • " +
-               $"{preview.Timestamps.Length:N0} plot points • {detail}";
+        return $"{rangeText} scanned in bounded native chunks • {preview.Timestamps.Length:N0} plot points • {detail}";
     }
 
     private void WaveformView_NavigationChanged(object? sender, ComtradeNavigationChangedEventArgs e)
     {
-        NavigationTextBlock.Text = _isReducedView
-            ? e.Summary + "  |  reduced full-record overview"
-            : e.Summary;
+        var suffix = _sourceNavigationEnabled
+            ? _isReducedView
+                ? "  |  wheel reloads higher-resolution native range"
+                : _loadedSourceViewport.FrameCount < _record.Info.FrameCount
+                    ? "  |  exact native detail range"
+                    : string.Empty
+            : _isReducedView
+                ? "  |  reduced full-record overview"
+                : string.Empty;
+        NavigationTextBlock.Text = e.Summary + suffix;
     }
 
-    private void ResetView_Click(object sender, RoutedEventArgs e)
+    private async void WaveformView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (!_sourceNavigationEnabled || _activeSignal is null || _loadedSourceViewport.FrameCount == 0)
+            return;
+
+        var fraction = PlotFraction(e.GetPosition(WaveformView).X);
+        ComtradeSourceViewport target;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+        {
+            var step = Math.Max(1UL, _loadedSourceViewport.FrameCount / 10);
+            var signedStep = ToSignedStep(step, e.Delta > 0 ? -1 : 1);
+            target = ComtradeAbsoluteViewportMath.Pan(
+                _loadedSourceViewport,
+                _record.Info.FrameCount,
+                signedStep);
+        }
+        else
+        {
+            target = ComtradeAbsoluteViewportMath.Zoom(
+                _loadedSourceViewport,
+                _record.Info.FrameCount,
+                fraction,
+                e.Delta > 0 ? 0.60 : 1.60,
+                minimumFrames: 32);
+        }
+
+        e.Handled = true;
+        if (target == _loadedSourceViewport)
+            return;
+
+        await LoadAndDisplaySignalAsync(_activeSignal, target, initialSelection: false).ConfigureAwait(true);
+    }
+
+    private void WaveformView_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_sourceNavigationEnabled || _activeSignal is null || _loadedSourceViewport.FrameCount == 0)
+            return;
+
+        var panGesture = e.ChangedButton == MouseButton.Middle ||
+                         (e.ChangedButton == MouseButton.Left && (Keyboard.Modifiers & ModifierKeys.Alt) != 0);
+        if (!panGesture)
+            return;
+
+        _sourcePanGesture = true;
+        _sourcePanStartPoint = e.GetPosition(WaveformView);
+        _sourcePanStartViewport = _loadedSourceViewport;
+        WaveformView.CaptureMouse();
+        WaveformView.Cursor = Cursors.SizeWE;
+        e.Handled = true;
+    }
+
+    private async void WaveformView_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_sourcePanGesture || _activeSignal is null)
+            return;
+
+        _sourcePanGesture = false;
+        var endPoint = e.GetPosition(WaveformView);
+        if (WaveformView.IsMouseCaptured)
+            WaveformView.ReleaseMouseCapture();
+        WaveformView.Cursor = Cursors.Cross;
+        e.Handled = true;
+
+        var plotWidth = Math.Max(1.0, WaveformView.ActualWidth - 82.0);
+        var deltaFraction = -(endPoint.X - _sourcePanStartPoint.X) / plotWidth;
+        var deltaFrames = ToSignedDelta(_sourcePanStartViewport.FrameCount, deltaFraction);
+        var target = ComtradeAbsoluteViewportMath.Pan(
+            _sourcePanStartViewport,
+            _record.Info.FrameCount,
+            deltaFrames);
+        if (target == _loadedSourceViewport)
+            return;
+
+        await LoadAndDisplaySignalAsync(_activeSignal, target, initialSelection: false).ConfigureAwait(true);
+    }
+
+    private async void ResetView_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sourceNavigationEnabled && _activeSignal is not null)
+        {
+            var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
+            if (_loadedSourceViewport != full)
+            {
+                await LoadAndDisplaySignalAsync(_activeSignal, full, initialSelection: false).ConfigureAwait(true);
+                return;
+            }
+        }
+
         WaveformView.ResetNavigation();
     }
+
+    private double PlotFraction(double x)
+    {
+        var plotWidth = Math.Max(1.0, WaveformView.ActualWidth - 82.0);
+        return Math.Clamp((x - 62.0) / plotWidth, 0.0, 1.0);
+    }
+
+    private static long ToSignedStep(ulong magnitude, int direction)
+    {
+        var bounded = Math.Min(magnitude, checked((ulong)long.MaxValue));
+        var value = checked((long)bounded);
+        return direction < 0 ? -value : value;
+    }
+
+    private static long ToSignedDelta(ulong frameCount, double fraction)
+    {
+        if (!double.IsFinite(fraction) || fraction == 0 || frameCount == 0)
+            return 0;
+        var magnitude = Math.Abs(fraction) * frameCount;
+        if (!double.IsFinite(magnitude) || magnitude >= long.MaxValue)
+            return fraction < 0 ? long.MinValue + 1 : long.MaxValue;
+        var rounded = checked((long)Math.Round(magnitude, MidpointRounding.AwayFromZero));
+        return fraction < 0 ? -rounded : rounded;
+    }
+
+    private static ulong SourceEndFrame(ComtradeSourceViewport viewport)
+        => viewport.FrameCount == 0 ? viewport.StartFrame : viewport.EndExclusive - 1;
 
     private async void FullAnalysis_Click(object sender, RoutedEventArgs e)
     {
@@ -381,7 +556,8 @@ public partial class ComtradeWorkspaceWindow : Window
         double[]? Analog,
         byte[]? Status,
         uint[] Timestamps,
-        ulong SourceFrameCount,
+        ulong TotalSourceFrameCount,
+        ComtradeSourceViewport SourceViewport,
         bool IsReduced,
         bool IsLossy,
         string DisplayMode);
