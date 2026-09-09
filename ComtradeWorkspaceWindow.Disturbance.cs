@@ -67,7 +67,10 @@ public partial class ComtradeWorkspaceWindow
         foreach (var signal in all.Where(item => item.IsAnalog).Take(6))
             _disturbanceVisibleSignals.Add(signal);
 
-        var semanticDigital = all.Where(item => !item.IsAnalog && IsUsefulProtectionDigital(item.Title)).Take(6).ToArray();
+        var semanticDigital = all
+            .Where(item => !item.IsAnalog && ComtradeDisturbanceTimelineMath.IsUsefulProtectionDigital(item.Title))
+            .Take(6)
+            .ToArray();
         var digitalDefaults = semanticDigital.Length > 0
             ? semanticDigital
             : all.Where(item => !item.IsAnalog).Take(4).ToArray();
@@ -312,7 +315,11 @@ public partial class ComtradeWorkspaceWindow
                 var after = track.Digital[i] != 0;
                 if (before == after) continue;
                 var time = ComtradeTimeMath.ToMilliseconds(track.Timestamps[i], _record.Info.TimeMultiplier);
-                events.Add((time, track.Title, DescribeDigitalEvent(track.Title, after), $"{(before ? 1 : 0)}→{(after ? 1 : 0)}"));
+                events.Add((
+                    time,
+                    track.Title,
+                    ComtradeDisturbanceTimelineMath.DescribeDigitalEvent(track.Title, after),
+                    $"{(before ? 1 : 0)}→{(after ? 1 : 0)}"));
             }
         }
 
@@ -325,7 +332,7 @@ public partial class ComtradeWorkspaceWindow
             var delta = previous is { } previousTime ? item.Time - previousTime : (double?)null;
             rows.Add(new ComtradeDigitalEventRow(
                 item.Time,
-                FormatRelativeTime(relative),
+                ComtradeDisturbanceTimelineMath.FormatRelativeTime(relative),
                 delta is { } d ? $"{d:G6} ms" : "—",
                 item.Signal,
                 item.Event,
@@ -437,7 +444,8 @@ public partial class ComtradeWorkspaceWindow
         if (_disturbanceReferenceExact && _disturbanceReferenceTimestamps is { Length: > 0 } timestamps)
         {
             var targetRaw = cursor * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
-            var index = NearestTimestampIndex(timestamps, targetRaw);
+            var index = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(timestamps, targetRaw);
+            if (index < 0) return false;
             frame = Math.Min(_record.Info.FrameCount - 1, _disturbanceLoadedViewport.StartFrame + checked((ulong)index));
             return true;
         }
@@ -451,22 +459,6 @@ public partial class ComtradeWorkspaceWindow
             : checked((ulong)Math.Round((_disturbanceLoadedViewport.FrameCount - 1) * fraction, MidpointRounding.AwayFromZero));
         frame = Math.Min(_record.Info.FrameCount - 1, _disturbanceLoadedViewport.StartFrame + offset);
         return true;
-    }
-
-    private static int NearestTimestampIndex(uint[] timestamps, double target)
-    {
-        if (timestamps.Length <= 1) return 0;
-        var lo = 0;
-        var hi = timestamps.Length - 1;
-        while (lo < hi)
-        {
-            var mid = lo + (hi - lo) / 2;
-            if (timestamps[mid] < target) lo = mid + 1;
-            else hi = mid;
-        }
-        if (lo == 0) return 0;
-        var before = lo - 1;
-        return Math.Abs(timestamps[lo] - target) < Math.Abs(timestamps[before] - target) ? lo : before;
     }
 
     private static string BuildTrackSubtitle(string phase, string circuit)
@@ -494,26 +486,6 @@ public partial class ComtradeWorkspaceWindow
             _ => Color.FromRgb(48, 126, 213)
         };
     }
-
-    private static bool IsUsefulProtectionDigital(string title)
-    {
-        var value = (title ?? string.Empty).ToUpperInvariant();
-        return new[] { "TRIP", "PICK", "START", "OPER", "OPEN", "CLOSE", "BREAKER", "CB", "52", "87", "50", "51", "21" }
-            .Any(value.Contains);
-    }
-
-    private static string DescribeDigitalEvent(string title, bool asserted)
-    {
-        var value = (title ?? string.Empty).ToUpperInvariant();
-        if (value.Contains("TRIP")) return asserted ? "Trip" : "Trip reset";
-        if (value.Contains("PICK") || value.Contains("START")) return asserted ? "Pickup" : "Dropoff";
-        if (value.Contains("OPEN")) return asserted ? "Open" : "Open reset";
-        if (value.Contains("CLOSE")) return asserted ? "Close" : "Close reset";
-        return asserted ? "Assert" : "Deassert";
-    }
-
-    private static string FormatRelativeTime(double milliseconds)
-        => Math.Abs(milliseconds) < 0.0005 ? "0 ms" : $"{milliseconds:+0.###;-0.###} ms";
 
     private sealed record LoadedDisturbanceTrack(ComtradeSignalItem Signal, ComtradeDisturbanceTrack Track);
     private sealed record DisturbanceLoadResult(
