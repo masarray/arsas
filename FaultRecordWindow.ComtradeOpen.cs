@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -102,16 +103,55 @@ public partial class FaultRecordWindow
                 return;
             }
 
-            StatusText = $"Opening {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE Viewer…";
-            ShowToast("Starting COMTRADE Viewer…", ToastKind.Information);
+            StatusText = $"Opening {Path.GetFileName(cfgPath)} in the native COMTRADE workspace…";
+            ShowToast("Loading COMTRADE record with native ArdIrec core…", ToastKind.Information);
+
+            // P1A's reference DatReader eagerly decodes the record while opening. Keep that work
+            // off WPF's dispatcher thread so large field records do not freeze the Fault Records UI.
+            var nativeOpen = await Task.Run(() =>
+            {
+                var opened = ArdIrecNativeBridge.TryOpen(cfgPath, out var record, out var error);
+                return (Opened: opened, Record: record, Error: error);
+            }).ConfigureAwait(true);
+
+            if (nativeOpen.Opened && nativeOpen.Record is not null)
+            {
+                try
+                {
+                    var workspace = new ComtradeWorkspaceWindow(nativeOpen.Record)
+                    {
+                        Owner = this
+                    };
+                    workspace.Show();
+                    StatusText = $"Opened {Path.GetFileName(cfgPath)} in the ARSAS native COMTRADE workspace.";
+                    ShowToast("COMTRADE record opened natively.", ToastKind.Success);
+                    return;
+                }
+                catch
+                {
+                    nativeOpen.Record.Dispose();
+                    throw;
+                }
+            }
+
+            var nativeError = nativeOpen.Error;
+
+            // P1 rolls out native-first while preserving the proven P0 viewer as a compatibility
+            // fallback. This keeps field workflows available if the native DLL is absent or a
+            // workstation exposes an interop issue during the parity phase.
+            StatusText = $"Native COMTRADE workspace unavailable; using compatibility viewer. {nativeError}";
+            ShowToast("Opening compatibility COMTRADE Viewer…", ToastKind.Information);
 
             if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var process, out var launchError) || process is null)
             {
-                StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}: {launchError}";
+                var combinedError = string.IsNullOrWhiteSpace(nativeError)
+                    ? launchError
+                    : $"Native workspace: {nativeError}{Environment.NewLine}{Environment.NewLine}Compatibility viewer: {launchError}";
+                StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}.";
                 ShowToast("COMTRADE Viewer could not be started.", ToastKind.Error);
                 MessageBox.Show(
                     this,
-                    launchError,
+                    combinedError,
                     "COMTRADE Viewer",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -120,9 +160,6 @@ public partial class FaultRecordWindow
 
             using (process)
             {
-                // Process.Start only proves Windows created a process. Qt/QML or graphics-runtime
-                // failures can still close the viewer immediately. Observe a short bounded startup
-                // period so Open never appears to do nothing on a real workstation.
                 var activated = false;
                 for (var attempt = 0; attempt < 6; attempt++)
                 {
@@ -132,7 +169,7 @@ public partial class FaultRecordWindow
                     if (process.HasExited)
                     {
                         var earlyExitError = ArdIrecViewerLauncher.DescribeEarlyExit(process, cfgPath);
-                        StatusText = $"COMTRADE viewer failed for {Path.GetFileName(cfgPath)}: {earlyExitError}";
+                        StatusText = $"COMTRADE compatibility viewer failed for {Path.GetFileName(cfgPath)}: {earlyExitError}";
                         ShowToast("COMTRADE Viewer closed during startup.", ToastKind.Error);
                         MessageBox.Show(
                             this,
@@ -147,13 +184,13 @@ public partial class FaultRecordWindow
                         activated = ArdIrecViewerLauncher.TryActivateViewerWindow(process);
                 }
 
-                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE Viewer.";
-                ShowToast("COMTRADE record opened.", ToastKind.Success);
+                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the compatibility COMTRADE Viewer.";
+                ShowToast("COMTRADE record opened in compatibility viewer.", ToastKind.Success);
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or SEHException or BadImageFormatException)
         {
-            StatusText = $"COMTRADE viewer startup failed for {row.RecordName}: {ex.Message}";
+            StatusText = $"COMTRADE startup failed for {row.RecordName}: {ex.Message}";
             ShowToast("COMTRADE Viewer startup failed.", ToastKind.Error);
             MessageBox.Show(
                 this,

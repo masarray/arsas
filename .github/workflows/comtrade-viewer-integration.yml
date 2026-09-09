@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - "FaultRecordWindow.ComtradeOpen.cs"
+      - "ComtradeWorkspaceWindow.xaml"
+      - "ComtradeWorkspaceWindow.xaml.cs"
+      - "Controls/ComtradeWaveformView.cs"
+      - "Services/ArdIrecNativeBridge.cs"
       - "Services/ArdIrecViewerLauncher.cs"
       - "Properties/AssemblyInfo.Tests.cs"
+      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
       - "tests/ARSAS.Tests/ArdIrecViewerLauncherTests.cs"
       - "scripts/stage-ardirec-viewer.ps1"
       - "engines/ARDIREC.lock.json"
@@ -18,7 +23,7 @@ permissions:
 
 jobs:
   windows-viewer-integration:
-    name: Build pinned ArdIrec and smoke ARSAS launch contract
+    name: Build pinned ArdIrec P1 engine and smoke compatibility launch
     runs-on: windows-latest
     timeout-minutes: 35
 
@@ -34,18 +39,21 @@ jobs:
           $lockPath = ".\ARSAS\engines\ARDIREC.lock.json"
           $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
 
-          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or $lock.ref -ne 'main') {
-            throw "ArdIrec repository/ref lock is invalid; P0 must pin main."
+          if ($lock.schema -ne 2 -or $lock.repository -notmatch '^[^/]+/[^/]+$' -or $lock.ref -ne 'main') {
+            throw "ArdIrec repository/ref lock is invalid; P1 must pin merged main with schema 2."
           }
           if ($lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ArdIrec commit lock is invalid."
           }
+          if ($lock.bridge.abi -ne 1 -or $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+            throw "ArdIrec native bridge contract is invalid."
+          }
           if ($lock.qt.version -ne '6.8.3' -or $lock.qt.arch -ne 'win64_msvc2022_64') {
-            throw "ArdIrec Qt lock must match the validated Windows recipe (Qt 6.8.3 / win64_msvc2022_64)."
+            throw "ArdIrec Qt fallback lock must match the validated Windows recipe (Qt 6.8.3 / win64_msvc2022_64)."
           }
           if ($lock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
               $lock.runtime.launchArgument -ne '--arsas-open') {
-            throw "ArdIrec runtime contract is invalid."
+            throw "ArdIrec compatibility runtime contract is invalid."
           }
 
           "ARDIREC_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -69,7 +77,7 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true
 
-      - name: Build, test and stage ArdIrec viewer
+      - name: Build, test and stage ArdIrec P1 engine
         shell: powershell
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "arsas-viewer-publish"
@@ -83,11 +91,12 @@ jobs:
 
           "VIEWER_PUBLISH=$publish" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Verify deployed runtime and ARSAS launch contract
+      - name: Verify native bridge and compatibility runtime
         shell: pwsh
         run: |
           $viewer = Join-Path $env:VIEWER_PUBLISH "Tools\ArdIrec\ardirec.exe"
           foreach ($relative in @(
+            "Tools\ArdIrec\ardirec_bridge.dll",
             "Tools\ArdIrec\ardirec.exe",
             "Tools\ArdIrec\Qt6Core.dll",
             "Tools\ArdIrec\Qt6Gui.dll",
@@ -97,7 +106,7 @@ jobs:
           )) {
             $path = Join-Path $env:VIEWER_PUBLISH $relative
             if (-not (Test-Path $path -PathType Leaf)) {
-              throw "Missing staged ArdIrec runtime file: $path"
+              throw "Missing staged ArdIrec P1 runtime file: $path"
             }
           }
 
@@ -106,6 +115,8 @@ jobs:
           Copy-Item ".\ArdIrec\tests\data\binary.cfg" (Join-Path $fixtureDirectory "binary.cfg") -Force
           Copy-Item ".\ArdIrec\tests\data\binary.dat" (Join-Path $fixtureDirectory "binary.dat") -Force
           $fixtureCfg = Join-Path $fixtureDirectory "binary.cfg"
+          "NATIVE_BRIDGE_PATH=$(Join-Path $env:VIEWER_PUBLISH 'Tools\ArdIrec\ardirec_bridge.dll')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "COMTRADE_FIXTURE_CFG=$fixtureCfg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
           $startInfo.FileName = $viewer
@@ -116,12 +127,12 @@ jobs:
           $startInfo.Environment["QT_QPA_PLATFORM"] = "offscreen"
 
           $process = [System.Diagnostics.Process]::Start($startInfo)
-          if ($null -eq $process) { throw "Could not start staged ArdIrec viewer." }
+          if ($null -eq $process) { throw "Could not start staged ArdIrec compatibility viewer." }
           Start-Sleep -Seconds 4
           if ($process.HasExited) {
-            throw "ArdIrec viewer exited unexpectedly during ARSAS launch smoke test (code $($process.ExitCode))."
+            throw "ArdIrec compatibility viewer exited unexpectedly during launch smoke test (code $($process.ExitCode))."
           }
 
           Stop-Process -Id $process.Id -Force
           $process.WaitForExit()
-          Write-Host "ARSAS -> ArdIrec launch contract passed with a Unicode COMTRADE path containing spaces."
+          Write-Host "P1 native bridge is staged; P0 compatibility launch also passed with a Unicode COMTRADE path containing spaces."

@@ -50,6 +50,7 @@ Write-Host "==> Configuring pinned ArdIrec source: $source"
     -B $build `
     -A x64 `
     -DARDIREC_BUILD_DESKTOP=ON `
+    -DARDIREC_BUILD_BRIDGE=ON `
     -DARDIREC_BUILD_TESTS=ON
 if ($LASTEXITCODE -ne 0) {
     throw "ArdIrec CMake configure failed with exit code $LASTEXITCODE."
@@ -61,15 +62,19 @@ if ($LASTEXITCODE -ne 0) {
     throw "ArdIrec build failed with exit code $LASTEXITCODE."
 }
 
-Write-Host "==> Running ArdIrec regression tests"
+Write-Host "==> Running ArdIrec regression and native bridge tests"
 & ctest --test-dir $build -C Release --output-on-failure
 if ($LASTEXITCODE -ne 0) {
     throw "ArdIrec regression tests failed with exit code $LASTEXITCODE."
 }
 
 $builtExe = Join-Path $build "apps\desktop\Release\ardirec.exe"
+$builtBridge = Join-Path $build "bridge\Release\ardirec_bridge.dll"
 if (-not (Test-Path $builtExe -PathType Leaf)) {
     throw "Built ArdIrec executable was not found: $builtExe"
+}
+if (-not (Test-Path $builtBridge -PathType Leaf)) {
+    throw "Built ArdIrec native bridge was not found: $builtBridge"
 }
 
 $destination = Join-Path $publish "Tools\ArdIrec"
@@ -79,9 +84,11 @@ if (Test-Path $destination) {
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
 $destinationExe = Join-Path $destination "ardirec.exe"
+$destinationBridge = Join-Path $destination "ardirec_bridge.dll"
 Copy-Item $builtExe $destinationExe -Force
+Copy-Item $builtBridge $destinationBridge -Force
 
-Write-Host "==> Deploying ArdIrec Qt runtime into ARSAS publish tree"
+Write-Host "==> Deploying ArdIrec Qt fallback runtime and MSVC runtime into ARSAS publish tree"
 & $windeployqt.Source `
     --release `
     --compiler-runtime `
@@ -97,6 +104,7 @@ if (Test-Path $licensePath -PathType Leaf) {
 }
 
 $requiredRuntimeFiles = @(
+    "ardirec_bridge.dll",
     "ardirec.exe",
     "Qt6Core.dll",
     "Qt6Gui.dll",
@@ -111,5 +119,5 @@ foreach ($relativePath in $requiredRuntimeFiles) {
     }
 }
 
-Write-Host "==> ArdIrec viewer staged for ARSAS: $destination"
+Write-Host "==> ArdIrec P1 native bridge + Qt fallback staged for ARSAS: $destination"
 Write-Output $destination
