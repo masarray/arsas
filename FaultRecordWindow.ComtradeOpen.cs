@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -20,6 +21,8 @@ public partial class FaultRecordWindow
 
         var buttonFactory = new FrameworkElementFactory(typeof(Button));
         buttonFactory.SetValue(ContentControl.ContentProperty, "Open");
+        buttonFactory.SetValue(AutomationProperties.AutomationIdProperty, "FaultRecord.OpenComtrade");
+        buttonFactory.SetValue(AutomationProperties.NameProperty, "Open COMTRADE record");
         buttonFactory.SetValue(FrameworkElement.HeightProperty, 27d);
         buttonFactory.SetValue(FrameworkElement.MinWidthProperty, 60d);
         buttonFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 3, 6, 3));
