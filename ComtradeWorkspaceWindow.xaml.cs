@@ -19,6 +19,7 @@ public partial class ComtradeWorkspaceWindow : Window
     private CancellationTokenSource? _signalLoadCts;
     private ComtradeSignalItem? _activeSignal;
     private ComtradeSourceViewport _loadedSourceViewport;
+    private ComtradeSourceViewport _requestedSourceViewport;
     private bool _sourceNavigationEnabled;
     private bool _isReducedView;
     private bool _sourcePanGesture;
@@ -132,6 +133,7 @@ public partial class ComtradeWorkspaceWindow : Window
         _activeSignal = signal;
         _sourceNavigationEnabled = _record.Info.FrameCount > ExactSignalFrameLimit;
         var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
+        _requestedSourceViewport = full;
         await LoadAndDisplaySignalAsync(signal, full, initialSelection: true).ConfigureAwait(true);
     }
 
@@ -140,6 +142,7 @@ public partial class ComtradeWorkspaceWindow : Window
         ComtradeSourceViewport sourceViewport,
         bool initialSelection)
     {
+        _requestedSourceViewport = sourceViewport;
         _signalLoadCts?.Cancel();
         _signalLoadCts?.Dispose();
         _signalLoadCts = new CancellationTokenSource();
@@ -161,6 +164,7 @@ public partial class ComtradeWorkspaceWindow : Window
                 return;
 
             _loadedSourceViewport = preview.SourceViewport;
+            _requestedSourceViewport = preview.SourceViewport;
             _isReducedView = preview.IsReduced;
             if (preview.Analog is not null)
             {
@@ -353,21 +357,24 @@ public partial class ComtradeWorkspaceWindow : Window
         if (!_sourceNavigationEnabled || _activeSignal is null || _loadedSourceViewport.FrameCount == 0)
             return;
 
+        var current = _requestedSourceViewport.FrameCount > 0
+            ? _requestedSourceViewport
+            : _loadedSourceViewport;
         var fraction = PlotFraction(e.GetPosition(WaveformView).X);
         ComtradeSourceViewport target;
         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
         {
-            var step = Math.Max(1UL, _loadedSourceViewport.FrameCount / 10);
+            var step = Math.Max(1UL, current.FrameCount / 10);
             var signedStep = ToSignedStep(step, e.Delta > 0 ? -1 : 1);
             target = ComtradeAbsoluteViewportMath.Pan(
-                _loadedSourceViewport,
+                current,
                 _record.Info.FrameCount,
                 signedStep);
         }
         else
         {
             target = ComtradeAbsoluteViewportMath.Zoom(
-                _loadedSourceViewport,
+                current,
                 _record.Info.FrameCount,
                 fraction,
                 e.Delta > 0 ? 0.60 : 1.60,
@@ -375,9 +382,10 @@ public partial class ComtradeWorkspaceWindow : Window
         }
 
         e.Handled = true;
-        if (target == _loadedSourceViewport)
+        if (target == current)
             return;
 
+        _requestedSourceViewport = target;
         await LoadAndDisplaySignalAsync(_activeSignal, target, initialSelection: false).ConfigureAwait(true);
     }
 
@@ -393,7 +401,9 @@ public partial class ComtradeWorkspaceWindow : Window
 
         _sourcePanGesture = true;
         _sourcePanStartPoint = e.GetPosition(WaveformView);
-        _sourcePanStartViewport = _loadedSourceViewport;
+        _sourcePanStartViewport = _requestedSourceViewport.FrameCount > 0
+            ? _requestedSourceViewport
+            : _loadedSourceViewport;
         WaveformView.CaptureMouse();
         WaveformView.Cursor = Cursors.SizeWE;
         e.Handled = true;
@@ -418,9 +428,10 @@ public partial class ComtradeWorkspaceWindow : Window
             _sourcePanStartViewport,
             _record.Info.FrameCount,
             deltaFrames);
-        if (target == _loadedSourceViewport)
+        if (target == _requestedSourceViewport)
             return;
 
+        _requestedSourceViewport = target;
         await LoadAndDisplaySignalAsync(_activeSignal, target, initialSelection: false).ConfigureAwait(true);
     }
 
@@ -429,8 +440,9 @@ public partial class ComtradeWorkspaceWindow : Window
         if (_sourceNavigationEnabled && _activeSignal is not null)
         {
             var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
-            if (_loadedSourceViewport != full)
+            if (_requestedSourceViewport != full || _loadedSourceViewport != full)
             {
+                _requestedSourceViewport = full;
                 await LoadAndDisplaySignalAsync(_activeSignal, full, initialSelection: false).ConfigureAwait(true);
                 return;
             }
