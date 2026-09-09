@@ -1,0 +1,125 @@
+name: Validate COMTRADE viewer integration
+
+on:
+  pull_request:
+    paths:
+      - "FaultRecordWindow.ComtradeOpen.cs"
+      - "Services/ArdIrecViewerLauncher.cs"
+      - "scripts/stage-ardirec-viewer.ps1"
+      - "engines/ARDIREC.lock.json"
+      - "docs/COMTRADE_VIEWER_INTEGRATION.md"
+      - ".github/workflows/comtrade-viewer-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-viewer-integration:
+    name: Build pinned ArdIrec and smoke ARSAS launch contract
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout ARSAS
+        uses: actions/checkout@v4
+        with:
+          path: ARSAS
+
+      - name: Resolve immutable ArdIrec integration lock
+        shell: powershell
+        run: |
+          $lockPath = ".\ARSAS\engines\ARDIREC.lock.json"
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$') {
+            throw "ArdIrec repository lock is invalid."
+          }
+          if ($lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ArdIrec commit lock is invalid."
+          }
+          if ($lock.qt.version -ne '6.8.3' -or $lock.qt.arch -ne 'win64_msvc2022_64') {
+            throw "ArdIrec Qt lock must match the validated Windows recipe (Qt 6.8.3 / win64_msvc2022_64)."
+          }
+          if ($lock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
+              $lock.runtime.launchArgument -ne '--arsas-open') {
+            throw "ArdIrec runtime contract is invalid."
+          }
+
+          "ARDIREC_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ArdIrec revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
+      - name: Install Qt 6.8.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Build, test and stage ArdIrec viewer
+        shell: powershell
+        run: |
+          $publish = Join-Path $env:RUNNER_TEMP "arsas-viewer-publish"
+          if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
+          New-Item -ItemType Directory -Path $publish -Force | Out-Null
+
+          .\ARSAS\scripts\stage-ardirec-viewer.ps1 `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+            -PublishedDirectory $publish `
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-build"
+
+          "VIEWER_PUBLISH=$publish" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify deployed runtime and ARSAS launch contract
+        shell: powershell
+        run: |
+          $viewer = Join-Path $env:VIEWER_PUBLISH "Tools\ArdIrec\ardirec.exe"
+          foreach ($relative in @(
+            "Tools\ArdIrec\ardirec.exe",
+            "Tools\ArdIrec\Qt6Core.dll",
+            "Tools\ArdIrec\Qt6Gui.dll",
+            "Tools\ArdIrec\Qt6Qml.dll",
+            "Tools\ArdIrec\Qt6Quick.dll",
+            "Tools\ArdIrec\platforms\qwindows.dll"
+          )) {
+            $path = Join-Path $env:VIEWER_PUBLISH $relative
+            if (-not (Test-Path $path -PathType Leaf)) {
+              throw "Missing staged ArdIrec runtime file: $path"
+            }
+          }
+
+          $fixtureDirectory = Join-Path $env:RUNNER_TEMP "COMTRADE fixture with spaces"
+          New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
+          Copy-Item ".\ArdIrec\tests\data\binary.cfg" (Join-Path $fixtureDirectory "binary.cfg") -Force
+          Copy-Item ".\ArdIrec\tests\data\binary.dat" (Join-Path $fixtureDirectory "binary.dat") -Force
+          $fixtureCfg = Join-Path $fixtureDirectory "binary.cfg"
+
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $viewer
+          $startInfo.UseShellExecute = $false
+          $startInfo.WorkingDirectory = Split-Path -Parent $viewer
+          $startInfo.ArgumentList.Add("--arsas-open")
+          $startInfo.ArgumentList.Add($fixtureCfg)
+          $startInfo.Environment["QT_QPA_PLATFORM"] = "offscreen"
+
+          $process = [System.Diagnostics.Process]::Start($startInfo)
+          if ($null -eq $process) { throw "Could not start staged ArdIrec viewer." }
+          Start-Sleep -Seconds 4
+          if ($process.HasExited) {
+            throw "ArdIrec viewer exited unexpectedly during ARSAS launch smoke test (code $($process.ExitCode))."
+          }
+
+          Stop-Process -Id $process.Id -Force
+          $process.WaitForExit()
+          Write-Host "ARSAS -> ArdIrec launch contract passed with a COMTRADE path containing spaces."
