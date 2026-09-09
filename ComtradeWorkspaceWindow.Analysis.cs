@@ -127,7 +127,7 @@ public partial class ComtradeWorkspaceWindow
         var relative = timeMs is { } absolute && triggerMs is { } trigger ? absolute - trigger : (double?)null;
         AnalysisReferenceTextBlock.Text = timeMs is { } ms
             ? $"Analysis reference: {(cursorReference ? "Cursor A" : "viewport center")} • frame {referenceFrame:N0} • " +
-              (relative is { } rel ? FormatRelativeTime(rel) : $"{ms:G7} ms")
+              (relative is { } rel ? ComtradeDisturbanceSemantics.FormatRelativeTime(rel) : $"{ms:G7} ms")
             : $"Analysis reference: {(cursorReference ? "Cursor A" : "viewport center")} • frame {referenceFrame:N0}";
 
         try
