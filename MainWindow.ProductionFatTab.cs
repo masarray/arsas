@@ -46,8 +46,9 @@ public partial class MainWindow
         if (_productionFatTabInstalled || !IsLoaded)
             return;
 
-        // PR #290 creates the seventh navigation slot. Wait until that shell contribution
-        // exists, then replace only its FAT content/handlers; P0/P1 shell geometry is untouched.
+        // The seventh FAT destination is now canonical MainWindow XAML. Wait only for the
+        // native FAT state contribution to bind its compatibility fields; do not create,
+        // restyle, or re-own navigation here.
         if (!_nativeFatInstalled || _nativeFatTab == null || _nativeFatNavButton == null)
         {
             _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.ApplicationIdle)
@@ -70,18 +71,12 @@ public partial class MainWindow
         AttachNativeFatObservedDevice(null);
         PropertyChanged -= NativeFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged -= NativeFat_MainTabsSelectionChanged;
-        _nativeFatNavButton.Click -= NativeFatNavButton_Click;
 
         _nativeFatTab.Content = BuildProductionFatLauncher();
 
-        // FAT must be visually indistinguishable from the existing workflow tabs.
-        _nativeFatNavButton.Style = NavDiagnosticsButton.Style;
-        _nativeFatNavButton.Padding = NavDiagnosticsButton.Padding;
-        _nativeFatNavButton.Margin = NavDiagnosticsButton.Margin;
-        _nativeFatNavButton.HorizontalContentAlignment = NavDiagnosticsButton.HorizontalContentAlignment;
-        _nativeFatNavButton.VerticalContentAlignment = NavDiagnosticsButton.VerticalContentAlignment;
+        // MainWindow.xaml owns the FAT button's SegmentedNavButton style and NavButton_Click.
+        // Production FAT reacts to tab selection below; it must not install a second click owner.
         _nativeFatNavButton.ToolTip = "Production FAT workspace · automatic Value 1 / Value 2 evidence capture";
-        _nativeFatNavButton.Click += ProductionFatNavButton_Click;
 
         PropertyChanged += ProductionFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged += ProductionFat_MainTabsSelectionChanged;
@@ -176,17 +171,6 @@ public partial class MainWindow
         card.Child = content;
         root.Children.Add(card);
         return root;
-    }
-
-    private void ProductionFatNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (MainTabs.Items.Count <= NativeFatWorkspaceIndex)
-            return;
-
-        MainTabs.SelectedIndex = NativeFatWorkspaceIndex;
-        QueueNativeFatNavigationGeometry();
-        SynchronizeProductionFatSelectedIed();
-        _productionFatWindow?.NotifyEmbeddedHostActivated();
     }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
