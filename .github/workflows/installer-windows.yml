@@ -69,6 +69,7 @@ jobs:
 
           $ardirecLock = Get-Content ".\ArIED61850Tester\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
           if ($ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $ardirecLock.ref -ne 'main' -or
               $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
               $ardirecLock.qt.version -ne '6.8.3' -or
               $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
