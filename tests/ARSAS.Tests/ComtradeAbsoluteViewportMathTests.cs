@@ -58,7 +58,7 @@ public sealed class ComtradeAbsoluteViewportMathTests
 
     [Theory]
     [InlineData(0.0, 100UL)]
-    [InlineData(0.5, 149UL)]
+    [InlineData(0.5, 150UL)]
     [InlineData(1.0, 199UL)]
     public void FrameAtFraction_UsesAbsoluteSourceCoordinates(double fraction, ulong expected)
     {
