@@ -129,7 +129,6 @@ internal static class ComtradeRangeDecimator
                     minimum[bucket] = value;
                     minimumTimestamp[bucket] = timestamps[i];
                 }
-
                 if (value > maximum[bucket])
                 {
                     maximum[bucket] = value;
@@ -148,15 +147,13 @@ internal static class ComtradeRangeDecimator
 
             var min = double.IsPositiveInfinity(minimum[bucket]) ? double.NaN : minimum[bucket];
             var max = double.IsNegativeInfinity(maximum[bucket]) ? double.NaN : maximum[bucket];
-            var minTimestamp = double.IsFinite(min) ? minimumTimestamp[bucket] : firstTimestamp[bucket];
-            var maxTimestamp = double.IsFinite(max) ? maximumTimestamp[bucket] : lastTimestamp[bucket];
             buckets.Add(new ComtradeAnalogEnvelopeBucket(
                 bucketStarts[bucket],
                 bucketEnds[bucket],
                 firstTimestamp[bucket],
                 lastTimestamp[bucket],
-                minTimestamp,
-                maxTimestamp,
+                minimumTimestamp[bucket],
+                maximumTimestamp[bucket],
                 min,
                 max));
         }
@@ -178,15 +175,21 @@ internal static class ComtradeRangeDecimator
         if (range.FrameCount == 0)
             return new ComtradeDigitalTransitionSet(range, 0, 0, 0, Array.Empty<ComtradeDigitalTransition>(), false);
 
-        maxTransitions = Math.Max(1, maxTransitions);
+        maxTransitions = Math.Max(2, maxTransitions);
         chunkFrames = NormalizeChunkFrames(chunkFrames);
-        var transitions = new List<ComtradeDigitalTransition>(Math.Min(maxTransitions, 4096));
 
+        // The first state is always retained. Subsequent transitions are sampled adaptively.
+        // When the cap is reached we double the sampling stride and compact already-stored
+        // transitions by their original change ordinal, then continue scanning the full range.
+        var sampled = new List<SampledDigitalTransition>(Math.Min(maxTransitions, 4096));
         var havePrevious = false;
         byte previousState = 0;
         ulong processed = 0;
+        ulong changeOrdinal = 0;
+        ulong samplingStride = 1;
         uint firstTimestamp = 0;
         uint lastTimestamp = 0;
+        ComtradeDigitalTransition? lastActualTransition = null;
 
         while (processed < range.FrameCount)
         {
@@ -207,7 +210,9 @@ internal static class ComtradeRangeDecimator
 
                 if (!havePrevious)
                 {
-                    transitions.Add(new ComtradeDigitalTransition(absoluteFrame, timestamps[i], state));
+                    var initial = new ComtradeDigitalTransition(absoluteFrame, timestamps[i], state);
+                    sampled.Add(new SampledDigitalTransition(0, initial));
+                    lastActualTransition = initial;
                     havePrevious = true;
                     previousState = state;
                     continue;
@@ -216,24 +221,41 @@ internal static class ComtradeRangeDecimator
                 if (state == previousState)
                     continue;
 
-                if (transitions.Count >= maxTransitions)
-                {
-                    var scanned = processed + checked((ulong)i) + 1;
-                    return new ComtradeDigitalTransitionSet(
-                        range,
-                        scanned,
-                        firstTimestamp,
-                        lastTimestamp,
-                        transitions,
-                        true);
-                }
-
-                transitions.Add(new ComtradeDigitalTransition(absoluteFrame, timestamps[i], state));
+                changeOrdinal++;
+                var transition = new ComtradeDigitalTransition(absoluteFrame, timestamps[i], state);
+                lastActualTransition = transition;
                 previousState = state;
+
+                if (changeOrdinal % samplingStride != 0)
+                    continue;
+
+                sampled.Add(new SampledDigitalTransition(changeOrdinal, transition));
+                while (sampled.Count >= maxTransitions && samplingStride <= ulong.MaxValue / 2)
+                {
+                    samplingStride *= 2;
+                    CompactTransitions(sampled, samplingStride);
+                }
             }
 
             processed += checked((ulong)take);
         }
+
+        // Keep the actual final state transition so the trace terminates in the correct state,
+        // even when adaptive sampling omitted the last change.
+        if (lastActualTransition is { } lastActual &&
+            sampled[^1].Transition.Frame != lastActual.Frame)
+        {
+            if (sampled.Count >= maxTransitions)
+                sampled.RemoveAt(sampled.Count - 1);
+            sampled.Add(new SampledDigitalTransition(changeOrdinal, lastActual));
+        }
+
+        var transitions = sampled
+            .Select(item => item.Transition)
+            .OrderBy(item => item.Frame)
+            .ToArray();
+        var exactTransitionCount = changeOrdinal + 1; // initial state + actual changes
+        var isTruncated = checked((ulong)transitions.Length) < exactTransitionCount;
 
         return new ComtradeDigitalTransitionSet(
             range,
@@ -241,7 +263,7 @@ internal static class ComtradeRangeDecimator
             firstTimestamp,
             lastTimestamp,
             transitions,
-            false);
+            isTruncated);
     }
 
     internal static ComtradeFrameRange NormalizeRange(ulong totalFrames, ulong startFrame, ulong frameCount)
@@ -251,6 +273,22 @@ internal static class ComtradeRangeDecimator
 
         var available = totalFrames - startFrame;
         return new ComtradeFrameRange(startFrame, Math.Min(frameCount, available));
+    }
+
+    private static void CompactTransitions(List<SampledDigitalTransition> sampled, ulong stride)
+    {
+        if (sampled.Count <= 1)
+            return;
+
+        var write = 1; // Preserve initial state at ordinal zero.
+        for (var read = 1; read < sampled.Count; read++)
+        {
+            if (sampled[read].ChangeOrdinal % stride != 0)
+                continue;
+            sampled[write++] = sampled[read];
+        }
+        if (write < sampled.Count)
+            sampled.RemoveRange(write, sampled.Count - write);
     }
 
     private static int NormalizeChunkFrames(int chunkFrames)
@@ -276,4 +314,8 @@ internal static class ComtradeRangeDecimator
                 $"Expected {expected} frames, signal={signalLength}, timestamps={timestampLength}.");
         }
     }
+
+    private readonly record struct SampledDigitalTransition(
+        ulong ChangeOrdinal,
+        ComtradeDigitalTransition Transition);
 }
