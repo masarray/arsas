@@ -13,12 +13,6 @@ public partial class FaultRecordWindow
 {
     private bool _comtradeOpenColumnInstalled;
 
-    protected override void OnContentRendered(EventArgs e)
-    {
-        base.OnContentRendered(e);
-        EnsureComtradeOpenColumn();
-    }
-
     private void EnsureComtradeOpenColumn()
     {
         if (_comtradeOpenColumnInstalled || FaultRecordsGrid is null)
