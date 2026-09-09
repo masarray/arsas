@@ -306,6 +306,32 @@ public static class IoFatEngineeringSelectionBridge
         return changed;
     }
 
+    /// <summary>
+    /// Automatic Engineering -> FAT bootstrap is a Static DataSet workflow. Static FCDA/FCD
+    /// membership is therefore the complete FAT workspace authority for that bootstrap.
+    /// Persisted/manual SCL rows are retained for audit/evidence continuity but are removed
+    /// from the shared active workspace so they cannot shadow an authoritative static member
+    /// after both references resolve to the same primary live leaf.
+    /// </summary>
+    internal static int RetireManualWorkspaceRowsForStaticDataSetMode(IoTestIedPlan ied)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        if (!ied.TestPoints.Any(IoTestSignalSelectionService.IsSclDataSetAuthority))
+            return 0;
+
+        var changed = 0;
+        foreach (var point in ied.TestPoints.Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority))
+        {
+            if (!point.WorkspaceSelected)
+                continue;
+
+            point.WorkspaceSelected = false;
+            changed++;
+        }
+
+        return changed;
+    }
+
     private static HashSet<IoTestPointPlan> FindRedundantManualWorkspacePoints(IoTestIedPlan ied)
         => ied.TestPoints
             .Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority)
