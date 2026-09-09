@@ -5,20 +5,20 @@ namespace ARSAS.Tests;
 public sealed class ComtradeDecimatedSeriesBuilderTests
 {
     [Fact]
-    public void AnalogSeries_PreservesExtremaInTimestampOrder()
+    public void AnalogSeries_PreservesBoundariesAndExtremaInTimestampOrder()
     {
         var envelope = new ComtradeAnalogEnvelope(
             new ComtradeFrameRange(0, 20),
             new[]
             {
-                new ComtradeAnalogEnvelopeBucket(0, 10, 0, 900, 700, 200, -5, 8),
-                new ComtradeAnalogEnvelopeBucket(10, 20, 1000, 1900, 1100, 1800, -3, 12)
+                new ComtradeAnalogEnvelopeBucket(0, 10, 0, 900, 1, 2, 700, 200, -5, 8),
+                new ComtradeAnalogEnvelopeBucket(10, 20, 1000, 1900, 3, 4, 1100, 1800, -3, 12)
             });
 
         var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
 
-        Assert.Equal(new double[] { 8, -5, -3, 12 }, series.Values);
-        Assert.Equal(new uint[] { 200, 700, 1100, 1800 }, series.Timestamps);
+        Assert.Equal(new double[] { 1, 8, -5, 2, 3, -3, 12, 4 }, series.Values);
+        Assert.Equal(new uint[] { 0, 200, 700, 900, 1000, 1100, 1800, 1900 }, series.Timestamps);
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public sealed class ComtradeDecimatedSeriesBuilderTests
             new ComtradeFrameRange(0, 1),
             new[]
             {
-                new ComtradeAnalogEnvelopeBucket(0, 1, 100, 100, 100, 100, -10, 10)
+                new ComtradeAnalogEnvelopeBucket(0, 1, 100, 100, -10, 10, 100, 100, -10, 10)
             });
 
         var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
@@ -60,21 +60,21 @@ public sealed class ComtradeDecimatedSeriesBuilderTests
     {
         var transitions = new ComtradeDigitalTransitionSet(
             new ComtradeFrameRange(0, 100),
-            51,
+            100,
             0,
-            50,
+            99,
             new[]
             {
                 new ComtradeDigitalTransition(0, 0, 0),
                 new ComtradeDigitalTransition(20, 20, 1),
-                new ComtradeDigitalTransition(40, 40, 0)
+                new ComtradeDigitalTransition(80, 80, 0)
             },
             true);
 
         var series = ComtradeDecimatedSeriesBuilder.BuildDigital(transitions);
 
         Assert.Equal(new byte[] { 0, 1, 0, 0 }, series.States);
-        Assert.Equal(new uint[] { 0, 20, 40, 50 }, series.Timestamps);
+        Assert.Equal(new uint[] { 0, 20, 80, 99 }, series.Timestamps);
         Assert.True(series.IsTruncated);
     }
 }
