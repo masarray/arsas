@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace ArIED61850Tester.Services;
 
 internal static class ArdIrecViewerLauncher
 {
     private const string ViewerExecutableName = "ardirec.exe";
+    private const int SwRestore = 9;
 
     public static bool TryResolveComtradeCfg(
         string localDirectory,
@@ -70,8 +72,9 @@ internal static class ArdIrecViewerLauncher
         return false;
     }
 
-    public static bool TryLaunch(string cfgPath, out string error)
+    public static bool TryLaunch(string cfgPath, out Process? process, out string error)
     {
+        process = null;
         error = string.Empty;
 
         if (string.IsNullOrWhiteSpace(cfgPath) || !File.Exists(cfgPath))
@@ -95,12 +98,14 @@ internal static class ArdIrecViewerLauncher
             {
                 FileName = executable,
                 UseShellExecute = false,
+                CreateNoWindow = false,
                 WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory
             };
             startInfo.ArgumentList.Add("--arsas-open");
             startInfo.ArgumentList.Add(Path.GetFullPath(cfgPath));
 
-            if (Process.Start(startInfo) is null)
+            process = Process.Start(startInfo);
+            if (process is null)
             {
                 error = "Windows could not start the ARSAS COMTRADE Viewer component.";
                 return false;
@@ -110,9 +115,57 @@ internal static class ArdIrecViewerLauncher
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
         {
+            process?.Dispose();
+            process = null;
             error = $"Could not open the COMTRADE viewer: {ex.Message}";
             return false;
         }
+    }
+
+    public static bool TryActivateViewerWindow(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        try
+        {
+            if (process.HasExited)
+                return false;
+
+            process.Refresh();
+            var handle = process.MainWindowHandle;
+            if (handle == IntPtr.Zero)
+                return false;
+
+            _ = ShowWindow(handle, SwRestore);
+            return SetForegroundWindow(handle);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    public static string DescribeEarlyExit(Process process, string cfgPath)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+
+        var exitText = "unknown";
+        try
+        {
+            if (process.HasExited)
+                exitText = process.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return
+            $"The ARSAS COMTRADE Viewer started but closed immediately (exit code {exitText}). " +
+            "The downloaded CFG/DAT package was found, so the failure occurred while starting the viewer runtime. " +
+            $"Record: {Path.GetFileName(cfgPath)}";
     }
 
     private static string? ResolveViewerExecutable()
@@ -164,4 +217,12 @@ internal static class ArdIrecViewerLauncher
         var sanitized = new string(characters).Trim().TrimEnd('.');
         return string.IsNullOrWhiteSpace(sanitized) ? "fault-record" : sanitized;
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
