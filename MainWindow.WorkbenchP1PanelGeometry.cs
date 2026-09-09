@@ -31,12 +31,14 @@ public partial class MainWindow
         public bool DockDragging { get; set; }
         public Dictionary<int, double> DockHeightByWorkspace { get; } = new()
         {
-            [0] = 182,
-            [1] = 165,
-            [2] = 182,
-            [3] = 165,
-            [4] = 165,
-            [5] = 165
+            // First paint should expose a complete command row without forcing the operator
+            // to resize the dock. Dragged heights remain authoritative for the session.
+            [0] = 248,
+            [1] = 224,
+            [2] = 252,
+            [3] = 224,
+            [4] = 224,
+            [5] = 224
         };
     }
 
@@ -304,7 +306,7 @@ public partial class MainWindow
         var availableHeight = Math.Max(520, _persistentWorkbench?.Shell.ActualHeight ?? ActualHeight);
         var preferred = state.DockHeightByWorkspace.TryGetValue(workspaceIndex, out var stored)
             ? stored
-            : 175d;
+            : 224d;
         preferred = Math.Clamp(preferred, 126d, Math.Min(430d, availableHeight * 0.48d));
 
         state.DockGutterRow.Height = new GridLength(10);
