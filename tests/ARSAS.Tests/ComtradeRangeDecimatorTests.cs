@@ -27,6 +27,8 @@ public sealed class ComtradeRangeDecimatorTests
         Assert.Equal((ulong)10, first.EndExclusive);
         Assert.Equal((uint)0, first.FirstTimestamp);
         Assert.Equal((uint)900, first.LastTimestamp);
+        Assert.Equal((uint)0, first.MinimumTimestamp);
+        Assert.Equal((uint)900, first.MaximumTimestamp);
         Assert.Equal(0.0, first.Minimum);
         Assert.Equal(9.0, first.Maximum);
 
@@ -39,6 +41,28 @@ public sealed class ComtradeRangeDecimatorTests
         Assert.InRange(source.MaxAnalogRead, 1, 7);
         Assert.InRange(source.MaxTimestampRead, 1, 7);
         Assert.True(source.AnalogReadCalls > 1);
+    }
+
+    [Fact]
+    public void AnalogEnvelope_TracksExtremaTimestampsInsideBucket()
+    {
+        var values = new double[] { 4, -10, 2, 11, 3 };
+        var timestamps = new uint[] { 0, 100, 200, 300, 400 };
+        var source = new FakeRangeSource(values, new byte[5], timestamps);
+
+        var envelope = ComtradeRangeDecimator.BuildAnalogEnvelope(
+            source,
+            channelIndex: 0,
+            startFrame: 0,
+            frameCount: 5,
+            targetBuckets: 1,
+            chunkFrames: 2);
+
+        var bucket = Assert.Single(envelope.Buckets);
+        Assert.Equal(-10, bucket.Minimum);
+        Assert.Equal(11, bucket.Maximum);
+        Assert.Equal((uint)100, bucket.MinimumTimestamp);
+        Assert.Equal((uint)300, bucket.MaximumTimestamp);
     }
 
     [Fact]
@@ -91,9 +115,9 @@ public sealed class ComtradeRangeDecimatorTests
     }
 
     [Fact]
-    public void DigitalTransitions_StopsAtConfiguredMemoryBound()
+    public void DigitalTransitions_ScansFullRangeWhileKeepingConfiguredMemoryBound()
     {
-        var states = Enumerable.Range(0, 20).Select(value => (byte)(value % 2)).ToArray();
+        var states = Enumerable.Range(0, 100).Select(value => (byte)(value % 2)).ToArray();
         var timestamps = Enumerable.Range(0, states.Length).Select(value => checked((uint)value)).ToArray();
         var source = new FakeRangeSource(new double[states.Length], states, timestamps);
 
@@ -102,16 +126,19 @@ public sealed class ComtradeRangeDecimatorTests
             channelIndex: 0,
             startFrame: 0,
             frameCount: checked((ulong)states.Length),
-            maxTransitions: 3,
-            chunkFrames: 4);
+            maxTransitions: 5,
+            chunkFrames: 7);
 
         Assert.True(result.IsTruncated);
-        Assert.Equal(3, result.Transitions.Count);
-        Assert.Equal((ulong)4, result.ScannedFrameCount);
+        Assert.InRange(result.Transitions.Count, 2, 5);
+        Assert.Equal((ulong)states.Length, result.ScannedFrameCount);
         Assert.Equal((uint)0, result.FirstTimestamp);
-        Assert.Equal((uint)3, result.LastTimestamp);
+        Assert.Equal((uint)99, result.LastTimestamp);
         Assert.Equal((ulong)0, result.Transitions[0].Frame);
-        Assert.Equal((ulong)2, result.Transitions[^1].Frame);
+        Assert.Equal((ulong)99, result.Transitions[^1].Frame);
+        Assert.Equal((byte)1, result.Transitions[^1].State);
+        Assert.InRange(source.MaxStatusRead, 1, 7);
+        Assert.InRange(source.MaxTimestampRead, 1, 7);
     }
 
     [Fact]
