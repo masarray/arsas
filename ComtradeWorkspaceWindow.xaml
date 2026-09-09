@@ -114,14 +114,31 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="6" Background="#F9FBFE" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="8" Padding="10,7">
+        <Border Grid.Row="6" Background="#F9FBFE" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="8" Padding="10,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusTextBlock" FontSize="10.5" Foreground="#687B92" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="P1A • in-process native bridge" FontSize="10" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusTextBlock" FontSize="10.5" Foreground="#687B92" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <Button x:Name="FullAnalysisButton"
+                        Grid.Column="1"
+                        Content="Full analysis"
+                        Height="27"
+                        MinWidth="96"
+                        Margin="12,0,14,0"
+                        Padding="12,0"
+                        FontSize="10.5"
+                        FontWeight="SemiBold"
+                        Foreground="#315D91"
+                        Background="#F5F9FF"
+                        BorderBrush="#C5D8EE"
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip="Open the complete COMTRADE analysis workspace while native P1 analysis parity is still in progress."
+                        Click="FullAnalysis_Click"/>
+                <TextBlock Grid.Column="2" Text="P1A • in-process native bridge" FontSize="10" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>
