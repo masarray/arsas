@@ -5,6 +5,8 @@ on:
     paths:
       - "FaultRecordWindow.ComtradeOpen.cs"
       - "Services/ArdIrecViewerLauncher.cs"
+      - "Properties/AssemblyInfo.Tests.cs"
+      - "tests/ARSAS.Tests/ArdIrecViewerLauncherTests.cs"
       - "scripts/stage-ardirec-viewer.ps1"
       - "engines/ARDIREC.lock.json"
       - "docs/COMTRADE_VIEWER_INTEGRATION.md"
