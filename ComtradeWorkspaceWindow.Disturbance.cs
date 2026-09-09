@@ -29,8 +29,6 @@ public partial class ComtradeWorkspaceWindow
         if (_disturbanceInitialized) return;
         _disturbanceInitialized = true;
 
-        // The synchronized view replaces the old one-channel canvas as the primary waveform UX.
-        // Keep the old renderer alive only as a compatibility implementation detail while P1D lands.
         WaveformView.NavigationChanged -= WaveformView_NavigationChanged;
         WaveformView.Visibility = Visibility.Collapsed;
         DisturbanceView.Visibility = _analysisMode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
@@ -284,7 +282,7 @@ public partial class ComtradeWorkspaceWindow
                     loaded.Add(new LoadedDisturbanceTrack(signal, new ComtradeDisturbanceTrack(
                         signal.Title, BuildTrackSubtitle(metadata.Phase, metadata.Circuit), metadata.Units,
                         false, preview.Analog, null, preview.Timestamps,
-                        ResolveSignalColor(metadata.Phase, signal.Title, false), preserveAllPoints: true)));
+                        ResolveSignalColor(metadata.Phase, signal.Title, false), PreserveAllPoints: true)));
                 }
                 else if (!signal.IsAnalog && preview.Status is not null)
                 {
