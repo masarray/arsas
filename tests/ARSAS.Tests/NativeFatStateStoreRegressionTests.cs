@@ -115,6 +115,30 @@ public sealed class NativeFatStateStoreRegressionTests
     }
 
     [Fact]
+    public async Task DamagedPreferredJson_IsNeverOverwrittenByRecoveryState()
+    {
+        using var temp = new TemporaryDirectory();
+        var device = CreateDevice("device-corrupt", "Corrupt Evidence IED");
+        device.Signals.Add(CreateSignal("DI 1", "IED1LD0/GGIO1.Ind1.stVal"));
+
+        var firstStore = new NativeFatStateStore(temp.Path);
+        var seed = await firstStore.LoadAsync(device);
+        var damagedPath = seed.StoragePath;
+        const string damagedContent = "{ this is intentionally not valid JSON";
+        await File.WriteAllTextAsync(damagedPath, damagedContent);
+
+        var recoveryStore = new NativeFatStateStore(temp.Path);
+        var recovered = await recoveryStore.LoadAndReconcileAsync(device);
+        Assert.NotEqual(damagedPath, recovered.StoragePath);
+        Assert.Contains("RECOVERY", Path.GetFileName(recovered.StoragePath), StringComparison.OrdinalIgnoreCase);
+
+        await recoveryStore.SaveAsync(recovered);
+        Assert.Equal(damagedContent, await File.ReadAllTextAsync(damagedPath));
+        Assert.True(File.Exists(recovered.StoragePath));
+        Assert.Equal(2, Directory.GetFiles(temp.Path, "*.json").Length);
+    }
+
+    [Fact]
     public void ReportSnapshot_FreezesEvidenceAndSummaryAtBuildTime()
     {
         var device = CreateDevice("device-report", "Report IED");
