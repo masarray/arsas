@@ -8,10 +8,11 @@ using System.Windows.Threading;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// One pointer-selection authority for the fault-record grid. Clicking either the SELECT
-/// checkbox or anywhere on a transferable record row toggles FaultRecordRow.IsSelected exactly
-/// once. Local Downloaded state never owns a second selection set; it only changes transfer
-/// semantics from first download to staged atomic replacement.
+/// One pointer-selection authority for the fault-record grid. Clicking the SELECT checkbox or a
+/// non-action area of a transferable record row toggles FaultRecordRow.IsSelected exactly once.
+/// Embedded row action buttons keep their own click authority and must never be converted into a
+/// download-selection toggle. Local Downloaded state only changes transfer semantics from first
+/// download to staged atomic replacement.
 /// </summary>
 public partial class FaultRecordWindow
 {
@@ -27,12 +28,14 @@ public partial class FaultRecordWindow
 
     private static void RedownloadSelectionAuthority_Down(object sender, MouseButtonEventArgs e)
     {
+        var source = e.OriginalSource as DependencyObject;
         if (sender is not DataGrid grid ||
             Window.GetWindow(grid) is not FaultRecordWindow window ||
             !ReferenceEquals(grid, window.FaultRecordsGrid) ||
             window.IsBusy ||
             e.ChangedButton != MouseButton.Left ||
-            !TryResolveTransferRow(e.OriginalSource as DependencyObject, out var row) ||
+            IsIndependentRowAction(source) ||
+            !TryResolveTransferRow(source, out var row) ||
             !row.CanSelectForDownload)
         {
             return;
@@ -52,6 +55,14 @@ public partial class FaultRecordWindow
                 window.ConfigureRecordRow(row);
                 window.UpdateSmartSelectionUi();
             }));
+    }
+
+    private static bool IsIndependentRowAction(DependencyObject? source)
+    {
+        // A Button inside a row owns its pointer gesture. In particular the COMTRADE Open button
+        // must be allowed to reach Button.Click instead of the preview row-selection authority.
+        // CheckBox intentionally remains under the existing one-toggle selection path.
+        return FindRedownloadSelectionAncestor<Button>(source) is not null;
     }
 
     private static bool TryResolveTransferRow(DependencyObject? source, out FaultRecordRow row)
