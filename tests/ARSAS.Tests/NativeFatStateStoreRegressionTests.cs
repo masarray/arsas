@@ -55,6 +55,56 @@ public sealed class NativeFatStateStoreRegressionTests
     }
 
     [Fact]
+    public void Reconcile_ExplorerSelectionChange_PreservesEvidenceAndRestoresOnReselect()
+    {
+        var device = CreateDevice("device-selection", "Selection IED");
+        var first = CreateSignal("DI 1", "IED1LD0/GGIO1.Ind1.stVal");
+        var second = CreateSignal("DI 2", "IED1LD0/GGIO1.Ind2.stVal");
+        device.Signals.Add(first);
+        device.Signals.Add(second);
+
+        var state = new NativeFatDeviceState();
+        NativeFatStateStore.Reconcile(state, device);
+        Assert.Equal(2, state.Signals.Count);
+
+        var firstState = state.Signals.Single(signal =>
+            signal.Key == NativeFatIdentity.BuildKey(first));
+        firstState.Result = NativeFatResult.Pass;
+        firstState.Value1 = new NativeFatCapture
+        {
+            Value = "False",
+            Quality = "Good",
+            SourceMode = "BRCB"
+        };
+
+        // Keep DI 2 selected so Explorer has an explicit selected-signal scope. DI 1 must
+        // become historical rather than being deleted when its checkbox is cleared.
+        first.IsSelected = false;
+        NativeFatStateStore.Reconcile(state, device);
+
+        firstState = state.Signals.Single(signal =>
+            signal.Key == NativeFatIdentity.BuildKey(first));
+        var secondState = state.Signals.Single(signal =>
+            signal.Key == NativeFatIdentity.BuildKey(second));
+        Assert.True(firstState.IsHistorical);
+        Assert.False(secondState.IsHistorical);
+        Assert.Equal(NativeFatResult.Pass, firstState.Result);
+        Assert.Equal("False", firstState.Value1?.Value);
+
+        // Re-selecting the same canonical IEC identity resumes the old evidence instead of
+        // starting a new UNTESTED record.
+        first.IsSelected = true;
+        NativeFatStateStore.Reconcile(state, device);
+
+        firstState = state.Signals.Single(signal =>
+            signal.Key == NativeFatIdentity.BuildKey(first));
+        Assert.False(firstState.IsHistorical);
+        Assert.Equal(NativeFatResult.Pass, firstState.Result);
+        Assert.Equal("False", firstState.Value1?.Value);
+        Assert.Equal(2, state.Signals.Count);
+    }
+
+    [Fact]
     public async Task SaveLoad_RestartAndIedRename_ResumeByStableDeviceId()
     {
         using var temp = new TemporaryDirectory();
