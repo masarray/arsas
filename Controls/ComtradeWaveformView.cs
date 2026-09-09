@@ -4,16 +4,17 @@ using System.Windows.Media;
 
 namespace ArIED61850Tester.Controls;
 
-internal sealed class ComtradeWaveformView : FrameworkElement
+public sealed class ComtradeWaveformView : FrameworkElement
 {
     private double[]? _analog;
     private byte[]? _status;
     private uint[]? _timestamps;
+    private double _timeMultiplier = 1.0;
     private string _title = "Select a signal";
     private string _subtitle = "Native ArdIrec core • ARSAS WPF";
     private string _units = string.Empty;
 
-    internal void ShowAnalog(string title, string subtitle, string units, double[] values, uint[] timestamps)
+    internal void ShowAnalog(string title, string subtitle, string units, double[] values, uint[] timestamps, double timeMultiplier)
     {
         _title = title;
         _subtitle = subtitle;
@@ -21,10 +22,11 @@ internal sealed class ComtradeWaveformView : FrameworkElement
         _analog = values;
         _status = null;
         _timestamps = timestamps;
+        _timeMultiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
         InvalidateVisual();
     }
 
-    internal void ShowStatus(string title, string subtitle, byte[] values, uint[] timestamps)
+    internal void ShowStatus(string title, string subtitle, byte[] values, uint[] timestamps, double timeMultiplier)
     {
         _title = title;
         _subtitle = subtitle;
@@ -32,6 +34,7 @@ internal sealed class ComtradeWaveformView : FrameworkElement
         _analog = null;
         _status = values;
         _timestamps = timestamps;
+        _timeMultiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
         InvalidateVisual();
     }
 
@@ -43,6 +46,7 @@ internal sealed class ComtradeWaveformView : FrameworkElement
         _analog = null;
         _status = null;
         _timestamps = null;
+        _timeMultiplier = 1.0;
         InvalidateVisual();
     }
 
@@ -188,10 +192,11 @@ internal sealed class ComtradeWaveformView : FrameworkElement
         if (_timestamps is not { Length: > 1 })
             return;
 
-        var first = _timestamps[0];
-        var last = _timestamps[^1];
-        var firstText = $"{first / 1000.0:G5} ms";
-        var lastText = $"{last / 1000.0:G5} ms";
+        // COMTRADE timestamps are in microseconds and are scaled by TIMEMULT.
+        var firstMs = _timestamps[0] * _timeMultiplier / 1000.0;
+        var lastMs = _timestamps[^1] * _timeMultiplier / 1000.0;
+        var firstText = $"{firstMs:G6} ms";
+        var lastText = $"{lastMs:G6} ms";
         dc.DrawText(new FormattedText(firstText, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             typeface, 9.5, Brushes.Gray, dpi), new Point(plot.Left, plot.Bottom + 8));
         var formattedLast = new FormattedText(lastText, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
