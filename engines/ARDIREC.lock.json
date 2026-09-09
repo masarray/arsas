@@ -2,7 +2,7 @@
   "schema": 1,
   "repository": "masarray/ardirec",
   "ref": "feat/p0-open-cfg-from-cli",
-  "commit": "7e49f6b2d7b461db14ccd31058018153f7fbf651",
+  "commit": "3d585cf6330e86f460b22700e18a16f0f887d87b",
   "qt": {
     "version": "6.8.3",
     "arch": "win64_msvc2022_64"
