@@ -19,13 +19,32 @@ public partial class ComtradeWorkspaceWindow : Window
         InitializeComponent();
         PopulateHeader();
         PopulateSignals();
-        Closed += (_, _) =>
+        Closed += ComtradeWorkspaceWindow_Closed;
+    }
+
+    private async void ComtradeWorkspaceWindow_Closed(object? sender, EventArgs e)
+    {
+        // A selected-channel copy may still be executing on a worker thread. Cancel any queued
+        // load, then wait for the native gate before freeing the opaque record handle.
+        _signalLoadCts?.Cancel();
+        try
         {
-            _signalLoadCts?.Cancel();
+            await _nativeGate.WaitAsync().ConfigureAwait(true);
+            try
+            {
+                _record.Dispose();
+            }
+            finally
+            {
+                _nativeGate.Release();
+            }
+        }
+        finally
+        {
             _signalLoadCts?.Dispose();
+            _signalLoadCts = null;
             _nativeGate.Dispose();
-            _record.Dispose();
-        };
+        }
     }
 
     private void PopulateHeader()
@@ -99,7 +118,8 @@ public partial class ComtradeWorkspaceWindow : Window
                     BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.IsTruncated),
                     metadata.Units,
                     preview.Analog,
-                    preview.Timestamps);
+                    preview.Timestamps,
+                    _record.Info.TimeMultiplier);
             }
             else if (preview.Status is not null)
             {
@@ -108,7 +128,8 @@ public partial class ComtradeWorkspaceWindow : Window
                     signal.Title,
                     BuildSignalSubtitle(metadata.Phase, metadata.Circuit, preview.IsTruncated),
                     preview.Status,
-                    preview.Timestamps);
+                    preview.Timestamps,
+                    _record.Info.TimeMultiplier);
             }
 
             StatusTextBlock.Text = preview.IsTruncated
@@ -117,6 +138,10 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (ObjectDisposedException)
+        {
+            // Window shutdown can dispose the native lifetime after the load was cancelled.
         }
         catch (Exception ex)
         {
