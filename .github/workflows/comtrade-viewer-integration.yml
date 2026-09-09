@@ -101,7 +101,7 @@ jobs:
             }
           }
 
-          $fixtureDirectory = Join-Path $env:RUNNER_TEMP "COMTRADE fixture with spaces"
+          $fixtureDirectory = Join-Path $env:RUNNER_TEMP "COMTRADE fixture üñîçødé 日本 with spaces"
           New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
           Copy-Item ".\ArdIrec\tests\data\binary.cfg" (Join-Path $fixtureDirectory "binary.cfg") -Force
           Copy-Item ".\ArdIrec\tests\data\binary.dat" (Join-Path $fixtureDirectory "binary.dat") -Force
@@ -124,4 +124,4 @@ jobs:
 
           Stop-Process -Id $process.Id -Force
           $process.WaitForExit()
-          Write-Host "ARSAS -> ArdIrec launch contract passed with a COMTRADE path containing spaces."
+          Write-Host "ARSAS -> ArdIrec launch contract passed with a Unicode COMTRADE path containing spaces."
