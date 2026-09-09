@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -9,6 +10,7 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow : Window
 {
     private const int MaxPreviewFrames = 500_000;
+    private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Click Cursor A • Ctrl/right-click Cursor B";
     private readonly ArdIrecNativeRecord _record;
     private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private CancellationTokenSource? _signalLoadCts;
@@ -17,6 +19,9 @@ public partial class ComtradeWorkspaceWindow : Window
     {
         _record = record;
         InitializeComponent();
+        WaveformView.NavigationChanged += WaveformView_NavigationChanged;
+        ConfigureTriggerReference();
+        ResetViewButton.IsEnabled = false;
         PopulateHeader();
         PopulateSignals();
         Closed += ComtradeWorkspaceWindow_Closed;
@@ -41,10 +46,20 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         finally
         {
+            WaveformView.NavigationChanged -= WaveformView_NavigationChanged;
             _signalLoadCts?.Dispose();
             _signalLoadCts = null;
             _nativeGate.Dispose();
         }
+    }
+
+    private void ConfigureTriggerReference()
+    {
+        var info = _record.Info;
+        if (ComtradeTimeMath.TryGetTriggerOffsetMilliseconds(info.StartTime, info.TriggerTime, out var triggerOffsetMilliseconds))
+            WaveformView.SetTriggerOffsetMilliseconds(triggerOffsetMilliseconds);
+        else
+            WaveformView.SetTriggerOffsetMilliseconds(null);
     }
 
     private void PopulateHeader()
@@ -88,7 +103,11 @@ public partial class ComtradeWorkspaceWindow : Window
         if (signals.Count > 0)
             SignalList.SelectedIndex = 0;
         else
+        {
+            NavigationTextBlock.Text = NavigationHint;
+            ResetViewButton.IsEnabled = false;
             WaveformView.ShowMessage("No channels", "The COMTRADE record contains no analog or digital channels.");
+        }
     }
 
     private async void SignalList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -101,6 +120,8 @@ public partial class ComtradeWorkspaceWindow : Window
         _signalLoadCts = new CancellationTokenSource();
         var token = _signalLoadCts.Token;
 
+        ResetViewButton.IsEnabled = false;
+        NavigationTextBlock.Text = NavigationHint;
         StatusTextBlock.Text = $"Loading {signal.Title} from native ArdIrec core…";
         WaveformView.ShowMessage(signal.Title, "Loading signal samples…");
 
@@ -132,9 +153,10 @@ public partial class ComtradeWorkspaceWindow : Window
                     _record.Info.TimeMultiplier);
             }
 
+            ResetViewButton.IsEnabled = preview.Timestamps.Length > 1;
             StatusTextBlock.Text = preview.IsTruncated
-                ? $"Showing the first {preview.Timestamps.Length:N0} of {_record.Info.FrameCount:N0} frames • P1A preview limit"
-                : $"{preview.Timestamps.Length:N0} frames • in-process native bridge • no Qt child process";
+                ? $"Showing the first {preview.Timestamps.Length:N0} of {_record.Info.FrameCount:N0} frames • P1B navigation preview limit"
+                : $"{preview.Timestamps.Length:N0} frames • native navigation • trigger/cursor time from COMTRADE timestamps";
         }
         catch (OperationCanceledException)
         {
@@ -145,6 +167,8 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         catch (Exception ex)
         {
+            ResetViewButton.IsEnabled = false;
+            NavigationTextBlock.Text = NavigationHint;
             WaveformView.ShowMessage("Signal load failed", ex.Message);
             StatusTextBlock.Text = $"Native signal load failed: {ex.Message}";
         }
@@ -171,6 +195,16 @@ public partial class ComtradeWorkspaceWindow : Window
         {
             _nativeGate.Release();
         }
+    }
+
+    private void WaveformView_NavigationChanged(object? sender, ComtradeNavigationChangedEventArgs e)
+    {
+        NavigationTextBlock.Text = e.Summary;
+    }
+
+    private void ResetView_Click(object sender, RoutedEventArgs e)
+    {
+        WaveformView.ResetNavigation();
     }
 
     private async void FullAnalysis_Click(object sender, RoutedEventArgs e)
