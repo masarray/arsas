@@ -16,6 +16,7 @@ public partial class ComtradeWorkspaceWindow : Window
     private readonly ArdIrecNativeRecord _record;
     private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private CancellationTokenSource? _signalLoadCts;
+    private bool _isReducedView;
 
     internal ComtradeWorkspaceWindow(ArdIrecNativeRecord record)
     {
@@ -122,6 +123,7 @@ public partial class ComtradeWorkspaceWindow : Window
         _signalLoadCts = new CancellationTokenSource();
         var token = _signalLoadCts.Token;
 
+        _isReducedView = false;
         ResetViewButton.IsEnabled = false;
         NavigationTextBlock.Text = NavigationHint;
         StatusTextBlock.Text = $"Loading {signal.Title} from native ArdIrec core…";
@@ -133,6 +135,7 @@ public partial class ComtradeWorkspaceWindow : Window
             if (token.IsCancellationRequested)
                 return;
 
+            _isReducedView = preview.IsReduced;
             if (preview.Analog is not null)
             {
                 var metadata = _record.AnalogChannels[checked((int)signal.Index)];
@@ -156,9 +159,6 @@ public partial class ComtradeWorkspaceWindow : Window
             }
 
             ResetViewButton.IsEnabled = preview.Timestamps.Length > 1;
-            NavigationTextBlock.Text = preview.IsReduced
-                ? NavigationHint + " • reduced full-record overview"
-                : NavigationHint;
             StatusTextBlock.Text = BuildLoadStatus(preview);
         }
         catch (OperationCanceledException)
@@ -170,6 +170,7 @@ public partial class ComtradeWorkspaceWindow : Window
         }
         catch (Exception ex)
         {
+            _isReducedView = false;
             ResetViewButton.IsEnabled = false;
             NavigationTextBlock.Text = NavigationHint;
             WaveformView.ShowMessage("Signal load failed", ex.Message);
@@ -279,7 +280,9 @@ public partial class ComtradeWorkspaceWindow : Window
 
     private void WaveformView_NavigationChanged(object? sender, ComtradeNavigationChangedEventArgs e)
     {
-        NavigationTextBlock.Text = e.Summary;
+        NavigationTextBlock.Text = _isReducedView
+            ? e.Summary + "  |  reduced full-record overview"
+            : e.Summary;
     }
 
     private void ResetView_Click(object sender, RoutedEventArgs e)
