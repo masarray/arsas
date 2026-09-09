@@ -145,8 +145,12 @@ public sealed class ComtradeWaveformView : FrameworkElement
         }
         else
         {
-            var anchor = FractionAtPoint(e.GetPosition(this));
-            _window = ComtradeNavigationMath.Zoom(_window, DataLength, anchor, e.Delta > 0 ? 0.8 : 1.25);
+            var plotFraction = FractionAtPoint(e.GetPosition(this));
+            var anchorFrame = FrameAtPlotFraction(plotFraction);
+            var frameFraction = anchorFrame < 0 || _window.Count <= 1
+                ? plotFraction
+                : (anchorFrame - _window.Start) / (double)(_window.Count - 1);
+            _window = ComtradeNavigationMath.Zoom(_window, DataLength, frameFraction, e.Delta > 0 ? 0.8 : 1.25);
         }
 
         InvalidateVisual();
@@ -183,7 +187,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
 
         if (e.ChangedButton is MouseButton.Left or MouseButton.Right)
         {
-            var index = ComtradeNavigationMath.FrameAtFraction(_window, DataLength, FractionAtPoint(e.GetPosition(this)));
+            var index = FrameAtPlotFraction(FractionAtPoint(e.GetPosition(this)));
             if (index >= 0)
             {
                 if (e.ChangedButton == MouseButton.Right || (Keyboard.Modifiers & ModifierKeys.Control) != 0)
@@ -264,6 +268,20 @@ public sealed class ComtradeWaveformView : FrameworkElement
         return Math.Clamp((point.X - _lastPlot.Left) / _lastPlot.Width, 0.0, 1.0);
     }
 
+    private int FrameAtPlotFraction(double fraction)
+    {
+        if (_timestamps is { Length: > 0 })
+            return ComtradeTimeMath.FrameAtFraction(_timestamps, _window, fraction);
+        return ComtradeNavigationMath.FrameAtFraction(_window, DataLength, fraction);
+    }
+
+    private double FractionForFrame(int frameIndex)
+    {
+        if (_timestamps is { Length: > 0 })
+            return ComtradeTimeMath.FractionForFrame(_timestamps, _window, frameIndex);
+        return _window.Count <= 1 ? 0.0 : (frameIndex - _window.Start) / (double)(_window.Count - 1);
+    }
+
     private void DrawGrid(DrawingContext dc, Rect plot)
     {
         var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(229, 234, 241)), 1);
@@ -321,8 +339,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
                 var value = _analog[i];
                 if (!double.IsFinite(value))
                     continue;
-                var fraction = _window.Count <= 1 ? 0.0 : (i - start) / (double)(_window.Count - 1);
-                var x = plot.Left + plot.Width * fraction;
+                var x = plot.Left + plot.Width * FractionForFrame(i);
                 var y = plot.Bottom - (value - min) / (max - min) * plot.Height;
                 var point = new Point(x, y);
                 if (!started)
@@ -342,7 +359,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
                 var value = _analog[i];
                 if (double.IsFinite(value))
                 {
-                    var x = plot.Right;
+                    var x = plot.Left + plot.Width * FractionForFrame(i);
                     var y = plot.Bottom - (value - min) / (max - min) * plot.Height;
                     if (!started)
                         context.BeginFigure(new Point(x, y), false, false);
@@ -375,19 +392,26 @@ public sealed class ComtradeWaveformView : FrameworkElement
         {
             var y0 = plot.Bottom - plot.Height * 0.25;
             var y1 = plot.Top + plot.Height * 0.25;
-            var previous = _status[start] == 0 ? y0 : y1;
-            context.BeginFigure(new Point(plot.Left, previous), false, false);
+            var previousState = _status[start] != 0;
+            var previousY = previousState ? y1 : y0;
+            context.BeginFigure(new Point(plot.Left, previousY), false, false);
+
+            // Digital traces are transition-driven: a 500k-frame record with a steady state
+            // produces one horizontal segment instead of half a million line commands.
             for (var i = start + 1; i < end; i++)
             {
-                var fraction = _window.Count <= 1 ? 0.0 : (i - start) / (double)(_window.Count - 1);
-                var x = plot.Left + plot.Width * fraction;
-                var current = _status[i] == 0 ? y0 : y1;
-                context.LineTo(new Point(x, previous), true, false);
-                if (Math.Abs(current - previous) > 0.1)
-                    context.LineTo(new Point(x, current), true, false);
-                previous = current;
+                var currentState = _status[i] != 0;
+                if (currentState == previousState)
+                    continue;
+
+                var x = plot.Left + plot.Width * FractionForFrame(i);
+                var currentY = currentState ? y1 : y0;
+                context.LineTo(new Point(x, previousY), true, false);
+                context.LineTo(new Point(x, currentY), true, false);
+                previousState = currentState;
+                previousY = currentY;
             }
-            context.LineTo(new Point(plot.Right, previous), true, false);
+            context.LineTo(new Point(plot.Right, previousY), true, false);
         }
         geometry.Freeze();
         dc.DrawGeometry(null, pen, geometry);
@@ -421,8 +445,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
         if (index is not { } frame || frame < _window.Start || frame >= _window.EndExclusive || _window.Count <= 1)
             return;
 
-        var fraction = (frame - _window.Start) / (double)(_window.Count - 1);
-        var x = plot.Left + plot.Width * fraction;
+        var x = plot.Left + plot.Width * FractionForFrame(frame);
         var pen = new Pen(new SolidColorBrush(color), 1.15);
         pen.Freeze();
         dc.DrawLine(pen, new Point(x, plot.Top), new Point(x, plot.Bottom));
@@ -476,7 +499,7 @@ public sealed class ComtradeWaveformView : FrameworkElement
         if (_timestamps is null || _timestamps.Length == 0)
             return 0;
         index = Math.Clamp(index, 0, _timestamps.Length - 1);
-        return _timestamps[index] * _timeMultiplier / 1000.0;
+        return ComtradeTimeMath.ToMilliseconds(_timestamps[index], _timeMultiplier);
     }
 
     private string CursorText(string name, int? index)
