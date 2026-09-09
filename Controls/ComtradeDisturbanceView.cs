@@ -392,8 +392,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         if (_triggerMilliseconds is not { } trigger || trigger < _viewStartMilliseconds || trigger > _viewEndMilliseconds)
             return;
         var x = XForTime(trigger, plot);
-        var pen = FrozenPen(Color.FromRgb(217, 121, 41), 1.1); pen.DashStyle = DashStyles.Dash;
-        dc.DrawLine(pen, new Point(x, plot.Top), new Point(x, plot.Bottom));
+        dc.DrawLine(FrozenDashedPen(Color.FromRgb(217, 121, 41), 1.1), new Point(x, plot.Top), new Point(x, plot.Bottom));
         DrawText(dc, "TRG 0", 8.5, semibold, Color.FromRgb(186, 99, 31), new Point(x + 3, plot.Top + 1), dpi);
     }
 
@@ -478,6 +477,14 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     {
         var brush = new SolidColorBrush(color); brush.Freeze();
         var pen = new Pen(brush, thickness); pen.Freeze();
+        return pen;
+    }
+
+    private static Pen FrozenDashedPen(Color color, double thickness)
+    {
+        var brush = new SolidColorBrush(color); brush.Freeze();
+        var pen = new Pen(brush, thickness) { DashStyle = DashStyles.Dash };
+        pen.Freeze();
         return pen;
     }
 
