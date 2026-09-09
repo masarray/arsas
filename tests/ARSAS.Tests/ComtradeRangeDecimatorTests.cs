@@ -79,6 +79,8 @@ public sealed class ComtradeRangeDecimatorTests
 
         Assert.False(result.IsTruncated);
         Assert.Equal((ulong)states.Length, result.ScannedFrameCount);
+        Assert.Equal((uint)0, result.FirstTimestamp);
+        Assert.Equal((uint)7000, result.LastTimestamp);
         Assert.Collection(
             result.Transitions,
             item => Assert.Equal(new ComtradeDigitalTransition(0, 0, 0), item),
@@ -105,7 +107,9 @@ public sealed class ComtradeRangeDecimatorTests
 
         Assert.True(result.IsTruncated);
         Assert.Equal(3, result.Transitions.Count);
-        Assert.Equal((ulong)3, result.ScannedFrameCount);
+        Assert.Equal((ulong)4, result.ScannedFrameCount);
+        Assert.Equal((uint)0, result.FirstTimestamp);
+        Assert.Equal((uint)3, result.LastTimestamp);
         Assert.Equal((ulong)0, result.Transitions[0].Frame);
         Assert.Equal((ulong)2, result.Transitions[^1].Frame);
     }
