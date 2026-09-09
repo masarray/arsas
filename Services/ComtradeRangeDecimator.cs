@@ -39,6 +39,8 @@ internal readonly record struct ComtradeAnalogEnvelopeBucket(
     ulong EndExclusive,
     uint FirstTimestamp,
     uint LastTimestamp,
+    double FirstValue,
+    double LastValue,
     uint MinimumTimestamp,
     uint MaximumTimestamp,
     double Minimum,
@@ -90,6 +92,8 @@ internal static class ComtradeRangeDecimator
         var bucketEnds = new ulong[bucketCount];
         var firstTimestamp = new uint[bucketCount];
         var lastTimestamp = new uint[bucketCount];
+        var firstValue = new double[bucketCount];
+        var lastValue = new double[bucketCount];
         var minimumTimestamp = new uint[bucketCount];
         var maximumTimestamp = new uint[bucketCount];
         var initialized = new bool[bucketCount];
@@ -109,18 +113,20 @@ internal static class ComtradeRangeDecimator
                 var relativeFrame = processed + checked((ulong)i);
                 var absoluteFrame = absoluteStart + checked((ulong)i);
                 var bucket = BucketIndex(relativeFrame, range.FrameCount, bucketCount);
+                var value = values[i];
 
                 if (!initialized[bucket])
                 {
                     initialized[bucket] = true;
                     bucketStarts[bucket] = absoluteFrame;
                     firstTimestamp[bucket] = timestamps[i];
+                    firstValue[bucket] = value;
                 }
 
                 bucketEnds[bucket] = absoluteFrame + 1;
                 lastTimestamp[bucket] = timestamps[i];
+                lastValue[bucket] = value;
 
-                var value = values[i];
                 if (!double.IsFinite(value))
                     continue;
 
@@ -152,6 +158,8 @@ internal static class ComtradeRangeDecimator
                 bucketEnds[bucket],
                 firstTimestamp[bucket],
                 lastTimestamp[bucket],
+                firstValue[bucket],
+                lastValue[bucket],
                 minimumTimestamp[bucket],
                 maximumTimestamp[bucket],
                 min,
