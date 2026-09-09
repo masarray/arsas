@@ -173,6 +173,73 @@ public partial class ComtradeWorkspaceWindow : Window
         }
     }
 
+    private async void FullAnalysis_Click(object sender, RoutedEventArgs e)
+    {
+        var cfgPath = _record.CfgPath;
+        FullAnalysisButton.IsEnabled = false;
+        var originalContent = FullAnalysisButton.Content;
+        FullAnalysisButton.Content = "Opening…";
+        StatusTextBlock.Text = "Opening the complete COMTRADE analysis workspace…";
+
+        try
+        {
+            if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var process, out var launchError) || process is null)
+            {
+                StatusTextBlock.Text = "Full analysis could not be started.";
+                MessageBox.Show(
+                    this,
+                    launchError,
+                    "COMTRADE full analysis",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            using (process)
+            {
+                var activated = false;
+                for (var attempt = 0; attempt < 6; attempt++)
+                {
+                    await Task.Delay(attempt == 0 ? 350 : 220).ConfigureAwait(true);
+                    process.Refresh();
+
+                    if (process.HasExited)
+                    {
+                        var earlyExitError = ArdIrecViewerLauncher.DescribeEarlyExit(process, cfgPath);
+                        StatusTextBlock.Text = "Full analysis closed during startup.";
+                        MessageBox.Show(
+                            this,
+                            earlyExitError,
+                            "COMTRADE full analysis startup failed",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                        return;
+                    }
+
+                    if (!activated)
+                        activated = ArdIrecViewerLauncher.TryActivateViewerWindow(process);
+                }
+            }
+
+            StatusTextBlock.Text = "Full COMTRADE analysis opened • native workspace remains available.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            StatusTextBlock.Text = "Full analysis startup failed.";
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "COMTRADE full analysis startup failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            FullAnalysisButton.Content = originalContent;
+            FullAnalysisButton.IsEnabled = true;
+        }
+    }
+
     private static string BuildSignalSubtitle(string phase, string circuit, bool truncated)
     {
         var parts = new List<string>();
