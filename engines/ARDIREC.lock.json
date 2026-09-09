@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "repository": "masarray/ardirec",
-  "ref": "feat/p0-open-cfg-from-cli",
-  "commit": "3d585cf6330e86f460b22700e18a16f0f887d87b",
+  "ref": "main",
+  "commit": "1c9c2b9230e216eda76c508b11fff705c04349dc",
   "qt": {
     "version": "6.8.3",
     "arch": "win64_msvc2022_64"
@@ -11,5 +11,5 @@
     "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
     "launchArgument": "--arsas-open"
   },
-  "purpose": "Pinned P0 COMTRADE viewer runtime for ARSAS Fault Records integration. Change ref to main after the ArdIrec P0 PR is merged; keep the commit immutable until deliberately upgraded."
+  "purpose": "Pinned P0 COMTRADE viewer runtime for ARSAS Fault Records integration. This commit is the merged ArdIrec main revision validated by ARSAS; change it only through a deliberate viewer upgrade."
 }
