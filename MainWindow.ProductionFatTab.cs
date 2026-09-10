@@ -8,7 +8,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// P2 FAT pivot: the Engineering FAT tab is a host for the proven production
+/// Engineering FAT pivot: the permanent XAML FAT tab hosts the proven production
 /// IoListTestingWindow workspace rather than a second/manual FAT implementation.
 /// The global Engineering IED Explorer and shared Command Dock remain authoritative.
 /// </summary>
@@ -19,7 +19,7 @@ public partial class MainWindow
     private FrameworkElement? _productionFatSurface;
     private DispatcherTimer? _productionFatInstallRetry;
 
-    internal bool ProductionFatTabReady => _productionFatTabInstalled && _nativeFatTab != null;
+    internal bool ProductionFatTabReady => _productionFatTabInstalled && NativeFatTab != null;
 
     [ModuleInitializer]
     internal static void RegisterProductionFatTabPivot()
@@ -46,10 +46,10 @@ public partial class MainWindow
         if (_productionFatTabInstalled || !IsLoaded)
             return;
 
-        // The seventh FAT destination is now canonical MainWindow XAML. Wait only for the
-        // native FAT state contribution to bind its compatibility fields; do not create,
-        // restyle, or re-own navigation here.
-        if (!_nativeFatInstalled || _nativeFatTab == null || _nativeFatNavButton == null)
+        // M7: MainWindow.xaml is the sole owner of the seventh destination. Wait only
+        // until the canonical XAML tab is present; there is no native FAT runtime to install.
+        if (MainTabs.Items.Count <= NativeFatWorkspaceIndex ||
+            !ReferenceEquals(MainTabs.Items[NativeFatWorkspaceIndex], NativeFatTab))
         {
             _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.ApplicationIdle)
             {
@@ -63,25 +63,14 @@ public partial class MainWindow
 
         _productionFatInstallRetry?.Stop();
         _productionFatTabInstalled = true;
+        NativeFatTab.Content = BuildProductionFatPermanentHost();
 
-        // Retire the experimental manual-capture surface. Keep its code isolated in the
-        // branch for now so this pivot is reversible while production FAT parity is verified.
-        _nativeFatReconcileTimer?.Stop();
-        _nativeFatSaveTimer?.Stop();
-        AttachNativeFatObservedDevice(null);
-        PropertyChanged -= NativeFat_MainWindowPropertyChanged;
-        MainTabs.SelectionChanged -= NativeFat_MainTabsSelectionChanged;
-
-        _nativeFatTab.Content = BuildProductionFatPermanentHost();
-
-        // M2 prewarm starts as soon as the canonical host exists. It is deliberately
-        // independent of the currently selected tab so a valid Engineering SCL/DataSet
+        // Prewarm as soon as the canonical host exists. A valid Engineering SCL/DataSet
         // can prepare the exact production surface before the operator first opens FAT.
         QueueProductionFatEngineeringBootstrap();
 
-        // MainWindow.xaml owns the FAT button's SegmentedNavButton style and NavButton_Click.
-        // Production FAT reacts to tab selection below; it must not install a second click owner.
-        _nativeFatNavButton.ToolTip = "Production FAT workspace · automatic Value 1 / Value 2 evidence capture";
+        // MainWindow.xaml owns both style and click routing for the seventh nav button.
+        NavNativeFatButton.ToolTip = "Production FAT workspace · automatic Value 1 / Value 2 evidence capture";
 
         PropertyChanged += ProductionFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged += ProductionFat_MainTabsSelectionChanged;
@@ -98,10 +87,8 @@ public partial class MainWindow
 
     private FrameworkElement BuildProductionFatPermanentHost()
     {
-        // This is a stable shell slot, not a launcher/form. With a valid Engineering
-        // static DataSet it is replaced in the background by the exact production FAT
-        // workspace before first navigation. With no eligible IED it remains a quiet
-        // contextual empty state and never creates an alternate FAT workflow.
+        // Stable shell slot, never a launcher or alternate FAT workflow. With a valid
+        // Engineering static DataSet this is replaced by the exact production FAT surface.
         var root = new Grid { Margin = new Thickness(0) };
         root.Children.Add(new TextBlock
         {
@@ -144,13 +131,13 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(surface);
-        if (!ProductionFatTabReady || _nativeFatTab == null)
+        if (!ProductionFatTabReady)
             return false;
 
         _productionFatWindow = window;
         _productionFatSurface = surface;
         surface.DataContext = window;
-        _nativeFatTab.Content = surface;
+        NativeFatTab.Content = surface;
         if (_persistentWorkbench != null)
             _persistentWorkbench.DockExpandedByWorkspace[NativeFatWorkspaceIndex] = true;
 
@@ -176,8 +163,7 @@ public partial class MainWindow
         window.Closed -= ProductionFatWindow_Closed;
         _productionFatWindow = null;
         _productionFatSurface = null;
-        if (_nativeFatTab != null)
-            _nativeFatTab.Content = BuildProductionFatPermanentHost();
+        NativeFatTab.Content = BuildProductionFatPermanentHost();
     }
 
     private void ProductionFatWindow_Closed(object? sender, EventArgs e)
