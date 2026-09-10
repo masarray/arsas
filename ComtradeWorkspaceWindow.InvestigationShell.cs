@@ -10,6 +10,7 @@ public partial class ComtradeWorkspaceWindow
     private bool _investigationTimelineAttached;
     private double? _harmonicCursorMilliseconds;
     private CancellationTokenSource? _shellAnalysisRefreshCts;
+    private object? _normalizedDigitalEventSource;
 
     private void InvestigationTimeline_Loaded(object sender, RoutedEventArgs e)
     {
@@ -62,8 +63,6 @@ public partial class ComtradeWorkspaceWindow
 
     private void SignalList_ShellSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        // Existing analysis logic can return to Time Signals when a non-analog row is selected.
-        // Reconcile the persistent ruler after that handler has completed.
         Dispatcher.BeginInvoke(() =>
         {
             if (_analysisMode != AnalysisMode.Harmonics &&
@@ -76,6 +75,7 @@ public partial class ComtradeWorkspaceWindow
     private void DisturbanceView_ShellNavigationChanged(object? sender, ComtradeDisturbanceNavigationChangedEventArgs e)
     {
         SyncInvestigationTimeline();
+        QueueDigitalEventTimelineNormalization();
     }
 
     private void DisturbanceView_ShellCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
@@ -159,6 +159,30 @@ public partial class ComtradeWorkspaceWindow
             DisturbanceView.Cursor1Milliseconds,
             DisturbanceView.Cursor2Milliseconds,
             _harmonicCursorMilliseconds);
+    }
+
+    private void QueueDigitalEventTimelineNormalization()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            var source = DigitalEventGrid.ItemsSource;
+            if (source is null || ReferenceEquals(source, _normalizedDigitalEventSource) ||
+                source is not IEnumerable<ComtradeDigitalEventRow> rows)
+                return;
+
+            var trigger = DisturbanceView.EffectiveTriggerMilliseconds ?? ResolveTriggerMilliseconds();
+            if (trigger is not { } triggerMilliseconds) return;
+
+            var normalized = rows
+                .Select(row => row with
+                {
+                    TimeText = ComtradeDisturbanceTimelineMath.FormatRelativeTime(
+                        row.AbsoluteMilliseconds - triggerMilliseconds)
+                })
+                .ToArray();
+            _normalizedDigitalEventSource = normalized;
+            DigitalEventGrid.ItemsSource = normalized;
+        }, DispatcherPriority.Background);
     }
 
     private void QueueShellAnalysisRefresh(bool immediate)
