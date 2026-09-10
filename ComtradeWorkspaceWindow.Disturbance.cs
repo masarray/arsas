@@ -28,7 +28,6 @@ public partial class ComtradeWorkspaceWindow
         if (_disturbanceInitialized) return;
         _disturbanceInitialized = true;
 
-        WaveformView.NavigationChanged -= WaveformView_NavigationChanged;
         WaveformView.Visibility = Visibility.Collapsed;
         DisturbanceView.Visibility = _analysisMode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
         DisturbanceView.NavigationChanged += DisturbanceView_NavigationChanged;
@@ -221,6 +220,23 @@ public partial class ComtradeWorkspaceWindow
             {
                 DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
                 _disturbanceInitialFocusApplied = true;
+
+                // A full-record 4096-bucket envelope can be too sparse for an eight-cycle opening
+                // view. Use timestamp->source-frame identity from that overview to reload a buffered
+                // trigger neighborhood, then keep the same trigger-focused time window.
+                if (result.SourceViewport.FrameCount > ExactSignalFrameLimit &&
+                    TryBuildSourceViewportForTimeWindow(
+                        DisturbanceView.ViewStartMilliseconds,
+                        DisturbanceView.ViewEndMilliseconds,
+                        out var triggerViewport) &&
+                    triggerViewport.FrameCount > 0 &&
+                    triggerViewport.FrameCount < result.SourceViewport.FrameCount)
+                {
+                    StatusTextBlock.Text = "Refining trigger neighborhood from native source frames…";
+                    await ReloadDisturbanceAsync(triggerViewport, initialLoad: false).ConfigureAwait(true);
+                    DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
+                    return;
+                }
             }
             else if (preserveLocalView && previousSourceViewport == result.SourceViewport && previousView.SpanMilliseconds > 0)
             {
@@ -489,7 +505,18 @@ public partial class ComtradeWorkspaceWindow
     {
         var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
         if (_disturbanceRequestedViewport != full || _disturbanceLoadedViewport != full)
+        {
             await ReloadDisturbanceAsync(full, initialLoad: false).ConfigureAwait(true);
+            if (_record.Info.FrameCount > ExactSignalFrameLimit &&
+                TryBuildSourceViewportForTimeWindow(
+                    DisturbanceView.ViewStartMilliseconds,
+                    DisturbanceView.ViewEndMilliseconds,
+                    out var triggerViewport) &&
+                triggerViewport.FrameCount > 0 && triggerViewport != full)
+            {
+                await ReloadDisturbanceAsync(triggerViewport, initialLoad: false).ConfigureAwait(true);
+            }
+        }
         DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
         _disturbanceInitialFocusApplied = true;
     }
@@ -517,11 +544,20 @@ public partial class ComtradeWorkspaceWindow
             return; // Small records use the control's in-memory Ctrl+wheel zoom.
 
         var current = _disturbanceRequestedViewport.FrameCount > 0 ? _disturbanceRequestedViewport : _disturbanceLoadedViewport;
-        var fraction = DisturbanceView.PlotFractionAt(e.GetPosition(DisturbanceView).X);
+        var plotFraction = DisturbanceView.PlotFractionAt(e.GetPosition(DisturbanceView).X);
+        var visibleSpan = DisturbanceView.ViewEndMilliseconds - DisturbanceView.ViewStartMilliseconds;
+        var anchorMilliseconds = DisturbanceView.ViewStartMilliseconds + visibleSpan * plotFraction;
+        var sourceFraction = plotFraction;
+        if (TryResolveDisturbanceFrameAtMilliseconds(anchorMilliseconds, out var anchorFrame) && current.FrameCount > 1 &&
+            anchorFrame >= current.StartFrame && anchorFrame < current.EndExclusive)
+        {
+            sourceFraction = (anchorFrame - current.StartFrame) / (double)(current.FrameCount - 1);
+        }
+
         var target = ComtradeAbsoluteViewportMath.Zoom(
             current,
             _record.Info.FrameCount,
-            fraction,
+            Math.Clamp(sourceFraction, 0.0, 1.0),
             e.Delta > 0 ? 0.60 : 1.60,
             minimumFrames: 32);
         e.Handled = true;
@@ -534,6 +570,14 @@ public partial class ComtradeWorkspaceWindow
     {
         if (_record.Info.FrameCount <= ExactSignalFrameLimit || _disturbanceLoadedViewport.FrameCount == 0)
             return;
+
+        // If the in-memory view still has margin inside the loaded native range, local panning is
+        // sufficient. Reload source frames only when the gesture reaches a loaded-range edge.
+        const double epsilon = 1e-6;
+        if (DisturbanceView.ViewStartMilliseconds > DisturbanceView.FullStartMilliseconds + epsilon &&
+            DisturbanceView.ViewEndMilliseconds < DisturbanceView.FullEndMilliseconds - epsilon)
+            return;
+
         var current = _disturbanceRequestedViewport.FrameCount > 0 ? _disturbanceRequestedViewport : _disturbanceLoadedViewport;
         var delta = ToSignedDelta(current.FrameCount, e.DeltaFraction);
         var target = ComtradeAbsoluteViewportMath.Pan(current, _record.Info.FrameCount, delta);
@@ -622,12 +666,52 @@ public partial class ComtradeWorkspaceWindow
         var count = Math.Min(timestamps.Length, sourceFrames.Length);
         if (count <= 0) return false;
         var targetRaw = milliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
-        var index = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(
-            count == timestamps.Length ? timestamps : timestamps.Take(count).ToArray(),
-            targetRaw);
+        var searchTimestamps = count == timestamps.Length ? timestamps : timestamps.Take(count).ToArray();
+        var index = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetRaw);
         if (index < 0 || index >= count) return false;
         frame = Math.Min(_record.Info.FrameCount - 1, sourceFrames[index]);
         return true;
+    }
+
+    private bool TryBuildSourceViewportForTimeWindow(
+        double startMilliseconds,
+        double endMilliseconds,
+        out ComtradeSourceViewport viewport)
+    {
+        viewport = default;
+        if (!double.IsFinite(startMilliseconds) || !double.IsFinite(endMilliseconds) || endMilliseconds <= startMilliseconds ||
+            _disturbanceReferenceTimestamps is not { Length: > 1 } timestamps ||
+            _disturbanceReferenceSourceFrames is not { Length: > 1 } sourceFrames)
+            return false;
+
+        var count = Math.Min(timestamps.Length, sourceFrames.Length);
+        var targetStartRaw = startMilliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
+        var targetEndRaw = endMilliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
+        var searchTimestamps = count == timestamps.Length ? timestamps : timestamps.Take(count).ToArray();
+        var startIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetStartRaw);
+        var endIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetEndRaw);
+        if (startIndex < 0 || endIndex < 0) return false;
+
+        var lowIndex = Math.Max(0, Math.Min(startIndex, endIndex) - 2);
+        var highIndex = Math.Min(count - 1, Math.Max(startIndex, endIndex) + 2);
+        var startFrame = Math.Min(sourceFrames[lowIndex], sourceFrames[highIndex]);
+        var endFrame = Math.Max(sourceFrames[lowIndex], sourceFrames[highIndex]);
+        var frameCount = endFrame >= startFrame ? endFrame - startFrame + 1 : 0;
+        if (frameCount == 0) return false;
+
+        const ulong minimumFrames = 32;
+        if (frameCount < minimumFrames)
+        {
+            var center = startFrame + frameCount / 2;
+            var half = minimumFrames / 2;
+            startFrame = center > half ? center - half : 0;
+            frameCount = minimumFrames;
+        }
+
+        viewport = ComtradeAbsoluteViewportMath.Normalize(
+            new ComtradeSourceViewport(startFrame, frameCount),
+            _record.Info.FrameCount);
+        return viewport.FrameCount > 0;
     }
 
     private bool TryResolveDisturbanceViewportCenterFrame(out ulong frame)
