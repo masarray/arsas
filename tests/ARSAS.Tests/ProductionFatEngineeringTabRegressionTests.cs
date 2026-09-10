@@ -48,7 +48,7 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     {
         var xaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
         var mainSource = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
-        var nativeSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
+        var bridgeSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
         var productionSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
         var repoRoot = FindRepoRoot();
 
@@ -60,16 +60,19 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         Assert.Contains("var cellWidth = contentWidth / 7d", mainSource, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", mainSource, StringComparison.Ordinal);
 
-        Assert.Contains("_nativeFatTab = NativeFatTab", nativeSource, StringComparison.Ordinal);
-        Assert.Contains("_nativeFatNavButton = NavNativeFatButton", nativeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("MainTabs.Items.Add(_nativeFatTab)", nativeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("InstallNativeFatNavigationButton", nativeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("Name = \"NavNativeFatButton\"", nativeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("var cellWidth = contentWidth / 7d", nativeSource, StringComparison.Ordinal);
+        Assert.Contains("private const int NativeFatWorkspaceIndex = 6", bridgeSource, StringComparison.Ordinal);
+        Assert.Contains("QueueNativeFatNavigationGeometry", bridgeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatTab", bridgeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatNavButton", bridgeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildNativeFatWorkspaceContent", bridgeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataGrid", bridgeSource, StringComparison.Ordinal);
 
+        Assert.Contains("NativeFatTab.Content = BuildProductionFatPermanentHost();", productionSource, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton.ToolTip", productionSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ProductionFatNavButton_Click", productionSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("_nativeFatNavButton.Style =", productionSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("_nativeFatNavButton.Click +=", productionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatInstalled", productionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatTab", productionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatNavButton", productionSource, StringComparison.Ordinal);
 
         Assert.False(
             File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatNavigationParity.cs")),
