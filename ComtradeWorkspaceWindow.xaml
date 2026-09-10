@@ -177,16 +177,29 @@
                             <TextBlock x:Name="NavigationTextBlock"
                                        Text="Wheel scrolls signals • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 moves • right-click places C2"
                                        FontSize="10" Foreground="#64778F" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
-                                <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
-                                        Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#365D88" Background="White"
-                                        BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
-                                        ToolTip="Return to the trigger-focused engineering window (about eight nominal cycles)." Click="DisturbanceReset_Click"/>
-                                <Button x:Name="FullRecordButton" Content="Full record" Height="25" MinWidth="78" Margin="5,0,0,0"
-                                        Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#586F89" Background="White"
-                                        BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
-                                        ToolTip="Show the complete COMTRADE time range." Click="DisturbanceFullRecord_Click"/>
-                            </StackPanel>
+                            <Grid Grid.Column="1" Margin="12,0,0,0">
+                                <StackPanel x:Name="TimeNavigationPanel" Orientation="Horizontal">
+                                    <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
+                                            Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#365D88" Background="White"
+                                            BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                            ToolTip="Return to the trigger-focused engineering window (about eight nominal cycles)." Click="DisturbanceReset_Click"/>
+                                    <Button x:Name="FullRecordButton" Content="Full record" Height="25" MinWidth="78" Margin="5,0,0,0"
+                                            Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#586F89" Background="White"
+                                            BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                            ToolTip="Show the complete COMTRADE time range." Click="DisturbanceFullRecord_Click"/>
+                                </StackPanel>
+                                <StackPanel x:Name="PhasorReferencePanel" Orientation="Horizontal" Visibility="Collapsed" VerticalAlignment="Center">
+                                    <TextBlock Text="Reference" Margin="0,0,7,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                    <Button x:Name="PhasorCursor1Button" Content="C1" Height="25" MinWidth="42" Padding="9,0"
+                                            FontSize="10" FontWeight="SemiBold" Cursor="Hand"
+                                            ToolTip="Use global Time Signals cursor C1 for both Voltage and Current phasor diagrams."
+                                            Click="PhasorCursor1_Click"/>
+                                    <Button x:Name="PhasorCursor2Button" Content="C2" Height="25" MinWidth="42" Margin="5,0,0,0" Padding="9,0"
+                                            FontSize="10" FontWeight="SemiBold" Cursor="Hand"
+                                            ToolTip="Use global Time Signals cursor C2 for both Voltage and Current phasor diagrams."
+                                            Click="PhasorCursor2_Click"/>
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
 
