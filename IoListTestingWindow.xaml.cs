@@ -119,20 +119,28 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private async void StartSession_Click(object sender, RoutedEventArgs e)
     {
-        // Capture target latch: keep this local IED for the complete async prepare +
-        // Start transaction even if the global Engineering Explorer changes selection.
-        var selectedIed = SelectedIed;
-        if (selectedIed?.IsPreparing == true)
+        // M4 freezes both the IED owner and exact evidence scope before any asynchronous
+        // Engineering preparation. Explorer navigation may continue, but it cannot redirect
+        // this transaction or silently widen the production capture scope.
+        var requestedIed = SelectedIed;
+        if (requestedIed?.IsPreparing == true)
             return;
 
-        var preflight = IoTestSessionPreflight.Validate(selectedIed);
-        if (!preflight.Succeeded)
+        IoFatCaptureTargetLease captureLease;
+        try
         {
-            ShowActionResult(preflight, "FAT session scope is not ready");
+            captureLease = IoFatProductionControllerAdapter.LatchStartTarget(Project, requestedIed);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ShowActionResult(
+                IoTestSessionActionResult.Failure(ex.Message),
+                "FAT session scope is not ready");
             return;
         }
 
-        PreparationStatusText = $"Connecting {selectedIed!.IedName} · {selectedIed.IpAddress}:102";
+        var selectedIed = captureLease.Ied;
+        PreparationStatusText = $"Connecting {selectedIed.IedName} · {selectedIed.IpAddress}:102";
         RaisePreparationProperties();
         try
         {
@@ -157,7 +165,10 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
                 }
             }
 
-            var result = Session.Start(selectedIed);
+            // Revalidate the frozen identity/configuration only after Engineering has
+            // completed connection preparation. The adapter delegates to the unchanged
+            // production session controller, which remains the sole evidence writer.
+            var result = IoFatProductionControllerAdapter.StartLatched(Project, Session, captureLease);
             ShowActionResult(result, "FAT evidence session could not start");
             RaiseStatusProperties();
             if (result.Succeeded)
@@ -189,7 +200,8 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private void PauseSession_Click(object sender, RoutedEventArgs e)
     {
-        var result = Session.Pause();
+        var targetIed = SelectedIed;
+        var result = Session.Pause(targetIed);
         ShowActionResult(result, "FAT session could not pause");
         if (result.Succeeded)
             Storage?.SaveNow();
@@ -197,7 +209,10 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private void ResumeSession_Click(object sender, RoutedEventArgs e)
     {
-        var result = Session.Resume();
+        // Continue is explicitly IED-targeted. A later Explorer change cannot make the
+        // production controller rebind this active evidence session to another device.
+        var targetIed = SelectedIed;
+        var result = Session.Resume(targetIed);
         ShowActionResult(result, "FAT session could not resume");
         if (result.Succeeded)
             Storage?.ScheduleSave();
@@ -205,7 +220,8 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private void StopSession_Click(object sender, RoutedEventArgs e)
     {
-        var result = Session.Stop();
+        var targetIed = SelectedIed;
+        var result = Session.Stop(targetIed);
         ShowActionResult(result, "FAT session could not stop");
         if (result.Succeeded)
             Storage?.SaveNow();

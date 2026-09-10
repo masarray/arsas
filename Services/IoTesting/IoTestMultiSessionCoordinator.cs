@@ -156,15 +156,33 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
             controller => controller.Pause(reason),
             "No FAT evidence session is active for the selected IED.");
 
+    public IoTestSessionActionResult Pause(IoTestIedPlan? ied, string reason = "Paused by operator")
+        => TargetAction(
+            ied,
+            controller => controller.Pause(reason),
+            "No FAT evidence session is active for the latched IED.");
+
     public IoTestSessionActionResult Resume()
         => SelectedAction(
             controller => controller.Resume(),
             "No paused or interrupted FAT evidence session belongs to the selected IED.");
 
+    public IoTestSessionActionResult Resume(IoTestIedPlan? ied)
+        => TargetAction(
+            ied,
+            controller => controller.Resume(),
+            "No paused or interrupted FAT evidence session belongs to the latched IED.");
+
     public IoTestSessionActionResult Stop(string reason = "Stopped by operator")
         => SelectedAction(
             controller => controller.Stop(reason),
             "No FAT evidence session is active for the selected IED.");
+
+    public IoTestSessionActionResult Stop(IoTestIedPlan? ied, string reason = "Stopped by operator")
+        => TargetAction(
+            ied,
+            controller => controller.Stop(reason),
+            "No FAT evidence session is active for the latched IED.");
 
     public IoTestSessionActionResult StopAll(string reason = "Stopped by operator")
     {
@@ -342,6 +360,26 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
             _controllers.Add(ied, controller);
             return controller;
         }
+    }
+
+    private IoTestSessionActionResult TargetAction(
+        IoTestIedPlan? ied,
+        Func<IoTestSessionController, IoTestSessionActionResult> action,
+        string missingMessage)
+    {
+        ThrowIfDisposed();
+        if (ied == null)
+            return IoTestSessionActionResult.Failure(missingMessage);
+
+        IoTestSessionController? controller;
+        lock (_sync)
+            _controllers.TryGetValue(ied, out controller);
+        if (controller == null)
+            return IoTestSessionActionResult.Failure(missingMessage);
+
+        var result = action(controller);
+        RaiseProjectionProperties();
+        return result;
     }
 
     private IoTestSessionActionResult SelectedAction(
