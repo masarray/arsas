@@ -22,11 +22,26 @@ internal static class ComtradeHarmonicsOverviewMath
 
     internal static double NiceMagnitudeAxisMaximum(IEnumerable<double> magnitudes)
     {
-        var measured = magnitudes
-            .Where(double.IsFinite)
-            .Select(Math.Abs)
-            .DefaultIfEmpty(0.0)
-            .Max();
+        if (magnitudes is null)
+            return 1.0;
+
+        var measured = 0.0;
+        foreach (var value in magnitudes)
+        {
+            if (!double.IsFinite(value))
+                continue;
+            measured = Math.Max(measured, Math.Abs(value));
+        }
+        return NiceMagnitudeAxisMaximum(measured);
+    }
+
+    /// <summary>
+    /// Zero-enumeration overload for prepared render data. Callers that already know the largest
+    /// magnitude should use this overload so a redraw never allocates an iterator pipeline.
+    /// </summary>
+    internal static double NiceMagnitudeAxisMaximum(double measuredMaximum)
+    {
+        var measured = double.IsFinite(measuredMaximum) ? Math.Abs(measuredMaximum) : 0.0;
         if (measured <= 1e-12) return 1.0;
 
         var target = measured * 1.12;
