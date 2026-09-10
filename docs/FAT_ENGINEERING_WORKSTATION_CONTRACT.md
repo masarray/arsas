@@ -50,6 +50,8 @@ Legacy snapshots without DeviceId may migrate only through the exact IEC identit
 
 Persistence reconciliation is not an evidence-producing operation. It may adopt already-persisted V1/V2/transition/result state into the matching current IED, but it must not append or manufacture evidence journal records. Production evidence creation remains owned by explicit FAT session/capture operations.
 
+The Engineering bootstrap must reconcile the isolated snapshot before creating its production FAT session controller. This ordering is intentional: reconciliation has no active evidence writer to call, then the normal production session/persistence controller is attached after the current Engineering plan has been safely reconciled.
+
 ## Static DataSet authority invariant
 
 Automatic Engineering FAT uses the authoritative static DataSet projection from the already parsed `SclIedWorkspace`.
