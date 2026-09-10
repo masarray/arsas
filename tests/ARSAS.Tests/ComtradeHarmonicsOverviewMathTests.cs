@@ -35,4 +35,25 @@ public sealed class ComtradeHarmonicsOverviewMathTests
         Assert.True(maximum > 45.39);
         Assert.True(double.IsFinite(maximum));
     }
+
+    [Fact]
+    public void NiceMagnitudeAxisMaximum_ScalarFastPathMatchesEnumerablePath()
+    {
+        const double largest = 45.39;
+
+        var enumerable = ComtradeHarmonicsOverviewMath.NiceMagnitudeAxisMaximum(new[] { 10.95, largest, 11.17 });
+        var scalar = ComtradeHarmonicsOverviewMath.NiceMagnitudeAxisMaximum(largest);
+
+        Assert.Equal(enumerable, scalar, 10);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    [InlineData(0.0)]
+    public void NiceMagnitudeAxisMaximum_ScalarFastPathFailsSafe(double invalidOrEmpty)
+    {
+        Assert.Equal(1.0, ComtradeHarmonicsOverviewMath.NiceMagnitudeAxisMaximum(invalidOrEmpty));
+    }
 }
