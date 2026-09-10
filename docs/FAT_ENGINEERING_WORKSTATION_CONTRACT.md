@@ -40,7 +40,7 @@ When a FAT session starts or continues, the capture target is latched to that se
 
 Persisted FAT state is reconciled by stable device/IEC identity. Background reconciliation is read/reconcile-only and must not manufacture new evidence.
 
-M3 is code/CI closed around this split: selected context remains an operator view/control projection, while evidence actions resolve the owning active IED session. Regression coverage exercises concurrent IED sessions while the selected context changes, and requires independent evidence journals/device routing.
+M3 is CODE VERIFIED and CI VERIFIED around this split: selected context remains an operator view/control projection, while evidence actions resolve the owning active IED session. Regression coverage exercises concurrent IED sessions while the selected context changes, and requires independent evidence journals/device routing. FIELD VERIFIED remains intentionally open until physical-IED acceptance.
 
 ## Persistence authority invariant
 
