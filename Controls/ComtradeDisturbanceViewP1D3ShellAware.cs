@@ -19,6 +19,8 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     private uint _firstRawTimestamp;
     private double _timeOriginMilliseconds;
     private double? _effectiveTriggerMilliseconds;
+    private double _lastRelayedViewStartMilliseconds = double.NaN;
+    private double _lastRelayedViewEndMilliseconds = double.NaN;
 
     internal event EventHandler<ComtradeDisturbanceNavigationChangedEventArgs>? NavigationChanged;
     internal event EventHandler<ComtradeDisturbanceCursorChangedEventArgs>? CursorChanged;
@@ -41,12 +43,36 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     public ComtradeDisturbanceViewP1D3ShellAware()
     {
         Children.Add(_inner);
-        _inner.NavigationChanged += (_, e) => NavigationChanged?.Invoke(this, e);
-        _inner.CursorChanged += (_, e) => CursorChanged?.Invoke(this, e);
-        _inner.PanRequested += (_, e) => PanRequested?.Invoke(this, e);
+        _inner.NavigationChanged += Inner_NavigationChanged;
+        _inner.CursorChanged += Inner_CursorChanged;
+        _inner.PanRequested += Inner_PanRequested;
         _inner.ToolTip = null;
         ToolTip = null;
     }
+
+    private void Inner_NavigationChanged(object? sender, ComtradeDisturbanceNavigationChangedEventArgs e)
+    {
+        var start = _inner.ViewStartMilliseconds;
+        var end = _inner.ViewEndMilliseconds;
+        if (NearlyEqual(start, _lastRelayedViewStartMilliseconds) &&
+            NearlyEqual(end, _lastRelayedViewEndMilliseconds))
+            return;
+
+        _lastRelayedViewStartMilliseconds = start;
+        _lastRelayedViewEndMilliseconds = end;
+        NavigationChanged?.Invoke(this, e);
+    }
+
+    private void Inner_CursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
+    {
+        // The shell mirrors interactive cursor motion directly at pointer cadence. Downstream
+        // consumers need the inner event only for the final native edge confirmation/status path.
+        if (e.IsFinal)
+            CursorChanged?.Invoke(this, e);
+    }
+
+    private void Inner_PanRequested(object? sender, ComtradeDisturbancePanRequestedEventArgs e)
+        => PanRequested?.Invoke(this, e);
 
     internal void ShowTracks(
         IReadOnlyList<ComtradeDisturbanceTrack> tracks,
@@ -93,12 +119,15 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     {
         var value = SnapAnalysisCursorFromShell(requestedMilliseconds, snapToleranceMilliseconds);
         _inner.SetCursorFromHost(cursor, value);
-        CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(
-            cursor,
-            value,
-            Math.Max(0.0, snapToleranceMilliseconds),
-            isFinal,
-            Math.Abs(value - requestedMilliseconds) > 1e-9));
+        if (isFinal)
+        {
+            CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(
+                cursor,
+                value,
+                Math.Max(0.0, snapToleranceMilliseconds),
+                true,
+                Math.Abs(value - requestedMilliseconds) > 1e-9));
+        }
         return value;
     }
 
@@ -165,31 +194,40 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     private double[] BuildSnapIndex(IReadOnlyList<ComtradeDisturbanceTrack> tracks)
     {
         var times = new List<double>();
-        foreach (var track in tracks)
+        for (var trackIndex = 0; trackIndex < tracks.Count; trackIndex++)
         {
+            var track = tracks[trackIndex];
             if (!track.IsDigital) continue;
-            if (track.DigitalEdges is { Count: > 0 })
+            if (track.DigitalEdges is { Count: > 0 } edges)
             {
-                times.AddRange(track.DigitalEdges.Select(edge => ComtradeTimeMath.ToMilliseconds(edge.Timestamp, _timeMultiplier)));
+                for (var edgeIndex = 0; edgeIndex < edges.Count; edgeIndex++)
+                    times.Add(ComtradeTimeMath.ToMilliseconds(edges[edgeIndex].Timestamp, _timeMultiplier));
                 continue;
             }
             if (track.Digital is null) continue;
             var count = Math.Min(track.Digital.Length, track.Timestamps.Length);
-            for (var i = 1; i < count; i++)
+            for (var index = 1; index < count; index++)
             {
-                if ((track.Digital[i - 1] != 0) != (track.Digital[i] != 0))
-                    times.Add(ComtradeTimeMath.ToMilliseconds(track.Timestamps[i], _timeMultiplier));
+                if ((track.Digital[index - 1] != 0) != (track.Digital[index] != 0))
+                    times.Add(ComtradeTimeMath.ToMilliseconds(track.Timestamps[index], _timeMultiplier));
             }
         }
         if (times.Count == 0) return Array.Empty<double>();
+
         times.Sort();
-        var unique = new List<double>(times.Count) { times[0] };
-        for (var i = 1; i < times.Count; i++)
+        var unique = new double[times.Count];
+        var uniqueCount = 1;
+        unique[0] = times[0];
+        for (var index = 1; index < times.Count; index++)
         {
-            if (Math.Abs(times[i] - unique[^1]) > 1e-9)
-                unique.Add(times[i]);
+            if (Math.Abs(times[index] - unique[uniqueCount - 1]) <= 1e-9)
+                continue;
+            unique[uniqueCount++] = times[index];
         }
-        return unique.ToArray();
+        if (uniqueCount == unique.Length)
+            return unique;
+        Array.Resize(ref unique, uniqueCount);
+        return unique;
     }
 
     private void InitializeTimeOrigin(IReadOnlyList<ComtradeDisturbanceTrack> tracks, double timeMultiplier)
@@ -197,8 +235,9 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
         if (_timeOriginInitialized || tracks.Count == 0)
             return;
 
-        foreach (var track in tracks)
+        for (var trackIndex = 0; trackIndex < tracks.Count; trackIndex++)
         {
+            var track = tracks[trackIndex];
             var count = Math.Min(track.Timestamps.Length, track.SourceFrames?.Length ?? 0);
             for (var index = 0; index < count; index++)
             {
@@ -210,13 +249,27 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
             }
         }
 
-        var first = tracks
-            .Where(track => track.Timestamps.Length > 0)
-            .Select(track => track.Timestamps[0])
-            .DefaultIfEmpty(0u)
-            .Min();
-        _firstRawTimestamp = first;
-        _timeOriginMilliseconds = ComtradeTimeMath.ToMilliseconds(first, timeMultiplier);
+        var found = false;
+        var first = uint.MaxValue;
+        for (var trackIndex = 0; trackIndex < tracks.Count; trackIndex++)
+        {
+            var timestamps = tracks[trackIndex].Timestamps;
+            if (timestamps.Length == 0) continue;
+            if (!found || timestamps[0] < first)
+            {
+                first = timestamps[0];
+                found = true;
+            }
+        }
+        _firstRawTimestamp = found ? first : 0u;
+        _timeOriginMilliseconds = ComtradeTimeMath.ToMilliseconds(_firstRawTimestamp, timeMultiplier);
         _timeOriginInitialized = true;
+    }
+
+    private static bool NearlyEqual(double left, double right)
+    {
+        if (!double.IsFinite(left) || !double.IsFinite(right))
+            return false;
+        return Math.Abs(left - right) <= 1e-9 * Math.Max(1.0, Math.Max(Math.Abs(left), Math.Abs(right)));
     }
 }
