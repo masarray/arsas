@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -47,13 +46,14 @@ internal sealed class ComtradeInvestigationTimelineCursorChangedEventArgs : Even
 /// Persistent, lightweight investigation ruler. Plot geometry is supplied by the Time Signals
 /// renderer so the ruler and waveform use the exact same horizontal coordinate system even when
 /// the waveform ScrollViewer reserves space for a vertical scrollbar.
+/// P1D.4 deliberately keeps no independent interactive cursor identity: pointer positions are
+/// synchronously resolved by the host snap authority and reflected back as the exact shared value.
 /// </summary>
 public sealed class ComtradeInvestigationTimelineView : FrameworkElement
 {
     private const double DefaultLeftInset = 150.0;
     private const double DefaultRightInset = 18.0;
     private const double CursorHitRadius = 10.0;
-    private static readonly long InteractiveNotifyTicks = Math.Max(1, Stopwatch.Frequency / 60);
 
     private ComtradeInvestigationTimelineMode _mode = ComtradeInvestigationTimelineMode.DualCursor;
     private ComtradeInvestigationTimelineCursor _dragCursor;
@@ -71,7 +71,6 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     private double _plotRightInset = DefaultRightInset;
     private double _plotContentWidth;
     private Rect _rulerRect;
-    private long _lastInteractiveNotify;
 
     internal event EventHandler<ComtradeInvestigationTimelineCursorChangedEventArgs>? CursorChanged;
 
@@ -88,7 +87,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         Focusable = true;
         Cursor = Cursors.Arrow;
         ToolTipService.SetInitialShowDelay(this, 1200);
-        ToolTip = "Time Signals: C1/C2. Phasor: P. Harmonics: H. Drag the active cursor on the common timebase.";
+        ToolTip = "Time Signals: C1/C2. Phasor: P. Harmonics: H. Cursor position and digital-edge snap are shared with the waveform timebase.";
     }
 
     internal void SetPlotGeometry(double leftInset, double rightInset, double contentWidth)
@@ -188,7 +187,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         _dragging = true;
         CaptureMouse();
         Cursor = Cursors.SizeWE;
-        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: false, forceNotify: true);
+        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: false);
         e.Handled = true;
     }
 
@@ -201,7 +200,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
             Cursor = HoverCursor(point.X);
             return;
         }
-        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: false, forceNotify: false);
+        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: false);
         e.Handled = true;
     }
 
@@ -213,7 +212,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         _dragging = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
         Cursor = Cursors.Arrow;
-        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: true, forceNotify: true);
+        PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: true);
         e.Handled = true;
     }
 
@@ -235,17 +234,26 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         return ComtradeInvestigationTimelineCursor.Cursor1;
     }
 
-    private void PlaceCursor(ComtradeInvestigationTimelineCursor cursor, double milliseconds, bool isFinal, bool forceNotify)
+    private void PlaceCursor(ComtradeInvestigationTimelineCursor cursor, double milliseconds, bool isFinal)
     {
         milliseconds = ComtradeInvestigationTimelineMath.ClampToRecord(milliseconds, _fullStartMilliseconds, _fullEndMilliseconds);
-        SetCursorFromHost(cursor, milliseconds);
-        var now = Stopwatch.GetTimestamp();
-        if (!forceNotify && !isFinal && now - _lastInteractiveNotify < InteractiveNotifyTicks)
+        var tolerance = ComtradeTimeSignalsNavigationMath.SnapToleranceMilliseconds(
+            _viewEndMilliseconds - _viewStartMilliseconds,
+            Math.Max(1.0, _rulerRect.Width));
+
+        // The host is the single snap authority. Do not paint an unsnapped ruler value first: the
+        // event is synchronous and the host reflects the exact snapped value back via SetCursorFromHost.
+        // WPF naturally coalesces InvalidateVisual calls at composition time, so there is no need for
+        // a second stopwatch throttle here.
+        var handler = CursorChanged;
+        if (handler is null)
+        {
+            SetCursorFromHost(cursor, milliseconds);
             return;
-        _lastInteractiveNotify = now;
-        var tolerance = (_viewEndMilliseconds - _viewStartMilliseconds) * 10.0 / Math.Max(1.0, _rulerRect.Width);
-        CursorChanged?.Invoke(this, new ComtradeInvestigationTimelineCursorChangedEventArgs(
-            cursor, milliseconds, Math.Max(0.0, tolerance), isFinal));
+        }
+
+        handler.Invoke(this, new ComtradeInvestigationTimelineCursorChangedEventArgs(
+            cursor, milliseconds, tolerance, isFinal));
     }
 
     private void DrawReadout(DrawingContext dc, double dpi, Typeface body, Typeface semibold)
@@ -332,7 +340,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         }
         geometry.Freeze();
         dc.DrawGeometry(brush, null, geometry);
-        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, _rulerRect.Top + 2), new Point(x, _rulerRect.Bottom));
+        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, _rulerRect.Top + 2), new Point(x, ActualHeight));
         DrawText(dc, label, 7.2, semibold, color, new Point(x + 5, _rulerRect.Top - 12), dpi, 22);
     }
 
