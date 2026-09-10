@@ -130,6 +130,7 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
     {
         var navigation = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
         var main = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+        var nativeFat = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
 
         Assert.Contains("contentWidth / 7d", navigation, StringComparison.Ordinal);
         Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6)", navigation, StringComparison.Ordinal);
@@ -137,7 +138,8 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains("NavNativeFatButton", navigation, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 4", main, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 5", main, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(index, 0, 6)", main, StringComparison.Ordinal);
+        Assert.Contains("private const int NativeFatWorkspaceIndex = 6", nativeFat, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(index, 0, NativeFatWorkspaceIndex)", main, StringComparison.Ordinal);
     }
 
     [Fact]
