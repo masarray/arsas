@@ -218,7 +218,7 @@ public partial class IoListTestingWindow
 
         // Resolve by strongest Engineering identity first. Do not use one OR predicate:
         // a weak fallback on an earlier project row must never beat an exact live DeviceId.
-        IoTestIedPlan? match = null;
+        var match = Project.Ieds.FirstOrDefault(_ => false);
         if (!string.IsNullOrWhiteSpace(device.DeviceId))
         {
             match = Project.Ieds.FirstOrDefault(ied =>
