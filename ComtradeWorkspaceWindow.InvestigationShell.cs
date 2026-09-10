@@ -9,7 +9,6 @@ public partial class ComtradeWorkspaceWindow
 {
     private bool _investigationTimelineAttached;
     private double? _harmonicCursorMilliseconds;
-    private CancellationTokenSource? _shellAnalysisRefreshCts;
     private object? _normalizedDigitalEventSource;
 
     private void InvestigationTimeline_Loaded(object sender, RoutedEventArgs e)
@@ -20,21 +19,23 @@ public partial class ComtradeWorkspaceWindow
         InvestigationTimeline.CursorChanged += InvestigationTimeline_CursorChanged;
         DisturbanceView.NavigationChanged += DisturbanceView_ShellNavigationChanged;
         DisturbanceView.CursorChanged += DisturbanceView_ShellCursorChanged;
+        DisturbanceView.SizeChanged += DisturbanceView_ShellSizeChanged;
+        DisturbanceScrollViewer.SizeChanged += DisturbanceView_ShellSizeChanged;
         SignalList.SelectionChanged += SignalList_ShellSelectionChanged;
         Closed += InvestigationShell_Closed;
         SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
     }
 
     private void InvestigationShell_Closed(object? sender, EventArgs e)
     {
-        _shellAnalysisRefreshCts?.Cancel();
-        _shellAnalysisRefreshCts?.Dispose();
-        _shellAnalysisRefreshCts = null;
         if (!_investigationTimelineAttached) return;
 
         InvestigationTimeline.CursorChanged -= InvestigationTimeline_CursorChanged;
         DisturbanceView.NavigationChanged -= DisturbanceView_ShellNavigationChanged;
         DisturbanceView.CursorChanged -= DisturbanceView_ShellCursorChanged;
+        DisturbanceView.SizeChanged -= DisturbanceView_ShellSizeChanged;
+        DisturbanceScrollViewer.SizeChanged -= DisturbanceView_ShellSizeChanged;
         SignalList.SelectionChanged -= SignalList_ShellSelectionChanged;
         _investigationTimelineAttached = false;
     }
@@ -44,13 +45,16 @@ public partial class ComtradeWorkspaceWindow
         InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.DualCursor);
         SetAnalysisMode(AnalysisMode.Waveform);
         SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
     }
 
     private void PhasorModeShell_Click(object sender, RoutedEventArgs e)
     {
-        InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.DualCursor);
+        EnsurePhasorCursor();
+        InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.PhasorCursor);
         SetAnalysisMode(AnalysisMode.Phasor);
         SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
     }
 
     private void HarmonicsModeShell_Click(object sender, RoutedEventArgs e)
@@ -59,38 +63,51 @@ public partial class ComtradeWorkspaceWindow
         InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.HarmonicCursor);
         SetAnalysisMode(AnalysisMode.Harmonics);
         SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
     }
 
     private void SignalList_ShellSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (_analysisMode != AnalysisMode.Harmonics &&
-                InvestigationTimeline.Mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
+            if (_analysisMode == AnalysisMode.Waveform && InvestigationTimeline.Mode != ComtradeInvestigationTimelineMode.DualCursor)
                 InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.DualCursor);
+            else if (_analysisMode == AnalysisMode.Phasor && InvestigationTimeline.Mode != ComtradeInvestigationTimelineMode.PhasorCursor)
+                InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.PhasorCursor);
+            else if (_analysisMode == AnalysisMode.Harmonics && InvestigationTimeline.Mode != ComtradeInvestigationTimelineMode.HarmonicCursor)
+                InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.HarmonicCursor);
             SyncInvestigationTimeline();
         }, DispatcherPriority.Background);
+    }
+
+    private void DisturbanceView_ShellSizeChanged(object sender, SizeChangedEventArgs e)
+        => SyncInvestigationTimelineGeometry();
+
+    private void SyncInvestigationTimelineGeometry()
+    {
+        if (!_investigationTimelineAttached) return;
+        InvestigationTimeline.SetPlotGeometry(
+            DisturbanceView.PlotLeftInset,
+            DisturbanceView.PlotRightInset,
+            Math.Max(0.0, DisturbanceView.ActualWidth));
     }
 
     private void DisturbanceView_ShellNavigationChanged(object? sender, ComtradeDisturbanceNavigationChangedEventArgs e)
     {
         SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
         QueueDigitalEventTimelineNormalization();
     }
 
     private void DisturbanceView_ShellCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
+        // Time Signals owns the authoritative C1/C2 snap position. Reflect that exact value into
+        // the shell rather than maintaining a second unsnapped cursor state.
+        var shellCursor = e.Cursor == ComtradeDisturbanceCursor.Cursor1
+            ? ComtradeInvestigationTimelineCursor.Cursor1
+            : ComtradeInvestigationTimelineCursor.Cursor2;
+        InvestigationTimeline.SetCursorFromHost(shellCursor, e.AbsoluteMilliseconds);
         SyncInvestigationTimeline();
-        if (!e.IsFinal || _analysisMode != AnalysisMode.Phasor) return;
-
-        var selected = _phasorReferenceCursor == ComtradeDisturbanceCursor.Cursor1
-            ? ComtradeInvestigationTimelineCursor.Cursor1
-            : ComtradeInvestigationTimelineCursor.Cursor2;
-        var changed = e.Cursor == ComtradeDisturbanceCursor.Cursor1
-            ? ComtradeInvestigationTimelineCursor.Cursor1
-            : ComtradeInvestigationTimelineCursor.Cursor2;
-        if (changed == selected)
-            QueueShellAnalysisRefresh(immediate: true);
     }
 
     private void InvestigationTimeline_CursorChanged(object? sender, ComtradeInvestigationTimelineCursorChangedEventArgs e)
@@ -98,47 +115,49 @@ public partial class ComtradeWorkspaceWindow
         switch (e.Cursor)
         {
             case ComtradeInvestigationTimelineCursor.Cursor1:
-                DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor1, e.AbsoluteMilliseconds);
-                if (e.IsFinal)
-                    DisturbanceView_CursorChanged(DisturbanceView,
-                        new ComtradeDisturbanceCursorChangedEventArgs(
-                            ComtradeDisturbanceCursor.Cursor1,
-                            e.AbsoluteMilliseconds,
-                            e.SnapToleranceMilliseconds,
-                            true,
-                            false));
-                if (_analysisMode == AnalysisMode.Phasor && _phasorReferenceCursor == ComtradeDisturbanceCursor.Cursor1)
-                    QueueShellAnalysisRefresh(e.IsFinal);
+            {
+                var actual = DisturbanceView.PlaceCursorFromShell(
+                    ComtradeDisturbanceCursor.Cursor1,
+                    e.AbsoluteMilliseconds,
+                    e.SnapToleranceMilliseconds,
+                    e.IsFinal);
+                InvestigationTimeline.SetCursorFromHost(ComtradeInvestigationTimelineCursor.Cursor1, actual);
                 break;
-
+            }
             case ComtradeInvestigationTimelineCursor.Cursor2:
-                DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor2, e.AbsoluteMilliseconds);
-                if (e.IsFinal)
-                    DisturbanceView_CursorChanged(DisturbanceView,
-                        new ComtradeDisturbanceCursorChangedEventArgs(
-                            ComtradeDisturbanceCursor.Cursor2,
-                            e.AbsoluteMilliseconds,
-                            e.SnapToleranceMilliseconds,
-                            true,
-                            false));
-                if (_analysisMode == AnalysisMode.Phasor && _phasorReferenceCursor == ComtradeDisturbanceCursor.Cursor2)
-                    QueueShellAnalysisRefresh(e.IsFinal);
+            {
+                var actual = DisturbanceView.PlaceCursorFromShell(
+                    ComtradeDisturbanceCursor.Cursor2,
+                    e.AbsoluteMilliseconds,
+                    e.SnapToleranceMilliseconds,
+                    e.IsFinal);
+                InvestigationTimeline.SetCursorFromHost(ComtradeInvestigationTimelineCursor.Cursor2, actual);
                 break;
-
+            }
+            case ComtradeInvestigationTimelineCursor.Phasor:
+                _phasorCursorMilliseconds = e.AbsoluteMilliseconds;
+                QueueRealtimeAnalysisScrub(e.IsFinal);
+                break;
             case ComtradeInvestigationTimelineCursor.Harmonic:
                 _harmonicCursorMilliseconds = e.AbsoluteMilliseconds;
-                if (_analysisMode == AnalysisMode.Harmonics)
-                    QueueShellAnalysisRefresh(e.IsFinal);
+                QueueRealtimeAnalysisScrub(e.IsFinal);
                 break;
         }
 
         SyncInvestigationTimeline();
     }
 
+    private void EnsurePhasorCursor()
+    {
+        if (_phasorCursorMilliseconds.HasValue) return;
+        _phasorCursorMilliseconds = DisturbanceView.Cursor1Milliseconds
+            ?? DisturbanceView.EffectiveTriggerMilliseconds
+            ?? (DisturbanceView.ViewStartMilliseconds + DisturbanceView.ViewEndMilliseconds) * 0.5;
+    }
+
     private void EnsureHarmonicCursor()
     {
         if (_harmonicCursorMilliseconds.HasValue) return;
-
         _harmonicCursorMilliseconds = DisturbanceView.Cursor1Milliseconds
             ?? DisturbanceView.EffectiveTriggerMilliseconds
             ?? (DisturbanceView.ViewStartMilliseconds + DisturbanceView.ViewEndMilliseconds) * 0.5;
@@ -147,6 +166,8 @@ public partial class ComtradeWorkspaceWindow
     private void SyncInvestigationTimeline()
     {
         if (!_investigationTimelineAttached) return;
+        if (_analysisMode == AnalysisMode.Phasor)
+            EnsurePhasorCursor();
         if (_analysisMode == AnalysisMode.Harmonics)
             EnsureHarmonicCursor();
 
@@ -158,6 +179,7 @@ public partial class ComtradeWorkspaceWindow
             DisturbanceView.EffectiveTriggerMilliseconds,
             DisturbanceView.Cursor1Milliseconds,
             DisturbanceView.Cursor2Milliseconds,
+            _phasorCursorMilliseconds,
             _harmonicCursorMilliseconds);
     }
 
@@ -182,29 +204,6 @@ public partial class ComtradeWorkspaceWindow
                 .ToArray();
             _normalizedDigitalEventSource = normalized;
             DigitalEventGrid.ItemsSource = normalized;
-        }, DispatcherPriority.Background);
-    }
-
-    private void QueueShellAnalysisRefresh(bool immediate)
-    {
-        if (_analysisMode == AnalysisMode.Waveform) return;
-
-        _shellAnalysisRefreshCts?.Cancel();
-        _shellAnalysisRefreshCts?.Dispose();
-        _shellAnalysisRefreshCts = new CancellationTokenSource();
-        var token = _shellAnalysisRefreshCts.Token;
-        _ = Dispatcher.InvokeAsync(async () =>
-        {
-            try
-            {
-                if (!immediate)
-                    await Task.Delay(90, token).ConfigureAwait(true);
-                if (!token.IsCancellationRequested)
-                    await RefreshNativeAnalysisAsync().ConfigureAwait(true);
-            }
-            catch (OperationCanceledException)
-            {
-            }
         }, DispatcherPriority.Background);
     }
 }
