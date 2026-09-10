@@ -30,7 +30,7 @@ public sealed class ProductionFatM7CleanupRegressionTests
         var contract = File.ReadAllText(FindRepoFile("docs/FAT_ENGINEERING_WORKSTATION_CONTRACT.md"));
 
         Assert.Contains("AdoptEngineeringRuntimeWorkspaces", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("IoTestSessionPreflight.Validate", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("IoTestSessionPreflight.Validate", adapter, StringComparison.Ordinal);
         Assert.Contains("IoFatProductionControllerAdapter", adapter, StringComparison.Ordinal);
         Assert.Contains("production FAT", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Engineering", contract, StringComparison.OrdinalIgnoreCase);
