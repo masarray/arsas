@@ -119,7 +119,7 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
             : clamped;
     }
 
-    private static IReadOnlyList<ComtradeDisturbanceTrack> StableAnalogThenDigital(
+    internal static IReadOnlyList<ComtradeDisturbanceTrack> StableAnalogThenDigital(
         IReadOnlyList<ComtradeDisturbanceTrack> tracks)
     {
         if (tracks.Count <= 1)
