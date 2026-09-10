@@ -101,8 +101,6 @@ public partial class ComtradeWorkspaceWindow
 
     private void DisturbanceView_ShellCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
-        // Time Signals owns the authoritative C1/C2 snap position. Reflect that exact value into
-        // the shell rather than maintaining a second unsnapped cursor state.
         var shellCursor = e.Cursor == ComtradeDisturbanceCursor.Cursor1
             ? ComtradeInvestigationTimelineCursor.Cursor1
             : ComtradeInvestigationTimelineCursor.Cursor2;
@@ -135,13 +133,21 @@ public partial class ComtradeWorkspaceWindow
                 break;
             }
             case ComtradeInvestigationTimelineCursor.Phasor:
-                _phasorCursorMilliseconds = e.AbsoluteMilliseconds;
+            {
+                var actual = DisturbanceView.SnapAnalysisCursorFromShell(e.AbsoluteMilliseconds, e.SnapToleranceMilliseconds);
+                _phasorCursorMilliseconds = actual;
+                InvestigationTimeline.SetCursorFromHost(ComtradeInvestigationTimelineCursor.Phasor, actual);
                 QueueRealtimeAnalysisScrub(e.IsFinal);
                 break;
+            }
             case ComtradeInvestigationTimelineCursor.Harmonic:
-                _harmonicCursorMilliseconds = e.AbsoluteMilliseconds;
+            {
+                var actual = DisturbanceView.SnapAnalysisCursorFromShell(e.AbsoluteMilliseconds, e.SnapToleranceMilliseconds);
+                _harmonicCursorMilliseconds = actual;
+                InvestigationTimeline.SetCursorFromHost(ComtradeInvestigationTimelineCursor.Harmonic, actual);
                 QueueRealtimeAnalysisScrub(e.IsFinal);
                 break;
+            }
         }
 
         SyncInvestigationTimeline();
