@@ -1,0 +1,73 @@
+name: FAT M1 seven-slot guarded consistency fix
+
+on:
+  push:
+    branches:
+      - fix/fat-workstation-convergence
+    paths:
+      - .github/workflows/fat-m1-seven-slot-guarded-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/fat-workstation-convergence
+          fetch-depth: 0
+
+      - name: Apply guarded seven-slot consistency migration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Replace-Exact([string]$Path, [string]$Old, [string]$New, [int]$ExpectedCount = 1) {
+            $text = Get-Content $Path -Raw
+            $count = ([regex]::Matches($text, [regex]::Escape($Old))).Count
+            if ($count -ne $ExpectedCount) {
+              throw "Guard failed for $Path. Expected $ExpectedCount occurrence(s) of [$Old], found $count."
+            }
+            $text = $text.Replace($Old, $New)
+            Set-Content -Path $Path -Value $text -NoNewline -Encoding utf8
+          }
+
+          $nav = 'MainWindow.NavigationLayoutFix.cs'
+          Replace-Exact $nav 'split into six equal columns' 'split into seven equal columns'
+          Replace-Exact $nav 'button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton")' 'button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavNativeFatButton")'
+          Replace-Exact $nav '            window.FindName("NavDiagnosticsButton") as Button`n        ];' '            window.FindName("NavDiagnosticsButton") as Button,`n            window.FindName("NavNativeFatButton") as Button`n        ];'
+          Replace-Exact $nav 'six equal star columns' 'seven equal star columns'
+          Replace-Exact $nav 'contentWidth / 6d' 'contentWidth / 7d' 2
+          Replace-Exact $nav 'Math.Clamp(tabs.SelectedIndex, 0, 5)' 'Math.Clamp(tabs.SelectedIndex, 0, 6)'
+
+          $sas = 'SasOperationalUiPolicy.cs'
+          Replace-Exact $sas '"NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton"' '"NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton", "NavNativeFatButton"'
+
+          $tests = 'tests/ARSAS.Tests/AlarmAnnunciatorIntegrationRegressionTests.cs'
+          Replace-Exact $tests 'Header_UsesSixWorkflowDestinations_WithoutDuplicateRuntimeStatusChips' 'Header_UsesSevenWorkflowDestinations_WithoutDuplicateRuntimeStatusChips'
+          Replace-Exact $tests 'Assert.Equal(6, navColumns);' 'Assert.Equal(7, navColumns);'
+          Replace-Exact $tests '            (string?)button.Attribute(x + "Name") == "NavDiagnosticsButton" &&`n            (string?)button.Attribute("Tag") == "5");' '            (string?)button.Attribute(x + "Name") == "NavDiagnosticsButton" &&`n            (string?)button.Attribute("Tag") == "5");`n        Assert.Contains(navGrid.Descendants(p + "Button"), button =>`n            (string?)button.Attribute(x + "Name") == "NavNativeFatButton" &&`n            (string?)button.Attribute("Tag") == "6" &&`n            (string?)button.Attribute("Content") == "FAT");'
+          Replace-Exact $tests '\"NavExplorerButton\", \"NavLiveButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavDiagnosticsButton\"' '\"NavExplorerButton\", \"NavLiveButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavDiagnosticsButton\", \"NavNativeFatButton\"'
+          Replace-Exact $tests 'NavigationAndDiagnosticsUseSixTabGeometry' 'NavigationAndDiagnosticsUseSevenTabGeometry'
+          Replace-Exact $tests 'Assert.Contains("contentWidth / 6d", navigation, StringComparison.Ordinal);' 'Assert.Contains("contentWidth / 7d", navigation, StringComparison.Ordinal);'
+          Replace-Exact $tests 'Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 5)", navigation, StringComparison.Ordinal);' 'Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6)", navigation, StringComparison.Ordinal);'
+          Replace-Exact $tests 'Assert.Contains("NavAlarmButton", navigation, StringComparison.Ordinal);' 'Assert.Contains("NavAlarmButton", navigation, StringComparison.Ordinal);`n        Assert.Contains("NavNativeFatButton", navigation, StringComparison.Ordinal);'
+          Replace-Exact $tests 'Assert.Contains("Math.Clamp(index, 0, 5)", main, StringComparison.Ordinal);' 'Assert.Contains("Math.Clamp(index, 0, 6)", main, StringComparison.Ordinal);'
+
+          # Fail closed if any six-slot geometry remains in the two navigation owners.
+          $navAfter = Get-Content $nav -Raw
+          $sasAfter = Get-Content $sas -Raw
+          if ($navAfter -match 'contentWidth / 6d' -or $navAfter -match 'SelectedIndex, 0, 5' -or $sasAfter -notmatch 'NavNativeFatButton') {
+            throw 'Seven-slot consistency postcondition failed.'
+          }
+
+          Remove-Item '.github/workflows/fat-m1-seven-slot-guarded-fix.yml'
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add MainWindow.NavigationLayoutFix.cs SasOperationalUiPolicy.cs tests/ARSAS.Tests/AlarmAnnunciatorIntegrationRegressionTests.cs .github/workflows/fat-m1-seven-slot-guarded-fix.yml
+          git commit -m 'fix: complete canonical seven-slot navigation ownership'
+          git push origin HEAD:fix/fat-workstation-convergence
