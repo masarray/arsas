@@ -192,7 +192,23 @@ Do not:
 
 A new dependency must justify purpose, maintenance cost, binary impact, security implications, and runtime overhead.
 
-## 14. Definition of done
+## 14. Exception-free hot paths, Result pattern, and asynchronous diagnostics
+
+Expected or recoverable failures must not use exceptions as normal control flow in performance-critical or high-frequency code. This includes COMTRADE/SCL parsing loops, IEC 61850 frame decoding, packet/event processing, waveform/harmonic/phasor calculation loops, device acquisition callbacks, and rendering-preparation hot paths.
+
+Prefer explicit C# failure contracts such as `TryXxx(...)`, typed `Result<T>` / result records, discriminated status models, nullable returns only when the failure meaning is unambiguous, and structured error codes. A normal timeout, malformed field, missing sample, unsupported value, disconnected device, or parse rejection should not require stack unwinding.
+
+Exceptions from .NET, OS APIs, filesystem/network libraries, or third-party code may still occur. Catch them at the nearest meaningful infrastructure/application boundary, convert them into the repository's structured result/error model, preserve cancellation semantics, and keep exception handling out of inner loops. Do not catch and ignore exceptions.
+
+For hot-path diagnostics, never synchronously write files, console logs, telemetry, UI dialogs, JSON, or expensive formatted strings. Publish a small structured diagnostic event to a bounded asynchronous diagnostic channel/queue and let a background consumer aggregate, format, persist, or surface it.
+
+Diagnostic queues must be bounded and have an explicit overload policy. Deduplicate/rate-limit repeated failures and aggregate counts such as `MalformedRow x 4281` instead of enqueueing thousands of equivalent messages. A full/broken diagnostic queue must never block protocol processing, parsing, rendering, or UI responsiveness; retain counters/high-severity/latest events according to documented policy.
+
+The diagnostic subsystem is observational, not a correctness dependency. Logging failure must not become application failure.
+
+When implementing a `Result<T>` family, keep it lightweight and consistent. Do not create multiple incompatible result abstractions in different subsystems. Error payloads should carry stable machine-readable codes/context first; human-readable formatting belongs outside the hot path.
+
+## 15. Definition of done
 
 A task is not complete because it compiles.
 
@@ -210,7 +226,7 @@ BUILD
 
 Use the repository PR template and existing engineering validation gates. Never claim a check was run when it was not.
 
-## 15. Agent completion report
+## 16. Agent completion report
 
 After implementation, report:
 - Changed: what was modified;
