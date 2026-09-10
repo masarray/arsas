@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Services;
