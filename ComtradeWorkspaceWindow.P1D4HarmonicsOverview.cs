@@ -8,12 +8,15 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow
 {
     private const int MaxP1D4HarmonicOverviewSignals = 8;
+    private const int P1D4HarmonicCacheCapacity = 384;
     private ulong _p1d4LastRenderedHarmonicOverviewFrame = ulong.MaxValue;
     private string _p1d4LastRenderedHarmonicOverviewSignature = string.Empty;
     private ComtradeSignalItem[] _p1d4ResolvedHarmonicSignals = Array.Empty<ComtradeSignalItem>();
     private ulong _p1d4ResolvedHarmonicFingerprint;
     private string _p1d4ResolvedHarmonicSignature = string.Empty;
     private bool _p1d4ResolvedHarmonicSelectionInitialized;
+    private readonly BoundedFifoCache<HarmonicCacheKey, ComtradeHarmonicSpectrum> _p1d4HarmonicFrameCache =
+        new(P1D4HarmonicCacheCapacity);
 
     private IReadOnlyList<ComtradeSignalItem> ResolveP1D4HarmonicOverviewSignals()
     {
@@ -122,7 +125,7 @@ public partial class ComtradeWorkspaceWindow
         {
             token.ThrowIfCancellationRequested();
             var key = new HarmonicCacheKey(signals[index].Index, referenceFrame);
-            if (_harmonicFrameCache.TryGetValue(key, out var cached))
+            if (_p1d4HarmonicFrameCache.TryGetValue(key, out var cached))
             {
                 spectra[index] = cached;
             }
@@ -160,9 +163,9 @@ public partial class ComtradeWorkspaceWindow
                     var position = missingPositions[index];
                     var signal = missingSignals[index];
                     spectra[position] = loadedSpectrum;
-                    if (_harmonicFrameCache.Count >= 384)
-                        _harmonicFrameCache.Clear();
-                    _harmonicFrameCache[new HarmonicCacheKey(signal.Index, referenceFrame)] = loadedSpectrum;
+                    _p1d4HarmonicFrameCache.Set(
+                        new HarmonicCacheKey(signal.Index, referenceFrame),
+                        loadedSpectrum);
                 }
             }
             finally
