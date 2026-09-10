@@ -18,9 +18,11 @@ public sealed class ProductionFatM6ReportPreviewRegressionTests
         Assert.Contains("_printPreviewToggle = WorkspacePreviewToggle;", embedded, StringComparison.Ordinal);
         Assert.Contains("DetachProductionFatCentralWorkspace", embedded, StringComparison.Ordinal);
 
-        // MainWindow hosts the exact detached production center. Explorer and Command Dock
-        // remain owned by the workstation shell; preview never replaces MainWindow itself.
-        Assert.Contains("_nativeFatTab.Content = surface;", productionTab, StringComparison.Ordinal);
+        // MainWindow hosts the exact detached production center in the canonical XAML FAT tab.
+        // Explorer and Command Dock remain owned by the workstation shell; preview never
+        // replaces MainWindow itself and no retired native FAT tab authority is recreated.
+        Assert.Contains("NativeFatTab.Content = surface;", productionTab, StringComparison.Ordinal);
+        Assert.DoesNotContain("_nativeFatTab.Content = surface;", productionTab, StringComparison.Ordinal);
         Assert.Contains("global Engineering IED Explorer and shared Command Dock remain authoritative", productionTab, StringComparison.Ordinal);
 
         var install = ExtractMethod(preview, "private void InstallPerIedPrintPreview()");
