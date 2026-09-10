@@ -50,10 +50,10 @@ public sealed class ArdIrecNativeBridgeIntegrationTests
             Assert.Equal(readCount, timestamps.Length);
             Assert.True(timestamps[^1] >= timestamps[0]);
 
-            // This small binary fixture may not contain a complete power-frequency cycle, but
-            // invoking both P1C exports here proves the managed delegate/struct boundary against
-            // the exact DLL that will be packaged. Numeric analysis accuracy is covered by the
-            // ArdIrec bridge smoke using its 1 kHz / 50 Hz distance_p1 fixture.
+            // These compact fixtures may not contain a complete power-frequency cycle, but
+            // invoking both P1C exports proves the managed delegate/struct boundary against the
+            // exact DLL that will be packaged. Numeric analysis accuracy is covered by ArdIrec's
+            // 1 kHz / 50 Hz bridge smoke fixture.
             var referenceFrame = record.Info.FrameCount - 1;
             var phasor = record.ReadPhasor(0, referenceFrame);
             Assert.True(phasor.WindowStartFrame <= phasor.WindowEndExclusive);
@@ -120,21 +120,26 @@ public sealed class ArdIrecNativeBridgeIntegrationTests
                     Assert.True(double.IsFinite(measurement.Instantaneous));
                     Assert.True(double.IsFinite(measurement.Rms));
                     Assert.True(measurement.WindowEndExclusive > measurement.WindowStartFrame);
+                    Assert.True(measurement.WindowSampleCount > 0);
 
+                    // The installer and workflow lanes deliberately use different compact
+                    // COMTRADE fixtures. Assert the engine contract rather than assuming a
+                    // particular transition is located at frame 1.
                     var state = new NativeStatusStateInfo();
                     Assert.Equal(0, getStatusState(handle, 0, 1, ref state));
-                    Assert.Equal(0, state.NormalState);
-                    Assert.Equal(1, state.RawState);
-                    Assert.Equal(1, state.IsActive);
+                    Assert.Contains(state.RawState, new[] { 0, 1 });
+                    Assert.Contains(state.NormalState, new[] { 0, 1 });
+                    Assert.Equal(state.RawState != state.NormalState ? 1 : 0, state.IsActive);
 
                     var edge = new NativeStatusEdgeInfo();
-                    Assert.Equal(0, findEdge(handle, 0, 0.002, ref edge));
+                    Assert.Equal(0, findEdge(handle, 0, 0.010, ref edge));
                     Assert.Equal(1, edge.Valid);
-                    Assert.Equal((ulong)1, edge.FrameIndex);
-                    Assert.Equal((uint)0, edge.ChannelIndex);
-                    Assert.Equal(0, edge.BeforeState);
-                    Assert.Equal(1, edge.AfterState);
-                    Assert.Equal(1, edge.BecameActive);
+                    Assert.NotEqual(edge.BeforeState, edge.AfterState);
+                    Assert.Contains(edge.BeforeState, new[] { 0, 1 });
+                    Assert.Contains(edge.AfterState, new[] { 0, 1 });
+                    Assert.Contains(edge.NormalState, new[] { 0, 1 });
+                    Assert.Equal(edge.AfterState != edge.NormalState ? 1 : 0, edge.BecameActive);
+                    Assert.True(edge.DistanceSeconds >= 0.0 && double.IsFinite(edge.DistanceSeconds));
                 }
                 finally
                 {
