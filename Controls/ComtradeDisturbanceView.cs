@@ -6,6 +6,19 @@ using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Controls;
 
+internal enum ComtradeDisturbanceCursor
+{
+    Cursor1,
+    Cursor2
+}
+
+internal sealed record ComtradeDisturbanceDigitalEdge(
+    uint Timestamp,
+    ulong SourceFrame,
+    byte BeforeState,
+    byte AfterState,
+    int NormalState);
+
 internal sealed record ComtradeDisturbanceTrack(
     string Title,
     string Subtitle,
@@ -15,12 +28,45 @@ internal sealed record ComtradeDisturbanceTrack(
     byte[]? Digital,
     uint[] Timestamps,
     Color StrokeColor,
-    bool PreserveAllPoints = false);
+    bool PreserveAllPoints = false,
+    ulong[]? SourceFrames = null,
+    int DigitalNormalState = 0,
+    IReadOnlyList<ComtradeDisturbanceDigitalEdge>? DigitalEdges = null,
+    bool DigitalIsLossy = false);
 
 internal sealed class ComtradeDisturbanceNavigationChangedEventArgs : EventArgs
 {
     internal ComtradeDisturbanceNavigationChangedEventArgs(string summary) => Summary = summary;
     internal string Summary { get; }
+}
+
+internal sealed class ComtradeDisturbanceCursorChangedEventArgs : EventArgs
+{
+    internal ComtradeDisturbanceCursorChangedEventArgs(
+        ComtradeDisturbanceCursor cursor,
+        double absoluteMilliseconds,
+        double snapToleranceMilliseconds,
+        bool isFinal,
+        bool locallySnapped)
+    {
+        Cursor = cursor;
+        AbsoluteMilliseconds = absoluteMilliseconds;
+        SnapToleranceMilliseconds = snapToleranceMilliseconds;
+        IsFinal = isFinal;
+        LocallySnapped = locallySnapped;
+    }
+
+    internal ComtradeDisturbanceCursor Cursor { get; }
+    internal double AbsoluteMilliseconds { get; }
+    internal double SnapToleranceMilliseconds { get; }
+    internal bool IsFinal { get; }
+    internal bool LocallySnapped { get; }
+}
+
+internal sealed class ComtradeDisturbancePanRequestedEventArgs : EventArgs
+{
+    internal ComtradeDisturbancePanRequestedEventArgs(double deltaFraction) => DeltaFraction = deltaFraction;
+    internal double DeltaFraction { get; }
 }
 
 public sealed class ComtradeDisturbanceView : FrameworkElement
@@ -32,34 +78,53 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     private const double AnalogTrackHeight = 92.0;
     private const double DigitalTrackHeight = 40.0;
     private const double TrackGap = 6.0;
+    private const double CursorHitRadius = 9.0;
+    private const double PanActivationPixels = 4.0;
+
+    private enum PointerMode
+    {
+        None,
+        PendingPan,
+        Panning,
+        Cursor1,
+        Cursor2
+    }
 
     private IReadOnlyList<ComtradeDisturbanceTrack> _tracks = Array.Empty<ComtradeDisturbanceTrack>();
     private double _timeMultiplier = 1.0;
     private double? _triggerMilliseconds;
+    private double _nominalFrequencyHz;
     private double _fullStartMilliseconds;
     private double _fullEndMilliseconds;
     private double _viewStartMilliseconds;
     private double _viewEndMilliseconds;
-    private double? _cursorAMilliseconds;
-    private double? _cursorBMilliseconds;
+    private double? _cursor1Milliseconds;
+    private double? _cursor2Milliseconds;
     private Rect _lastPlot;
-    private bool _isPanning;
-    private Point _panStartPoint;
+    private PointerMode _pointerMode;
+    private Point _pointerStartPoint;
     private double _panStartMilliseconds;
     private double _panEndMilliseconds;
 
     internal event EventHandler<ComtradeDisturbanceNavigationChangedEventArgs>? NavigationChanged;
+    internal event EventHandler<ComtradeDisturbanceCursorChangedEventArgs>? CursorChanged;
+    internal event EventHandler<ComtradeDisturbancePanRequestedEventArgs>? PanRequested;
 
-    internal double? CursorAMilliseconds => _cursorAMilliseconds;
-    internal double? CursorBMilliseconds => _cursorBMilliseconds;
+    internal double? Cursor1Milliseconds => _cursor1Milliseconds;
+    internal double? Cursor2Milliseconds => _cursor2Milliseconds;
+    // Compatibility aliases while P1D analysis consumers are being migrated from A/B naming.
+    internal double? CursorAMilliseconds => _cursor1Milliseconds;
+    internal double? CursorBMilliseconds => _cursor2Milliseconds;
     internal double ViewStartMilliseconds => _viewStartMilliseconds;
     internal double ViewEndMilliseconds => _viewEndMilliseconds;
+    internal double FullStartMilliseconds => _fullStartMilliseconds;
+    internal double FullEndMilliseconds => _fullEndMilliseconds;
 
     public ComtradeDisturbanceView()
     {
         Focusable = true;
         Cursor = Cursors.Cross;
-        ToolTip = "Wheel: zoom • Shift+wheel: pan • Alt+drag/middle-drag: pan • Click: Cursor A • Ctrl+click/right-click: Cursor B";
+        ToolTip = "Wheel: scroll signals • Ctrl+wheel: zoom • Drag plot: pan • Drag C1/C2: move • Right-click: C2 • cursors snap to digital edges";
     }
 
     internal void ShowTracks(
@@ -79,12 +144,8 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         _viewEndMilliseconds = bounds.End;
         if (!preserveCursor)
         {
-            _cursorAMilliseconds = null;
-            _cursorBMilliseconds = null;
-        }
-        else
-        {
-            ClampCursorsToFullRange();
+            _cursor1Milliseconds = null;
+            _cursor2Milliseconds = null;
         }
 
         Height = Math.Max(330, TopMargin + BottomAxisHeight + _tracks.Sum(track => TrackHeight(track) + TrackGap));
@@ -99,18 +160,58 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         _fullEndMilliseconds = 0;
         _viewStartMilliseconds = 0;
         _viewEndMilliseconds = 0;
-        _cursorAMilliseconds = null;
-        _cursorBMilliseconds = null;
+        _cursor1Milliseconds = null;
+        _cursor2Milliseconds = null;
         Height = 330;
         ToolTip = message;
         InvalidateVisual();
     }
 
-    internal void SetCursorAFromAbsoluteMilliseconds(double milliseconds)
+    internal void ApplyTriggerFocusedDefault(double nominalFrequencyHz)
     {
-        if (!double.IsFinite(milliseconds) || _fullEndMilliseconds <= _fullStartMilliseconds)
+        _nominalFrequencyHz = nominalFrequencyHz;
+        if (_fullEndMilliseconds <= _fullStartMilliseconds)
             return;
-        _cursorAMilliseconds = Math.Clamp(milliseconds, _fullStartMilliseconds, _fullEndMilliseconds);
+
+        var window = ComtradeTimeSignalsNavigationMath.CreateTriggerFocusedWindow(
+            _fullStartMilliseconds,
+            _fullEndMilliseconds,
+            _triggerMilliseconds,
+            nominalFrequencyHz);
+        SetView(window.StartMilliseconds, window.EndMilliseconds);
+
+        var cursors = ComtradeTimeSignalsNavigationMath.CreateInitialCursors(
+            _fullStartMilliseconds,
+            _fullEndMilliseconds,
+            _triggerMilliseconds,
+            nominalFrequencyHz);
+        _cursor1Milliseconds = cursors.Cursor1Milliseconds;
+        _cursor2Milliseconds = cursors.Cursor2Milliseconds;
+        InvalidateVisual();
+        RaiseNavigationChanged();
+    }
+
+    internal void ResetToTriggerView()
+    {
+        if (_nominalFrequencyHz > 0)
+        {
+            ApplyTriggerFocusedDefault(_nominalFrequencyHz);
+            return;
+        }
+        ResetNavigation();
+    }
+
+    internal void SetCursorAFromAbsoluteMilliseconds(double milliseconds)
+        => SetCursorFromHost(ComtradeDisturbanceCursor.Cursor1, milliseconds);
+
+    internal void SetCursorFromHost(ComtradeDisturbanceCursor cursor, double milliseconds)
+    {
+        if (!double.IsFinite(milliseconds))
+            return;
+        if (cursor == ComtradeDisturbanceCursor.Cursor1)
+            _cursor1Milliseconds = milliseconds;
+        else
+            _cursor2Milliseconds = milliseconds;
         InvalidateVisual();
         RaiseNavigationChanged();
     }
@@ -121,6 +222,13 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
             return;
         _viewStartMilliseconds = _fullStartMilliseconds;
         _viewEndMilliseconds = _fullEndMilliseconds;
+        InvalidateVisual();
+        RaiseNavigationChanged();
+    }
+
+    internal void SetViewWindow(double startMilliseconds, double endMilliseconds)
+    {
+        SetView(startMilliseconds, endMilliseconds);
         InvalidateVisual();
         RaiseNavigationChanged();
     }
@@ -170,33 +278,26 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         var tracksBottom = Math.Min(bounds.Height - BottomAxisHeight, y - TrackGap);
         var timelinePlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(1, tracksBottom - TopMargin));
         DrawTrigger(dc, timelinePlot, dpi, semibold);
-        DrawCursor(dc, timelinePlot, _cursorAMilliseconds, "A", Color.FromRgb(221, 142, 32), dpi, semibold);
-        DrawCursor(dc, timelinePlot, _cursorBMilliseconds, "B", Color.FromRgb(36, 172, 211), dpi, semibold);
+        DrawCursor(dc, timelinePlot, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
+        DrawCursor(dc, timelinePlot, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
         DrawTimeAxis(dc, new Rect(LabelWidth, tracksBottom, plotWidth, BottomAxisHeight), dpi, body, semibold);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+            return; // Deliberately bubble normal wheel to the outer vertical signal ScrollViewer.
         if (!_lastPlot.Contains(e.GetPosition(this)) || _viewEndMilliseconds <= _viewStartMilliseconds)
             return;
 
         var span = _viewEndMilliseconds - _viewStartMilliseconds;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-        {
-            var delta = span * 0.10 * (e.Delta > 0 ? -1 : 1);
-            SetView(_viewStartMilliseconds + delta, _viewEndMilliseconds + delta);
-        }
-        else
-        {
-            var fraction = PlotFractionAt(e.GetPosition(this).X);
-            var anchor = _viewStartMilliseconds + span * fraction;
-            var factor = e.Delta > 0 ? 0.78 : 1.28;
-            var nextSpan = Math.Clamp(span * factor, MinimumViewSpan(), Math.Max(MinimumViewSpan(), _fullEndMilliseconds - _fullStartMilliseconds));
-            var start = anchor - nextSpan * fraction;
-            SetView(start, start + nextSpan);
-        }
-
+        var fraction = PlotFractionAt(e.GetPosition(this).X);
+        var anchor = _viewStartMilliseconds + span * fraction;
+        var factor = e.Delta > 0 ? 0.72 : 1.38;
+        var nextSpan = Math.Clamp(span * factor, MinimumViewSpan(), Math.Max(MinimumViewSpan(), _fullEndMilliseconds - _fullStartMilliseconds));
+        var start = anchor - nextSpan * fraction;
+        SetView(start, start + nextSpan);
         InvalidateVisual();
         RaiseNavigationChanged();
         e.Handled = true;
@@ -205,40 +306,51 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (!_lastPlot.Contains(e.GetPosition(this)) || _viewEndMilliseconds <= _viewStartMilliseconds)
+        var point = e.GetPosition(this);
+        if (!_lastPlot.Contains(point) || _viewEndMilliseconds <= _viewStartMilliseconds)
             return;
 
         Focus();
         if (e.ClickCount >= 2 && e.ChangedButton == MouseButton.Left)
         {
-            ResetNavigation();
+            ResetToTriggerView();
             e.Handled = true;
             return;
         }
 
-        var panGesture = e.ChangedButton == MouseButton.Middle ||
-                         (e.ChangedButton == MouseButton.Left && (Keyboard.Modifiers & ModifierKeys.Alt) != 0);
-        if (panGesture)
+        if (e.ChangedButton == MouseButton.Right)
         {
-            _isPanning = true;
-            _panStartPoint = e.GetPosition(this);
+            PlaceCursor(ComtradeDisturbanceCursor.Cursor2, TimeAtFraction(PlotFractionAt(point.X)), true);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            _pointerStartPoint = point;
+            if (IsNearCursor(point.X, _cursor1Milliseconds))
+                _pointerMode = PointerMode.Cursor1;
+            else if (IsNearCursor(point.X, _cursor2Milliseconds))
+                _pointerMode = PointerMode.Cursor2;
+            else
+                _pointerMode = PointerMode.PendingPan;
+
             _panStartMilliseconds = _viewStartMilliseconds;
             _panEndMilliseconds = _viewEndMilliseconds;
             CaptureMouse();
-            Cursor = Cursors.SizeWE;
+            Cursor = _pointerMode is PointerMode.Cursor1 or PointerMode.Cursor2 ? Cursors.SizeWE : Cursors.Hand;
             e.Handled = true;
             return;
         }
 
-        if (e.ChangedButton is MouseButton.Left or MouseButton.Right)
+        if (e.ChangedButton == MouseButton.Middle)
         {
-            var time = TimeAtFraction(PlotFractionAt(e.GetPosition(this).X));
-            if (e.ChangedButton == MouseButton.Right || (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-                _cursorBMilliseconds = time;
-            else
-                _cursorAMilliseconds = time;
-            InvalidateVisual();
-            RaiseNavigationChanged();
+            _pointerStartPoint = point;
+            _pointerMode = PointerMode.Panning;
+            _panStartMilliseconds = _viewStartMilliseconds;
+            _panEndMilliseconds = _viewEndMilliseconds;
+            CaptureMouse();
+            Cursor = Cursors.Hand;
             e.Handled = true;
         }
     }
@@ -246,10 +358,31 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!_isPanning || !IsMouseCaptured || _lastPlot.Width <= 0)
+        if (_pointerMode == PointerMode.None || !IsMouseCaptured || _lastPlot.Width <= 0)
+        {
+            Cursor = HoverCursor(e.GetPosition(this));
             return;
+        }
+
+        var point = e.GetPosition(this);
+        if (_pointerMode is PointerMode.Cursor1 or PointerMode.Cursor2)
+        {
+            var cursor = _pointerMode == PointerMode.Cursor1
+                ? ComtradeDisturbanceCursor.Cursor1
+                : ComtradeDisturbanceCursor.Cursor2;
+            PlaceCursor(cursor, TimeAtFraction(PlotFractionAt(point.X)), false);
+            e.Handled = true;
+            return;
+        }
+
+        var deltaPixels = point.X - _pointerStartPoint.X;
+        if (_pointerMode == PointerMode.PendingPan && Math.Abs(deltaPixels) >= PanActivationPixels)
+            _pointerMode = PointerMode.Panning;
+        if (_pointerMode != PointerMode.Panning)
+            return;
+
         var span = _panEndMilliseconds - _panStartMilliseconds;
-        var delta = -(e.GetPosition(this).X - _panStartPoint.X) / _lastPlot.Width * span;
+        var delta = -deltaPixels / _lastPlot.Width * span;
         SetView(_panStartMilliseconds + delta, _panEndMilliseconds + delta);
         InvalidateVisual();
         RaiseNavigationChanged();
@@ -259,18 +392,117 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
-        if (!_isPanning) return;
-        _isPanning = false;
+        if (_pointerMode == PointerMode.None)
+            return;
+
+        var mode = _pointerMode;
+        var point = e.GetPosition(this);
+        _pointerMode = PointerMode.None;
         if (IsMouseCaptured) ReleaseMouseCapture();
         Cursor = Cursors.Cross;
+
+        if (mode is PointerMode.Cursor1 or PointerMode.Cursor2)
+        {
+            var cursor = mode == PointerMode.Cursor1
+                ? ComtradeDisturbanceCursor.Cursor1
+                : ComtradeDisturbanceCursor.Cursor2;
+            PlaceCursor(cursor, TimeAtFraction(PlotFractionAt(point.X)), true);
+        }
+        else if (mode == PointerMode.PendingPan && e.ChangedButton == MouseButton.Left)
+        {
+            PlaceCursor(ComtradeDisturbanceCursor.Cursor1, TimeAtFraction(PlotFractionAt(point.X)), true);
+        }
+        else if (mode == PointerMode.Panning && _lastPlot.Width > 0)
+        {
+            var deltaFraction = -(point.X - _pointerStartPoint.X) / _lastPlot.Width;
+            if (Math.Abs(deltaFraction) > 1e-6)
+                PanRequested?.Invoke(this, new ComtradeDisturbancePanRequestedEventArgs(deltaFraction));
+        }
+
         e.Handled = true;
     }
 
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
-        _isPanning = false;
+        _pointerMode = PointerMode.None;
         Cursor = Cursors.Cross;
+    }
+
+    private Cursor HoverCursor(Point point)
+    {
+        if (!_lastPlot.Contains(point)) return Cursors.Arrow;
+        if (IsNearCursor(point.X, _cursor1Milliseconds) || IsNearCursor(point.X, _cursor2Milliseconds))
+            return Cursors.SizeWE;
+        return Cursors.Cross;
+    }
+
+    private bool IsNearCursor(double x, double? time)
+    {
+        if (time is not { } milliseconds || _viewEndMilliseconds <= _viewStartMilliseconds ||
+            milliseconds < _viewStartMilliseconds || milliseconds > _viewEndMilliseconds)
+            return false;
+        return Math.Abs(x - XForTime(milliseconds, _lastPlot)) <= CursorHitRadius;
+    }
+
+    private void PlaceCursor(ComtradeDisturbanceCursor cursor, double requestedMilliseconds, bool isFinal)
+    {
+        if (!double.IsFinite(requestedMilliseconds)) return;
+        requestedMilliseconds = Math.Clamp(requestedMilliseconds, _fullStartMilliseconds, _fullEndMilliseconds);
+        var tolerance = ComtradeTimeSignalsNavigationMath.SnapToleranceMilliseconds(
+            _viewEndMilliseconds - _viewStartMilliseconds,
+            Math.Max(1.0, _lastPlot.Width));
+        var snapped = TrySnapToVisibleDigitalEdge(requestedMilliseconds, tolerance, out var snappedMilliseconds);
+        var value = snapped ? snappedMilliseconds : requestedMilliseconds;
+
+        if (cursor == ComtradeDisturbanceCursor.Cursor1)
+            _cursor1Milliseconds = value;
+        else
+            _cursor2Milliseconds = value;
+
+        InvalidateVisual();
+        RaiseNavigationChanged();
+        CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(cursor, value, tolerance, isFinal, snapped));
+    }
+
+    private bool TrySnapToVisibleDigitalEdge(double requestedMilliseconds, double toleranceMilliseconds, out double snappedMilliseconds)
+    {
+        snappedMilliseconds = requestedMilliseconds;
+        if (toleranceMilliseconds <= 0) return false;
+
+        var bestDistance = double.PositiveInfinity;
+        foreach (var track in _tracks.Where(item => item.IsDigital))
+        {
+            if (track.DigitalEdges is { Count: > 0 })
+            {
+                foreach (var edge in track.DigitalEdges)
+                {
+                    var time = ToMilliseconds(edge.Timestamp);
+                    var distance = Math.Abs(time - requestedMilliseconds);
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        snappedMilliseconds = time;
+                    }
+                }
+                continue;
+            }
+
+            if (track.Digital is null) continue;
+            var count = Math.Min(track.Digital.Length, track.Timestamps.Length);
+            for (var i = 1; i < count; i++)
+            {
+                if ((track.Digital[i - 1] != 0) == (track.Digital[i] != 0)) continue;
+                var time = ToMilliseconds(track.Timestamps[i]);
+                var distance = Math.Abs(time - requestedMilliseconds);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    snappedMilliseconds = time;
+                }
+            }
+        }
+        return bestDistance <= toleranceMilliseconds;
     }
 
     private void DrawTrackBackground(DrawingContext dc, Rect row, Rect plot)
@@ -291,6 +523,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         dc.DrawRoundedRectangle(accent, null, new Rect(10, row.Top + 10, 4, Math.Max(14, row.Height - 20)), 2, 2);
         DrawText(dc, track.Title, 10.7, semibold, Color.FromRgb(43, 61, 82), new Point(22, row.Top + 8), dpi, maxWidth: LabelWidth - 30);
         var subtitle = string.IsNullOrWhiteSpace(track.Units) ? track.Subtitle : $"{track.Subtitle} • {track.Units}";
+        if (track.DigitalIsLossy) subtitle = string.IsNullOrWhiteSpace(subtitle) ? "sampled events" : $"{subtitle} • sampled events";
         DrawText(dc, subtitle, 8.8, body, Color.FromRgb(119, 132, 149), new Point(22, row.Top + 27), dpi, maxWidth: LabelWidth - 30);
     }
 
@@ -315,7 +548,8 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         if (Math.Abs(max - min) < 1e-12)
         {
             var pad = Math.Max(1.0, Math.Abs(max) * 0.1);
-            min -= pad; max += pad;
+            min -= pad;
+            max += pad;
         }
 
         if (min < 0 && max > 0)
@@ -360,30 +594,54 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
 
         var activeBrush = new SolidColorBrush(Color.FromArgb(46, track.StrokeColor.R, track.StrokeColor.G, track.StrokeColor.B)); activeBrush.Freeze();
         var pen = FrozenPen(track.StrokeColor, 1.35);
-        var previousState = track.Digital[0] != 0;
-        var previousMs = ToMilliseconds(track.Timestamps[0]);
-        for (var i = 1; i <= count; i++)
+        if (!track.DigitalIsLossy)
         {
-            var endMs = i < count ? ToMilliseconds(track.Timestamps[i]) : ToMilliseconds(track.Timestamps[count - 1]);
-            var clampedStart = Math.Max(previousMs, _viewStartMilliseconds);
-            var clampedEnd = Math.Min(endMs, _viewEndMilliseconds);
-            if (previousState && clampedEnd > clampedStart)
+            var previousRaw = track.Digital[0] != 0 ? 1 : 0;
+            var previousMs = ToMilliseconds(track.Timestamps[0]);
+            for (var i = 1; i <= count; i++)
             {
-                var x1 = XForTime(clampedStart, plot);
-                var x2 = XForTime(clampedEnd, plot);
-                dc.DrawRectangle(activeBrush, null, new Rect(x1, plot.Top + 5, Math.Max(1, x2 - x1), plot.Height - 10));
-            }
+                var endMs = i < count ? ToMilliseconds(track.Timestamps[i]) : ToMilliseconds(track.Timestamps[count - 1]);
+                var clampedStart = Math.Max(previousMs, _viewStartMilliseconds);
+                var clampedEnd = Math.Min(endMs, _viewEndMilliseconds);
+                var active = previousRaw != track.DigitalNormalState;
+                if (active && clampedEnd > clampedStart)
+                {
+                    var x1 = XForTime(clampedStart, plot);
+                    var x2 = XForTime(clampedEnd, plot);
+                    dc.DrawRectangle(activeBrush, null, new Rect(x1, plot.Top + 5, Math.Max(1, x2 - x1), plot.Height - 10));
+                }
 
-            if (i >= count) break;
-            var currentState = track.Digital[i] != 0;
-            if (currentState != previousState && endMs >= _viewStartMilliseconds && endMs <= _viewEndMilliseconds)
-            {
-                var x = XForTime(endMs, plot);
-                dc.DrawLine(pen, new Point(x, plot.Top + 4), new Point(x, plot.Bottom - 4));
-                DrawText(dc, currentState ? "↑" : "↓", 10, body, track.StrokeColor, new Point(x + 2, plot.Top + 1), dpi);
+                if (i >= count) break;
+                previousRaw = track.Digital[i] != 0 ? 1 : 0;
+                previousMs = endMs;
             }
-            previousState = currentState;
-            previousMs = endMs;
+        }
+
+        var edges = track.DigitalEdges;
+        if (edges is { Count: > 0 })
+        {
+            foreach (var edge in edges)
+            {
+                var ms = ToMilliseconds(edge.Timestamp);
+                if (ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) continue;
+                var x = XForTime(ms, plot);
+                dc.DrawLine(pen, new Point(x, plot.Top + 4), new Point(x, plot.Bottom - 4));
+                DrawText(dc, edge.AfterState != 0 ? "↑" : "↓", 10, body, track.StrokeColor, new Point(x + 2, plot.Top + 1), dpi);
+            }
+        }
+        else
+        {
+            for (var i = 1; i < count; i++)
+            {
+                var before = track.Digital[i - 1] != 0;
+                var after = track.Digital[i] != 0;
+                if (before == after) continue;
+                var ms = ToMilliseconds(track.Timestamps[i]);
+                if (ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) continue;
+                var x = XForTime(ms, plot);
+                dc.DrawLine(pen, new Point(x, plot.Top + 4), new Point(x, plot.Bottom - 4));
+                DrawText(dc, after ? "↑" : "↓", 10, body, track.StrokeColor, new Point(x + 2, plot.Top + 1), dpi);
+            }
         }
     }
 
@@ -393,15 +651,18 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
             return;
         var x = XForTime(trigger, plot);
         dc.DrawLine(FrozenDashedPen(Color.FromRgb(217, 121, 41), 1.1), new Point(x, plot.Top), new Point(x, plot.Bottom));
-        DrawText(dc, "TRG 0", 8.5, semibold, Color.FromRgb(186, 99, 31), new Point(x + 3, plot.Top + 1), dpi);
+        DrawText(dc, "TRG 0", 8.5, semibold, Color.FromRgb(186, 99, 31), new Point(x + 3, plot.Top + 17), dpi);
     }
 
     private void DrawCursor(DrawingContext dc, Rect plot, double? time, string label, Color color, double dpi, Typeface semibold)
     {
         if (time is not { } ms || ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) return;
         var x = XForTime(ms, plot);
-        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, plot.Top), new Point(x, plot.Bottom));
-        DrawText(dc, label, 9, semibold, color, new Point(x + 3, plot.Top + 15), dpi);
+        var brush = new SolidColorBrush(color); brush.Freeze();
+        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, plot.Top + 15), new Point(x, plot.Bottom));
+        var handle = new Rect(x - 13, plot.Top, 26, 15);
+        dc.DrawRoundedRectangle(brush, null, handle, 3, 3);
+        DrawText(dc, label, 8.3, semibold, Colors.White, new Point(x - 8, plot.Top + 1), dpi);
     }
 
     private void DrawTimeAxis(DrawingContext dc, Rect axis, double dpi, Typeface body, Typeface semibold)
@@ -452,12 +713,6 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         return (start, end);
     }
 
-    private void ClampCursorsToFullRange()
-    {
-        if (_cursorAMilliseconds is { } a && (a < _fullStartMilliseconds || a > _fullEndMilliseconds)) _cursorAMilliseconds = null;
-        if (_cursorBMilliseconds is { } b && (b < _fullStartMilliseconds || b > _fullEndMilliseconds)) _cursorBMilliseconds = null;
-    }
-
     private void RaiseNavigationChanged()
     {
         var trigger = _triggerMilliseconds ?? 0.0;
@@ -465,9 +720,9 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         {
             $"View {FormatRelative(_viewStartMilliseconds - trigger)} … {FormatRelative(_viewEndMilliseconds - trigger)}"
         };
-        if (_cursorAMilliseconds is { } a) parts.Add($"A {FormatRelative(a - trigger)}"); else parts.Add("A —");
-        if (_cursorBMilliseconds is { } b) parts.Add($"B {FormatRelative(b - trigger)}"); else parts.Add("B —");
-        if (_cursorAMilliseconds is { } ca && _cursorBMilliseconds is { } cb) parts.Add($"Δt {Math.Abs(cb - ca):G6} ms");
+        if (_cursor1Milliseconds is { } c1) parts.Add($"C1 {FormatRelative(c1 - trigger)}"); else parts.Add("C1 —");
+        if (_cursor2Milliseconds is { } c2) parts.Add($"C2 {FormatRelative(c2 - trigger)}"); else parts.Add("C2 —");
+        if (_cursor1Milliseconds is { } first && _cursor2Milliseconds is { } second) parts.Add($"Δt {Math.Abs(second - first):G6} ms");
         NavigationChanged?.Invoke(this, new ComtradeDisturbanceNavigationChangedEventArgs(string.Join("  |  ", parts)));
     }
 
