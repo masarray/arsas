@@ -30,9 +30,11 @@ public partial class IoListTestingWindow
 
     internal void PrepareForEmbeddedEngineeringHost()
     {
-        // Must run before Window.Show(). A transparent/off-screen, non-activating donor
-        // cannot produce the historical black/blank compositor frame while its exact
-        // production center is being re-parented into MainWindow.
+        // WPF refuses Window.Show() when ShowActivated=false while WindowState=Maximized.
+        // The production FAT XAML historically starts maximized, therefore normalize the
+        // invisible donor BEFORE Show(). Its exact center is re-parented into MainWindow on
+        // Loaded; the donor itself never needs a maximized native HWND.
+        WindowState = WindowState.Normal;
         ShowActivated = false;
         ShowInTaskbar = false;
         Opacity = 0d;
@@ -75,14 +77,13 @@ public partial class IoListTestingWindow
         {
             EnsureProductionFatPresentationForEmbeddedHost();
             DisableLegacyEmbeddedCommandPanel();
-            var surface = DetachProductionFatCentralWorkspace();
-            if (surface == null)
-                return;
+            var surface = DetachProductionFatCentralWorkspace()
+                          ?? throw new InvalidOperationException("Production FAT center could not be detached from its donor window.");
 
             _engineeringEmbeddedSurface = surface;
             _engineeringEmbeddedMounted = owner.MountProductionFatWorkspace(this, surface);
             if (!_engineeringEmbeddedMounted)
-                return;
+                throw new InvalidOperationException("Engineering FAT host rejected the production workspace surface.");
 
             // The central FAT view now belongs to MainWindow. Keep this Window loaded and
             // hidden because existing controller/session/event code is intentionally reused.
@@ -90,9 +91,16 @@ public partial class IoListTestingWindow
         }
         catch (Exception ex)
         {
+            // Never leave an invisible off-screen donor as a silent blank FAT failure.
+            // Restore the historical standalone presentation so the operator has a usable
+            // production FAT surface and a visible diagnostic if embedding itself fails.
+            WindowState = WindowState.Maximized;
             Opacity = 1d;
             ShowInTaskbar = true;
             ShowActivated = true;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            Left = double.NaN;
+            Top = double.NaN;
             MessageBox.Show(
                 owner,
                 $"ARSAS could not embed the production FAT workspace. The standalone FAT window will remain available.\n\n{ex.Message}",
