@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
@@ -7,11 +8,14 @@ namespace ArIED61850Tester;
 
 public partial class ComtradeWorkspaceWindow
 {
+    private const double WaveformCursorPreviewHitRadius = 12.0;
+
     private bool _investigationTimelineAttached;
     private double? _harmonicCursorMilliseconds;
     private object? _normalizedDigitalEventSource;
     private double _lastTimelineViewStartMilliseconds = double.NaN;
     private double _lastTimelineViewEndMilliseconds = double.NaN;
+    private ComtradeInvestigationTimelineCursor? _waveformPreviewCursor;
 
     private void InvestigationTimeline_Loaded(object sender, RoutedEventArgs e)
     {
@@ -23,6 +27,9 @@ public partial class ComtradeWorkspaceWindow
         DisturbanceView.NavigationChanged += DisturbanceView_ShellNavigationChanged;
         DisturbanceView.CursorChanged += DisturbanceView_ShellCursorChanged;
         DisturbanceView.SizeChanged += DisturbanceView_ShellSizeChanged;
+        DisturbanceView.PreviewMouseDown += DisturbanceView_ShellPreviewMouseDown;
+        DisturbanceView.PreviewMouseMove += DisturbanceView_ShellPreviewMouseMove;
+        DisturbanceView.PreviewMouseUp += DisturbanceView_ShellPreviewMouseUp;
         DisturbanceScrollViewer.SizeChanged += DisturbanceView_ShellSizeChanged;
         SignalList.SelectionChanged += SignalList_ShellSelectionChanged;
         Closed += InvestigationShell_Closed;
@@ -39,8 +46,12 @@ public partial class ComtradeWorkspaceWindow
         DisturbanceView.NavigationChanged -= DisturbanceView_ShellNavigationChanged;
         DisturbanceView.CursorChanged -= DisturbanceView_ShellCursorChanged;
         DisturbanceView.SizeChanged -= DisturbanceView_ShellSizeChanged;
+        DisturbanceView.PreviewMouseDown -= DisturbanceView_ShellPreviewMouseDown;
+        DisturbanceView.PreviewMouseMove -= DisturbanceView_ShellPreviewMouseMove;
+        DisturbanceView.PreviewMouseUp -= DisturbanceView_ShellPreviewMouseUp;
         DisturbanceScrollViewer.SizeChanged -= DisturbanceView_ShellSizeChanged;
         SignalList.SelectionChanged -= SignalList_ShellSelectionChanged;
+        _waveformPreviewCursor = null;
         _investigationTimelineAttached = false;
     }
 
@@ -123,6 +134,90 @@ public partial class ComtradeWorkspaceWindow
         if (e.IsFinal)
             SyncInvestigationTimeline();
     }
+
+    /// <summary>
+    /// P1D.4 waveform-side cursor preview. The cached waveform renderer intentionally limits its
+    /// outward cursor event rate, but the visible ruler is only a lightweight overlay. Mirror the
+    /// same time/snap calculation here on every pointer frame so the ruler and waveform read as one
+    /// cursor identity instead of two lines chasing each other during a fast drag.
+    /// </summary>
+    private void DisturbanceView_ShellPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_analysisMode != AnalysisMode.Waveform) return;
+
+        var x = e.GetPosition(DisturbanceView).X;
+        if (e.ChangedButton == MouseButton.Right)
+        {
+            PreviewWaveformCursor(ComtradeInvestigationTimelineCursor.Cursor2, x);
+            return;
+        }
+        if (e.ChangedButton != MouseButton.Left) return;
+
+        _waveformPreviewCursor = ResolveWaveformCursorAtX(x);
+        if (_waveformPreviewCursor is { } cursor)
+            PreviewWaveformCursor(cursor, x);
+    }
+
+    private void DisturbanceView_ShellPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_analysisMode != AnalysisMode.Waveform || _waveformPreviewCursor is not { } cursor)
+            return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _waveformPreviewCursor = null;
+            return;
+        }
+
+        PreviewWaveformCursor(cursor, e.GetPosition(DisturbanceView).X);
+    }
+
+    private void DisturbanceView_ShellPreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_analysisMode == AnalysisMode.Waveform && _waveformPreviewCursor is { } cursor)
+            PreviewWaveformCursor(cursor, e.GetPosition(DisturbanceView).X);
+        _waveformPreviewCursor = null;
+    }
+
+    private ComtradeInvestigationTimelineCursor? ResolveWaveformCursorAtX(double x)
+    {
+        var c1Distance = DistanceToWaveformCursor(x, DisturbanceView.Cursor1Milliseconds);
+        var c2Distance = DistanceToWaveformCursor(x, DisturbanceView.Cursor2Milliseconds);
+        var c1Near = c1Distance <= WaveformCursorPreviewHitRadius;
+        var c2Near = c2Distance <= WaveformCursorPreviewHitRadius;
+        if (!c1Near && !c2Near) return null;
+        return c2Near && c2Distance < c1Distance
+            ? ComtradeInvestigationTimelineCursor.Cursor2
+            : ComtradeInvestigationTimelineCursor.Cursor1;
+    }
+
+    private double DistanceToWaveformCursor(double x, double? milliseconds)
+    {
+        if (milliseconds is not { } value || !double.IsFinite(value))
+            return double.PositiveInfinity;
+        var span = DisturbanceView.ViewEndMilliseconds - DisturbanceView.ViewStartMilliseconds;
+        var plotWidth = WaveformPlotWidth();
+        if (span <= 0 || plotWidth <= 0)
+            return double.PositiveInfinity;
+        var cursorX = DisturbanceView.PlotLeftInset +
+                      plotWidth * (value - DisturbanceView.ViewStartMilliseconds) / span;
+        return Math.Abs(cursorX - x);
+    }
+
+    private void PreviewWaveformCursor(ComtradeInvestigationTimelineCursor cursor, double x)
+    {
+        var span = DisturbanceView.ViewEndMilliseconds - DisturbanceView.ViewStartMilliseconds;
+        var plotWidth = WaveformPlotWidth();
+        if (span <= 0 || plotWidth <= 0) return;
+
+        var fraction = Math.Clamp((x - DisturbanceView.PlotLeftInset) / plotWidth, 0.0, 1.0);
+        var requested = DisturbanceView.ViewStartMilliseconds + span * fraction;
+        var tolerance = ComtradeTimeSignalsNavigationMath.SnapToleranceMilliseconds(span, plotWidth);
+        var snapped = DisturbanceView.SnapAnalysisCursorFromShell(requested, tolerance);
+        InvestigationTimeline.SetCursorFromHost(cursor, snapped);
+    }
+
+    private double WaveformPlotWidth()
+        => Math.Max(1.0, DisturbanceView.ActualWidth - DisturbanceView.PlotLeftInset - DisturbanceView.PlotRightInset);
 
     private void InvestigationTimeline_CursorChanged(object? sender, ComtradeInvestigationTimelineCursorChangedEventArgs e)
     {
