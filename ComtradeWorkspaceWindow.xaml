@@ -92,13 +92,28 @@
                             <TextBlock Text="Signals" FontSize="12.5" FontWeight="SemiBold" Foreground="#263D58"/>
                             <TextBlock x:Name="SignalCountText" Margin="7,1,0,0" FontSize="9.5" Foreground="#7B8CA2"/>
                         </StackPanel>
-                        <Button Grid.Column="2" Content="Auto" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="AutoSignals_Click" ToolTip="Show a practical starter set of analog phases and protection/status channels."/>
-                        <Button Grid.Column="3" Content="Clear" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="ClearSignals_Click" ToolTip="Hide all waveform tracks."/>
+                        <Button Grid.Column="2" Content="Auto" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="AutoSignals_Click" ToolTip="Show a practical voltage/current/protection starter set."/>
+                        <Button Grid.Column="3" Content="Clear" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="ClearSignals_Click" ToolTip="Hide all Time Signals tracks."/>
                     </Grid>
 
                     <ListBox x:Name="SignalList" Grid.Row="2" BorderThickness="0" Background="Transparent"
                              SelectionChanged="SignalList_SelectionChanged"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#F5F8FC" BorderBrush="#E2E9F2" BorderThickness="0,0,0,1" Padding="5,4" Margin="0,5,0,2">
+                                            <TextBlock Text="{Binding Name}" FontSize="9.4" FontWeight="SemiBold" Foreground="#667A92"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="2,4">
@@ -112,7 +127,7 @@
                                               Loaded="SignalVisibility_Loaded"
                                               Checked="SignalVisibility_Checked"
                                               Unchecked="SignalVisibility_Unchecked"
-                                              ToolTip="Show or hide this signal in the synchronized waveform workspace."/>
+                                              ToolTip="Show or hide this signal in Time Signals."/>
                                     <Border Grid.Column="2" Width="4" Height="27" CornerRadius="2" Background="{Binding Accent}" VerticalAlignment="Center"/>
                                     <StackPanel Grid.Column="3">
                                         <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" Foreground="#263D58" TextTrimming="CharacterEllipsis"/>
@@ -141,14 +156,14 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal">
-                                <Button x:Name="WaveformModeButton" Content="Waveform" Height="27" MinWidth="82" Padding="12,0"
+                                <Button x:Name="WaveformModeButton" Content="Time Signals" Height="27" MinWidth="88" Padding="12,0"
                                         FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="WaveformMode_Click"/>
                                 <Button x:Name="PhasorModeButton" Content="Phasor" Height="27" MinWidth="72" Margin="5,0,0,0" Padding="12,0"
                                         FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorMode_Click"/>
                                 <Button x:Name="HarmonicsModeButton" Content="Harmonics" Height="27" MinWidth="86" Margin="5,0,0,0" Padding="12,0"
                                         FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsMode_Click"/>
                             </StackPanel>
-                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="2" Text="Analysis reference: Cursor A / viewport"
+                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="2" Text="Analysis reference: C1 / viewport"
                                        FontSize="9.6" Foreground="#7A8BA0" VerticalAlignment="Center" Margin="14,0,0,0"/>
                         </Grid>
                     </Border>
@@ -160,12 +175,18 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="NavigationTextBlock"
-                                       Text="Shared timeline • trigger = 0 ms • click Cursor A • Ctrl/right-click Cursor B • digital ↑/↓ = transition"
+                                       Text="Wheel scrolls signals • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 moves • right-click places C2"
                                        FontSize="10" Foreground="#64778F" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            <Button x:Name="ResetViewButton" Grid.Column="1" Content="Reset view" Height="25" MinWidth="78" Margin="12,0,0,0"
-                                    Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#365D88" Background="White"
-                                    BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
-                                    ToolTip="Reset synchronized waveform zoom/pan to the full record." Click="DisturbanceReset_Click"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
+                                        Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#365D88" Background="White"
+                                        BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                        ToolTip="Return to the trigger-focused engineering window (about eight nominal cycles)." Click="DisturbanceReset_Click"/>
+                                <Button x:Name="FullRecordButton" Content="Full record" Height="25" MinWidth="78" Margin="5,0,0,0"
+                                        Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#586F89" Background="White"
+                                        BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                        ToolTip="Show the complete COMTRADE time range." Click="DisturbanceFullRecord_Click"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -175,7 +196,7 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White">
+                            <ScrollViewer x:Name="DisturbanceScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White" PanningMode="VerticalOnly">
                                 <controls:ComtradeDisturbanceView x:Name="DisturbanceView" MinHeight="330"/>
                             </ScrollViewer>
                             <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="True"
@@ -189,7 +210,7 @@
                                         <DataGridTextColumn Header="Δ previous" Binding="{Binding DeltaText}" Width="86"/>
                                         <DataGridTextColumn Header="Signal" Binding="{Binding Signal}" Width="*"/>
                                         <DataGridTextColumn Header="Event" Binding="{Binding Event}" Width="110"/>
-                                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="58"/>
+                                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="112"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Expander>
