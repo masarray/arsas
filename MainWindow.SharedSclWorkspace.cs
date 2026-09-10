@@ -99,9 +99,8 @@ public partial class MainWindow
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
 
-        // M2 permanent FAT host: authority establishment is also a readiness trigger.
-        // This covers SCL refresh on the same SelectedDevice, where PropertyChanged for
-        // SelectedDevice would otherwise not fire.
+        // FAT is built lazily. Queueing here is harmless because the bootstrap guard only
+        // runs while the operator is actually on the FAT destination.
         QueueProductionFatEngineeringBootstrap();
     }
 
@@ -121,16 +120,26 @@ public partial class MainWindow
 
     private void MarkSharedSelectionAuthority(Iec61850MonitorDevice device)
     {
-        // The initial FAT import historically reached this helper for both branches. If the
-        // immediately preceding operator decision was Static DataSet, preserve that explicit
-        // report-only authority instead of silently demoting it to Hybrid.
+        // Initial explicit Static DataSet assignment still needs the full materialization path.
         if (_pendingSharedStaticSelectionAssignments > 0)
         {
             ApplyStaticDataSetSelection(device);
             return;
         }
 
-        // Manual selection restores the normal Smart/Hybrid acquisition contract.
+        // IMPORTANT: automatic FAT bootstrap revisits already-connected Engineering devices.
+        // If that device already owns Static DataSet report-only authority, merely register
+        // the shared selection authority. Never demote it to Hybrid/MMS as a side effect of
+        // opening FAT; the Engineering acquisition mode is the protocol authority.
+        if (IsSharedStaticDataSetAuthority(device))
+        {
+            _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+            _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
+            SaveSignalSelectionMemory(device);
+            return;
+        }
+
+        // Only an explicit/manual selection path restores normal Smart/Hybrid acquisition.
         _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
         Iec61850MonitoringModeRegistry.UseHybrid(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
@@ -224,10 +233,6 @@ public partial class MainWindow
                 autoStartAfterSave: false,
                 ownerOverride: owner);
 
-            // The FAT window is not yet attached during an initial FAT import, so perform
-            // the same bridge operation explicitly. Selected non-DataSet SCL signals are
-            // materialized here as persistent FAT rows; existing FAT TEST/disposition state
-            // is never rewritten by Engineering selection.
             foreach (var signal in device.Signals)
             {
                 IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
