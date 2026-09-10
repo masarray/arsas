@@ -18,6 +18,12 @@ public sealed class ProductionFatM7CleanupRegressionTests
         Assert.False(
             File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatHistoryInspector.cs")),
             "The retired side-panel history inspector must not return as a second FAT presentation stack.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatExplorerSync.cs")),
+            "The retired native FAT Explorer reconciler must not return; Engineering selection and production FAT own synchronization.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatPersistenceSafety.cs")),
+            "The retired native FAT persistence runtime must not return; production FAT storage remains the persistence authority.");
 
         // MainWindow.NativeFatWorkspace.cs is now only a compatibility bridge for the
         // canonical seventh shell slot. It must never regain its own FAT runtime/state.
