@@ -30,9 +30,12 @@ public partial class IoListTestingWindow
 
     internal void PrepareForEmbeddedEngineeringHost()
     {
-        // Must run before Window.Show(). A transparent/off-screen, non-activating donor
-        // cannot produce the historical black/blank compositor frame while its exact
-        // production center is being re-parented into MainWindow.
+        // WPF rejects Show() when a Window is both non-activating and Maximized.
+        // The donor only exists long enough to create the proven production visual tree,
+        // so normalize it before the hidden/off-screen bootstrap and let MainWindow own size.
+        if (WindowState == WindowState.Maximized)
+            WindowState = WindowState.Normal;
+
         ShowActivated = false;
         ShowInTaskbar = false;
         Opacity = 0d;
@@ -178,103 +181,16 @@ public partial class IoListTestingWindow
         };
         host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         if (footer != null)
-        {
-            host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
             host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        }
 
-        workspaceBorder.Margin = new Thickness(0);
         Grid.SetRow(workspaceBorder, 0);
-        Grid.SetColumn(workspaceBorder, 0);
         host.Children.Add(workspaceBorder);
-
         if (footer != null)
         {
-            footer.Margin = new Thickness(0);
-            Grid.SetRow(footer, 2);
-            Grid.SetColumn(footer, 0);
+            Grid.SetRow(footer, 1);
             host.Children.Add(footer);
         }
 
         return host;
-    }
-
-    internal void SelectEngineeringDeviceForEmbeddedFat(Iec61850MonitorDevice? device)
-    {
-        if (!_engineeringEmbeddedMounted)
-            return;
-
-        // M3 viewed-device contract: the persistent Engineering IED Explorer owns
-        // what the FAT grid displays. SelectedIed/Session.SelectContext changes only that
-        // projection; an active capture remains latched inside its per-IED controller.
-        // Clearing the Explorer selection or selecting an IED outside this FAT projection
-        // must clear the FAT view instead of silently leaving the previous IED on screen.
-        if (device == null)
-        {
-            if (CanSelectIed)
-                SelectedIed = null;
-            return;
-        }
-
-        // Resolve by strongest Engineering identity first. Do not use one OR predicate:
-        // a weak fallback on an earlier project row must never beat an exact live DeviceId.
-        var match = Project.Ieds.FirstOrDefault(_ => false);
-        if (!string.IsNullOrWhiteSpace(device.DeviceId))
-        {
-            match = Project.Ieds.FirstOrDefault(ied =>
-                !string.IsNullOrWhiteSpace(ied.LiveDeviceId) &&
-                ied.LiveDeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (match == null && !string.IsNullOrWhiteSpace(device.SclIedName))
-        {
-            match = Project.Ieds.FirstOrDefault(ied =>
-                ied.IedName.Equals(device.SclIedName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (match == null && !string.IsNullOrWhiteSpace(device.Name))
-        {
-            match = Project.Ieds.FirstOrDefault(ied =>
-                ied.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (match == null && !string.IsNullOrWhiteSpace(device.IpAddress))
-        {
-            match = Project.Ieds.FirstOrDefault(ied =>
-                !string.IsNullOrWhiteSpace(ied.IpAddress) &&
-                ied.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (ReferenceEquals(SelectedIed, match) || !CanSelectIed)
-            return;
-
-        SelectedIed = match;
-    }
-
-    internal void NotifyEmbeddedHostActivated()
-    {
-        if (!_engineeringEmbeddedMounted)
-            return;
-
-        RefreshFatV2WorkspaceUx(refreshRows: true);
-        if (_printPreviewActive)
-            RefreshPrintPreview();
-    }
-
-    private void EmbeddedEngineeringFatHost_Closed(object? sender, EventArgs e)
-    {
-        if (Owner is MainWindow owner)
-            owner.UnmountProductionFatWorkspace(this);
-        Closed -= EmbeddedEngineeringFatHost_Closed;
-        _engineeringEmbeddedMounted = false;
-        _engineeringEmbeddedSurface = null;
-    }
-
-    // Field initializer cannot attach an instance event. Hook cleanup once the embedded
-    // surface has actually been mounted; this helper is called from the production owner.
-    internal void RegisterEmbeddedHostCloseCleanup()
-    {
-        Closed -= EmbeddedEngineeringFatHost_Closed;
-        Closed += EmbeddedEngineeringFatHost_Closed;
     }
 }
