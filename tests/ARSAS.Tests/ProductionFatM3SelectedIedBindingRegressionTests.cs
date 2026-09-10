@@ -8,12 +8,17 @@ public sealed class ProductionFatM3SelectedIedBindingRegressionTests
         var window = Read("IoListTestingWindow.xaml.cs");
         var coordinator = Read("Services/IoTesting/IoTestMultiSessionCoordinator.cs");
 
-        var latch = window.IndexOf("var selectedIed = SelectedIed;", StringComparison.Ordinal);
-        var prepare = window.IndexOf("await engineeringWindow.PrepareIoTestIedForFatAsync(", latch, StringComparison.Ordinal);
-        var start = window.IndexOf("Session.Start(selectedIed)", latch, StringComparison.Ordinal);
-        Assert.True(latch >= 0, "Start FAT must latch the currently viewed IED before asynchronous preparation.");
-        Assert.True(prepare > latch, "Engineering acquisition must use the latched target.");
-        Assert.True(start > prepare, "The production session must start the same latched target after preparation.");
+        var requested = window.IndexOf("var requestedIed = SelectedIed;", StringComparison.Ordinal);
+        var latch = window.IndexOf("IoFatProductionControllerAdapter.LatchStartTarget(Project, requestedIed)", requested, StringComparison.Ordinal);
+        var selected = window.IndexOf("var selectedIed = captureLease.Ied;", latch, StringComparison.Ordinal);
+        var prepare = window.IndexOf("await engineeringWindow.PrepareIoTestIedForFatAsync(", selected, StringComparison.Ordinal);
+        var start = window.IndexOf("IoFatProductionControllerAdapter.StartLatched(Project, Session, captureLease)", prepare, StringComparison.Ordinal);
+
+        Assert.True(requested >= 0, "Start FAT must read the currently viewed IED before asynchronous preparation.");
+        Assert.True(latch > requested, "Production FAT must freeze the IED and exact capture scope before asynchronous preparation.");
+        Assert.True(selected > latch, "The preparation target must come from the frozen production capture lease.");
+        Assert.True(prepare > selected, "Engineering acquisition must prepare the latched target.");
+        Assert.True(start > prepare, "The production session must start from the same frozen lease after preparation.");
 
         var startBody = MethodBody(
             coordinator,
