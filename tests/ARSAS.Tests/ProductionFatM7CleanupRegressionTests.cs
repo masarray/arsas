@@ -3,12 +3,15 @@ namespace ARSAS.Tests;
 public sealed class ProductionFatM7CleanupRegressionTests
 {
     [Fact]
-    public void ObsoleteNativeSidePanelPreview_IsNotASecondFatPreviewAuthority()
+    public void ObsoleteNativeSidePanelPreviewStack_IsNotASecondFatPreviewAuthority()
     {
         var repoRoot = FindRepoRoot();
         Assert.False(
             File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatReportPreview.cs")),
             "The retired native FAT side-panel preview must not return. Production FAT owns one in-place report preview.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatHistoryInspector.cs")),
+            "The retired side-panel history inspector depended on the obsolete native preview and must not return as a second preview stack.");
 
         var productionPreview = File.ReadAllText(Path.Combine(repoRoot, "IoListTestingWindow.PrintPreview.cs"));
         var embeddedHost = File.ReadAllText(Path.Combine(repoRoot, "IoListTestingWindow.EmbeddedEngineeringHost.cs"));
