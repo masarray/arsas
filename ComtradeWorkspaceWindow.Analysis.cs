@@ -16,6 +16,7 @@ public partial class ComtradeWorkspaceWindow
     }
 
     private AnalysisMode _analysisMode = AnalysisMode.Waveform;
+    private ComtradeDisturbanceCursor _phasorReferenceCursor = ComtradeDisturbanceCursor.Cursor1;
     private CancellationTokenSource? _analysisLoadCts;
     private bool _analysisEventsAttached;
 
@@ -41,23 +42,39 @@ public partial class ComtradeWorkspaceWindow
     private void SignalList_AnalysisSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateAnalysisAvailability();
-        if (_activeSignal is { IsAnalog: false } && _analysisMode != AnalysisMode.Waveform)
+
+        // P1D.2D Phasor is a record-level Voltage + Current workstation and no longer depends on
+        // the selected signal row. Harmonics remains a selected-analog-channel workflow until its
+        // own parity slice lands.
+        if (_analysisMode == AnalysisMode.Harmonics && _activeSignal is not { IsAnalog: true })
         {
             SetAnalysisMode(AnalysisMode.Waveform);
             return;
         }
 
-        if (_analysisMode != AnalysisMode.Waveform)
+        if (_analysisMode == AnalysisMode.Harmonics)
             _ = Dispatcher.InvokeAsync(async () => await RefreshNativeAnalysisAsync().ConfigureAwait(true));
     }
 
     private void WaveformMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Waveform);
     private void PhasorMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Phasor);
     private void HarmonicsMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Harmonics);
+    private void PhasorCursor1_Click(object sender, RoutedEventArgs e) => SetPhasorReferenceCursor(ComtradeDisturbanceCursor.Cursor1);
+    private void PhasorCursor2_Click(object sender, RoutedEventArgs e) => SetPhasorReferenceCursor(ComtradeDisturbanceCursor.Cursor2);
+
+    private void SetPhasorReferenceCursor(ComtradeDisturbanceCursor cursor)
+    {
+        _phasorReferenceCursor = cursor;
+        ApplyPhasorCursorVisuals();
+        if (_analysisMode == AnalysisMode.Phasor)
+            _ = RefreshNativeAnalysisAsync();
+    }
 
     private void SetAnalysisMode(AnalysisMode mode)
     {
-        if (mode != AnalysisMode.Waveform && _activeSignal is not { IsAnalog: true })
+        if (mode == AnalysisMode.Phasor && _record.Info.AnalogCount == 0)
+            mode = AnalysisMode.Waveform;
+        if (mode == AnalysisMode.Harmonics && _activeSignal is not { IsAnalog: true })
             mode = AnalysisMode.Waveform;
 
         _analysisMode = mode;
@@ -65,11 +82,11 @@ public partial class ComtradeWorkspaceWindow
         WaveformView.Visibility = Visibility.Collapsed;
         PhasorView.Visibility = mode == AnalysisMode.Phasor ? Visibility.Visible : Visibility.Collapsed;
         HarmonicsView.Visibility = mode == AnalysisMode.Harmonics ? Visibility.Visible : Visibility.Collapsed;
-        ResetViewButton.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
-        FullRecordButton.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
+        TimeNavigationPanel.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
+        PhasorReferencePanel.Visibility = mode == AnalysisMode.Phasor ? Visibility.Visible : Visibility.Collapsed;
         NavigationTextBlock.Text = mode switch
         {
-            AnalysisMode.Phasor => "C1 = phasor reference • native one-cycle DFT • select an analog signal family on the left",
+            AnalysisMode.Phasor => "Dual Voltage / Current diagrams • choose C1 or C2 • native one-cycle DFT • common phase reference",
             AnalysisMode.Harmonics => "C1 = harmonic reference • full-cycle native DFT • click a bar for details",
             _ => "Wheel scrolls tracks • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 measures • right-click places C2"
         };
@@ -81,19 +98,21 @@ public partial class ComtradeWorkspaceWindow
 
     private void UpdateAnalysisAvailability()
     {
-        var analog = _activeSignal is { IsAnalog: true };
-        PhasorModeButton.IsEnabled = analog;
-        HarmonicsModeButton.IsEnabled = analog;
-        if (!analog)
-        {
-            PhasorModeButton.ToolTip = "Select an analog signal first. C1 on Time Signals becomes the phasor reference.";
-            HarmonicsModeButton.ToolTip = "Select an analog signal first. C1 on Time Signals becomes the harmonic reference.";
-        }
-        else
-        {
-            PhasorModeButton.ToolTip = "Show same-unit fundamental RMS phasors at C1 (or the visible Time Signals center when C1 is unset).";
-            HarmonicsModeButton.ToolTip = "Show native ArdIrec harmonic spectrum at C1 (or the visible Time Signals center when C1 is unset).";
-        }
+        var hasAnalogRecord = _record.Info.AnalogCount > 0;
+        var selectedAnalog = _activeSignal is { IsAnalog: true };
+        PhasorModeButton.IsEnabled = hasAnalogRecord;
+        HarmonicsModeButton.IsEnabled = selectedAnalog;
+
+        PhasorModeButton.ToolTip = hasAnalogRecord
+            ? "Show record-level Voltage and Current fundamental RMS phasors at global C1 or C2."
+            : "This COMTRADE record contains no analog channels.";
+        HarmonicsModeButton.ToolTip = selectedAnalog
+            ? "Show native ArdIrec harmonic spectrum at C1 (or the visible Time Signals center when C1 is unset)."
+            : "Select an analog signal first. C1 on Time Signals becomes the harmonic reference.";
+
+        PhasorCursor1Button.IsEnabled = DisturbanceView.Cursor1Milliseconds.HasValue;
+        PhasorCursor2Button.IsEnabled = DisturbanceView.Cursor2Milliseconds.HasValue;
+        ApplyPhasorCursorVisuals();
     }
 
     private void ApplyAnalysisModeVisuals()
@@ -101,6 +120,7 @@ public partial class ComtradeWorkspaceWindow
         ApplyModeButton(WaveformModeButton, _analysisMode == AnalysisMode.Waveform);
         ApplyModeButton(PhasorModeButton, _analysisMode == AnalysisMode.Phasor);
         ApplyModeButton(HarmonicsModeButton, _analysisMode == AnalysisMode.Harmonics);
+        ApplyPhasorCursorVisuals();
     }
 
     private static void ApplyModeButton(Button button, bool selected)
@@ -111,47 +131,82 @@ public partial class ComtradeWorkspaceWindow
         button.BorderThickness = new Thickness(1);
     }
 
+    private void ApplyPhasorCursorVisuals()
+    {
+        ApplyCursorButton(
+            PhasorCursor1Button,
+            _phasorReferenceCursor == ComtradeDisturbanceCursor.Cursor1,
+            Color.FromRgb(221, 142, 32),
+            Color.FromRgb(255, 247, 232));
+        ApplyCursorButton(
+            PhasorCursor2Button,
+            _phasorReferenceCursor == ComtradeDisturbanceCursor.Cursor2,
+            Color.FromRgb(36, 172, 211),
+            Color.FromRgb(235, 249, 253));
+    }
+
+    private static void ApplyCursorButton(Button button, bool selected, Color accent, Color selectedBackground)
+    {
+        button.Foreground = new SolidColorBrush(selected ? accent : Color.FromRgb(94, 111, 132));
+        button.Background = new SolidColorBrush(selected ? selectedBackground : Colors.White);
+        button.BorderBrush = new SolidColorBrush(selected ? accent : Color.FromRgb(203, 216, 231));
+        button.BorderThickness = new Thickness(1);
+    }
+
     private async Task RefreshNativeAnalysisAsync()
     {
-        if (_analysisMode == AnalysisMode.Waveform || _activeSignal is not { IsAnalog: true } signal)
+        if (_analysisMode == AnalysisMode.Waveform)
+            return;
+        if (_analysisMode == AnalysisMode.Harmonics && _activeSignal is not { IsAnalog: true })
             return;
 
         _analysisLoadCts?.Cancel();
         _analysisLoadCts?.Dispose();
         _analysisLoadCts = new CancellationTokenSource();
         var token = _analysisLoadCts.Token;
-        var cursorReference = TryResolveDisturbanceCursorFrame(out var cursorFrame);
-        var referenceFrame = cursorReference ? cursorFrame : ResolveAnalysisReferenceFrame();
+        var preferredCursor = _analysisMode == AnalysisMode.Phasor
+            ? _phasorReferenceCursor
+            : ComtradeDisturbanceCursor.Cursor1;
+        var cursorReference = TryResolveAnalysisCursorFrame(preferredCursor, out var cursorFrame);
+        var referenceFrame = cursorReference ? cursorFrame : ResolveAnalysisReferenceFrame(preferredCursor);
         var timeMs = await TryReadReferenceTimeMillisecondsAsync(referenceFrame, token).ConfigureAwait(true);
         if (token.IsCancellationRequested) return;
         var triggerMs = ResolveTriggerMilliseconds();
         var relative = timeMs is { } absolute && triggerMs is { } trigger ? absolute - trigger : (double?)null;
-        AnalysisReferenceTextBlock.Text = timeMs is { } ms
-            ? $"Analysis reference: {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0} • " +
-              (relative is { } rel ? ComtradeDisturbanceTimelineMath.FormatRelativeTime(rel) : $"{ms:G7} ms")
-            : $"Analysis reference: {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0}";
+        var referenceName = cursorReference ? CursorName(preferredCursor) : "visible center";
+        var referenceTimeText = relative is { } relativeMs
+            ? ComtradeDisturbanceTimelineMath.FormatRelativeTime(relativeMs)
+            : timeMs is { } absoluteMs
+                ? $"{absoluteMs:G7} ms"
+                : "time unavailable";
+        AnalysisReferenceTextBlock.Text = $"Analysis reference: {referenceName} • frame {referenceFrame:N0} • {referenceTimeText}";
 
         try
         {
             if (_analysisMode == AnalysisMode.Phasor)
             {
-                PhasorView.ShowMessage("Phasor", "Calculating native one-cycle phasors…");
-                var result = await LoadPhasorGroupAsync(signal, referenceFrame, token).ConfigureAwait(true);
+                PhasorView.ShowMessage("Phasor", "Calculating native Voltage and Current one-cycle phasors…");
+                var result = await LoadPhasorWorkspaceAsync(referenceFrame, token).ConfigureAwait(true);
                 if (token.IsCancellationRequested || _analysisMode != AnalysisMode.Phasor) return;
-                if (result.Count == 0)
+                if (result.VoltageVectors.Count == 0 && result.CurrentVectors.Count == 0)
                 {
-                    PhasorView.ShowMessage("Phasor", "The selected reference does not contain a complete analyzable cycle.");
+                    PhasorView.ShowMessage("Phasor", "The selected reference does not contain a complete analyzable Voltage or Current cycle.");
+                    StatusTextBlock.Text = $"Native ArdIrec phasor analysis • {referenceName} • no valid Voltage/Current vectors.";
                     return;
                 }
 
-                var selectedMetadata = _record.AnalogChannels[checked((int)signal.Index)];
-                var subtitle = BuildAnalysisSubtitle(selectedMetadata, referenceFrame, result.Count,
-                    "fundamental RMS • same-unit channels");
-                PhasorView.ShowPhasors("Phasor diagram", subtitle, result);
-                StatusTextBlock.Text = $"Native ArdIrec phasor analysis • {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0} • {result.Count} vector(s)";
+                var detail = $"{referenceTimeText} • frame {referenceFrame:N0} • full-cycle DFT • RMS magnitude • common phase reference";
+                PhasorView.ShowPhasors(
+                    referenceName.ToUpperInvariant(),
+                    detail,
+                    result.VoltageVectors,
+                    result.CurrentVectors);
+                StatusTextBlock.Text = $"Native ArdIrec phasor workstation • {referenceName} • frame {referenceFrame:N0} • " +
+                                       $"{result.VoltageVectors.Count} voltage + {result.CurrentVectors.Count} current vector(s)";
                 return;
             }
 
+            var signal = _activeSignal!;
             HarmonicsView.ShowMessage("Harmonics", "Calculating native harmonic spectrum…");
             var spectrum = await LoadHarmonicsAsync(signal, referenceFrame, token).ConfigureAwait(true);
             if (token.IsCancellationRequested || _analysisMode != AnalysisMode.Harmonics) return;
@@ -177,7 +232,7 @@ public partial class ComtradeWorkspaceWindow
             var harmonicSubtitle = BuildAnalysisSubtitle(metadata, referenceFrame, spectrum.Bins.Count,
                 $"orders H1…H{spectrum.Bins[^1].Order}");
             HarmonicsView.ShowSpectrum("Harmonic spectrum", harmonicSubtitle, display);
-            StatusTextBlock.Text = $"Native ArdIrec harmonics • {(cursorReference ? "C1" : "visible center")} • THD {spectrum.ThdPercent:G5}% • " +
+            StatusTextBlock.Text = $"Native ArdIrec harmonics • {referenceName} • THD {spectrum.ThdPercent:G5}% • " +
                                    (spectrum.DominantOrder > 1
                                        ? $"dominant H{spectrum.DominantOrder} {spectrum.DominantPercent:G4}%"
                                        : "no meaningful distortion harmonic");
@@ -198,9 +253,18 @@ public partial class ComtradeWorkspaceWindow
         }
     }
 
-    private ulong ResolveAnalysisReferenceFrame()
+    private bool TryResolveAnalysisCursorFrame(ComtradeDisturbanceCursor cursor, out ulong frame)
     {
-        if (TryResolveDisturbanceCursorFrame(out var cursorFrame))
+        frame = 0;
+        var milliseconds = cursor == ComtradeDisturbanceCursor.Cursor1
+            ? DisturbanceView.Cursor1Milliseconds
+            : DisturbanceView.Cursor2Milliseconds;
+        return milliseconds is { } value && TryResolveDisturbanceFrameAtMilliseconds(value, out frame);
+    }
+
+    private ulong ResolveAnalysisReferenceFrame(ComtradeDisturbanceCursor preferredCursor)
+    {
+        if (TryResolveAnalysisCursorFrame(preferredCursor, out var cursorFrame))
             return cursorFrame;
         if (TryResolveDisturbanceViewportCenterFrame(out var centerFrame))
             return centerFrame;
@@ -225,8 +289,7 @@ public partial class ComtradeWorkspaceWindow
         }
     }
 
-    private async Task<IReadOnlyList<ComtradePhasorVector>> LoadPhasorGroupAsync(
-        ComtradeSignalItem signal,
+    private async Task<ComtradePhasorWorkspaceResult> LoadPhasorWorkspaceAsync(
         ulong referenceFrame,
         CancellationToken token)
     {
@@ -236,39 +299,70 @@ public partial class ComtradeWorkspaceWindow
             return await Task.Run(() =>
             {
                 token.ThrowIfCancellationRequested();
-                var selected = _record.AnalogChannels[checked((int)signal.Index)];
-                var sameUnits = _record.AnalogChannels
-                    .Select((channel, index) => (channel, index))
-                    .Where(item => string.Equals(item.channel.Units?.Trim(), selected.Units?.Trim(), StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                var sameCircuit = sameUnits
-                    .Where(item => !string.IsNullOrWhiteSpace(selected.Circuit) &&
-                                   string.Equals(item.channel.Circuit?.Trim(), selected.Circuit?.Trim(), StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                var candidates = sameCircuit.Length >= 2 ? sameCircuit : sameUnits;
-                if (candidates.Length == 0)
-                    candidates = new[] { (selected, checked((int)signal.Index)) };
-
-                var vectors = new List<ComtradePhasorVector>();
-                foreach (var item in candidates.Take(8))
+                var descriptors = new List<ComtradePhasorChannelDescriptor>(_record.AnalogChannels.Count);
+                for (var index = 0; index < _record.AnalogChannels.Count; index++)
                 {
                     token.ThrowIfCancellationRequested();
-                    var phasor = _record.ReadPhasor(checked((uint)item.index), referenceFrame);
-                    if (!phasor.Valid) continue;
-                    vectors.Add(new ComtradePhasorVector(
-                        item.channel.Id,
-                        NormalizePhase(item.channel.Phase, item.channel.Id),
-                        item.channel.Units,
-                        phasor.MagnitudeRms,
-                        phasor.AngleDegrees));
+                    var channel = _record.AnalogChannels[index];
+                    var hasSemantics = _record.TryReadAnalogSemantics(checked((uint)index), out var semantics) && semantics is not null;
+                    var fallbackPhase = NormalizePhase(channel.Phase, channel.Id);
+                    var role = hasSemantics
+                        ? semantics!.Role
+                        : ResolveAnalogSection(channel.Units, null) switch
+                        {
+                            "Voltage" => ComtradePhasorWorkspaceMath.RoleVoltage,
+                            "Current" => ComtradePhasorWorkspaceMath.RoleCurrent,
+                            _ => 0
+                        };
+                    var phaseRole = hasSemantics
+                        ? semantics!.PhaseRole
+                        : ComtradePhasorWorkspaceMath.PhaseRoleFromCanonicalName(fallbackPhase);
+                    descriptors.Add(new ComtradePhasorChannelDescriptor(
+                        checked((uint)index),
+                        role,
+                        phaseRole,
+                        channel.Id,
+                        ComtradePhasorWorkspaceMath.CanonicalPhaseName(phaseRole, fallbackPhase),
+                        channel.Circuit,
+                        channel.Units));
                 }
-                return (IReadOnlyList<ComtradePhasorVector>)vectors;
+
+                var voltageChannels = ComtradePhasorWorkspaceMath.SelectRoleSet(
+                    descriptors,
+                    ComtradePhasorWorkspaceMath.RoleVoltage);
+                var currentChannels = ComtradePhasorWorkspaceMath.SelectRoleSet(
+                    descriptors,
+                    ComtradePhasorWorkspaceMath.RoleCurrent);
+                var voltageVectors = ReadPhasorVectors(voltageChannels, referenceFrame, token);
+                var currentVectors = ReadPhasorVectors(currentChannels, referenceFrame, token);
+                return new ComtradePhasorWorkspaceResult(voltageVectors, currentVectors);
             }, token).ConfigureAwait(false);
         }
         finally
         {
             _nativeGate.Release();
         }
+    }
+
+    private IReadOnlyList<ComtradePhasorVector> ReadPhasorVectors(
+        IReadOnlyList<ComtradePhasorChannelDescriptor> channels,
+        ulong referenceFrame,
+        CancellationToken token)
+    {
+        var vectors = new List<ComtradePhasorVector>(channels.Count);
+        foreach (var channel in channels)
+        {
+            token.ThrowIfCancellationRequested();
+            var phasor = _record.ReadPhasor(channel.Index, referenceFrame);
+            if (!phasor.Valid) continue;
+            vectors.Add(new ComtradePhasorVector(
+                channel.Label,
+                ComtradePhasorWorkspaceMath.CanonicalPhaseName(channel.PhaseRole, channel.Phase),
+                channel.Units,
+                phasor.MagnitudeRms,
+                phasor.AngleDegrees));
+        }
+        return vectors;
     }
 
     private async Task<ComtradeHarmonicSpectrum> LoadHarmonicsAsync(
@@ -299,6 +393,9 @@ public partial class ComtradeWorkspaceWindow
         return $"{context} • reference frame {referenceFrame:N0} • {itemCount} {suffix}";
     }
 
+    private static string CursorName(ComtradeDisturbanceCursor cursor)
+        => cursor == ComtradeDisturbanceCursor.Cursor1 ? "C1" : "C2";
+
     private static string NormalizePhase(string phase, string id)
     {
         var direct = (phase ?? string.Empty).Trim().ToUpperInvariant();
@@ -314,4 +411,8 @@ public partial class ComtradeWorkspaceWindow
         if (name.Contains("3I0") || name.Contains("3V0") || name.Contains("3U0") || name.Contains("RES") || name.Contains("NEUTRAL")) return "E";
         return "Other";
     }
+
+    private sealed record ComtradePhasorWorkspaceResult(
+        IReadOnlyList<ComtradePhasorVector> VoltageVectors,
+        IReadOnlyList<ComtradePhasorVector> CurrentVectors);
 }
