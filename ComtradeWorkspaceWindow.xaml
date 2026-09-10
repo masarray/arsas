@@ -210,7 +210,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <ScrollViewer x:Name="DisturbanceScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White" PanningMode="VerticalOnly">
-                                <controls:ComtradeDisturbanceView x:Name="DisturbanceView" MinHeight="330"/>
+                                <controls:ComtradeDisturbanceViewP1D3 x:Name="DisturbanceView" MinHeight="330"/>
                             </ScrollViewer>
                             <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="True"
                                       Background="#FAFCFF" BorderBrush="#E2E9F2" BorderThickness="0,1,0,0" Padding="8,4" MaxHeight="175">
@@ -232,7 +232,7 @@
                         <!-- Compatibility one-channel renderer retained internally during P1D migration. -->
                         <controls:ComtradeWaveformView x:Name="WaveformView" MinHeight="330" Visibility="Collapsed"/>
                         <controls:ComtradePhasorView x:Name="PhasorView" MinHeight="330" Visibility="Collapsed"/>
-                        <controls:ComtradeHarmonicsView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
+                        <controls:ComtradeHarmonicsWorkstationView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
                     </Grid>
                 </Grid>
             </Border>
@@ -251,7 +251,7 @@
                         BorderBrush="#C5D8EE" BorderThickness="1" Cursor="Hand"
                         ToolTip="Open the complete Qt analysis workspace for field comparison."
                         Click="FullAnalysis_Click"/>
-                <TextBlock Grid.Column="2" Text="P1D • synchronized disturbance workspace" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="P1D.3 • optimized disturbance + harmonics" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>
