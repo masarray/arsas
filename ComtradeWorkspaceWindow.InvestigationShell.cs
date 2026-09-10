@@ -8,7 +8,7 @@ namespace ArIED61850Tester;
 
 public partial class ComtradeWorkspaceWindow
 {
-    private const double WaveformCursorPreviewHitRadius = 12.0;
+    private const double WaveformCursorPreviewHitRadius = 9.0;
 
     private bool _investigationTimelineAttached;
     private double? _harmonicCursorMilliseconds;
