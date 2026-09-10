@@ -35,6 +35,7 @@ public partial class ComtradeWorkspaceWindow
             Height = Math.Min(Math.Max(MinHeight, 920.0), Math.Max(MinHeight, work.Height - 36.0));
         }
 
+        InitializeP1D5LocusUi();
         RefreshP1D5PresentationButtons();
         QueueP1D5CursorMeasurements();
     }
@@ -81,7 +82,8 @@ public partial class ComtradeWorkspaceWindow
         _p1d5PresentationRefreshRunning = true;
         try
         {
-            // Phasor vectors are cached after representation scaling; force one deterministic refresh.
+            // Analysis absolute values are representation-dependent; relative phase and % harmonic
+            // metrics remain invariant. Clear only immutable presentation caches on a PRI/SEC switch.
             _p1d4PhasorFrameCache.Clear();
             _phasorFrameCache.Clear();
             _lastRenderedPhasorFrame = ulong.MaxValue;
@@ -96,9 +98,17 @@ public partial class ComtradeWorkspaceWindow
                     preserveLocalView: true).ConfigureAwait(true);
             }
 
-            QueueP1D5CursorMeasurements();
-            if (_analysisMode != AnalysisMode.Waveform)
-                QueueP1D4LiveAnalysisScrub(isFinal: true);
+            if (_p1d5LocusActive)
+            {
+                await RefreshP1D5LocusStaticAsync(forceReopen: false).ConfigureAwait(true);
+                QueueP1D5LocusCursorRefresh();
+            }
+            else
+            {
+                QueueP1D5CursorMeasurements();
+                if (_analysisMode != AnalysisMode.Waveform)
+                    QueueP1D4LiveAnalysisScrub(isFinal: true);
+            }
         }
         finally
         {
