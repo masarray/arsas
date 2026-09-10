@@ -52,4 +52,14 @@ public sealed class ComtradeTimeMathTests
         Assert.Equal(5.0, ComtradeTimeMath.ToMilliseconds(1000, 5.0), 8);
         Assert.Equal(1.0, ComtradeTimeMath.ToMilliseconds(1000, double.NaN), 8);
     }
+
+    [Fact]
+    public void ToRecordMilliseconds_SubtractsNonZeroFirstDatTimestamp()
+    {
+        // Legacy records may encode sample 1 at +1 sample period while CFG StartTime still names
+        // sample 1. Trigger and waveform must therefore share the same elapsed-time origin.
+        Assert.Equal(0.0, ComtradeTimeMath.ToRecordMilliseconds(1000, 1000, 1.0), 8);
+        Assert.Equal(124.0, ComtradeTimeMath.ToRecordMilliseconds(125000, 1000, 1.0), 8);
+        Assert.Equal(620.0, ComtradeTimeMath.ToRecordMilliseconds(125000, 1000, 5.0), 8);
+    }
 }
