@@ -31,7 +31,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     private const double LabelWidth = 82.0;
     private const double RightMargin = 12.0;
     private const double RowGap = 5.0;
-    private const double MinimumRowHeight = 76.0;
+    private const double MinimumRowHeight = 70.0;
     private const double MaximumRowHeight = 132.0;
     private const int MaximumDisplayedOrder = 10;
 
@@ -369,14 +369,22 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         Typeface typeface,
         Color color,
         double dpi,
-        double maxWidth = 10000)
+        double? maxWidth = null)
     {
-        return new FormattedText(text ?? string.Empty, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            typeface, size, FrozenBrush(color), dpi)
+        var formatted = new FormattedText(
+            text ?? string.Empty,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            size,
+            FrozenBrush(color),
+            dpi);
+        if (maxWidth is { } width)
         {
-            MaxTextWidth = Math.Max(1, maxWidth),
-            Trimming = TextTrimming.CharacterEllipsis
-        };
+            formatted.MaxTextWidth = Math.Max(1, width);
+            formatted.Trimming = TextTrimming.CharacterEllipsis;
+        }
+        return formatted;
     }
 
     private static void DrawText(
@@ -400,8 +408,9 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         double dpi)
     {
         var formatted = MakeText(text, size, typeface, color, dpi);
-        formatted.TextAlignment = TextAlignment.Center;
-        dc.DrawText(formatted, point);
+        dc.DrawText(formatted, new Point(
+            point.X - formatted.WidthIncludingTrailingWhitespace * 0.5,
+            point.Y));
     }
 
     private static void DrawRightAlignedText(
@@ -414,8 +423,9 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         double dpi)
     {
         var formatted = MakeText(text, size, typeface, color, dpi);
-        formatted.TextAlignment = TextAlignment.Right;
-        dc.DrawText(formatted, point);
+        dc.DrawText(formatted, new Point(
+            point.X - formatted.WidthIncludingTrailingWhitespace,
+            point.Y));
     }
 
     private sealed record PlotBin(int Order, double MagnitudeRms, double PercentOfFundamental, double AngleDegrees);
