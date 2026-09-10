@@ -75,11 +75,21 @@ public partial class ComtradeWorkspaceWindow
 
     private void HarmonicsModeShell_Click(object sender, RoutedEventArgs e)
     {
+        if (_activeSignal is not { IsAnalog: true })
+        {
+            var firstAnalog = ResolveP1D4HarmonicOverviewSignals().FirstOrDefault();
+            if (firstAnalog is not null)
+                SignalList.SelectedItem = firstAnalog;
+        }
+
         EnsureHarmonicCursor();
         InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.HarmonicCursor);
         SetAnalysisMode(AnalysisMode.Harmonics);
         SyncInvestigationTimeline();
         SyncInvestigationTimelineGeometry();
+
+        if (_analysisMode == AnalysisMode.Harmonics)
+            QueueP1D4LiveAnalysisScrub(isFinal: true);
     }
 
     private void SignalList_ShellSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -93,6 +103,9 @@ public partial class ComtradeWorkspaceWindow
             else if (_analysisMode == AnalysisMode.Harmonics && InvestigationTimeline.Mode != ComtradeInvestigationTimelineMode.HarmonicCursor)
                 InvestigationTimeline.SetMode(ComtradeInvestigationTimelineMode.HarmonicCursor);
             SyncInvestigationTimeline();
+
+            if (_analysisMode == AnalysisMode.Harmonics)
+                QueueP1D4LiveAnalysisScrub(isFinal: true);
         }, DispatcherPriority.Background);
     }
 
@@ -110,10 +123,6 @@ public partial class ComtradeWorkspaceWindow
 
     private void DisturbanceView_ShellNavigationChanged(object? sender, ComtradeDisturbanceNavigationChangedEventArgs e)
     {
-        // Cursor motion in the optimized waveform renderer also raises NavigationChanged for its
-        // compact text summary. Do not rebuild the full ruler context for those events. Only a real
-        // view-window change needs a context/geometry refresh; cursor identity is synchronized by
-        // DisturbanceView_ShellCursorChanged itself.
         var start = DisturbanceView.ViewStartMilliseconds;
         var end = DisturbanceView.ViewEndMilliseconds;
         var viewChanged = !NearlyEqual(start, _lastTimelineViewStartMilliseconds) ||
@@ -135,12 +144,6 @@ public partial class ComtradeWorkspaceWindow
             SyncInvestigationTimeline();
     }
 
-    /// <summary>
-    /// P1D.4 waveform-side cursor preview. The cached waveform renderer intentionally limits its
-    /// outward cursor event rate, but the visible ruler is only a lightweight overlay. Mirror the
-    /// same time/snap calculation here on every pointer frame so the ruler and waveform read as one
-    /// cursor identity instead of two lines chasing each other during a fast drag.
-    /// </summary>
     private void DisturbanceView_ShellPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (_analysisMode != AnalysisMode.Waveform) return;

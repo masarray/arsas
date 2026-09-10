@@ -6,9 +6,9 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow
 {
     // P1D.4 field-scrub path. Visual cursor motion is synchronous and cheap; native analysis is
-    // coalesced at WPF composition cadence with at most one worker in flight. Unlike the older
-    // scheduler, a final mouse-up revision invalidates any older in-flight result so the view cannot
-    // flash back to a stale phasor/harmonic frame after the user has already stopped scrubbing.
+    // coalesced at WPF composition cadence with at most one worker in flight. A final mouse-up
+    // revision invalidates any older in-flight result so the view cannot flash back to a stale
+    // phasor/harmonic frame after the user has already stopped scrubbing.
     private bool _p1d4ScrubRenderingHooked;
     private bool _p1d4ScrubWorkerRunning;
     private bool _p1d4ScrubDirty;
@@ -24,8 +24,6 @@ public partial class ComtradeWorkspaceWindow
     {
         if (_analysisMode == AnalysisMode.Waveform) return;
 
-        // SetAnalysisMode still owns the non-interactive first render. As soon as field scrubbing
-        // starts, transfer authority to P1D.4 and cancel any old scheduler request for this mode.
         if (_p1d4OwnedAnalysisMode != _analysisMode)
         {
             StopAnalysisRenderingPump();
@@ -93,7 +91,6 @@ public partial class ComtradeWorkspaceWindow
             return;
         }
 
-        // A final pointer event on the same immutable source frame requires no duplicate DFT.
         if (IsP1D4AnalysisAlreadyRendered(request))
         {
             if (!_p1d4ScrubDirty)
@@ -102,8 +99,6 @@ public partial class ComtradeWorkspaceWindow
         }
 
         _p1d4ScrubWorkerRunning = true;
-        // Do not keep a no-op callback attached for every monitor refresh while native work is in
-        // flight. A newer pointer move only marks dirty; finally re-hooks exactly once if needed.
         StopP1D4LiveAnalysisRenderingPump();
         _ = ExecuteP1D4LiveAnalysisRequestAsync(request);
     }
@@ -126,14 +121,16 @@ public partial class ComtradeWorkspaceWindow
                 AnalysisMode.Phasor,
                 frame,
                 null,
-                null,
+                string.Empty,
                 referenceMilliseconds,
                 _p1d4TargetRevision,
                 isFinal);
             return true;
         }
 
-        if (_activeSignal is not { IsAnalog: true } signal) return false;
+        var harmonicSignals = ResolveP1D4HarmonicOverviewSignals();
+        if (harmonicSignals.Count == 0) return false;
+
         EnsureHarmonicCursor();
         var harmonicMilliseconds = _harmonicCursorMilliseconds ??
                                    (DisturbanceView.ViewStartMilliseconds + DisturbanceView.ViewEndMilliseconds) * 0.5;
@@ -144,8 +141,8 @@ public partial class ComtradeWorkspaceWindow
         request = new P1D4LiveAnalysisRequest(
             AnalysisMode.Harmonics,
             harmonicFrame,
-            signal.Index,
-            signal,
+            harmonicSignals,
+            BuildP1D4HarmonicOverviewSignature(harmonicSignals),
             harmonicMilliseconds,
             _p1d4TargetRevision,
             isFinal);
@@ -155,8 +152,11 @@ public partial class ComtradeWorkspaceWindow
     private bool IsP1D4AnalysisAlreadyRendered(P1D4LiveAnalysisRequest request)
         => request.Mode == AnalysisMode.Phasor
             ? request.ReferenceFrame == _lastRenderedPhasorFrame
-            : request.ChannelIndex is { } channel &&
-              _lastRenderedHarmonicKey == new HarmonicCacheKey(channel, request.ReferenceFrame);
+            : request.ReferenceFrame == _p1d4LastRenderedHarmonicOverviewFrame &&
+              string.Equals(
+                  request.HarmonicSignature,
+                  _p1d4LastRenderedHarmonicOverviewSignature,
+                  StringComparison.Ordinal);
 
     private async Task ExecuteP1D4LiveAnalysisRequestAsync(P1D4LiveAnalysisRequest request)
     {
@@ -174,17 +174,19 @@ public partial class ComtradeWorkspaceWindow
                 if (!ShouldPresentP1D4LiveAnalysis(request)) return;
                 PresentPhasor(request.ReferenceFrame, request.ReferenceMilliseconds, phasor);
             }
-            else if (request.ChannelIndex is { } channel && request.Signal is { IsAnalog: true } signal)
+            else if (request.HarmonicSignals is { Count: > 0 } harmonicSignals)
             {
-                var key = new HarmonicCacheKey(channel, request.ReferenceFrame);
-                if (!_harmonicFrameCache.TryGetValue(key, out var spectrum))
-                {
-                    spectrum = await LoadHarmonicsAsync(signal, request.ReferenceFrame, token).ConfigureAwait(true);
-                    RememberHarmonic(key, spectrum);
-                }
+                var overview = await LoadP1D4HarmonicOverviewAsync(
+                    harmonicSignals,
+                    request.ReferenceFrame,
+                    token).ConfigureAwait(true);
 
                 if (!ShouldPresentP1D4LiveAnalysis(request)) return;
-                PresentHarmonics(signal, request.ReferenceFrame, request.ReferenceMilliseconds, spectrum);
+                PresentP1D4HarmonicOverview(
+                    request.ReferenceFrame,
+                    request.ReferenceMilliseconds,
+                    request.HarmonicSignature,
+                    overview);
             }
         }
         catch (OperationCanceledException)
@@ -212,12 +214,17 @@ public partial class ComtradeWorkspaceWindow
     {
         if (request.Mode != _analysisMode)
             return false;
-        if (request.Mode == AnalysisMode.Harmonics &&
-            (_activeSignal is not { IsAnalog: true } current || request.ChannelIndex != current.Index))
-            return false;
 
-        // During an active drag, ordered completed previews are allowed so the diagram keeps moving.
-        // Once mouse-up establishes a settled revision, any older in-flight result is discarded.
+        if (request.Mode == AnalysisMode.Harmonics)
+        {
+            var currentSignals = ResolveP1D4HarmonicOverviewSignals();
+            if (!string.Equals(
+                    request.HarmonicSignature,
+                    BuildP1D4HarmonicOverviewSignature(currentSignals),
+                    StringComparison.Ordinal))
+                return false;
+        }
+
         return request.Revision >= _p1d4SettledRevision;
     }
 
@@ -297,8 +304,8 @@ public partial class ComtradeWorkspaceWindow
     private readonly record struct P1D4LiveAnalysisRequest(
         AnalysisMode Mode,
         ulong ReferenceFrame,
-        uint? ChannelIndex,
-        ComtradeSignalItem? Signal,
+        IReadOnlyList<ComtradeSignalItem>? HarmonicSignals,
+        string HarmonicSignature,
         double ReferenceMilliseconds,
         long Revision,
         bool IsFinal);
