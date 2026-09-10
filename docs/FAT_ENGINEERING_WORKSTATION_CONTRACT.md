@@ -28,9 +28,9 @@ Engineering navigation has exactly seven destinations in this order:
 6. Diagnostics
 7. FAT
 
-There must be one navigation owner. Do not reintroduce a second `ModuleInitializer` / `ApplicationIdle` parity layer that fights the canonical navigation state.
+There must be one canonical navigation owner. Do not reintroduce a second `ModuleInitializer` / `ApplicationIdle` parity layer that fights the canonical navigation state.
 
-Target end-state: the FAT button and FAT `TabItem` are literal XAML siblings of the other six destinations and use the same `SegmentedNavButton` style resource.
+M1 locks FAT as a literal seventh XAML sibling using the same `SegmentedNavButton` contract. Every responsive/navigation presentation layer must consume the same seven destinations: MainWindow index range is `0..6`, selection geometry divides the available navigation width into seven equal slots, and ballistic navigation styling includes `NavNativeFatButton`. Regression tests must fail if any of these layers silently falls back to six-slot behavior.
 
 ## Multi-IED context invariant
 
@@ -58,7 +58,7 @@ Target reusable structure:
 - `FatReportPreviewView`: canonical production A4 preview presentation.
 - `IoListTestingWindow`: legacy standalone shell that may host the reusable views for compatibility, but must not be the presentation/lifecycle owner of the Engineering FAT tab.
 
-The Engineering FAT tab must eventually own a permanent FAT visual surface. Selecting FAT should only switch workstation content; it must not require `Window.Show -> Loaded -> detach/reparent`.
+The Engineering FAT tab must own a permanent FAT visual surface. Selecting FAT should only switch workstation content; it must not require `Window.Show -> Loaded -> detach/reparent`.
 
 ## Report preview invariant
 
