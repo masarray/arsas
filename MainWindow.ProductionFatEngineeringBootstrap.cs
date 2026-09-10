@@ -38,7 +38,6 @@ public partial class MainWindow
         window.MainTabs.SelectionChanged += window.ProductionFatEngineeringBootstrap_SelectionChanged;
         window.PropertyChanged += window.ProductionFatEngineeringBootstrap_PropertyChanged;
         window.Closed += window.ProductionFatEngineeringBootstrap_Closed;
-        window.QueueProductionFatEngineeringBootstrap();
     }
 
     private void ProductionFatEngineeringBootstrap_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -50,19 +49,22 @@ public partial class MainWindow
 
     private void ProductionFatEngineeringBootstrap_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(SelectedDevice))
+        if (e.PropertyName != nameof(SelectedDevice) || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
         // A running production FAT session owns its latched IED. The normal embedded-host
         // selection bridge handles idle retargeting. Bootstrap is only needed before a FAT
-        // workspace exists.
+        // workspace exists and only while the operator is actually entering FAT.
         if (_productionFatWindow == null && _loadedIoFatWindow == null)
             QueueProductionFatEngineeringBootstrap();
     }
 
     private void QueueProductionFatEngineeringBootstrap()
     {
-        if (!_productionFatEngineeringBootstrapInstalled)
+        // FAT preparation must never run in the background while Engineering is connecting
+        // or monitoring. The shared Engineering acquisition session remains authoritative;
+        // clicking FAT is the only navigation event allowed to build the FAT projection.
+        if (!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
         Dispatcher.BeginInvoke(
@@ -73,6 +75,7 @@ public partial class MainWindow
     private async Task EnsureProductionFatFromEngineeringAsync()
     {
         if (_productionFatEngineeringBootstrapBusy ||
+            MainTabs.SelectedIndex != NativeFatWorkspaceIndex ||
             !ProductionFatTabReady)
         {
             return;
@@ -158,7 +161,7 @@ public partial class MainWindow
                              ?? ResolveIoTestDevice(ied.IpAddress)
                              ?? ResolveIoTestDevice(ied.IedName);
                 if (device is not null)
-                    MarkSharedSelectionAuthority(device);
+                    PreserveSharedStaticDataSetAuthority(device);
             }
 
             launch.Workspace.ScheduleSave();
