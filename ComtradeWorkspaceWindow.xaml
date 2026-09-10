@@ -145,6 +145,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -153,18 +154,16 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="WaveformModeButton" Content="Time Signals" Height="27" MinWidth="88" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="WaveformMode_Click"/>
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="TimeSignalsModeShell_Click"/>
                                 <Button x:Name="PhasorModeButton" Content="Phasor" Height="27" MinWidth="72" Margin="5,0,0,0" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorMode_Click"/>
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorModeShell_Click"/>
                                 <Button x:Name="HarmonicsModeButton" Content="Harmonics" Height="27" MinWidth="86" Margin="5,0,0,0" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsMode_Click"/>
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsModeShell_Click"/>
                             </StackPanel>
-                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="2" Text="Analysis reference: C1 / viewport"
-                                       FontSize="9.6" Foreground="#7A8BA0" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="1" Visibility="Collapsed"/>
                         </Grid>
                     </Border>
 
@@ -174,9 +173,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="NavigationTextBlock"
-                                       Text="Wheel scrolls signals • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 moves • right-click places C2"
-                                       FontSize="10" Foreground="#64778F" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="NavigationTextBlock" Visibility="Collapsed"/>
                             <Grid Grid.Column="1" Margin="12,0,0,0">
                                 <StackPanel x:Name="TimeNavigationPanel" Orientation="Horizontal">
                                     <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
@@ -189,28 +186,31 @@
                                             ToolTip="Show the complete COMTRADE time range." Click="DisturbanceFullRecord_Click"/>
                                 </StackPanel>
                                 <StackPanel x:Name="PhasorReferencePanel" Orientation="Horizontal" Visibility="Collapsed" VerticalAlignment="Center">
-                                    <TextBlock Text="Reference" Margin="0,0,7,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Phasor reference" Margin="0,0,7,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
                                     <Button x:Name="PhasorCursor1Button" Content="C1" Height="25" MinWidth="42" Padding="9,0"
                                             FontSize="10" FontWeight="SemiBold" Cursor="Hand"
-                                            ToolTip="Use global Time Signals cursor C1 for both Voltage and Current phasor diagrams."
+                                            ToolTip="Use global investigation cursor C1 for both Voltage and Current phasor diagrams."
                                             Click="PhasorCursor1_Click"/>
                                     <Button x:Name="PhasorCursor2Button" Content="C2" Height="25" MinWidth="42" Margin="5,0,0,0" Padding="9,0"
                                             FontSize="10" FontWeight="SemiBold" Cursor="Hand"
-                                            ToolTip="Use global Time Signals cursor C2 for both Voltage and Current phasor diagrams."
+                                            ToolTip="Use global investigation cursor C2 for both Voltage and Current phasor diagrams."
                                             Click="PhasorCursor2_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Grid>
                     </Border>
 
-                    <Grid Grid.Row="2">
+                    <controls:ComtradeInvestigationTimelineView x:Name="InvestigationTimeline" Grid.Row="2"
+                                                               Loaded="InvestigationTimeline_Loaded"/>
+
+                    <Grid Grid.Row="3">
                         <Grid x:Name="WaveformWorkspaceHost">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <ScrollViewer x:Name="DisturbanceScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White" PanningMode="VerticalOnly">
-                                <controls:ComtradeDisturbanceViewP1D3 x:Name="DisturbanceView" MinHeight="330"/>
+                                <controls:ComtradeDisturbanceViewP1D3ShellAware x:Name="DisturbanceView" MinHeight="330"/>
                             </ScrollViewer>
                             <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="True"
                                       Background="#FAFCFF" BorderBrush="#E2E9F2" BorderThickness="0,1,0,0" Padding="8,4" MaxHeight="175">
@@ -229,7 +229,6 @@
                             </Expander>
                         </Grid>
 
-                        <!-- Compatibility one-channel renderer retained internally during P1D migration. -->
                         <controls:ComtradeWaveformView x:Name="WaveformView" MinHeight="330" Visibility="Collapsed"/>
                         <controls:ComtradePhasorView x:Name="PhasorView" MinHeight="330" Visibility="Collapsed"/>
                         <controls:ComtradeHarmonicsWorkstationView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
@@ -251,7 +250,7 @@
                         BorderBrush="#C5D8EE" BorderThickness="1" Cursor="Hand"
                         ToolTip="Open the complete Qt analysis workspace for field comparison."
                         Click="FullAnalysis_Click"/>
-                <TextBlock Grid.Column="2" Text="P1D.3 • optimized disturbance + harmonics" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="P1D.3 • shared investigation timeline" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>
