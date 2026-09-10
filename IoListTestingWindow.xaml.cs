@@ -119,6 +119,8 @@ public partial class IoListTestingWindow : Window, INotifyPropertyChanged
 
     private async void StartSession_Click(object sender, RoutedEventArgs e)
     {
+        // Capture target latch: keep this local IED for the complete async prepare +
+        // Start transaction even if the global Engineering Explorer changes selection.
         var selectedIed = SelectedIed;
         if (selectedIed?.IsPreparing == true)
             return;

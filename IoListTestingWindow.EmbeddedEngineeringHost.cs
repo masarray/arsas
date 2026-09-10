@@ -214,8 +214,9 @@ public partial class IoListTestingWindow
         if (match == null || ReferenceEquals(SelectedIed, match))
             return;
 
-        // Do not retarget an active production FAT transaction/session. When idle, the
-        // persistent Engineering IED Explorer is the navigation/selection authority.
+        // M3 viewed-device contract: the persistent Engineering IED Explorer owns
+        // what the FAT grid displays. SelectedIed/Session.SelectContext changes only that
+        // projection; an active capture remains latched inside its per-IED controller.
         if (!CanSelectIed)
             return;
 

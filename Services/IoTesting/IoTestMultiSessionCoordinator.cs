@@ -133,7 +133,9 @@ public sealed class IoTestMultiSessionCoordinator : ObservableObject, IDisposabl
         if (ied == null)
             return IoTestSessionActionResult.Failure("Select an imported IED first.");
 
-        SelectContext(ied);
+        // M3: the caller latches the capture target before any asynchronous IED
+        // preparation. Starting that target must never steal the Explorer/view context
+        // if the operator selected another IED while preparation was in flight.
         IoTestSessionController controller;
         try
         {
