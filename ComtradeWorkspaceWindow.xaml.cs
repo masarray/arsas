@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Controls;
@@ -13,7 +14,7 @@ public partial class ComtradeWorkspaceWindow : Window
     private const int ExactSignalFrameLimit = 500_000;
     private const int FullRecordAnalogBuckets = 4_096;
     private const int FullRecordDigitalTransitionCap = 100_000;
-    private const string NavigationHint = "Wheel zoom • Shift+wheel pan • Alt/middle-drag pan • Click Cursor A • Ctrl/right-click Cursor B";
+    private const string NavigationHint = "Wheel scrolls signals • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 moves cursors • right-click places C2";
     private readonly ArdIrecNativeRecord _record;
     private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private CancellationTokenSource? _signalLoadCts;
@@ -36,6 +37,7 @@ public partial class ComtradeWorkspaceWindow : Window
         WaveformView.PreviewMouseUp += WaveformView_PreviewMouseUp;
         ConfigureTriggerReference();
         ResetViewButton.IsEnabled = false;
+        FullRecordButton.IsEnabled = false;
         PopulateHeader();
         PopulateSignals();
         Closed += ComtradeWorkspaceWindow_Closed;
@@ -93,27 +95,56 @@ public partial class ComtradeWorkspaceWindow : Window
 
     private void PopulateSignals()
     {
-        var analogAccent = new SolidColorBrush(Color.FromRgb(42, 120, 223));
-        var digitalAccent = new SolidColorBrush(Color.FromRgb(31, 145, 94));
-        analogAccent.Freeze();
-        digitalAccent.Freeze();
-
         var signals = new List<ComtradeSignalItem>(_record.AnalogChannels.Count + _record.StatusChannels.Count);
         for (var i = 0; i < _record.AnalogChannels.Count; i++)
         {
             var channel = _record.AnalogChannels[i];
-            var context = string.Join(" • ", new[] { channel.Phase, channel.Circuit, channel.Units }.Where(value => !string.IsNullOrWhiteSpace(value)));
-            signals.Add(new ComtradeSignalItem(true, checked((uint)i), channel.Id, context, analogAccent));
+            _record.TryReadAnalogSemantics(checked((uint)i), out var semantics);
+            var section = ResolveAnalogSection(channel.Units, semantics);
+            var sectionOrder = section switch
+            {
+                "Voltage" => 0,
+                "Current" => 1,
+                _ => 2
+            };
+            var phaseOrder = ResolvePhaseOrder(channel.Phase, channel.Id, semantics);
+            var context = string.Join(" • ", new[] { channel.Phase, channel.Circuit, channel.Units }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            signals.Add(new ComtradeSignalItem(
+                true,
+                checked((uint)i),
+                channel.Id,
+                context,
+                FrozenSignalBrush(ResolveSignalColor(channel.Phase, channel.Id, false)),
+                section,
+                sectionOrder,
+                phaseOrder));
         }
 
         for (var i = 0; i < _record.StatusChannels.Count; i++)
         {
             var channel = _record.StatusChannels[i];
-            var context = string.Join(" • ", new[] { channel.Phase, channel.Circuit, $"normal {channel.NormalState}" }.Where(value => !string.IsNullOrWhiteSpace(value)));
-            signals.Add(new ComtradeSignalItem(false, checked((uint)i), channel.Id, context, digitalAccent));
+            var context = string.Join(" • ", new[] { channel.Phase, channel.Circuit, $"normal {channel.NormalState}" }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            signals.Add(new ComtradeSignalItem(
+                false,
+                checked((uint)i),
+                channel.Id,
+                context,
+                FrozenSignalBrush(ResolveSignalColor(channel.Phase, channel.Id, true)),
+                "Digital Events",
+                3,
+                ResolvePhaseOrder(channel.Phase, channel.Id, null)));
         }
 
-        SignalList.ItemsSource = signals;
+        var ordered = signals
+            .OrderBy(item => item.SectionOrder)
+            .ThenBy(item => item.PhaseOrder)
+            .ThenBy(item => item.Index)
+            .ToList();
+        var view = new ListCollectionView(ordered);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ComtradeSignalItem.Section)));
+        SignalList.ItemsSource = view;
         SignalCountText.Text = $"{signals.Count} total";
         if (signals.Count > 0)
             SignalList.SelectedIndex = 0;
@@ -121,8 +152,58 @@ public partial class ComtradeWorkspaceWindow : Window
         {
             NavigationTextBlock.Text = NavigationHint;
             ResetViewButton.IsEnabled = false;
+            FullRecordButton.IsEnabled = false;
             WaveformView.ShowMessage("No channels", "The COMTRADE record contains no analog or digital channels.");
         }
+    }
+
+    private static string ResolveAnalogSection(string units, ComtradeAnalogSemantics? semantics)
+    {
+        if (semantics is not null)
+        {
+            return semantics.Role switch
+            {
+                1 => "Voltage",
+                2 => "Current",
+                _ => "Other Analog"
+            };
+        }
+
+        var normalized = (units ?? string.Empty).Trim().ToUpperInvariant().Replace(" ", string.Empty, StringComparison.Ordinal);
+        if (normalized is "V" or "KV" or "MV" or "UV") return "Voltage";
+        if (normalized is "A" or "KA" or "MA" or "UA") return "Current";
+        return "Other Analog";
+    }
+
+    private static int ResolvePhaseOrder(string phase, string title, ComtradeAnalogSemantics? semantics)
+    {
+        if (semantics is not null)
+        {
+            return semantics.PhaseRole switch
+            {
+                1 => 0,
+                2 => 1,
+                3 => 2,
+                4 => 3,
+                _ => 4
+            };
+        }
+
+        return NormalizePhase(phase, title) switch
+        {
+            "L1" => 0,
+            "L2" => 1,
+            "L3" => 2,
+            "N" or "E" => 3,
+            _ => 4
+        };
+    }
+
+    private static Brush FrozenSignalBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     private async void SignalList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -132,6 +213,12 @@ public partial class ComtradeWorkspaceWindow : Window
 
         _activeSignal = signal;
         _sourceNavigationEnabled = _record.Info.FrameCount > ExactSignalFrameLimit;
+
+        // P1D uses the multi-track Time Signals renderer. Do not scan the permanently collapsed
+        // legacy one-channel view on every list selection; analysis consumers use _activeSignal.
+        if (WaveformView.Visibility != Visibility.Visible)
+            return;
+
         var full = ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
         _requestedSourceViewport = full;
         await LoadAndDisplaySignalAsync(signal, full, initialSelection: true).ConfigureAwait(true);
@@ -563,7 +650,16 @@ public partial class ComtradeWorkspaceWindow : Window
         _ => "UNKNOWN"
     };
 
-    private sealed record ComtradeSignalItem(bool IsAnalog, uint Index, string Title, string Subtitle, Brush Accent);
+    private sealed record ComtradeSignalItem(
+        bool IsAnalog,
+        uint Index,
+        string Title,
+        string Subtitle,
+        Brush Accent,
+        string Section,
+        int SectionOrder,
+        int PhaseOrder);
+
     private sealed record SignalPreview(
         double[]? Analog,
         byte[]? Status,
