@@ -5,12 +5,16 @@ namespace ArIED61850Tester.Controls;
 
 /// <summary>
 /// Thin host around the optimized P1D.3 renderer. It reconciles CFG absolute Start/Trigger time
-/// with legacy DAT files whose first raw timestamp is not zero, while keeping the renderer/host
-/// source-frame coordinate system unchanged.
+/// with legacy DAT files whose first raw timestamp is not zero, and is the single cursor-snap
+/// authority shared by the waveform and the workstation ruler.
 /// </summary>
 public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
 {
+    private const double PlotLabelWidth = 150.0;
+    private const double PlotRightMargin = 18.0;
     private readonly ComtradeDisturbanceViewP1D3 _inner = new();
+    private double[] _snapTimesMilliseconds = Array.Empty<double>();
+    private double _timeMultiplier = 1.0;
     private bool _timeOriginInitialized;
     private uint _firstRawTimestamp;
     private double _timeOriginMilliseconds;
@@ -31,6 +35,8 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     internal double? EffectiveTriggerMilliseconds => _effectiveTriggerMilliseconds;
     internal uint FirstRawTimestamp => _firstRawTimestamp;
     internal double TimeOriginMilliseconds => _timeOriginMilliseconds;
+    internal double PlotLeftInset => PlotLabelWidth;
+    internal double PlotRightInset => PlotRightMargin;
 
     public ComtradeDisturbanceViewP1D3ShellAware()
     {
@@ -48,11 +54,13 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
         double? triggerMilliseconds,
         bool preserveCursor = true)
     {
-        InitializeTimeOrigin(tracks, timeMultiplier);
+        _timeMultiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
+        InitializeTimeOrigin(tracks, _timeMultiplier);
         _effectiveTriggerMilliseconds = triggerMilliseconds is { } trigger && double.IsFinite(trigger)
             ? trigger + _timeOriginMilliseconds
             : null;
-        _inner.ShowTracks(tracks, timeMultiplier, _effectiveTriggerMilliseconds, preserveCursor);
+        _snapTimesMilliseconds = BuildSnapIndex(tracks);
+        _inner.ShowTracks(tracks, _timeMultiplier, _effectiveTriggerMilliseconds, preserveCursor);
         _inner.ToolTip = null;
     }
 
@@ -64,6 +72,75 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     internal void ResetNavigation() => _inner.ResetNavigation();
     internal void SetViewWindow(double startMilliseconds, double endMilliseconds) => _inner.SetViewWindow(startMilliseconds, endMilliseconds);
     internal double PlotFractionAt(double x) => _inner.PlotFractionAt(x);
+
+    /// <summary>
+    /// Places a Time Signals cursor from the common shell and returns the actual snapped value.
+    /// The exact same sorted digital-edge index and pixel-derived tolerance are used for both the
+    /// ruler and waveform, eliminating the previous split cursor identities.
+    /// </summary>
+    internal double PlaceCursorFromShell(
+        ComtradeDisturbanceCursor cursor,
+        double requestedMilliseconds,
+        double snapToleranceMilliseconds,
+        bool isFinal)
+    {
+        var value = SnapAnalysisCursorFromShell(requestedMilliseconds, snapToleranceMilliseconds);
+        _inner.SetCursorFromHost(cursor, value);
+        CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(
+            cursor,
+            value,
+            Math.Max(0.0, snapToleranceMilliseconds),
+            isFinal,
+            Math.Abs(value - requestedMilliseconds) > 1e-9));
+        return value;
+    }
+
+    /// <summary>
+    /// P/H analysis cursors use the same visible digital-edge snap index without becoming C1/C2.
+    /// </summary>
+    internal double SnapAnalysisCursorFromShell(double requestedMilliseconds, double snapToleranceMilliseconds)
+    {
+        if (!double.IsFinite(requestedMilliseconds))
+            return FullStartMilliseconds;
+        var clamped = Math.Clamp(requestedMilliseconds, FullStartMilliseconds, FullEndMilliseconds);
+        return ComtradeInteractionPerformanceMath.TrySnapSorted(
+            _snapTimesMilliseconds,
+            clamped,
+            Math.Max(0.0, snapToleranceMilliseconds),
+            out var snapped)
+            ? snapped
+            : clamped;
+    }
+
+    private double[] BuildSnapIndex(IReadOnlyList<ComtradeDisturbanceTrack> tracks)
+    {
+        var times = new List<double>();
+        foreach (var track in tracks)
+        {
+            if (!track.IsDigital) continue;
+            if (track.DigitalEdges is { Count: > 0 })
+            {
+                times.AddRange(track.DigitalEdges.Select(edge => ComtradeTimeMath.ToMilliseconds(edge.Timestamp, _timeMultiplier)));
+                continue;
+            }
+            if (track.Digital is null) continue;
+            var count = Math.Min(track.Digital.Length, track.Timestamps.Length);
+            for (var i = 1; i < count; i++)
+            {
+                if ((track.Digital[i - 1] != 0) != (track.Digital[i] != 0))
+                    times.Add(ComtradeTimeMath.ToMilliseconds(track.Timestamps[i], _timeMultiplier));
+            }
+        }
+        if (times.Count == 0) return Array.Empty<double>();
+        times.Sort();
+        var unique = new List<double>(times.Count) { times[0] };
+        for (var i = 1; i < times.Count; i++)
+        {
+            if (Math.Abs(times[i] - unique[^1]) > 1e-9)
+                unique.Add(times[i]);
+        }
+        return unique.ToArray();
+    }
 
     private void InitializeTimeOrigin(IReadOnlyList<ComtradeDisturbanceTrack> tracks, double timeMultiplier)
     {
@@ -83,8 +160,6 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
             }
         }
 
-        // Initial workspace load is the full record. Preserve a conservative fallback for unusual
-        // decimators that omit source-frame identity while still retaining the first DAT timestamp.
         var first = tracks
             .Where(track => track.Timestamps.Length > 0)
             .Select(track => track.Timestamps[0])
