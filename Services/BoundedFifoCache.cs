@@ -38,14 +38,11 @@ internal sealed class BoundedFifoCache<TKey, TValue> where TKey : notnull
                 break;
         }
 
-        // The queue and dictionary are owned together, but keep a defensive final bound in case a
-        // future caller mutates lifecycle assumptions. Never grow past Capacity.
+        // Both structures are private and mutate together. If that invariant is ever broken by a
+        // future change, fail closed: skip caching this value rather than exceed the memory bound or
+        // attempt unsafe mutation through a live dictionary enumerator.
         if (_items.Count >= Capacity)
-        {
-            using var enumerator = _items.Keys.GetEnumerator();
-            if (enumerator.MoveNext())
-                _items.Remove(enumerator.Current);
-        }
+            return;
 
         _items[key] = value;
         _insertionOrder.Enqueue(key);
