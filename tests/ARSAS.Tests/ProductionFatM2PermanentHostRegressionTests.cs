@@ -60,7 +60,7 @@ public sealed class ProductionFatM2PermanentHostRegressionTests
     }
 
     private static string Read(string relativePath)
-        => File.ReadAllText(Path.Combine(FindRepoRoot(), relativePath));
+        => File.ReadAllText(Path.Combine(FindRepoRoot(), relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 
     private static string FindRepoRoot()
     {
