@@ -43,9 +43,6 @@ public partial class ComtradeWorkspaceWindow
     {
         UpdateAnalysisAvailability();
 
-        // P1D.2D Phasor is a record-level Voltage + Current workstation and no longer depends on
-        // the selected signal row. Harmonics remains a selected-analog-channel workflow until its
-        // own parity slice lands.
         if (_analysisMode == AnalysisMode.Harmonics && _activeSignal is not { IsAnalog: true })
         {
             SetAnalysisMode(AnalysisMode.Waveform);
@@ -56,6 +53,8 @@ public partial class ComtradeWorkspaceWindow
             _ = Dispatcher.InvokeAsync(async () => await RefreshNativeAnalysisAsync().ConfigureAwait(true));
     }
 
+    // Retained for code-driven compatibility. The visible mode buttons route through the shared
+    // investigation-shell handlers so the persistent C1/C2/H ruler can switch context first.
     private void WaveformMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Waveform);
     private void PhasorMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Phasor);
     private void HarmonicsMode_Click(object sender, RoutedEventArgs e) => SetAnalysisMode(AnalysisMode.Harmonics);
@@ -84,12 +83,6 @@ public partial class ComtradeWorkspaceWindow
         HarmonicsView.Visibility = mode == AnalysisMode.Harmonics ? Visibility.Visible : Visibility.Collapsed;
         TimeNavigationPanel.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
         PhasorReferencePanel.Visibility = mode == AnalysisMode.Phasor ? Visibility.Visible : Visibility.Collapsed;
-        NavigationTextBlock.Text = mode switch
-        {
-            AnalysisMode.Phasor => "Dual Voltage / Current diagrams • choose C1 or C2 • native one-cycle DFT • common phase reference",
-            AnalysisMode.Harmonics => "C1 = harmonic reference • full-cycle native DFT • click a bar for details",
-            _ => "Wheel scrolls tracks • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 measures • right-click places C2"
-        };
         ApplyAnalysisModeVisuals();
 
         if (mode != AnalysisMode.Waveform)
@@ -107,8 +100,8 @@ public partial class ComtradeWorkspaceWindow
             ? "Show record-level Voltage and Current fundamental RMS phasors at global C1 or C2."
             : "This COMTRADE record contains no analog channels.";
         HarmonicsModeButton.ToolTip = selectedAnalog
-            ? "Show native ArdIrec harmonic spectrum at C1 (or the visible Time Signals center when C1 is unset)."
-            : "Select an analog signal first. C1 on Time Signals becomes the harmonic reference.";
+            ? "Show native ArdIrec harmonic spectrum at the dedicated H cursor on the shared timeline."
+            : "Select an analog signal first. Harmonics uses one dedicated H cursor.";
 
         PhasorCursor1Button.IsEnabled = DisturbanceView.Cursor1Milliseconds.HasValue;
         PhasorCursor2Button.IsEnabled = DisturbanceView.Cursor2Milliseconds.HasValue;
@@ -164,16 +157,33 @@ public partial class ComtradeWorkspaceWindow
         _analysisLoadCts?.Dispose();
         _analysisLoadCts = new CancellationTokenSource();
         var token = _analysisLoadCts.Token;
+
         var preferredCursor = _analysisMode == AnalysisMode.Phasor
             ? _phasorReferenceCursor
             : ComtradeDisturbanceCursor.Cursor1;
-        var cursorReference = TryResolveAnalysisCursorFrame(preferredCursor, out var cursorFrame);
-        var referenceFrame = cursorReference ? cursorFrame : ResolveAnalysisReferenceFrame(preferredCursor);
+
+        bool cursorReference;
+        ulong referenceFrame;
+        string referenceName;
+        if (_analysisMode == AnalysisMode.Harmonics &&
+            _harmonicCursorMilliseconds is { } harmonicMilliseconds &&
+            TryResolveDisturbanceFrameAtMilliseconds(harmonicMilliseconds, out var harmonicFrame))
+        {
+            cursorReference = true;
+            referenceFrame = harmonicFrame;
+            referenceName = "H";
+        }
+        else
+        {
+            cursorReference = TryResolveAnalysisCursorFrame(preferredCursor, out var cursorFrame);
+            referenceFrame = cursorReference ? cursorFrame : ResolveAnalysisReferenceFrame(preferredCursor);
+            referenceName = cursorReference ? CursorName(preferredCursor) : "visible center";
+        }
+
         var timeMs = await TryReadReferenceTimeMillisecondsAsync(referenceFrame, token).ConfigureAwait(true);
         if (token.IsCancellationRequested) return;
-        var triggerMs = ResolveTriggerMilliseconds();
+        var triggerMs = DisturbanceView.EffectiveTriggerMilliseconds ?? ResolveTriggerMilliseconds();
         var relative = timeMs is { } absolute && triggerMs is { } trigger ? absolute - trigger : (double?)null;
-        var referenceName = cursorReference ? CursorName(preferredCursor) : "visible center";
         var referenceTimeText = relative is { } relativeMs
             ? ComtradeDisturbanceTimelineMath.FormatRelativeTime(relativeMs)
             : timeMs is { } absoluteMs
@@ -212,7 +222,7 @@ public partial class ComtradeWorkspaceWindow
             if (token.IsCancellationRequested || _analysisMode != AnalysisMode.Harmonics) return;
             if (!spectrum.Valid || spectrum.Bins.Count == 0)
             {
-                HarmonicsView.ShowMessage("Harmonics", "The selected reference does not contain a valid full-cycle harmonic window.");
+                HarmonicsView.ShowMessage("Harmonics", "The H cursor does not contain a valid full-cycle harmonic window.");
                 return;
             }
 
@@ -230,9 +240,9 @@ public partial class ComtradeWorkspaceWindow
                 spectrum.Bins.Select(bin => new ComtradeHarmonicDisplayBin(
                     bin.Order, bin.MagnitudeRms, bin.PercentOfFundamental, bin.AngleDegrees)).ToArray());
             var harmonicSubtitle = BuildAnalysisSubtitle(metadata, referenceFrame, spectrum.Bins.Count,
-                $"orders H1…H{spectrum.Bins[^1].Order}");
+                $"H cursor • orders H1…H{spectrum.Bins[^1].Order}");
             HarmonicsView.ShowSpectrum("Harmonic spectrum", harmonicSubtitle, display);
-            StatusTextBlock.Text = $"Native ArdIrec harmonics • {referenceName} • THD {spectrum.ThdPercent:G5}% • " +
+            StatusTextBlock.Text = $"Native ArdIrec harmonics • H • {referenceTimeText} • THD {spectrum.ThdPercent:G5}% • " +
                                    (spectrum.DominantOrder > 1
                                        ? $"dominant H{spectrum.DominantOrder} {spectrum.DominantPercent:G4}%"
                                        : "no meaningful distortion harmonic");
