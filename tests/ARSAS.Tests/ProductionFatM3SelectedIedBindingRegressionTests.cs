@@ -33,22 +33,29 @@ public sealed class ProductionFatM3SelectedIedBindingRegressionTests
 
         var propertyHandler = MethodBody(
             owner,
-            "private void ProductionFat_PropertyChanged",
-            "private void ProductionFat_MainTabsSelectionChanged");
-        Assert.Contains("SynchronizeProductionFatSelectedIed(SelectedDevice);", propertyHandler, StringComparison.Ordinal);
+            "private void ProductionFat_MainWindowPropertyChanged",
+            "private void SynchronizeProductionFatSelectedIed()");
+        Assert.Contains("e.PropertyName == nameof(SelectedDevice)", propertyHandler, StringComparison.Ordinal);
+        Assert.Contains("SynchronizeProductionFatSelectedIed();", propertyHandler, StringComparison.Ordinal);
         Assert.DoesNotContain("HasRunningSession", propertyHandler, StringComparison.Ordinal);
 
         var selectDevice = MethodBody(
             embedded,
             "internal void SelectEngineeringDeviceForEmbeddedFat",
             "internal void NotifyEmbeddedHostActivated");
+        Assert.Contains("SelectedIed = null;", selectDevice, StringComparison.Ordinal);
         Assert.Contains("SelectedIed = match;", selectDevice, StringComparison.Ordinal);
-        Assert.Contains("LiveDeviceId", selectDevice, StringComparison.Ordinal);
-        Assert.Contains("IpAddress", selectDevice, StringComparison.Ordinal);
-        Assert.Contains("IedName", selectDevice, StringComparison.Ordinal);
-
+        Assert.Contains("Session.SelectContext", window, StringComparison.Ordinal);
         Assert.Contains("public bool CanSelectIed => true;", window, StringComparison.Ordinal);
-        Assert.Contains("Session.SelectContext(_selectedIed);", window, StringComparison.Ordinal);
+
+        var deviceId = selectDevice.IndexOf("device.DeviceId", StringComparison.Ordinal);
+        var sclIedName = selectDevice.IndexOf("device.SclIedName", StringComparison.Ordinal);
+        var displayName = selectDevice.IndexOf("device.Name", StringComparison.Ordinal);
+        var ipAddress = selectDevice.IndexOf("device.IpAddress", StringComparison.Ordinal);
+        Assert.True(deviceId >= 0, "Engineering DeviceId must be the strongest view identity.");
+        Assert.True(sclIedName > deviceId, "SCL IED identity must follow DeviceId fallback.");
+        Assert.True(displayName > sclIedName, "Engineering display name must be weaker than SCL identity.");
+        Assert.True(ipAddress > displayName, "IP address must be the final view-binding fallback.");
     }
 
     [Fact]
