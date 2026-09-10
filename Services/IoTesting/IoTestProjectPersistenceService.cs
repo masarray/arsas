@@ -572,6 +572,9 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                     ReviewerComment = point.ReviewerComment
                 }).ToList())
             {
+                // M5: persist the stable Engineering DeviceId when available. Older snapshots
+                // omit this field and continue through the exact IEC identity + endpoint fallback.
+                LiveDeviceId = ied.LiveDeviceId,
                 LatestComtradeFiles = ied.LatestComtradeFiles,
                 LatestComtradeRemotePath = ied.LatestComtradeRemotePath,
                 LatestComtradeCompleteness = ied.LatestComtradeCompleteness,
@@ -987,6 +990,7 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         string Switchgear,
         List<IoTestPointData> TestPoints)
     {
+        public string LiveDeviceId { get; init; } = string.Empty;
         public string LatestComtradeFiles { get; init; } = string.Empty;
         public string LatestComtradeRemotePath { get; init; } = string.Empty;
         public string LatestComtradeCompleteness { get; init; } = string.Empty;

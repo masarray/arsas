@@ -250,7 +250,8 @@ public static class IoTestWorkspaceBootstrapService
             var iedKey = IoTestPerIedProgressIdentity.IedKey(ied);
             if (!currentIedIdentityCounts.TryGetValue(iedKey, out var currentIdentityCount) ||
                 currentIdentityCount != 1 ||
-                !savedIedsByIdentity.TryGetValue(iedKey, out var savedIed))
+                !savedIedsByIdentity.TryGetValue(iedKey, out var savedIed) ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, savedIed))
             {
                 continue;
             }
@@ -445,8 +446,11 @@ public static class IoTestWorkspaceBootstrapService
             var savedIed = savedIeds.FirstOrDefault(candidate =>
                 OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
                 OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
-            if (savedIed.ValueKind != JsonValueKind.Object)
+            if (savedIed.ValueKind != JsonValueKind.Object ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, savedIed))
+            {
                 continue;
+            }
 
             var existingIds = ied.TestPoints
                 .Select(point => point.TestPointId)
@@ -543,8 +547,11 @@ public static class IoTestWorkspaceBootstrapService
             var saved = savedIeds.FirstOrDefault(candidate =>
                 OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
                 OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
-            if (saved.ValueKind != JsonValueKind.Object)
+            if (saved.ValueKind != JsonValueKind.Object ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, saved))
+            {
                 continue;
+            }
 
             ied.LatestComtradeFiles = OptionalString(saved, "latestComtradeFiles", string.Empty);
             ied.LatestComtradeRemotePath = OptionalString(saved, "latestComtradeRemotePath", string.Empty);
