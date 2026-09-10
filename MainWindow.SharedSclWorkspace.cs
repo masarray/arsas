@@ -98,6 +98,11 @@ public partial class MainWindow
         // shared monitor to start and never changes acquisition method.
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
+
+        // M2 permanent FAT host: authority establishment is also a readiness trigger.
+        // This covers SCL refresh on the same SelectedDevice, where PropertyChanged for
+        // SelectedDevice would otherwise not fire.
+        QueueProductionFatEngineeringBootstrap();
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)

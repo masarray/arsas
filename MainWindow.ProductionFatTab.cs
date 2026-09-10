@@ -72,7 +72,12 @@ public partial class MainWindow
         PropertyChanged -= NativeFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged -= NativeFat_MainTabsSelectionChanged;
 
-        _nativeFatTab.Content = BuildProductionFatLauncher();
+        _nativeFatTab.Content = BuildProductionFatPermanentHost();
+
+        // M2 prewarm starts as soon as the canonical host exists. It is deliberately
+        // independent of the currently selected tab so a valid Engineering SCL/DataSet
+        // can prepare the exact production surface before the operator first opens FAT.
+        QueueProductionFatEngineeringBootstrap();
 
         // MainWindow.xaml owns the FAT button's SegmentedNavButton style and NavButton_Click.
         // Production FAT reacts to tab selection below; it must not install a second click owner.
@@ -91,85 +96,21 @@ public partial class MainWindow
         TryInstallProductionFatTabPivot();
     }
 
-    private FrameworkElement BuildProductionFatLauncher()
+    private FrameworkElement BuildProductionFatPermanentHost()
     {
+        // This is a stable shell slot, not a launcher/form. With a valid Engineering
+        // static DataSet it is replaced in the background by the exact production FAT
+        // workspace before first navigation. With no eligible IED it remains a quiet
+        // contextual empty state and never creates an alternate FAT workflow.
         var root = new Grid { Margin = new Thickness(0) };
-        var card = new Border
+        root.Children.Add(new TextBlock
         {
-            MaxWidth = 720,
-            Padding = new Thickness(28, 24, 28, 24),
-            CornerRadius = new CornerRadius(16),
-            Background = TryFindResource("Surface") as Brush ?? Brushes.White,
-            BorderBrush = TryFindResource("Line") as Brush ?? new SolidColorBrush(Color.FromRgb(0xDC, 0xE4, 0xEF)),
-            BorderThickness = new Thickness(1),
+            Text = "FAT · awaiting an Engineering IED with static DataSet scope",
+            FontSize = 12,
+            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var content = new StackPanel();
-        content.Children.Add(new TextBlock
-        {
-            Text = "FAT WORKSPACE",
-            Style = TryFindResource("MicroLabel") as Style,
-            Foreground = TryFindResource("Accent") as Brush,
-            HorizontalAlignment = HorizontalAlignment.Center
         });
-        content.Children.Add(new TextBlock
-        {
-            Text = "Production FAT inside Engineering",
-            Margin = new Thickness(0, 7, 0, 0),
-            FontSize = 22,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TryFindResource("Ink") as Brush ?? Brushes.Black,
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-        content.Children.Add(new TextBlock
-        {
-            Text = "Open an SCL FAT project to use the proven automatic capture / completion workflow. The global IED Explorer stays visible at left and the shared Command Dock remains the only command surface.",
-            Margin = new Thickness(0, 10, 0, 18),
-            MaxWidth = 610,
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 12.2,
-            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray
-        });
-
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        var openScl = new Button
-        {
-            Content = "Open SCL for FAT",
-            Style = TryFindResource("PrimaryButton") as Style,
-            Padding = new Thickness(14, 8, 14, 8),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        openScl.Click += OpenSclFatTesting_Click;
-        actions.Children.Add(openScl);
-
-        var openProject = new Button
-        {
-            Content = "Open ARSAS Project",
-            Style = TryFindResource("SoftButton") as Style,
-            Padding = new Thickness(14, 8, 14, 8)
-        };
-        openProject.Click += OpenIoListPackage_Click;
-        actions.Children.Add(openProject);
-        content.Children.Add(actions);
-
-        content.Children.Add(new TextBlock
-        {
-            Text = "Excel workflow is intentionally not part of this primary FAT tab.",
-            Margin = new Thickness(0, 14, 0, 0),
-            FontSize = 10.6,
-            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-
-        card.Child = content;
-        root.Children.Add(card);
         return root;
     }
 
@@ -217,20 +158,13 @@ public partial class MainWindow
         window.Closed += ProductionFatWindow_Closed;
         SynchronizeProductionFatSelectedIed();
 
-        MainTabs.SelectedIndex = NativeFatWorkspaceIndex;
+        // Passive mount: prewarming must never navigate, hide/show, activate, or steal
+        // focus from the operator's current Engineering destination.
+        window.RegisterEmbeddedHostCloseCleanup();
         QueueNativeFatNavigationGeometry();
 
-        // The legacy launcher hides Engineering before showing IoListTestingWindow.
-        // Once its proven central workspace is re-parented here, restore Engineering and
-        // keep the legacy Window loaded-but-hidden solely as the production controller owner.
-        IsEnabled = true;
-        if (!IsVisible)
-            Show();
-        if (WindowState == WindowState.Minimized)
-            WindowState = WindowState.Normal;
-        Activate();
-
-        SetStatus($"FAT ready in Engineering tab · {window.Project.Ieds.Count} IED · production auto-capture workflow.");
+        if (MainTabs.SelectedIndex == NativeFatWorkspaceIndex)
+            SetStatus($"FAT ready in Engineering tab · {window.Project.Ieds.Count} IED · production auto-capture workflow.");
         return true;
     }
 
@@ -243,7 +177,7 @@ public partial class MainWindow
         _productionFatWindow = null;
         _productionFatSurface = null;
         if (_nativeFatTab != null)
-            _nativeFatTab.Content = BuildProductionFatLauncher();
+            _nativeFatTab.Content = BuildProductionFatPermanentHost();
     }
 
     private void ProductionFatWindow_Closed(object? sender, EventArgs e)

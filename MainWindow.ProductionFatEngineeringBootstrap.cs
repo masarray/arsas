@@ -50,7 +50,7 @@ public partial class MainWindow
 
     private void ProductionFatEngineeringBootstrap_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(SelectedDevice) || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
+        if (e.PropertyName != nameof(SelectedDevice))
             return;
 
         // A running production FAT session owns its latched IED. The normal embedded-host
@@ -62,7 +62,7 @@ public partial class MainWindow
 
     private void QueueProductionFatEngineeringBootstrap()
     {
-        if (!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
+        if (!_productionFatEngineeringBootstrapInstalled)
             return;
 
         Dispatcher.BeginInvoke(
@@ -73,7 +73,6 @@ public partial class MainWindow
     private async Task EnsureProductionFatFromEngineeringAsync()
     {
         if (_productionFatEngineeringBootstrapBusy ||
-            MainTabs.SelectedIndex != NativeFatWorkspaceIndex ||
             !ProductionFatTabReady)
         {
             return;

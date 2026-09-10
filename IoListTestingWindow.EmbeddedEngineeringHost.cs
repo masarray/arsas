@@ -28,6 +28,19 @@ public partial class IoListTestingWindow
             handledEventsToo: true);
     }
 
+    internal void PrepareForEmbeddedEngineeringHost()
+    {
+        // Must run before Window.Show(). A transparent/off-screen, non-activating donor
+        // cannot produce the historical black/blank compositor frame while its exact
+        // production center is being re-parented into MainWindow.
+        ShowActivated = false;
+        ShowInTaskbar = false;
+        Opacity = 0d;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = -32000d;
+        Top = -32000d;
+    }
+
     private static void EmbeddedEngineeringFatHost_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not IoListTestingWindow window ||
@@ -45,9 +58,7 @@ public partial class IoListTestingWindow
         // MainWindow's legacy launcher still calls Show() on this Window. Make that bootstrap
         // surface invisible immediately; the actual production visual is moved into Engineering
         // on the next Loaded-priority dispatcher turn, before ContextIdle command-panel work.
-        window.ShowActivated = false;
-        window.ShowInTaskbar = false;
-        window.Opacity = 0d;
+        window.PrepareForEmbeddedEngineeringHost();
 
         window.Dispatcher.BeginInvoke(
             DispatcherPriority.Loaded,

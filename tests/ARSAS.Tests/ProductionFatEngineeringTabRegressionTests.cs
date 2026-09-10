@@ -21,7 +21,7 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
 
-        Assert.Contains("MainTabs.SelectedIndex != NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
+        Assert.Contains("QueueProductionFatEngineeringBootstrap();", source, StringComparison.Ordinal);
         Assert.Contains("selected?.SclWorkspace", source, StringComparison.Ordinal);
         Assert.Contains("DesignModel.DataSets.Sum", source, StringComparison.Ordinal);
         Assert.Contains("IoFatEngineeringWorkspaceProjectionService.BuildAsync", source, StringComparison.Ordinal);
