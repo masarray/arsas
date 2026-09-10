@@ -189,11 +189,19 @@ public partial class ComtradeWorkspaceWindow
         _disturbanceLoadCts?.Dispose();
         _disturbanceLoadCts = new CancellationTokenSource();
         var token = _disturbanceLoadCts.Token;
-        var selected = _disturbanceVisibleSignals.Take(MaxVisibleDisturbanceTracks).ToArray();
+        var selected = _disturbanceVisibleSignals
+            .OrderBy(item => item.IsAnalog ? 0 : 1)
+            .ThenBy(item => item.SectionOrder)
+            .ThenBy(item => item.PhaseOrder)
+            .ThenBy(item => item.Index)
+            .Take(MaxVisibleDisturbanceTracks)
+            .ToArray();
 
         if (selected.Length == 0)
         {
             DisturbanceView.ShowMessage("Select signals to display.");
+            CursorReadoutCanvas.Children.Clear();
+            _p1d5VisibleTrackOrder = Array.Empty<ComtradeSignalItem>();
             DigitalEventGrid.ItemsSource = Array.Empty<ComtradeDigitalEventRow>();
             StatusTextBlock.Text = "No Time Signals tracks selected • use the checkboxes in Signals or choose Auto.";
             NavigationTextBlock.Text = "Wheel scrolls signals • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 measures";
@@ -213,6 +221,7 @@ public partial class ComtradeWorkspaceWindow
             _disturbanceRequestedViewport = result.SourceViewport;
             _disturbanceReferenceTimestamps = result.ReferenceTimestamps;
             _disturbanceReferenceSourceFrames = result.ReferenceSourceFrames;
+            P1D5RememberTrackOrder(result.Tracks);
             var triggerMs = ResolveTriggerMilliseconds();
             DisturbanceView.ShowTracks(result.Tracks.Select(item => item.Track).ToArray(), _record.Info.TimeMultiplier, triggerMs);
 
@@ -221,9 +230,6 @@ public partial class ComtradeWorkspaceWindow
                 DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
                 _disturbanceInitialFocusApplied = true;
 
-                // A full-record 4096-bucket envelope can be too sparse for an eight-cycle opening
-                // view. Use timestamp->source-frame identity from that overview to reload a buffered
-                // trigger neighborhood, then keep the same trigger-focused time window.
                 if (result.SourceViewport.FrameCount > ExactSignalFrameLimit &&
                     TryBuildSourceViewportForTimeWindow(
                         DisturbanceView.ViewStartMilliseconds,
@@ -232,7 +238,7 @@ public partial class ComtradeWorkspaceWindow
                     triggerViewport.FrameCount > 0 &&
                     triggerViewport.FrameCount < result.SourceViewport.FrameCount)
                 {
-                    StatusTextBlock.Text = "Refining trigger neighborhood from native source frames…";
+                    StatusTextBlock.Text = "Refining trigger neighborhood from source frames…";
                     await ReloadDisturbanceAsync(triggerViewport, initialLoad: false).ConfigureAwait(true);
                     DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
                     return;
@@ -247,8 +253,10 @@ public partial class ComtradeWorkspaceWindow
             DigitalEventExpander.Visibility = result.Tracks.Any(item => item.Track.IsDigital) ? Visibility.Visible : Visibility.Collapsed;
             ResetViewButton.IsEnabled = result.Tracks.Any(item => item.Track.Timestamps.Length > 1);
             FullRecordButton.IsEnabled = result.Tracks.Any(item => item.Track.Timestamps.Length > 1);
-            StatusTextBlock.Text = $"Time Signals • {result.Tracks.Count} tracks • {result.SourceViewport.FrameCount:N0} source frames" +
-                                   (result.SourceViewport.FrameCount <= ExactSignalFrameLimit ? " • exact native samples" : " • bounded native overview");
+            var traceMode = P1D5IsRmsTrace ? "RMS" : "instantaneous";
+            StatusTextBlock.Text = $"Time Signals • {result.Tracks.Count} tracks • {traceMode} • {P1D5RepresentationLabel} • {result.SourceViewport.FrameCount:N0} source frames" +
+                                   (result.SourceViewport.FrameCount <= ExactSignalFrameLimit ? " • exact samples" : " • bounded overview");
+            QueueP1D5CursorMeasurements();
         }
         catch (OperationCanceledException)
         {
@@ -260,6 +268,7 @@ public partial class ComtradeWorkspaceWindow
         {
             DisturbanceView.ShowMessage(ex.Message);
             StatusTextBlock.Text = $"Time Signals load failed: {ex.Message}";
+            ComtradeDiagnosticQueue.TryEnqueue("P1D5.TimeSignals", "TIMESIGNALS_LOAD_FAILURE", $"viewport={requestedViewport}", ex);
         }
     }
 
@@ -299,12 +308,23 @@ public partial class ComtradeWorkspaceWindow
                 if (signal.IsAnalog)
                 {
                     var metadata = _record.AnalogChannels[checked((int)signal.Index)];
+                    var recorded = _record.ReadAnalog(signal.Index, viewport.StartFrame, count);
+                    var values = P1D5IsRmsTrace
+                        ? ComtradeRmsSeriesBuilder.BuildExact(
+                            recorded,
+                            timestamps,
+                            sourceFrames,
+                            _record.Info.TimeMultiplier,
+                            _record.Info.NominalFrequency,
+                            P1D5DisplayScale(signal.Index),
+                            token).Values
+                        : P1D5ScaleInstantaneous(recorded, signal.Index);
                     loaded.Add(new LoadedDisturbanceTrack(signal, new ComtradeDisturbanceTrack(
                         signal.Title,
-                        BuildTrackSubtitle(metadata.Phase, metadata.Circuit),
+                        BuildP1D5TrackSubtitle(metadata),
                         metadata.Units,
                         false,
-                        _record.ReadAnalog(signal.Index, viewport.StartFrame, count),
+                        values,
                         null,
                         timestamps,
                         ResolveSignalColor(metadata.Phase, signal.Title, false),
@@ -338,26 +358,54 @@ public partial class ComtradeWorkspaceWindow
                 token.ThrowIfCancellationRequested();
                 if (signal.IsAnalog)
                 {
-                    var envelope = ComtradeRangeDecimator.BuildAnalogEnvelope(
-                        source,
-                        signal.Index,
-                        viewport.StartFrame,
-                        viewport.FrameCount,
-                        FullRecordAnalogBuckets,
-                        cancellationToken: token);
-                    var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
                     var metadata = _record.AnalogChannels[checked((int)signal.Index)];
-                    loaded.Add(new LoadedDisturbanceTrack(signal, new ComtradeDisturbanceTrack(
-                        signal.Title,
-                        BuildTrackSubtitle(metadata.Phase, metadata.Circuit),
-                        metadata.Units,
-                        false,
-                        series.Values,
-                        null,
-                        series.Timestamps,
-                        ResolveSignalColor(metadata.Phase, signal.Title, false),
-                        PreserveAllPoints: true,
-                        SourceFrames: series.SourceFrames)));
+                    if (P1D5IsRmsTrace)
+                    {
+                        var rms = ComtradeRmsSeriesBuilder.BuildBounded(
+                            source,
+                            signal.Index,
+                            viewport.StartFrame,
+                            viewport.FrameCount,
+                            _record.Info.TimeMultiplier,
+                            _record.Info.NominalFrequency,
+                            P1D5DisplayScale(signal.Index),
+                            FullRecordAnalogBuckets * 2,
+                            cancellationToken: token);
+                        loaded.Add(new LoadedDisturbanceTrack(signal, new ComtradeDisturbanceTrack(
+                            signal.Title,
+                            BuildP1D5TrackSubtitle(metadata),
+                            metadata.Units,
+                            false,
+                            rms.Values,
+                            null,
+                            rms.Timestamps,
+                            ResolveSignalColor(metadata.Phase, signal.Title, false),
+                            PreserveAllPoints: true,
+                            SourceFrames: rms.SourceFrames)));
+                    }
+                    else
+                    {
+                        var envelope = ComtradeRangeDecimator.BuildAnalogEnvelope(
+                            source,
+                            signal.Index,
+                            viewport.StartFrame,
+                            viewport.FrameCount,
+                            FullRecordAnalogBuckets,
+                            cancellationToken: token);
+                        var series = ComtradeDecimatedSeriesBuilder.BuildAnalog(envelope);
+                        var values = P1D5ScaleInstantaneous(series.Values, signal.Index);
+                        loaded.Add(new LoadedDisturbanceTrack(signal, new ComtradeDisturbanceTrack(
+                            signal.Title,
+                            BuildP1D5TrackSubtitle(metadata),
+                            metadata.Units,
+                            false,
+                            values,
+                            null,
+                            series.Timestamps,
+                            ResolveSignalColor(metadata.Phase, signal.Title, false),
+                            PreserveAllPoints: true,
+                            SourceFrames: series.SourceFrames)));
+                    }
                 }
                 else
                 {
@@ -400,6 +448,15 @@ public partial class ComtradeWorkspaceWindow
             reference?.SourceFrames ?? Array.Empty<ulong>());
     }
 
+    private string BuildP1D5TrackSubtitle(ComtradeAnalogChannelInfo metadata)
+    {
+        var baseSubtitle = BuildTrackSubtitle(metadata.Phase, metadata.Circuit);
+        var trace = P1D5IsRmsTrace ? "RMS" : "instant";
+        return string.IsNullOrWhiteSpace(baseSubtitle)
+            ? $"{trace} • {P1D5RepresentationLabel}"
+            : $"{baseSubtitle} • {trace} • {P1D5RepresentationLabel}";
+    }
+
     private static ulong[] BuildSequentialFrames(ulong startFrame, int count)
     {
         var frames = new ulong[count];
@@ -432,10 +489,6 @@ public partial class ComtradeWorkspaceWindow
     {
         if (transitionSet.Transitions.Count <= 1)
             return Array.Empty<ComtradeDisturbanceDigitalEdge>();
-
-        // Every retained item after the initial state is an actual binary transition. Adaptive
-        // sampling may omit intermediate transitions, so infer the immediate before-state as the
-        // opposite raw value instead of comparing adjacent retained samples.
         return transitionSet.Transitions
             .Skip(1)
             .Select(transition =>
@@ -498,6 +551,7 @@ public partial class ComtradeWorkspaceWindow
     {
         if (DigitalEventGrid.SelectedItem is not ComtradeDigitalEventRow row) return;
         DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor1, row.AbsoluteMilliseconds);
+        QueueP1D5CursorMeasurements();
         StatusTextBlock.Text = $"C1 moved to {row.Signal} • {row.Event} • {row.TimeText}.";
     }
 
@@ -519,6 +573,7 @@ public partial class ComtradeWorkspaceWindow
         }
         DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
         _disturbanceInitialFocusApplied = true;
+        QueueP1D5CursorMeasurements();
     }
 
     private async void DisturbanceFullRecord_Click(object sender, RoutedEventArgs e)
@@ -539,9 +594,9 @@ public partial class ComtradeWorkspaceWindow
     private async void DisturbanceView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
-            return; // Normal wheel belongs to the vertical track ScrollViewer.
+            return;
         if (_record.Info.FrameCount <= ExactSignalFrameLimit || _disturbanceLoadedViewport.FrameCount == 0)
-            return; // Small records use the control's in-memory Ctrl+wheel zoom.
+            return;
 
         var current = _disturbanceRequestedViewport.FrameCount > 0 ? _disturbanceRequestedViewport : _disturbanceLoadedViewport;
         var plotFraction = DisturbanceView.PlotFractionAt(e.GetPosition(DisturbanceView).X);
@@ -570,9 +625,6 @@ public partial class ComtradeWorkspaceWindow
     {
         if (_record.Info.FrameCount <= ExactSignalFrameLimit || _disturbanceLoadedViewport.FrameCount == 0)
             return;
-
-        // If the in-memory view still has margin inside the loaded native range, local panning is
-        // sufficient. Reload source frames only when the gesture reaches a loaded-range edge.
         const double epsilon = 1e-6;
         if (DisturbanceView.ViewStartMilliseconds > DisturbanceView.FullStartMilliseconds + epsilon &&
             DisturbanceView.ViewEndMilliseconds < DisturbanceView.FullEndMilliseconds - epsilon)
@@ -591,7 +643,10 @@ public partial class ComtradeWorkspaceWindow
         if (!e.IsFinal || e.SnapToleranceMilliseconds <= 0 ||
             !_record.Supports(ArdIrecNativeBridge.CapDigitalEdgeSnap) ||
             !TryResolveDisturbanceFrameAtMilliseconds(e.AbsoluteMilliseconds, out var sourceFrame))
+        {
+            if (e.IsFinal) QueueP1D5CursorMeasurements();
             return;
+        }
 
         _disturbanceCursorSnapCts?.Cancel();
         _disturbanceCursorSnapCts?.Dispose();
@@ -616,11 +671,16 @@ public partial class ComtradeWorkspaceWindow
                 _nativeGate.Release();
             }
 
-            if (token.IsCancellationRequested || edge is not { Valid: true }) return;
+            if (token.IsCancellationRequested || edge is not { Valid: true })
+            {
+                await Dispatcher.InvokeAsync(QueueP1D5CursorMeasurements);
+                return;
+            }
             var snappedMilliseconds = ComtradeTimeMath.ToMilliseconds(edge.RawTimestamp, _record.Info.TimeMultiplier);
             await Dispatcher.InvokeAsync(() =>
             {
                 DisturbanceView.SetCursorFromHost(e.Cursor, snappedMilliseconds);
+                QueueP1D5CursorMeasurements();
                 var signal = edge.ChannelIndex < _record.StatusChannels.Count
                     ? _record.StatusChannels[checked((int)edge.ChannelIndex)].Id
                     : $"digital {edge.ChannelIndex + 1}";
@@ -642,11 +702,9 @@ public partial class ComtradeWorkspaceWindow
             : ComtradeAbsoluteViewportMath.Full(_record.Info.FrameCount);
 
     private double? ResolveTriggerMilliseconds()
-    {
-        return ComtradeTimeMath.TryGetTriggerOffsetMilliseconds(_record.Info.StartTime, _record.Info.TriggerTime, out var trigger)
+        => ComtradeTimeMath.TryGetTriggerOffsetMilliseconds(_record.Info.StartTime, _record.Info.TriggerTime, out var trigger)
             ? trigger
             : null;
-    }
 
     private bool TryResolveDisturbanceCursorFrame(out ulong frame)
     {
@@ -666,8 +724,7 @@ public partial class ComtradeWorkspaceWindow
         var count = Math.Min(timestamps.Length, sourceFrames.Length);
         if (count <= 0) return false;
         var targetRaw = milliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
-        var searchTimestamps = count == timestamps.Length ? timestamps : timestamps.Take(count).ToArray();
-        var index = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetRaw);
+        var index = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(timestamps, count, targetRaw);
         if (index < 0 || index >= count) return false;
         frame = Math.Min(_record.Info.FrameCount - 1, sourceFrames[index]);
         return true;
@@ -687,9 +744,8 @@ public partial class ComtradeWorkspaceWindow
         var count = Math.Min(timestamps.Length, sourceFrames.Length);
         var targetStartRaw = startMilliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
         var targetEndRaw = endMilliseconds * 1000.0 / Math.Max(1e-12, _record.Info.TimeMultiplier);
-        var searchTimestamps = count == timestamps.Length ? timestamps : timestamps.Take(count).ToArray();
-        var startIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetStartRaw);
-        var endIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(searchTimestamps, targetEndRaw);
+        var startIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(timestamps, count, targetStartRaw);
+        var endIndex = ComtradeDisturbanceTimelineMath.NearestTimestampIndex(timestamps, count, targetEndRaw);
         if (startIndex < 0 || endIndex < 0) return false;
 
         var lowIndex = Math.Max(0, Math.Min(startIndex, endIndex) - 2);

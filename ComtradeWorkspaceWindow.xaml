@@ -3,8 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ArIED61850Tester.Controls"
         Title="ARSAS — COMTRADE Workspace"
-        Width="1280" Height="800" MinWidth="980" MinHeight="620"
+        Width="1360" Height="920" MinWidth="1040" MinHeight="700"
         WindowStartupLocation="CenterOwner"
+        Loaded="P1D5Workspace_Loaded"
         Background="#F3F6FA"
         FontFamily="Segoe UI">
     <Grid Margin="10">
@@ -23,22 +24,10 @@
                     <RowDefinition Height="8"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="COMTRADE Workspace" FontSize="17" FontWeight="SemiBold" Foreground="#18324F"/>
-                        <TextBlock x:Name="RecordIdentityText" Margin="14,2,0,0" FontSize="10.5" Foreground="#6A7F98" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-                    <Border Grid.Column="1" Background="#EEF6FF" BorderBrush="#C8DEF8" BorderThickness="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="6" Height="6" Fill="#2A78DF" VerticalAlignment="Center"/>
-                            <TextBlock Text="Native ArdIrec core" Margin="6,0,0,0" FontSize="10.5" FontWeight="SemiBold" Foreground="#275D9A"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="COMTRADE Workspace" FontSize="17" FontWeight="SemiBold" Foreground="#18324F"/>
+                    <TextBlock x:Name="RecordIdentityText" Margin="14,2,0,0" FontSize="10.5" Foreground="#6A7F98" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
 
                 <Grid Grid.Row="2">
                     <Grid.ColumnDefinitions>
@@ -173,7 +162,18 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="NavigationTextBlock" Visibility="Collapsed"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel x:Name="WaveformTraceModePanel" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Trace" Margin="0,0,6,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                    <Button x:Name="InstantTraceButton" Content="Instant" Height="25" MinWidth="58" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="InstantTrace_Click"/>
+                                    <Button x:Name="RmsTraceButton" Content="RMS" Height="25" MinWidth="48" Margin="4,0,0,0" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="RmsTrace_Click"/>
+                                </StackPanel>
+                                <Border Width="1" Height="19" Background="#DDE5EF" Margin="10,0"/>
+                                <TextBlock Text="Values" Margin="0,0,6,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                <Button x:Name="SecondaryValueButton" Content="Secondary" Height="25" MinWidth="72" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="SecondaryValue_Click"/>
+                                <Button x:Name="PrimaryValueButton" Content="Primary" Height="25" MinWidth="62" Margin="4,0,0,0" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="PrimaryValue_Click"/>
+                                <TextBlock x:Name="NavigationTextBlock" Visibility="Collapsed"/>
+                            </StackPanel>
                             <Grid Grid.Column="1" Margin="12,0,0,0">
                                 <StackPanel x:Name="TimeNavigationPanel" Orientation="Horizontal">
                                     <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
@@ -187,21 +187,14 @@
                                 </StackPanel>
                                 <StackPanel x:Name="PhasorReferencePanel" Orientation="Horizontal" Visibility="Collapsed" VerticalAlignment="Center">
                                     <TextBlock Text="Phasor reference" Margin="0,0,7,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
-                                    <Button x:Name="PhasorCursor1Button" Content="C1" Height="25" MinWidth="42" Padding="9,0"
-                                            FontSize="10" FontWeight="SemiBold" Cursor="Hand"
-                                            ToolTip="Use global investigation cursor C1 for both Voltage and Current phasor diagrams."
-                                            Click="PhasorCursor1_Click"/>
-                                    <Button x:Name="PhasorCursor2Button" Content="C2" Height="25" MinWidth="42" Margin="5,0,0,0" Padding="9,0"
-                                            FontSize="10" FontWeight="SemiBold" Cursor="Hand"
-                                            ToolTip="Use global investigation cursor C2 for both Voltage and Current phasor diagrams."
-                                            Click="PhasorCursor2_Click"/>
+                                    <Button x:Name="PhasorCursor1Button" Content="C1" Height="25" MinWidth="42" Padding="9,0" FontSize="10" FontWeight="SemiBold" Cursor="Hand" Click="PhasorCursor1_Click"/>
+                                    <Button x:Name="PhasorCursor2Button" Content="C2" Height="25" MinWidth="42" Margin="5,0,0,0" Padding="9,0" FontSize="10" FontWeight="SemiBold" Cursor="Hand" Click="PhasorCursor2_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Grid>
                     </Border>
 
-                    <controls:ComtradeInvestigationTimelineView x:Name="InvestigationTimeline" Grid.Row="2"
-                                                               Loaded="InvestigationTimeline_Loaded"/>
+                    <controls:ComtradeInvestigationTimelineView x:Name="InvestigationTimeline" Grid.Row="2" Loaded="InvestigationTimeline_Loaded"/>
 
                     <Grid Grid.Row="3">
                         <Grid x:Name="WaveformWorkspaceHost">
@@ -210,9 +203,12 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <ScrollViewer x:Name="DisturbanceScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White" PanningMode="VerticalOnly">
-                                <controls:ComtradeDisturbanceViewP1D3ShellAware x:Name="DisturbanceView" MinHeight="330"/>
+                                <Grid>
+                                    <controls:ComtradeDisturbanceViewP1D3ShellAware x:Name="DisturbanceView" MinHeight="330"/>
+                                    <Canvas x:Name="CursorReadoutCanvas" Width="150" HorizontalAlignment="Left" IsHitTestVisible="False" Panel.ZIndex="5"/>
+                                </Grid>
                             </ScrollViewer>
-                            <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="True"
+                            <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="False"
                                       Background="#FAFCFF" BorderBrush="#E2E9F2" BorderThickness="0,1,0,0" Padding="8,4" MaxHeight="175">
                                 <DataGrid x:Name="DigitalEventGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                                           GridLinesVisibility="Horizontal" BorderThickness="0" Background="White" RowHeaderWidth="0"
@@ -242,15 +238,9 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="StatusTextBlock" FontSize="10.2" Foreground="#687B92" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <Button x:Name="FullAnalysisButton" Grid.Column="1" Content="Full analysis" Height="26" MinWidth="94" Margin="12,0,14,0"
-                        Padding="12,0" FontSize="10.2" FontWeight="SemiBold" Foreground="#315D91" Background="#F5F9FF"
-                        BorderBrush="#C5D8EE" BorderThickness="1" Cursor="Hand"
-                        ToolTip="Open the complete Qt analysis workspace for field comparison."
-                        Click="FullAnalysis_Click"/>
-                <TextBlock Grid.Column="2" Text="P1D.3 • shared investigation timeline" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="P1D.5 • ARSAS COMTRADE workstation" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

@@ -36,7 +36,7 @@ public partial class FaultRecordWindow
         buttonFactory.SetValue(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(244, 248, 255)));
         buttonFactory.SetValue(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(166, 190, 221)));
         buttonFactory.SetValue(Control.BorderThicknessProperty, new Thickness(1));
-        buttonFactory.SetValue(FrameworkElement.ToolTipProperty, "Open in COMTRADE Viewer");
+        buttonFactory.SetValue(FrameworkElement.ToolTipProperty, "Open in ARSAS COMTRADE Workspace");
         buttonFactory.SetValue(ToolTipService.InitialShowDelayProperty, 650);
         buttonFactory.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
         buttonFactory.SetBinding(
@@ -47,11 +47,6 @@ public partial class FaultRecordWindow
                 Converter = DownloadedFaultRecordVisibilityConverter.Instance
             });
         buttonFactory.AddHandler(Button.ClickEvent, new RoutedEventHandler(OpenComtrade_Click));
-
-        var cellTemplate = new DataTemplate
-        {
-            VisualTree = buttonFactory
-        };
 
         FaultRecordsGrid.Columns.Add(new DataGridTemplateColumn
         {
@@ -67,7 +62,7 @@ public partial class FaultRecordWindow
             IsReadOnly = true,
             CanUserSort = false,
             CanUserResize = false,
-            CellTemplate = cellTemplate
+            CellTemplate = new DataTemplate { VisualTree = buttonFactory }
         });
 
         _comtradeOpenColumnInstalled = true;
@@ -79,7 +74,6 @@ public partial class FaultRecordWindow
             return;
 
         e.Handled = true;
-
         if (row.LocalState != FaultRecordLocalState.Downloaded)
         {
             ShowToast("Download the complete COMTRADE record before opening it.", ToastKind.Warning);
@@ -103,99 +97,57 @@ public partial class FaultRecordWindow
                 return;
             }
 
-            StatusText = $"Opening {Path.GetFileName(cfgPath)} in the native COMTRADE workspace…";
-            ShowToast("Loading COMTRADE record with native ArdIrec core…", ToastKind.Information);
+            StatusText = $"Opening {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE workspace…";
+            ShowToast("Loading COMTRADE record…", ToastKind.Information);
 
-            // P1A's reference DatReader eagerly decodes the record while opening. Keep that work
-            // off WPF's dispatcher thread so large field records do not freeze the Fault Records UI.
+            // Native record decode can be substantial. Keep it off WPF's dispatcher so large field
+            // records never freeze the fault-record browser while the workspace is being created.
             var nativeOpen = await Task.Run(() =>
             {
                 var opened = ArdIrecNativeBridge.TryOpen(cfgPath, out var record, out var error);
                 return (Opened: opened, Record: record, Error: error);
             }).ConfigureAwait(true);
 
-            if (nativeOpen.Opened && nativeOpen.Record is not null)
+            if (!nativeOpen.Opened || nativeOpen.Record is null)
             {
-                try
-                {
-                    var workspace = new ComtradeWorkspaceWindow(nativeOpen.Record)
-                    {
-                        Owner = this
-                    };
-                    workspace.Show();
-                    StatusText = $"Opened {Path.GetFileName(cfgPath)} in the ARSAS native COMTRADE workspace.";
-                    ShowToast("COMTRADE record opened natively.", ToastKind.Success);
-                    return;
-                }
-                catch
-                {
-                    nativeOpen.Record.Dispose();
-                    throw;
-                }
-            }
-
-            var nativeError = nativeOpen.Error;
-
-            // P1 rolls out native-first while preserving the proven P0 viewer as a compatibility
-            // fallback. This keeps field workflows available if the native DLL is absent or a
-            // workstation exposes an interop issue during the parity phase.
-            StatusText = $"Native COMTRADE workspace unavailable; using compatibility viewer. {nativeError}";
-            ShowToast("Opening compatibility COMTRADE Viewer…", ToastKind.Information);
-
-            if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var process, out var launchError) || process is null)
-            {
-                var combinedError = string.IsNullOrWhiteSpace(nativeError)
-                    ? launchError
-                    : $"Native workspace: {nativeError}{Environment.NewLine}{Environment.NewLine}Compatibility viewer: {launchError}";
-                StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}.";
-                ShowToast("COMTRADE Viewer could not be started.", ToastKind.Error);
+                var message = string.IsNullOrWhiteSpace(nativeOpen.Error)
+                    ? "The ARSAS COMTRADE analysis engine could not open this record."
+                    : nativeOpen.Error;
+                StatusText = $"COMTRADE workspace could not open {Path.GetFileName(cfgPath)}.";
+                ShowToast("COMTRADE workspace could not be started.", ToastKind.Error);
                 MessageBox.Show(
                     this,
-                    combinedError,
-                    "COMTRADE Viewer",
+                    message,
+                    "COMTRADE Workspace",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
             }
 
-            using (process)
+            try
             {
-                var activated = false;
-                for (var attempt = 0; attempt < 6; attempt++)
+                var workspace = new ComtradeWorkspaceWindow(nativeOpen.Record)
                 {
-                    await Task.Delay(attempt == 0 ? 350 : 220).ConfigureAwait(true);
-
-                    process.Refresh();
-                    if (process.HasExited)
-                    {
-                        var earlyExitError = ArdIrecViewerLauncher.DescribeEarlyExit(process, cfgPath);
-                        StatusText = $"COMTRADE compatibility viewer failed for {Path.GetFileName(cfgPath)}: {earlyExitError}";
-                        ShowToast("COMTRADE Viewer closed during startup.", ToastKind.Error);
-                        MessageBox.Show(
-                            this,
-                            earlyExitError,
-                            "COMTRADE Viewer startup failed",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
-                        return;
-                    }
-
-                    if (!activated)
-                        activated = ArdIrecViewerLauncher.TryActivateViewerWindow(process);
-                }
-
-                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the compatibility COMTRADE Viewer.";
-                ShowToast("COMTRADE record opened in compatibility viewer.", ToastKind.Success);
+                    Owner = this
+                };
+                workspace.Show();
+                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the ARSAS COMTRADE workspace.";
+                ShowToast("COMTRADE record opened.", ToastKind.Success);
+            }
+            catch
+            {
+                nativeOpen.Record.Dispose();
+                throw;
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or SEHException or BadImageFormatException)
+        catch (Exception ex) when (ex is InvalidOperationException or SEHException or BadImageFormatException)
         {
             StatusText = $"COMTRADE startup failed for {row.RecordName}: {ex.Message}";
-            ShowToast("COMTRADE Viewer startup failed.", ToastKind.Error);
+            ShowToast("COMTRADE workspace startup failed.", ToastKind.Error);
             MessageBox.Show(
                 this,
                 ex.Message,
-                "COMTRADE Viewer startup failed",
+                "COMTRADE Workspace startup failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
