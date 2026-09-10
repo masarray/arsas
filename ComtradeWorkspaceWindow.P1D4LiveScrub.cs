@@ -162,43 +162,30 @@ public partial class ComtradeWorkspaceWindow
     {
         try
         {
-            var token = EnsureP1D4ScrubToken();
-            if (request.Mode == AnalysisMode.Phasor)
-            {
-                if (!_phasorFrameCache.TryGetValue(request.ReferenceFrame, out var phasor))
-                {
-                    phasor = await LoadP1D4PhasorWorkspaceAsync(request.ReferenceFrame, token).ConfigureAwait(true);
-                    RememberPhasor(request.ReferenceFrame, phasor);
-                }
+            var outcome = await TryLoadP1D4LiveAnalysisAsync(request, EnsureP1D4ScrubToken()).ConfigureAwait(true);
+            if (outcome.State == P1D4LiveAnalysisState.Cancelled || !ShouldPresentP1D4LiveAnalysis(request))
+                return;
 
-                if (!ShouldPresentP1D4LiveAnalysis(request)) return;
-                PresentPhasor(request.ReferenceFrame, request.ReferenceMilliseconds, phasor);
+            if (outcome.State == P1D4LiveAnalysisState.Failed)
+            {
+                StatusTextBlock.Text = outcome.OperatorMessage;
+                return;
             }
-            else if (request.HarmonicSignals is { Count: > 0 } harmonicSignals)
-            {
-                var overview = await LoadP1D4HarmonicOverviewAsync(
-                    harmonicSignals,
-                    request.ReferenceFrame,
-                    token).ConfigureAwait(true);
 
-                if (!ShouldPresentP1D4LiveAnalysis(request)) return;
+            if (request.Mode == AnalysisMode.Phasor && outcome.Phasor is { } phasor)
+            {
+                PresentPhasor(request.ReferenceFrame, request.ReferenceMilliseconds, phasor);
+                return;
+            }
+
+            if (request.Mode == AnalysisMode.Harmonics && outcome.Harmonics is { Count: > 0 } overview)
+            {
                 PresentP1D4HarmonicOverview(
                     request.ReferenceFrame,
                     request.ReferenceMilliseconds,
                     request.HarmonicSignature,
                     overview);
             }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-        catch (Exception ex)
-        {
-            if (ShouldPresentP1D4LiveAnalysis(request))
-                StatusTextBlock.Text = $"Native COMTRADE live analysis failed: {ex.Message}";
         }
         finally
         {
@@ -207,6 +194,71 @@ public partial class ComtradeWorkspaceWindow
                 EnsureP1D4LiveAnalysisRenderingPump();
             else
                 StopP1D4LiveAnalysisRenderingPump();
+        }
+    }
+
+    /// <summary>
+    /// Native/framework exceptions are contained at this asynchronous boundary and translated into
+    /// an explicit result state. Expected cancellation never reaches presentation as an error.
+    /// Detailed exception context is handed to the bounded diagnostic queue without blocking UI.
+    /// </summary>
+    private async Task<P1D4LiveAnalysisOutcome> TryLoadP1D4LiveAnalysisAsync(
+        P1D4LiveAnalysisRequest request,
+        CancellationToken token)
+    {
+        try
+        {
+            if (token.IsCancellationRequested)
+                return P1D4LiveAnalysisOutcome.Cancelled();
+
+            if (request.Mode == AnalysisMode.Phasor)
+            {
+                if (!_phasorFrameCache.TryGetValue(request.ReferenceFrame, out var phasor))
+                {
+                    phasor = await LoadP1D4PhasorWorkspaceAsync(request.ReferenceFrame, token).ConfigureAwait(true);
+                    if (token.IsCancellationRequested)
+                        return P1D4LiveAnalysisOutcome.Cancelled();
+                    RememberPhasor(request.ReferenceFrame, phasor);
+                }
+                return P1D4LiveAnalysisOutcome.Success(phasor);
+            }
+
+            if (request.HarmonicSignals is not { Count: > 0 } harmonicSignals)
+            {
+                return P1D4LiveAnalysisOutcome.Failed(
+                    "HARMONIC_SELECTION_EMPTY",
+                    "Native COMTRADE harmonics unavailable: no checked analog channel is active.");
+            }
+
+            var overview = await LoadP1D4HarmonicOverviewAsync(
+                harmonicSignals,
+                request.ReferenceFrame,
+                token).ConfigureAwait(true);
+            if (token.IsCancellationRequested)
+                return P1D4LiveAnalysisOutcome.Cancelled();
+            return P1D4LiveAnalysisOutcome.Success(overview);
+        }
+        catch (OperationCanceledException)
+        {
+            return P1D4LiveAnalysisOutcome.Cancelled();
+        }
+        catch (ObjectDisposedException)
+        {
+            return P1D4LiveAnalysisOutcome.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            var code = request.Mode == AnalysisMode.Phasor
+                ? "PHASOR_NATIVE_FAILURE"
+                : "HARMONIC_NATIVE_FAILURE";
+            ComtradeDiagnosticQueue.TryEnqueue(
+                "P1D4.LiveAnalysis",
+                code,
+                $"Mode={request.Mode}; frame={request.ReferenceFrame}; revision={request.Revision}; final={request.IsFinal}",
+                ex);
+            return P1D4LiveAnalysisOutcome.Failed(
+                code,
+                $"Native COMTRADE {request.Mode.ToString().ToLowerInvariant()} analysis is unavailable at this reference. Diagnostics captured.");
         }
     }
 
@@ -299,6 +351,33 @@ public partial class ComtradeWorkspaceWindow
         _p1d4CurrentChannels = ComtradePhasorWorkspaceMath
             .SelectRoleSet(descriptors, ComtradePhasorWorkspaceMath.RoleCurrent)
             .ToArray();
+    }
+
+    private enum P1D4LiveAnalysisState
+    {
+        Success,
+        Cancelled,
+        Failed
+    }
+
+    private readonly record struct P1D4LiveAnalysisOutcome(
+        P1D4LiveAnalysisState State,
+        ComtradePhasorWorkspaceResult? Phasor,
+        IReadOnlyList<P1D4HarmonicOverviewEntry>? Harmonics,
+        string ErrorCode,
+        string OperatorMessage)
+    {
+        internal static P1D4LiveAnalysisOutcome Success(ComtradePhasorWorkspaceResult phasor)
+            => new(P1D4LiveAnalysisState.Success, phasor, null, string.Empty, string.Empty);
+
+        internal static P1D4LiveAnalysisOutcome Success(IReadOnlyList<P1D4HarmonicOverviewEntry> harmonics)
+            => new(P1D4LiveAnalysisState.Success, null, harmonics, string.Empty, string.Empty);
+
+        internal static P1D4LiveAnalysisOutcome Cancelled()
+            => new(P1D4LiveAnalysisState.Cancelled, null, null, "CANCELLED", string.Empty);
+
+        internal static P1D4LiveAnalysisOutcome Failed(string code, string operatorMessage)
+            => new(P1D4LiveAnalysisState.Failed, null, null, code, operatorMessage);
     }
 
     private readonly record struct P1D4LiveAnalysisRequest(
