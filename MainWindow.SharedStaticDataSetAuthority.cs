@@ -7,9 +7,9 @@ public partial class MainWindow
 {
     /// <summary>
     /// Reasserts the acquisition contract already chosen in Engineering when the FAT
-    /// projection is opened. FAT is a consumer of the shared static DataSet workspace;
-    /// it must never demote that workspace to Hybrid/MMS merely because a FAT session
-    /// was materialized.
+    /// projection is opened. FAT is a passive consumer of the shared static DataSet
+    /// workspace; this method deliberately performs no signal reselection, persistence,
+    /// reconnect, discovery, or RefreshComputed work.
     /// </summary>
     private void PreserveSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
     {
@@ -18,12 +18,10 @@ public partial class MainWindow
         Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
-        SaveSignalSelectionMemory(device);
-        device.RefreshComputed();
 
         AddLog(
             "INFO",
             "FAT",
-            $"Preserved Engineering Static DataSet report-only authority for {device.Name}; FAT did not enable Hybrid or cyclic MMS polling.");
+            $"Preserved Engineering Static DataSet report-only authority for {device.Name}; FAT did not reconnect, enable Hybrid, or start cyclic MMS polling.");
     }
 }
