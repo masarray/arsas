@@ -5,6 +5,8 @@ namespace ArIED61850Tester;
 
 public partial class ComtradeWorkspaceWindow
 {
+    private const int P1D4PhasorCacheCapacity = 64;
+
     // P1D.4 field-scrub path. Visual cursor motion is synchronous and cheap; native analysis is
     // coalesced at WPF composition cadence with at most one worker in flight. A final mouse-up
     // revision invalidates any older in-flight result so the view cannot flash back to a stale
@@ -19,6 +21,8 @@ public partial class ComtradeWorkspaceWindow
     private CancellationTokenSource? _p1d4ScrubCts = new();
     private IReadOnlyList<ComtradePhasorChannelDescriptor>? _p1d4VoltageChannels;
     private IReadOnlyList<ComtradePhasorChannelDescriptor>? _p1d4CurrentChannels;
+    private readonly BoundedFifoCache<ulong, ComtradePhasorWorkspaceResult> _p1d4PhasorFrameCache =
+        new(P1D4PhasorCacheCapacity);
 
     private void QueueP1D4LiveAnalysisScrub(bool isFinal)
     {
@@ -213,12 +217,12 @@ public partial class ComtradeWorkspaceWindow
 
             if (request.Mode == AnalysisMode.Phasor)
             {
-                if (!_phasorFrameCache.TryGetValue(request.ReferenceFrame, out var phasor))
+                if (!_p1d4PhasorFrameCache.TryGetValue(request.ReferenceFrame, out var phasor))
                 {
                     phasor = await LoadP1D4PhasorWorkspaceAsync(request.ReferenceFrame, token).ConfigureAwait(true);
                     if (token.IsCancellationRequested)
                         return P1D4LiveAnalysisOutcome.Cancelled();
-                    RememberPhasor(request.ReferenceFrame, phasor);
+                    _p1d4PhasorFrameCache.Set(request.ReferenceFrame, phasor);
                 }
                 return P1D4LiveAnalysisOutcome.Success(phasor);
             }
