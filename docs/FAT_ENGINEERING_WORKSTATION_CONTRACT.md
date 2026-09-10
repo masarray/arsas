@@ -40,7 +40,15 @@ When a FAT session starts or continues, the capture target is latched to that se
 
 Persisted FAT state is reconciled by stable device/IEC identity. Background reconciliation is read/reconcile-only and must not manufacture new evidence.
 
-A persisted snapshot is evidence input, not authority to replace the fresh Engineering projection. Bootstrap must isolate a canonical prior snapshot before selective reconciliation. If technical IED identity, endpoint/IP, source identity, or point configuration does not match, restore fails closed and the current Engineering project remains authoritative; lower persistence layers must not recover the rejected snapshot wholesale.
+M3 is code/CI closed around this split: selected context remains an operator view/control projection, while evidence actions resolve the owning active IED session. Regression coverage exercises concurrent IED sessions while the selected context changes, and requires independent evidence journals/device routing.
+
+## Persistence authority invariant
+
+A persisted FAT result belongs to an IED only after its IEC technical identity and endpoint match. New M5 snapshots also persist the Engineering `LiveDeviceId`; when both the current Engineering IED and the saved snapshot know a DeviceId, a DeviceId mismatch is a hard fail-closed boundary.
+
+Legacy snapshots without DeviceId may migrate only through the exact IEC identity + endpoint path and the existing evidence-critical point configuration fingerprint. A persistence candidate may contribute prior progress/evidence to the freshly projected Engineering plan, but it must never replace that plan wholesale.
+
+Persistence reconciliation is not an evidence-producing operation. It may adopt already-persisted V1/V2/transition/result state into the matching current IED, but it must not append or manufacture evidence journal records. Production evidence creation remains owned by explicit FAT session/capture operations.
 
 ## Static DataSet authority invariant
 
