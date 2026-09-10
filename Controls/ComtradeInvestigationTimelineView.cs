@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Services;
@@ -11,6 +10,7 @@ namespace ArIED61850Tester.Controls;
 internal enum ComtradeInvestigationTimelineMode
 {
     DualCursor,
+    PhasorCursor,
     HarmonicCursor
 }
 
@@ -18,6 +18,7 @@ internal enum ComtradeInvestigationTimelineCursor
 {
     Cursor1,
     Cursor2,
+    Phasor,
     Harmonic
 }
 
@@ -42,16 +43,16 @@ internal sealed class ComtradeInvestigationTimelineCursorChangedEventArgs : Even
 }
 
 /// <summary>
-/// Persistent investigation ruler shared by Time Signals, Phasor and Harmonics. It intentionally
-/// owns only lightweight cursor interaction; waveform rendering and native analysis remain in their
-/// dedicated views. This mirrors the workstation model where one timeline context drives all views.
+/// Persistent, lightweight investigation ruler. Plot geometry is supplied by the Time Signals
+/// renderer so the ruler and waveform use the exact same horizontal coordinate system even when
+/// the waveform ScrollViewer reserves space for a vertical scrollbar.
 /// </summary>
 public sealed class ComtradeInvestigationTimelineView : FrameworkElement
 {
-    private const double LeftInset = 150.0;
-    private const double RightInset = 18.0;
+    private const double DefaultLeftInset = 150.0;
+    private const double DefaultRightInset = 18.0;
     private const double CursorHitRadius = 10.0;
-    private static readonly long InteractiveNotifyTicks = Math.Max(1, Stopwatch.Frequency / 30);
+    private static readonly long InteractiveNotifyTicks = Math.Max(1, Stopwatch.Frequency / 60);
 
     private ComtradeInvestigationTimelineMode _mode = ComtradeInvestigationTimelineMode.DualCursor;
     private ComtradeInvestigationTimelineCursor _dragCursor;
@@ -63,7 +64,11 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     private double? _triggerMilliseconds;
     private double? _cursor1Milliseconds;
     private double? _cursor2Milliseconds;
+    private double? _phasorCursorMilliseconds;
     private double? _harmonicCursorMilliseconds;
+    private double _plotLeftInset = DefaultLeftInset;
+    private double _plotRightInset = DefaultRightInset;
+    private double _plotContentWidth;
     private Rect _rulerRect;
     private long _lastInteractiveNotify;
 
@@ -72,6 +77,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     internal ComtradeInvestigationTimelineMode Mode => _mode;
     internal double? Cursor1Milliseconds => _cursor1Milliseconds;
     internal double? Cursor2Milliseconds => _cursor2Milliseconds;
+    internal double? PhasorCursorMilliseconds => _phasorCursorMilliseconds;
     internal double? HarmonicCursorMilliseconds => _harmonicCursorMilliseconds;
 
     public ComtradeInvestigationTimelineView()
@@ -81,7 +87,22 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         Focusable = true;
         Cursor = Cursors.Arrow;
         ToolTipService.SetInitialShowDelay(this, 1200);
-        ToolTip = "Drag C1/C2 to investigate. Harmonics uses one H cursor.";
+        ToolTip = "Time Signals: C1/C2. Phasor: P. Harmonics: H. Drag the active cursor on the common timebase.";
+    }
+
+    internal void SetPlotGeometry(double leftInset, double rightInset, double contentWidth)
+    {
+        var nextLeft = double.IsFinite(leftInset) && leftInset >= 0 ? leftInset : DefaultLeftInset;
+        var nextRight = double.IsFinite(rightInset) && rightInset >= 0 ? rightInset : DefaultRightInset;
+        var nextWidth = double.IsFinite(contentWidth) && contentWidth > 0 ? contentWidth : 0.0;
+        if (Math.Abs(nextLeft - _plotLeftInset) < 0.01 &&
+            Math.Abs(nextRight - _plotRightInset) < 0.01 &&
+            Math.Abs(nextWidth - _plotContentWidth) < 0.01)
+            return;
+        _plotLeftInset = nextLeft;
+        _plotRightInset = nextRight;
+        _plotContentWidth = nextWidth;
+        InvalidateVisual();
     }
 
     internal void SetMode(ComtradeInvestigationTimelineMode mode)
@@ -99,6 +120,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         double? triggerMilliseconds,
         double? cursor1Milliseconds,
         double? cursor2Milliseconds,
+        double? phasorCursorMilliseconds,
         double? harmonicCursorMilliseconds)
     {
         _fullStartMilliseconds = double.IsFinite(fullStartMilliseconds) ? fullStartMilliseconds : 0.0;
@@ -109,10 +131,11 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         _viewEndMilliseconds = double.IsFinite(viewEndMilliseconds) && viewEndMilliseconds > _viewStartMilliseconds
             ? viewEndMilliseconds
             : _fullEndMilliseconds;
-        _triggerMilliseconds = triggerMilliseconds is { } trigger && double.IsFinite(trigger) ? trigger : null;
-        _cursor1Milliseconds = cursor1Milliseconds is { } c1 && double.IsFinite(c1) ? c1 : null;
-        _cursor2Milliseconds = cursor2Milliseconds is { } c2 && double.IsFinite(c2) ? c2 : null;
-        _harmonicCursorMilliseconds = harmonicCursorMilliseconds is { } harmonic && double.IsFinite(harmonic) ? harmonic : null;
+        _triggerMilliseconds = Finite(triggerMilliseconds);
+        _cursor1Milliseconds = Finite(cursor1Milliseconds);
+        _cursor2Milliseconds = Finite(cursor2Milliseconds);
+        _phasorCursorMilliseconds = Finite(phasorCursorMilliseconds);
+        _harmonicCursorMilliseconds = Finite(harmonicCursorMilliseconds);
         InvalidateVisual();
     }
 
@@ -122,15 +145,10 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         milliseconds = ComtradeInvestigationTimelineMath.ClampToRecord(milliseconds, _fullStartMilliseconds, _fullEndMilliseconds);
         switch (cursor)
         {
-            case ComtradeInvestigationTimelineCursor.Cursor1:
-                _cursor1Milliseconds = milliseconds;
-                break;
-            case ComtradeInvestigationTimelineCursor.Cursor2:
-                _cursor2Milliseconds = milliseconds;
-                break;
-            case ComtradeInvestigationTimelineCursor.Harmonic:
-                _harmonicCursorMilliseconds = milliseconds;
-                break;
+            case ComtradeInvestigationTimelineCursor.Cursor1: _cursor1Milliseconds = milliseconds; break;
+            case ComtradeInvestigationTimelineCursor.Cursor2: _cursor2Milliseconds = milliseconds; break;
+            case ComtradeInvestigationTimelineCursor.Phasor: _phasorCursorMilliseconds = milliseconds; break;
+            case ComtradeInvestigationTimelineCursor.Harmonic: _harmonicCursorMilliseconds = milliseconds; break;
         }
         InvalidateVisual();
     }
@@ -148,8 +166,11 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         dc.DrawRectangle(FrozenBrush(Color.FromRgb(250, 252, 255)), null, new Rect(0, 0, width, height));
         dc.DrawLine(FrozenPen(Color.FromRgb(226, 233, 242), 1), new Point(0, height - 1), new Point(width, height - 1));
 
-        var left = Math.Min(LeftInset, Math.Max(18, width * 0.22));
-        var right = Math.Max(left + 80, width - RightInset);
+        // Use the actual waveform content width, not this control's wider width. A ScrollViewer
+        // scrollbar otherwise makes an equal timestamp appear at a different X coordinate.
+        var coordinateWidth = _plotContentWidth > 0 ? Math.Min(width, _plotContentWidth) : width;
+        var left = Math.Min(_plotLeftInset, Math.Max(18, coordinateWidth * 0.45));
+        var right = Math.Max(left + 80, coordinateWidth - _plotRightInset);
         _rulerRect = new Rect(left, 28, Math.Max(80, right - left), 30);
 
         DrawReadout(dc, dpi, body, semibold);
@@ -159,28 +180,12 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (_rulerRect.Width <= 0 || !_rulerRect.Contains(e.GetPosition(this))) return;
+        var point = e.GetPosition(this);
+        if (_rulerRect.Width <= 0 || !_rulerRect.Contains(point)) return;
+        if (e.ChangedButton is not (MouseButton.Left or MouseButton.Right)) return;
 
         Focus();
-        var point = e.GetPosition(this);
-        if (_mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
-        {
-            _dragCursor = ComtradeInvestigationTimelineCursor.Harmonic;
-        }
-        else if (e.ChangedButton == MouseButton.Right)
-        {
-            _dragCursor = ComtradeInvestigationTimelineCursor.Cursor2;
-        }
-        else if (IsNear(point.X, _cursor2Milliseconds))
-        {
-            _dragCursor = ComtradeInvestigationTimelineCursor.Cursor2;
-        }
-        else
-        {
-            _dragCursor = ComtradeInvestigationTimelineCursor.Cursor1;
-        }
-
-        if (e.ChangedButton is not (MouseButton.Left or MouseButton.Right)) return;
+        _dragCursor = ResolveCursorForPointer(point.X, e.ChangedButton);
         _dragging = true;
         CaptureMouse();
         Cursor = Cursors.SizeWE;
@@ -197,7 +202,6 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
             Cursor = HoverCursor(point.X);
             return;
         }
-
         PlaceCursor(_dragCursor, TimeAtX(point.X), isFinal: false, forceNotify: false);
         e.Handled = true;
     }
@@ -221,46 +225,54 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         Cursor = Cursors.Arrow;
     }
 
-    private void PlaceCursor(
-        ComtradeInvestigationTimelineCursor cursor,
-        double milliseconds,
-        bool isFinal,
-        bool forceNotify)
+    private ComtradeInvestigationTimelineCursor ResolveCursorForPointer(double x, MouseButton button)
+    {
+        if (_mode == ComtradeInvestigationTimelineMode.PhasorCursor)
+            return ComtradeInvestigationTimelineCursor.Phasor;
+        if (_mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
+            return ComtradeInvestigationTimelineCursor.Harmonic;
+        if (button == MouseButton.Right || IsNear(x, _cursor2Milliseconds))
+            return ComtradeInvestigationTimelineCursor.Cursor2;
+        return ComtradeInvestigationTimelineCursor.Cursor1;
+    }
+
+    private void PlaceCursor(ComtradeInvestigationTimelineCursor cursor, double milliseconds, bool isFinal, bool forceNotify)
     {
         milliseconds = ComtradeInvestigationTimelineMath.ClampToRecord(milliseconds, _fullStartMilliseconds, _fullEndMilliseconds);
         SetCursorFromHost(cursor, milliseconds);
-
         var now = Stopwatch.GetTimestamp();
         if (!forceNotify && !isFinal && now - _lastInteractiveNotify < InteractiveNotifyTicks)
             return;
         _lastInteractiveNotify = now;
         var tolerance = (_viewEndMilliseconds - _viewStartMilliseconds) * 10.0 / Math.Max(1.0, _rulerRect.Width);
         CursorChanged?.Invoke(this, new ComtradeInvestigationTimelineCursorChangedEventArgs(
-            cursor,
-            milliseconds,
-            Math.Max(0.0, tolerance),
-            isFinal));
+            cursor, milliseconds, Math.Max(0.0, tolerance), isFinal));
     }
 
     private void DrawReadout(DrawingContext dc, double dpi, Typeface body, Typeface semibold)
     {
         var trigger = _triggerMilliseconds ?? 0.0;
+        if (_mode == ComtradeInvestigationTimelineMode.PhasorCursor)
+        {
+            DrawText(dc, "PHASOR CURSOR", 8.6, semibold, Color.FromRgb(86, 102, 122), new Point(10, 6), dpi);
+            DrawText(dc, _phasorCursorMilliseconds is { } p ? $"P  {FormatRelative(p - trigger)}" : "P  —",
+                9.6, semibold, Color.FromRgb(34, 132, 184), new Point(104, 4), dpi);
+            DrawText(dc, "single analysis reference", 8.2, body, Color.FromRgb(132, 144, 159), new Point(215, 6), dpi);
+            return;
+        }
         if (_mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
         {
             DrawText(dc, "HARMONIC CURSOR", 8.6, semibold, Color.FromRgb(86, 102, 122), new Point(10, 6), dpi);
-            DrawText(dc,
-                _harmonicCursorMilliseconds is { } harmonic ? $"H  {FormatRelative(harmonic - trigger)}" : "H  —",
+            DrawText(dc, _harmonicCursorMilliseconds is { } h ? $"H  {FormatRelative(h - trigger)}" : "H  —",
                 9.6, semibold, Color.FromRgb(220, 127, 35), new Point(112, 4), dpi);
             DrawText(dc, "single analysis reference", 8.2, body, Color.FromRgb(132, 144, 159), new Point(220, 6), dpi);
             return;
         }
 
         DrawText(dc, "INVESTIGATION CURSORS", 8.6, semibold, Color.FromRgb(86, 102, 122), new Point(10, 6), dpi);
-        DrawText(dc,
-            _cursor1Milliseconds is { } c1 ? $"C1  {FormatRelative(c1 - trigger)}" : "C1  —",
+        DrawText(dc, _cursor1Milliseconds is { } c1 ? $"C1  {FormatRelative(c1 - trigger)}" : "C1  —",
             9.2, semibold, Color.FromRgb(205, 128, 24), new Point(132, 4), dpi);
-        DrawText(dc,
-            _cursor2Milliseconds is { } c2 ? $"C2  {FormatRelative(c2 - trigger)}" : "C2  —",
+        DrawText(dc, _cursor2Milliseconds is { } c2 ? $"C2  {FormatRelative(c2 - trigger)}" : "C2  —",
             9.2, semibold, Color.FromRgb(26, 145, 184), new Point(232, 4), dpi);
         if (_cursor1Milliseconds is { } first && _cursor2Milliseconds is { } second)
             DrawText(dc, $"Δt  {Math.Abs(second - first):0.###} ms", 9.0, body,
@@ -271,24 +283,16 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     {
         var y = _rulerRect.Top + 14;
         dc.DrawLine(FrozenPen(Color.FromRgb(174, 186, 201), 1), new Point(_rulerRect.Left, y), new Point(_rulerRect.Right, y));
-
         var approximateTicks = Math.Clamp((int)Math.Round(_rulerRect.Width / 125.0), 4, 10);
-        var ticks = ComtradeInvestigationTimelineMath.BuildTriggerAnchoredTicks(
-            _viewStartMilliseconds,
-            _viewEndMilliseconds,
-            _triggerMilliseconds,
-            approximateTicks);
-        foreach (var tick in ticks)
+        foreach (var tick in ComtradeInvestigationTimelineMath.BuildTriggerAnchoredTicks(
+                     _viewStartMilliseconds, _viewEndMilliseconds, _triggerMilliseconds, approximateTicks))
         {
             var x = XForTime(tick.AbsoluteMilliseconds);
             var isTriggerTick = Math.Abs(tick.RelativeMilliseconds) < 1e-9 && _triggerMilliseconds.HasValue;
-            var pen = isTriggerTick
-                ? FrozenPen(Color.FromRgb(70, 78, 89), 1.4)
-                : FrozenPen(Color.FromRgb(202, 211, 222), 1);
-            dc.DrawLine(pen, new Point(x, y - (isTriggerTick ? 12 : 4)), new Point(x, y + 5));
+            dc.DrawLine(isTriggerTick ? FrozenPen(Color.FromRgb(70, 78, 89), 1.4) : FrozenPen(Color.FromRgb(202, 211, 222), 1),
+                new Point(x, y - (isTriggerTick ? 12 : 4)), new Point(x, y + 5));
             var label = isTriggerTick ? "0" : tick.RelativeMilliseconds.ToString("+0.###;-0.###", CultureInfo.CurrentCulture);
-            DrawText(dc, label, 7.8, body,
-                isTriggerTick ? Color.FromRgb(58, 65, 74) : Color.FromRgb(117, 130, 146),
+            DrawText(dc, label, 7.8, body, isTriggerTick ? Color.FromRgb(58, 65, 74) : Color.FromRgb(117, 130, 146),
                 new Point(x - 12, y + 7), dpi, 32);
         }
 
@@ -299,14 +303,19 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
             DrawText(dc, "TRG", 7.6, semibold, Color.FromRgb(55, 62, 72), new Point(x + 4, _rulerRect.Top), dpi);
         }
 
-        if (_mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
+        switch (_mode)
         {
-            DrawCursorMarker(dc, _harmonicCursorMilliseconds, "H", Color.FromRgb(226, 132, 38), dpi, semibold);
-            return;
+            case ComtradeInvestigationTimelineMode.PhasorCursor:
+                DrawCursorMarker(dc, _phasorCursorMilliseconds, "P", Color.FromRgb(34, 132, 184), dpi, semibold);
+                break;
+            case ComtradeInvestigationTimelineMode.HarmonicCursor:
+                DrawCursorMarker(dc, _harmonicCursorMilliseconds, "H", Color.FromRgb(226, 132, 38), dpi, semibold);
+                break;
+            default:
+                DrawCursorMarker(dc, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
+                DrawCursorMarker(dc, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
+                break;
         }
-
-        DrawCursorMarker(dc, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
-        DrawCursorMarker(dc, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
     }
 
     private void DrawCursorMarker(DrawingContext dc, double? milliseconds, string label, Color color, double dpi, Typeface semibold)
@@ -324,7 +333,7 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         }
         geometry.Freeze();
         dc.DrawGeometry(brush, null, geometry);
-        dc.DrawLine(FrozenPen(color, 1.1), new Point(x, _rulerRect.Top + 2), new Point(x, _rulerRect.Bottom - 1));
+        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, _rulerRect.Top + 2), new Point(x, _rulerRect.Bottom));
         DrawText(dc, label, 7.2, semibold, color, new Point(x + 5, _rulerRect.Top - 12), dpi, 22);
     }
 
@@ -332,11 +341,9 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     {
         if (_rulerRect.Width <= 0 || x < _rulerRect.Left || x > _rulerRect.Right)
             return Cursors.Arrow;
-        if (_mode == ComtradeInvestigationTimelineMode.HarmonicCursor)
+        if (_mode is ComtradeInvestigationTimelineMode.PhasorCursor or ComtradeInvestigationTimelineMode.HarmonicCursor)
             return Cursors.SizeWE;
-        return IsNear(x, _cursor1Milliseconds) || IsNear(x, _cursor2Milliseconds)
-            ? Cursors.SizeWE
-            : Cursors.Cross;
+        return IsNear(x, _cursor1Milliseconds) || IsNear(x, _cursor2Milliseconds) ? Cursors.SizeWE : Cursors.Cross;
     }
 
     private bool IsNear(double x, double? milliseconds)
@@ -350,35 +357,23 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
     }
 
     private double XForTime(double milliseconds)
-        => _rulerRect.Left + _rulerRect.Width *
-           (milliseconds - _viewStartMilliseconds) / Math.Max(1e-12, _viewEndMilliseconds - _viewStartMilliseconds);
+        => _rulerRect.Left + _rulerRect.Width * (milliseconds - _viewStartMilliseconds) /
+           Math.Max(1e-12, _viewEndMilliseconds - _viewStartMilliseconds);
 
-    private static string FormatRelative(double value)
-        => Math.Abs(value) < 0.0005 ? "0 ms" : $"{value:+0.###;-0.###} ms";
+    private static double? Finite(double? value) => value is { } v && double.IsFinite(v) ? v : null;
+    private static string FormatRelative(double value) => Math.Abs(value) < 0.0005 ? "0 ms" : $"{value:+0.###;-0.###} ms";
 
     private static SolidColorBrush FrozenBrush(Color color)
     {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
+        var brush = new SolidColorBrush(color); brush.Freeze(); return brush;
     }
 
     private static Pen FrozenPen(Color color, double thickness)
     {
-        var pen = new Pen(FrozenBrush(color), thickness);
-        pen.Freeze();
-        return pen;
+        var pen = new Pen(FrozenBrush(color), thickness); pen.Freeze(); return pen;
     }
 
-    private static void DrawText(
-        DrawingContext dc,
-        string text,
-        double size,
-        Typeface typeface,
-        Color color,
-        Point point,
-        double dpi,
-        double maxWidth = double.PositiveInfinity)
+    private static void DrawText(DrawingContext dc, string text, double size, Typeface typeface, Color color, Point point, double dpi, double maxWidth = double.PositiveInfinity)
     {
         var formatted = new FormattedText(text ?? string.Empty, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, size, FrozenBrush(color), dpi)
