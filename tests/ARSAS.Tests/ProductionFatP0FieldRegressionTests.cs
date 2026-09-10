@@ -78,7 +78,7 @@ public sealed class ProductionFatP0FieldRegressionTests
         Assert.Contains("ShouldKeepEngineeringVisibleDuringProductionFatBootstrap", source, StringComparison.Ordinal);
         Assert.Contains("_productionFatEngineeringBootstrapBusy", source, StringComparison.Ordinal);
         Assert.Contains("ProductionFatTabReady", source, StringComparison.Ordinal);
-        Assert.Contains("MainTabs.SelectedIndex == NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainTabs.SelectedIndex == NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
         Assert.Contains("base.Hide();", source, StringComparison.Ordinal);
     }
 
