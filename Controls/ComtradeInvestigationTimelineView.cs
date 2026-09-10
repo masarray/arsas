@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Services;
@@ -166,8 +167,6 @@ public sealed class ComtradeInvestigationTimelineView : FrameworkElement
         dc.DrawRectangle(FrozenBrush(Color.FromRgb(250, 252, 255)), null, new Rect(0, 0, width, height));
         dc.DrawLine(FrozenPen(Color.FromRgb(226, 233, 242), 1), new Point(0, height - 1), new Point(width, height - 1));
 
-        // Use the actual waveform content width, not this control's wider width. A ScrollViewer
-        // scrollbar otherwise makes an equal timestamp appear at a different X coordinate.
         var coordinateWidth = _plotContentWidth > 0 ? Math.Min(width, _plotContentWidth) : width;
         var left = Math.Min(_plotLeftInset, Math.Max(18, coordinateWidth * 0.45));
         var right = Math.Max(left + 80, coordinateWidth - _plotRightInset);
