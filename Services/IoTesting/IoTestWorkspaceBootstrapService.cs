@@ -61,21 +61,23 @@ public static class IoTestWorkspaceBootstrapService
         {
             if (!string.IsNullOrWhiteSpace(restoreSnapshotPath) && File.Exists(restoreSnapshotPath))
             {
+                // Isolate the canonical persisted snapshot BEFORE attempting selective restore.
+                // Otherwise a rejected/invalid partial restore could fall through to
+                // IoTestWorkspacePersistence.OpenSourcesAsync(), which is allowed to restore a
+                // matching snapshot wholesale. Engineering is the fresh plan authority here:
+                // the old snapshot is read-only evidence input, never a replacement project.
+                if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Directory.CreateDirectory(localDirectory);
+                    File.Move(snapshotPath, backupPath, true);
+                    movedSnapshot = true;
+                    restoreSnapshotPath = backupPath;
+                }
+
                 try
                 {
                     ApplySnapshotProgress(importedProject, restoreSnapshotPath);
                     restored = true;
-
-                    // The snapshot at the canonical current path is temporarily moved so
-                    // persistence cannot replace the freshly imported IEC model wholesale.
-                    // A compatible SCL snapshot discovered under an older staging/project
-                    // identity is read-only input; the new current path is saved normally.
-                    if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Directory.CreateDirectory(localDirectory);
-                        File.Move(snapshotPath, backupPath, true);
-                        movedSnapshot = true;
-                    }
                 }
                 catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
                 {
