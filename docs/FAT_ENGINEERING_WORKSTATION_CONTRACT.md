@@ -40,6 +40,8 @@ When a FAT session starts or continues, the capture target is latched to that se
 
 Persisted FAT state is reconciled by stable device/IEC identity. Background reconciliation is read/reconcile-only and must not manufacture new evidence.
 
+A persisted snapshot is evidence input, not authority to replace the fresh Engineering projection. Bootstrap must isolate a canonical prior snapshot before selective reconciliation. If technical IED identity, endpoint/IP, source identity, or point configuration does not match, restore fails closed and the current Engineering project remains authoritative; lower persistence layers must not recover the rejected snapshot wholesale.
+
 ## Static DataSet authority invariant
 
 Automatic Engineering FAT uses the authoritative static DataSet projection from the already parsed `SclIedWorkspace`.
