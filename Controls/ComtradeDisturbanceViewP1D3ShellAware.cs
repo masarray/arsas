@@ -55,12 +55,19 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
         bool preserveCursor = true)
     {
         _timeMultiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
-        InitializeTimeOrigin(tracks, _timeMultiplier);
+
+        // Canonical workstation ordering: analog traces always stay above the protection/digital
+        // timeline, regardless of the order in which checkboxes were activated. This is a stable
+        // two-pass partition (O(n), one bounded array, no comparison sort) so order inside each
+        // category remains deterministic and no extra churn is introduced on the render hot path.
+        var orderedTracks = StableAnalogThenDigital(tracks);
+
+        InitializeTimeOrigin(orderedTracks, _timeMultiplier);
         _effectiveTriggerMilliseconds = triggerMilliseconds is { } trigger && double.IsFinite(trigger)
             ? trigger + _timeOriginMilliseconds
             : null;
-        _snapTimesMilliseconds = BuildSnapIndex(tracks);
-        _inner.ShowTracks(tracks, _timeMultiplier, _effectiveTriggerMilliseconds, preserveCursor);
+        _snapTimesMilliseconds = BuildSnapIndex(orderedTracks);
+        _inner.ShowTracks(orderedTracks, _timeMultiplier, _effectiveTriggerMilliseconds, preserveCursor);
         _inner.ToolTip = null;
     }
 
@@ -110,6 +117,49 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
             out var snapped)
             ? snapped
             : clamped;
+    }
+
+    private static IReadOnlyList<ComtradeDisturbanceTrack> StableAnalogThenDigital(
+        IReadOnlyList<ComtradeDisturbanceTrack> tracks)
+    {
+        if (tracks.Count <= 1)
+            return tracks;
+
+        var requiresReorder = false;
+        var sawDigital = false;
+        for (var index = 0; index < tracks.Count; index++)
+        {
+            if (tracks[index].IsDigital)
+            {
+                sawDigital = true;
+                continue;
+            }
+
+            if (sawDigital)
+            {
+                requiresReorder = true;
+                break;
+            }
+        }
+
+        if (!requiresReorder)
+            return tracks;
+
+        var ordered = new ComtradeDisturbanceTrack[tracks.Count];
+        var write = 0;
+        for (var index = 0; index < tracks.Count; index++)
+        {
+            var track = tracks[index];
+            if (!track.IsDigital)
+                ordered[write++] = track;
+        }
+        for (var index = 0; index < tracks.Count; index++)
+        {
+            var track = tracks[index];
+            if (track.IsDigital)
+                ordered[write++] = track;
+        }
+        return ordered;
     }
 
     private double[] BuildSnapIndex(IReadOnlyList<ComtradeDisturbanceTrack> tracks)
