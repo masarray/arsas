@@ -10,8 +10,8 @@ namespace ArIED61850Tester;
 
 /// <summary>
 /// Makes the embedded production FAT workspace a projection of the Engineering workspace.
-/// Opening SCL in Explorer is therefore sufficient: selecting FAT reuses the already-parsed
-/// ARIEC SCL/static DataSet authority and the existing Engineering acquisition session.
+/// Opening SCL in Explorer is sufficient; the expensive FAT projection is created only when
+/// the operator actually enters FAT so normal Engineering acquisition remains untouched.
 /// </summary>
 public partial class MainWindow
 {
@@ -38,7 +38,6 @@ public partial class MainWindow
         window.MainTabs.SelectionChanged += window.ProductionFatEngineeringBootstrap_SelectionChanged;
         window.PropertyChanged += window.ProductionFatEngineeringBootstrap_PropertyChanged;
         window.Closed += window.ProductionFatEngineeringBootstrap_Closed;
-        window.QueueProductionFatEngineeringBootstrap();
     }
 
     private void ProductionFatEngineeringBootstrap_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -50,7 +49,7 @@ public partial class MainWindow
 
     private void ProductionFatEngineeringBootstrap_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(SelectedDevice))
+        if (e.PropertyName != nameof(SelectedDevice) || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
         // A running production FAT session owns its latched IED. The normal embedded-host
@@ -62,7 +61,10 @@ public partial class MainWindow
 
     private void QueueProductionFatEngineeringBootstrap()
     {
-        if (!_productionFatEngineeringBootstrapInstalled)
+        // Never prewarm FAT while the operator is in Explorer/Live Monitor/etc. Creating the
+        // production FAT projection off-tab caused field regressions by mutating acquisition
+        // authority and adding UI/runtime work during ordinary Engineering operation.
+        if (!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
         Dispatcher.BeginInvoke(
@@ -73,6 +75,7 @@ public partial class MainWindow
     private async Task EnsureProductionFatFromEngineeringAsync()
     {
         if (_productionFatEngineeringBootstrapBusy ||
+            MainTabs.SelectedIndex != NativeFatWorkspaceIndex ||
             !ProductionFatTabReady)
         {
             return;
@@ -135,12 +138,6 @@ public partial class MainWindow
 
             SynchronizeImportedSclFatWithEngineering(launch.Project);
 
-            // This automatic entry path is explicitly Static DataSet FAT. Engineering may
-            // also expose selected scalar aliases outside the DataSet, and older saved P2
-            // projects may contain scl-manual-* rows created from those aliases. Keep such
-            // rows/evidence in the project for audit continuity, but do not arm them in the
-            // shared workspace here. Otherwise a static member and its scalar alias can both
-            // resolve to the same live primary leaf and correctly trip session preflight.
             var retiredManualRows = launch.Project.Ieds.Sum(
                 IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode);
             if (retiredManualRows > 0)
