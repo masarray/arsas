@@ -66,11 +66,12 @@ public partial class ComtradeWorkspaceWindow
         PhasorView.Visibility = mode == AnalysisMode.Phasor ? Visibility.Visible : Visibility.Collapsed;
         HarmonicsView.Visibility = mode == AnalysisMode.Harmonics ? Visibility.Visible : Visibility.Collapsed;
         ResetViewButton.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
+        FullRecordButton.Visibility = mode == AnalysisMode.Waveform ? Visibility.Visible : Visibility.Collapsed;
         NavigationTextBlock.Text = mode switch
         {
-            AnalysisMode.Phasor => "Cursor A = phasor reference • native one-cycle DFT • select an analog signal family on the left",
-            AnalysisMode.Harmonics => "Cursor A = harmonic reference • full-cycle native DFT • click a bar for details",
-            _ => "Shared trigger-relative timeline • click Cursor A • Ctrl/right-click Cursor B • digital ↑/↓ = transition"
+            AnalysisMode.Phasor => "C1 = phasor reference • native one-cycle DFT • select an analog signal family on the left",
+            AnalysisMode.Harmonics => "C1 = harmonic reference • full-cycle native DFT • click a bar for details",
+            _ => "Wheel scrolls tracks • Ctrl+wheel zooms time • drag plot pans • drag C1/C2 measures • right-click places C2"
         };
         ApplyAnalysisModeVisuals();
 
@@ -85,13 +86,13 @@ public partial class ComtradeWorkspaceWindow
         HarmonicsModeButton.IsEnabled = analog;
         if (!analog)
         {
-            PhasorModeButton.ToolTip = "Select an analog signal first. Cursor A on the waveform becomes the phasor reference.";
-            HarmonicsModeButton.ToolTip = "Select an analog signal first. Cursor A on the waveform becomes the harmonic reference.";
+            PhasorModeButton.ToolTip = "Select an analog signal first. C1 on Time Signals becomes the phasor reference.";
+            HarmonicsModeButton.ToolTip = "Select an analog signal first. C1 on Time Signals becomes the harmonic reference.";
         }
         else
         {
-            PhasorModeButton.ToolTip = "Show same-unit fundamental RMS phasors at Cursor A (or viewport center when Cursor A is unset).";
-            HarmonicsModeButton.ToolTip = "Show native ArdIrec harmonic spectrum at Cursor A (or viewport center when Cursor A is unset).";
+            PhasorModeButton.ToolTip = "Show same-unit fundamental RMS phasors at C1 (or the visible Time Signals center when C1 is unset).";
+            HarmonicsModeButton.ToolTip = "Show native ArdIrec harmonic spectrum at C1 (or the visible Time Signals center when C1 is unset).";
         }
     }
 
@@ -126,9 +127,9 @@ public partial class ComtradeWorkspaceWindow
         var triggerMs = ResolveTriggerMilliseconds();
         var relative = timeMs is { } absolute && triggerMs is { } trigger ? absolute - trigger : (double?)null;
         AnalysisReferenceTextBlock.Text = timeMs is { } ms
-            ? $"Analysis reference: {(cursorReference ? "Cursor A" : "viewport center")} • frame {referenceFrame:N0} • " +
+            ? $"Analysis reference: {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0} • " +
               (relative is { } rel ? ComtradeDisturbanceTimelineMath.FormatRelativeTime(rel) : $"{ms:G7} ms")
-            : $"Analysis reference: {(cursorReference ? "Cursor A" : "viewport center")} • frame {referenceFrame:N0}";
+            : $"Analysis reference: {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0}";
 
         try
         {
@@ -147,7 +148,7 @@ public partial class ComtradeWorkspaceWindow
                 var subtitle = BuildAnalysisSubtitle(selectedMetadata, referenceFrame, result.Count,
                     "fundamental RMS • same-unit channels");
                 PhasorView.ShowPhasors("Phasor diagram", subtitle, result);
-                StatusTextBlock.Text = $"Native ArdIrec phasor analysis • {(cursorReference ? "Cursor A" : "viewport center")} • frame {referenceFrame:N0} • {result.Count} vector(s)";
+                StatusTextBlock.Text = $"Native ArdIrec phasor analysis • {(cursorReference ? "C1" : "visible center")} • frame {referenceFrame:N0} • {result.Count} vector(s)";
                 return;
             }
 
@@ -176,7 +177,7 @@ public partial class ComtradeWorkspaceWindow
             var harmonicSubtitle = BuildAnalysisSubtitle(metadata, referenceFrame, spectrum.Bins.Count,
                 $"orders H1…H{spectrum.Bins[^1].Order}");
             HarmonicsView.ShowSpectrum("Harmonic spectrum", harmonicSubtitle, display);
-            StatusTextBlock.Text = $"Native ArdIrec harmonics • {(cursorReference ? "Cursor A" : "viewport center")} • THD {spectrum.ThdPercent:G5}% • " +
+            StatusTextBlock.Text = $"Native ArdIrec harmonics • {(cursorReference ? "C1" : "visible center")} • THD {spectrum.ThdPercent:G5}% • " +
                                    (spectrum.DominantOrder > 1
                                        ? $"dominant H{spectrum.DominantOrder} {spectrum.DominantPercent:G4}%"
                                        : "no meaningful distortion harmonic");
@@ -201,18 +202,12 @@ public partial class ComtradeWorkspaceWindow
     {
         if (TryResolveDisturbanceCursorFrame(out var cursorFrame))
             return cursorFrame;
+        if (TryResolveDisturbanceViewportCenterFrame(out var centerFrame))
+            return centerFrame;
 
         var total = _record.Info.FrameCount;
         if (total == 0) return 0;
-        var viewport = _requestedSourceViewport.FrameCount > 0
-            ? _requestedSourceViewport
-            : _loadedSourceViewport.FrameCount > 0
-                ? _loadedSourceViewport
-                : ComtradeAbsoluteViewportMath.Full(total);
-        viewport = ComtradeAbsoluteViewportMath.Normalize(viewport, total);
-        if (viewport.FrameCount == 0) return Math.Min(total - 1, viewport.StartFrame);
-        var offset = (viewport.FrameCount - 1) / 2;
-        return Math.Min(total - 1, viewport.StartFrame + offset);
+        return (total - 1) / 2;
     }
 
     private async Task<double?> TryReadReferenceTimeMillisecondsAsync(ulong referenceFrame, CancellationToken token)
