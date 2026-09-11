@@ -8,9 +8,9 @@ using ArIED61850Tester.Services;
 namespace ArIED61850Tester.Controls;
 
 /// <summary>
-/// P1D.3 workstation renderer. Heavy waveform/digital geometry is cached separately from the
-/// lightweight cursor overlay so C1/C2 movement never rebuilds all visible tracks. Pan gestures
-/// use a translated preview and commit the time window only once on mouse-up.
+/// Retained-mode COMTRADE workstation renderer. Static frame/data visuals are only rebuilt when
+/// data, viewport or size changes. C1/C2 are rendered in an independent lightweight visual at the
+/// WPF composition cadence, so cursor scrubbing never replays waveform geometry.
 /// </summary>
 public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
 {
@@ -35,6 +35,14 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         Cursor2
     }
 
+    private readonly VisualCollection _visuals;
+    private readonly DrawingVisual _frameVisual = new();
+    private readonly ContainerVisual _plotContainer = new();
+    private readonly DrawingVisual _dataVisual = new();
+    private readonly DrawingVisual _cursorVisual = new();
+    private readonly TranslateTransform _dataPanTransform = new();
+    private readonly TranslateTransform _cursorPanTransform = new();
+
     private IReadOnlyList<ComtradeDisturbanceTrack> _tracks = Array.Empty<ComtradeDisturbanceTrack>();
     private double[] _snapTimesMilliseconds = Array.Empty<double>();
     private double _timeMultiplier = 1.0;
@@ -54,11 +62,12 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     private double _panEndMilliseconds;
     private double _panPreviewPixels;
     private long _lastInteractiveNotifyTicks;
-
-    private DrawingGroup? _frameLayer;
-    private DrawingGroup? _dataLayer;
     private Size _cachedSize;
-    private bool _staticDirty = true;
+    private bool _frameDirty = true;
+    private bool _dataDirty = true;
+    private bool _cursorVisualDirty = true;
+    private bool _cursorRenderingHooked;
+    private string? _analogRepresentationLabel;
 
     internal event EventHandler<ComtradeDisturbanceNavigationChangedEventArgs>? NavigationChanged;
     internal event EventHandler<ComtradeDisturbanceCursorChangedEventArgs>? CursorChanged;
@@ -73,12 +82,25 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     internal double FullStartMilliseconds => _fullStartMilliseconds;
     internal double FullEndMilliseconds => _fullEndMilliseconds;
 
+    protected override int VisualChildrenCount => _visuals.Count;
+
     public ComtradeDisturbanceViewP1D3()
     {
         Focusable = true;
         Cursor = Cursors.Cross;
         ToolTip = "Wheel: scroll signals • Ctrl+wheel: zoom • Drag plot: pan • Drag C1/C2: move • Right-click: C2 • cursors snap to digital edges";
+
+        _visuals = new VisualCollection(this);
+        _visuals.Add(_frameVisual);
+        _plotContainer.Children.Add(_dataVisual);
+        _plotContainer.Children.Add(_cursorVisual);
+        _visuals.Add(_plotContainer);
+        _dataVisual.Transform = _dataPanTransform;
+        _cursorVisual.Transform = _cursorPanTransform;
+        Unloaded += (_, _) => StopCursorRenderingPump();
     }
+
+    protected override Visual GetVisualChild(int index) => _visuals[index];
 
     internal void ShowTracks(
         IReadOnlyList<ComtradeDisturbanceTrack> tracks,
@@ -103,6 +125,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         }
 
         Height = Math.Max(330, TopMargin + BottomAxisHeight + _tracks.Sum(track => TrackHeight(track) + TrackGap));
+        ResetPanPreview();
         MarkStaticDirty();
         InvalidateVisual();
         RaiseNavigationChanged();
@@ -120,6 +143,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         _cursor2Milliseconds = null;
         Height = 330;
         ToolTip = message;
+        ResetPanPreview();
         MarkStaticDirty();
         InvalidateVisual();
     }
@@ -169,8 +193,18 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _cursor1Milliseconds = milliseconds;
         else
             _cursor2Milliseconds = milliseconds;
-        InvalidateVisual();
+        RequestCursorOverlayRedraw();
         RaiseNavigationChanged();
+    }
+
+    internal void SetAnalogRepresentationLabel(string representation)
+    {
+        var normalized = string.IsNullOrWhiteSpace(representation) ? null : representation.Trim();
+        if (string.Equals(_analogRepresentationLabel, normalized, StringComparison.Ordinal))
+            return;
+        _analogRepresentationLabel = normalized;
+        _frameDirty = true;
+        InvalidateVisual();
     }
 
     internal void ResetNavigation()
@@ -201,45 +235,16 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     {
         base.OnRender(dc);
         var bounds = new Rect(0, 0, Math.Max(0, ActualWidth), Math.Max(0, ActualHeight));
-        dc.DrawRectangle(Brushes.White, null, bounds);
-        if (bounds.Width < 320 || bounds.Height < 160) return;
+        // Cheap transparent hit target. Heavy waveform content lives in retained child visuals.
+        dc.DrawRectangle(Brushes.Transparent, null, bounds);
+        EnsureRetainedLayers(bounds);
+    }
 
-        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var body = new Typeface("Segoe UI");
-        var semibold = new Typeface("Segoe UI Semibold");
-        var plotWidth = Math.Max(80, bounds.Width - LabelWidth - RightMargin);
-        _lastPlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(80, bounds.Height - TopMargin - BottomAxisHeight));
-
-        if (_tracks.Count == 0 || _viewEndMilliseconds <= _viewStartMilliseconds)
-        {
-            DrawText(dc, "Select signals from the left panel to build a synchronized disturbance timeline.", 12,
-                body, Color.FromRgb(119, 133, 151), new Point(LabelWidth + 18, 42), dpi);
-            return;
-        }
-
-        EnsureCachedLayers(bounds, dpi, body, semibold);
-        if (_frameLayer is not null)
-            dc.DrawDrawing(_frameLayer);
-
-        if (_dataLayer is not null)
-        {
-            if (_pointerMode == PointerMode.Panning && Math.Abs(_panPreviewPixels) > 0.1)
-            {
-                dc.PushClip(new RectangleGeometry(_lastTimelinePlot));
-                dc.PushTransform(new TranslateTransform(_panPreviewPixels, 0));
-                dc.DrawDrawing(_dataLayer);
-                dc.Pop();
-                dc.Pop();
-            }
-            else
-            {
-                dc.DrawDrawing(_dataLayer);
-            }
-        }
-
-        var cursorOffset = _pointerMode == PointerMode.Panning ? _panPreviewPixels : 0.0;
-        DrawCursor(dc, _lastTimelinePlot, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold, cursorOffset);
-        DrawCursor(dc, _lastTimelinePlot, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold, cursorOffset);
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        MarkStaticDirty();
+        InvalidateVisual();
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -292,7 +297,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
                     : PointerMode.PendingPan;
             _panStartMilliseconds = _viewStartMilliseconds;
             _panEndMilliseconds = _viewEndMilliseconds;
-            _panPreviewPixels = 0;
+            ResetPanPreview();
             CaptureMouse();
             Cursor = _pointerMode is PointerMode.Cursor1 or PointerMode.Cursor2 ? Cursors.SizeWE : Cursors.Hand;
             e.Handled = true;
@@ -305,7 +310,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _pointerMode = PointerMode.Panning;
             _panStartMilliseconds = _viewStartMilliseconds;
             _panEndMilliseconds = _viewEndMilliseconds;
-            _panPreviewPixels = 0;
+            ResetPanPreview();
             CaptureMouse();
             Cursor = Cursors.Hand;
             e.Handled = true;
@@ -337,8 +342,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _pointerMode = PointerMode.Panning;
         if (_pointerMode != PointerMode.Panning) return;
 
-        _panPreviewPixels = deltaPixels;
-        InvalidateVisual();
+        SetPanPreview(deltaPixels);
         e.Handled = true;
     }
 
@@ -370,7 +374,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             var span = _panEndMilliseconds - _panStartMilliseconds;
             var delta = -deltaPixels / _lastPlot.Width * span;
             SetView(_panStartMilliseconds + delta, _panEndMilliseconds + delta);
-            _panPreviewPixels = 0;
+            ResetPanPreview();
             MarkStaticDirty();
             InvalidateVisual();
             RaiseNavigationChanged();
@@ -386,29 +390,76 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
-        if (_pointerMode == PointerMode.Panning && Math.Abs(_panPreviewPixels) > 0.1)
-        {
-            _panPreviewPixels = 0;
-            InvalidateVisual();
-        }
+        ResetPanPreview();
         _pointerMode = PointerMode.None;
         Cursor = Cursors.Cross;
     }
 
-    private void EnsureCachedLayers(Rect bounds, double dpi, Typeface body, Typeface semibold)
+    private void EnsureRetainedLayers(Rect bounds)
     {
         var size = new Size(bounds.Width, bounds.Height);
-        if (!_staticDirty && _frameLayer is not null && _dataLayer is not null && _cachedSize == size)
-            return;
-
-        var frame = new DrawingGroup();
-        var data = new DrawingGroup();
-        var plotWidth = Math.Max(80, bounds.Width - LabelWidth - RightMargin);
-        var y = TopMargin;
-
-        using (var frameDc = frame.Open())
-        using (var dataDc = data.Open())
+        if (_cachedSize != size)
         {
+            _cachedSize = size;
+            _frameDirty = true;
+            _dataDirty = true;
+            _cursorVisualDirty = true;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var body = new Typeface("Segoe UI");
+        var semibold = new Typeface("Segoe UI Semibold");
+        var plotWidth = Math.Max(80, bounds.Width - LabelWidth - RightMargin);
+        _lastPlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(80, bounds.Height - TopMargin - BottomAxisHeight));
+
+        if (bounds.Width < 320 || bounds.Height < 160)
+        {
+            using (var frameDc = _frameVisual.RenderOpen())
+                frameDc.DrawRectangle(Brushes.White, null, bounds);
+            using (_dataVisual.RenderOpen()) { }
+            using (_cursorVisual.RenderOpen()) { }
+            _plotContainer.Clip = null;
+            _frameDirty = false;
+            _dataDirty = false;
+            _cursorVisualDirty = false;
+            return;
+        }
+
+        if (_tracks.Count == 0 || _viewEndMilliseconds <= _viewStartMilliseconds)
+        {
+            if (_frameDirty)
+            {
+                using var frameDc = _frameVisual.RenderOpen();
+                frameDc.DrawRectangle(Brushes.White, null, bounds);
+                DrawText(frameDc, "Select signals from the left panel to build a synchronized disturbance timeline.", 12,
+                    body, Color.FromRgb(119, 133, 151), new Point(LabelWidth + 18, 42), dpi);
+            }
+            if (_dataDirty)
+            {
+                using var dataDc = _dataVisual.RenderOpen();
+            }
+            using (var cursorDc = _cursorVisual.RenderOpen()) { }
+            _plotContainer.Clip = null;
+            _frameDirty = false;
+            _dataDirty = false;
+            _cursorVisualDirty = false;
+            return;
+        }
+
+        var y = TopMargin;
+        foreach (var track in _tracks)
+            y += TrackHeight(track) + TrackGap;
+        var tracksBottom = Math.Min(bounds.Height - BottomAxisHeight, y - TrackGap);
+        _lastTimelinePlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(1, tracksBottom - TopMargin));
+        var clip = new RectangleGeometry(_lastTimelinePlot);
+        clip.Freeze();
+        _plotContainer.Clip = clip;
+
+        if (_frameDirty)
+        {
+            using var frameDc = _frameVisual.RenderOpen();
+            frameDc.DrawRectangle(Brushes.White, null, bounds);
+            y = TopMargin;
             foreach (var track in _tracks)
             {
                 var height = TrackHeight(track);
@@ -416,25 +467,92 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
                 var plot = new Rect(LabelWidth, y, plotWidth, height);
                 DrawTrackBackground(frameDc, row, plot);
                 DrawTrackLabel(frameDc, track, row, dpi, body, semibold);
+                y += height + TrackGap;
+            }
+            DrawTimeAxis(frameDc, new Rect(LabelWidth, tracksBottom, plotWidth, BottomAxisHeight), dpi, body, semibold);
+            _frameDirty = false;
+        }
+
+        if (_dataDirty)
+        {
+            using var dataDc = _dataVisual.RenderOpen();
+            y = TopMargin;
+            foreach (var track in _tracks)
+            {
+                var height = TrackHeight(track);
+                var plot = new Rect(LabelWidth, y, plotWidth, height);
                 if (track.IsDigital)
                     DrawDigitalTrack(dataDc, track, plot, dpi, body);
                 else
                     DrawAnalogTrack(dataDc, track, plot);
                 y += height + TrackGap;
             }
-
-            var tracksBottom = Math.Min(bounds.Height - BottomAxisHeight, y - TrackGap);
-            _lastTimelinePlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(1, tracksBottom - TopMargin));
             DrawTrigger(dataDc, _lastTimelinePlot, dpi, semibold);
-            DrawTimeAxis(frameDc, new Rect(LabelWidth, tracksBottom, plotWidth, BottomAxisHeight), dpi, body, semibold);
+            _dataDirty = false;
         }
 
-        frame.Freeze();
-        data.Freeze();
-        _frameLayer = frame;
-        _dataLayer = data;
-        _cachedSize = size;
-        _staticDirty = false;
+        if (_cursorVisualDirty)
+            RedrawCursorOverlay(dpi, semibold);
+    }
+
+    private void RequestCursorOverlayRedraw()
+    {
+        _cursorVisualDirty = true;
+        if (_cursorRenderingHooked)
+            return;
+        CompositionTarget.Rendering += CursorCompositionFrame;
+        _cursorRenderingHooked = true;
+    }
+
+    private void CursorCompositionFrame(object? sender, EventArgs e)
+    {
+        if (!_cursorVisualDirty)
+        {
+            StopCursorRenderingPump();
+            return;
+        }
+
+        _cursorVisualDirty = false;
+        if (_lastTimelinePlot.Width > 0 && _tracks.Count > 0)
+        {
+            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            RedrawCursorOverlay(dpi, new Typeface("Segoe UI Semibold"));
+        }
+        else
+        {
+            using var cursorDc = _cursorVisual.RenderOpen();
+        }
+        StopCursorRenderingPump();
+    }
+
+    private void StopCursorRenderingPump()
+    {
+        if (!_cursorRenderingHooked)
+            return;
+        CompositionTarget.Rendering -= CursorCompositionFrame;
+        _cursorRenderingHooked = false;
+    }
+
+    private void RedrawCursorOverlay(double dpi, Typeface semibold)
+    {
+        using var cursorDc = _cursorVisual.RenderOpen();
+        DrawCursor(cursorDc, _lastTimelinePlot, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
+        DrawCursor(cursorDc, _lastTimelinePlot, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
+        _cursorVisualDirty = false;
+    }
+
+    private void SetPanPreview(double pixels)
+    {
+        _panPreviewPixels = pixels;
+        _dataPanTransform.X = pixels;
+        _cursorPanTransform.X = pixels;
+    }
+
+    private void ResetPanPreview()
+    {
+        _panPreviewPixels = 0;
+        _dataPanTransform.X = 0;
+        _cursorPanTransform.X = 0;
     }
 
     private void PlaceCursor(ComtradeDisturbanceCursor cursor, double requestedMilliseconds, bool isFinal)
@@ -456,7 +574,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         else
             _cursor2Milliseconds = value;
 
-        InvalidateVisual();
+        RequestCursorOverlayRedraw();
         if (isFinal || ShouldNotifyInteractive())
         {
             RaiseNavigationChanged();
@@ -536,15 +654,23 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     {
         dc.DrawRoundedRectangle(FrozenBrush(track.StrokeColor), null, new Rect(10, row.Top + 9, 4, Math.Max(14, row.Height - 18)), 2, 2);
         DrawText(dc, track.Title, 10.5, semibold, Color.FromRgb(43, 61, 82), new Point(22, row.Top + 7), dpi, LabelWidth - 30);
-
-        // Digital lanes are intentionally title-only: phase/circuit/normal-state metadata already
-        // exists in the Signals browser and event table, and repeating it here caused unreadable text noise.
         if (track.IsDigital) return;
+
+        var trackSubtitle = ApplyRepresentationLabel(track.Subtitle);
         var subtitle = string.IsNullOrWhiteSpace(track.Units)
-            ? track.Subtitle
-            : string.IsNullOrWhiteSpace(track.Subtitle) ? track.Units : $"{track.Subtitle} • {track.Units}";
+            ? trackSubtitle
+            : string.IsNullOrWhiteSpace(trackSubtitle) ? track.Units : $"{trackSubtitle} • {track.Units}";
         if (!string.IsNullOrWhiteSpace(subtitle))
             DrawText(dc, subtitle, 8.6, body, Color.FromRgb(119, 132, 149), new Point(22, row.Top + 26), dpi, LabelWidth - 30);
+    }
+
+    private string ApplyRepresentationLabel(string subtitle)
+    {
+        if (string.IsNullOrWhiteSpace(subtitle) || string.IsNullOrWhiteSpace(_analogRepresentationLabel))
+            return subtitle;
+        return subtitle
+            .Replace("Secondary", _analogRepresentationLabel, StringComparison.Ordinal)
+            .Replace("Primary", _analogRepresentationLabel, StringComparison.Ordinal);
     }
 
     private void DrawAnalogTrack(DrawingContext dc, ComtradeDisturbanceTrack track, Rect plot)
@@ -553,12 +679,13 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         var count = Math.Min(track.Analog.Length, track.Timestamps.Length);
         if (count <= 0) return;
 
+        var range = VisibleRange(track.Timestamps, count);
+        if (range.IsEmpty) return;
+
         var min = double.PositiveInfinity;
         var max = double.NegativeInfinity;
-        for (var i = 0; i < count; i++)
+        for (var i = range.StartIndex; i < range.EndExclusive; i++)
         {
-            var ms = ToMilliseconds(track.Timestamps[i]);
-            if (ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) continue;
             var value = track.Analog[i];
             if (!double.IsFinite(value)) continue;
             min = Math.Min(min, value);
@@ -581,30 +708,124 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
-            var maxPoints = Math.Max(120, (int)Math.Ceiling(plot.Width * 1.6));
-            var stride = track.PreserveAllPoints ? 1 : Math.Max(1, count / maxPoints);
             var started = false;
-            for (var i = 0; i < count; i += stride)
+            var lastEmitted = -1;
+            if (ComtradeScreenSpaceRenderPolicy.UseEnvelope(range.Count, plot.Width))
             {
-                var ms = ToMilliseconds(track.Timestamps[i]);
-                if (ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) continue;
-                var value = track.Analog[i];
-                if (!double.IsFinite(value)) continue;
-                var x = XForTime(ms, plot);
-                var y = plot.Bottom - (value - min) / (max - min) * plot.Height;
-                if (!started)
-                {
-                    context.BeginFigure(new Point(x, y), false, false);
-                    started = true;
-                }
-                else
-                {
-                    context.LineTo(new Point(x, y), true, false);
-                }
+                DrawAnalogEnvelope(context, track, plot, range, min, max, ref started, ref lastEmitted);
+            }
+            else
+            {
+                var stride = ComtradeScreenSpaceRenderPolicy.SparseStride(range.Count, plot.Width, track.PreserveAllPoints);
+                for (var i = range.StartIndex; i < range.EndExclusive; i += stride)
+                    AppendAnalogPoint(context, track, plot, i, min, max, ref started, ref lastEmitted);
+                AppendAnalogPoint(context, track, plot, range.EndExclusive - 1, min, max, ref started, ref lastEmitted);
             }
         }
         geometry.Freeze();
         dc.DrawGeometry(null, FrozenPen(track.StrokeColor, 1.15), geometry);
+    }
+
+    private void DrawAnalogEnvelope(
+        StreamGeometryContext context,
+        ComtradeDisturbanceTrack track,
+        Rect plot,
+        ComtradeVisibleSampleRange range,
+        double min,
+        double max,
+        ref bool started,
+        ref int lastEmitted)
+    {
+        if (track.Analog is null || range.IsEmpty) return;
+        var bucketCount = ComtradeScreenSpaceRenderPolicy.PixelBucketCount(plot.Width);
+        var span = Math.Max(1e-12, _viewEndMilliseconds - _viewStartMilliseconds);
+        var currentBucket = -1;
+        var firstIndex = -1;
+        var lastIndex = -1;
+        var minIndex = -1;
+        var maxIndex = -1;
+        var minValue = double.PositiveInfinity;
+        var maxValue = double.NegativeInfinity;
+
+        for (var index = range.StartIndex; index < range.EndExclusive; index++)
+        {
+            var value = track.Analog[index];
+            if (!double.IsFinite(value)) continue;
+            var ms = ToMilliseconds(track.Timestamps[index]);
+            var bucket = Math.Clamp((int)Math.Floor((ms - _viewStartMilliseconds) / span * bucketCount), 0, bucketCount - 1);
+            if (currentBucket >= 0 && bucket != currentBucket)
+            {
+                EmitEnvelopeBucket(context, track, plot, firstIndex, minIndex, maxIndex, lastIndex, min, max, ref started, ref lastEmitted);
+                firstIndex = lastIndex = minIndex = maxIndex = -1;
+                minValue = double.PositiveInfinity;
+                maxValue = double.NegativeInfinity;
+            }
+
+            currentBucket = bucket;
+            if (firstIndex < 0) firstIndex = index;
+            lastIndex = index;
+            if (value < minValue) { minValue = value; minIndex = index; }
+            if (value > maxValue) { maxValue = value; maxIndex = index; }
+        }
+
+        if (currentBucket >= 0)
+            EmitEnvelopeBucket(context, track, plot, firstIndex, minIndex, maxIndex, lastIndex, min, max, ref started, ref lastEmitted);
+    }
+
+    private void EmitEnvelopeBucket(
+        StreamGeometryContext context,
+        ComtradeDisturbanceTrack track,
+        Rect plot,
+        int firstIndex,
+        int minIndex,
+        int maxIndex,
+        int lastIndex,
+        double min,
+        double max,
+        ref bool started,
+        ref int lastEmitted)
+    {
+        AppendAnalogPoint(context, track, plot, firstIndex, min, max, ref started, ref lastEmitted);
+        if (minIndex <= maxIndex)
+        {
+            AppendAnalogPoint(context, track, plot, minIndex, min, max, ref started, ref lastEmitted);
+            AppendAnalogPoint(context, track, plot, maxIndex, min, max, ref started, ref lastEmitted);
+        }
+        else
+        {
+            AppendAnalogPoint(context, track, plot, maxIndex, min, max, ref started, ref lastEmitted);
+            AppendAnalogPoint(context, track, plot, minIndex, min, max, ref started, ref lastEmitted);
+        }
+        AppendAnalogPoint(context, track, plot, lastIndex, min, max, ref started, ref lastEmitted);
+    }
+
+    private void AppendAnalogPoint(
+        StreamGeometryContext context,
+        ComtradeDisturbanceTrack track,
+        Rect plot,
+        int index,
+        double min,
+        double max,
+        ref bool started,
+        ref int lastEmitted)
+    {
+        if (track.Analog is null || index < 0 || index >= track.Analog.Length || index >= track.Timestamps.Length || index == lastEmitted)
+            return;
+        var value = track.Analog[index];
+        if (!double.IsFinite(value)) return;
+        var ms = ToMilliseconds(track.Timestamps[index]);
+        var x = XForTime(ms, plot);
+        var y = plot.Bottom - (value - min) / (max - min) * plot.Height;
+        if (!started)
+        {
+            context.BeginFigure(new Point(x, y), false, false);
+            started = true;
+        }
+        else
+        {
+            context.LineTo(new Point(x, y), true, false);
+        }
+        lastEmitted = index;
     }
 
     private void DrawDigitalTrack(DrawingContext dc, ComtradeDisturbanceTrack track, Rect plot, double dpi, Typeface body)
@@ -612,6 +833,9 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         if (track.Digital is null || track.Timestamps.Length == 0) return;
         var count = Math.Min(track.Digital.Length, track.Timestamps.Length);
         if (count <= 0) return;
+        var range = VisibleRange(track.Timestamps, count);
+        if (range.IsEmpty) return;
+
         var mid = plot.Top + plot.Height * 0.5;
         dc.DrawLine(FrozenPen(Color.FromRgb(216, 224, 233), 1), new Point(plot.Left, mid), new Point(plot.Right, mid));
 
@@ -619,11 +843,14 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         var pen = FrozenPen(track.StrokeColor, 1.25);
         if (!track.DigitalIsLossy)
         {
-            var previousRaw = track.Digital[0] != 0 ? 1 : 0;
-            var previousMs = ToMilliseconds(track.Timestamps[0]);
-            for (var i = 1; i <= count; i++)
+            var startIndex = range.StartIndex;
+            var previousRaw = track.Digital[startIndex] != 0 ? 1 : 0;
+            var previousMs = ToMilliseconds(track.Timestamps[startIndex]);
+            for (var i = startIndex + 1; i <= range.EndExclusive; i++)
             {
-                var endMs = i < count ? ToMilliseconds(track.Timestamps[i]) : ToMilliseconds(track.Timestamps[count - 1]);
+                var endMs = i < range.EndExclusive
+                    ? ToMilliseconds(track.Timestamps[i])
+                    : Math.Min(_viewEndMilliseconds, ToMilliseconds(track.Timestamps[range.EndExclusive - 1]));
                 var clampedStart = Math.Max(previousMs, _viewStartMilliseconds);
                 var clampedEnd = Math.Min(endMs, _viewEndMilliseconds);
                 if (previousRaw != track.DigitalNormalState && clampedEnd > clampedStart)
@@ -632,7 +859,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
                     var x2 = XForTime(clampedEnd, plot);
                     dc.DrawRectangle(activeBrush, null, new Rect(x1, plot.Top + 4, Math.Max(1, x2 - x1), plot.Height - 8));
                 }
-                if (i >= count) break;
+                if (i >= range.EndExclusive) break;
                 previousRaw = track.Digital[i] != 0 ? 1 : 0;
                 previousMs = endMs;
             }
@@ -650,7 +877,8 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         }
         else
         {
-            for (var i = 1; i < count; i++)
+            var start = Math.Max(1, range.StartIndex);
+            for (var i = start; i < range.EndExclusive; i++)
             {
                 var before = track.Digital[i - 1] != 0;
                 var after = track.Digital[i] != 0;
@@ -679,6 +907,14 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         }
     }
 
+    private ComtradeVisibleSampleRange VisibleRange(uint[] timestamps, int count)
+    {
+        var divisor = Math.Max(1e-12, _timeMultiplier);
+        var startRaw = _viewStartMilliseconds * 1000.0 / divisor;
+        var endRaw = _viewEndMilliseconds * 1000.0 / divisor;
+        return ComtradeScreenSpaceRenderPolicy.FindVisibleRange(timestamps, count, startRaw, endRaw);
+    }
+
     private void DrawTrigger(DrawingContext dc, Rect plot, double dpi, Typeface semibold)
     {
         if (_triggerMilliseconds is not { } trigger || trigger < _viewStartMilliseconds || trigger > _viewEndMilliseconds) return;
@@ -687,10 +923,10 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         DrawText(dc, "TRG", 8.2, semibold, Color.FromRgb(186, 99, 31), new Point(x + 3, plot.Top + 17), dpi);
     }
 
-    private void DrawCursor(DrawingContext dc, Rect plot, double? time, string label, Color color, double dpi, Typeface semibold, double xOffset)
+    private void DrawCursor(DrawingContext dc, Rect plot, double? time, string label, Color color, double dpi, Typeface semibold)
     {
         if (time is not { } ms || ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) return;
-        var x = XForTime(ms, plot) + xOffset;
+        var x = XForTime(ms, plot);
         if (x < plot.Left - 14 || x > plot.Right + 14) return;
         var brush = FrozenBrush(color);
         dc.DrawLine(FrozenPen(color, 1.2), new Point(x, plot.Top + 15), new Point(x, plot.Bottom));
@@ -729,9 +965,9 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
 
     private void MarkStaticDirty()
     {
-        _staticDirty = true;
-        _frameLayer = null;
-        _dataLayer = null;
+        _frameDirty = true;
+        _dataDirty = true;
+        _cursorVisualDirty = true;
     }
 
     private double MinimumViewSpan() => Math.Max(0.001, (_fullEndMilliseconds - _fullStartMilliseconds) / 5000.0);
