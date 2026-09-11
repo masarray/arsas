@@ -67,6 +67,22 @@ public sealed class IoFatSclProjectImportService
         }
     }
 
+    /// <summary>
+    /// Registers ARIEC workspaces that are already owned by Engineering. This is the
+    /// zero-reparse bridge used by the embedded FAT tab: the exact SclIedWorkspace objects
+    /// already attached to Explorer devices become the production FAT runtime authority.
+    /// </summary>
+    internal void AdoptEngineeringRuntimeWorkspaces(IEnumerable<SclIedWorkspace> workspaces)
+    {
+        ArgumentNullException.ThrowIfNull(workspaces);
+        var stable = workspaces
+            .Where(workspace => workspace != null)
+            .GroupBy(workspace => workspace.WorkspaceKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last())
+            .ToArray();
+        SetRuntimeWorkspaces(stable);
+    }
+
     public Task<IoFatSclProjectImportResult> ImportAsync(
         IReadOnlyCollection<string> sclPaths,
         string? projectName = null,
