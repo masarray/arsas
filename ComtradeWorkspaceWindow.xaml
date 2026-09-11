@@ -92,8 +92,8 @@
                             <TextBlock Text="Signals" FontSize="12.5" FontWeight="SemiBold" Foreground="#263D58"/>
                             <TextBlock x:Name="SignalCountText" Margin="7,1,0,0" FontSize="9.5" Foreground="#7B8CA2"/>
                         </StackPanel>
-                        <Button Grid.Column="2" Content="Auto" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="AutoSignals_Click" ToolTip="Show a practical voltage/current/protection starter set."/>
-                        <Button Grid.Column="3" Content="Clear" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="ClearSignals_Click" ToolTip="Hide all Time Signals tracks."/>
+                        <Button Grid.Column="2" Content="Auto" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="P1D5AutoSignals_Click" ToolTip="Show a practical voltage/current/protection starter set."/>
+                        <Button Grid.Column="3" Content="Clear" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="P1D5ClearSignals_Click" ToolTip="Hide all Time Signals tracks."/>
                     </Grid>
 
                     <ListBox x:Name="SignalList" Grid.Row="2" BorderThickness="0" Background="Transparent"
