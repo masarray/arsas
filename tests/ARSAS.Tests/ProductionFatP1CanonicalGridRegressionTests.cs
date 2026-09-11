@@ -35,6 +35,33 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
         Assert.DoesNotContain("new Iec61850MonitorPoint", gridSource, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void P1C_NativeFatUsesEngineeringGridStyleTemplateAndVirtualizationContract()
+    {
+        var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+        var engineeringXaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
+        var appXaml = File.ReadAllText(FindRepoFile("App.xaml"));
+
+        Assert.Contains("x:Key=\"ModernDataGrid\"", appXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"RowHeight\" Value=\"32\"/>", appXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"ColumnHeaderHeight\" Value=\"34\"/>", appXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Style=\"{StaticResource ModernDataGrid}\" FrozenColumnCount=\"2\"", engineeringXaml, StringComparison.Ordinal);
+        Assert.Contains("CellTemplate=\"{StaticResource ProcessValueBadgeTemplate}\"", engineeringXaml, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", engineeringXaml, StringComparison.Ordinal);
+
+        Assert.Contains("FindResource(\"ModernDataGrid\") as Style", gridSource, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTemplateColumn(\"Value\", \"ProcessValueBadgeTemplate\", 125);", gridSource, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.SetVirtualizationMode(_nativeFatCanonicalGrid, VirtualizationMode.Recycling);", gridSource, StringComparison.Ordinal);
+        Assert.Contains("RowStyle = BuildEngineeringLiveRowStyle()", gridSource, StringComparison.Ordinal);
+        Assert.Contains("CellStyle = BuildEngineeringLiveCellStyle()", gridSource, StringComparison.Ordinal);
+
+        // Engineering FAT must inherit the shared 32 px authority rather than the
+        // legacy IoList FAT local 40 px row family.
+        Assert.DoesNotContain("RowHeight = 40", gridSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight = 40", gridSource, StringComparison.Ordinal);
+    }
+
     private static string FindRepoFile(string relativePath)
         => Path.Combine(FindRepoRoot(), relativePath);
 
