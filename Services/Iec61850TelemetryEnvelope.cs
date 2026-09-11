@@ -5,7 +5,7 @@ namespace ArIED61850Tester.Services;
 /// <summary>
 /// Normalized IEC 61850 telemetry boundary used between network decoding and application logic.
 /// Missing/ambiguous data is never promoted to a valid process value: the source timestamp
-/// stays unknown and the quality is forced Invalid while ReceivedAtUtc records local receipt.
+/// stays unknown and quality is preserved conservatively while ReceivedAtUtc records local receipt.
 /// </summary>
 public enum Iec61850TelemetryQualityState
 {
@@ -52,9 +52,11 @@ public readonly record struct Iec61850TelemetryEnvelope(
             ? hasValue
                 ? $"Telemetry quality is invalid ({qualityText})."
                 : "Telemetry contains no process value."
-            : sourceTimestamp is null && read.HasDeviceTimestamp
-                ? "Device timestamp was present but could not be parsed safely; source timestamp remains unknown."
-                : string.Empty;
+            : qualityState == Iec61850TelemetryQualityState.Questionable
+                ? $"Telemetry quality is not proven Good ({qualityText})."
+                : sourceTimestamp is null && read.HasDeviceTimestamp
+                    ? "Device timestamp was present but could not be parsed safely; source timestamp remains unknown."
+                    : string.Empty;
 
         return new Iec61850TelemetryEnvelope(
             read.Value,
@@ -88,8 +90,9 @@ public readonly record struct Iec61850TelemetryEnvelope(
         if (text.Length == 0 || text == "-")
             return null;
 
-        // IEC 61850 timestamps are UTC-based. Only publish a parsed source timestamp when
-        // parsing succeeds; never substitute DateTime.Now/ReceivedAtUtc for missing data.
+        // ARIEC61850's decoded IEC UtcTime display can be zone-less even though IEC UtcTime
+        // is semantically UTC. AssumeUniversal therefore preserves engine semantics here;
+        // parsing failure still stays null and is never replaced by ReceivedAtUtc/PC time.
         if (!DateTimeOffset.TryParse(
                 text,
                 CultureInfo.InvariantCulture,
@@ -107,27 +110,23 @@ public readonly record struct Iec61850TelemetryEnvelope(
         if (!hasValue)
             return Iec61850TelemetryQualityState.Invalid;
 
+        // Never infer Good from an unknown/vendor token. IEC validity is only considered
+        // Good when the decoder explicitly said Good. This prevents missing or future
+        // quality representations from being silently promoted to trustworthy evidence.
+        if (quality.Equals("Good", StringComparison.OrdinalIgnoreCase))
+            return Iec61850TelemetryQualityState.Good;
+
         if (quality.Contains("invalid", StringComparison.OrdinalIgnoreCase) ||
             quality.Contains("failure", StringComparison.OrdinalIgnoreCase) ||
             quality.Contains("bad", StringComparison.OrdinalIgnoreCase) ||
+            quality.Contains("reserved", StringComparison.OrdinalIgnoreCase) ||
             quality.Contains("outofrange", StringComparison.OrdinalIgnoreCase) ||
             quality.Contains("out-of-range", StringComparison.OrdinalIgnoreCase))
         {
             return Iec61850TelemetryQualityState.Invalid;
         }
 
-        if (quality.Length == 0 || quality == "-" ||
-            quality.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
-            quality.Contains("questionable", StringComparison.OrdinalIgnoreCase) ||
-            quality.Contains("olddata", StringComparison.OrdinalIgnoreCase) ||
-            quality.Contains("old-data", StringComparison.OrdinalIgnoreCase) ||
-            quality.Contains("substituted", StringComparison.OrdinalIgnoreCase) ||
-            quality.Contains("test", StringComparison.OrdinalIgnoreCase))
-        {
-            return Iec61850TelemetryQualityState.Questionable;
-        }
-
-        return Iec61850TelemetryQualityState.Good;
+        return Iec61850TelemetryQualityState.Questionable;
     }
 
     private static string NormalizeQualityText(string? value)
