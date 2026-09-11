@@ -79,7 +79,7 @@ public sealed class P8RuntimeArchitectureRegressionTests
         Assert.Contains("DateTimeOffset? SourceTimestampUtc", source, StringComparison.Ordinal);
         Assert.Contains("DateTimeOffset ReceivedAtUtc", source, StringComparison.Ordinal);
         Assert.Contains("source timestamp remains unknown", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("never substitute DateTime.Now/ReceivedAtUtc", source, StringComparison.Ordinal);
+        Assert.Contains("never replaced by ReceivedAtUtc/PC time", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SourceTimestampUtc = DateTime", source, StringComparison.Ordinal);
     }
 
