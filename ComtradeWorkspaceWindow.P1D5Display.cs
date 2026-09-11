@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -26,9 +27,6 @@ public partial class ComtradeWorkspaceWindow
 
     private void P1D5Workspace_Loaded(object sender, RoutedEventArgs e)
     {
-        // Use more of the engineering workstation screen by default without preventing resize/maximize.
-        // Keep only a small work-area safety margin so another trace row is visible on common
-        // 1080p engineering laptops while the title bar/taskbar remain reachable.
         var work = SystemParameters.WorkArea;
         if (WindowState == WindowState.Normal)
         {
@@ -38,6 +36,7 @@ public partial class ComtradeWorkspaceWindow
 
         InitializeP1D5LocusUi();
         RefreshP1D5PresentationButtons();
+        DisturbanceView.SetAnalogRepresentationLabel(P1D5RepresentationLabel);
         QueueP1D5CursorMeasurements();
     }
 
@@ -73,7 +72,49 @@ public partial class ComtradeWorkspaceWindow
 
         _p1d5ValueRepresentation = representation;
         RefreshP1D5PresentationButtons();
-        await RefreshP1D5PresentationAsync(reloadWaveform: true).ConfigureAwait(true);
+        await RefreshP1D5RepresentationAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// PRI/SEC is a positive per-channel engineering scale. Because every Time Signals lane is
+    /// independently auto-ranged, multiplying all samples in one lane by that scale cannot change
+    /// its normalized waveform geometry. Re-reading/rebuilding every source frame was therefore
+    /// pure latency. Keep the retained waveform data/geometry, update only frame metadata and
+    /// representation-dependent native readouts/analysis.
+    /// </summary>
+    private async Task RefreshP1D5RepresentationAsync()
+    {
+        if (_p1d5PresentationRefreshRunning)
+            return;
+        _p1d5PresentationRefreshRunning = true;
+        try
+        {
+            InvalidateP1D5AnalysisPresentationCaches();
+            DisturbanceView.SetAnalogRepresentationLabel(P1D5RepresentationLabel);
+
+            if (_p1d5LocusActive)
+            {
+                await RefreshP1D5LocusStaticAsync(forceReopen: false).ConfigureAwait(true);
+                QueueP1D5LocusCursorRefresh();
+            }
+            else
+            {
+                QueueP1D5CursorMeasurements();
+                if (_analysisMode != AnalysisMode.Waveform)
+                    QueueP1D4LiveAnalysisScrub(isFinal: true);
+            }
+
+            if (_analysisMode == AnalysisMode.Waveform && _disturbanceLoadedViewport.FrameCount > 0)
+            {
+                var traceMode = P1D5IsRmsTrace ? "RMS" : "instantaneous";
+                StatusTextBlock.Text = $"Time Signals • {_disturbanceVisibleSignals.Count} tracks • {traceMode} • " +
+                                       $"{P1D5RepresentationLabel} • {_disturbanceLoadedViewport.FrameCount:N0} source frames • retained waveform";
+            }
+        }
+        finally
+        {
+            _p1d5PresentationRefreshRunning = false;
+        }
     }
 
     private async Task RefreshP1D5PresentationAsync(bool reloadWaveform)
@@ -83,13 +124,7 @@ public partial class ComtradeWorkspaceWindow
         _p1d5PresentationRefreshRunning = true;
         try
         {
-            // Analysis absolute values are representation-dependent; relative phase and % harmonic
-            // metrics remain invariant. Clear only immutable presentation caches on a PRI/SEC switch.
-            _p1d4PhasorFrameCache.Clear();
-            _phasorFrameCache.Clear();
-            _lastRenderedPhasorFrame = ulong.MaxValue;
-            _p1d4LastRenderedHarmonicOverviewFrame = ulong.MaxValue;
-            _p1d4LastRenderedHarmonicOverviewSignature = string.Empty;
+            InvalidateP1D5AnalysisPresentationCaches();
 
             if (reloadWaveform && _disturbanceInitialized)
             {
@@ -97,6 +132,7 @@ public partial class ComtradeWorkspaceWindow
                     CurrentDisturbanceViewport(),
                     initialLoad: false,
                     preserveLocalView: true).ConfigureAwait(true);
+                DisturbanceView.SetAnalogRepresentationLabel(P1D5RepresentationLabel);
             }
 
             if (_p1d5LocusActive)
@@ -115,6 +151,15 @@ public partial class ComtradeWorkspaceWindow
         {
             _p1d5PresentationRefreshRunning = false;
         }
+    }
+
+    private void InvalidateP1D5AnalysisPresentationCaches()
+    {
+        _p1d4PhasorFrameCache.Clear();
+        _phasorFrameCache.Clear();
+        _lastRenderedPhasorFrame = ulong.MaxValue;
+        _p1d4LastRenderedHarmonicOverviewFrame = ulong.MaxValue;
+        _p1d4LastRenderedHarmonicOverviewSignature = string.Empty;
     }
 
     private void RefreshP1D5PresentationButtons()
