@@ -9,8 +9,6 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// </summary>
 public static class IoFatCanonicalEvidenceMigrationService
 {
-    private const string EngineeringProjectionStaticDataSetAuthority = "ENGINEERING_SCL_DATASET_AUTHORITY";
-
     public sealed record Result(
         int RemovedManualRows,
         int MigratedEvidenceRows,
@@ -26,25 +24,12 @@ public static class IoFatCanonicalEvidenceMigrationService
 
         foreach (var ied in project.Ieds)
         {
-            // Engineering projection deliberately carries a provenance-specific binding
-            // status before bootstrap. Normalize that status to the shared static DataSet
-            // authority contract before any legacy migration or runtime matching. Without
-            // this step, field projects can contain 58 canonical Engineering rows plus
-            // restored scl-manual-* history, while the migration incorrectly concludes
-            // there is no static authority and skips the IED entirely.
-            var canonicalRows = ied.TestPoints
-                .Where(IsCanonicalStaticDataSetAuthority)
-                .ToArray();
-            if (canonicalRows.Length == 0)
+            // The Engineering projection carries a provenance-specific immutable binding
+            // status. IoTestSignalSelectionService recognizes it as the same static DataSet
+            // authority as direct SCL imports. This check therefore covers the real field
+            // case: canonical Engineering rows plus restored scl-manual-* snapshot history.
+            if (!ied.TestPoints.Any(IoTestSignalSelectionService.IsSclDataSetAuthority))
                 continue;
-
-            foreach (var canonical in canonicalRows)
-            {
-                if (IsEngineeringProjectionStaticDataSetAuthority(canonical))
-                {
-                    canonical.BindingStatus = IoTestSignalSelectionService.SclDataSetAuthorityBindingStatus;
-                }
-            }
 
             var manualRows = ied.TestPoints
                 .Where(IsLegacyManualWorkspaceRow)
@@ -96,16 +81,6 @@ public static class IoFatCanonicalEvidenceMigrationService
         return point.TestPointId.StartsWith("scl-manual-", StringComparison.OrdinalIgnoreCase) ||
                IoTestSignalSelectionService.IsSclWorkspaceAuthority(point);
     }
-
-    private static bool IsCanonicalStaticDataSetAuthority(IoTestPointPlan point)
-        => IoTestSignalSelectionService.IsSclDataSetAuthority(point) ||
-           IsEngineeringProjectionStaticDataSetAuthority(point);
-
-    private static bool IsEngineeringProjectionStaticDataSetAuthority(IoTestPointPlan point)
-        => string.Equals(
-            point.BindingStatus,
-            EngineeringProjectionStaticDataSetAuthority,
-            StringComparison.OrdinalIgnoreCase);
 
     private static bool MigrateEvidenceOnly(IoTestPointPlan source, IoTestPointPlan target)
     {
