@@ -31,6 +31,7 @@ public sealed record IoTestSignalSelectionResult(
 public sealed class IoTestSignalSelectionService
 {
     internal const string SclDataSetAuthorityBindingStatus = "SCL_DATASET_AUTHORITY";
+    internal const string EngineeringSclDataSetAuthorityBindingStatus = "ENGINEERING_SCL_DATASET_AUTHORITY";
     internal const string SclWorkspaceAuthorityBindingStatus = "SCL_WORKSPACE_AUTHORITY";
     private const int SclStaticMembershipIdentityBonus = 1000;
 
@@ -245,9 +246,13 @@ public sealed class IoTestSignalSelectionService
 
     internal static bool IsSclDataSetAuthority(IoTestPointPlan point)
         => string.Equals(
-            point.BindingStatus,
-            SclDataSetAuthorityBindingStatus,
-            StringComparison.OrdinalIgnoreCase);
+               point.BindingStatus,
+               SclDataSetAuthorityBindingStatus,
+               StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(
+               point.BindingStatus,
+               EngineeringSclDataSetAuthorityBindingStatus,
+               StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsSclWorkspaceAuthority(IoTestPointPlan point)
         => string.Equals(
