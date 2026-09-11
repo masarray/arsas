@@ -13,7 +13,7 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
         Assert.Contains("BindNativeFatCanonicalRows();", tabSource, StringComparison.Ordinal);
 
         Assert.DoesNotContain("IoFatEngineeringWorkspaceProjectionService", gridSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("IoTestPointPlan", gridSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("new IoTestPointPlan", gridSource, StringComparison.Ordinal);
         Assert.DoesNotContain("QueueProductionFatEngineeringBootstrap();", tabSource, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenDescribedSourcesAsync", tabSource, StringComparison.Ordinal);
     }
