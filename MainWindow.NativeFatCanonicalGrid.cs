@@ -22,6 +22,7 @@ public partial class MainWindow
     /// P1A: FAT renders the exact Engineering live-row objects. There is no projection,
     /// SCL parse, IoTestPointPlan collection, or second acquisition owner in this surface.
     /// P1B adds only three sparse evidence columns keyed outside those canonical rows.
+    /// P1C reuses the Engineering grid visual authority and virtualization contract.
     /// </summary>
     private FrameworkElement BuildNativeFatCanonicalWorkspace(string? statusText = null)
     {
@@ -81,34 +82,26 @@ public partial class MainWindow
         header.Child = headerGrid;
         root.Children.Add(header);
 
+        var modernDataGridStyle = FindResource("ModernDataGrid") as Style
+            ?? throw new InvalidOperationException("ModernDataGrid visual authority was not found.");
+
         _nativeFatCanonicalGrid = new DataGrid
         {
+            Style = modernDataGridStyle,
+            RowStyle = BuildEngineeringLiveRowStyle(),
+            CellStyle = BuildEngineeringLiveCellStyle(),
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
-            CanUserReorderColumns = false,
-            CanUserResizeColumns = true,
             IsReadOnly = false,
-            HeadersVisibility = DataGridHeadersVisibility.Column,
-            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(225, 231, 240)),
-            Background = Brushes.White,
-            RowBackground = Brushes.White,
-            SelectionMode = DataGridSelectionMode.Single,
-            SelectionUnit = DataGridSelectionUnit.FullRow,
-            RowHeaderWidth = 0,
-            FrozenColumnCount = 1,
+            FrozenColumnCount = 2,
             EnableRowVirtualization = true,
-            EnableColumnVirtualization = true,
-            HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(232, 237, 245)),
-            VerticalGridLinesBrush = Brushes.Transparent
+            EnableColumnVirtualization = true
         };
         VirtualizingPanel.SetIsVirtualizing(_nativeFatCanonicalGrid, true);
         VirtualizingPanel.SetVirtualizationMode(_nativeFatCanonicalGrid, VirtualizationMode.Recycling);
         ScrollViewer.SetCanContentScroll(_nativeFatCanonicalGrid, true);
         ScrollViewer.SetHorizontalScrollBarVisibility(_nativeFatCanonicalGrid, ScrollBarVisibility.Auto);
-        ScrollViewer.SetVerticalScrollBarVisibility(_nativeFatCanonicalGrid, ScrollBarVisibility.Auto);
         _nativeFatCanonicalGrid.CellEditEnding += NativeFatCanonicalGrid_CellEditEnding;
 
         AddCanonicalTextColumn("Status", nameof(Iec61850MonitorPoint.Status), 90);
@@ -116,9 +109,9 @@ public partial class MainWindow
         AddCanonicalTextColumn("Address", nameof(Iec61850MonitorPoint.IecTelegram), 210);
         AddCanonicalTextColumn("Message", nameof(Iec61850MonitorPoint.SignalName), 180);
         AddCanonicalTextColumn("Data Reference", nameof(Iec61850MonitorPoint.IecReference), 290);
-        AddCanonicalTextColumn("Quality", nameof(Iec61850MonitorPoint.Quality), 92);
-        AddCanonicalTextColumn("Timestamp", nameof(Iec61850MonitorPoint.DeviceTimestamp), 152);
-        AddCanonicalTextColumn("Value", nameof(Iec61850MonitorPoint.DisplayValue), 90);
+        AddCanonicalTextColumn("Quality", nameof(Iec61850MonitorPoint.Quality), 105);
+        AddCanonicalTextColumn("Timestamp", nameof(Iec61850MonitorPoint.DeviceTimestamp), 155);
+        AddCanonicalTemplateColumn("Value", "ProcessValueBadgeTemplate", 125);
         _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Value 1", NativeFatEvidenceField.Value1, 104));
         _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Value 2", NativeFatEvidenceField.Value2, 104));
         _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Result", NativeFatEvidenceField.Result, 104));
@@ -126,6 +119,35 @@ public partial class MainWindow
         Grid.SetRow(_nativeFatCanonicalGrid, 2);
         root.Children.Add(_nativeFatCanonicalGrid);
         return root;
+    }
+
+    private Style BuildEngineeringLiveRowStyle()
+    {
+        var style = new Style(typeof(DataGridRow), FindResource(typeof(DataGridRow)) as Style);
+        var changed = new DataTrigger
+        {
+            Binding = new Binding(nameof(Iec61850MonitorPoint.IsRecentlyChanged)),
+            Value = true
+        };
+        changed.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(255, 240, 168))));
+        changed.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(245, 158, 11))));
+        changed.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(4, 1, 1, 1)));
+        style.Triggers.Add(changed);
+        return style;
+    }
+
+    private Style BuildEngineeringLiveCellStyle()
+    {
+        var style = new Style(typeof(DataGridCell), FindResource(typeof(DataGridCell)) as Style);
+        var changed = new DataTrigger
+        {
+            Binding = new Binding(nameof(Iec61850MonitorPoint.IsRecentlyChanged)),
+            Value = true
+        };
+        changed.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(255, 245, 194))));
+        changed.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(92, 59, 0))));
+        style.Triggers.Add(changed);
+        return style;
     }
 
     private void AddCanonicalTextColumn(string header, string path, double width)
@@ -137,6 +159,22 @@ public partial class MainWindow
         {
             Header = header,
             Binding = new Binding(path) { Mode = BindingMode.OneWay },
+            Width = new DataGridLength(width),
+            IsReadOnly = true
+        });
+    }
+
+    private void AddCanonicalTemplateColumn(string header, string templateKey, double width)
+    {
+        if (_nativeFatCanonicalGrid == null)
+            return;
+
+        var template = FindResource(templateKey) as DataTemplate
+            ?? throw new InvalidOperationException($"Engineering cell template '{templateKey}' was not found.");
+        _nativeFatCanonicalGrid.Columns.Add(new DataGridTemplateColumn
+        {
+            Header = header,
+            CellTemplate = template,
             Width = new DataGridLength(width),
             IsReadOnly = true
         });
@@ -273,8 +311,7 @@ public partial class MainWindow
                     ? _owner.ReadNativeFatEvidence(point, Field)
                     : string.Empty,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Padding = new Thickness(5, 0, 5, 0)
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
         }
 
@@ -286,8 +323,9 @@ public partial class MainWindow
                     ? _owner.ReadNativeFatEvidence(point, Field)
                     : string.Empty,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Padding = new Thickness(4, 1, 4, 1),
-                BorderThickness = new Thickness(1)
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(0)
             };
         }
     }
