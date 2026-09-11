@@ -36,9 +36,10 @@ public partial class MainWindow
         if (sender is not MainWindow window || window._productionFatTabInstalled)
             return;
 
-        window.Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
-            new Action(window.TryInstallProductionFatTabPivot));
+        // MainWindow.Loaded runs after XAML has materialized the canonical seventh tab but
+        // before the first normal render. Install the permanent FAT shell immediately so the
+        // operator never sees an empty/black seventh workspace while idle-dispatcher work waits.
+        window.TryInstallProductionFatTabPivot();
     }
 
     private void TryInstallProductionFatTabPivot()
@@ -51,9 +52,9 @@ public partial class MainWindow
         if (MainTabs.Items.Count <= NativeFatWorkspaceIndex ||
             !ReferenceEquals(MainTabs.Items[NativeFatWorkspaceIndex], NativeFatTab))
         {
-            _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.ApplicationIdle)
+            _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.Loaded)
             {
-                Interval = TimeSpan.FromMilliseconds(120)
+                Interval = TimeSpan.FromMilliseconds(60)
             };
             _productionFatInstallRetry.Tick -= ProductionFatInstallRetry_Tick;
             _productionFatInstallRetry.Tick += ProductionFatInstallRetry_Tick;
@@ -65,8 +66,8 @@ public partial class MainWindow
         _productionFatTabInstalled = true;
         NativeFatTab.Content = BuildProductionFatPermanentHost();
 
-        // Prewarm as soon as the canonical host exists. A valid Engineering SCL/DataSet
-        // can prepare the exact production surface before the operator first opens FAT.
+        // Bootstrap remains navigation-gated. Queueing here is harmless because the
+        // Engineering bootstrap itself refuses to build FAT unless the FAT tab is active.
         QueueProductionFatEngineeringBootstrap();
 
         // MainWindow.xaml owns both style and click routing for the seventh nav button.
@@ -85,20 +86,79 @@ public partial class MainWindow
         TryInstallProductionFatTabPivot();
     }
 
-    private FrameworkElement BuildProductionFatPermanentHost()
+    private FrameworkElement BuildProductionFatPermanentHost(
+        string? statusText = null,
+        bool isBusy = false)
     {
-        // Stable shell slot, never a launcher or alternate FAT workflow. With a valid
-        // Engineering static DataSet this is replaced by the exact production FAT surface.
         var root = new Grid { Margin = new Thickness(0) };
-        root.Children.Add(new TextBlock
+        var card = new Border
         {
-            Text = "FAT · awaiting an Engineering IED with static DataSet scope",
-            FontSize = 12,
-            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
+            MaxWidth = 520,
+            Padding = new Thickness(28, 24, 28, 22),
+            CornerRadius = new CornerRadius(18),
+            Background = TryFindResource("CardBackground") as Brush ?? Brushes.White,
+            BorderBrush = TryFindResource("CardBorder") as Brush ?? new SolidColorBrush(Color.FromRgb(220, 228, 239)),
+            BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
+        };
+        var panel = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "IEC 61850 FAT",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TryFindResource("Accent") as Brush ?? Brushes.RoyalBlue,
+            HorizontalAlignment = HorizontalAlignment.Center
         });
+        panel.Children.Add(new TextBlock
+        {
+            Text = isBusy ? "Preparing production workspace" : "Production FAT workspace",
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TryFindResource("Ink") as Brush ?? Brushes.Black,
+            Margin = new Thickness(0, 5, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(statusText)
+                ? "Select an Engineering IED with static DataSet scope, then open FAT."
+                : statusText,
+            FontSize = 11.5,
+            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+
+        if (isBusy)
+        {
+            panel.Children.Add(new ProgressBar
+            {
+                Height = 4,
+                IsIndeterminate = true,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0, 18, 0, 0),
+                Foreground = TryFindResource("Accent") as Brush ?? Brushes.RoyalBlue,
+                Background = new SolidColorBrush(Color.FromRgb(220, 231, 248))
+            });
+        }
+
+        card.Child = panel;
+        root.Children.Add(card);
         return root;
+    }
+
+    internal void ShowProductionFatBootstrapState(string message, bool isBusy)
+    {
+        if (!ProductionFatTabReady || _productionFatWindow is { IsLoaded: true })
+            return;
+
+        NativeFatTab.Content = BuildProductionFatPermanentHost(message, isBusy);
     }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
