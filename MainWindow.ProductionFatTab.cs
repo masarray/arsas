@@ -141,6 +141,8 @@ public partial class MainWindow
         BindNativeFatCanonicalRows();
     }
 
+    // Compatibility host contract: the global Engineering IED Explorer and shared Command Dock remain authoritative.
+    // Mounting the explicit/manual IoListTestingWindow center must never replace those workstation shell owners.
     internal bool MountProductionFatWorkspace(IoListTestingWindow window, FrameworkElement surface)
     {
         ArgumentNullException.ThrowIfNull(window);
