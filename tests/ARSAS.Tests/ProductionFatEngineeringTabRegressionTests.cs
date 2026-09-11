@@ -96,11 +96,15 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     {
         var bootstrapSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
         var fieldRegressionSource = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/ProductionFatP0FieldRegressionTests.cs"));
+        var preflightSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSessionPreflight.cs"));
+        var preflightTests = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/IoTestSessionPreflightTests.cs"));
 
         Assert.Contains("RetireManualWorkspaceRowsForStaticDataSetMode", bootstrapSource, StringComparison.Ordinal);
         Assert.Contains("AutomaticStaticDataSetScope_RetiresManualAliasBeforeSessionPreflight", fieldRegressionSource, StringComparison.Ordinal);
         Assert.Contains("IoTestSessionPreflight.Validate", fieldRegressionSource, StringComparison.Ordinal);
-        Assert.Contains("multiple enabled test points", fieldRegressionSource, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RetireRedundantManualWorkspaceRows", preflightSource, StringComparison.Ordinal);
+        Assert.Contains("multiple enabled test points", preflightSource, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Validate_RejectsDuplicateEnabledLiveReference", preflightTests, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
