@@ -61,15 +61,25 @@ public partial class MainWindow
 
     private void QueueProductionFatEngineeringBootstrap()
     {
-        // FAT preparation must never run in the background while Engineering is connecting
-        // or monitoring. The shared Engineering acquisition session remains authoritative;
-        // clicking FAT is the only navigation event allowed to build the FAT projection.
+        // P1A boundary: entering FAT from Engineering is navigation only. The Engineering
+        // workspace already owns the canonical static DataSet rows and acquisition session;
+        // never schedule the legacy IoTest projection/bootstrap from this navigation path.
         if (!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
+        // If an older request is still preparing while the operator enters FAT, make it stale
+        // immediately. Do not start BuildAsync/OpenDescribedSources/ShowIoTestingWorkspace here.
+        _productionFatEngineeringBootstrapCts?.Cancel();
+
         Dispatcher.BeginInvoke(
             DispatcherPriority.ContextIdle,
-            new Action(async () => await EnsureProductionFatFromEngineeringAsync()));
+            new Action(() =>
+            {
+                if (MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
+                    return;
+
+                SynchronizeProductionFatSelectedIed();
+            }));
     }
 
     private async Task EnsureProductionFatFromEngineeringAsync()
