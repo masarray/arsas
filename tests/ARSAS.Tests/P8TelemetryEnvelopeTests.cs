@@ -80,6 +80,27 @@ public sealed class P8TelemetryEnvelopeTests
         Assert.Contains("could not be parsed", envelope.Diagnostic, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("10:00:31")]
+    [InlineData("2026-09-11")]
+    [InlineData("2026-09-11T01:02")]
+    [InlineData("09/11/2026 01:02:03")]
+    public void IncompleteOrCultureDependentRelayTimestamp_RemainsUnknown(string deviceTimestamp)
+    {
+        var read = new Iec61850ReadValue
+        {
+            Value = true,
+            DisplayValue = "True",
+            Quality = "Good",
+            DeviceTimestamp = deviceTimestamp
+        };
+
+        var envelope = read.ToTelemetryEnvelope();
+
+        Assert.Null(envelope.SourceTimestampUtc);
+        Assert.Contains("could not be parsed", envelope.Diagnostic, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void GoodTelemetry_PreservesSourceTimestampSeparatelyFromReceiptTime()
     {
@@ -121,6 +142,22 @@ public sealed class P8TelemetryEnvelopeTests
         Assert.Equal(TimeSpan.Zero, envelope.SourceTimestampUtc!.Value.Offset);
         Assert.Equal(2026, envelope.SourceTimestampUtc.Value.Year);
         Assert.Equal(10, envelope.SourceTimestampUtc.Value.Hour);
+    }
+
+    [Fact]
+    public void ExplicitOffsetTimestamp_IsNormalizedToUtc()
+    {
+        var read = new Iec61850ReadValue
+        {
+            Value = 1,
+            DisplayValue = "1",
+            Quality = "Good",
+            DeviceTimestamp = "2026-09-11T08:02:03+07:00"
+        };
+
+        var envelope = read.ToTelemetryEnvelope();
+
+        Assert.Equal(new DateTimeOffset(2026, 9, 11, 1, 2, 3, TimeSpan.Zero), envelope.SourceTimestampUtc);
     }
 
     [Theory]
