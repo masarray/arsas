@@ -22,6 +22,7 @@ public partial class ComtradeWorkspaceWindow
     private bool _p1d5MeasurementDirty;
     private bool _p1d5MeasurementWorkerRunning;
     private long _p1d5MeasurementRevision;
+    private long _p1d5LastPresentedMeasurementRevision;
     private CancellationTokenSource? _p1d5MeasurementCts = new();
     private bool _p1d5MeasurementEventsAttached;
 
@@ -59,8 +60,15 @@ public partial class ComtradeWorkspaceWindow
 
     private void P1D5DisturbanceMouseMove(object sender, MouseEventArgs e)
     {
-        if (_analysisMode == AnalysisMode.Waveform && e.LeftButton == MouseButtonState.Pressed)
+        // Queue native readouts only while an actual C1/C2 drag is active. Panning uses the same
+        // left button but must not consume the native gate or create revisions that can starve the
+        // final cursor measurement.
+        if (_analysisMode == AnalysisMode.Waveform &&
+            _waveformPreviewCursor is not null &&
+            e.LeftButton == MouseButtonState.Pressed)
+        {
             QueueP1D5CursorMeasurements();
+        }
     }
 
     private void P1D5DisturbanceMouseUp(object sender, MouseButtonEventArgs e)
@@ -206,10 +214,19 @@ public partial class ComtradeWorkspaceWindow
         try
         {
             var token = EnsureP1D5MeasurementToken();
+            if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
+                return;
+
             await _nativeGate.WaitAsync(token).ConfigureAwait(false);
             P1D5MeasurementResult result;
             try
             {
+                // A newer pointer position may have arrived while waiting behind another native
+                // operation. Skip this obsolete read before touching the bridge; the dirty flag will
+                // schedule exactly one latest request after this worker exits.
+                if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
+                    return;
+
                 result = await Task.Run(() => ReadP1D5CursorMeasurements(request, token), token).ConfigureAwait(false);
             }
             finally
@@ -217,10 +234,20 @@ public partial class ComtradeWorkspaceWindow
                 _nativeGate.Release();
             }
 
-            if (token.IsCancellationRequested || request.Revision != _p1d5MeasurementRevision)
+            if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
                 return;
 
-            await Dispatcher.InvokeAsync(() => PresentP1D5CursorMeasurements(result));
+            await Dispatcher.InvokeAsync(() =>
+            {
+                // Recheck on the UI dispatcher as well. This closes the final race where a pointer
+                // event lands after native work completed but before the queued presentation runs.
+                if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested) ||
+                    request.Revision < _p1d5LastPresentedMeasurementRevision)
+                    return;
+
+                PresentP1D5CursorMeasurements(result);
+                _p1d5LastPresentedMeasurementRevision = request.Revision;
+            });
         }
         catch (OperationCanceledException)
         {
@@ -241,6 +268,8 @@ public partial class ComtradeWorkspaceWindow
             _p1d5MeasurementWorkerRunning = false;
             if (_p1d5MeasurementDirty && _analysisMode == AnalysisMode.Waveform)
                 EnsureP1D5MeasurementRenderingPump();
+            else
+                StopP1D5MeasurementRenderingPump();
         }
     }
 
@@ -276,11 +305,10 @@ public partial class ComtradeWorkspaceWindow
 
     private string FormatP1D5CursorValue(string cursor, ComtradeCursorMeasurement? measurement)
     {
-        if (measurement is not { Valid: true })
-            return string.Empty;
-        var value = P1D5IsRmsTrace ? measurement.Rms : measurement.Instantaneous;
-        var mode = P1D5IsRmsTrace ? "RMS" : "Inst";
-        return $"{cursor} {mode} {value.ToString("G6", CultureInfo.CurrentCulture)}";
+        double? value = measurement is { Valid: true }
+            ? P1D5IsRmsTrace ? measurement.Rms : measurement.Instantaneous
+            : null;
+        return ComtradeCursorReadoutPolicy.FormatValue(cursor, P1D5IsRmsTrace, value, CultureInfo.CurrentCulture);
     }
 
     private CancellationToken EnsureP1D5MeasurementToken()
