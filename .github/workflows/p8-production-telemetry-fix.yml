@@ -1,0 +1,41 @@
+name: Apply P8 production telemetry fix
+
+on:
+  push:
+    branches:
+      - feat/p8-runtime-performance-resilience
+    paths:
+      - .github/workflows/p8-production-telemetry-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: windows-2025
+    steps:
+      - name: Checkout P8 branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/p8-runtime-performance-resilience
+          fetch-depth: 0
+
+      - name: Apply production telemetry fix
+        shell: pwsh
+        run: python .\scripts\apply-p8-production-telemetry-fix.py
+
+      - name: Commit production fix and remove temporary patch automation
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          Remove-Item .\.github\workflows\p8-production-telemetry-fix.yml -Force
+          Remove-Item .\scripts\apply-p8-production-telemetry-fix.py -Force
+          git add -A
+          git diff --cached --stat
+          if (git diff --cached --quiet) {
+            throw "P8 telemetry patch produced no changes."
+          }
+          git commit -m "fix(p8): wire defensive telemetry into production runtime"
+          git push origin HEAD:feat/p8-runtime-performance-resilience
