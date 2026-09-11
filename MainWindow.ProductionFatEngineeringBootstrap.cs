@@ -130,6 +130,7 @@ public partial class MainWindow
                 engineeringDevices,
                 token);
             token.ThrowIfCancellationRequested();
+            var canonicalStaticRowCount = projection.Project.SignalCount;
 
             // Register the exact same ARIEC workspace instances already owned by Explorer.
             // Production FAT preparation can therefore prove shared SCL authority without
@@ -150,20 +151,43 @@ public partial class MainWindow
 
             SynchronizeImportedSclFatWithEngineering(launch.Project);
 
-            // This automatic entry path is explicitly Static DataSet FAT. Engineering may
-            // also expose selected scalar aliases outside the DataSet, and older saved P2
-            // projects may contain scl-manual-* rows created from those aliases. Keep such
-            // rows/evidence in the project for audit continuity, but do not arm them in the
-            // shared workspace here. Otherwise a static member and its scalar alias can both
-            // resolve to the same live primary leaf and correctly trip session preflight.
-            var retiredManualRows = launch.Project.Ieds.Sum(
-                IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode);
-            if (retiredManualRows > 0)
+            // Canonical Engineering -> FAT rule: historical scl-manual-* rows are evidence
+            // input only. Snapshot restore may materialize them for legacy workflows, and
+            // shared-selection synchronization may encounter them, but the automatic static
+            // DataSet FAT surface must never expose a second row authority. Migrate evidence
+            // only when one legacy row maps uniquely to one static member, then physically
+            // remove every manual row before the production grid/session is exposed.
+            var migration = IoFatCanonicalEvidenceMigrationService
+                .MigrateAndRemoveLegacyManualRows(launch.Project);
+
+            if (launch.Project.Ieds
+                .SelectMany(ied => ied.TestPoints)
+                .Any(IoFatCanonicalEvidenceMigrationService.IsLegacyManualWorkspaceRow))
+            {
+                throw new InvalidDataException(
+                    "Canonical Engineering FAT still contains a legacy manual SCL row after migration.");
+            }
+
+            if (launch.Project.SignalCount != canonicalStaticRowCount)
+            {
+                throw new InvalidDataException(
+                    $"Canonical Engineering FAT expected {canonicalStaticRowCount} static DataSet row(s), but {launch.Project.SignalCount} row(s) remain after legacy migration.");
+            }
+
+            if (migration.RemovedManualRows > 0)
             {
                 AddLog(
                     "INFO",
                     "FAT",
-                    $"Automatic Static DataSet scope retired {retiredManualRows} manual SCL workspace overlay(s); static membership remains authoritative.");
+                    $"Canonical Engineering FAT removed {migration.RemovedManualRows} legacy manual row(s); migrated evidence for {migration.MigratedEvidenceRows} uniquely mapped row(s). Active rows remain the static DataSet authority only.");
+            }
+
+            if (migration.AmbiguousEvidenceRows > 0)
+            {
+                AddLog(
+                    "WARN",
+                    "FAT",
+                    $"{migration.AmbiguousEvidenceRows} legacy manual evidence row(s) matched multiple static DataSet memberships. ARSAS kept the canonical rows and did not guess an evidence owner; the persisted snapshot remains audit history.");
             }
 
             RegisterSharedSclSourcePaths(launch.Project, launch.Project.Ieds, projection.SourceInputs);
@@ -179,7 +203,7 @@ public partial class MainWindow
             launch.Workspace.ScheduleSave();
             await ShowIoTestingWorkspaceAsync(launch, importWarningCount: 0);
             SynchronizeProductionFatSelectedIed();
-            SetStatus($"FAT ready · {selected.Name} · Engineering static DataSet authority reused · no SCL re-import.");
+            SetStatus($"FAT ready · {selected.Name} · {canonicalStaticRowCount} canonical Engineering row(s) · no SCL re-import.");
         }
         catch (OperationCanceledException)
         {
