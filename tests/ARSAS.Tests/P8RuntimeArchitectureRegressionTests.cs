@@ -40,6 +40,8 @@ public sealed class P8RuntimeArchitectureRegressionTests
         Assert.Contains("_pendingPointSnapshots.AddOrUpdate", source, StringComparison.Ordinal);
         Assert.Contains("_pendingEvents.Enqueue(entry)", source, StringComparison.Ordinal);
         Assert.Contains("while (eventBatch.Count < 1000 && _pendingEvents.TryDequeue", source, StringComparison.Ordinal);
+
+        Assert.False(File.Exists(Path.Combine(FindRepoRoot(), "Services", "LatestValueUiBatcher.cs")));
     }
 
     [Fact]
@@ -79,6 +81,19 @@ public sealed class P8RuntimeArchitectureRegressionTests
         Assert.Contains("source timestamp remains unknown", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("never substitute DateTime.Now/ReceivedAtUtc", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SourceTimestampUtc = DateTime", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P8_DoesNotIntroduceSpeculativePoolingIntoAmbiguousOwnershipPaths()
+    {
+        var nativeClient = Read("Services/NativeIec61850Client.cs");
+        var monitor = Read("Services/Iec61850MonitorRuntime.cs");
+        var goose = Read("Services/GooseSubscriberRuntime.cs");
+
+        Assert.DoesNotContain("ArrayPool<", nativeClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("ArrayPool<", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ArrayPool<", goose, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(FindRepoRoot(), "Services", "PooledByteBufferLease.cs")));
     }
 
     private static string Read(string relativePath)
