@@ -1,156 +1,244 @@
-# ARSAS Engineering Guardrails
+# AGENTS.md — ARSAS Production Engineering Contract
 
-These instructions apply to every code change in this repository unless a narrower directory-level `AGENTS.md` explicitly strengthens them. They are architecture rules, not optional style advice.
+These rules apply to every AI/code agent working in this repository. ARSAS is professional substation-engineering software; engineering correctness, deterministic behavior, responsiveness, field robustness, and regression safety are product requirements from the first implementation.
 
-## 1. Production-ready from the first implementation
+## 1. Prime directive
 
-Do not land a deliberately naive, temporary, or "simple first" implementation on a production path. The first committed design must already account for realistic data volume, slow devices, partial data, cancellation, concurrent UI activity, malformed input, and long-running sessions.
+Do not begin with a deliberately naive, disposable, prototype-only, or intentionally simplified implementation when the production architecture is already knowable.
 
-Prefer bounded algorithms, deterministic state transitions, immutable/cached presentation data, and explicit failure states. Do not accept known lag, crash, unbounded memory growth, or correctness debt with the intention of fixing it later.
+Design the smallest production-quality solution that satisfies the requirement without unnecessary architectural complexity.
 
-## 2. Defensive programming and fail-safe behavior
+Priorities, in order:
+1. engineering correctness and data integrity;
+2. failure containment and crash resistance;
+3. regression compatibility;
+4. UI responsiveness and bounded latency;
+5. performance and bounded memory;
+6. maintainability and testability.
 
-Treat all external, file, native, network, device, user, and persisted data as untrusted until validated.
+Do not sacrifice existing working capability to make a new screenshot or demo pass.
 
-- Validate ranges, lengths, indexes, enum values, timestamps, units, counts, and finite floating-point values before use.
-- Never assume arrays from different sources have identical lengths; use validated common bounds.
-- Clamp UI coordinates and time/frame requests to known valid domains.
-- Bound collections and work queues. A corrupted input must not cause an unbounded allocation or loop.
-- A failed optional feature must degrade locally and must not crash the workstation or corrupt shared state.
-- Cleanup must be idempotent. Cancellation, close, disconnect, or repeated teardown must be safe.
+## 2. Mandatory workflow before editing
 
-## 3. Exception-free critical data paths and Result/Try patterns
+For non-trivial bugs, features, performance work, or architectural changes, follow this sequence:
 
-Exceptions are not control flow for high-frequency or critical processing.
+RECONNAISSANCE -> REPRODUCE/BASELINE -> ROOT CAUSE -> INVARIANTS -> ARCHITECTURE IMPACT -> IMPLEMENT -> REGRESSION TEST -> FAILURE-PATH TEST -> PERFORMANCE CHECK -> CI/BUILD -> USER WORKFLOW VALIDATION
 
-For parsers, conversion, analysis requests, native result decoding, timeline calculations, measurement processing, persistence validation, and other critical data functions:
+Before changing code:
+- locate the current implementation and all known consumers;
+- identify the authoritative state/model and avoid creating a second source of truth;
+- identify related tests, serialization formats, protocol mappings, view-model bindings, and lifecycle owners;
+- state which existing behaviors must not change;
+- determine root cause before applying a patch;
+- prefer an existing abstraction over creating a parallel subsystem.
 
-- Prefer `Try...` APIs, result structs/records, status enums, or explicit success/failure objects.
-- Return failure details as data instead of throwing for expected malformed input, unavailable data, unsupported capability, cancellation-aware rejection, or validation failure.
-- Do not add `throw` to hot paths to represent an expected runtime state.
-- Do not use broad `catch (Exception)` as the normal boundary for routine processing. If an exception boundary is unavoidable at an OS/native/framework edge, contain it at that boundary, translate it immediately to a structured result, enqueue diagnostics asynchronously, and keep exception objects out of render/update loops.
-- Cancellation is a state, not an error. Prefer early cancellation checks and cancelled result states where this can avoid exception churn. Framework APIs that necessarily throw `OperationCanceledException` may be contained at the task boundary only.
+Do not repeatedly modify code hoping one version works. If an attempt fails, stop, re-check assumptions, gather evidence, then revise the design.
 
-A practical result shape should carry at least success/state, stable error code, concise operator-safe message, and optional diagnostic context without requiring exception propagation.
+Three patches in the same subsystem for the same symptom are a signal to re-audit the root cause and architecture.
 
-## 4. Asynchronous internal diagnostics
+## 3. Architecture boundaries
 
-Failures that matter to engineering diagnosis must not burden interactive UI paths.
+Keep dependencies directional where practical:
 
-- Route diagnostics through a bounded, asynchronous internal diagnostic queue or existing equivalent diagnostic service.
-- UI/status text receives only concise operator-facing state; detailed context goes to diagnostics.
-- Never synchronously write large logs, serialize reports, or perform filesystem/network diagnostics from cursor, render, packet, measurement, or polling callbacks.
-- Apply backpressure/coalescing/deduplication to repeated diagnostic events.
-- Diagnostics must never become a new crash source; queue failure is non-fatal.
+Presentation / XAML / View
+-> Application / orchestration / use cases
+-> Domain / engineering models / calculations
+-> Infrastructure / device / file / network / OS adapters
 
-## 5. Hot-path performance rules
+Rules:
+- engineering calculations must not depend directly on UI controls;
+- filesystem, network, device, database, update, export, and OS integration should remain behind explicit service/adaptor boundaries;
+- avoid global mutable state;
+- prefer one authoritative document/session state model;
+- do not duplicate engineering data merely to simplify UI code;
+- do not introduce abstractions for hypothetical future requirements without a current need.
 
-The following are hot paths when active: rendering, cursor/scrub movement, mouse move, waveform navigation, live value updates, protocol receive callbacks, measurement loops, polling, packet processing, and device state projection.
+## 4. Defensive programming and failure containment
 
-On hot paths:
+Treat all external inputs as fallible: COMTRADE, SCL, packet captures, IEC 61850 responses, device/network traffic, local files, configuration, persisted state, user input, and update metadata.
 
-- No blocking I/O.
-- No synchronous waits on async work (`.Wait()`, `.Result`, busy waiting).
-- Avoid LINQ and iterator pipelines when they allocate or repeat enumeration per frame/update.
-- Avoid rebuilding dictionaries, lists, formatted text, geometries, brushes, pens, or large strings every frame when data is unchanged.
-- Cache immutable/static drawing layers separately from rapidly changing overlays.
-- Freeze WPF `Freezable` objects when safe and reuse them.
-- Coalesce high-frequency updates to the presentation cadence and enforce latest-wins semantics.
-- Allow at most the explicitly designed number of in-flight workers. Never create one background task per mouse move, packet, or value change.
-- Use O(1) or O(log n) lookup on repeated interactive searches where practical; pre-index sorted snap/event data rather than linearly scanning on every cursor move.
-- Long-record visualization must be bounded/decimated while preserving exact source identity for drill-down.
+Validate before use:
+- nullability and missing fields;
+- bounds, lengths, indexes, and channel counts;
+- numeric ranges, overflow, NaN and Infinity;
+- schema/version assumptions;
+- malformed, partial, truncated, stale, or inconsistent data;
+- timeouts, cancellation, disconnect, and partial completion.
 
-## 6. UI responsiveness and thread ownership
+For C# prefer nullable reference types, pattern matching, TryParse-style APIs, explicit guards, typed result/error models, `using`/`await using`, and cancellation tokens where appropriate.
 
-The WPF dispatcher owns UI objects only. Native/file/network/CPU-heavy work belongs off the UI thread.
+Do not wrap every function in a broad `try/catch`. Catch at meaningful failure boundaries. Never silently swallow failures. Recover locally when safe; otherwise propagate a structured failure to the owning layer and keep the application usable when isolation is possible.
 
-- Keep dispatcher work small and presentation-only.
-- Do not perform native scans, file reads, DFT/harmonic calculations, large parsing, or report generation on the UI thread.
-- Background results must be generation/revision checked before presentation so stale results cannot overwrite newer user intent.
-- Mode switches, close/dispose, and new requests must invalidate or cancel obsolete work.
-- Pointer feedback must remain synchronous and lightweight even if deeper analysis is still computing.
+One malformed field record must not crash the entire application.
 
-## 7. Deterministic state and stable ordering
+## 5. Zero UI blocking
 
-Never let `HashSet`, dictionary enumeration, task completion order, or checkbox activation order accidentally define operator-visible ordering.
+The UI thread exists for presentation and interaction.
 
-- Define canonical ordering for operator-visible collections.
-- Preserve relative order inside semantic categories unless a documented sort key applies.
-- One concept has one authority: cursor identity, timebase, selection, connection ownership, measurement state, and device state must not have competing sources of truth.
-- Derived UI must project from authoritative state rather than maintaining an independent shadow state.
+Never perform synchronous long-running:
+- file parsing or export;
+- network/device communication;
+- SCL/COMTRADE bulk processing;
+- FFT/harmonic/phasor/locus calculations;
+- report generation;
+- database or package/update work
 
-For COMTRADE Time Signals specifically: selected analog tracks are always rendered before selected digital/protection tracks; selection order must not alter that category ordering.
+on the UI thread.
 
-## 8. Memory, allocation, and resource bounds
+For a 60 Hz interface, ~16.7 ms is the total frame budget, not permission for an individual operation to consume 16 ms repeatedly.
 
-Every long-lived cache, queue, history, evidence buffer, waveform data set, and diagnostic buffer must have a documented bound or lifecycle.
+Use async I/O for I/O-bound work and background workers/tasks for CPU-bound work. User-triggered work that can outlive its screen/session must support cancellation when practical. Marshal only minimal results back to UI state.
 
-- Prefer fixed-size/ring/LRU-style bounded caches where retention is useful.
-- Release obsolete cancellation tokens, event subscriptions, native handles, timers, streams, and large buffers promptly.
-- Avoid copying large arrays unless the copy provides a measured or correctness benefit.
-- Reuse immutable data between views when authority and lifetime are clear.
-- Never retain UI objects in global/static caches.
+Never use arbitrary `Task.Delay`/timers to hide a race condition.
 
-## 9. Native and protocol boundaries
+## 6. Streaming, batching, backpressure
 
-Native ArdIrec/ARIEC61850 and protocol integrations are authoritative engineering boundaries.
+High-frequency streams such as waveform updates, packet/event feeds, device telemetry, logging, cursor-driven analysis, or live IEC 61850 data must not trigger one expensive UI update per incoming event.
 
-- Validate native capability before use.
-- Check native return/status values before reading output buffers.
-- Do not duplicate authoritative native calculations in managed UI code merely for convenience.
-- Keep native calls outside render callbacks.
-- Serialize access only where the native contract requires it; do not use a broad lock/gate that unnecessarily blocks unrelated UI work.
-- Preserve raw/source frame identity through decimation and projection so engineering evidence remains traceable.
+Use bounded queues, coalescing, batching, throttling, latest-value semantics, or backpressure according to domain needs.
 
-## 10. Regression-proof changes
+Rules:
+- avoid unbounded queues;
+- avoid one task/thread per event;
+- separate acquisition frequency from presentation frequency;
+- preserve all samples only when the engineering requirement is lossless;
+- otherwise prefer latest-state/coalesced rendering;
+- always commit the exact final interaction value after coalesced drag/update flows.
 
-Every bug fix or architecture rule that can regress must gain an automated contract where practical.
+## 7. Large files and large datasets
 
-At minimum, tests should cover:
+Do not eagerly load entire large engineering files into multiple duplicate in-memory structures when streaming/indexed access is practical.
 
-- the field-reported failure mode;
-- boundary and malformed input behavior;
-- cancellation/stale-result behavior where asynchronous work is involved;
-- deterministic ordering/identity rules;
-- large/bounded data behavior for algorithms designed to protect responsiveness.
+Prefer:
+streaming -> chunked parse -> indexed metadata -> bounded working set -> viewport/analysis-specific access
 
-A green build alone is not enough for a performance claim. Add deterministic allocation/algorithmic contracts and, where stable in CI, benchmark or latency budgets. Do not add flaky wall-clock tests that depend on shared-runner speed.
+For very large local files, consider memory mapping when it materially improves the workload and lifetime model.
 
-## 11. Performance acceptance
+Avoid full-record rescans for small cursor or viewport changes.
 
-For interactive workstation features, reason about and document four budgets:
+## 8. Waveform, chart, table, and tree virtualization
 
-1. work per pointer/render/update event;
-2. maximum in-flight asynchronous work;
-3. maximum retained memory/cache size;
-4. stale-work invalidation/cancellation behavior.
+Rendering cost must scale primarily with visible information, not total dataset size.
 
-Prefer algorithmic tests for these budgets. Use field/benchmark evidence for actual latency numbers; never claim a specific p95/p99 latency without measurement.
+Large lists, trees, protocol frames, event logs, tables, and engineering grids must use virtualization/lazy loading/paging where supported.
 
-## 12. Change discipline
+Dense waveform/time-series rendering must use viewport-aware LOD/downsampling before drawing. For disturbance waveforms, prefer extrema-preserving min/max envelope strategies over simple averaging so short transients and trip spikes are not hidden.
 
-Before changing architecture:
+Keep static layers (grid, axes, protection zones, base geometry) separate from high-frequency dynamic overlays (cursor, selection, hover, live markers) to avoid full-scene invalidation.
 
-- inspect existing authority, lifecycle, tests, and hot-path design;
-- preserve working field behavior unless the change intentionally corrects it;
-- modify the smallest authoritative layer rather than adding another parallel mechanism;
-- avoid copy-pasted alternative implementations;
-- keep commits focused and diagnosable;
-- do not merge a field-test PR until exact-head CI is green and the requested field acceptance has been received.
+Never regenerate a full waveform, locus, or harmonic dataset merely because a cursor moved.
 
-## 13. COMTRADE workstation invariants
+## 9. Memory and resource lifetime
 
-For the COMTRADE workspace, preserve all of the following unless a newer accepted specification explicitly replaces them:
+Avoid unnecessary allocations/copies in hot paths.
 
-- a shared corrected timebase and trigger origin;
-- one authoritative snap index for visible digital edges;
-- C1/C2 waveform and upper ruler represent the same cursor identities;
-- one P cursor for Phasor and one H cursor for Harmonics;
-- interactive cursor feedback must not rebuild waveform data geometry;
-- Phasor/Harmonics analysis is coalesced and stale results cannot flash back after a newer/final request;
-- large records use bounded overview data plus exact source-frame drill-down;
-- accented/legacy CFG labels degrade safely instead of corrupting the workstation;
-- Harmonics uses native ArdIrec analysis and presents checked analog channels consistently;
-- selected analog tracks render above all selected digital tracks.
+Prefer reusable buffers, retained capacity, spans/views, pooled arrays only when profiling shows allocation pressure, and precomputed indexes instead of repeated scans.
 
-When a requested change conflicts with one of these invariants, redesign the authority intentionally; do not patch around it with another shadow state.
+Do not add a generic object pool merely because pooling sounds faster.
+
+Every owned resource must have an explicit lifecycle: files, streams, sockets, timers, subscriptions, event handlers, cancellation sources, device handles, unmanaged buffers, workers, and GPU resources.
+
+Dispose/unsubscribe/release when ownership ends. A document reload/close must not leave callbacks pointing to destroyed state.
+
+## 10. IEC 61850 / device / protocol rules
+
+Never assume an IED, gateway, capture, or remote endpoint behaves perfectly.
+
+Validate declared lengths before field access. Use explicit timeouts. Handle disconnect, reconnect, cancellation, negative responses, partial responses, unsupported services, malformed frames, and stale state.
+
+Protocol state machines must have explicit transitions and bounded retry behavior. Unexpected frames must fail safely rather than corrupt session state.
+
+Device/network callbacks must not perform expensive UI work directly.
+
+Do not cosmetically alter protocol/engineering data to imitate another product. UI representation may be optimized, but timestamps, values, quality, sequence, trigger semantics, phasors, impedance, zones, and report facts must remain engineering-correct.
+
+## 11. Performance as a contract
+
+Performance-sensitive paths should define and preserve measurable budgets where practical:
+- startup time;
+- file-open latency;
+- parsing throughput;
+- interaction/cursor latency;
+- UI frame time;
+- allocation rate and working-set memory;
+- report/export time;
+- packet/event processing throughput;
+- queue depth under burst load.
+
+Do not claim an optimization without evidence. Prefer algorithmic/layout improvements over speculative micro-optimizations.
+
+Do not add caches, worker pools, SIMD, object pooling, or complex concurrency unless the bottleneck and ownership model are understood.
+
+## 12. Regression prevention
+
+Every bug fix should add or update a regression test whenever technically practical.
+
+Test the exact failure mode that motivated the change, not only nearby happy paths.
+
+Before changing shared behavior, identify callers and persisted/public contracts. Do not change serialization, configuration, protocol mapping, default values, timing semantics, report semantics, or public APIs without compatibility analysis.
+
+For UI bugs, protect interaction semantics in addition to appearance.
+
+## 13. Change discipline
+
+Prefer the smallest coherent change that fixes the root cause.
+
+Do not:
+- mix unrelated refactoring into a focused fix;
+- create duplicate services/state stores because understanding the existing path is inconvenient;
+- rename large areas without a compelling reason;
+- add a dependency when the platform/current stack already provides the capability;
+- replace a working subsystem simply because a rewrite appears easier.
+
+A new dependency must justify purpose, maintenance cost, binary impact, security implications, and runtime overhead.
+
+## 14. Exception-free hot paths, Result pattern, and asynchronous diagnostics
+
+Expected or recoverable failures must not use exceptions as normal control flow in performance-critical or high-frequency code. This includes COMTRADE/SCL parsing loops, IEC 61850 frame decoding, packet/event processing, waveform/harmonic/phasor calculation loops, device acquisition callbacks, and rendering-preparation hot paths.
+
+Prefer explicit C# failure contracts such as `TryXxx(...)`, typed `Result<T>` / result records, discriminated status models, nullable returns only when the failure meaning is unambiguous, and structured error codes. A normal timeout, malformed field, missing sample, unsupported value, disconnected device, or parse rejection should not require stack unwinding.
+
+Exceptions from .NET, OS APIs, filesystem/network libraries, or third-party code may still occur. Catch them at the nearest meaningful infrastructure/application boundary, convert them into the repository's structured result/error model, preserve cancellation semantics, and keep exception handling out of inner loops. Do not catch and ignore exceptions.
+
+For hot-path diagnostics, never synchronously write files, console logs, telemetry, UI dialogs, JSON, or expensive formatted strings. Publish a small structured diagnostic event to a bounded asynchronous diagnostic channel/queue and let a background consumer aggregate, format, persist, or surface it.
+
+Diagnostic queues must be bounded and have an explicit overload policy. Deduplicate/rate-limit repeated failures and aggregate counts such as `MalformedRow x 4281` instead of enqueueing thousands of equivalent messages. A full/broken diagnostic queue must never block protocol processing, parsing, rendering, or UI responsiveness; retain counters/high-severity/latest events according to documented policy.
+
+The diagnostic subsystem is observational, not a correctness dependency. Logging failure must not become application failure.
+
+When implementing a `Result<T>` family, keep it lightweight and consistent. Do not create multiple incompatible result abstractions in different subsystems. Error payloads should carry stable machine-readable codes/context first; human-readable formatting belongs outside the hot path.
+
+## 15. Definition of done
+
+A task is not complete because it compiles.
+
+Validate, as applicable:
+BUILD
++ STATIC ANALYSIS
++ UNIT TESTS
++ REGRESSION TESTS
++ INTEGRATION/DETERMINISTIC FIXTURES
++ NEGATIVE/FAILURE-PATH TESTS
++ PERFORMANCE/ALLOCATION CHECK
++ RESOURCE/LIFECYCLE CHECK
++ PACKAGED STARTUP/SMOKE TEST
++ REAL USER WORKFLOW CHECK
+
+Use the repository PR template and existing engineering validation gates. Never claim a check was run when it was not.
+
+## 16. Agent completion report
+
+After implementation, report:
+- Changed: what was modified;
+- Root cause: why the previous behavior failed;
+- Architecture: why this solution belongs in the existing design;
+- Regression protection: tests/invariants added;
+- Performance impact: measured result or why the path is not performance-sensitive;
+- Validation: exact checks/commands and results;
+- Remaining limitations: genuine unresolved limitations only.
+
+## Final rule
+
+Think like the maintainer who must support ARSAS on real engineering data for years, not like a prototype generator trying to make today's screenshot pass.
+
+Understand first. Fix root causes. Preserve working behavior. Keep hot paths bounded. Validate failure modes. Measure performance when relevant. Prevent regressions before declaring done.
