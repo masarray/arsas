@@ -125,8 +125,8 @@
                                     </Grid.ColumnDefinitions>
                                     <CheckBox Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center"
                                               Loaded="SignalVisibility_Loaded"
-                                              Checked="SignalVisibility_Checked"
-                                              Unchecked="SignalVisibility_Unchecked"
+                                              Checked="P1D5SignalVisibility_Checked"
+                                              Unchecked="P1D5SignalVisibility_Unchecked"
                                               ToolTip="Show or hide this signal in Time Signals."/>
                                     <Border Grid.Column="2" Width="4" Height="27" CornerRadius="2" Background="{Binding Accent}" VerticalAlignment="Center"/>
                                     <StackPanel Grid.Column="3">
