@@ -5,7 +5,7 @@ P8 hardens ARSAS for long-running, multi-IED IEC 61850 work without trading proc
 ## Non-negotiable invariants
 
 1. **Network/process evidence is lossless.** IEC 61850 Report/GOOSE/SOE processing stays event-by-event. Only the visual latest-value projection may be coalesced.
-2. **Missing data is never promoted to a valid measurement.** A missing value or unusable quality becomes `Invalid`; an absent relay timestamp stays unknown. `ReceivedAtUtc` is separate local receipt metadata.
+2. **Missing or unproven data is never promoted to Good evidence.** A missing process value is `Invalid`; unknown/vendor quality remains `Questionable` or `Invalid`, never silently `Good`; an absent relay timestamp stays unknown. `ReceivedAtUtc` is separate local receipt metadata.
 3. **One IED cannot stall another.** Lifecycle gates, monitor cancellation, reconnect state, client instances, and report recovery are scoped per device.
 4. **Native/vendor work does not execute its synchronous prefix on the WPF Dispatcher.** The UI-facing runtime facade offloads IEC 61850 lifecycle operations and provides a pre-emptive stop lane.
 5. **Shutdown is bounded.** Native teardown is best effort and may not freeze the application indefinitely.
@@ -47,11 +47,11 @@ Main-window timers are stopped during shutdown; the application CTS is cancelled
 - source/relay timestamp (`SourceTimestampUtc`),
 - local receipt time (`ReceivedAtUtc`).
 
-A missing process value is `Invalid` even if malformed upstream metadata claims `Good`. A malformed source timestamp remains `null`; ARSAS does not replace missing relay evidence with the PC receive clock. `Iec61850ReadValue` exposes this normalized envelope while preserving the existing runtime's report/MMS evidence path.
+A missing process value is `Invalid` even if malformed upstream metadata claims `Good`. Only an explicit IEC quality of `Good` makes `IsValid` true. `Questionable` data remains separately identifiable through `IsUsable` and is never promoted to Good evidence. A malformed source timestamp remains `null`; ARSAS does not replace missing relay evidence with the PC receive clock. ARIEC's zone-less decoded IEC `UtcTime` display is interpreted as UTC by protocol semantics, not as local PC time. `Iec61850ReadValue` exposes this normalized envelope while preserving the existing runtime's report/MMS evidence path.
 
 ### P8.6 — Allocation profiling
 
-`RuntimeAllocationSnapshot` captures total allocated bytes, managed heap size, fragmentation, and generation collection counters without forcing GC. It provides deltas for repeatable field/performance baselines. P8 intentionally avoids hard-coded allocation or timing thresholds in CI because runner scheduling and GC timing would make such tests flaky; thresholds should be established from measured field baselines.
+`RuntimeAllocationSnapshot` captures total allocated bytes, managed heap size, fragmentation, and generation collection counters without forcing GC. It provides defensive deltas for repeatable field/performance baselines, including safe handling of accidentally reversed snapshots. P8 intentionally avoids hard-coded allocation or timing thresholds in CI because runner scheduling and GC timing would make such tests flaky; thresholds should be established from measured field baselines.
 
 ### P8.7 — Pooling decision after profiling audit
 
@@ -67,6 +67,7 @@ P8 protects:
 
 - null/malformed telemetry normalization,
 - no fabricated relay timestamp,
+- explicit Good versus Questionable/Invalid quality semantics,
 - production latest-value UI coalescing while SOE remains lossless FIFO,
 - per-IED operation/reconnect isolation,
 - existing independent multi-IED FAT state,
