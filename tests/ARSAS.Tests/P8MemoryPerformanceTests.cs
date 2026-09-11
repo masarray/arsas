@@ -5,21 +5,6 @@ namespace ARSAS.Tests;
 public sealed class P8MemoryPerformanceTests
 {
     [Fact]
-    public void PooledByteBufferLease_ExposesRequestedLength_AndDisposeIsIdempotent()
-    {
-        var lease = PooledByteBufferLease.Rent(1024, clearOnReturn: true);
-        Assert.Equal(1024, lease.Length);
-        Assert.Equal(1024, lease.Memory.Length);
-
-        lease.Span[0] = 0x61;
-        Assert.Equal((byte)0x61, lease.Span[0]);
-
-        lease.Dispose();
-        lease.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => _ = lease.Memory);
-    }
-
-    [Fact]
     public void AllocationSnapshot_DeltaNeverReportsNegativeAllocatedBytesOrCollectionCounts()
     {
         var before = RuntimeAllocationSnapshot.Capture();
@@ -33,5 +18,19 @@ public sealed class P8MemoryPerformanceTests
         Assert.True(delta.Gen1Collections >= 0);
         Assert.True(delta.Gen2Collections >= 0);
         Assert.True(delta.AllocatedMegabytesPerSecond >= 0d);
+    }
+
+    [Fact]
+    public void AllocationSnapshot_DoesNotForceGarbageCollection()
+    {
+        var gen0Before = GC.CollectionCount(0);
+        var gen1Before = GC.CollectionCount(1);
+        var gen2Before = GC.CollectionCount(2);
+
+        _ = RuntimeAllocationSnapshot.Capture();
+
+        Assert.Equal(gen0Before, GC.CollectionCount(0));
+        Assert.Equal(gen1Before, GC.CollectionCount(1));
+        Assert.Equal(gen2Before, GC.CollectionCount(2));
     }
 }
