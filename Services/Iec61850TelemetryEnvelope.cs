@@ -24,7 +24,8 @@ public readonly record struct Iec61850TelemetryEnvelope(
     string SourceReference,
     string Diagnostic)
 {
-    public bool HasProcessValue => Value is not null || !string.IsNullOrWhiteSpace(DisplayValue);
+    public bool HasProcessValue => Value is not null ||
+                                   (!string.IsNullOrWhiteSpace(DisplayValue) && DisplayValue != "-");
     public bool IsValid => HasProcessValue && QualityState != Iec61850TelemetryQualityState.Invalid;
 
     public static Iec61850TelemetryEnvelope FromReadValue(
@@ -76,7 +77,7 @@ public readonly record struct Iec61850TelemetryEnvelope(
             safePlaceholder?.ToString() ?? "-",
             Iec61850TelemetryQualityState.Invalid,
             "Invalid",
-            SourceTimestampUtc: null,
+            null,
             receivedAtUtc,
             sourceReference?.Trim() ?? string.Empty,
             diagnostic?.Trim() ?? string.Empty);
