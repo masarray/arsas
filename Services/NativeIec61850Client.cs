@@ -2356,18 +2356,25 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
     private static void ApplyDiscoveryReadValue(SignalDefinition signal, object value)
     {
-        if (value is Iec61850ReadValue rich)
-        {
-            signal.Value = Iec61850ValueFormatter.Format(rich.Value ?? rich.ToString(), signal.DataType, signal.Unit);
-            signal.Quality = rich.HasQuality ? rich.Quality : "Good";
-            signal.DeviceTimestamp = rich.HasDeviceTimestamp ? rich.DeviceTimestamp : "-";
-        }
-        else
-        {
-            signal.Value = Iec61850ValueFormatter.Format(value, signal.DataType, signal.Unit);
-            signal.Quality = "Good";
-        }
-        signal.ProbeStatus = "Readable";
+        var receivedAtUtc = value is Iec61850ReadValue rich
+            ? rich.ReceivedAtUtc
+            : DateTimeOffset.UtcNow;
+        var envelope = Iec61850ProductionTelemetryNormalizer.FromReadObject(
+            value,
+            signal.DataType,
+            signal.Unit,
+            receivedAtUtc,
+            signal.ObjectReference,
+            value is Iec61850ReadValue read ? read.ReadReference : signal.ObjectReference);
+
+        signal.Value = envelope.HasProcessValue
+            ? Iec61850ValueFormatter.Format(envelope.Value ?? envelope.DisplayValue, signal.DataType, signal.Unit)
+            : "-";
+        signal.Quality = envelope.QualityText;
+        signal.DeviceTimestamp = Iec61850ProductionTelemetryNormalizer.SourceTimestampTextOrUnknown(
+            envelope,
+            value is Iec61850ReadValue sourceRead ? sourceRead.DeviceTimestamp : null);
+        signal.ProbeStatus = envelope.HasProcessValue ? "Readable" : "Readable / no process value";
         signal.Timestamp = DateTime.Now;
     }
 
