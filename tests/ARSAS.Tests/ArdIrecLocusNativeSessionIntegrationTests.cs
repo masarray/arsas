@@ -4,6 +4,8 @@ namespace ARSAS.Tests;
 
 public sealed class ArdIrecLocusNativeSessionIntegrationTests
 {
+    private const int SecondaryRepresentation = 1;
+
     [Fact]
     public void PackagedBridge_ProvidesSixLoopCursorAndBoundedLocus_WhenConfigured()
     {
@@ -21,7 +23,7 @@ public sealed class ArdIrecLocusNativeSessionIntegrationTests
         {
             Assert.Equal((ulong)48, session.FrameCount);
             Assert.True(session.TryReadLoops(
-                22, ArdIrecNativeBridge.ValueSecondary, 0.0, 0.0,
+                22, SecondaryRepresentation, 0.0, 0.0,
                 out var loops, out error), error);
             Assert.Equal(6, loops.Length);
             Assert.All(loops, point => Assert.True(point.Valid));
@@ -32,7 +34,7 @@ public sealed class ArdIrecLocusNativeSessionIntegrationTests
             Assert.True(session.TryReadLocus(
                 ArdIrecLocusNativeSession.LoopL1E,
                 0, session.FrameCount, 16,
-                ArdIrecNativeBridge.ValueSecondary, 0.0, 0.0,
+                SecondaryRepresentation, 0.0, 0.0,
                 out var locus, out error), error);
             Assert.InRange(locus.Length, 2, 16);
             Assert.Equal((ulong)0, locus[0].ReferenceFrame);
