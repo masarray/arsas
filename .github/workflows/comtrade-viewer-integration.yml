@@ -12,6 +12,7 @@ on:
       - "tests/ARSAS.Tests/ArdIrec*Tests.cs"
       - "tests/ARSAS.Tests/Comtrade*Tests.cs"
       - "scripts/stage-ardirec-viewer.ps1"
+      - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
       - "docs/COMTRADE_VIEWER_INTEGRATION.md"
       - ".github/workflows/comtrade-viewer-integration.yml"
@@ -32,11 +33,16 @@ jobs:
         with:
           path: ARSAS
 
-      - name: Resolve immutable ArdIrec bridge lock
+      - name: Resolve immutable engine locks
         shell: powershell
         run: |
-          $lockPath = ".\ARSAS\engines\ARDIREC.lock.json"
-          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+          $iecLock = Get-Content ".\ARSAS\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($iecLock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+
+          $lock = Get-Content ".\ARSAS\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
           if ($lock.schema -ne 3 -or
               $lock.repository -notmatch '^[^/]+/[^/]+$' -or
               $lock.commit -notmatch '^[0-9a-f]{40}$' -or
@@ -45,8 +51,22 @@ jobs:
               $lock.bridge.mode -ne 'native-only') {
             throw "ArdIrec P1D.5 bridge-only lock metadata is invalid."
           }
+
+          "ARIEC61850_REPOSITORY=$($iecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($iecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
 
       - name: Checkout immutable ArdIrec revision
         shell: powershell
