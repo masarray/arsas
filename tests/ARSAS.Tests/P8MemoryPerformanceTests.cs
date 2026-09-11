@@ -22,11 +22,13 @@ public sealed class P8MemoryPerformanceTests
     }
 
     [Fact]
-    public void AllocationSnapshot_ReversedInputClampsElapsedAndCountersSafely()
+    public void AllocationSnapshot_ReversedMonotonicInputClampsElapsedAndCountersSafely()
     {
         var later = new RuntimeAllocationSnapshot(
             new DateTimeOffset(2026, 9, 11, 2, 0, 0, TimeSpan.Zero),
             2_000,
+            2_000,
+            1_600,
             1_500,
             100,
             5,
@@ -35,6 +37,8 @@ public sealed class P8MemoryPerformanceTests
         var earlier = new RuntimeAllocationSnapshot(
             later.CapturedAtUtc.AddSeconds(-10),
             1_000,
+            1_000,
+            1_100,
             1_000,
             50,
             2,
@@ -52,12 +56,18 @@ public sealed class P8MemoryPerformanceTests
     }
 
     [Fact]
-    public void AllocationSnapshot_ImplementationNeverForcesCollection()
+    public void AllocationSnapshot_ImplementationUsesMonotonicRateTiming_AndHonestHeapLabels()
     {
         var source = ReadRepoFile("Services/RuntimeAllocationSnapshot.cs");
 
+        Assert.Contains("Stopwatch.GetTimestamp()", source, StringComparison.Ordinal);
+        Assert.Contains("Stopwatch.GetElapsedTime(", source, StringComparison.Ordinal);
+        Assert.Contains("GC.GetTotalMemory(forceFullCollection: false)", source, StringComparison.Ordinal);
+        Assert.Contains("LastGcHeapSizeBytes", source, StringComparison.Ordinal);
+        Assert.Contains("LastGcFragmentedBytes", source, StringComparison.Ordinal);
         Assert.Contains("GC.GetGCMemoryInfo()", source, StringComparison.Ordinal);
         Assert.Contains("GC.GetTotalAllocatedBytes(precise: false)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CapturedAtUtc - earlier.CapturedAtUtc", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GC.Collect(", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GC.WaitForPendingFinalizers", source, StringComparison.Ordinal);
     }
