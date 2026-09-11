@@ -41,16 +41,19 @@ public static class NativeFatCanonicalEvidenceOverlay
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
 
-        if (!cache.EvidenceByRow.TryGetValue(BuildRowKey(point), out var slot))
-            return string.Empty;
-
-        return field switch
+        lock (cache.EvidenceByRow)
         {
-            NativeFatEvidenceField.Value1 => slot.Value1,
-            NativeFatEvidenceField.Value2 => slot.Value2,
-            NativeFatEvidenceField.Result => slot.Result,
-            _ => string.Empty
-        };
+            if (!cache.EvidenceByRow.TryGetValue(BuildRowKey(point), out var slot))
+                return string.Empty;
+
+            return field switch
+            {
+                NativeFatEvidenceField.Value1 => slot.Value1,
+                NativeFatEvidenceField.Value2 => slot.Value2,
+                NativeFatEvidenceField.Result => slot.Result,
+                _ => string.Empty
+            };
+        }
     }
 
     public static void Write(
@@ -65,36 +68,39 @@ public static class NativeFatCanonicalEvidenceOverlay
         var key = BuildRowKey(point);
         var text = value ?? string.Empty;
 
-        if (!cache.EvidenceByRow.TryGetValue(key, out var slot))
+        lock (cache.EvidenceByRow)
         {
-            // Reading/clearing an untouched cell must not allocate evidence.
-            if (string.IsNullOrWhiteSpace(text))
-                return;
+            if (!cache.EvidenceByRow.TryGetValue(key, out var slot))
+            {
+                // Reading/clearing an untouched cell must not allocate evidence.
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
 
-            slot = new NativeFatEvidenceSlotState();
-            cache.EvidenceByRow[key] = slot;
-        }
+                slot = new NativeFatEvidenceSlotState();
+                cache.EvidenceByRow[key] = slot;
+            }
 
-        switch (field)
-        {
-            case NativeFatEvidenceField.Value1:
-                slot.Value1 = text;
-                break;
-            case NativeFatEvidenceField.Value2:
-                slot.Value2 = text;
-                break;
-            case NativeFatEvidenceField.Result:
-                slot.Result = text;
-                break;
-        }
+            switch (field)
+            {
+                case NativeFatEvidenceField.Value1:
+                    slot.Value1 = text;
+                    break;
+                case NativeFatEvidenceField.Value2:
+                    slot.Value2 = text;
+                    break;
+                case NativeFatEvidenceField.Result:
+                    slot.Result = text;
+                    break;
+            }
 
-        // Keep the overlay genuinely sparse. Clearing the last evidence value removes
-        // the entry rather than leaving a shadow row behind.
-        if (string.IsNullOrWhiteSpace(slot.Value1) &&
-            string.IsNullOrWhiteSpace(slot.Value2) &&
-            string.IsNullOrWhiteSpace(slot.Result))
-        {
-            cache.EvidenceByRow.Remove(key);
+            // Keep the overlay genuinely sparse. Clearing the last evidence value removes
+            // the entry rather than leaving a shadow row behind.
+            if (string.IsNullOrWhiteSpace(slot.Value1) &&
+                string.IsNullOrWhiteSpace(slot.Value2) &&
+                string.IsNullOrWhiteSpace(slot.Result))
+            {
+                cache.EvidenceByRow.Remove(key);
+            }
         }
     }
 }
