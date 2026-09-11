@@ -160,6 +160,17 @@ public partial class MainWindow
             var migration = IoFatCanonicalEvidenceMigrationService
                 .MigrateAndRemoveLegacyManualRows(launch.Project);
 
+            // Keep the former selection-only cleanup as an idempotence assertion, not as the
+            // duplicate fix. Canonical migration above must already have physically removed
+            // every manual row; if this changes anything, a second authority escaped.
+            var retiredManualRows = launch.Project.Ieds.Sum(
+                IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode);
+            if (retiredManualRows != 0)
+            {
+                throw new InvalidDataException(
+                    $"Canonical Engineering FAT left {retiredManualRows} manual selection overlay(s) after physical migration.");
+            }
+
             if (launch.Project.Ieds
                 .SelectMany(ied => ied.TestPoints)
                 .Any(IoFatCanonicalEvidenceMigrationService.IsLegacyManualWorkspaceRow))
