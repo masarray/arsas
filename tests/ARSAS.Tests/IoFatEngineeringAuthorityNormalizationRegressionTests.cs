@@ -6,7 +6,7 @@ namespace ARSAS.Tests;
 public sealed class IoFatEngineeringAuthorityNormalizationRegressionTests
 {
     [Fact]
-    public void EngineeringProjectionAuthority_IsNormalizedBeforeLegacyManualMigration()
+    public void EngineeringProjectionAuthority_IsRecognizedBeforeLegacyManualMigration()
     {
         const string runtime = "AA1E1F06R4V1T3p1_OperationalValues/RPRE_MMXU1.A.phsA.cVal.mag.f";
         var canonical = new IoTestPointPlan
@@ -24,7 +24,7 @@ public sealed class IoFatEngineeringAuthorityNormalizationRegressionTests
             WorkspaceSelected = true,
             TestEnabled = true,
             ImportReady = true,
-            BindingStatus = "ENGINEERING_SCL_DATASET_AUTHORITY"
+            BindingStatus = IoTestSignalSelectionService.EngineeringSclDataSetAuthorityBindingStatus
         };
         canonical.ApplyLiveBinding(
             IoTestLiveBindingState.LivePointReady,
@@ -81,13 +81,18 @@ public sealed class IoFatEngineeringAuthorityNormalizationRegressionTests
             }
         };
 
+        // Critical field contract: Engineering projection rows must already be recognized
+        // as static DataSet authority before synchronize/migration runs. BindingStatus is
+        // immutable provenance and must not be rewritten later.
+        Assert.True(IoTestSignalSelectionService.IsSclDataSetAuthority(canonical));
+
         var result = IoFatCanonicalEvidenceMigrationService.MigrateAndRemoveLegacyManualRows(project);
 
         Assert.Equal(1, result.RemovedManualRows);
         Assert.Equal(1, result.MigratedEvidenceRows);
         Assert.Single(project.Ieds[0].TestPoints);
         Assert.Same(canonical, project.Ieds[0].TestPoints[0]);
-        Assert.Equal(IoTestSignalSelectionService.SclDataSetAuthorityBindingStatus, canonical.BindingStatus);
+        Assert.Equal(IoTestSignalSelectionService.EngineeringSclDataSetAuthorityBindingStatus, canonical.BindingStatus);
         Assert.True(IoTestSignalSelectionService.IsSclDataSetAuthority(canonical));
         Assert.NotNull(canonical.Runtime.Value1Evidence);
         Assert.DoesNotContain(project.Ieds[0].TestPoints, IoFatCanonicalEvidenceMigrationService.IsLegacyManualWorkspaceRow);
