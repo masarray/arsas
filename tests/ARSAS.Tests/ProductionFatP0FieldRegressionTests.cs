@@ -70,6 +70,28 @@ public sealed class ProductionFatP0FieldRegressionTests
     }
 
     [Fact]
+    public void EngineeringBootstrap_ReusesDescribedSourcesWhileStagingStillVerifiesSha256()
+    {
+        var projection = Read("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs");
+        var bootstrap = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
+        var bootstrapService = Read("Services/IoTesting/IoTestWorkspaceBootstrapService.cs");
+        var persistence = Read("Services/IoTesting/IoTestProjectPersistenceService.cs");
+        var sourceWorkspace = Read("Services/IoTesting/IoFatSourceWorkspaceService.cs");
+
+        Assert.Contains("IReadOnlyList<IoFatDescribedSource> DescribedSources", projection, StringComparison.Ordinal);
+        Assert.Equal(
+            1,
+            projection.Split("IoFatSourceWorkspaceService.DescribeAsync", StringSplitOptions.None).Length - 1);
+        Assert.Contains("projection.DescribedSources", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
+        Assert.Contains("IoTestWorkspacePersistence.OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
+        Assert.Contains("StageDescribedAsync", persistence, StringComparison.Ordinal);
+        Assert.Contains("CopyVerifiedAsync", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("VerifyHash(bytes, expectedSha256", sourceWorkspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EmbeddedAutomaticBootstrap_NeverHidesEngineeringWindow()
     {
         var source = Read("MainWindow.ProductionFatNoFlicker.cs");
