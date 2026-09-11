@@ -40,7 +40,10 @@ public readonly record struct Iec61850TelemetryEnvelope(
         Iec61850ReadValue? read,
         DateTimeOffset? receivedAtUtc = null)
     {
-        var received = receivedAtUtc ?? DateTimeOffset.UtcNow;
+        // Preserve the timestamp captured when the read projection was created. Normalization
+        // can happen later after queuing/batching and must not move local receipt evidence
+        // forward to the conversion time. UtcNow is only a last resort for a null read.
+        var received = receivedAtUtc ?? read?.ReceivedAtUtc ?? DateTimeOffset.UtcNow;
         if (read is null)
         {
             return Invalid(
