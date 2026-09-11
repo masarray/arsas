@@ -136,9 +136,12 @@ public partial class MainWindow
             // reparsing XML or starting a second model/acquisition stack.
             _ioFatSclProjectImportService.AdoptEngineeringRuntimeWorkspaces(projection.RuntimeWorkspaces);
 
-            var launch = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
+            // Projection already SHA-256-described the canonical Engineering SCL source set.
+            // Carry those exact identities through bootstrap/persistence instead of hashing
+            // the same files again. Staging still verifies every copied byte against SHA-256.
+            var launch = await IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync(
                 projection.Project,
-                projection.SourceInputs,
+                projection.DescribedSources,
                 IoTestingProjectsRoot(),
                 IoTestingEvidenceRoot(),
                 CreateIoTestSession,
