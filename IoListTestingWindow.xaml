@@ -7,7 +7,7 @@
         Height="900" Width="1500" MinHeight="760" MinWidth="1180"
         WindowStartupLocation="CenterOwner" WindowState="Maximized"
         Background="{StaticResource AppBackgroundGradient}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="Inter, Segoe UI Variable Text, Segoe UI, Calibri"
         Icon="Assets/app-icon.ico"
         Closing="Window_Closing"
         ContentRendered="IoListTestingWindow_ContentRendered">
@@ -17,11 +17,11 @@
         <Style x:Key="FatGridText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-            <Setter Property="FontSize" Value="12.2"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style TargetType="DataGridCell">
-            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Padding" Value="7,4"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#E8EDF5"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -29,11 +29,11 @@
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         </Style>
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="7,0"/>
             <Setter Property="Background" Value="#F4F7FB"/>
             <Setter Property="Foreground" Value="#617087"/>
-            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontSize" Value="10.2"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#DCE4EF"/>
@@ -45,7 +45,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
         </Style>
         <Style TargetType="DataGridRow">
-            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="MinHeight" Value="40"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
@@ -59,16 +59,16 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="14">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="12"/>
-            <RowDefinition Height="*"/>
             <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="8"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Style="{StaticResource Card}" Padding="16,12">
+        <Border Grid.Row="0" Style="{StaticResource Card}" Padding="14,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -76,24 +76,24 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="IO LIST FAT" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
-                    <TextBlock Text="{Binding Project.ProjectName}" FontSize="18" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding Project.ProjectName}" FontSize="17" FontWeight="SemiBold"
                                Foreground="{StaticResource Ink}" Margin="0,2,0,0"/>
-                    <TextBlock Text="Workbook scope · report-first acquisition · relay-timestamped evidence"
+                    <TextBlock Text="Engineering SCL scope · report-first acquisition · relay-timestamped evidence"
                                Style="{StaticResource Caption}" Margin="0,3,0,0"/>
                 </StackPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-                    <Border Background="#F1F5FB" CornerRadius="14" Padding="12,7" Margin="0,0,9,0">
-                        <TextBlock Text="{Binding ProjectSummary}" FontSize="11.8" Foreground="{StaticResource Ink}"/>
+                    <Border Background="#F1F5FB" CornerRadius="14" Padding="11,6" Margin="0,0,8,0">
+                        <TextBlock Text="{Binding ProjectSummary}" FontSize="11.4" Foreground="{StaticResource Ink}"/>
                     </Border>
-                    <Button Content="Save" Style="{StaticResource SoftButton}" Padding="11,7"
-                            Click="SaveProgress_Click" Margin="0,0,6,0"/>
-                    <Button Content="Excel" Style="{StaticResource SoftButton}" Padding="11,7"
-                            Click="ExportExcel_Click" Margin="0,0,6,0"/>
-                    <Button Content="PDF" Style="{StaticResource SoftButton}" Padding="11,7"
-                            Click="ExportPdf_Click" Margin="0,0,6,0"/>
-                    <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="12,7"
-                            Click="ExportHandover_Click" Margin="0,0,6,0"/>
-                    <Button Content="Engineering" Style="{StaticResource SoftButton}" Padding="11,7"
+                    <Button Content="Save" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="SaveProgress_Click" Margin="0,0,5,0"/>
+                    <Button Content="Excel" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="ExportExcel_Click" Margin="0,0,5,0"/>
+                    <Button Content="PDF" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="ExportPdf_Click" Margin="0,0,5,0"/>
+                    <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="11,6"
+                            Click="ExportHandover_Click" Margin="0,0,5,0"/>
+                    <Button Content="Engineering" Style="{StaticResource SoftButton}" Padding="10,6"
                             Click="ReturnToEngineering_Click"/>
                 </WrapPanel>
             </Grid>
@@ -101,21 +101,21 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="304"/>
-                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="282"/>
+                <ColumnDefinition Width="10"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="9">
                 <DockPanel>
-                    <Grid DockPanel.Dock="Top" Margin="5,3,5,11">
+                    <Grid DockPanel.Dock="Top" Margin="5,3,5,9">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="IED EXPLORER" Style="{StaticResource MicroLabel}"/>
-                            <TextBlock Text="Workbook devices" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            <TextBlock Text="Engineering FAT devices" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <Border Grid.Column="1" Background="#F1F5FB" CornerRadius="12" Padding="8,4" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Project.Ieds.Count}" FontWeight="SemiBold" FontSize="11"
@@ -124,7 +124,7 @@
                     </Grid>
 
                     <Button DockPanel.Dock="Bottom" Content="＋ Add IED · Import SCL"
-                            Style="{StaticResource PrimaryButton}" Margin="4,10,4,2" Padding="12,9"
+                            Style="{StaticResource PrimaryButton}" Margin="4,8,4,2" Padding="11,8"
                             IsEnabled="{Binding CanAddFatIed}" Click="AddFatIedFromScl_Click"
                             ToolTip="Add another IED from CID/SCD/ICD/IID without replacing the current FAT workspace"/>
 
@@ -137,7 +137,7 @@
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="0"/>
-                                <Setter Property="Margin" Value="0,0,0,8"/>
+                                <Setter Property="Margin" Value="0,0,0,7"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderThickness" Value="0"/>
@@ -146,7 +146,7 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
                                             <Border x:Name="IedCard" Background="#FAFCFF" BorderBrush="#D8E1EE"
-                                                    BorderThickness="1" CornerRadius="15" Padding="10">
+                                                    BorderThickness="1" CornerRadius="14" Padding="9">
                                                 <ContentPresenter/>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -166,14 +166,14 @@
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid MinHeight="70">
+                                <Grid MinHeight="64">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="58"/>
+                                        <ColumnDefinition Width="54"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Width="56"
+                                    <StackPanel Grid.Column="0" Width="52"
                                                 HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Viewbox Width="46" Height="46" HorizontalAlignment="Center">
+                                        <Viewbox Width="42" Height="42" HorizontalAlignment="Center">
                                             <Control x:Name="RelayIcon" Width="50" Height="50" Foreground="#D94B55"
                                                      Template="{StaticResource IedRelayFrontPanelTemplate}"/>
                                         </Viewbox>
@@ -202,12 +202,12 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding IedName}" FontSize="12.8" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding IedName}" FontSize="12.4" FontWeight="SemiBold"
                                                        Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
-                                                       Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                       Margin="0,0,9,0" VerticalAlignment="Center"/>
                                             <Border Grid.Column="1" Background="#EAF8F1" BorderBrush="#8FD1B1"
                                                     BorderThickness="1" CornerRadius="9" Padding="7,2"
-                                                    Margin="10,0,0,0" VerticalAlignment="Center">
+                                                    Margin="9,0,0,0" VerticalAlignment="Center">
                                                 <Border.Visibility>
                                                     <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}">
                                                         <Binding Path="TestPoints.Count"/>
@@ -218,8 +218,8 @@
                                             </Border>
                                         </Grid>
                                         <TextBlock Grid.Row="1" Text="{Binding IpAddress}" Style="{StaticResource Caption}"
-                                                   Margin="0,3,0,0"/>
-                                        <TextBlock Grid.Row="2" Margin="0,7,0,0" FontSize="10.5"
+                                                   Margin="0,2,0,0"/>
+                                        <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="10.2"
                                                    Foreground="{StaticResource Muted}">
                                             <Run Text="{Binding BoundCount, Mode=OneWay}"/>
                                             <Run Text=" live  ·  "/>
@@ -231,7 +231,7 @@
                                         <ProgressBar x:Name="CardProgress"
                                                      Grid.Row="3"
                                                      Height="3"
-                                                     Margin="0,8,0,0"
+                                                     Margin="0,7,0,0"
                                                      Minimum="0"
                                                      Maximum="100"
                                                      IsIndeterminate="True"
@@ -268,12 +268,12 @@
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12">
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="12"/>
+                        <RowDefinition Height="10"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -282,47 +282,47 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
-                            <TextBlock Text="{Binding SelectedIed.IedName}" FontSize="17" FontWeight="SemiBold"
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock Text="{Binding SelectedIed.IedName}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{StaticResource Ink}"/>
-                            <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,3,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button x:Name="WorkspacePreviewToggle"
                                     Content="Print Preview"
                                     Style="{StaticResource SoftButton}"
-                                    Padding="11,8"
+                                    Padding="10,7"
                                     Click="TogglePrintPreview_Click"
-                                    Margin="0,0,10,0"/>
+                                    Margin="0,0,8,0"/>
                             <Button Content="{Binding SelectedStartWorkflowText}" Style="{StaticResource PrimaryButton}"
-                                    Padding="13,8" IsEnabled="{Binding SelectedCanStartWorkflow}"
-                                    Click="StartSelectedIedSafely_Click" Margin="0,0,6,0"/>
-                            <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="11,8"
-                                    IsEnabled="{Binding SelectedCanPause}" Click="PauseSession_Click" Margin="0,0,6,0"/>
-                            <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="11,8"
-                                    IsEnabled="{Binding SelectedCanResume}" Click="ResumeSession_Click" Margin="0,0,6,0"/>
-                            <Button Content="Stop" Style="{StaticResource SoftButton}" Padding="11,8"
+                                    Padding="12,7" IsEnabled="{Binding SelectedCanStartWorkflow}"
+                                    Click="StartSelectedIedSafely_Click" Margin="0,0,5,0"/>
+                            <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="10,7"
+                                    IsEnabled="{Binding SelectedCanPause}" Click="PauseSession_Click" Margin="0,0,5,0"/>
+                            <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="10,7"
+                                    IsEnabled="{Binding SelectedCanResume}" Click="ResumeSession_Click" Margin="0,0,5,0"/>
+                            <Button Content="Stop" Style="{StaticResource SoftButton}" Padding="10,7"
                                     IsEnabled="{Binding SelectedCanStop}" Click="StopSession_Click"/>
                         </StackPanel>
                     </Grid>
 
                     <Border Grid.Row="1" Visibility="{Binding PreparationVisibility}"
                             Background="#F3F7FF" BorderBrush="#B9CCF4" BorderThickness="1"
-                            CornerRadius="13" Padding="12,9" Margin="0,11,0,0">
+                            CornerRadius="12" Padding="11,8" Margin="0,9,0,0">
                         <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding PreparationIedText}" FontSize="11.8" FontWeight="SemiBold"
+                                <TextBlock Text="{Binding PreparationIedText}" FontSize="11.5" FontWeight="SemiBold"
                                            Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding PreparationStatusText}" FontSize="10.8"
-                                           Foreground="#526783" Margin="12,0,0,0" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="1" Text="{Binding PreparationStatusText}" FontSize="10.6"
+                                           Foreground="#526783" Margin="11,0,0,0" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
                             </Grid>
                             <ProgressBar Height="4"
-                                         Margin="0,9,0,0"
+                                         Margin="0,8,0,0"
                                          IsIndeterminate="True"
                                          BorderThickness="0"
                                          Background="#DCE7F8"
@@ -349,16 +349,16 @@
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
                               RowHeaderWidth="0"
-                               FrozenColumnCount="1"
-                               EnableRowVirtualization="True"
-                               EnableColumnVirtualization="True"
-                               VirtualizingPanel.IsVirtualizing="True"
-                               VirtualizingPanel.VirtualizationMode="Recycling"
-                               ScrollViewer.CanContentScroll="True"
-                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              FrozenColumnCount="1"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="TEST" Width="48" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="TEST" Width="46" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -367,7 +367,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="SIGNAL" Width="1.55*" MinWidth="190" MaxWidth="300">
+                            <DataGridTemplateColumn Header="SIGNAL" Width="1.35*" MinWidth="170" MaxWidth="260">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding SignalName}" Style="{StaticResource FatGridText}"
@@ -375,20 +375,20 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="IEC REFERENCE" Width="1.85*" MinWidth="235" MaxWidth="360">
+                            <DataGridTemplateColumn Header="IEC REFERENCE" Width="2.25*" MinWidth="290" MaxWidth="480">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding ObjectReference}" Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="11.0"
+                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.8"
                                                    Foreground="#52627A" ToolTip="{Binding ObjectReference}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="LIVE" Width="82" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="LIVE" Width="76" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock x:Name="LiveText" Text="{Binding LiveBindingText}"
-                                                   Style="{StaticResource FatGridText}" FontSize="10.8"
+                                                   Style="{StaticResource FatGridText}" FontSize="10.5"
                                                    FontWeight="SemiBold" Foreground="#65758B"
                                                    ToolTip="{Binding LiveBindingReason}"/>
                                         <DataTemplate.Triggers>
@@ -399,7 +399,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="VALUE" Width="78" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="VALUE" Width="72" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentValue}" Style="{StaticResource FatGridText}"
@@ -407,60 +407,60 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="QUALITY" Width="88" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="QUALITY" Width="82" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentQuality}" Style="{StaticResource FatGridText}"
-                                                   FontSize="11.2" ToolTip="{Binding Runtime.CurrentQuality}"/>
+                                                   FontSize="10.8" ToolTip="{Binding Runtime.CurrentQuality}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="ACQUISITION" Width="136" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="ACQUISITION" Width="122" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentSource}" Style="{StaticResource FatGridText}"
-                                                   FontSize="10.8" FontWeight="SemiBold" Foreground="#405B7D"
+                                                   FontSize="10.4" FontWeight="SemiBold" Foreground="#405B7D"
                                                    ToolTip="{Binding Runtime.CurrentSource}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="ON · RELAY TIME" Width="168"
+                            <DataGridTemplateColumn Header="ON · RELAY TIME" Width="154"
                                                     HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.OnRelayTimestampText}"
                                                    Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.4"
+                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.1"
                                                    ToolTip="{Binding Runtime.OnEvidenceToolTip}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="OFF · RELAY TIME" Width="168"
+                            <DataGridTemplateColumn Header="OFF · RELAY TIME" Width="154"
                                                     HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.OffRelayTimestampText}"
                                                    Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.4"
+                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.1"
                                                    ToolTip="{Binding Runtime.OffEvidenceToolTip}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="STATUS" Width="118" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="STATUS" Width="108" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.StateText}" Style="{StaticResource FatGridText}"
-                                                   FontSize="10.7" FontWeight="SemiBold" Foreground="#607089"
+                                                   FontSize="10.4" FontWeight="SemiBold" Foreground="#607089"
                                                    ToolTip="{Binding Runtime.StatusReason}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="RESULT" Width="92" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="RESULT" Width="86" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock x:Name="FinalResultText" Text="—"
                                                    Style="{StaticResource FatGridText}"
-                                                   FontSize="10.8" FontWeight="Bold"
+                                                   FontSize="10.5" FontWeight="Bold"
                                                    Foreground="#8A97A9"
                                                    ToolTip="{Binding Runtime.StatusReason}"/>
                                         <DataTemplate.Triggers>
@@ -490,7 +490,7 @@
         </Grid>
 
         <Border Grid.Row="4" Background="#F8FAFD" BorderBrush="#DEE6F0"
-                BorderThickness="1" CornerRadius="13" Padding="12,8">
+                BorderThickness="1" CornerRadius="12" Padding="11,7">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.4*"/>
