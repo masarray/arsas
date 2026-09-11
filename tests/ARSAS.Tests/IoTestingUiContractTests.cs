@@ -195,7 +195,8 @@ public sealed class IoTestingUiContractTests
         Assert.Contains(
             document.Descendants(presentation + "Setter"),
             setter => (string?)setter.Attribute("Property") == "MinHeight" &&
-                      (string?)setter.Attribute("Value") == "48");
+                      (string?)setter.Attribute("Value") == "40");
+        Assert.StartsWith("Inter", (string?)document.Root?.Attribute("FontFamily"), StringComparison.Ordinal);
         Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
         Assert.Contains("CardStateText", text, StringComparison.Ordinal);
         Assert.Contains("✔ PASS", text, StringComparison.Ordinal);
@@ -270,11 +271,13 @@ public sealed class IoTestingUiContractTests
         var onTime = FindColumn(document, presentation, "ON · RELAY TIME");
         var offTime = FindColumn(document, presentation, "OFF · RELAY TIME");
 
-        Assert.Equal("1.55*", (string?)signal.Attribute("Width"));
-        Assert.Equal("1.85*", (string?)reference.Attribute("Width"));
-        Assert.Equal("136", (string?)acquisition.Attribute("Width"));
-        Assert.Equal("168", (string?)onTime.Attribute("Width"));
-        Assert.Equal("168", (string?)offTime.Attribute("Width"));
+        Assert.Equal("1.35*", (string?)signal.Attribute("Width"));
+        Assert.Equal("2.25*", (string?)reference.Attribute("Width"));
+        Assert.Equal("290", (string?)reference.Attribute("MinWidth"));
+        Assert.Equal("480", (string?)reference.Attribute("MaxWidth"));
+        Assert.Equal("122", (string?)acquisition.Attribute("Width"));
+        Assert.Equal("154", (string?)onTime.Attribute("Width"));
+        Assert.Equal("154", (string?)offTime.Attribute("Width"));
         Assert.Equal("{StaticResource CenteredFatGridHeader}", (string?)onTime.Attribute("HeaderStyle"));
         Assert.Equal("{StaticResource CenteredFatGridHeader}", (string?)offTime.Attribute("HeaderStyle"));
     }
