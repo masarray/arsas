@@ -14,6 +14,18 @@ public sealed class ComtradeCursorReadoutPolicyTests
     }
 
     [Fact]
+    public void IsCurrent_RapidAlternatingCursorRevisions_LeavesOnlyLatestEligible()
+    {
+        const long c1First = 101;
+        const long c2Next = 102;
+        const long c1Latest = 103;
+
+        Assert.False(ComtradeCursorReadoutPolicy.IsCurrent(c1First, c1Latest, cancelled: false));
+        Assert.False(ComtradeCursorReadoutPolicy.IsCurrent(c2Next, c1Latest, cancelled: false));
+        Assert.True(ComtradeCursorReadoutPolicy.IsCurrent(c1Latest, c1Latest, cancelled: false));
+    }
+
+    [Fact]
     public void FormatValue_NeverReturnsBlankForUnavailableMeasurement()
     {
         Assert.Equal("C1 Inst —", ComtradeCursorReadoutPolicy.FormatValue("C1", rms: false, null, CultureInfo.InvariantCulture));
