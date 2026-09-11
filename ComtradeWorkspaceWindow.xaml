@@ -3,11 +3,22 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ArIED61850Tester.Controls"
         Title="ARSAS — COMTRADE Workspace"
-        Width="1360" Height="920" MinWidth="1040" MinHeight="700"
+        Width="1360" Height="960" MinWidth="1040" MinHeight="700"
         WindowStartupLocation="CenterOwner"
         Loaded="P1D5Workspace_Loaded"
         Background="#F3F6FA"
         FontFamily="Segoe UI">
+    <Window.Resources>
+        <!-- Keep the compact engineering density of this workstation while inheriting the same
+             rounded ARSAS button chrome, hover/press behavior and palette used by the main app. -->
+        <Style TargetType="Button" BasedOn="{StaticResource SoftButton}">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
