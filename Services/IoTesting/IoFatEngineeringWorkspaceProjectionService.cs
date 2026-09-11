@@ -7,6 +7,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 public sealed record IoFatEngineeringWorkspaceProjection(
     IoTestProject Project,
     IReadOnlyList<IoFatSourceInput> SourceInputs,
+    IReadOnlyList<IoFatDescribedSource> DescribedSources,
     IReadOnlyList<SclIedWorkspace> RuntimeWorkspaces);
 
 /// <summary>
@@ -71,6 +72,13 @@ public static class IoFatEngineeringWorkspaceProjectionService
             .Select(device => Path.GetFullPath(device.SclSourcePath))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => new IoFatSourceInput(path, IoFatSourceKinds.Scl))
+            .ToArray();
+        var canonicalDescribedSources = sourceInputs
+            .Select(input =>
+            {
+                var path = Path.GetFullPath(input.FilePath);
+                return new IoFatDescribedSource(descriptorByPath[path], path);
+            })
             .ToArray();
 
         var workspaceSources = canonicalDevices
@@ -167,6 +175,7 @@ public static class IoFatEngineeringWorkspaceProjectionService
         return new IoFatEngineeringWorkspaceProjection(
             project,
             sourceInputs,
+            canonicalDescribedSources,
             canonicalDevices.Select(device => device.SclWorkspace!).ToArray());
     }
 
