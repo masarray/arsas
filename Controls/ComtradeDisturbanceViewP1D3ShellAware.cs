@@ -65,11 +65,6 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
 
     private void Inner_CursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
-        // Inner interactive notifications are already bounded to ~30 Hz and final delivery is
-        // guaranteed. Relay that canonical stream so lightweight consumers such as C1/C2 analog
-        // readouts can follow scrubbing without listening to raw MouseMove. Expensive native edge
-        // confirmation remains final-only in the host handler, while readout work is separately
-        // composition-coalesced/latest-wins.
         CursorChanged?.Invoke(this, e);
     }
 
@@ -83,11 +78,6 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
         bool preserveCursor = true)
     {
         _timeMultiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
-
-        // Canonical workstation ordering: analog traces always stay above the protection/digital
-        // timeline, regardless of the order in which checkboxes were activated. This is a stable
-        // two-pass partition (O(n), one bounded array, no comparison sort) so order inside each
-        // category remains deterministic and no extra churn is introduced on the render hot path.
         var orderedTracks = StableAnalogThenDigital(tracks);
 
         InitializeTimeOrigin(orderedTracks, _timeMultiplier);
@@ -104,15 +94,11 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
     internal void ResetToTriggerView() => _inner.ResetToTriggerView();
     internal void SetCursorAFromAbsoluteMilliseconds(double milliseconds) => _inner.SetCursorAFromAbsoluteMilliseconds(milliseconds);
     internal void SetCursorFromHost(ComtradeDisturbanceCursor cursor, double milliseconds) => _inner.SetCursorFromHost(cursor, milliseconds);
+    internal void SetAnalogRepresentationLabel(string representation) => _inner.SetAnalogRepresentationLabel(representation);
     internal void ResetNavigation() => _inner.ResetNavigation();
     internal void SetViewWindow(double startMilliseconds, double endMilliseconds) => _inner.SetViewWindow(startMilliseconds, endMilliseconds);
     internal double PlotFractionAt(double x) => _inner.PlotFractionAt(x);
 
-    /// <summary>
-    /// Places a Time Signals cursor from the common shell and returns the actual snapped value.
-    /// The exact same sorted digital-edge index and pixel-derived tolerance are used for both the
-    /// ruler and waveform, eliminating the previous split cursor identities.
-    /// </summary>
     internal double PlaceCursorFromShell(
         ComtradeDisturbanceCursor cursor,
         double requestedMilliseconds,
@@ -133,9 +119,6 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
         return value;
     }
 
-    /// <summary>
-    /// P/H analysis cursors use the same visible digital-edge snap index without becoming C1/C2.
-    /// </summary>
     internal double SnapAnalysisCursorFromShell(double requestedMilliseconds, double snapToleranceMilliseconds)
     {
         if (!double.IsFinite(requestedMilliseconds))
@@ -165,7 +148,6 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
                 sawDigital = true;
                 continue;
             }
-
             if (sawDigital)
             {
                 requiresReorder = true;
