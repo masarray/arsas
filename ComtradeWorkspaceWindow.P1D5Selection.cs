@@ -99,11 +99,11 @@ public partial class ComtradeWorkspaceWindow
         }
         finally
         {
+            // Clear may supersede an in-flight Auto generation. Always release the re-entry guard;
+            // only the still-current generation is allowed to re-enable the investigation ruler.
+            _p1d5AutoReloadRunning = false;
             if (generation == Volatile.Read(ref _p1d5SelectionGeneration))
-            {
-                _p1d5AutoReloadRunning = false;
                 InvestigationTimeline.IsEnabled = DisturbanceView.FullEndMilliseconds > DisturbanceView.FullStartMilliseconds;
-            }
         }
     }
 
@@ -133,13 +133,17 @@ public partial class ComtradeWorkspaceWindow
 
     private void CaptureP1D5SelectionNavigation()
     {
-        _p1d5SuspendedSelectionNavigation = ComtradeSelectionNavigationSnapshot.Capture(
+        var snapshot = ComtradeSelectionNavigationSnapshot.Capture(
             DisturbanceView.ViewStartMilliseconds,
             DisturbanceView.ViewEndMilliseconds,
             DisturbanceView.Cursor1Milliseconds,
             DisturbanceView.Cursor2Milliseconds,
             _disturbanceLoadedViewport.StartFrame,
             _disturbanceLoadedViewport.FrameCount);
+        if (!snapshot.IsValid)
+            return;
+
+        _p1d5SuspendedSelectionNavigation = snapshot;
         _p1d5SuspendedTrackScrollOffset = DisturbanceScrollViewer.VerticalOffset;
     }
 
