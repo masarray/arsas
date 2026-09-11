@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace ArIED61850Tester.Services;
 
 /// <summary>
@@ -6,19 +8,24 @@ namespace ArIED61850Tester.Services;
 /// </summary>
 public readonly record struct RuntimeAllocationSnapshot(
     DateTimeOffset CapturedAtUtc,
+    long MonotonicTimestamp,
     long TotalAllocatedBytes,
-    long HeapSizeBytes,
-    long FragmentedBytes,
+    long CurrentManagedBytes,
+    long LastGcHeapSizeBytes,
+    long LastGcFragmentedBytes,
     int Gen0Collections,
     int Gen1Collections,
     int Gen2Collections)
 {
     public static RuntimeAllocationSnapshot Capture()
     {
+        var monotonicTimestamp = Stopwatch.GetTimestamp();
         var memory = GC.GetGCMemoryInfo();
         return new RuntimeAllocationSnapshot(
             DateTimeOffset.UtcNow,
+            monotonicTimestamp,
             GC.GetTotalAllocatedBytes(precise: false),
+            GC.GetTotalMemory(forceFullCollection: false),
             memory.HeapSizeBytes,
             memory.FragmentedBytes,
             GC.CollectionCount(0),
@@ -28,14 +35,17 @@ public readonly record struct RuntimeAllocationSnapshot(
 
     public RuntimeAllocationDelta DeltaFrom(RuntimeAllocationSnapshot earlier)
     {
-        var elapsed = CapturedAtUtc >= earlier.CapturedAtUtc
-            ? CapturedAtUtc - earlier.CapturedAtUtc
+        var elapsed = MonotonicTimestamp > 0 &&
+                      earlier.MonotonicTimestamp > 0 &&
+                      MonotonicTimestamp >= earlier.MonotonicTimestamp
+            ? Stopwatch.GetElapsedTime(earlier.MonotonicTimestamp, MonotonicTimestamp)
             : TimeSpan.Zero;
 
         return new RuntimeAllocationDelta(
             Math.Max(0, TotalAllocatedBytes - earlier.TotalAllocatedBytes),
-            HeapSizeBytes - earlier.HeapSizeBytes,
-            FragmentedBytes - earlier.FragmentedBytes,
+            CurrentManagedBytes - earlier.CurrentManagedBytes,
+            LastGcHeapSizeBytes - earlier.LastGcHeapSizeBytes,
+            LastGcFragmentedBytes - earlier.LastGcFragmentedBytes,
             Math.Max(0, Gen0Collections - earlier.Gen0Collections),
             Math.Max(0, Gen1Collections - earlier.Gen1Collections),
             Math.Max(0, Gen2Collections - earlier.Gen2Collections),
@@ -45,8 +55,9 @@ public readonly record struct RuntimeAllocationSnapshot(
 
 public readonly record struct RuntimeAllocationDelta(
     long AllocatedBytes,
-    long HeapSizeDeltaBytes,
-    long FragmentedBytesDelta,
+    long CurrentManagedBytesDelta,
+    long LastGcHeapSizeDeltaBytes,
+    long LastGcFragmentedBytesDelta,
     int Gen0Collections,
     int Gen1Collections,
     int Gen2Collections,
