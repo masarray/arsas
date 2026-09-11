@@ -1,7 +1,7 @@
 using System.Globalization;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
@@ -31,9 +31,13 @@ public partial class ComtradeWorkspaceWindow
         if (_p1d5MeasurementEventsAttached)
             return;
         _p1d5MeasurementEventsAttached = true;
+
+        // Subscribe to the canonical cursor authorities instead of raw pointer motion. The waveform
+        // renderer emits interactive cursor updates at a bounded cadence and always emits the final
+        // position; the upper investigation ruler emits its own canonical cursor updates. This keeps
+        // native measurement work independent from mouse-button details and from preview-only state.
         InvestigationTimeline.CursorChanged += P1D5InvestigationTimeline_CursorChanged;
-        DisturbanceView.AddHandler(Mouse.MouseMoveEvent, new MouseEventHandler(P1D5DisturbanceMouseMove), handledEventsToo: true);
-        DisturbanceView.AddHandler(Mouse.MouseUpEvent, new MouseButtonEventHandler(P1D5DisturbanceMouseUp), handledEventsToo: true);
+        DisturbanceView.CursorChanged += P1D5DisturbanceCursorChanged;
         Closed += P1D5MeasurementWindow_Closed;
     }
 
@@ -46,8 +50,7 @@ public partial class ComtradeWorkspaceWindow
         if (_p1d5MeasurementEventsAttached)
         {
             InvestigationTimeline.CursorChanged -= P1D5InvestigationTimeline_CursorChanged;
-            DisturbanceView.RemoveHandler(Mouse.MouseMoveEvent, new MouseEventHandler(P1D5DisturbanceMouseMove));
-            DisturbanceView.RemoveHandler(Mouse.MouseUpEvent, new MouseButtonEventHandler(P1D5DisturbanceMouseUp));
+            DisturbanceView.CursorChanged -= P1D5DisturbanceCursorChanged;
             _p1d5MeasurementEventsAttached = false;
         }
     }
@@ -58,20 +61,7 @@ public partial class ComtradeWorkspaceWindow
             QueueP1D5CursorMeasurements();
     }
 
-    private void P1D5DisturbanceMouseMove(object sender, MouseEventArgs e)
-    {
-        // Queue native readouts only while an actual C1/C2 drag is active. Panning uses the same
-        // left button but must not consume the native gate or create revisions that can starve the
-        // final cursor measurement.
-        if (_analysisMode == AnalysisMode.Waveform &&
-            _waveformPreviewCursor is not null &&
-            e.LeftButton == MouseButtonState.Pressed)
-        {
-            QueueP1D5CursorMeasurements();
-        }
-    }
-
-    private void P1D5DisturbanceMouseUp(object sender, MouseButtonEventArgs e)
+    private void P1D5DisturbanceCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
         if (_analysisMode == AnalysisMode.Waveform)
             QueueP1D5CursorMeasurements();
@@ -150,8 +140,12 @@ public partial class ComtradeWorkspaceWindow
             !_record.Supports(ArdIrecNativeBridge.CapCursorMeasurement))
             return;
 
-        unchecked { _p1d5MeasurementRevision++; }
-        if (_p1d5MeasurementRevision <= 0) _p1d5MeasurementRevision = 1;
+        // Revision is read by the native worker, so use atomic access even though queueing itself is
+        // UI-thread owned. A wrapped revision is practically unreachable, but keep 0 reserved.
+        var revision = Interlocked.Increment(ref _p1d5MeasurementRevision);
+        if (revision <= 0)
+            Interlocked.Exchange(ref _p1d5MeasurementRevision, 1);
+
         _p1d5MeasurementDirty = true;
         if (!_p1d5MeasurementWorkerRunning)
             EnsureP1D5MeasurementRenderingPump();
@@ -184,7 +178,7 @@ public partial class ComtradeWorkspaceWindow
             return;
 
         _p1d5MeasurementDirty = false;
-        var revision = _p1d5MeasurementRevision;
+        var revision = Interlocked.Read(ref _p1d5MeasurementRevision);
         var c1 = DisturbanceView.Cursor1Milliseconds;
         var c2 = DisturbanceView.Cursor2Milliseconds;
         ulong? c1Frame = c1 is { } first && TryResolveDisturbanceFrameAtMilliseconds(first, out var firstFrame) ? firstFrame : null;
@@ -205,28 +199,29 @@ public partial class ComtradeWorkspaceWindow
             return;
         }
 
+        var token = EnsureP1D5MeasurementToken();
         _p1d5MeasurementWorkerRunning = true;
         StopP1D5MeasurementRenderingPump();
         _ = ExecuteP1D5CursorMeasurementsAsync(
-            new P1D5MeasurementRequest(revision, analogSignals, c1Frame, c2Frame, _p1d5ValueRepresentation));
+            new P1D5MeasurementRequest(revision, analogSignals, c1Frame, c2Frame, _p1d5ValueRepresentation),
+            token);
     }
 
-    private async Task ExecuteP1D5CursorMeasurementsAsync(P1D5MeasurementRequest request)
+    private async Task ExecuteP1D5CursorMeasurementsAsync(P1D5MeasurementRequest request, CancellationToken token)
     {
         try
         {
-            var token = EnsureP1D5MeasurementToken();
-            if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
+            if (!P1D5MeasurementRequestIsCurrent(request.Revision, token))
                 return;
 
             await _nativeGate.WaitAsync(token).ConfigureAwait(false);
             P1D5MeasurementResult result;
             try
             {
-                // A newer pointer position may have arrived while waiting behind another native
-                // operation. Skip this obsolete read before touching the bridge; the dirty flag will
-                // schedule exactly one latest request after this worker exits.
-                if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
+                // A newer cursor position may have arrived while waiting behind another native
+                // operation. Skip obsolete bridge work; the UI-owned dirty flag will schedule one
+                // latest replacement after this worker completes.
+                if (!P1D5MeasurementRequestIsCurrent(request.Revision, token))
                     return;
 
                 result = await Task.Run(() => ReadP1D5CursorMeasurements(request, token), token).ConfigureAwait(false);
@@ -236,14 +231,14 @@ public partial class ComtradeWorkspaceWindow
                 _nativeGate.Release();
             }
 
-            if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested))
+            if (!P1D5MeasurementRequestIsCurrent(request.Revision, token))
                 return;
 
             await Dispatcher.InvokeAsync(() =>
             {
-                // Recheck on the UI dispatcher as well. This closes the final race where a pointer
-                // event lands after native work completed but before the queued presentation runs.
-                if (!ComtradeCursorReadoutPolicy.IsCurrent(request.Revision, _p1d5MeasurementRevision, token.IsCancellationRequested) ||
+                // Recheck on the UI dispatcher as well. This closes the final race where a cursor
+                // event lands after native work completed but before presentation executes.
+                if (!P1D5MeasurementRequestIsCurrent(request.Revision, token) ||
                     request.Revision < _p1d5LastPresentedMeasurementRevision)
                     return;
 
@@ -267,12 +262,36 @@ public partial class ComtradeWorkspaceWindow
         }
         finally
         {
-            _p1d5MeasurementWorkerRunning = false;
-            if (_p1d5MeasurementDirty && _analysisMode == AnalysisMode.Waveform)
-                EnsureP1D5MeasurementRenderingPump();
-            else
-                StopP1D5MeasurementRenderingPump();
+            // ConfigureAwait(false) intentionally keeps native work off the UI thread. The scheduler
+            // state itself, however, is WPF state: worker completion and CompositionTarget re-arming
+            // MUST return to the window Dispatcher. Re-arming Rendering from the worker thread was
+            // the field freeze seen after alternating C1/C2 drags.
+            if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+            {
+                try
+                {
+                    await Dispatcher.InvokeAsync(CompleteP1D5MeasurementWorker);
+                }
+                catch (TaskCanceledException)
+                {
+                }
+            }
         }
+    }
+
+    private bool P1D5MeasurementRequestIsCurrent(long revision, CancellationToken token)
+        => ComtradeCursorReadoutPolicy.IsCurrent(
+            revision,
+            Interlocked.Read(ref _p1d5MeasurementRevision),
+            token.IsCancellationRequested);
+
+    private void CompleteP1D5MeasurementWorker()
+    {
+        _p1d5MeasurementWorkerRunning = false;
+        if (_p1d5MeasurementDirty && _analysisMode == AnalysisMode.Waveform)
+            EnsureP1D5MeasurementRenderingPump();
+        else
+            StopP1D5MeasurementRenderingPump();
     }
 
     private P1D5MeasurementResult ReadP1D5CursorMeasurements(P1D5MeasurementRequest request, CancellationToken token)
