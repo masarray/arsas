@@ -3,104 +3,135 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ArIED61850Tester.Controls"
         Title="ARSAS — COMTRADE Workspace"
-        Width="1220" Height="760" MinWidth="920" MinHeight="560"
+        Width="1360" Height="960" MinWidth="1040" MinHeight="700"
         WindowStartupLocation="CenterOwner"
-        Background="#F4F7FB"
+        Loaded="P1D5Workspace_Loaded"
+        Background="#F3F6FA"
         FontFamily="Segoe UI">
-    <Grid Margin="12">
+    <Window.Resources>
+        <!-- Keep the compact engineering density of this workstation while inheriting the same
+             rounded ARSAS button chrome, hover/press behavior and palette used by the main app. -->
+        <Style TargetType="Button" BasedOn="{StaticResource SoftButton}">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="10"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="10"/>
+            <RowDefinition Height="8"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="8"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="White" BorderBrush="#DCE5F0" BorderThickness="1" CornerRadius="12" Padding="18,14">
+        <Border Grid.Row="0" Background="White" BorderBrush="#D9E3EF" BorderThickness="1" CornerRadius="10" Padding="14,10">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="COMTRADE Workspace" FontSize="19" FontWeight="SemiBold" Foreground="#18324F"/>
-                    <TextBlock x:Name="RecordIdentityText" Margin="0,4,0,0" FontSize="11.5" Foreground="#667B94"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="COMTRADE Workspace" FontSize="17" FontWeight="SemiBold" Foreground="#18324F"/>
+                    <TextBlock x:Name="RecordIdentityText" Margin="14,2,0,0" FontSize="10.5" Foreground="#6A7F98" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <Border Grid.Column="1" Background="#EEF6FF" BorderBrush="#C8DEF8" BorderThickness="1" CornerRadius="9" Padding="12,7" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="7" Height="7" Fill="#2A78DF" VerticalAlignment="Center"/>
-                        <TextBlock Text="Native ArdIrec core" Margin="7,0,0,0" FontSize="11.5" FontWeight="SemiBold" Foreground="#275D9A"/>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2.2*"/>
+                        <ColumnDefinition Width="1.15*"/>
+                        <ColumnDefinition Width="1.15*"/>
+                        <ColumnDefinition Width="1.0*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Station / recorder" FontSize="9.5" Foreground="#8997A9"/>
+                        <TextBlock x:Name="StationText" Margin="0,1,0,0" FontSize="11.5" FontWeight="SemiBold" Foreground="#263D58" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
-                </Border>
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                        <TextBlock Text="Channels" FontSize="9.5" Foreground="#8997A9"/>
+                        <TextBlock x:Name="ChannelsText" Margin="0,1,0,0" FontSize="11.5" FontWeight="SemiBold" Foreground="#263D58"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Margin="16,0,0,0">
+                        <TextBlock Text="Nominal frequency" FontSize="9.5" Foreground="#8997A9"/>
+                        <TextBlock x:Name="FrequencyText" Margin="0,1,0,0" FontSize="11.5" FontWeight="SemiBold" Foreground="#263D58"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Margin="16,0,0,0">
+                        <TextBlock Text="Frames" FontSize="9.5" Foreground="#8997A9"/>
+                        <TextBlock x:Name="FramesText" Margin="0,1,0,0" FontSize="11.5" FontWeight="SemiBold" Foreground="#263D58"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Background="White" BorderBrush="#DCE5F0" BorderThickness="1" CornerRadius="10" Padding="14,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="2*"/>
-                    <ColumnDefinition Width="1.2*"/>
-                    <ColumnDefinition Width="1.2*"/>
-                    <ColumnDefinition Width="1.2*"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Station / recorder" FontSize="10.5" Foreground="#8391A5"/>
-                    <TextBlock x:Name="StationText" Margin="0,2,0,0" FontSize="12" FontWeight="SemiBold" Foreground="#263D58" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Margin="16,0,0,0">
-                    <TextBlock Text="Channels" FontSize="10.5" Foreground="#8391A5"/>
-                    <TextBlock x:Name="ChannelsText" Margin="0,2,0,0" FontSize="12" FontWeight="SemiBold" Foreground="#263D58"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2" Margin="16,0,0,0">
-                    <TextBlock Text="Nominal frequency" FontSize="10.5" Foreground="#8391A5"/>
-                    <TextBlock x:Name="FrequencyText" Margin="0,2,0,0" FontSize="12" FontWeight="SemiBold" Foreground="#263D58"/>
-                </StackPanel>
-                <StackPanel Grid.Column="3" Margin="16,0,0,0">
-                    <TextBlock Text="Frames" FontSize="10.5" Foreground="#8391A5"/>
-                    <TextBlock x:Name="FramesText" Margin="0,2,0,0" FontSize="12" FontWeight="SemiBold" Foreground="#263D58"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="4">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="270"/>
-                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="292"/>
+                <ColumnDefinition Width="8"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="White" BorderBrush="#DCE5F0" BorderThickness="1" CornerRadius="10" Padding="10">
+            <Border Grid.Column="0" Background="White" BorderBrush="#D9E3EF" BorderThickness="1" CornerRadius="9" Padding="9">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="7"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Signals" FontSize="13" FontWeight="SemiBold" Foreground="#263D58" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SignalCountText" Grid.Column="1" FontSize="10.5" Foreground="#7B8CA2" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Signals" FontSize="12.5" FontWeight="SemiBold" Foreground="#263D58"/>
+                            <TextBlock x:Name="SignalCountText" Margin="7,1,0,0" FontSize="9.5" Foreground="#7B8CA2"/>
+                        </StackPanel>
+                        <Button Grid.Column="2" Content="Auto" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="P1D5AutoSignals_Click" ToolTip="Show a practical voltage/current/protection starter set."/>
+                        <Button Grid.Column="3" Content="Clear" Height="24" Padding="9,0" Margin="5,0,0,0" FontSize="9.5" Cursor="Hand" Click="P1D5ClearSignals_Click" ToolTip="Hide all Time Signals tracks."/>
                     </Grid>
+
                     <ListBox x:Name="SignalList" Grid.Row="2" BorderThickness="0" Background="Transparent"
                              SelectionChanged="SignalList_SelectionChanged"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#F5F8FC" BorderBrush="#E2E9F2" BorderThickness="0,0,0,1" Padding="5,4" Margin="0,5,0,2">
+                                            <TextBlock Text="{Binding Name}" FontSize="9.4" FontWeight="SemiBold" Foreground="#667A92"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid Margin="3,5">
+                                <Grid Margin="2,4">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="7"/>
+                                        <ColumnDefinition Width="7"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="4" Height="28" CornerRadius="2" Background="{Binding Accent}" VerticalAlignment="Center"/>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" Foreground="#263D58" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Subtitle}" Margin="0,1,0,0" FontSize="9.8" Foreground="#8190A3" TextTrimming="CharacterEllipsis"/>
+                                    <CheckBox Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                              Loaded="SignalVisibility_Loaded"
+                                              Checked="P1D5SignalVisibility_Checked"
+                                              Unchecked="P1D5SignalVisibility_Unchecked"
+                                              ToolTip="Show or hide this signal in Time Signals."/>
+                                    <Border Grid.Column="2" Width="4" Height="27" CornerRadius="2" Background="{Binding Accent}" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="3">
+                                        <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" Foreground="#263D58" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Subtitle}" Margin="0,1,0,0" FontSize="9.2" Foreground="#8190A3" TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -109,73 +140,118 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Background="White" BorderBrush="#DCE5F0" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+            <Border Grid.Column="2" Background="White" BorderBrush="#D9E3EF" BorderThickness="1" CornerRadius="9" ClipToBounds="True">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Background="#F8FAFD" BorderBrush="#E1E8F1" BorderThickness="0,0,0,1" Padding="10,7">
+                    <Border Grid.Row="0" Background="#F8FAFD" BorderBrush="#E1E8F1" BorderThickness="0,0,0,1" Padding="9,6">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal">
-                                <Button x:Name="WaveformModeButton" Content="Waveform" Height="27" MinWidth="82" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="WaveformMode_Click"/>
-                                <Button x:Name="PhasorModeButton" Content="Phasor" Height="27" MinWidth="72" Margin="6,0,0,0" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorMode_Click"/>
-                                <Button x:Name="HarmonicsModeButton" Content="Harmonics" Height="27" MinWidth="86" Margin="6,0,0,0" Padding="12,0"
-                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsMode_Click"/>
+                                <Button x:Name="WaveformModeButton" Content="Time Signals" Height="27" MinWidth="88" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="TimeSignalsModeShell_Click"/>
+                                <Button x:Name="PhasorModeButton" Content="Phasor" Height="27" MinWidth="72" Margin="5,0,0,0" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="PhasorModeShell_Click"/>
+                                <Button x:Name="HarmonicsModeButton" Content="Harmonics" Height="27" MinWidth="86" Margin="5,0,0,0" Padding="12,0"
+                                        FontSize="10.5" FontWeight="SemiBold" Cursor="Hand" Click="HarmonicsModeShell_Click"/>
                             </StackPanel>
-                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="2" Text="Analysis reference: trigger / viewport center"
-                                       FontSize="9.8" Foreground="#7A8BA0" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                            <TextBlock x:Name="AnalysisReferenceTextBlock" Grid.Column="1" Visibility="Collapsed"/>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="1" Background="#FBFCFE" BorderBrush="#E8EDF4" BorderThickness="0,0,0,1" Padding="11,6">
+                    <Border Grid.Row="1" Background="#FBFCFE" BorderBrush="#E8EDF4" BorderThickness="0,0,0,1" Padding="10,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="NavigationTextBlock"
-                                       Text="Wheel zoom • Shift+wheel pan • Alt/middle-drag pan • Click Cursor A • Ctrl/right-click Cursor B"
-                                       FontSize="10.2" Foreground="#64778F" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            <Button x:Name="ResetViewButton" Grid.Column="1" Content="Reset view" Height="25" MinWidth="78" Margin="12,0,0,0"
-                                    Padding="10,0" FontSize="10.2" FontWeight="SemiBold" Foreground="#365D88" Background="White"
-                                    BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
-                                    ToolTip="Reset waveform zoom, pan and cursors to the full loaded record." Click="ResetView_Click"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel x:Name="WaveformTraceModePanel" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Trace" Margin="0,0,6,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                    <Button x:Name="InstantTraceButton" Content="Instant" Height="25" MinWidth="58" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="InstantTrace_Click"/>
+                                    <Button x:Name="RmsTraceButton" Content="RMS" Height="25" MinWidth="48" Margin="4,0,0,0" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="RmsTrace_Click"/>
+                                </StackPanel>
+                                <Border Width="1" Height="19" Background="#DDE5EF" Margin="10,0"/>
+                                <TextBlock Text="Values" Margin="0,0,6,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                <Button x:Name="SecondaryValueButton" Content="Secondary" Height="25" MinWidth="72" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="SecondaryValue_Click"/>
+                                <Button x:Name="PrimaryValueButton" Content="Primary" Height="25" MinWidth="62" Margin="4,0,0,0" Padding="8,0" FontSize="9.8" FontWeight="SemiBold" Cursor="Hand" Click="PrimaryValue_Click"/>
+                                <TextBlock x:Name="NavigationTextBlock" Visibility="Collapsed"/>
+                            </StackPanel>
+                            <Grid Grid.Column="1" Margin="12,0,0,0">
+                                <StackPanel x:Name="TimeNavigationPanel" Orientation="Horizontal">
+                                    <Button x:Name="ResetViewButton" Content="Trigger view" Height="25" MinWidth="82"
+                                            Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#365D88" Background="White"
+                                            BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                            ToolTip="Return to the trigger-focused engineering window (about eight nominal cycles)." Click="DisturbanceReset_Click"/>
+                                    <Button x:Name="FullRecordButton" Content="Full record" Height="25" MinWidth="78" Margin="5,0,0,0"
+                                            Padding="10,0" FontSize="10" FontWeight="SemiBold" Foreground="#586F89" Background="White"
+                                            BorderBrush="#CBD8E7" BorderThickness="1" Cursor="Hand"
+                                            ToolTip="Show the complete COMTRADE time range." Click="DisturbanceFullRecord_Click"/>
+                                </StackPanel>
+                                <StackPanel x:Name="PhasorReferencePanel" Orientation="Horizontal" Visibility="Collapsed" VerticalAlignment="Center">
+                                    <TextBlock Text="Phasor reference" Margin="0,0,7,0" FontSize="9.5" Foreground="#77889C" VerticalAlignment="Center"/>
+                                    <Button x:Name="PhasorCursor1Button" Content="C1" Height="25" MinWidth="42" Padding="9,0" FontSize="10" FontWeight="SemiBold" Cursor="Hand" Click="PhasorCursor1_Click"/>
+                                    <Button x:Name="PhasorCursor2Button" Content="C2" Height="25" MinWidth="42" Margin="5,0,0,0" Padding="9,0" FontSize="10" FontWeight="SemiBold" Cursor="Hand" Click="PhasorCursor2_Click"/>
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
 
-                    <Grid Grid.Row="2">
-                        <controls:ComtradeWaveformView x:Name="WaveformView" MinHeight="330"/>
+                    <controls:ComtradeInvestigationTimelineView x:Name="InvestigationTimeline" Grid.Row="2" Loaded="InvestigationTimeline_Loaded"/>
+
+                    <Grid Grid.Row="3">
+                        <Grid x:Name="WaveformWorkspaceHost">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollViewer x:Name="DisturbanceScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White" PanningMode="VerticalOnly">
+                                <Grid>
+                                    <controls:ComtradeDisturbanceViewP1D3ShellAware x:Name="DisturbanceView" MinHeight="330"/>
+                                    <Canvas x:Name="CursorReadoutCanvas" Width="150" HorizontalAlignment="Left" IsHitTestVisible="False" Panel.ZIndex="5"/>
+                                </Grid>
+                            </ScrollViewer>
+                            <Expander x:Name="DigitalEventExpander" Grid.Row="1" Header="Digital events / protection timeline" IsExpanded="False"
+                                      Background="#FAFCFF" BorderBrush="#E2E9F2" BorderThickness="0,1,0,0" Padding="8,4" MaxHeight="175">
+                                <DataGrid x:Name="DigitalEventGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal" BorderThickness="0" Background="White" RowHeaderWidth="0"
+                                          SelectionMode="Single" SelectionUnit="FullRow" FontSize="9.7"
+                                          SelectionChanged="DigitalEventGrid_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="92"/>
+                                        <DataGridTextColumn Header="Δ previous" Binding="{Binding DeltaText}" Width="86"/>
+                                        <DataGridTextColumn Header="Signal" Binding="{Binding Signal}" Width="*"/>
+                                        <DataGridTextColumn Header="Event" Binding="{Binding Event}" Width="110"/>
+                                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="112"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Expander>
+                        </Grid>
+
+                        <controls:ComtradeWaveformView x:Name="WaveformView" MinHeight="330" Visibility="Collapsed"/>
                         <controls:ComtradePhasorView x:Name="PhasorView" MinHeight="330" Visibility="Collapsed"/>
-                        <controls:ComtradeHarmonicsView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
+                        <controls:ComtradeHarmonicsWorkstationView x:Name="HarmonicsView" MinHeight="330" Visibility="Collapsed"/>
                     </Grid>
                 </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Row="6" Background="#F9FBFE" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="8" Padding="10,6">
+        <Border Grid.Row="4" Background="#F9FBFE" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="8" Padding="9,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusTextBlock" FontSize="10.5" Foreground="#687B92" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <Button x:Name="FullAnalysisButton" Grid.Column="1" Content="Full analysis" Height="27" MinWidth="96" Margin="12,0,14,0"
-                        Padding="12,0" FontSize="10.5" FontWeight="SemiBold" Foreground="#315D91" Background="#F5F9FF"
-                        BorderBrush="#C5D8EE" BorderThickness="1" Cursor="Hand"
-                        ToolTip="Open the complete Qt analysis workspace while native WPF analysis parity is still being field-validated."
-                        Click="FullAnalysis_Click"/>
-                <TextBlock Grid.Column="2" Text="P1C • native waveform + phasor + harmonics" FontSize="10" Foreground="#8A99AA" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusTextBlock" FontSize="10.2" Foreground="#687B92" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="1" Text="P1D.5 • ARSAS COMTRADE workstation" FontSize="9.7" Foreground="#8A99AA" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

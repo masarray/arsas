@@ -39,6 +39,41 @@ internal sealed record ComtradeStatusChannelInfo(
     string Circuit,
     int NormalState);
 
+internal sealed record ComtradeAnalogSemantics(
+    int Role,
+    int PhaseRole,
+    int RecordedRepresentation,
+    bool HasValidTransformerRatio,
+    double ScaleToSecondary,
+    double ScaleToPrimary);
+
+internal sealed record ComtradeCursorMeasurement(
+    bool Valid,
+    ulong ReferenceFrame,
+    uint RawTimestamp,
+    double TimeSeconds,
+    double Instantaneous,
+    double Rms,
+    ulong WindowStartFrame,
+    ulong WindowEndExclusive,
+    uint WindowSampleCount);
+
+internal sealed record ComtradeStatusState(
+    int RawState,
+    int NormalState,
+    bool IsActive);
+
+internal sealed record ComtradeStatusEdge(
+    bool Valid,
+    uint ChannelIndex,
+    ulong FrameIndex,
+    uint RawTimestamp,
+    int BeforeState,
+    int AfterState,
+    int NormalState,
+    bool BecameActive,
+    double DistanceSeconds);
+
 internal sealed record ComtradePhasor(
     bool Valid,
     double MagnitudeRms,
@@ -71,6 +106,14 @@ internal sealed record ComtradeHarmonicSpectrum(
 internal static class ArdIrecNativeBridge
 {
     internal const uint ExpectedAbiVersion = 1;
+    internal const ulong CapCursorMeasurement = 1UL << 0;
+    internal const ulong CapChannelSemantics = 1UL << 1;
+    internal const ulong CapValueRepresentation = 1UL << 2;
+    internal const ulong CapStatusState = 1UL << 3;
+    internal const ulong CapDigitalEdgeSnap = 1UL << 4;
+    internal const ulong CapPhasor = 1UL << 5;
+    internal const ulong CapHarmonics = 1UL << 6;
+
     private const string BridgeFileName = "ardirec_bridge.dll";
     private static readonly object Sync = new();
     private static NativeApi? _api;
@@ -242,10 +285,19 @@ internal static class ArdIrecNativeBridge
             CopyRawTimestamps = Export<RecordCopyRawTimestampsDelegate>("ardirec_record_copy_raw_timestamps");
             GetPhasor = Export<RecordGetPhasorDelegate>("ardirec_record_get_phasor");
             GetHarmonicSpectrum = Export<RecordGetHarmonicSpectrumDelegate>("ardirec_record_get_harmonic_spectrum");
+
+            var capabilities = TryExport<BridgeCapabilitiesDelegate>("ardirec_bridge_capabilities");
+            Capabilities = capabilities?.Invoke() ?? 0UL;
+            GetAnalogSemantics = TryExport<RecordGetAnalogSemanticsDelegate>("ardirec_record_get_analog_semantics");
+            GetRepresentationScale = TryExport<RecordGetRepresentationScaleDelegate>("ardirec_record_get_representation_scale");
+            GetCursorMeasurement = TryExport<RecordGetCursorMeasurementDelegate>("ardirec_record_get_cursor_measurement");
+            GetStatusState = TryExport<RecordGetStatusStateDelegate>("ardirec_record_get_status_state");
+            FindNearestStatusEdge = TryExport<RecordFindNearestStatusEdgeDelegate>("ardirec_record_find_nearest_status_edge");
         }
 
         internal string LibraryPath { get; }
         internal uint AbiVersion { get; }
+        internal ulong Capabilities { get; }
         internal RecordOpenDelegate Open { get; }
         internal RecordCloseDelegate Close { get; }
         internal RecordGetInfoDelegate GetInfo { get; }
@@ -256,12 +308,22 @@ internal static class ArdIrecNativeBridge
         internal RecordCopyRawTimestampsDelegate CopyRawTimestamps { get; }
         internal RecordGetPhasorDelegate GetPhasor { get; }
         internal RecordGetHarmonicSpectrumDelegate GetHarmonicSpectrum { get; }
+        internal RecordGetAnalogSemanticsDelegate? GetAnalogSemantics { get; }
+        internal RecordGetRepresentationScaleDelegate? GetRepresentationScale { get; }
+        internal RecordGetCursorMeasurementDelegate? GetCursorMeasurement { get; }
+        internal RecordGetStatusStateDelegate? GetStatusState { get; }
+        internal RecordFindNearestStatusEdgeDelegate? FindNearestStatusEdge { get; }
 
         private T Export<T>(string name) where T : Delegate
         {
             var address = NativeLibrary.GetExport(_library, name);
             return Marshal.GetDelegateForFunctionPointer<T>(address);
         }
+
+        private T? TryExport<T>(string name) where T : Delegate
+            => NativeLibrary.TryGetExport(_library, name, out var address)
+                ? Marshal.GetDelegateForFunctionPointer<T>(address)
+                : null;
 
         public void Dispose()
         {
@@ -272,11 +334,17 @@ internal static class ArdIrecNativeBridge
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate uint BridgeAbiVersionDelegate();
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate ulong BridgeCapabilitiesDelegate();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordOpenDelegate(IntPtr cfgPath, out IntPtr handle, IntPtr error, nuint errorCapacity);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void RecordCloseDelegate(IntPtr handle);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetInfoDelegate(IntPtr handle, ref NativeRecordInfo info);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetAnalogChannelDelegate(IntPtr handle, uint index, ref NativeAnalogChannelInfo info);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetStatusChannelDelegate(IntPtr handle, uint index, ref NativeStatusChannelInfo info);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetAnalogSemanticsDelegate(IntPtr handle, uint channel, ref NativeAnalogSemanticsInfo info);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetRepresentationScaleDelegate(IntPtr handle, uint channel, int representation, out double scale);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetCursorMeasurementDelegate(IntPtr handle, uint channel, ulong referenceFrame, int representation, ref NativeCursorMeasurementInfo info);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordGetStatusStateDelegate(IntPtr handle, uint channel, ulong referenceFrame, ref NativeStatusStateInfo info);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordFindNearestStatusEdgeDelegate(IntPtr handle, ulong referenceFrame, double maxDistanceSeconds, ref NativeStatusEdgeInfo info);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyAnalogDelegate(IntPtr handle, uint channel, ulong start, ulong count, [Out] double[] destination);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyStatusDelegate(IntPtr handle, uint channel, ulong start, ulong count, [Out] byte[] destination);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int RecordCopyRawTimestampsDelegate(IntPtr handle, ulong start, ulong count, [Out] uint[] destination);
@@ -352,6 +420,53 @@ internal static class ArdIrecNativeBridge
             Phase = new byte[64],
             Circuit = new byte[128]
         };
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeAnalogSemanticsInfo
+    {
+        internal int Role;
+        internal int PhaseRole;
+        internal int RecordedRepresentation;
+        internal int HasValidTransformerRatio;
+        internal double ScaleToSecondary;
+        internal double ScaleToPrimary;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeCursorMeasurementInfo
+    {
+        internal int Valid;
+        internal ulong ReferenceFrame;
+        internal uint RawTimestamp;
+        internal double TimeSeconds;
+        internal double Instantaneous;
+        internal double Rms;
+        internal ulong WindowStartFrame;
+        internal ulong WindowEndExclusive;
+        internal uint WindowSampleCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeStatusStateInfo
+    {
+        internal int RawState;
+        internal int NormalState;
+        internal int IsActive;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeStatusEdgeInfo
+    {
+        internal int Valid;
+        internal uint ChannelIndex;
+        internal ulong FrameIndex;
+        internal uint RawTimestamp;
+        internal int BeforeState;
+        internal int AfterState;
+        internal int NormalState;
+        internal int BecameActive;
+        internal double DistanceSeconds;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -431,6 +546,9 @@ internal sealed class ArdIrecNativeRecord : IDisposable
     internal ComtradeRecordInfo Info { get; }
     internal IReadOnlyList<ComtradeAnalogChannelInfo> AnalogChannels { get; }
     internal IReadOnlyList<ComtradeStatusChannelInfo> StatusChannels { get; }
+    internal ulong BridgeCapabilities => _api.Capabilities;
+
+    internal bool Supports(ulong capability) => (_api.Capabilities & capability) == capability;
 
     internal double[] ReadAnalog(uint channelIndex, ulong startFrame, int frameCount)
     {
@@ -457,6 +575,86 @@ internal sealed class ArdIrecNativeRecord : IDisposable
         var values = new uint[frameCount];
         EnsureSuccess(_api.CopyRawTimestamps(_handle, startFrame, checked((ulong)frameCount), values), "read timestamps");
         return values;
+    }
+
+    internal bool TryReadAnalogSemantics(uint channelIndex, out ComtradeAnalogSemantics? semantics)
+    {
+        EnsureOpen();
+        semantics = null;
+        if (!Supports(ArdIrecNativeBridge.CapChannelSemantics) || _api.GetAnalogSemantics is null)
+            return false;
+
+        var native = new ArdIrecNativeBridge.NativeAnalogSemanticsInfo();
+        if (_api.GetAnalogSemantics(_handle, channelIndex, ref native) != 0)
+            return false;
+        semantics = new ComtradeAnalogSemantics(
+            native.Role,
+            native.PhaseRole,
+            native.RecordedRepresentation,
+            native.HasValidTransformerRatio != 0,
+            native.ScaleToSecondary,
+            native.ScaleToPrimary);
+        return true;
+    }
+
+    internal bool TryReadCursorMeasurement(uint channelIndex, ulong referenceFrame, int representation, out ComtradeCursorMeasurement? measurement)
+    {
+        EnsureOpen();
+        measurement = null;
+        if (!Supports(ArdIrecNativeBridge.CapCursorMeasurement) || _api.GetCursorMeasurement is null)
+            return false;
+
+        var native = new ArdIrecNativeBridge.NativeCursorMeasurementInfo();
+        if (_api.GetCursorMeasurement(_handle, channelIndex, referenceFrame, representation, ref native) != 0)
+            return false;
+        measurement = new ComtradeCursorMeasurement(
+            native.Valid != 0,
+            native.ReferenceFrame,
+            native.RawTimestamp,
+            native.TimeSeconds,
+            native.Instantaneous,
+            native.Rms,
+            native.WindowStartFrame,
+            native.WindowEndExclusive,
+            native.WindowSampleCount);
+        return true;
+    }
+
+    internal bool TryReadStatusState(uint channelIndex, ulong referenceFrame, out ComtradeStatusState? state)
+    {
+        EnsureOpen();
+        state = null;
+        if (!Supports(ArdIrecNativeBridge.CapStatusState) || _api.GetStatusState is null)
+            return false;
+
+        var native = new ArdIrecNativeBridge.NativeStatusStateInfo();
+        if (_api.GetStatusState(_handle, channelIndex, referenceFrame, ref native) != 0)
+            return false;
+        state = new ComtradeStatusState(native.RawState, native.NormalState, native.IsActive != 0);
+        return true;
+    }
+
+    internal bool TryFindNearestStatusEdge(ulong referenceFrame, double maxDistanceSeconds, out ComtradeStatusEdge? edge)
+    {
+        EnsureOpen();
+        edge = null;
+        if (!Supports(ArdIrecNativeBridge.CapDigitalEdgeSnap) || _api.FindNearestStatusEdge is null)
+            return false;
+
+        var native = new ArdIrecNativeBridge.NativeStatusEdgeInfo();
+        if (_api.FindNearestStatusEdge(_handle, referenceFrame, maxDistanceSeconds, ref native) != 0 || native.Valid == 0)
+            return false;
+        edge = new ComtradeStatusEdge(
+            true,
+            native.ChannelIndex,
+            native.FrameIndex,
+            native.RawTimestamp,
+            native.BeforeState,
+            native.AfterState,
+            native.NormalState,
+            native.BecameActive != 0,
+            native.DistanceSeconds);
+        return true;
     }
 
     internal ComtradePhasor ReadPhasor(uint channelIndex, ulong referenceFrame)

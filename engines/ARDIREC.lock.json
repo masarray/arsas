@@ -1,19 +1,22 @@
 {
-  "schema": 2,
+  "schema": 3,
   "repository": "masarray/ardirec",
-  "ref": "main",
-  "commit": "cfcd65adf853b6707ee54a89dd30328db8827f0b",
+  "ref": "feat/p1d5-arsas-analysis-bridge",
+  "commit": "7dbc7149db668126a493ce338264363a6ec5ec00",
   "bridge": {
     "abi": 1,
-    "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll"
+    "mode": "native-only",
+    "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll",
+    "requiredCapabilities": [
+      "cursor_measurement",
+      "channel_semantics",
+      "value_representation",
+      "status_state",
+      "digital_edge_snap",
+      "phasor",
+      "harmonics",
+      "distance_locus"
+    ]
   },
-  "qt": {
-    "version": "6.8.3",
-    "arch": "win64_msvc2022_64"
-  },
-  "runtime": {
-    "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
-    "launchArgument": "--arsas-open"
-  },
-  "purpose": "Pinned ArdIrec P1C engine for ARSAS COMTRADE integration. The native bridge is the preferred in-process path and exposes waveform, digital, phasor and harmonic analysis; the Qt runtime remains a compatibility fallback while WPF analysis parity is completed. Change this commit only through a deliberate engine upgrade."
+  "purpose": "P1D.5 field candidate: pin the exact ArdIrec native analysis bridge with mature six-loop distance/locus exports. No Qt desktop runtime or ardirec.exe is packaged by ARSAS. Replace this temporary exact-commit pin with merged main after ArdIrec PR #41 is accepted."
 }

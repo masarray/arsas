@@ -10,22 +10,13 @@ on:
       - "scripts/publish-windows-portable.ps1"
       - "scripts/stage-ardirec-viewer.ps1"
       - ".github/workflows/installer-windows.yml"
-      - ".github/workflows/release-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
-      - "ComtradeWorkspaceWindow.xaml"
-      - "ComtradeWorkspaceWindow.xaml.cs"
-      - "Controls/ComtradeWaveformView.cs"
-      - "Services/ArdIrecNativeBridge.cs"
-      - "Services/ArdIrecViewerLauncher.cs"
-      - "Services/ComtradeNavigationMath.cs"
-      - "Services/ComtradeTimeMath.cs"
-      - "Services/ComtradeRangeDecimator.cs"
-      - "Services/ComtradeDecimatedSeriesBuilder.cs"
-      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
-      - "tests/ARSAS.Tests/ComtradeNavigationMathTests.cs"
-      - "tests/ARSAS.Tests/ComtradeTimeMathTests.cs"
-      - "tests/ARSAS.Tests/ComtradeRangeDecimatorTests.cs"
-      - "tests/ARSAS.Tests/ComtradeDecimatedSeriesBuilderTests.cs"
+      - "ComtradeWorkspaceWindow*"
+      - "Controls/Comtrade*"
+      - "Services/ArdIrec*"
+      - "Services/Comtrade*"
+      - "tests/ARSAS.Tests/ArdIrec*Tests.cs"
+      - "tests/ARSAS.Tests/Comtrade*Tests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
@@ -39,22 +30,13 @@ on:
       - "scripts/publish-windows-portable.ps1"
       - "scripts/stage-ardirec-viewer.ps1"
       - ".github/workflows/installer-windows.yml"
-      - ".github/workflows/release-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
-      - "ComtradeWorkspaceWindow.xaml"
-      - "ComtradeWorkspaceWindow.xaml.cs"
-      - "Controls/ComtradeWaveformView.cs"
-      - "Services/ArdIrecNativeBridge.cs"
-      - "Services/ArdIrecViewerLauncher.cs"
-      - "Services/ComtradeNavigationMath.cs"
-      - "Services/ComtradeTimeMath.cs"
-      - "Services/ComtradeRangeDecimator.cs"
-      - "Services/ComtradeDecimatedSeriesBuilder.cs"
-      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
-      - "tests/ARSAS.Tests/ComtradeNavigationMathTests.cs"
-      - "tests/ARSAS.Tests/ComtradeTimeMathTests.cs"
-      - "tests/ARSAS.Tests/ComtradeRangeDecimatorTests.cs"
-      - "tests/ARSAS.Tests/ComtradeDecimatedSeriesBuilderTests.cs"
+      - "ComtradeWorkspaceWindow*"
+      - "Controls/Comtrade*"
+      - "Services/ArdIrec*"
+      - "Services/Comtrade*"
+      - "tests/ARSAS.Tests/ArdIrec*Tests.cs"
+      - "tests/ARSAS.Tests/Comtrade*Tests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
       - "VERSION"
@@ -67,8 +49,9 @@ permissions:
 
 jobs:
   installer:
-    name: Build and install/uninstall smoke test
+    name: Build install and field-runtime smoke test
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout ARSAS application
@@ -85,30 +68,24 @@ jobs:
           $projectVersion = [string]$project.Project.PropertyGroup.Version
           $versionFile = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$' -or
-              $projectVersion -ne $version -or
-              $versionFile -ne $version) {
+              $projectVersion -ne $version -or $versionFile -ne $version) {
             throw "ARSAS version metadata is inconsistent: props=$version project=$projectVersion VERSION=$versionFile"
           }
 
           $iecLock = Get-Content ".\ArIED61850Tester\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
           if ($iecLock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $iecLock.ref -ne 'main' -or
-              $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
+              $iecLock.ref -ne 'main' -or $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ARIEC61850 lock metadata is invalid."
           }
 
           $ardirecLock = Get-Content ".\ArIED61850Tester\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
-          if ($ardirecLock.schema -ne 2 -or
+          if ($ardirecLock.schema -ne 3 -or
               $ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $ardirecLock.ref -ne 'main' -or
               $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
               $ardirecLock.bridge.abi -ne 1 -or
               $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll' -or
-              $ardirecLock.qt.version -ne '6.8.3' -or
-              $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
-              $ardirecLock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
-              $ardirecLock.runtime.launchArgument -ne '--arsas-open') {
-            throw "ArdIrec P1 lock metadata is invalid."
+              $ardirecLock.bridge.mode -ne 'native-only') {
+            throw "ArdIrec P1D.5 bridge-only lock metadata is invalid."
           }
 
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -124,34 +101,23 @@ jobs:
           git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
           git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
           $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
-          if ($actual -ne $env:ARIEC61850_COMMIT) {
-            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
-          }
+          if ($actual -ne $env:ARIEC61850_COMMIT) { throw "ARIEC61850 pin mismatch." }
 
-      - name: Checkout immutable ArdIrec P1 engine revision
+      - name: Checkout immutable ArdIrec engine revision
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
           git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
           git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
           $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
-          if ($actual -ne $env:ARDIREC_COMMIT) {
-            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
-          }
+          if ($actual -ne $env:ARDIREC_COMMIT) { throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT got $actual." }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Install Qt 6.8.3 for COMTRADE fallback
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.8.3'
-          arch: 'win64_msvc2022_64'
-          cache: true
-
-      - name: Restore, build and test application solution
+      - name: Restore build and test application solution
         shell: powershell
         run: |
           dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
@@ -172,7 +138,7 @@ jobs:
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
 
-      - name: Stage pinned ArdIrec P1 native bridge and Qt fallback
+      - name: Stage pinned ArdIrec native analysis bridge
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
@@ -180,24 +146,19 @@ jobs:
             -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
             -BuildDirectory "$env:RUNNER_TEMP\ardirec-installer-build"
 
-      - name: Exercise managed P1 bridge against real COMTRADE fixture
+      - name: Exercise managed analysis bridge before packaging
         shell: powershell
         run: |
           $publish = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64"
           $bridge = Join-Path $publish "Tools\ArdIrec\ardirec_bridge.dll"
           if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not staged: $bridge" }
-
-          $fixtureDirectory = Join-Path $env:RUNNER_TEMP "ARSAS native COMTRADE üñîçødé 日本 with spaces"
-          New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
-          Copy-Item ".\ArdIrec\tests\data\binary.cfg" (Join-Path $fixtureDirectory "binary.cfg") -Force
-          Copy-Item ".\ArdIrec\tests\data\binary.dat" (Join-Path $fixtureDirectory "binary.dat") -Force
-
           $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridge
-          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = Join-Path $fixtureDirectory "binary.cfg"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
           dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
             -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests"
-          if ($LASTEXITCODE -ne 0) { throw "Managed ArdIrec P1 bridge integration test failed." }
+            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          if ($LASTEXITCODE -ne 0) { throw "Managed ArdIrec bridge/locus integration test failed." }
 
       - name: Install Inno Setup compiler
         shell: powershell
@@ -212,22 +173,16 @@ jobs:
             -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
             -OutputDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
 
-      - name: Silent install and uninstall smoke test
+      - name: Silent install and field-runtime smoke test
         shell: powershell
         run: |
           $installerPath = ".\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64-setup.exe"
           if (-not (Test-Path $installerPath -PathType Leaf)) { throw "Installer not found: $installerPath" }
-
           $installRoot = Join-Path $env:RUNNER_TEMP "ARSAS-installer-smoke"
           if (Test-Path $installRoot) { Remove-Item $installRoot -Recurse -Force }
 
           $install = Start-Process -FilePath $installerPath -ArgumentList @(
-            "/VERYSILENT",
-            "/SUPPRESSMSGBOXES",
-            "/NORESTART",
-            "/SP-",
-            "/CURRENTUSER",
-            "/DIR=$installRoot"
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CURRENTUSER", "/DIR=$installRoot"
           ) -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)." }
 
@@ -236,7 +191,12 @@ jobs:
             "AR.Iec61850.Transports.Npcap.dll",
             "SharpPcap.dll",
             "PacketDotNet.dll",
-            "Tools\ArdIrec\ardirec_bridge.dll",
+            "Tools\ArdIrec\ardirec_bridge.dll"
+          )) {
+            $installedFile = Join-Path $installRoot $file
+            if (-not (Test-Path $installedFile -PathType Leaf)) { throw "Missing installed file: $installedFile" }
+          }
+          foreach ($removed in @(
             "Tools\ArdIrec\ardirec.exe",
             "Tools\ArdIrec\Qt6Core.dll",
             "Tools\ArdIrec\Qt6Gui.dll",
@@ -244,16 +204,22 @@ jobs:
             "Tools\ArdIrec\Qt6Quick.dll",
             "Tools\ArdIrec\platforms\qwindows.dll"
           )) {
-            $installedFile = Join-Path $installRoot $file
-            if (-not (Test-Path $installedFile -PathType Leaf)) { throw "Missing installed file: $installedFile" }
+            $path = Join-Path $installRoot $removed
+            if (Test-Path $path) { throw "Removed desktop fallback is still packaged: $path" }
           }
+
+          $env:ARSAS_ARDIREC_BRIDGE_PATH = Join-Path $installRoot "Tools\ArdIrec\ardirec_bridge.dll"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
+            -c Release --no-build --no-restore `
+            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          if ($LASTEXITCODE -ne 0) { throw "Installed bridge/locus runtime validation failed." }
 
           $uninstaller = Join-Path $installRoot "unins000.exe"
           if (-not (Test-Path $uninstaller -PathType Leaf)) { throw "Uninstaller was not created." }
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
-            "/VERYSILENT",
-            "/SUPPRESSMSGBOXES",
-            "/NORESTART"
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
           ) -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
 
