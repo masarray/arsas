@@ -45,15 +45,23 @@ public sealed class P8RuntimeArchitectureRegressionTests
     }
 
     [Fact]
-    public void FatGrid_UsesRowAndColumnRecyclingVirtualization()
+    public void LargeProductionGrids_UseRecyclingVirtualization()
     {
-        var source = Read("IoListTestingWindow.xaml");
+        var fat = Read("IoListTestingWindow.xaml");
+        var main = Read("MainWindow.xaml");
 
-        Assert.Contains("EnableRowVirtualization=\"True\"", source, StringComparison.Ordinal);
-        Assert.Contains("EnableColumnVirtualization=\"True\"", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.CanContentScroll=\"True\"", source, StringComparison.Ordinal);
+        Assert.Contains("EnableRowVirtualization=\"True\"", fat, StringComparison.Ordinal);
+        Assert.Contains("EnableColumnVirtualization=\"True\"", fat, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", fat, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", fat, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.CanContentScroll=\"True\"", fat, StringComparison.Ordinal);
+
+        Assert.Contains("x:Name=\"GlobalLiveGrid\"", main, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding Events}\"", main, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding Logs}\"", main, StringComparison.Ordinal);
+        Assert.Contains("EnableRowVirtualization=\"True\" EnableColumnVirtualization=\"True\"", main, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\" VirtualizingPanel.VirtualizationMode=\"Recycling\"", main, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.CanContentScroll=\"True\"", main, StringComparison.Ordinal);
     }
 
     [Fact]
