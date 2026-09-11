@@ -25,21 +25,90 @@ public sealed class ProductionFatP0FieldRegressionTests
             primaryLiveLeaf);
 
         var ied = Ied(staticPoint, manualAlias);
-        var blocked = IoTestSessionPreflight.Validate(ied);
-        Assert.False(blocked.Succeeded);
-        Assert.Contains("multiple enabled test points", blocked.Message, StringComparison.OrdinalIgnoreCase);
 
-        var retired = IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode(ied);
+        // Field regression: a persisted scl-manual-* row may be restored before live
+        // binding proves that both rows collapse to the same primary leaf. Start FAT must
+        // self-heal that stale overlay instead of presenting a scope-not-ready dialog.
+        var ready = IoTestSessionPreflight.Validate(ied);
 
-        Assert.Equal(1, retired);
+        Assert.True(ready.Succeeded, ready.Message);
         Assert.True(staticPoint.WorkspaceSelected);
         Assert.False(manualAlias.WorkspaceSelected);
         Assert.True(manualAlias.TestEnabled);
         Assert.True(manualAlias.IsIncludedInFat);
         Assert.Equal(primaryLiveLeaf, manualAlias.LiveSignalReference);
 
+        // The broad automatic-static cleanup is now idempotent because preflight already
+        // retired the exact live-leaf shadow alias without touching evidence/test state.
+        var retired = IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode(ied);
+        Assert.Equal(0, retired);
+    }
+
+    [Fact]
+    public void Preflight_LiveDuplicateGroup_RetiresRestoredManualIdEvenWhenLegacyBindingStatusWasLost()
+    {
+        const string staticReference = "AA1E1F06R4V1T3p1_OperationalValues/RPRE_MMXU1.A.phsA";
+        const string primaryLiveLeaf = "AA1E1F06R4V1T3p1_OperationalValues/RPRE_MMXU1.A.phsA.cVal.mag.f";
+
+        var staticPoint = StaticPoint(staticReference);
+        var restoredManualAlias = ManualPoint(
+            primaryLiveLeaf,
+            bindingStatus: "LEGACY_RESTORED_SCL_ALIAS",
+            testPointId: "scl-manual-7496d038be4fdc18e340");
+        staticPoint.ApplyLiveBinding(
+            IoTestLiveBindingState.LivePointReady,
+            "field-proven primary leaf",
+            "device-1",
+            primaryLiveLeaf);
+        restoredManualAlias.ApplyLiveBinding(
+            IoTestLiveBindingState.LivePointReady,
+            "field-proven primary leaf",
+            "device-1",
+            primaryLiveLeaf);
+
+        var ied = Ied(staticPoint, restoredManualAlias);
+
         var ready = IoTestSessionPreflight.Validate(ied);
+
         Assert.True(ready.Succeeded, ready.Message);
+        Assert.True(staticPoint.WorkspaceSelected);
+        Assert.False(restoredManualAlias.WorkspaceSelected);
+        Assert.True(restoredManualAlias.TestEnabled);
+        Assert.True(restoredManualAlias.IsIncludedInFat);
+        Assert.Contains("Retired 1 stale manual live-reference alias", ready.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Preflight_TrueNonManualDuplicate_RemainsBlocked()
+    {
+        const string staticReference = "AA1E1F06R4V1T3p1_OperationalValues/RPRE_MMXU1.A.phsA";
+        const string primaryLiveLeaf = "AA1E1F06R4V1T3p1_OperationalValues/RPRE_MMXU1.A.phsA.cVal.mag.f";
+
+        var staticPoint = StaticPoint(staticReference);
+        var ambiguousLegacyPoint = ManualPoint(
+            primaryLiveLeaf,
+            bindingStatus: "LEGACY_WORKBOOK_MAPPING",
+            testPointId: "legacy-import-duplicate");
+        staticPoint.ApplyLiveBinding(
+            IoTestLiveBindingState.LivePointReady,
+            "field-proven primary leaf",
+            "device-1",
+            primaryLiveLeaf);
+        ambiguousLegacyPoint.ApplyLiveBinding(
+            IoTestLiveBindingState.LivePointReady,
+            "field-proven primary leaf",
+            "device-1",
+            primaryLiveLeaf);
+
+        var ied = Ied(staticPoint, ambiguousLegacyPoint);
+
+        var blocked = IoTestSessionPreflight.Validate(ied);
+
+        Assert.False(blocked.Succeeded);
+        Assert.Contains("multiple enabled test points", blocked.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(primaryLiveLeaf, blocked.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(staticPoint.WorkspaceSelected);
+        Assert.True(ambiguousLegacyPoint.WorkspaceSelected);
     }
 
     [Fact]
@@ -70,6 +139,30 @@ public sealed class ProductionFatP0FieldRegressionTests
     }
 
     [Fact]
+    public void EngineeringBootstrap_ReusesDescribedSourcesWhileStagingStillVerifiesSha256()
+    {
+        var projection = Read("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs");
+        var bootstrap = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
+        var bootstrapService = Read("Services/IoTesting/IoTestWorkspaceBootstrapService.cs");
+        var persistence = Read("Services/IoTesting/IoTestProjectPersistenceService.cs");
+        var sourceWorkspace = Read("Services/IoTesting/IoFatSourceWorkspaceService.cs");
+
+        Assert.Contains("IReadOnlyList<IoFatDescribedSource> DescribedSources", projection, StringComparison.Ordinal);
+        Assert.Equal(
+            1,
+            projection.Split("IoFatSourceWorkspaceService.DescribeAsync", StringSplitOptions.None).Length - 1);
+        Assert.Contains("projection.DescribedSources", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
+        Assert.Contains("IoTestWorkspacePersistence.OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
+        Assert.Contains("StageDescribedAsync", persistence, StringComparison.Ordinal);
+        Assert.Contains("CopyVerifiedAsync", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("IsVerifiedStagedCopyAsync", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("SHA256.HashDataAsync(stream", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("VerifyHash(bytes, expectedSha256", sourceWorkspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EmbeddedAutomaticBootstrap_NeverHidesEngineeringWindow()
     {
         var source = Read("MainWindow.ProductionFatNoFlicker.cs");
@@ -78,7 +171,7 @@ public sealed class ProductionFatP0FieldRegressionTests
         Assert.Contains("ShouldKeepEngineeringVisibleDuringProductionFatBootstrap", source, StringComparison.Ordinal);
         Assert.Contains("_productionFatEngineeringBootstrapBusy", source, StringComparison.Ordinal);
         Assert.Contains("ProductionFatTabReady", source, StringComparison.Ordinal);
-        Assert.Contains("MainTabs.SelectedIndex == NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainTabs.SelectedIndex == NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
         Assert.Contains("base.Hide();", source, StringComparison.Ordinal);
     }
 
@@ -109,10 +202,13 @@ public sealed class ProductionFatP0FieldRegressionTests
             BindingEvidence = "Static SCL DataSet authority"
         };
 
-    private static IoTestPointPlan ManualPoint(string runtimeReference)
+    private static IoTestPointPlan ManualPoint(
+        string runtimeReference,
+        string? bindingStatus = null,
+        string testPointId = "scl-manual-8498597f6ee9a39943c0")
         => new()
         {
-            TestPointId = "scl-manual-8498597f6ee9a39943c0",
+            TestPointId = testPointId,
             IedName = "AA1E1F06R4",
             IpAddress = "192.168.81.103",
             SignalName = "A PhsA scalar alias",
@@ -130,7 +226,7 @@ public sealed class ProductionFatP0FieldRegressionTests
             WorkspaceSelected = true,
             TestEnabled = true,
             ImportReady = true,
-            BindingStatus = IoTestSignalSelectionService.SclWorkspaceAuthorityBindingStatus,
+            BindingStatus = bindingStatus ?? IoTestSignalSelectionService.SclWorkspaceAuthorityBindingStatus,
             BindingEvidence = "Shared SCL workspace authority"
         };
 

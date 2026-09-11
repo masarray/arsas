@@ -38,7 +38,6 @@ public partial class MainWindow
         window.MainTabs.SelectionChanged += window.ProductionFatEngineeringBootstrap_SelectionChanged;
         window.PropertyChanged += window.ProductionFatEngineeringBootstrap_PropertyChanged;
         window.Closed += window.ProductionFatEngineeringBootstrap_Closed;
-        window.QueueProductionFatEngineeringBootstrap();
     }
 
     private void ProductionFatEngineeringBootstrap_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -55,13 +54,16 @@ public partial class MainWindow
 
         // A running production FAT session owns its latched IED. The normal embedded-host
         // selection bridge handles idle retargeting. Bootstrap is only needed before a FAT
-        // workspace exists.
+        // workspace exists and only while the operator is actually entering FAT.
         if (_productionFatWindow == null && _loadedIoFatWindow == null)
             QueueProductionFatEngineeringBootstrap();
     }
 
     private void QueueProductionFatEngineeringBootstrap()
     {
+        // FAT preparation must never run in the background while Engineering is connecting
+        // or monitoring. The shared Engineering acquisition session remains authoritative;
+        // clicking FAT is the only navigation event allowed to build the FAT projection.
         if (!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex)
             return;
 
@@ -89,6 +91,10 @@ public partial class MainWindow
         if (selected?.SclWorkspace == null ||
             selected.SclWorkspace.DesignModel.DataSets.Sum(dataSet => dataSet.Members.Count) == 0)
         {
+            var message = selected == null
+                ? "Select an Engineering IED with a static DataSet to prepare FAT."
+                : $"{selected.Name} has no static DataSet scope in the Engineering SCL model.";
+            ShowProductionFatBootstrapState(message, isBusy: false);
             SetStatus(selected == null
                 ? "FAT · select an Engineering IED with a static DataSet."
                 : $"FAT · {selected.Name} has no static DataSet scope in the Engineering SCL model.");
@@ -102,6 +108,8 @@ public partial class MainWindow
             .ToArray();
         if (engineeringDevices.All(device => !ReferenceEquals(device, selected)))
         {
+            var message = $"Engineering source provenance for {selected.Name} is unavailable. Reopen the SCL source to restore FAT authority.";
+            ShowProductionFatBootstrapState(message, isBusy: false);
             SetStatus($"FAT · Engineering source provenance for {selected.Name} is unavailable; use Open SCL to restore the source authority.");
             return;
         }
@@ -111,6 +119,9 @@ public partial class MainWindow
         _productionFatEngineeringBootstrapCts?.Dispose();
         _productionFatEngineeringBootstrapCts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         var token = _productionFatEngineeringBootstrapCts.Token;
+        ShowProductionFatBootstrapState(
+            $"Reusing {selected.Name} from the Engineering static DataSet authority. No reconnect or SCL re-import is started.",
+            isBusy: true);
         SetStatus($"FAT · preparing {selected.Name} from the Engineering static DataSet…");
 
         try
@@ -125,9 +136,12 @@ public partial class MainWindow
             // reparsing XML or starting a second model/acquisition stack.
             _ioFatSclProjectImportService.AdoptEngineeringRuntimeWorkspaces(projection.RuntimeWorkspaces);
 
-            var launch = await IoTestWorkspaceBootstrapService.OpenSourcesAsync(
+            // Projection already SHA-256-described the canonical Engineering SCL source set.
+            // Carry those exact identities through bootstrap/persistence instead of hashing
+            // the same files again. Staging still verifies every copied byte against SHA-256.
+            var launch = await IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync(
                 projection.Project,
-                projection.SourceInputs,
+                projection.DescribedSources,
                 IoTestingProjectsRoot(),
                 IoTestingEvidenceRoot(),
                 CreateIoTestSession,
@@ -159,7 +173,7 @@ public partial class MainWindow
                              ?? ResolveIoTestDevice(ied.IpAddress)
                              ?? ResolveIoTestDevice(ied.IedName);
                 if (device is not null)
-                    MarkSharedSelectionAuthority(device);
+                    PreserveSharedStaticDataSetAuthority(device);
             }
 
             launch.Workspace.ScheduleSave();
@@ -170,10 +184,19 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
             // Fast navigation/close is normal. No modal interruption is appropriate here.
+            if (MainTabs.SelectedIndex == NativeFatWorkspaceIndex && _productionFatWindow == null)
+            {
+                ShowProductionFatBootstrapState(
+                    "FAT preparation was cancelled. Select the FAT tab again to retry from the current Engineering authority.",
+                    isBusy: false);
+            }
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
             AddLog("WARN", "FAT", $"Automatic Engineering FAT bootstrap unavailable: {ex.Message}");
+            ShowProductionFatBootstrapState(
+                $"FAT could not reuse the current Engineering static DataSet: {ex.Message}",
+                isBusy: false);
             SetStatus($"FAT · could not reuse the Engineering static DataSet automatically: {ex.Message}");
         }
         finally

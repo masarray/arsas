@@ -494,6 +494,8 @@ public partial class MainWindow
         var controller = launch.Session;
         var persistence = launch.Workspace;
         var window = new IoListTestingWindow(launch.Project, controller, persistence) { Owner = this };
+        if (ProductionFatTabReady)
+            window.PrepareForEmbeddedEngineeringHost();
         RegisterLoadedIoFatWindow(window);
         _activeIoTestSessionController = controller;
         Interlocked.Exchange(ref _ioTestObservationSequence, DateTime.UtcNow.Ticks);
@@ -525,7 +527,8 @@ public partial class MainWindow
         }
 
         window.Closed += WindowClosed;
-        Hide();
+        if (!ProductionFatTabReady)
+            Hide();
         window.Show();
         return Task.CompletedTask;
     }

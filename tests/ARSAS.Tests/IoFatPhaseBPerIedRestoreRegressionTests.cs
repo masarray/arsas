@@ -134,6 +134,10 @@ public sealed class IoFatPhaseBPerIedRestoreRegressionTests
         using (reopened.Session)
         using (reopened.Workspace)
         {
+            // Bootstrap must keep the freshly imported Engineering plan as authority. A
+            // persistence candidate may contribute progress only after IED ownership matches;
+            // it must never replace the current project wholesale.
+            Assert.Same(current, reopened.Project);
             var point = reopened.Project.Ieds.Single().TestPoints.Single();
             Assert.Equal(IoTestPointState.NotStarted, point.Runtime.State);
             Assert.Null(point.Runtime.OnEvidence);

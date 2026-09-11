@@ -24,6 +24,5 @@ public partial class MainWindow
 
     private bool ShouldKeepEngineeringVisibleDuringProductionFatBootstrap()
         => _productionFatEngineeringBootstrapBusy &&
-           ProductionFatTabReady &&
-           MainTabs.SelectedIndex == NativeFatWorkspaceIndex;
+           ProductionFatTabReady;
 }

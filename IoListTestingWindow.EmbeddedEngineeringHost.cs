@@ -28,6 +28,21 @@ public partial class IoListTestingWindow
             handledEventsToo: true);
     }
 
+    internal void PrepareForEmbeddedEngineeringHost()
+    {
+        // WPF refuses Window.Show() when ShowActivated=false while WindowState=Maximized.
+        // The production FAT XAML historically starts maximized, therefore normalize the
+        // invisible donor BEFORE Show(). Its exact center is re-parented into MainWindow on
+        // Loaded; the donor itself never needs a maximized native HWND.
+        WindowState = WindowState.Normal;
+        ShowActivated = false;
+        ShowInTaskbar = false;
+        Opacity = 0d;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = -32000d;
+        Top = -32000d;
+    }
+
     private static void EmbeddedEngineeringFatHost_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not IoListTestingWindow window ||
@@ -45,9 +60,7 @@ public partial class IoListTestingWindow
         // MainWindow's legacy launcher still calls Show() on this Window. Make that bootstrap
         // surface invisible immediately; the actual production visual is moved into Engineering
         // on the next Loaded-priority dispatcher turn, before ContextIdle command-panel work.
-        window.ShowActivated = false;
-        window.ShowInTaskbar = false;
-        window.Opacity = 0d;
+        window.PrepareForEmbeddedEngineeringHost();
 
         window.Dispatcher.BeginInvoke(
             DispatcherPriority.Loaded,
@@ -64,14 +77,13 @@ public partial class IoListTestingWindow
         {
             EnsureProductionFatPresentationForEmbeddedHost();
             DisableLegacyEmbeddedCommandPanel();
-            var surface = DetachProductionFatCentralWorkspace();
-            if (surface == null)
-                return;
+            var surface = DetachProductionFatCentralWorkspace()
+                          ?? throw new InvalidOperationException("Production FAT center could not be detached from its donor window.");
 
             _engineeringEmbeddedSurface = surface;
             _engineeringEmbeddedMounted = owner.MountProductionFatWorkspace(this, surface);
             if (!_engineeringEmbeddedMounted)
-                return;
+                throw new InvalidOperationException("Engineering FAT host rejected the production workspace surface.");
 
             // The central FAT view now belongs to MainWindow. Keep this Window loaded and
             // hidden because existing controller/session/event code is intentionally reused.
@@ -79,9 +91,16 @@ public partial class IoListTestingWindow
         }
         catch (Exception ex)
         {
+            // Never leave an invisible off-screen donor as a silent blank FAT failure.
+            // Restore the historical standalone presentation so the operator has a usable
+            // production FAT surface and a visible diagnostic if embedding itself fails.
+            WindowState = WindowState.Maximized;
             Opacity = 1d;
             ShowInTaskbar = true;
             ShowActivated = true;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            Left = double.NaN;
+            Top = double.NaN;
             MessageBox.Show(
                 owner,
                 $"ARSAS could not embed the production FAT workspace. The standalone FAT window will remain available.\n\n{ex.Message}",
@@ -190,22 +209,51 @@ public partial class IoListTestingWindow
 
     internal void SelectEngineeringDeviceForEmbeddedFat(Iec61850MonitorDevice? device)
     {
-        if (!_engineeringEmbeddedMounted || device == null)
+        if (!_engineeringEmbeddedMounted)
             return;
 
-        var match = Project.Ieds.FirstOrDefault(ied =>
-            (!string.IsNullOrWhiteSpace(ied.LiveDeviceId) &&
-             ied.LiveDeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase)) ||
-            (!string.IsNullOrWhiteSpace(ied.IpAddress) &&
-             ied.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase)) ||
-            ied.IedName.Equals(device.SclIedName, StringComparison.OrdinalIgnoreCase) ||
-            ied.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase));
-        if (match == null || ReferenceEquals(SelectedIed, match))
+        // M3 viewed-device contract: the persistent Engineering IED Explorer owns
+        // what the FAT grid displays. SelectedIed/Session.SelectContext changes only that
+        // projection; an active capture remains latched inside its per-IED controller.
+        // Clearing the Explorer selection or selecting an IED outside this FAT projection
+        // must clear the FAT view instead of silently leaving the previous IED on screen.
+        if (device == null)
+        {
+            if (CanSelectIed)
+                SelectedIed = null;
             return;
+        }
 
-        // Do not retarget an active production FAT transaction/session. When idle, the
-        // persistent Engineering IED Explorer is the navigation/selection authority.
-        if (!CanSelectIed)
+        // Resolve by strongest Engineering identity first. Do not use one OR predicate:
+        // a weak fallback on an earlier project row must never beat an exact live DeviceId.
+        var match = Project.Ieds.FirstOrDefault(_ => false);
+        if (!string.IsNullOrWhiteSpace(device.DeviceId))
+        {
+            match = Project.Ieds.FirstOrDefault(ied =>
+                !string.IsNullOrWhiteSpace(ied.LiveDeviceId) &&
+                ied.LiveDeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (match == null && !string.IsNullOrWhiteSpace(device.SclIedName))
+        {
+            match = Project.Ieds.FirstOrDefault(ied =>
+                ied.IedName.Equals(device.SclIedName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (match == null && !string.IsNullOrWhiteSpace(device.Name))
+        {
+            match = Project.Ieds.FirstOrDefault(ied =>
+                ied.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (match == null && !string.IsNullOrWhiteSpace(device.IpAddress))
+        {
+            match = Project.Ieds.FirstOrDefault(ied =>
+                !string.IsNullOrWhiteSpace(ied.IpAddress) &&
+                ied.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (ReferenceEquals(SelectedIed, match) || !CanSelectIed)
             return;
 
         SelectedIed = match;

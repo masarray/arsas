@@ -8,7 +8,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// P2 FAT pivot: the Engineering FAT tab is a host for the proven production
+/// Engineering FAT pivot: the permanent XAML FAT tab hosts the proven production
 /// IoListTestingWindow workspace rather than a second/manual FAT implementation.
 /// The global Engineering IED Explorer and shared Command Dock remain authoritative.
 /// </summary>
@@ -19,7 +19,7 @@ public partial class MainWindow
     private FrameworkElement? _productionFatSurface;
     private DispatcherTimer? _productionFatInstallRetry;
 
-    internal bool ProductionFatTabReady => _productionFatTabInstalled && _nativeFatTab != null;
+    internal bool ProductionFatTabReady => _productionFatTabInstalled && NativeFatTab != null;
 
     [ModuleInitializer]
     internal static void RegisterProductionFatTabPivot()
@@ -36,9 +36,10 @@ public partial class MainWindow
         if (sender is not MainWindow window || window._productionFatTabInstalled)
             return;
 
-        window.Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
-            new Action(window.TryInstallProductionFatTabPivot));
+        // MainWindow.Loaded runs after XAML has materialized the canonical seventh tab but
+        // before the first normal render. Install the permanent FAT shell immediately so the
+        // operator never sees an empty/black seventh workspace while idle-dispatcher work waits.
+        window.TryInstallProductionFatTabPivot();
     }
 
     private void TryInstallProductionFatTabPivot()
@@ -46,13 +47,14 @@ public partial class MainWindow
         if (_productionFatTabInstalled || !IsLoaded)
             return;
 
-        // PR #290 creates the seventh navigation slot. Wait until that shell contribution
-        // exists, then replace only its FAT content/handlers; P0/P1 shell geometry is untouched.
-        if (!_nativeFatInstalled || _nativeFatTab == null || _nativeFatNavButton == null)
+        // M7: MainWindow.xaml is the sole owner of the seventh destination. Wait only
+        // until the canonical XAML tab is present; there is no native FAT runtime to install.
+        if (MainTabs.Items.Count <= NativeFatWorkspaceIndex ||
+            !ReferenceEquals(MainTabs.Items[NativeFatWorkspaceIndex], NativeFatTab))
         {
-            _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.ApplicationIdle)
+            _productionFatInstallRetry ??= new DispatcherTimer(DispatcherPriority.Loaded)
             {
-                Interval = TimeSpan.FromMilliseconds(120)
+                Interval = TimeSpan.FromMilliseconds(60)
             };
             _productionFatInstallRetry.Tick -= ProductionFatInstallRetry_Tick;
             _productionFatInstallRetry.Tick += ProductionFatInstallRetry_Tick;
@@ -62,26 +64,14 @@ public partial class MainWindow
 
         _productionFatInstallRetry?.Stop();
         _productionFatTabInstalled = true;
+        NativeFatTab.Content = BuildProductionFatPermanentHost();
 
-        // Retire the experimental manual-capture surface. Keep its code isolated in the
-        // branch for now so this pivot is reversible while production FAT parity is verified.
-        _nativeFatReconcileTimer?.Stop();
-        _nativeFatSaveTimer?.Stop();
-        AttachNativeFatObservedDevice(null);
-        PropertyChanged -= NativeFat_MainWindowPropertyChanged;
-        MainTabs.SelectionChanged -= NativeFat_MainTabsSelectionChanged;
-        _nativeFatNavButton.Click -= NativeFatNavButton_Click;
+        // Bootstrap remains navigation-gated. Queueing here is harmless because the
+        // Engineering bootstrap itself refuses to build FAT unless the FAT tab is active.
+        QueueProductionFatEngineeringBootstrap();
 
-        _nativeFatTab.Content = BuildProductionFatLauncher();
-
-        // FAT must be visually indistinguishable from the existing workflow tabs.
-        _nativeFatNavButton.Style = NavDiagnosticsButton.Style;
-        _nativeFatNavButton.Padding = NavDiagnosticsButton.Padding;
-        _nativeFatNavButton.Margin = NavDiagnosticsButton.Margin;
-        _nativeFatNavButton.HorizontalContentAlignment = NavDiagnosticsButton.HorizontalContentAlignment;
-        _nativeFatNavButton.VerticalContentAlignment = NavDiagnosticsButton.VerticalContentAlignment;
-        _nativeFatNavButton.ToolTip = "Production FAT workspace · automatic Value 1 / Value 2 evidence capture";
-        _nativeFatNavButton.Click += ProductionFatNavButton_Click;
+        // MainWindow.xaml owns both style and click routing for the seventh nav button.
+        NavNativeFatButton.ToolTip = "Production FAT workspace · automatic Value 1 / Value 2 evidence capture";
 
         PropertyChanged += ProductionFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged += ProductionFat_MainTabsSelectionChanged;
@@ -96,97 +86,79 @@ public partial class MainWindow
         TryInstallProductionFatTabPivot();
     }
 
-    private FrameworkElement BuildProductionFatLauncher()
+    private FrameworkElement BuildProductionFatPermanentHost(
+        string? statusText = null,
+        bool isBusy = false)
     {
         var root = new Grid { Margin = new Thickness(0) };
         var card = new Border
         {
-            MaxWidth = 720,
-            Padding = new Thickness(28, 24, 28, 24),
-            CornerRadius = new CornerRadius(16),
-            Background = TryFindResource("Surface") as Brush ?? Brushes.White,
-            BorderBrush = TryFindResource("Line") as Brush ?? new SolidColorBrush(Color.FromRgb(0xDC, 0xE4, 0xEF)),
+            MaxWidth = 520,
+            Padding = new Thickness(28, 24, 28, 22),
+            CornerRadius = new CornerRadius(18),
+            Background = TryFindResource("CardBackground") as Brush ?? Brushes.White,
+            BorderBrush = TryFindResource("CardBorder") as Brush ?? new SolidColorBrush(Color.FromRgb(220, 228, 239)),
             BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-
-        var content = new StackPanel();
-        content.Children.Add(new TextBlock
+        var panel = new StackPanel
         {
-            Text = "FAT WORKSPACE",
-            Style = TryFindResource("MicroLabel") as Style,
-            Foreground = TryFindResource("Accent") as Brush,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "IEC 61850 FAT",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TryFindResource("Accent") as Brush ?? Brushes.RoyalBlue,
             HorizontalAlignment = HorizontalAlignment.Center
         });
-        content.Children.Add(new TextBlock
+        panel.Children.Add(new TextBlock
         {
-            Text = "Production FAT inside Engineering",
-            Margin = new Thickness(0, 7, 0, 0),
-            FontSize = 22,
+            Text = isBusy ? "Preparing production workspace" : "Production FAT workspace",
+            FontSize = 18,
             FontWeight = FontWeights.SemiBold,
             Foreground = TryFindResource("Ink") as Brush ?? Brushes.Black,
+            Margin = new Thickness(0, 5, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center
         });
-        content.Children.Add(new TextBlock
+        panel.Children.Add(new TextBlock
         {
-            Text = "Open an SCL FAT project to use the proven automatic capture / completion workflow. The global IED Explorer stays visible at left and the shared Command Dock remains the only command surface.",
-            Margin = new Thickness(0, 10, 0, 18),
-            MaxWidth = 610,
+            Text = string.IsNullOrWhiteSpace(statusText)
+                ? "Select an Engineering IED with static DataSet scope, then open FAT."
+                : statusText,
+            FontSize = 11.5,
+            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 12.2,
-            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray
+            Margin = new Thickness(0, 8, 0, 0)
         });
 
-        var actions = new StackPanel
+        if (isBusy)
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        var openScl = new Button
-        {
-            Content = "Open SCL for FAT",
-            Style = TryFindResource("PrimaryButton") as Style,
-            Padding = new Thickness(14, 8, 14, 8),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        openScl.Click += OpenSclFatTesting_Click;
-        actions.Children.Add(openScl);
+            panel.Children.Add(new ProgressBar
+            {
+                Height = 4,
+                IsIndeterminate = true,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0, 18, 0, 0),
+                Foreground = TryFindResource("Accent") as Brush ?? Brushes.RoyalBlue,
+                Background = new SolidColorBrush(Color.FromRgb(220, 231, 248))
+            });
+        }
 
-        var openProject = new Button
-        {
-            Content = "Open ARSAS Project",
-            Style = TryFindResource("SoftButton") as Style,
-            Padding = new Thickness(14, 8, 14, 8)
-        };
-        openProject.Click += OpenIoListPackage_Click;
-        actions.Children.Add(openProject);
-        content.Children.Add(actions);
-
-        content.Children.Add(new TextBlock
-        {
-            Text = "Excel workflow is intentionally not part of this primary FAT tab.",
-            Margin = new Thickness(0, 14, 0, 0),
-            FontSize = 10.6,
-            Foreground = TryFindResource("Muted") as Brush ?? Brushes.DimGray,
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-
-        card.Child = content;
+        card.Child = panel;
         root.Children.Add(card);
         return root;
     }
 
-    private void ProductionFatNavButton_Click(object sender, RoutedEventArgs e)
+    internal void ShowProductionFatBootstrapState(string message, bool isBusy)
     {
-        if (MainTabs.Items.Count <= NativeFatWorkspaceIndex)
+        if (!ProductionFatTabReady || _productionFatWindow is { IsLoaded: true })
             return;
 
-        MainTabs.SelectedIndex = NativeFatWorkspaceIndex;
-        QueueNativeFatNavigationGeometry();
-        SynchronizeProductionFatSelectedIed();
-        _productionFatWindow?.NotifyEmbeddedHostActivated();
+        NativeFatTab.Content = BuildProductionFatPermanentHost(message, isBusy);
     }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -219,13 +191,13 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(surface);
-        if (!ProductionFatTabReady || _nativeFatTab == null)
+        if (!ProductionFatTabReady)
             return false;
 
         _productionFatWindow = window;
         _productionFatSurface = surface;
         surface.DataContext = window;
-        _nativeFatTab.Content = surface;
+        NativeFatTab.Content = surface;
         if (_persistentWorkbench != null)
             _persistentWorkbench.DockExpandedByWorkspace[NativeFatWorkspaceIndex] = true;
 
@@ -233,20 +205,13 @@ public partial class MainWindow
         window.Closed += ProductionFatWindow_Closed;
         SynchronizeProductionFatSelectedIed();
 
-        MainTabs.SelectedIndex = NativeFatWorkspaceIndex;
+        // Passive mount: prewarming must never navigate, hide/show, activate, or steal
+        // focus from the operator's current Engineering destination.
+        window.RegisterEmbeddedHostCloseCleanup();
         QueueNativeFatNavigationGeometry();
 
-        // The legacy launcher hides Engineering before showing IoListTestingWindow.
-        // Once its proven central workspace is re-parented here, restore Engineering and
-        // keep the legacy Window loaded-but-hidden solely as the production controller owner.
-        IsEnabled = true;
-        if (!IsVisible)
-            Show();
-        if (WindowState == WindowState.Minimized)
-            WindowState = WindowState.Normal;
-        Activate();
-
-        SetStatus($"FAT ready in Engineering tab · {window.Project.Ieds.Count} IED · production auto-capture workflow.");
+        if (MainTabs.SelectedIndex == NativeFatWorkspaceIndex)
+            SetStatus($"FAT ready in Engineering tab · {window.Project.Ieds.Count} IED · production auto-capture workflow.");
         return true;
     }
 
@@ -258,8 +223,7 @@ public partial class MainWindow
         window.Closed -= ProductionFatWindow_Closed;
         _productionFatWindow = null;
         _productionFatSurface = null;
-        if (_nativeFatTab != null)
-            _nativeFatTab.Content = BuildProductionFatLauncher();
+        NativeFatTab.Content = BuildProductionFatPermanentHost();
     }
 
     private void ProductionFatWindow_Closed(object? sender, EventArgs e)

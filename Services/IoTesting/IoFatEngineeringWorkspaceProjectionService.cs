@@ -7,6 +7,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 public sealed record IoFatEngineeringWorkspaceProjection(
     IoTestProject Project,
     IReadOnlyList<IoFatSourceInput> SourceInputs,
+    IReadOnlyList<IoFatDescribedSource> DescribedSources,
     IReadOnlyList<SclIedWorkspace> RuntimeWorkspaces);
 
 /// <summary>
@@ -36,12 +37,16 @@ public static class IoFatEngineeringWorkspaceProjectionService
                 "No Engineering IED has an already-parsed SCL workspace with static DataSet members and source provenance.");
         }
 
-        var sourceInputs = usable
+        // Describe every candidate source once so conflicting Engineering authorities are
+        // detected before canonicalization. The resulting canonical source set is then used
+        // for the FAT projection/staging path so duplicate Explorer entries do not multiply
+        // static DataSet rows or repeat downstream workspace work.
+        var candidateSourceInputs = usable
             .Select(device => Path.GetFullPath(device.SclSourcePath))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => new IoFatSourceInput(path, IoFatSourceKinds.Scl))
             .ToArray();
-        var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken)
+        var described = await IoFatSourceWorkspaceService.DescribeAsync(candidateSourceInputs, cancellationToken)
             .ConfigureAwait(false);
         var descriptorByPath = described.ToDictionary(
             item => Path.GetFullPath(item.OriginalPath),
@@ -62,7 +67,21 @@ public static class IoFatEngineeringWorkspaceProjectionService
             }
         }
 
-        var workspaceSources = usable
+        var canonicalDevices = CanonicalizeEngineeringDevices(usable, descriptorByPath);
+        var sourceInputs = canonicalDevices
+            .Select(device => Path.GetFullPath(device.SclSourcePath))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(path => new IoFatSourceInput(path, IoFatSourceKinds.Scl))
+            .ToArray();
+        var canonicalDescribedSources = sourceInputs
+            .Select(input =>
+            {
+                var path = Path.GetFullPath(input.FilePath);
+                return new IoFatDescribedSource(descriptorByPath[path], path);
+            })
+            .ToArray();
+
+        var workspaceSources = canonicalDevices
             .Select(device =>
             {
                 var descriptor = descriptorByPath[Path.GetFullPath(device.SclSourcePath)];
@@ -74,14 +93,15 @@ public static class IoFatEngineeringWorkspaceProjectionService
             .ToArray();
         var verification = FatSclWorkspaceImportService.Import(workspaceSources).Project;
 
-        var deviceByWorkspace = usable
-            .GroupBy(device => WorkspaceIdentity(device.SclWorkspace!), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var descriptorByWorkspace = usable
-            .GroupBy(device => WorkspaceIdentity(device.SclWorkspace!), StringComparer.OrdinalIgnoreCase)
+        var deviceByWorkspace = canonicalDevices
             .ToDictionary(
-                group => group.Key,
-                group => descriptorByPath[Path.GetFullPath(group.First().SclSourcePath)],
+                device => WorkspaceIdentity(device.SclWorkspace!),
+                device => device,
+                StringComparer.OrdinalIgnoreCase);
+        var descriptorByWorkspace = canonicalDevices
+            .ToDictionary(
+                device => WorkspaceIdentity(device.SclWorkspace!),
+                device => descriptorByPath[Path.GetFullPath(device.SclSourcePath)],
                 StringComparer.OrdinalIgnoreCase);
 
         var plans = new List<IoTestIedPlan>();
@@ -120,8 +140,8 @@ public static class IoFatEngineeringWorkspaceProjectionService
             plans.Add(plan);
         }
 
-        var sourceDescriptors = described
-            .Select(item => item.Source)
+        var sourceDescriptors = canonicalDevices
+            .Select(device => descriptorByPath[Path.GetFullPath(device.SclSourcePath)])
             .GroupBy(source => source.SourceId, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(source => source.SourceId, StringComparer.Ordinal)
@@ -144,7 +164,7 @@ public static class IoFatEngineeringWorkspaceProjectionService
         project.SetSources(sourceDescriptors, sourceFingerprint);
         project.InitializeRuntimeNotifications();
 
-        var staticMemberCount = usable.Sum(device =>
+        var staticMemberCount = canonicalDevices.Sum(device =>
             device.SclWorkspace!.DesignModel.DataSets.Sum(dataSet => dataSet.Members.Count));
         if (project.SignalCount != verification.Signals.Count || project.SignalCount != staticMemberCount)
         {
@@ -155,7 +175,71 @@ public static class IoFatEngineeringWorkspaceProjectionService
         return new IoFatEngineeringWorkspaceProjection(
             project,
             sourceInputs,
-            usable.Select(device => device.SclWorkspace!).ToArray());
+            canonicalDescribedSources,
+            canonicalDevices.Select(device => device.SclWorkspace!).ToArray());
+    }
+
+    private static IReadOnlyList<Iec61850MonitorDevice> CanonicalizeEngineeringDevices(
+        IReadOnlyCollection<Iec61850MonitorDevice> devices,
+        IReadOnlyDictionary<string, IoFatSourceDescriptor> descriptorByPath)
+    {
+        var canonical = new List<Iec61850MonitorDevice>();
+        foreach (var identityGroup in devices
+                     .GroupBy(device => WorkspaceIdentity(device.SclWorkspace!), StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var candidates = identityGroup
+                .Select(device =>
+                {
+                    var path = Path.GetFullPath(device.SclSourcePath);
+                    return new
+                    {
+                        Device = device,
+                        Path = path,
+                        Descriptor = descriptorByPath[path]
+                    };
+                })
+                .ToArray();
+
+            var distinctHashes = candidates
+                .Select(candidate => candidate.Descriptor.Sha256)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (distinctHashes.Length > 1)
+            {
+                throw new InvalidDataException(
+                    $"Conflicting Engineering SCL sources define the same IED/AccessPoint '{identityGroup.Key}'. " +
+                    "FAT will not silently merge competing static DataSet authorities.");
+            }
+
+            var distinctEndpoints = candidates
+                .Select(candidate => candidate.Device.IpAddress?.Trim() ?? string.Empty)
+                .Where(endpoint => !string.IsNullOrWhiteSpace(endpoint))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (distinctEndpoints.Length > 1)
+            {
+                throw new InvalidDataException(
+                    $"Engineering exposes IED/AccessPoint '{identityGroup.Key}' through multiple endpoints ({string.Join(", ", distinctEndpoints)}). " +
+                    "FAT will not guess which physical IED owns the evidence session.");
+            }
+
+            // Exact same-content duplicates are already harmless according to the lower SCL
+            // importer contract. Collapse them here as well so projection counts, runtime
+            // workspaces and staged source files all share one canonical authority. Prefer the
+            // currently monitoring/connected Engineering device so FAT remains attached to the
+            // live session that the operator is already using.
+            var selected = candidates
+                .OrderByDescending(candidate => candidate.Device.IsMonitoring)
+                .ThenByDescending(candidate => candidate.Device.IsConnected)
+                .ThenBy(candidate => candidate.Descriptor.FileName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(candidate => candidate.Device.DeviceId, StringComparer.OrdinalIgnoreCase)
+                .First();
+            canonical.Add(selected.Device);
+        }
+
+        return canonical;
     }
 
     private static IoTestPointPlan ToPointPlan(
