@@ -21,6 +21,7 @@ public partial class ComtradeWorkspaceWindow
     private P1D5WaveformTraceMode _p1d5WaveformTraceMode = P1D5WaveformTraceMode.Instantaneous;
     private int _p1d5ValueRepresentation = P1D5RepresentationSecondary;
     private bool _p1d5PresentationRefreshRunning;
+    private bool? _p1d5HasConvertibleAnalog;
 
     private bool P1D5IsRmsTrace => _p1d5WaveformTraceMode == P1D5WaveformTraceMode.Rms;
     private string P1D5RepresentationLabel => _p1d5ValueRepresentation == P1D5RepresentationPrimary ? "Primary" : "Secondary";
@@ -79,8 +80,8 @@ public partial class ComtradeWorkspaceWindow
     /// PRI/SEC is a positive per-channel engineering scale. Because every Time Signals lane is
     /// independently auto-ranged, multiplying all samples in one lane by that scale cannot change
     /// its normalized waveform geometry. Re-reading/rebuilding every source frame was therefore
-    /// pure latency. Keep the retained waveform data/geometry, update only frame metadata and
-    /// representation-dependent native readouts/analysis.
+    /// pure latency. Existing C1/C2 measurements are projected immediately through the cached
+    /// transformer ratio, while native work is requested only for a value that is genuinely absent.
     /// </summary>
     private async Task RefreshP1D5RepresentationAsync()
     {
@@ -90,6 +91,12 @@ public partial class ComtradeWorkspaceWindow
         try
         {
             InvalidateP1D5AnalysisPresentationCaches();
+            InvalidateP1D5CursorMeasurementGeneration();
+
+            var missingMeasurements = _analysisMode == AnalysisMode.Waveform
+                ? PresentP1D5CachedRepresentation(_p1d5ValueRepresentation)
+                : P1D5MeasurementTargets.None;
+
             DisturbanceView.SetAnalogRepresentationLabel(P1D5RepresentationLabel);
 
             if (_p1d5LocusActive)
@@ -97,11 +104,14 @@ public partial class ComtradeWorkspaceWindow
                 await RefreshP1D5LocusStaticAsync(forceReopen: false).ConfigureAwait(true);
                 QueueP1D5LocusCursorRefresh();
             }
+            else if (_analysisMode == AnalysisMode.Waveform)
+            {
+                if (missingMeasurements != P1D5MeasurementTargets.None)
+                    QueueP1D5CursorMeasurements(missingMeasurements, isFinal: true);
+            }
             else
             {
-                QueueP1D5CursorMeasurements();
-                if (_analysisMode != AnalysisMode.Waveform)
-                    QueueP1D4LiveAnalysisScrub(isFinal: true);
+                QueueP1D4LiveAnalysisScrub(isFinal: true);
             }
 
             if (_analysisMode == AnalysisMode.Waveform && _disturbanceLoadedViewport.FrameCount > 0)
@@ -169,20 +179,31 @@ public partial class ComtradeWorkspaceWindow
         ApplyP1D5ToggleButton(SecondaryValueButton, _p1d5ValueRepresentation == P1D5RepresentationSecondary);
         ApplyP1D5ToggleButton(PrimaryValueButton, _p1d5ValueRepresentation == P1D5RepresentationPrimary);
 
-        var hasConvertibleAnalog = false;
-        for (var index = 0; index < _record.AnalogChannels.Count; index++)
-        {
-            var semantics = P1D5AnalogSemantics(checked((uint)index));
-            if (semantics is { HasValidTransformerRatio: true })
-            {
-                hasConvertibleAnalog = true;
-                break;
-            }
-        }
+        var hasConvertibleAnalog = P1D5HasConvertibleAnalog();
         PrimaryValueButton.IsEnabled = hasConvertibleAnalog;
         PrimaryValueButton.ToolTip = hasConvertibleAnalog
             ? "Display analog values in primary engineering quantities using COMTRADE transformer ratios."
             : "No valid primary/secondary transformer ratio is declared by this COMTRADE record.";
+    }
+
+    private bool P1D5HasConvertibleAnalog()
+    {
+        if (_p1d5HasConvertibleAnalog is { } cached)
+            return cached;
+
+        // Deliberately walk all channels once. Besides answering the button-enabled question this
+        // pre-warms the authoritative native semantics cache, so the first PRI/SEC toggle performs
+        // no channel-semantics bridge calls on the UI thread.
+        var result = false;
+        for (var index = 0; index < _record.AnalogChannels.Count; index++)
+        {
+            var semantics = P1D5AnalogSemantics(checked((uint)index));
+            if (semantics is { HasValidTransformerRatio: true })
+                result = true;
+        }
+
+        _p1d5HasConvertibleAnalog = result;
+        return result;
     }
 
     private static void ApplyP1D5ToggleButton(Button button, bool selected)
@@ -206,15 +227,18 @@ public partial class ComtradeWorkspaceWindow
     }
 
     private double P1D5DisplayScale(uint channelIndex)
+        => P1D5DisplayScale(channelIndex, _p1d5ValueRepresentation);
+
+    private double P1D5DisplayScale(uint channelIndex, int representation)
     {
         var semantics = P1D5AnalogSemantics(channelIndex);
         if (semantics is not { HasValidTransformerRatio: true })
             return 1.0;
 
-        var scale = _p1d5ValueRepresentation == P1D5RepresentationPrimary
+        var scale = representation == P1D5RepresentationPrimary
             ? semantics.ScaleToPrimary
             : semantics.ScaleToSecondary;
-        return double.IsFinite(scale) && Math.Abs(scale) > 1e-15 ? scale : 1.0;
+        return ComtradeRepresentationScaleMath.IsUsableScale(scale) ? scale : 1.0;
     }
 
     private double[] P1D5ScaleInstantaneous(IReadOnlyList<double> values, uint channelIndex)

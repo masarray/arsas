@@ -9,8 +9,9 @@ namespace ArIED61850Tester.Controls;
 
 /// <summary>
 /// Retained-mode COMTRADE workstation renderer. Static frame/data visuals are only rebuilt when
-/// data, viewport or size changes. C1/C2 are rendered in an independent lightweight visual at the
-/// WPF composition cadence, so cursor scrubbing never replays waveform geometry.
+/// data, viewport or size changes. C1/C2 glyphs are retained DrawingVisuals whose X transforms are
+/// updated synchronously from pointer input, so cursor feedback never waits for a composition
+/// callback and never replays waveform geometry.
 /// </summary>
 public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
 {
@@ -39,9 +40,13 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     private readonly DrawingVisual _frameVisual = new();
     private readonly ContainerVisual _plotContainer = new();
     private readonly DrawingVisual _dataVisual = new();
-    private readonly DrawingVisual _cursorVisual = new();
+    private readonly ContainerVisual _cursorContainer = new();
+    private readonly DrawingVisual _cursor1Visual = new();
+    private readonly DrawingVisual _cursor2Visual = new();
     private readonly TranslateTransform _dataPanTransform = new();
     private readonly TranslateTransform _cursorPanTransform = new();
+    private readonly TranslateTransform _cursor1Transform = new();
+    private readonly TranslateTransform _cursor2Transform = new();
 
     private IReadOnlyList<ComtradeDisturbanceTrack> _tracks = Array.Empty<ComtradeDisturbanceTrack>();
     private double[] _snapTimesMilliseconds = Array.Empty<double>();
@@ -65,8 +70,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     private Size _cachedSize;
     private bool _frameDirty = true;
     private bool _dataDirty = true;
-    private bool _cursorVisualDirty = true;
-    private bool _cursorRenderingHooked;
+    private bool _cursorGlyphsDirty = true;
     private string? _analogRepresentationLabel;
 
     internal event EventHandler<ComtradeDisturbanceNavigationChangedEventArgs>? NavigationChanged;
@@ -93,11 +97,17 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         _visuals = new VisualCollection(this);
         _visuals.Add(_frameVisual);
         _plotContainer.Children.Add(_dataVisual);
-        _plotContainer.Children.Add(_cursorVisual);
+        _cursorContainer.Children.Add(_cursor1Visual);
+        _cursorContainer.Children.Add(_cursor2Visual);
+        _plotContainer.Children.Add(_cursorContainer);
         _visuals.Add(_plotContainer);
+
         _dataVisual.Transform = _dataPanTransform;
-        _cursorVisual.Transform = _cursorPanTransform;
-        Unloaded += (_, _) => StopCursorRenderingPump();
+        _cursorContainer.Transform = _cursorPanTransform;
+        _cursor1Visual.Transform = _cursor1Transform;
+        _cursor2Visual.Transform = _cursor2Transform;
+        _cursor1Visual.Opacity = 0.0;
+        _cursor2Visual.Opacity = 0.0;
     }
 
     protected override Visual GetVisualChild(int index) => _visuals[index];
@@ -193,8 +203,10 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _cursor1Milliseconds = milliseconds;
         else
             _cursor2Milliseconds = milliseconds;
-        RequestCursorOverlayRedraw();
-        RaiseNavigationChanged();
+
+        // Pointer feedback is presentation-only and synchronous. NavigationChanged intentionally
+        // remains reserved for viewport changes so this path allocates no status strings.
+        UpdateCursorTransforms();
     }
 
     internal void SetAnalogRepresentationLabel(string representation)
@@ -403,7 +415,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _cachedSize = size;
             _frameDirty = true;
             _dataDirty = true;
-            _cursorVisualDirty = true;
+            _cursorGlyphsDirty = true;
         }
 
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
@@ -417,11 +429,11 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             using (var frameDc = _frameVisual.RenderOpen())
                 frameDc.DrawRectangle(Brushes.White, null, bounds);
             using (_dataVisual.RenderOpen()) { }
-            using (_cursorVisual.RenderOpen()) { }
+            ClearCursorGlyphs();
             _plotContainer.Clip = null;
             _frameDirty = false;
             _dataDirty = false;
-            _cursorVisualDirty = false;
+            _cursorGlyphsDirty = false;
             return;
         }
 
@@ -438,11 +450,11 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             {
                 using var dataDc = _dataVisual.RenderOpen();
             }
-            using (var cursorDc = _cursorVisual.RenderOpen()) { }
+            ClearCursorGlyphs();
             _plotContainer.Clip = null;
             _frameDirty = false;
             _dataDirty = false;
-            _cursorVisualDirty = false;
+            _cursorGlyphsDirty = false;
             return;
         }
 
@@ -491,54 +503,54 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
             _dataDirty = false;
         }
 
-        if (_cursorVisualDirty)
-            RedrawCursorOverlay(dpi, semibold);
-    }
-
-    private void RequestCursorOverlayRedraw()
-    {
-        _cursorVisualDirty = true;
-        if (_cursorRenderingHooked)
-            return;
-        CompositionTarget.Rendering += CursorCompositionFrame;
-        _cursorRenderingHooked = true;
-    }
-
-    private void CursorCompositionFrame(object? sender, EventArgs e)
-    {
-        if (!_cursorVisualDirty)
-        {
-            StopCursorRenderingPump();
-            return;
-        }
-
-        _cursorVisualDirty = false;
-        if (_lastTimelinePlot.Width > 0 && _tracks.Count > 0)
-        {
-            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-            RedrawCursorOverlay(dpi, new Typeface("Segoe UI Semibold"));
-        }
+        if (_cursorGlyphsDirty)
+            RebuildCursorGlyphs(dpi, semibold);
         else
+            UpdateCursorTransforms();
+    }
+
+    private void ClearCursorGlyphs()
+    {
+        using (_cursor1Visual.RenderOpen()) { }
+        using (_cursor2Visual.RenderOpen()) { }
+        _cursor1Visual.Opacity = 0.0;
+        _cursor2Visual.Opacity = 0.0;
+    }
+
+    private void RebuildCursorGlyphs(double dpi, Typeface semibold)
+    {
+        DrawCursorGlyph(_cursor1Visual, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
+        DrawCursorGlyph(_cursor2Visual, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
+        _cursorGlyphsDirty = false;
+        UpdateCursorTransforms();
+    }
+
+    private void DrawCursorGlyph(DrawingVisual visual, string label, Color color, double dpi, Typeface semibold)
+    {
+        using var dc = visual.RenderOpen();
+        var brush = FrozenBrush(color);
+        dc.DrawLine(FrozenPen(color, 1.2), new Point(0, _lastTimelinePlot.Top + 15), new Point(0, _lastTimelinePlot.Bottom));
+        dc.DrawRoundedRectangle(brush, null, new Rect(-13, _lastTimelinePlot.Top, 26, 15), 3, 3);
+        DrawText(dc, label, 8.2, semibold, Colors.White, new Point(-8, _lastTimelinePlot.Top + 1), dpi);
+    }
+
+    private void UpdateCursorTransforms()
+    {
+        UpdateCursorTransform(_cursor1Visual, _cursor1Transform, _cursor1Milliseconds);
+        UpdateCursorTransform(_cursor2Visual, _cursor2Transform, _cursor2Milliseconds);
+    }
+
+    private void UpdateCursorTransform(DrawingVisual visual, TranslateTransform transform, double? time)
+    {
+        if (_lastTimelinePlot.Width <= 0 || _viewEndMilliseconds <= _viewStartMilliseconds ||
+            time is not { } ms || !double.IsFinite(ms) || ms < _viewStartMilliseconds || ms > _viewEndMilliseconds)
         {
-            using var cursorDc = _cursorVisual.RenderOpen();
-        }
-        StopCursorRenderingPump();
-    }
-
-    private void StopCursorRenderingPump()
-    {
-        if (!_cursorRenderingHooked)
+            visual.Opacity = 0.0;
             return;
-        CompositionTarget.Rendering -= CursorCompositionFrame;
-        _cursorRenderingHooked = false;
-    }
+        }
 
-    private void RedrawCursorOverlay(double dpi, Typeface semibold)
-    {
-        using var cursorDc = _cursorVisual.RenderOpen();
-        DrawCursor(cursorDc, _lastTimelinePlot, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
-        DrawCursor(cursorDc, _lastTimelinePlot, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
-        _cursorVisualDirty = false;
+        transform.X = XForTime(ms, _lastTimelinePlot);
+        visual.Opacity = 1.0;
     }
 
     private void SetPanPreview(double pixels)
@@ -574,10 +586,9 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         else
             _cursor2Milliseconds = value;
 
-        RequestCursorOverlayRedraw();
+        UpdateCursorTransforms();
         if (isFinal || ShouldNotifyInteractive())
         {
-            RaiseNavigationChanged();
             CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(cursor, value, tolerance, isFinal, snapped));
         }
     }
@@ -923,17 +934,6 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
         DrawText(dc, "TRG", 8.2, semibold, Color.FromRgb(186, 99, 31), new Point(x + 3, plot.Top + 17), dpi);
     }
 
-    private void DrawCursor(DrawingContext dc, Rect plot, double? time, string label, Color color, double dpi, Typeface semibold)
-    {
-        if (time is not { } ms || ms < _viewStartMilliseconds || ms > _viewEndMilliseconds) return;
-        var x = XForTime(ms, plot);
-        if (x < plot.Left - 14 || x > plot.Right + 14) return;
-        var brush = FrozenBrush(color);
-        dc.DrawLine(FrozenPen(color, 1.2), new Point(x, plot.Top + 15), new Point(x, plot.Bottom));
-        dc.DrawRoundedRectangle(brush, null, new Rect(x - 13, plot.Top, 26, 15), 3, 3);
-        DrawText(dc, label, 8.2, semibold, Colors.White, new Point(x - 8, plot.Top + 1), dpi);
-    }
-
     private void DrawTimeAxis(DrawingContext dc, Rect axis, double dpi, Typeface body, Typeface semibold)
     {
         var trigger = _triggerMilliseconds ?? 0.0;
@@ -967,7 +967,7 @@ public sealed class ComtradeDisturbanceViewP1D3 : FrameworkElement
     {
         _frameDirty = true;
         _dataDirty = true;
-        _cursorVisualDirty = true;
+        _cursorGlyphsDirty = true;
     }
 
     private double MinimumViewSpan() => Math.Max(0.001, (_fullEndMilliseconds - _fullStartMilliseconds) / 5000.0);

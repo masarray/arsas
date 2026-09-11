@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
 
@@ -14,6 +16,7 @@ public partial class ComtradeWorkspaceWindow
     private const double P1D5AnalogTrackHeight = 92.0;
     private const double P1D5DigitalTrackHeight = 38.0;
     private const double P1D5TrackGap = 5.0;
+    private static readonly long P1D5InteractiveMeasurementIntervalTicks = Math.Max(1, Stopwatch.Frequency / 12);
 
     [Flags]
     private enum P1D5MeasurementTargets
@@ -25,13 +28,16 @@ public partial class ComtradeWorkspaceWindow
     }
 
     private readonly Dictionary<uint, P1D5CursorReadoutControls> _p1d5CursorReadoutControls = new();
+    private readonly Dictionary<uint, P1D5CachedReadout> _p1d5CachedReadouts = new();
     private ComtradeSignalItem[] _p1d5VisibleTrackOrder = Array.Empty<ComtradeSignalItem>();
     private ComtradeSignalItem[] _p1d5VisibleAnalogTrackOrder = Array.Empty<ComtradeSignalItem>();
     private bool _p1d5MeasurementRenderingHooked;
     private bool _p1d5MeasurementDirty;
     private bool _p1d5MeasurementWorkerRunning;
     private P1D5MeasurementTargets _p1d5PendingMeasurementTargets;
+    private P1D5MeasurementTargets _p1d5DeferredInteractiveTargets;
     private P1D5MeasurementTargets _p1d5InFlightMeasurementTargets;
+    private long _p1d5LastInteractiveMeasurementQueueTicks;
     private long _p1d5MeasurementRevision;
     private long _p1d5LastPresentedMeasurementRevision;
     private CancellationTokenSource? _p1d5MeasurementCts = new();
@@ -71,16 +77,18 @@ public partial class ComtradeWorkspaceWindow
             _ => P1D5MeasurementTargets.None
         };
         if (target != P1D5MeasurementTargets.None)
-            QueueP1D5CursorMeasurements(target);
+            QueueP1D5CursorMeasurements(target, e.IsFinal);
     }
 
     private void P1D5DisturbanceCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
         if (_analysisMode != AnalysisMode.Waveform)
             return;
-        QueueP1D5CursorMeasurements(e.Cursor == ComtradeDisturbanceCursor.Cursor1
-            ? P1D5MeasurementTargets.Cursor1
-            : P1D5MeasurementTargets.Cursor2);
+        QueueP1D5CursorMeasurements(
+            e.Cursor == ComtradeDisturbanceCursor.Cursor1
+                ? P1D5MeasurementTargets.Cursor1
+                : P1D5MeasurementTargets.Cursor2,
+            e.IsFinal);
     }
 
     private void P1D5RememberTrackOrder(IReadOnlyList<LoadedDisturbanceTrack> tracks)
@@ -104,6 +112,8 @@ public partial class ComtradeWorkspaceWindow
 
         _p1d5VisibleTrackOrder = next;
         _p1d5VisibleAnalogTrackOrder = analog;
+        _p1d5CachedReadouts.Clear();
+        _p1d5DeferredInteractiveTargets = P1D5MeasurementTargets.None;
         RebuildP1D5CursorReadoutOverlay();
         AttachP1D5MeasurementEvents();
         QueueP1D5CursorMeasurements();
@@ -150,15 +160,26 @@ public partial class ComtradeWorkspaceWindow
             Text = string.Empty
         };
 
-    private void QueueP1D5CursorMeasurements(P1D5MeasurementTargets targets = P1D5MeasurementTargets.Both)
+    private void QueueP1D5CursorMeasurements(P1D5MeasurementTargets targets, bool isFinal = true)
     {
         if (_analysisMode != AnalysisMode.Waveform || targets == P1D5MeasurementTargets.None ||
             _p1d5VisibleAnalogTrackOrder.Length == 0 || !_record.Supports(ArdIrecNativeBridge.CapCursorMeasurement))
             return;
 
-        // If a newer cursor move invalidates a worker already in flight, carry that worker's target
-        // into the replacement request. This preserves eventual values for both cursors while the
-        // normal scrub path reads only the cursor that actually moved.
+        var now = Stopwatch.GetTimestamp();
+        if (!isFinal && now - _p1d5LastInteractiveMeasurementQueueTicks < P1D5InteractiveMeasurementIntervalTicks)
+        {
+            _p1d5DeferredInteractiveTargets |= targets;
+            return;
+        }
+
+        targets |= _p1d5DeferredInteractiveTargets;
+        _p1d5DeferredInteractiveTargets = P1D5MeasurementTargets.None;
+        _p1d5LastInteractiveMeasurementQueueTicks = now;
+
+        // If a newer accepted cursor sample invalidates a worker already in flight, carry that
+        // worker's target into the replacement request. Raw pointer events between accepted samples
+        // never create revisions, so native work cannot churn faster than the presentation budget.
         if (_p1d5MeasurementWorkerRunning)
             _p1d5PendingMeasurementTargets |= _p1d5InFlightMeasurementTargets;
         _p1d5PendingMeasurementTargets |= targets;
@@ -170,6 +191,65 @@ public partial class ComtradeWorkspaceWindow
         _p1d5MeasurementDirty = true;
         if (!_p1d5MeasurementWorkerRunning)
             EnsureP1D5MeasurementRenderingPump();
+    }
+
+    private void InvalidateP1D5CursorMeasurementGeneration()
+    {
+        var revision = Interlocked.Increment(ref _p1d5MeasurementRevision);
+        if (revision <= 0)
+            Interlocked.Exchange(ref _p1d5MeasurementRevision, 1);
+
+        _p1d5PendingMeasurementTargets = P1D5MeasurementTargets.None;
+        _p1d5DeferredInteractiveTargets = P1D5MeasurementTargets.None;
+        _p1d5MeasurementDirty = false;
+        if (!_p1d5MeasurementWorkerRunning)
+            StopP1D5MeasurementRenderingPump();
+    }
+
+    private P1D5MeasurementTargets PresentP1D5CachedRepresentation(int representation)
+    {
+        var missing = P1D5MeasurementTargets.None;
+        for (var index = 0; index < _p1d5VisibleAnalogTrackOrder.Length; index++)
+        {
+            var signal = _p1d5VisibleAnalogTrackOrder[index];
+            if (!_p1d5CursorReadoutControls.TryGetValue(signal.Index, out var controls))
+                continue;
+
+            if (_p1d5CachedReadouts.TryGetValue(signal.Index, out var cached) && cached.Cursor1 is { } c1)
+                controls.Cursor1.Text = FormatP1D5CachedCursorValue("C1", signal.Index, c1, representation);
+            else
+                missing |= P1D5MeasurementTargets.Cursor1;
+
+            if (_p1d5CachedReadouts.TryGetValue(signal.Index, out cached) && cached.Cursor2 is { } c2)
+                controls.Cursor2.Text = FormatP1D5CachedCursorValue("C2", signal.Index, c2, representation);
+            else
+                missing |= P1D5MeasurementTargets.Cursor2;
+        }
+        return missing;
+    }
+
+    private string FormatP1D5CachedCursorValue(
+        string cursor,
+        uint channelIndex,
+        P1D5CachedMeasurement cached,
+        int representation)
+    {
+        var measurement = cached.Measurement;
+        if (measurement is not { Valid: true })
+            return ComtradeCursorReadoutPolicy.FormatValue(cursor, P1D5IsRmsTrace, null, CultureInfo.CurrentCulture);
+
+        var sourceValue = P1D5IsRmsTrace ? measurement.Rms : measurement.Instantaneous;
+        var sourceScale = P1D5DisplayScale(channelIndex, cached.Representation);
+        var targetScale = P1D5DisplayScale(channelIndex, representation);
+        var converted = ComtradeRepresentationScaleMath.TryConvert(
+            sourceValue,
+            sourceScale,
+            targetScale,
+            magnitude: P1D5IsRmsTrace,
+            out var value)
+            ? value
+            : (double?)null;
+        return ComtradeCursorReadoutPolicy.FormatValue(cursor, P1D5IsRmsTrace, converted, CultureInfo.CurrentCulture);
     }
 
     private void EnsureP1D5MeasurementRenderingPump()
@@ -267,7 +347,7 @@ public partial class ComtradeWorkspaceWindow
 
                 PresentP1D5CursorMeasurements(result);
                 _p1d5LastPresentedMeasurementRevision = request.Revision;
-            });
+            }, DispatcherPriority.Background);
         }
         catch (OperationCanceledException)
         {
@@ -289,7 +369,7 @@ public partial class ComtradeWorkspaceWindow
             {
                 try
                 {
-                    await Dispatcher.InvokeAsync(CompleteP1D5MeasurementWorker);
+                    await Dispatcher.InvokeAsync(CompleteP1D5MeasurementWorker, DispatcherPriority.Background);
                 }
                 catch (TaskCanceledException)
                 {
@@ -329,7 +409,7 @@ public partial class ComtradeWorkspaceWindow
                 _record.TryReadCursorMeasurement(signal.Index, second, request.Representation, out c2);
             rows[index] = new P1D5MeasurementRow(signal.Index, c1, c2);
         }
-        return new P1D5MeasurementResult(rows, request.Targets);
+        return new P1D5MeasurementResult(rows, request.Targets, request.Representation);
     }
 
     private void PresentP1D5CursorMeasurements(P1D5MeasurementResult result)
@@ -339,10 +419,23 @@ public partial class ComtradeWorkspaceWindow
             var row = result.Rows[index];
             if (!_p1d5CursorReadoutControls.TryGetValue(row.ChannelIndex, out var controls))
                 continue;
+
+            if (!_p1d5CachedReadouts.TryGetValue(row.ChannelIndex, out var cached))
+            {
+                cached = new P1D5CachedReadout();
+                _p1d5CachedReadouts[row.ChannelIndex] = cached;
+            }
+
             if (result.Targets.HasFlag(P1D5MeasurementTargets.Cursor1))
+            {
+                cached.Cursor1 = new P1D5CachedMeasurement(row.Cursor1, result.Representation);
                 controls.Cursor1.Text = FormatP1D5CursorValue("C1", row.Cursor1);
+            }
             if (result.Targets.HasFlag(P1D5MeasurementTargets.Cursor2))
+            {
+                cached.Cursor2 = new P1D5CachedMeasurement(row.Cursor2, result.Representation);
                 controls.Cursor2.Text = FormatP1D5CursorValue("C2", row.Cursor2);
+            }
         }
     }
 
@@ -365,6 +458,16 @@ public partial class ComtradeWorkspaceWindow
     }
 
     private sealed record P1D5CursorReadoutControls(TextBlock Cursor1, TextBlock Cursor2);
+    private sealed class P1D5CachedReadout
+    {
+        internal P1D5CachedMeasurement? Cursor1 { get; set; }
+        internal P1D5CachedMeasurement? Cursor2 { get; set; }
+    }
+
+    private readonly record struct P1D5CachedMeasurement(
+        ComtradeCursorMeasurement? Measurement,
+        int Representation);
+
     private readonly record struct P1D5MeasurementRequest(
         long Revision,
         ComtradeSignalItem[] Signals,
@@ -376,5 +479,8 @@ public partial class ComtradeWorkspaceWindow
         uint ChannelIndex,
         ComtradeCursorMeasurement? Cursor1,
         ComtradeCursorMeasurement? Cursor2);
-    private sealed record P1D5MeasurementResult(P1D5MeasurementRow[] Rows, P1D5MeasurementTargets Targets);
+    private sealed record P1D5MeasurementResult(
+        P1D5MeasurementRow[] Rows,
+        P1D5MeasurementTargets Targets,
+        int Representation);
 }
