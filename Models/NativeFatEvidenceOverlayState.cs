@@ -18,6 +18,9 @@ public sealed class NativeFatIedSessionCacheState
 {
     public string? ActiveRowKey { get; set; }
     public int LastScrollIndex { get; set; }
+    public bool IsArmed { get; set; }
+    public DateTimeOffset? ArmedAt { get; set; }
+    public long LastArmElapsedMilliseconds { get; set; }
     public Dictionary<string, NativeFatEvidenceSlotState> EvidenceByRow { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 }
