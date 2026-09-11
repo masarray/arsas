@@ -1,19 +1,22 @@
 {
-  "schema": 2,
+  "schema": 3,
   "repository": "masarray/ardirec",
-  "ref": "main",
-  "commit": "b611a6c6ab9262d0e1cc50fdf6fc76910d90d298",
+  "ref": "feat/p1d5-arsas-analysis-bridge",
+  "commit": "7dbc7149db668126a493ce338264363a6ec5ec00",
   "bridge": {
     "abi": 1,
-    "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll"
+    "mode": "native-only",
+    "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll",
+    "requiredCapabilities": [
+      "cursor_measurement",
+      "channel_semantics",
+      "value_representation",
+      "status_state",
+      "digital_edge_snap",
+      "phasor",
+      "harmonics",
+      "distance_locus"
+    ]
   },
-  "qt": {
-    "version": "6.8.3",
-    "arch": "win64_msvc2022_64"
-  },
-  "runtime": {
-    "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
-    "launchArgument": "--arsas-open"
-  },
-  "purpose": "Temporary stacked P1D.2A integration pin. The ref field remains main to preserve the ARSAS immutable-lock policy, while the exact commit intentionally points to the unmerged ArdIrec P1D.2A head built on the latest open locus UX engine. It adds ABI-v1 capability probing, channel semantics, authoritative Primary/Secondary scaling, cursor instantaneous/true-RMS measurements, normal-state-aware digital state and native digital-edge snapping. Do not merge this temporary ARSAS pin; replace it with the merged ArdIrec main SHA before landing P1D.2B."
+  "purpose": "P1D.5 field candidate: pin the exact ArdIrec native analysis bridge with mature six-loop distance/locus exports. No Qt desktop runtime or ardirec.exe is packaged by ARSAS. Replace this temporary exact-commit pin with merged main after ArdIrec PR #41 is accepted."
 }
