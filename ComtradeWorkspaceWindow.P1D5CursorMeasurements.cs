@@ -17,6 +17,7 @@ public partial class ComtradeWorkspaceWindow
 
     private readonly Dictionary<uint, P1D5CursorReadoutControls> _p1d5CursorReadoutControls = new();
     private ComtradeSignalItem[] _p1d5VisibleTrackOrder = Array.Empty<ComtradeSignalItem>();
+    private ComtradeSignalItem[] _p1d5VisibleAnalogTrackOrder = Array.Empty<ComtradeSignalItem>();
     private bool _p1d5MeasurementRenderingHooked;
     private bool _p1d5MeasurementDirty;
     private bool _p1d5MeasurementWorkerRunning;
@@ -71,9 +72,24 @@ public partial class ComtradeWorkspaceWindow
     private void P1D5RememberTrackOrder(IReadOnlyList<LoadedDisturbanceTrack> tracks)
     {
         var next = new ComtradeSignalItem[tracks.Count];
+        var analogCount = 0;
         for (var index = 0; index < tracks.Count; index++)
-            next[index] = tracks[index].Signal;
+        {
+            var signal = tracks[index].Signal;
+            next[index] = signal;
+            if (signal.IsAnalog) analogCount++;
+        }
+
+        var analog = new ComtradeSignalItem[analogCount];
+        var write = 0;
+        for (var index = 0; index < next.Length; index++)
+        {
+            if (next[index].IsAnalog)
+                analog[write++] = next[index];
+        }
+
         _p1d5VisibleTrackOrder = next;
+        _p1d5VisibleAnalogTrackOrder = analog;
         RebuildP1D5CursorReadoutOverlay();
         AttachP1D5MeasurementEvents();
         QueueP1D5CursorMeasurements();
@@ -120,7 +136,7 @@ public partial class ComtradeWorkspaceWindow
 
     private void QueueP1D5CursorMeasurements()
     {
-        if (_analysisMode != AnalysisMode.Waveform || _p1d5VisibleTrackOrder.Length == 0 ||
+        if (_analysisMode != AnalysisMode.Waveform || _p1d5VisibleAnalogTrackOrder.Length == 0 ||
             !_record.Supports(ArdIrecNativeBridge.CapCursorMeasurement))
             return;
 
@@ -169,7 +185,10 @@ public partial class ComtradeWorkspaceWindow
             return;
         }
 
-        var analogSignals = _p1d5VisibleTrackOrder.Where(item => item.IsAnalog).ToArray();
+        // Track selection changes are rare compared with pointer frames. Keep the immutable analog
+        // order cached at track-load time so cursor scrubbing does not allocate LINQ arrays at
+        // composition cadence.
+        var analogSignals = _p1d5VisibleAnalogTrackOrder;
         if (analogSignals.Length == 0)
         {
             StopP1D5MeasurementRenderingPump();
