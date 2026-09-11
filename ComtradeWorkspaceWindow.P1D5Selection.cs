@@ -86,11 +86,7 @@ public partial class ComtradeWorkspaceWindow
             return;
         }
 
-        InvalidateP1D5MeasurementWork();
-        await ReloadDisturbanceAsync(
-            CurrentDisturbanceViewport(),
-            initialLoad: false,
-            preserveLocalView: true).ConfigureAwait(true);
+        await ReloadP1D5IncrementalSelectionAsync().ConfigureAwait(true);
     }
 
     private async void P1D5SignalVisibility_Unchecked(object sender, RoutedEventArgs e)
@@ -111,11 +107,7 @@ public partial class ComtradeWorkspaceWindow
         }
 
         _disturbanceVisibleSignals.Remove(signal);
-        InvalidateP1D5MeasurementWork();
-        await ReloadDisturbanceAsync(
-            CurrentDisturbanceViewport(),
-            initialLoad: false,
-            preserveLocalView: true).ConfigureAwait(true);
+        await ReloadP1D5IncrementalSelectionAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -132,6 +124,26 @@ public partial class ComtradeWorkspaceWindow
         _disturbanceVisibleSignals.Clear();
         SyncSignalVisibilityCheckboxes();
         PresentP1D5EmptySelection();
+    }
+
+    private async Task ReloadP1D5IncrementalSelectionAsync()
+    {
+        var generation = Interlocked.Increment(ref _p1d5SelectionGeneration);
+        InvalidateP1D5MeasurementWork();
+        await ReloadDisturbanceAsync(
+            CurrentDisturbanceViewport(),
+            initialLoad: false,
+            preserveLocalView: true).ConfigureAwait(true);
+
+        if (generation != Volatile.Read(ref _p1d5SelectionGeneration))
+            return;
+        if (DisturbanceView.FullEndMilliseconds <= DisturbanceView.FullStartMilliseconds)
+            return;
+
+        InvestigationTimeline.IsEnabled = true;
+        SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
+        QueueP1D5CursorMeasurements();
     }
 
     private async Task ReloadP1D5VisibleSelectionAsync(
