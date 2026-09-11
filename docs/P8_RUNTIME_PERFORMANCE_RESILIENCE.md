@@ -90,3 +90,7 @@ P8 protects:
 - current managed-memory versus last-GC heap semantics,
 - allocation snapshots that do not force GC,
 - the rule that ambiguous native/process-bus ownership paths do not receive speculative pooling.
+
+## Final IED field gate
+
+The portable build is acceptable for field verification only when the exact PR head has passed the full Windows build/regression suite, SV evidence validation, portable publish, and portable smoke test. Field verification must then confirm that static Report acquisition remains stable, FAT stays responsive, per-IED reconnect remains isolated, and missing quality/source-time metadata is displayed conservatively as `Unknown`/`-` rather than fabricated `Good` or PC time.
