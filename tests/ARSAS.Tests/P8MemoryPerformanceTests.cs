@@ -17,7 +17,38 @@ public sealed class P8MemoryPerformanceTests
         Assert.True(delta.Gen0Collections >= 0);
         Assert.True(delta.Gen1Collections >= 0);
         Assert.True(delta.Gen2Collections >= 0);
+        Assert.True(delta.Elapsed >= TimeSpan.Zero);
         Assert.True(delta.AllocatedMegabytesPerSecond >= 0d);
+    }
+
+    [Fact]
+    public void AllocationSnapshot_ReversedInputClampsElapsedAndCountersSafely()
+    {
+        var later = new RuntimeAllocationSnapshot(
+            new DateTimeOffset(2026, 9, 11, 2, 0, 0, TimeSpan.Zero),
+            2_000,
+            1_500,
+            100,
+            5,
+            3,
+            1);
+        var earlier = new RuntimeAllocationSnapshot(
+            later.CapturedAtUtc.AddSeconds(-10),
+            1_000,
+            1_000,
+            50,
+            2,
+            1,
+            0);
+
+        var reversed = earlier.DeltaFrom(later);
+
+        Assert.Equal(TimeSpan.Zero, reversed.Elapsed);
+        Assert.Equal(0, reversed.AllocatedBytes);
+        Assert.Equal(0, reversed.Gen0Collections);
+        Assert.Equal(0, reversed.Gen1Collections);
+        Assert.Equal(0, reversed.Gen2Collections);
+        Assert.Equal(0d, reversed.AllocatedMegabytesPerSecond);
     }
 
     [Fact]
