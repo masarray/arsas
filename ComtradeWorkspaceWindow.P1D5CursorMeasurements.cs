@@ -120,6 +120,8 @@ public partial class ComtradeWorkspaceWindow
 
             var c1 = CreateP1D5CursorReadout(Color.FromRgb(205, 126, 20));
             var c2 = CreateP1D5CursorReadout(Color.FromRgb(20, 143, 183));
+            c1.Text = ComtradeCursorReadoutPolicy.FormatValue("C1", P1D5IsRmsTrace, null, CultureInfo.CurrentCulture);
+            c2.Text = ComtradeCursorReadoutPolicy.FormatValue("C2", P1D5IsRmsTrace, null, CultureInfo.CurrentCulture);
             Canvas.SetLeft(c1, 22.0);
             Canvas.SetTop(c1, top + 45.0);
             Canvas.SetLeft(c2, 22.0);
