@@ -12,6 +12,7 @@ public sealed class P8TelemetryEnvelopeTests
         var envelope = Iec61850TelemetryEnvelope.FromReadValue(null, received);
 
         Assert.False(envelope.IsValid);
+        Assert.False(envelope.IsUsable);
         Assert.Equal(Iec61850TelemetryQualityState.Invalid, envelope.QualityState);
         Assert.Null(envelope.SourceTimestampUtc);
         Assert.Equal(received, envelope.ReceivedAtUtc);
@@ -31,6 +32,7 @@ public sealed class P8TelemetryEnvelopeTests
         var envelope = read.ToTelemetryEnvelope();
 
         Assert.False(envelope.IsValid);
+        Assert.False(envelope.IsUsable);
         Assert.False(envelope.HasProcessValue);
         Assert.Equal(Iec61850TelemetryQualityState.Invalid, envelope.QualityState);
     }
@@ -51,6 +53,7 @@ public sealed class P8TelemetryEnvelopeTests
         var envelope = read.ToTelemetryEnvelope();
 
         Assert.True(envelope.IsValid);
+        Assert.True(envelope.IsUsable);
         Assert.Null(envelope.SourceTimestampUtc);
         Assert.Equal(received, envelope.ReceivedAtUtc);
         Assert.Contains("could not be parsed", envelope.Diagnostic, StringComparison.OrdinalIgnoreCase);
@@ -73,6 +76,7 @@ public sealed class P8TelemetryEnvelopeTests
         var envelope = read.ToTelemetryEnvelope();
 
         Assert.True(envelope.IsValid);
+        Assert.True(envelope.IsUsable);
         Assert.Equal(Iec61850TelemetryQualityState.Good, envelope.QualityState);
         Assert.Equal(new DateTimeOffset(2026, 9, 11, 1, 2, 3, 125, TimeSpan.Zero), envelope.SourceTimestampUtc);
         Assert.Equal(received, envelope.ReceivedAtUtc);
@@ -92,9 +96,10 @@ public sealed class P8TelemetryEnvelopeTests
 
         var envelope = read.ToTelemetryEnvelope();
 
-        Assert.Equal(TimeSpan.Zero, envelope.SourceTimestampUtc?.Offset);
-        Assert.Equal(2026, envelope.SourceTimestampUtc?.Year);
-        Assert.Equal(10, envelope.SourceTimestampUtc?.Hour);
+        Assert.NotNull(envelope.SourceTimestampUtc);
+        Assert.Equal(TimeSpan.Zero, envelope.SourceTimestampUtc!.Value.Offset);
+        Assert.Equal(2026, envelope.SourceTimestampUtc.Value.Year);
+        Assert.Equal(10, envelope.SourceTimestampUtc.Value.Hour);
     }
 
     [Theory]
@@ -113,6 +118,7 @@ public sealed class P8TelemetryEnvelopeTests
 
         Assert.Equal(Iec61850TelemetryQualityState.Invalid, envelope.QualityState);
         Assert.False(envelope.IsValid);
+        Assert.False(envelope.IsUsable);
     }
 
     [Theory]
@@ -130,6 +136,8 @@ public sealed class P8TelemetryEnvelopeTests
         });
 
         Assert.Equal(Iec61850TelemetryQualityState.Questionable, envelope.QualityState);
+        Assert.False(envelope.IsValid);
+        Assert.True(envelope.IsUsable);
         Assert.NotEqual(Iec61850TelemetryQualityState.Good, envelope.QualityState);
         Assert.Contains("not proven Good", envelope.Diagnostic, StringComparison.OrdinalIgnoreCase);
     }
