@@ -26,7 +26,15 @@ public readonly record struct Iec61850TelemetryEnvelope(
 {
     public bool HasProcessValue => Value is not null ||
                                    (!string.IsNullOrWhiteSpace(DisplayValue) && DisplayValue != "-");
-    public bool IsValid => HasProcessValue && QualityState != Iec61850TelemetryQualityState.Invalid;
+
+    /// <summary>
+    /// True only when both the process value and IEC quality are explicitly Good.
+    /// Questionable data may still be presented to an engineer, but it is not promoted
+    /// to valid evidence by this boundary.
+    /// </summary>
+    public bool IsValid => HasProcessValue && QualityState == Iec61850TelemetryQualityState.Good;
+
+    public bool IsUsable => HasProcessValue && QualityState != Iec61850TelemetryQualityState.Invalid;
 
     public static Iec61850TelemetryEnvelope FromReadValue(
         Iec61850ReadValue? read,
