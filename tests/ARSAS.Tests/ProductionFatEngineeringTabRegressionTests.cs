@@ -17,21 +17,23 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     }
 
     [Fact]
-    public void ProductionFatTab_AutoBootstrapsFromSelectedEngineeringStaticDataSet()
+    public void ProductionFatTab_EntryReusesExistingHostWithoutLegacyProjectionBootstrap()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
+        var queueStart = source.IndexOf("private void QueueProductionFatEngineeringBootstrap()", StringComparison.Ordinal);
+        var legacyStart = source.IndexOf("private async Task EnsureProductionFatFromEngineeringAsync()", queueStart, StringComparison.Ordinal);
 
-        Assert.Contains("QueueProductionFatEngineeringBootstrap();", source, StringComparison.Ordinal);
-        Assert.Contains("selected?.SclWorkspace", source, StringComparison.Ordinal);
-        Assert.Contains("DesignModel.DataSets.Sum", source, StringComparison.Ordinal);
-        Assert.Contains("IoFatEngineeringWorkspaceProjectionService.BuildAsync", source, StringComparison.Ordinal);
-        Assert.Contains("AdoptEngineeringRuntimeWorkspaces", source, StringComparison.Ordinal);
-        Assert.Contains("IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync", source, StringComparison.Ordinal);
-        Assert.Contains("projection.DescribedSources", source, StringComparison.Ordinal);
-        Assert.Contains("SynchronizeImportedSclFatWithEngineering", source, StringComparison.Ordinal);
-        Assert.Contains("ShowIoTestingWorkspaceAsync", source, StringComparison.Ordinal);
-        Assert.Contains("no SCL re-import", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenSclFatTesting_Click", source, StringComparison.Ordinal);
+        Assert.True(queueStart >= 0, "P1A requires one explicit Engineering -> FAT navigation gateway.");
+        Assert.True(legacyStart > queueStart, "Legacy bootstrap may remain isolated, but it must not own FAT navigation.");
+
+        var queue = source[queueStart..legacyStart];
+        Assert.Contains("_productionFatEngineeringBootstrapCts?.Cancel();", queue, StringComparison.Ordinal);
+        Assert.Contains("SynchronizeProductionFatSelectedIed();", queue, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnsureProductionFatFromEngineeringAsync", queue, StringComparison.Ordinal);
+        Assert.DoesNotContain("IoFatEngineeringWorkspaceProjectionService.BuildAsync", queue, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenDescribedSourcesAsync", queue, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowIoTestingWorkspaceAsync", queue, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenSclFatTesting_Click", queue, StringComparison.Ordinal);
     }
 
     [Fact]
