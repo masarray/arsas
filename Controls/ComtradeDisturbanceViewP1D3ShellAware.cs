@@ -65,10 +65,12 @@ public sealed class ComtradeDisturbanceViewP1D3ShellAware : Grid
 
     private void Inner_CursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
-        // The shell mirrors interactive cursor motion directly at pointer cadence. Downstream
-        // consumers need the inner event only for the final native edge confirmation/status path.
-        if (e.IsFinal)
-            CursorChanged?.Invoke(this, e);
+        // Inner interactive notifications are already bounded to ~30 Hz and final delivery is
+        // guaranteed. Relay that canonical stream so lightweight consumers such as C1/C2 analog
+        // readouts can follow scrubbing without listening to raw MouseMove. Expensive native edge
+        // confirmation remains final-only in the host handler, while readout work is separately
+        // composition-coalesced/latest-wins.
+        CursorChanged?.Invoke(this, e);
     }
 
     private void Inner_PanRequested(object? sender, ComtradeDisturbancePanRequestedEventArgs e)
