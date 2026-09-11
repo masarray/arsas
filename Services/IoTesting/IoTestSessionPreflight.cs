@@ -9,6 +9,13 @@ public static class IoTestSessionPreflight
         if (ied == null)
             return IoTestSessionActionResult.Failure("Select an imported IED first.");
 
+        // Persisted/manual SCL aliases can be restored before live binding proves that an
+        // authoritative Static DataSet row and a manual scalar resolve to the same primary
+        // IEC 61850 leaf. Canonicalize only that shadow alias here, immediately before the
+        // strict duplicate-reference guard. TEST/disposition/evidence are preserved; only
+        // shared workspace ownership moves back to the Static DataSet authority.
+        IoFatEngineeringSelectionBridge.RetireRedundantManualWorkspaceRows(ied);
+
         var unsafeEnabled = ied.TestPoints
             .Where(point => point.WorkspaceSelected && point.IsIncludedInFat && point.TestEnabled && !point.ImportReady)
             .ToList();

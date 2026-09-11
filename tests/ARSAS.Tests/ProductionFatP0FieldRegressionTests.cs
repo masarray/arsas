@@ -25,21 +25,23 @@ public sealed class ProductionFatP0FieldRegressionTests
             primaryLiveLeaf);
 
         var ied = Ied(staticPoint, manualAlias);
-        var blocked = IoTestSessionPreflight.Validate(ied);
-        Assert.False(blocked.Succeeded);
-        Assert.Contains("multiple enabled test points", blocked.Message, StringComparison.OrdinalIgnoreCase);
 
-        var retired = IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode(ied);
+        // Field regression: a persisted scl-manual-* row may be restored before live
+        // binding proves that both rows collapse to the same primary leaf. Start FAT must
+        // self-heal that stale overlay instead of presenting a scope-not-ready dialog.
+        var ready = IoTestSessionPreflight.Validate(ied);
 
-        Assert.Equal(1, retired);
+        Assert.True(ready.Succeeded, ready.Message);
         Assert.True(staticPoint.WorkspaceSelected);
         Assert.False(manualAlias.WorkspaceSelected);
         Assert.True(manualAlias.TestEnabled);
         Assert.True(manualAlias.IsIncludedInFat);
         Assert.Equal(primaryLiveLeaf, manualAlias.LiveSignalReference);
 
-        var ready = IoTestSessionPreflight.Validate(ied);
-        Assert.True(ready.Succeeded, ready.Message);
+        // The broad automatic-static cleanup is now idempotent because preflight already
+        // retired the exact live-leaf shadow alias without touching evidence/test state.
+        var retired = IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode(ied);
+        Assert.Equal(0, retired);
     }
 
     [Fact]
@@ -88,6 +90,8 @@ public sealed class ProductionFatP0FieldRegressionTests
         Assert.Contains("IoTestWorkspacePersistence.OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
         Assert.Contains("StageDescribedAsync", persistence, StringComparison.Ordinal);
         Assert.Contains("CopyVerifiedAsync", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("IsVerifiedStagedCopyAsync", sourceWorkspace, StringComparison.Ordinal);
+        Assert.Contains("SHA256.HashDataAsync(stream", sourceWorkspace, StringComparison.Ordinal);
         Assert.Contains("VerifyHash(bytes, expectedSha256", sourceWorkspace, StringComparison.Ordinal);
     }
 
