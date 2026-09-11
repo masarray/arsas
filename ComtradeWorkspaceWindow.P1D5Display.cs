@@ -27,12 +27,13 @@ public partial class ComtradeWorkspaceWindow
     private void P1D5Workspace_Loaded(object sender, RoutedEventArgs e)
     {
         // Use more of the engineering workstation screen by default without preventing resize/maximize.
-        // Keep a safety margin so the title bar and taskbar remain reachable on smaller displays.
+        // Keep only a small work-area safety margin so another trace row is visible on common
+        // 1080p engineering laptops while the title bar/taskbar remain reachable.
         var work = SystemParameters.WorkArea;
         if (WindowState == WindowState.Normal)
         {
-            Width = Math.Min(Math.Max(MinWidth, 1360.0), Math.Max(MinWidth, work.Width - 36.0));
-            Height = Math.Min(Math.Max(MinHeight, 920.0), Math.Max(MinHeight, work.Height - 36.0));
+            Width = Math.Min(Math.Max(MinWidth, 1360.0), Math.Max(MinWidth, work.Width - 20.0));
+            Height = Math.Min(Math.Max(MinHeight, 960.0), Math.Max(MinHeight, work.Height - 20.0));
         }
 
         InitializeP1D5LocusUi();
