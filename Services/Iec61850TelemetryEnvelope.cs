@@ -24,8 +24,7 @@ public readonly record struct Iec61850TelemetryEnvelope(
     string SourceReference,
     string Diagnostic)
 {
-    public bool HasProcessValue => Value is not null ||
-                                   (!string.IsNullOrWhiteSpace(DisplayValue) && DisplayValue != "-");
+    public bool HasProcessValue => IsProcessValuePresent(Value, DisplayValue);
 
     /// <summary>
     /// True only when both the process value and IEC quality are explicitly Good.
@@ -53,7 +52,7 @@ public readonly record struct Iec61850TelemetryEnvelope(
         }
 
         var display = read.DisplayValue?.Trim() ?? string.Empty;
-        var hasValue = read.Value is not null || (display.Length > 0 && display != "-");
+        var hasValue = IsProcessValuePresent(read.Value, display);
         var qualityText = NormalizeQualityText(read.Quality);
         var qualityState = ClassifyQuality(qualityText, hasValue);
         var sourceTimestamp = TryParseSourceTimestampUtc(read.DeviceTimestamp);
@@ -114,6 +113,15 @@ public readonly record struct Iec61850TelemetryEnvelope(
         }
 
         return parsed.ToUniversalTime();
+    }
+
+    private static bool IsProcessValuePresent(object? value, string? displayValue)
+    {
+        if (value is not null)
+            return true;
+
+        var display = displayValue?.Trim() ?? string.Empty;
+        return display.Length > 0 && display != "-";
     }
 
     private static Iec61850TelemetryQualityState ClassifyQuality(string quality, bool hasValue)
