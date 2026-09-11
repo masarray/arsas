@@ -31,6 +31,7 @@ public sealed class P8TelemetryEnvelopeTests
         var envelope = read.ToTelemetryEnvelope();
 
         Assert.False(envelope.IsValid);
+        Assert.False(envelope.HasProcessValue);
         Assert.Equal(Iec61850TelemetryQualityState.Invalid, envelope.QualityState);
     }
 
@@ -78,10 +79,29 @@ public sealed class P8TelemetryEnvelopeTests
         Assert.Equal("LD0/LLN0.Mod.stVal", envelope.SourceReference);
     }
 
+    [Fact]
+    public void ZoneLessArIecUtcTimeDisplay_IsInterpretedAsUtc_NotLocalPcTime()
+    {
+        var read = new Iec61850ReadValue
+        {
+            Value = 1,
+            DisplayValue = "1",
+            Quality = "Good",
+            DeviceTimestamp = "2026-08-13 10:00:31.2006000"
+        };
+
+        var envelope = read.ToTelemetryEnvelope();
+
+        Assert.Equal(TimeSpan.Zero, envelope.SourceTimestampUtc?.Offset);
+        Assert.Equal(2026, envelope.SourceTimestampUtc?.Year);
+        Assert.Equal(10, envelope.SourceTimestampUtc?.Hour);
+    }
+
     [Theory]
     [InlineData("Invalid")]
     [InlineData("Bad / communication error")]
     [InlineData("Failure")]
+    [InlineData("Reserved")]
     public void DegradedQuality_IsNeverPromotedToGood(string quality)
     {
         var envelope = Iec61850TelemetryEnvelope.FromReadValue(new Iec61850ReadValue
@@ -93,5 +113,24 @@ public sealed class P8TelemetryEnvelopeTests
 
         Assert.Equal(Iec61850TelemetryQualityState.Invalid, envelope.QualityState);
         Assert.False(envelope.IsValid);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Unknown")]
+    [InlineData("Questionable")]
+    [InlineData("vendor-future-token")]
+    public void UnprovenQuality_IsQuestionable_NeverSilentlyGood(string quality)
+    {
+        var envelope = Iec61850TelemetryEnvelope.FromReadValue(new Iec61850ReadValue
+        {
+            Value = 1,
+            DisplayValue = "1",
+            Quality = quality
+        });
+
+        Assert.Equal(Iec61850TelemetryQualityState.Questionable, envelope.QualityState);
+        Assert.NotEqual(Iec61850TelemetryQualityState.Good, envelope.QualityState);
+        Assert.Contains("not proven Good", envelope.Diagnostic, StringComparison.OrdinalIgnoreCase);
     }
 }
