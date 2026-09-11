@@ -51,6 +51,8 @@ A missing process value is `Invalid` even if malformed upstream metadata claims 
 
 Relay timestamp parsing is deliberately strict. ARSAS accepts only complete ARIEC/ISO date-time shapes containing year, month, day, hour, minute, and second. Partial strings such as `10:00:31` are rejected because general date parsers can silently fill the missing date from the local PC. A zone-less decoded IEC `UtcTime` is interpreted as UTC by protocol semantics; explicit offsets are normalized to UTC. A malformed or incomplete source timestamp remains `null` and is never replaced by `ReceivedAtUtc` or local PC time.
 
+`Iec61850ProductionTelemetryNormalizer` is wired into the actual production discovery, cyclic MMS validation, and final report-to-runtime projection paths. Normalization therefore occurs before `RuntimePointState`, point snapshots, and SOE metadata are updated. Missing q/t metadata is not inherited from an older sample as if it belonged to the current read; a failed companion read leaves quality `Unknown` and source time `-` rather than carrying forward stale `Good` or stale relay time.
+
 ### P8.6 — Allocation profiling
 
 `RuntimeAllocationSnapshot` captures:
