@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace ArIED61850Tester.Services;
 
@@ -24,6 +25,10 @@ public readonly record struct Iec61850TelemetryEnvelope(
     string SourceReference,
     string Diagnostic)
 {
+    private static readonly Regex CompleteSourceTimestampPattern = new(
+        @"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|\s?[+-]\d{2}:\d{2})?$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     public bool HasProcessValue => IsProcessValuePresent(Value, DisplayValue);
 
     /// <summary>
@@ -100,10 +105,12 @@ public readonly record struct Iec61850TelemetryEnvelope(
         if (text.Length == 0 || text == "-")
             return null;
 
-        // ARIEC61850's decoded IEC UtcTime display can be zone-less even though IEC UtcTime
-        // is semantically UTC. AssumeUniversal therefore preserves engine semantics here;
-        // parsing failure still stays null and is never replaced by ReceivedAtUtc/PC time.
-        if (!DateTimeOffset.TryParse(
+        // DateTimeOffset.TryParse accepts partial values such as "10:00:31" and fills the
+        // missing date from the local PC. That would fabricate source evidence. Accept only
+        // complete ARIEC/ISO date-time shapes before parsing. A zone-less decoded IEC UtcTime
+        // is semantically UTC; malformed or incomplete input remains unknown.
+        if (!CompleteSourceTimestampPattern.IsMatch(text) ||
+            !DateTimeOffset.TryParse(
                 text,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
