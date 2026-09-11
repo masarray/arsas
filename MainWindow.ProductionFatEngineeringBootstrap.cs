@@ -91,6 +91,10 @@ public partial class MainWindow
         if (selected?.SclWorkspace == null ||
             selected.SclWorkspace.DesignModel.DataSets.Sum(dataSet => dataSet.Members.Count) == 0)
         {
+            var message = selected == null
+                ? "Select an Engineering IED with a static DataSet to prepare FAT."
+                : $"{selected.Name} has no static DataSet scope in the Engineering SCL model.";
+            ShowProductionFatBootstrapState(message, isBusy: false);
             SetStatus(selected == null
                 ? "FAT · select an Engineering IED with a static DataSet."
                 : $"FAT · {selected.Name} has no static DataSet scope in the Engineering SCL model.");
@@ -104,6 +108,8 @@ public partial class MainWindow
             .ToArray();
         if (engineeringDevices.All(device => !ReferenceEquals(device, selected)))
         {
+            var message = $"Engineering source provenance for {selected.Name} is unavailable. Reopen the SCL source to restore FAT authority.";
+            ShowProductionFatBootstrapState(message, isBusy: false);
             SetStatus($"FAT · Engineering source provenance for {selected.Name} is unavailable; use Open SCL to restore the source authority.");
             return;
         }
@@ -113,6 +119,9 @@ public partial class MainWindow
         _productionFatEngineeringBootstrapCts?.Dispose();
         _productionFatEngineeringBootstrapCts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         var token = _productionFatEngineeringBootstrapCts.Token;
+        ShowProductionFatBootstrapState(
+            $"Reusing {selected.Name} from the Engineering static DataSet authority. No reconnect or SCL re-import is started.",
+            isBusy: true);
         SetStatus($"FAT · preparing {selected.Name} from the Engineering static DataSet…");
 
         try
@@ -172,10 +181,19 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
             // Fast navigation/close is normal. No modal interruption is appropriate here.
+            if (MainTabs.SelectedIndex == NativeFatWorkspaceIndex && _productionFatWindow == null)
+            {
+                ShowProductionFatBootstrapState(
+                    "FAT preparation was cancelled. Select the FAT tab again to retry from the current Engineering authority.",
+                    isBusy: false);
+            }
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
             AddLog("WARN", "FAT", $"Automatic Engineering FAT bootstrap unavailable: {ex.Message}");
+            ShowProductionFatBootstrapState(
+                $"FAT could not reuse the current Engineering static DataSet: {ex.Message}",
+                isBusy: false);
             SetStatus($"FAT · could not reuse the Engineering static DataSet automatically: {ex.Message}");
         }
         finally
