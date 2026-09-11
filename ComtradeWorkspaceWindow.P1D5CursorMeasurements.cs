@@ -15,12 +15,23 @@ public partial class ComtradeWorkspaceWindow
     private const double P1D5DigitalTrackHeight = 38.0;
     private const double P1D5TrackGap = 5.0;
 
+    [Flags]
+    private enum P1D5MeasurementTargets
+    {
+        None = 0,
+        Cursor1 = 1,
+        Cursor2 = 2,
+        Both = Cursor1 | Cursor2
+    }
+
     private readonly Dictionary<uint, P1D5CursorReadoutControls> _p1d5CursorReadoutControls = new();
     private ComtradeSignalItem[] _p1d5VisibleTrackOrder = Array.Empty<ComtradeSignalItem>();
     private ComtradeSignalItem[] _p1d5VisibleAnalogTrackOrder = Array.Empty<ComtradeSignalItem>();
     private bool _p1d5MeasurementRenderingHooked;
     private bool _p1d5MeasurementDirty;
     private bool _p1d5MeasurementWorkerRunning;
+    private P1D5MeasurementTargets _p1d5PendingMeasurementTargets;
+    private P1D5MeasurementTargets _p1d5InFlightMeasurementTargets;
     private long _p1d5MeasurementRevision;
     private long _p1d5LastPresentedMeasurementRevision;
     private CancellationTokenSource? _p1d5MeasurementCts = new();
@@ -32,10 +43,6 @@ public partial class ComtradeWorkspaceWindow
             return;
         _p1d5MeasurementEventsAttached = true;
 
-        // Subscribe to the canonical cursor authorities instead of raw pointer motion. The waveform
-        // renderer emits interactive cursor updates at a bounded cadence and always emits the final
-        // position; the upper investigation ruler emits its own canonical cursor updates. This keeps
-        // native measurement work independent from mouse-button details and from preview-only state.
         InvestigationTimeline.CursorChanged += P1D5InvestigationTimeline_CursorChanged;
         DisturbanceView.CursorChanged += P1D5DisturbanceCursorChanged;
         Closed += P1D5MeasurementWindow_Closed;
@@ -57,14 +64,23 @@ public partial class ComtradeWorkspaceWindow
 
     private void P1D5InvestigationTimeline_CursorChanged(object? sender, ComtradeInvestigationTimelineCursorChangedEventArgs e)
     {
-        if (e.Cursor is ComtradeInvestigationTimelineCursor.Cursor1 or ComtradeInvestigationTimelineCursor.Cursor2)
-            QueueP1D5CursorMeasurements();
+        var target = e.Cursor switch
+        {
+            ComtradeInvestigationTimelineCursor.Cursor1 => P1D5MeasurementTargets.Cursor1,
+            ComtradeInvestigationTimelineCursor.Cursor2 => P1D5MeasurementTargets.Cursor2,
+            _ => P1D5MeasurementTargets.None
+        };
+        if (target != P1D5MeasurementTargets.None)
+            QueueP1D5CursorMeasurements(target);
     }
 
     private void P1D5DisturbanceCursorChanged(object? sender, ComtradeDisturbanceCursorChangedEventArgs e)
     {
-        if (_analysisMode == AnalysisMode.Waveform)
-            QueueP1D5CursorMeasurements();
+        if (_analysisMode != AnalysisMode.Waveform)
+            return;
+        QueueP1D5CursorMeasurements(e.Cursor == ComtradeDisturbanceCursor.Cursor1
+            ? P1D5MeasurementTargets.Cursor1
+            : P1D5MeasurementTargets.Cursor2);
     }
 
     private void P1D5RememberTrackOrder(IReadOnlyList<LoadedDisturbanceTrack> tracks)
@@ -134,14 +150,19 @@ public partial class ComtradeWorkspaceWindow
             Text = string.Empty
         };
 
-    private void QueueP1D5CursorMeasurements()
+    private void QueueP1D5CursorMeasurements(P1D5MeasurementTargets targets = P1D5MeasurementTargets.Both)
     {
-        if (_analysisMode != AnalysisMode.Waveform || _p1d5VisibleAnalogTrackOrder.Length == 0 ||
-            !_record.Supports(ArdIrecNativeBridge.CapCursorMeasurement))
+        if (_analysisMode != AnalysisMode.Waveform || targets == P1D5MeasurementTargets.None ||
+            _p1d5VisibleAnalogTrackOrder.Length == 0 || !_record.Supports(ArdIrecNativeBridge.CapCursorMeasurement))
             return;
 
-        // Revision is read by the native worker, so use atomic access even though queueing itself is
-        // UI-thread owned. A wrapped revision is practically unreachable, but keep 0 reserved.
+        // If a newer cursor move invalidates a worker already in flight, carry that worker's target
+        // into the replacement request. This preserves eventual values for both cursors while the
+        // normal scrub path reads only the cursor that actually moved.
+        if (_p1d5MeasurementWorkerRunning)
+            _p1d5PendingMeasurementTargets |= _p1d5InFlightMeasurementTargets;
+        _p1d5PendingMeasurementTargets |= targets;
+
         var revision = Interlocked.Increment(ref _p1d5MeasurementRevision);
         if (revision <= 0)
             Interlocked.Exchange(ref _p1d5MeasurementRevision, 1);
@@ -177,21 +198,27 @@ public partial class ComtradeWorkspaceWindow
         if (_p1d5MeasurementWorkerRunning || !_p1d5MeasurementDirty)
             return;
 
+        var targets = _p1d5PendingMeasurementTargets;
+        _p1d5PendingMeasurementTargets = P1D5MeasurementTargets.None;
         _p1d5MeasurementDirty = false;
-        var revision = Interlocked.Read(ref _p1d5MeasurementRevision);
-        var c1 = DisturbanceView.Cursor1Milliseconds;
-        var c2 = DisturbanceView.Cursor2Milliseconds;
-        ulong? c1Frame = c1 is { } first && TryResolveDisturbanceFrameAtMilliseconds(first, out var firstFrame) ? firstFrame : null;
-        ulong? c2Frame = c2 is { } second && TryResolveDisturbanceFrameAtMilliseconds(second, out var secondFrame) ? secondFrame : null;
-        if (c1Frame is null && c2Frame is null)
+        if (targets == P1D5MeasurementTargets.None)
         {
             StopP1D5MeasurementRenderingPump();
             return;
         }
 
-        // Track selection changes are rare compared with pointer frames. Keep the immutable analog
-        // order cached at track-load time so cursor scrubbing does not allocate LINQ arrays at
-        // composition cadence.
+        var revision = Interlocked.Read(ref _p1d5MeasurementRevision);
+        var c1 = DisturbanceView.Cursor1Milliseconds;
+        var c2 = DisturbanceView.Cursor2Milliseconds;
+        ulong? c1Frame = c1 is { } first && TryResolveDisturbanceFrameAtMilliseconds(first, out var firstFrame) ? firstFrame : null;
+        ulong? c2Frame = c2 is { } second && TryResolveDisturbanceFrameAtMilliseconds(second, out var secondFrame) ? secondFrame : null;
+        if ((targets.HasFlag(P1D5MeasurementTargets.Cursor1) && c1Frame is null) &&
+            (targets.HasFlag(P1D5MeasurementTargets.Cursor2) && c2Frame is null))
+        {
+            StopP1D5MeasurementRenderingPump();
+            return;
+        }
+
         var analogSignals = _p1d5VisibleAnalogTrackOrder;
         if (analogSignals.Length == 0)
         {
@@ -201,9 +228,10 @@ public partial class ComtradeWorkspaceWindow
 
         var token = EnsureP1D5MeasurementToken();
         _p1d5MeasurementWorkerRunning = true;
+        _p1d5InFlightMeasurementTargets = targets;
         StopP1D5MeasurementRenderingPump();
         _ = ExecuteP1D5CursorMeasurementsAsync(
-            new P1D5MeasurementRequest(revision, analogSignals, c1Frame, c2Frame, _p1d5ValueRepresentation),
+            new P1D5MeasurementRequest(revision, analogSignals, c1Frame, c2Frame, _p1d5ValueRepresentation, targets),
             token);
     }
 
@@ -218,9 +246,6 @@ public partial class ComtradeWorkspaceWindow
             P1D5MeasurementResult result;
             try
             {
-                // A newer cursor position may have arrived while waiting behind another native
-                // operation. Skip obsolete bridge work; the UI-owned dirty flag will schedule one
-                // latest replacement after this worker completes.
                 if (!P1D5MeasurementRequestIsCurrent(request.Revision, token))
                     return;
 
@@ -236,8 +261,6 @@ public partial class ComtradeWorkspaceWindow
 
             await Dispatcher.InvokeAsync(() =>
             {
-                // Recheck on the UI dispatcher as well. This closes the final race where a cursor
-                // event lands after native work completed but before presentation executes.
                 if (!P1D5MeasurementRequestIsCurrent(request.Revision, token) ||
                     request.Revision < _p1d5LastPresentedMeasurementRevision)
                     return;
@@ -257,15 +280,11 @@ public partial class ComtradeWorkspaceWindow
             ComtradeDiagnosticQueue.TryEnqueue(
                 "P1D5.CursorMeasurement",
                 "CURSOR_MEASUREMENT_FAILURE",
-                $"revision={request.Revision}; representation={request.Representation}",
+                $"revision={request.Revision}; representation={request.Representation}; targets={request.Targets}",
                 ex);
         }
         finally
         {
-            // ConfigureAwait(false) intentionally keeps native work off the UI thread. The scheduler
-            // state itself, however, is WPF state: worker completion and CompositionTarget re-arming
-            // MUST return to the window Dispatcher. Re-arming Rendering from the worker thread was
-            // the field freeze seen after alternating C1/C2 drags.
             if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
             {
                 try
@@ -288,6 +307,7 @@ public partial class ComtradeWorkspaceWindow
     private void CompleteP1D5MeasurementWorker()
     {
         _p1d5MeasurementWorkerRunning = false;
+        _p1d5InFlightMeasurementTargets = P1D5MeasurementTargets.None;
         if (_p1d5MeasurementDirty && _analysisMode == AnalysisMode.Waveform)
             EnsureP1D5MeasurementRenderingPump();
         else
@@ -303,13 +323,13 @@ public partial class ComtradeWorkspaceWindow
             var signal = request.Signals[index];
             ComtradeCursorMeasurement? c1 = null;
             ComtradeCursorMeasurement? c2 = null;
-            if (request.Cursor1Frame is { } first)
+            if (request.Targets.HasFlag(P1D5MeasurementTargets.Cursor1) && request.Cursor1Frame is { } first)
                 _record.TryReadCursorMeasurement(signal.Index, first, request.Representation, out c1);
-            if (request.Cursor2Frame is { } second)
+            if (request.Targets.HasFlag(P1D5MeasurementTargets.Cursor2) && request.Cursor2Frame is { } second)
                 _record.TryReadCursorMeasurement(signal.Index, second, request.Representation, out c2);
             rows[index] = new P1D5MeasurementRow(signal.Index, c1, c2);
         }
-        return new P1D5MeasurementResult(rows);
+        return new P1D5MeasurementResult(rows, request.Targets);
     }
 
     private void PresentP1D5CursorMeasurements(P1D5MeasurementResult result)
@@ -319,8 +339,10 @@ public partial class ComtradeWorkspaceWindow
             var row = result.Rows[index];
             if (!_p1d5CursorReadoutControls.TryGetValue(row.ChannelIndex, out var controls))
                 continue;
-            controls.Cursor1.Text = FormatP1D5CursorValue("C1", row.Cursor1);
-            controls.Cursor2.Text = FormatP1D5CursorValue("C2", row.Cursor2);
+            if (result.Targets.HasFlag(P1D5MeasurementTargets.Cursor1))
+                controls.Cursor1.Text = FormatP1D5CursorValue("C1", row.Cursor1);
+            if (result.Targets.HasFlag(P1D5MeasurementTargets.Cursor2))
+                controls.Cursor2.Text = FormatP1D5CursorValue("C2", row.Cursor2);
         }
     }
 
@@ -348,10 +370,11 @@ public partial class ComtradeWorkspaceWindow
         ComtradeSignalItem[] Signals,
         ulong? Cursor1Frame,
         ulong? Cursor2Frame,
-        int Representation);
+        int Representation,
+        P1D5MeasurementTargets Targets);
     private readonly record struct P1D5MeasurementRow(
         uint ChannelIndex,
         ComtradeCursorMeasurement? Cursor1,
         ComtradeCursorMeasurement? Cursor2);
-    private sealed record P1D5MeasurementResult(P1D5MeasurementRow[] Rows);
+    private sealed record P1D5MeasurementResult(P1D5MeasurementRow[] Rows, P1D5MeasurementTargets Targets);
 }
