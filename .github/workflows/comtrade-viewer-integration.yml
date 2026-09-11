@@ -132,7 +132,7 @@ jobs:
           Copy-Item ".\ArdIrec\tests\data\minimal_1999.cfg" (Join-Path $basic "minimal_1999.cfg") -Force
           Copy-Item ".\ArdIrec\tests\data\minimal_1999.dat" (Join-Path $basic "minimal_1999.dat") -Force
           $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = Join-Path $basic "minimal_1999.cfg"
-          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = ".\ArdIrec\tests\data\distance_p1.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = Join-Path $env:GITHUB_WORKSPACE "ArdIrec\tests\data\distance_p1.cfg"
 
           dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj `
             -c Release --no-build --no-restore `
