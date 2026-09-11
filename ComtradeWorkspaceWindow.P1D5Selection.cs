@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using ArIED61850Tester.Controls;
 using ArIED61850Tester.Services;
 
@@ -47,70 +48,80 @@ public partial class ComtradeWorkspaceWindow
             return;
         }
 
-        var generation = Interlocked.Increment(ref _p1d5SelectionGeneration);
         _p1d5AutoReloadRunning = true;
-        InvestigationTimeline.IsEnabled = false;
         try
         {
-            var suspended = _p1d5SuspendedSelectionNavigation;
-            var requestedViewport = suspended.IsValid
-                ? new ComtradeSourceViewport(suspended.SourceStartFrame, suspended.SourceFrameCount)
-                : CurrentDisturbanceViewport();
-
-            await ReloadDisturbanceAsync(
-                requestedViewport,
-                initialLoad: false,
-                preserveLocalView: false).ConfigureAwait(true);
-
-            if (generation != Volatile.Read(ref _p1d5SelectionGeneration))
-                return;
-
-            var hasLoadedTimeline = DisturbanceView.FullEndMilliseconds > DisturbanceView.FullStartMilliseconds;
-            if (hasLoadedTimeline && suspended.MatchesSource(
-                    _disturbanceLoadedViewport.StartFrame,
-                    _disturbanceLoadedViewport.FrameCount))
-            {
-                DisturbanceView.SetViewWindow(
-                    suspended.ViewStartMilliseconds,
-                    suspended.ViewEndMilliseconds);
-                if (suspended.Cursor1Milliseconds is { } c1)
-                    DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor1, c1);
-                if (suspended.Cursor2Milliseconds is { } c2)
-                    DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor2, c2);
-                DisturbanceScrollViewer.ScrollToVerticalOffset(_p1d5SuspendedTrackScrollOffset);
-            }
-            else if (hasLoadedTimeline)
-            {
-                // If there was no restorable local view, retain the modern trigger-focused P1D.5
-                // behavior rather than silently reverting to the historical full-record UX.
-                DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
-            }
-
-            if (hasLoadedTimeline)
-            {
-                _disturbanceInitialFocusApplied = true;
-                _p1d5SuspendedSelectionNavigation = default;
-                _p1d5SuspendedTrackScrollOffset = 0;
-                InvestigationTimeline.IsEnabled = true;
-                SyncInvestigationTimeline();
-                SyncInvestigationTimelineGeometry();
-                QueueP1D5CursorMeasurements();
-            }
+            await ReloadP1D5VisibleSelectionAsync(
+                restoreSuspendedNavigation: _p1d5SuspendedSelectionNavigation.IsValid,
+                applyTriggerFallback: true).ConfigureAwait(true);
         }
         finally
         {
-            // Clear may supersede an in-flight Auto generation. Always release the re-entry guard;
-            // only the still-current generation is allowed to re-enable the investigation ruler.
             _p1d5AutoReloadRunning = false;
-            if (generation == Volatile.Read(ref _p1d5SelectionGeneration))
-                InvestigationTimeline.IsEnabled = DisturbanceView.FullEndMilliseconds > DisturbanceView.FullStartMilliseconds;
         }
+    }
+
+    private async void P1D5SignalVisibility_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_disturbanceCheckboxSync || sender is not CheckBox checkBox || checkBox.DataContext is not ComtradeSignalItem signal)
+            return;
+        if (_disturbanceVisibleSignals.Contains(signal))
+            return;
+        if (_disturbanceVisibleSignals.Count >= MaxVisibleDisturbanceTracks)
+        {
+            _disturbanceCheckboxSync = true;
+            checkBox.IsChecked = false;
+            _disturbanceCheckboxSync = false;
+            StatusTextBlock.Text = $"Time Signals supports up to {MaxVisibleDisturbanceTracks} visible tracks at once. Hide another signal first.";
+            return;
+        }
+
+        var restoringFromEmpty = _disturbanceVisibleSignals.Count == 0 && _p1d5SuspendedSelectionNavigation.IsValid;
+        _disturbanceVisibleSignals.Add(signal);
+        if (restoringFromEmpty)
+        {
+            await ReloadP1D5VisibleSelectionAsync(
+                restoreSuspendedNavigation: true,
+                applyTriggerFallback: true).ConfigureAwait(true);
+            return;
+        }
+
+        InvalidateP1D5MeasurementWork();
+        await ReloadDisturbanceAsync(
+            CurrentDisturbanceViewport(),
+            initialLoad: false,
+            preserveLocalView: true).ConfigureAwait(true);
+    }
+
+    private async void P1D5SignalVisibility_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (_disturbanceCheckboxSync || sender is not CheckBox checkBox || checkBox.DataContext is not ComtradeSignalItem signal)
+            return;
+        if (!_disturbanceVisibleSignals.Contains(signal))
+            return;
+
+        if (_disturbanceVisibleSignals.Count == 1)
+        {
+            CaptureP1D5SelectionNavigation();
+            _disturbanceVisibleSignals.Remove(signal);
+            Interlocked.Increment(ref _p1d5SelectionGeneration);
+            CancelP1D5SelectionWork();
+            PresentP1D5EmptySelection();
+            return;
+        }
+
+        _disturbanceVisibleSignals.Remove(signal);
+        InvalidateP1D5MeasurementWork();
+        await ReloadDisturbanceAsync(
+            CurrentDisturbanceViewport(),
+            initialLoad: false,
+            preserveLocalView: true).ConfigureAwait(true);
     }
 
     /// <summary>
     /// Clear is presentation-only and must be immediate: no native reload, no frame rebuild, no
-    /// cursor measurement work. Keep one small navigation snapshot so Auto can restore the same
-    /// investigation context after it loads the practical signal set again.
+    /// cursor measurement work. Keep one small navigation snapshot so Auto or a manually reselected
+    /// signal can restore the same investigation context.
     /// </summary>
     private void P1D5ClearSignals_Click(object sender, RoutedEventArgs e)
     {
@@ -120,15 +131,60 @@ public partial class ComtradeWorkspaceWindow
 
         _disturbanceVisibleSignals.Clear();
         SyncSignalVisibilityCheckboxes();
+        PresentP1D5EmptySelection();
+    }
 
-        DisturbanceView.ShowMessage("Select signals to display.");
-        DigitalEventGrid.ItemsSource = Array.Empty<ComtradeDigitalEventRow>();
-        DigitalEventExpander.Visibility = Visibility.Collapsed;
-        ResetViewButton.IsEnabled = false;
-        FullRecordButton.IsEnabled = false;
+    private async Task ReloadP1D5VisibleSelectionAsync(
+        bool restoreSuspendedNavigation,
+        bool applyTriggerFallback)
+    {
+        var generation = Interlocked.Increment(ref _p1d5SelectionGeneration);
+        var suspended = restoreSuspendedNavigation ? _p1d5SuspendedSelectionNavigation : default;
+        var requestedViewport = suspended.IsValid
+            ? new ComtradeSourceViewport(suspended.SourceStartFrame, suspended.SourceFrameCount)
+            : CurrentDisturbanceViewport();
+
         InvestigationTimeline.IsEnabled = false;
-        StatusTextBlock.Text = "No Time Signals tracks selected • use the checkboxes in Signals or choose Auto.";
-        NavigationTextBlock.Text = "Selection cleared • Auto restores the previous investigation window with the practical signal set.";
+        InvalidateP1D5MeasurementWork();
+        await ReloadDisturbanceAsync(
+            requestedViewport,
+            initialLoad: false,
+            preserveLocalView: false).ConfigureAwait(true);
+
+        if (generation != Volatile.Read(ref _p1d5SelectionGeneration))
+            return;
+
+        var hasLoadedTimeline = DisturbanceView.FullEndMilliseconds > DisturbanceView.FullStartMilliseconds;
+        if (hasLoadedTimeline && suspended.MatchesSource(
+                _disturbanceLoadedViewport.StartFrame,
+                _disturbanceLoadedViewport.FrameCount))
+        {
+            DisturbanceView.SetViewWindow(
+                suspended.ViewStartMilliseconds,
+                suspended.ViewEndMilliseconds);
+            if (suspended.Cursor1Milliseconds is { } c1)
+                DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor1, c1);
+            if (suspended.Cursor2Milliseconds is { } c2)
+                DisturbanceView.SetCursorFromHost(ComtradeDisturbanceCursor.Cursor2, c2);
+            DisturbanceScrollViewer.ScrollToVerticalOffset(_p1d5SuspendedTrackScrollOffset);
+        }
+        else if (hasLoadedTimeline && applyTriggerFallback)
+        {
+            // If there was no restorable local view, retain the modern trigger-focused P1D.5
+            // behavior rather than silently reverting to the historical full-record UX.
+            DisturbanceView.ApplyTriggerFocusedDefault(_record.Info.NominalFrequency);
+        }
+
+        if (!hasLoadedTimeline)
+            return;
+
+        _disturbanceInitialFocusApplied = true;
+        _p1d5SuspendedSelectionNavigation = default;
+        _p1d5SuspendedTrackScrollOffset = 0;
+        InvestigationTimeline.IsEnabled = true;
+        SyncInvestigationTimeline();
+        SyncInvestigationTimelineGeometry();
+        QueueP1D5CursorMeasurements();
     }
 
     private void CaptureP1D5SelectionNavigation()
@@ -147,6 +203,18 @@ public partial class ComtradeWorkspaceWindow
         _p1d5SuspendedTrackScrollOffset = DisturbanceScrollViewer.VerticalOffset;
     }
 
+    private void PresentP1D5EmptySelection()
+    {
+        DisturbanceView.ShowMessage("Select signals to display.");
+        DigitalEventGrid.ItemsSource = Array.Empty<ComtradeDigitalEventRow>();
+        DigitalEventExpander.Visibility = Visibility.Collapsed;
+        ResetViewButton.IsEnabled = false;
+        FullRecordButton.IsEnabled = false;
+        InvestigationTimeline.IsEnabled = false;
+        StatusTextBlock.Text = "No Time Signals tracks selected • use the checkboxes in Signals or choose Auto.";
+        NavigationTextBlock.Text = "Selection cleared • the next selection restores the previous investigation window.";
+    }
+
     private void CancelP1D5SelectionWork()
     {
         _disturbanceLoadCts?.Cancel();
@@ -156,8 +224,12 @@ public partial class ComtradeWorkspaceWindow
         _disturbanceCursorSnapCts?.Cancel();
         _disturbanceCursorSnapCts?.Dispose();
         _disturbanceCursorSnapCts = null;
+        InvalidateP1D5MeasurementWork();
+    }
 
-        // Empty selection invalidates every cursor request that referenced the previous visible
+    private void InvalidateP1D5MeasurementWork()
+    {
+        // Selection changes invalidate every cursor request that referenced the previous visible
         // channels. Clear BOTH projections; leaving the analog projection alive was able to keep
         // native C1/C2 work queued behind Auto's track reload and made the workstation feel frozen.
         Interlocked.Increment(ref _p1d5MeasurementRevision);
