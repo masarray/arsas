@@ -169,15 +169,11 @@ public sealed class NativeFatArmCoordinator : IDisposable
                 return true;
             }
 
-            if (Iec61850MonitorPoint.AreSemanticallyEquivalent(slot.Value1, value) ||
-                (!string.IsNullOrWhiteSpace(slot.Value2) &&
-                 Iec61850MonitorPoint.AreSemanticallyEquivalent(slot.Value2, value)))
-            {
-                return false;
-            }
-
             if (string.IsNullOrWhiteSpace(slot.Value2))
             {
+                if (Iec61850MonitorPoint.AreSemanticallyEquivalent(slot.Value1, value))
+                    return false;
+
                 NativeFatCanonicalEvidenceOverlay.Write(
                     armed.Cache,
                     point,
@@ -186,6 +182,11 @@ public sealed class NativeFatArmCoordinator : IDisposable
                 RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value2);
                 return true;
             }
+
+            // Once a pair exists, only the newest Value 2 is the duplicate guard. A return
+            // to the prior Value 1 is itself a real transition and must advance the pair.
+            if (Iec61850MonitorPoint.AreSemanticallyEquivalent(slot.Value2, value))
+                return false;
 
             // Keep the current pair aligned to the latest meaningful transition without
             // touching Result, which remains an operator/report assessment field.
