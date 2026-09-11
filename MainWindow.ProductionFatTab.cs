@@ -199,6 +199,7 @@ public partial class MainWindow
         _productionFatSurface = null;
         if (_nativeFatCanonicalGrid != null)
             _nativeFatCanonicalGrid.CellEditEnding -= NativeFatCanonicalGrid_CellEditEnding;
+        DisposeNativeFatArmCoordinator();
         _nativeFatCanonicalGrid = null;
         _nativeFatIedText = null;
         _nativeFatRowCountText = null;
