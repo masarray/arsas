@@ -27,14 +27,20 @@ public readonly record struct RuntimeAllocationSnapshot(
     }
 
     public RuntimeAllocationDelta DeltaFrom(RuntimeAllocationSnapshot earlier)
-        => new(
+    {
+        var elapsed = CapturedAtUtc >= earlier.CapturedAtUtc
+            ? CapturedAtUtc - earlier.CapturedAtUtc
+            : TimeSpan.Zero;
+
+        return new RuntimeAllocationDelta(
             Math.Max(0, TotalAllocatedBytes - earlier.TotalAllocatedBytes),
             HeapSizeBytes - earlier.HeapSizeBytes,
             FragmentedBytes - earlier.FragmentedBytes,
             Math.Max(0, Gen0Collections - earlier.Gen0Collections),
             Math.Max(0, Gen1Collections - earlier.Gen1Collections),
             Math.Max(0, Gen2Collections - earlier.Gen2Collections),
-            CapturedAtUtc - earlier.CapturedAtUtc);
+            elapsed);
+    }
 }
 
 public readonly record struct RuntimeAllocationDelta(
