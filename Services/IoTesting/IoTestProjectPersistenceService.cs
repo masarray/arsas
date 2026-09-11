@@ -99,6 +99,38 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
         cancellationToken.ThrowIfCancellationRequested();
 
         var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        return await OpenDescribedSourcesAsync(
+            importedProject,
+            session,
+            described,
+            localProjectsRoot,
+            evidenceRoot,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a FAT workspace from a source set whose SHA-256 provenance has already been
+    /// calculated by an upstream authority in the same launch flow. This avoids hashing the
+    /// same SCL bytes again between Engineering projection and persistence. Staging still
+    /// reads every source and verifies its bytes against the supplied SHA-256 before the
+    /// canonical local copy is accepted, so this optimization never weakens content identity.
+    /// </summary>
+    public static async Task<IoTestWorkspaceOpenResult> OpenDescribedSourcesAsync(
+        IoTestProject importedProject,
+        IoTestSessionController session,
+        IReadOnlyCollection<IoFatDescribedSource> describedSources,
+        string localProjectsRoot,
+        string evidenceRoot,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importedProject);
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(describedSources);
+        if (describedSources.Count == 0)
+            throw new InvalidDataException("A FAT workspace must contain at least one source file.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var described = describedSources.ToArray();
         IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
@@ -572,8 +604,6 @@ public sealed class IoTestWorkspacePersistence : ObservableObject, IDisposable
                     ReviewerComment = point.ReviewerComment
                 }).ToList())
             {
-                // M5: persist the stable Engineering DeviceId when available. Older snapshots
-                // omit this field and continue through the exact IEC identity + endpoint fallback.
                 LiveDeviceId = ied.LiveDeviceId,
                 LatestComtradeFiles = ied.LatestComtradeFiles,
                 LatestComtradeRemotePath = ied.LatestComtradeRemotePath,
