@@ -19,6 +19,23 @@ public sealed class P8TelemetryEnvelopeTests
     }
 
     [Fact]
+    public void NormalizationWithoutOverride_PreservesReadReceiptTime()
+    {
+        var received = new DateTimeOffset(2026, 9, 11, 1, 15, 30, TimeSpan.Zero);
+        var read = new Iec61850ReadValue
+        {
+            Value = true,
+            DisplayValue = "True",
+            Quality = "Good",
+            ReceivedAtUtc = received
+        };
+
+        var envelope = Iec61850TelemetryEnvelope.FromReadValue(read);
+
+        Assert.Equal(received, envelope.ReceivedAtUtc);
+    }
+
+    [Fact]
     public void MissingProcessValue_RemainsInvalid_EvenWhenQualitySaysGood()
     {
         var read = new Iec61850ReadValue
