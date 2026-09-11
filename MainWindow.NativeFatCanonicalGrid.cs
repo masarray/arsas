@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -11,21 +12,31 @@ public partial class MainWindow
 {
     private readonly Dictionary<string, NativeFatIedSessionCacheState> _nativeFatSessionByIed =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly NativeFatArmCoordinator _nativeFatArmCoordinator = new();
 
     private DataGrid? _nativeFatCanonicalGrid;
     private TextBlock? _nativeFatIedText;
     private TextBlock? _nativeFatRowCountText;
     private TextBlock? _nativeFatStatusText;
+    private Button? _nativeFatStartButton;
     private string? _nativeFatBoundIedKey;
+    private bool _nativeFatArmEventsHooked;
 
     /// <summary>
     /// P1A: FAT renders the exact Engineering live-row objects. There is no projection,
     /// SCL parse, IoTestPointPlan collection, or second acquisition owner in this surface.
     /// P1B adds only three sparse evidence columns keyed outside those canonical rows.
     /// P1C reuses the Engineering grid visual authority and virtualization contract.
+    /// P1D makes Start FAT an ARM-only operation over those already-live row objects.
     /// </summary>
     private FrameworkElement BuildNativeFatCanonicalWorkspace(string? statusText = null)
     {
+        if (!_nativeFatArmEventsHooked)
+        {
+            _nativeFatArmCoordinator.EvidenceChanged += NativeFatArmCoordinator_EvidenceChanged;
+            _nativeFatArmEventsHooked = true;
+        }
+
         var root = new Grid
         {
             Margin = new Thickness(16)
@@ -68,6 +79,12 @@ public partial class MainWindow
         titlePanel.Children.Add(_nativeFatStatusText);
         headerGrid.Children.Add(titlePanel);
 
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(16, 0, 0, 0)
+        };
         _nativeFatRowCountText = new TextBlock
         {
             Text = "0 rows",
@@ -75,10 +92,24 @@ public partial class MainWindow
             FontWeight = FontWeights.SemiBold,
             Foreground = TryFindResource("Accent") as Brush ?? Brushes.RoyalBlue,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(16, 0, 0, 0)
+            Margin = new Thickness(0, 0, 12, 0)
         };
-        Grid.SetColumn(_nativeFatRowCountText, 1);
-        headerGrid.Children.Add(_nativeFatRowCountText);
+        actionPanel.Children.Add(_nativeFatRowCountText);
+
+        _nativeFatStartButton = new Button
+        {
+            Content = "Start FAT",
+            MinWidth = 92,
+            Padding = new Thickness(12, 6, 12, 6),
+            Style = TryFindResource("PrimaryButton") as Style,
+            IsEnabled = false,
+            ToolTip = "Arm FAT evidence on the already-running Engineering live stream."
+        };
+        _nativeFatStartButton.Click += NativeFatStartButton_Click;
+        actionPanel.Children.Add(_nativeFatStartButton);
+
+        Grid.SetColumn(actionPanel, 1);
+        headerGrid.Children.Add(actionPanel);
         header.Child = headerGrid;
         root.Children.Add(header);
 
@@ -201,11 +232,96 @@ public partial class MainWindow
             ? "FAT · select an Engineering IED"
             : $"FAT · {device.Name} · {device.IpAddress}:{device.Port}";
         _nativeFatRowCountText!.Text = device == null ? "0 rows" : $"{device.Points.Count} rows";
-        _nativeFatStatusText!.Text = device == null
-            ? "Select an Engineering IED with canonical live rows."
-            : "Canonical Engineering live rows · no reconnect · sparse Value 1 / Value 2 / Result overlay";
 
         RestoreNativeFatSessionState(device);
+        UpdateNativeFatArmUi(device);
+    }
+
+    private void UpdateNativeFatArmUi(Iec61850MonitorDevice? device, string? overrideStatus = null)
+    {
+        if (_nativeFatStatusText == null || _nativeFatStartButton == null)
+            return;
+
+        if (device == null)
+        {
+            _nativeFatStartButton.Content = "Start FAT";
+            _nativeFatStartButton.IsEnabled = false;
+            _nativeFatStatusText.Text = overrideStatus ?? "Select an Engineering IED with canonical live rows.";
+            return;
+        }
+
+        var cache = GetNativeFatSession(device.DeviceId);
+        var armed = cache.IsArmed || _nativeFatArmCoordinator.IsArmed(device.DeviceId);
+        _nativeFatStartButton.Content = armed ? "FAT Armed" : "Start FAT";
+        _nativeFatStartButton.IsEnabled = !armed && device.IsConnected && device.IsMonitoring && device.Points.Count > 0;
+        _nativeFatStartButton.ToolTip = armed
+            ? "FAT evidence is armed on the existing Engineering acquisition stream."
+            : device.IsConnected && device.IsMonitoring
+                ? "Arm FAT evidence only. No reconnect, SCL import, discovery, report restart, or polling change."
+                : "Start Engineering monitoring first; FAT will reuse that live acquisition.";
+
+        _nativeFatStatusText.Text = overrideStatus ?? (armed
+            ? $"FAT armed · shared Engineering acquisition untouched · {device.Points.Count} canonical row(s)"
+            : "Canonical Engineering live rows · Start FAT only arms evidence; acquisition remains untouched");
+    }
+
+    private void NativeFatStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var device = SelectedDevice;
+        if (device == null)
+        {
+            UpdateNativeFatArmUi(null, "Select an Engineering IED before starting FAT.");
+            return;
+        }
+
+        var cache = GetNativeFatSession(device.DeviceId);
+        var result = _nativeFatArmCoordinator.Arm(device, cache);
+        stopwatch.Stop();
+        cache.LastArmElapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+
+        var status = result.Succeeded
+            ? result.AlreadyArmed
+                ? result.Message
+                : $"{device.Name} FAT armed in {stopwatch.ElapsedMilliseconds} ms · {result.ArmedRows} canonical row(s) · {result.SeededValue1Rows} Value 1 seeded · no acquisition restart"
+            : result.Message;
+
+        UpdateNativeFatArmUi(device, status);
+        SetStatus(result.Succeeded
+            ? $"FAT · {device.Name} armed on shared Engineering live data in {stopwatch.ElapsedMilliseconds} ms"
+            : $"FAT · {result.Message}");
+
+        Trace.WriteLine(
+            $"[FAT P1D] ARM completed in {stopwatch.ElapsedMilliseconds} ms; " +
+            $"ied={device.Name}; deviceId={device.DeviceId}; rows={device.Points.Count}; " +
+            $"seededV1={result.SeededValue1Rows}; alreadyArmed={result.AlreadyArmed}; succeeded={result.Succeeded}; " +
+            "networkPrepare=false; reconnect=false; sclImport=false; discovery=false; reportRestart=false; pollingChange=false.");
+    }
+
+    private void NativeFatArmCoordinator_EvidenceChanged(object? sender, NativeFatEvidenceChangedEventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => NativeFatArmCoordinator_EvidenceChanged(sender, e));
+            return;
+        }
+
+        if (!string.Equals(_nativeFatBoundIedKey, e.DeviceId, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        RefreshNativeFatEvidenceCells(e.Point);
+    }
+
+    private void RefreshNativeFatEvidenceCells(Iec61850MonitorPoint point)
+    {
+        if (_nativeFatCanonicalGrid == null)
+            return;
+
+        foreach (var column in _nativeFatCanonicalGrid.Columns.OfType<NativeFatEvidenceColumn>())
+        {
+            if (column.GetCellContent(point) is TextBlock textBlock)
+                textBlock.Text = ReadNativeFatEvidence(point, column.Field);
+        }
     }
 
     private void SaveNativeFatSessionState()
@@ -282,6 +398,20 @@ public partial class MainWindow
         var cache = GetNativeFatSession(_nativeFatBoundIedKey);
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, evidenceColumn.Field, editor.Text);
         cache.ActiveRowKey = NativeFatCanonicalEvidenceOverlay.BuildRowKey(point);
+    }
+
+    private void DisposeNativeFatArmCoordinator()
+    {
+        if (_nativeFatArmEventsHooked)
+        {
+            _nativeFatArmCoordinator.EvidenceChanged -= NativeFatArmCoordinator_EvidenceChanged;
+            _nativeFatArmEventsHooked = false;
+        }
+
+        _nativeFatArmCoordinator.Dispose();
+        if (_nativeFatStartButton != null)
+            _nativeFatStartButton.Click -= NativeFatStartButton_Click;
+        _nativeFatStartButton = null;
     }
 
     private sealed class NativeFatEvidenceColumn : DataGridColumn
