@@ -237,6 +237,18 @@ After implementation, report:
 - Validation: exact checks/commands and results;
 - Remaining limitations: genuine unresolved limitations only.
 
+## 17. Parallel workstream coordination
+
+When multiple branches/threads are active in this repository, read `docs/WORKSTREAM_COORDINATION.md` before final integration or merge. A branch that was previously green is not automatically safe after `main` moves.
+
+Before landing a parallel workstream:
+- integrate the latest `main` rather than overwriting it with a stale branch snapshot;
+- preserve already accepted behavior from other workstreams unless an explicitly newer accepted requirement replaces it;
+- resolve conflicts by authority and subsystem ownership, not mechanically by choosing one side;
+- rerun the exact combined-head CI and any required field gates before merge.
+
+The combined result must preserve accepted behavior from every integrated workstream.
+
 ## Final rule
 
 Think like the maintainer who must support ARSAS on real engineering data for years, not like a prototype generator trying to make today's screenshot pass.

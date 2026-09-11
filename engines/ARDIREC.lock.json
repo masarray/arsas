@@ -1,7 +1,7 @@
 {
   "schema": 3,
   "repository": "masarray/ardirec",
-  "ref": "feat/p1d5-arsas-analysis-bridge",
+  "ref": "main",
   "commit": "7dbc7149db668126a493ce338264363a6ec5ec00",
   "bridge": {
     "abi": 1,
@@ -18,5 +18,5 @@
       "distance_locus"
     ]
   },
-  "purpose": "P1D.5 field candidate: pin the exact ArdIrec native analysis bridge with mature six-loop distance/locus exports. No Qt desktop runtime or ardirec.exe is packaged by ARSAS. Replace this temporary exact-commit pin with merged main after ArdIrec PR #41 is accepted."
+  "purpose": "Pin the exact field-qualified ArdIrec native analysis bridge from merged ArdIrec PR #41. The commit is now part of ArdIrec main; ARSAS intentionally keeps this exact revision until a separately qualified dependency update is accepted. No Qt desktop runtime or ardirec.exe is packaged by ARSAS."
 }
