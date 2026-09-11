@@ -35,13 +35,17 @@ public sealed class P8TelemetryEnvelopeTests
         Assert.Equal(received, envelope.ReceivedAtUtc);
     }
 
-    [Fact]
-    public void MissingProcessValue_RemainsInvalid_EvenWhenQualitySaysGood()
+    [Theory]
+    [InlineData("-")]
+    [InlineData("  -  ")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void MissingProcessValue_RemainsInvalid_EvenWhenQualitySaysGood(string displayValue)
     {
         var read = new Iec61850ReadValue
         {
             Value = null,
-            DisplayValue = "-",
+            DisplayValue = displayValue,
             Quality = "Good",
             DeviceTimestamp = "2026-09-11T01:02:03Z"
         };
