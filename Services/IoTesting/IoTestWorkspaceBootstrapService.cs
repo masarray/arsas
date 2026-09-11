@@ -45,6 +45,36 @@ public static class IoTestWorkspaceBootstrapService
         ArgumentNullException.ThrowIfNull(sessionFactory);
 
         var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        return await OpenDescribedSourcesAsync(
+            importedProject,
+            described,
+            localProjectsRoot,
+            evidenceRoot,
+            sessionFactory,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Continues FAT bootstrap with source identities already SHA-256-described upstream.
+    /// The persistence layer accepts the same immutable descriptions and still verifies the
+    /// bytes again while staging them, so this removes redundant full-file hashing without
+    /// weakening the source/evidence boundary.
+    /// </summary>
+    public static async Task<IoTestWorkspaceLaunchResult> OpenDescribedSourcesAsync(
+        IoTestProject importedProject,
+        IReadOnlyCollection<IoFatDescribedSource> describedSources,
+        string localProjectsRoot,
+        string evidenceRoot,
+        Func<IoTestProject, string, IoTestSessionController> sessionFactory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importedProject);
+        ArgumentNullException.ThrowIfNull(describedSources);
+        ArgumentNullException.ThrowIfNull(sessionFactory);
+        if (describedSources.Count == 0)
+            throw new InvalidDataException("A FAT workspace must contain at least one source file.");
+
+        var described = describedSources.ToArray();
         IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
@@ -63,7 +93,7 @@ public static class IoTestWorkspaceBootstrapService
             {
                 // Isolate the canonical persisted snapshot BEFORE attempting selective restore.
                 // Otherwise a rejected/invalid partial restore could fall through to
-                // IoTestWorkspacePersistence.OpenSourcesAsync(), which is allowed to restore a
+                // IoTestWorkspacePersistence.OpenDescribedSourcesAsync(), which is allowed to restore a
                 // matching snapshot wholesale. Engineering is the fresh plan authority here:
                 // the old snapshot is read-only evidence input, never a replacement project.
                 if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
@@ -88,10 +118,10 @@ public static class IoTestWorkspaceBootstrapService
             var session = sessionFactory(importedProject, evidenceRoot);
             try
             {
-                var opened = await IoTestWorkspacePersistence.OpenSourcesAsync(
+                var opened = await IoTestWorkspacePersistence.OpenDescribedSourcesAsync(
                     importedProject,
                     session,
-                    sourceInputs,
+                    described,
                     localProjectsRoot,
                     evidenceRoot,
                     cancellationToken).ConfigureAwait(false);
