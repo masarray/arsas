@@ -31,15 +31,24 @@ public partial class MainWindow
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceColumn(this, "Value 1", NativeFatEvidenceField.Value1, 120));
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceTimestampColumn(this, "V1 Timestamp", NativeFatEvidenceField.Value1, 185));
+            new NativeFatEvidenceColumn(this, "V1 Timestamp", NativeFatEvidenceField.Value1Timestamp, 185)
+            {
+                IsReadOnly = true
+            });
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceColumn(this, "Value 2", NativeFatEvidenceField.Value2, 120));
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceTimestampColumn(this, "V2 Timestamp", NativeFatEvidenceField.Value2, 185));
+            new NativeFatEvidenceColumn(this, "V2 Timestamp", NativeFatEvidenceField.Value2Timestamp, 185)
+            {
+                IsReadOnly = true
+            });
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceColumn(this, "Result", NativeFatEvidenceField.Result, 110));
     }
 
+    // Retained as an isolated formatter for report/tests and compatibility paths. The visible
+    // grid now routes timestamp fields through NativeFatEvidenceColumn so the existing evidence
+    // refresh loop updates Value, Timestamp and Result atomically after capture and hydration.
     private string ReadNativeFatTimestamp(Iec61850MonitorPoint point, NativeFatEvidenceField field)
     {
         if (string.IsNullOrWhiteSpace(_nativeFatBoundIedKey) ||
@@ -57,8 +66,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Read-only timestamp companion to the editable Value 1 / Value 2 evidence columns.
-    /// It reads the same stable IEDName + IEC Telegram overlay and owns no row collection.
+    /// Compatibility timestamp column retained for source/binary compatibility. The production
+    /// P4C grid uses read-only NativeFatEvidenceColumn timestamp fields so its established
+    /// RefreshNativeFatEvidenceCells loop refreshes all five evidence cells together.
     /// </summary>
     private sealed class NativeFatEvidenceTimestampColumn : DataGridColumn
     {
