@@ -99,6 +99,22 @@ public sealed class NativeFatP4ECommandFeedbackCorrelationTests
         Assert.DoesNotContain("ObjectReference", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void GlobalStableCommandConfirmation_AlsoRequiresExplicitControlStatusReference()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.ControlDiagnostics.cs"));
+        var start = source.IndexOf("private static string ResolveControlFeedbackKey", StringComparison.Ordinal);
+        var end = source.IndexOf("private async Task ExpirePositionCommandAsync", start, StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var resolver = source[start..end];
+        Assert.Contains("string.IsNullOrWhiteSpace(signal.ControlStatusReference)", resolver, StringComparison.Ordinal);
+        Assert.Contains("return string.Empty;", resolver, StringComparison.Ordinal);
+        Assert.Contains("NormalizeReference(signal.ControlStatusReference)", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain("signal.ObjectReference", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain(".stVal", resolver, StringComparison.Ordinal);
+    }
+
     private static Iec61850MonitorDevice Device(string name)
         => new()
         {
