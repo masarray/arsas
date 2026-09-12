@@ -7,7 +7,9 @@ namespace ArIED61850Tester.Services.IoTesting;
 public enum NativeFatEvidenceField
 {
     Value1,
+    Value1Timestamp,
     Value2,
+    Value2Timestamp,
     Result
 }
 
@@ -61,7 +63,9 @@ public static class NativeFatCanonicalEvidenceOverlay
             return field switch
             {
                 NativeFatEvidenceField.Value1 => RawValue(slot.Value1Evidence, slot.Value1),
+                NativeFatEvidenceField.Value1Timestamp => TimestampValue(slot.Value1Evidence),
                 NativeFatEvidenceField.Value2 => RawValue(slot.Value2Evidence, slot.Value2),
+                NativeFatEvidenceField.Value2Timestamp => TimestampValue(slot.Value2Evidence),
                 NativeFatEvidenceField.Result => ResolveResult(slot),
                 _ => string.Empty
             };
@@ -86,7 +90,9 @@ public static class NativeFatCanonicalEvidenceOverlay
             return field switch
             {
                 NativeFatEvidenceField.Value1 => RawValue(slot.Value1Evidence, slot.Value1),
+                NativeFatEvidenceField.Value1Timestamp => TimestampValue(slot.Value1Evidence),
                 NativeFatEvidenceField.Value2 => RawValue(slot.Value2Evidence, slot.Value2),
+                NativeFatEvidenceField.Value2Timestamp => TimestampValue(slot.Value2Evidence),
                 NativeFatEvidenceField.Result => slot.Result,
                 _ => string.Empty
             };
@@ -115,7 +121,9 @@ public static class NativeFatCanonicalEvidenceOverlay
             return field switch
             {
                 NativeFatEvidenceField.Value1 => DisplayValue(slot.Value1Evidence, slot.Value1),
+                NativeFatEvidenceField.Value1Timestamp => TimestampValue(slot.Value1Evidence),
                 NativeFatEvidenceField.Value2 => DisplayValue(slot.Value2Evidence, slot.Value2),
+                NativeFatEvidenceField.Value2Timestamp => TimestampValue(slot.Value2Evidence),
                 NativeFatEvidenceField.Result => ResolveResult(slot),
                 _ => string.Empty
             };
@@ -139,8 +147,8 @@ public static class NativeFatCanonicalEvidenceOverlay
 
             return field switch
             {
-                NativeFatEvidenceField.Value1 => slot.Value1Evidence,
-                NativeFatEvidenceField.Value2 => slot.Value2Evidence,
+                NativeFatEvidenceField.Value1 or NativeFatEvidenceField.Value1Timestamp => slot.Value1Evidence,
+                NativeFatEvidenceField.Value2 or NativeFatEvidenceField.Value2Timestamp => slot.Value2Evidence,
                 _ => null
             };
         }
@@ -154,6 +162,8 @@ public static class NativeFatCanonicalEvidenceOverlay
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
+        if (field is NativeFatEvidenceField.Value1Timestamp or NativeFatEvidenceField.Value2Timestamp)
+            return;
         if (!TryBuildRowKey(point, out var key))
             return;
 
@@ -385,6 +395,14 @@ public static class NativeFatCanonicalEvidenceOverlay
             return raw;
         var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
         return $"{raw} - {timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)}";
+    }
+
+    private static string TimestampValue(FatValueEvidence? evidence)
+    {
+        if (evidence is null)
+            return string.Empty;
+        var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
+        return timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 
     private static string RawValue(FatValueEvidence? evidence, string legacyRaw)
