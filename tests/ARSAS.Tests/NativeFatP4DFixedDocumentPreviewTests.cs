@@ -25,7 +25,12 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Contains("NativePreviewLucideIcon.ChevronRight", preview, StringComparison.Ordinal);
         Assert.Contains("NativePreviewLucideIcon.RefreshCw", preview, StringComparison.Ordinal);
         Assert.Contains("NativePreviewLucideIcon.Save", preview, StringComparison.Ordinal);
-        Assert.Contains("NativePreviewLucideIcon.X", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("NativePreviewLucideIcon.X", preview, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment = HorizontalAlignment.Center", preview, StringComparison.Ordinal);
+        Assert.Contains("FitNativeReportPage(viewer)", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.FitToWidth()", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.FitToHeight()", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.Zoom = Math.Min(widthZoom, heightZoom)", preview, StringComparison.Ordinal);
         Assert.DoesNotContain("new DataGrid", preview, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsSource = snapshot.Rows", preview, StringComparison.Ordinal);
 
@@ -94,6 +99,11 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
         var layout = NativeFatP4DReportAdapter.Build(snapshot, draft: true);
         var bytes = IoFatPdfReportService.GenerateLayout(layout, snapshot.IedName, snapshot.Rows[0].IecTelegram);
+        var reportText = layout.Pages
+            .SelectMany(page => page.Commands)
+            .OfType<IoFatReportTextCommand>()
+            .Select(command => command.Text)
+            .ToArray();
 
         Assert.Equal("52_ACB1 Status", snapshot.Rows[0].Signal);
         Assert.Equal("COMPLETE", snapshot.Rows[0].Result);
@@ -101,12 +111,43 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value1TimestampText));
         Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value2TimestampText));
+        Assert.Contains("OK", reportText);
+        Assert.DoesNotContain("COMPLETE", reportText);
+        Assert.Contains("ARSAS", reportText);
+        Assert.DoesNotContain(reportText, text => text.Contains("COMTRADE", StringComparison.OrdinalIgnoreCase));
         Assert.True(layout.Pages.Count >= 2);
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "TESTED BY");
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "WITNESSED BY");
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "APPROVED BY");
         Assert.True(bytes.Length > 32);
         Assert.Equal("%PDF-1.4", Encoding.ASCII.GetString(bytes, 0, 8));
+    }
+
+    [Fact]
+    public void P4D_ReportUsesSharedSignalNamingAndCustomerFacingCopy()
+    {
+        var snapshot = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatPrintPreviewSnapshot.cs"));
+        var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
+        var finalization = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportFinalization.cs"));
+        var branding = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportBranding.cs"));
+
+        Assert.Contains("IoFatSignalDisplayNameFormatter.Format(point.SignalName, point.IecReference)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportBranding.AddLogo", adapter, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportBranding.AddLogo", finalization, StringComparison.Ordinal);
+        Assert.Contains("\"ARSAS\"", branding, StringComparison.Ordinal);
+        Assert.Contains("return value.Equals(\"COMPLETE\", StringComparison.OrdinalIgnoreCase) ? \"OK\" : value;", adapter, StringComparison.Ordinal);
+
+        foreach (var internalCopy in new[]
+                 {
+                     "Canonical Explorer snapshot",
+                     "Immutable Engineering FAT snapshot",
+                     "Final acceptance record for the immutable",
+                     "blank sign-off fields are intentionally not prefilled"
+                 })
+        {
+            Assert.DoesNotContain(internalCopy, adapter, StringComparison.Ordinal);
+            Assert.DoesNotContain(internalCopy, finalization, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
