@@ -19,6 +19,8 @@ public sealed record NativeFatEvidenceHydrationResult(
 /// P2 local evidence persistence/hydration for the native Engineering FAT surface.
 /// This service owns only sparse Value 1 / Value 2 / Result data. It never touches
 /// Engineering acquisition, SCL, reports, MMS sessions, polling cadence, or canonical rows.
+/// Existing IO FAT snapshots are read as passive evidence provenance only; opening FAT never
+/// opens/restores their workspace model or starts any legacy bootstrap path.
 /// </summary>
 public sealed class NativeFatEvidenceHydrationService : IDisposable
 {
@@ -30,18 +32,35 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
         WriteIndented = false
     };
 
+    private static readonly HashSet<string> FunctionalConstraintTokens = new(
+        new[] { "st", "mx", "sp", "sv", "cf", "dc", "sg", "se", "sr", "or", "bl", "ex", "co", "us", "ms", "rp", "br", "lg", "go", "gs" },
+        StringComparer.OrdinalIgnoreCase);
+
     private readonly string _rootDirectory;
+    private readonly string _legacyProjectsRoot;
     private readonly SemaphoreSlim _ioGate = new(1, 1);
     private bool _disposed;
 
-    public NativeFatEvidenceHydrationService(string? rootDirectory = null)
+    public NativeFatEvidenceHydrationService(
+        string? rootDirectory = null,
+        string? legacyProjectsRoot = null)
     {
-        _rootDirectory = string.IsNullOrWhiteSpace(rootDirectory)
+        var usingDefaultRoot = string.IsNullOrWhiteSpace(rootDirectory);
+        _rootDirectory = usingDefaultRoot
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ARSAS",
                 "Native FAT Evidence")
-            : Path.GetFullPath(rootDirectory);
+            : Path.GetFullPath(rootDirectory!);
+
+        _legacyProjectsRoot = !string.IsNullOrWhiteSpace(legacyProjectsRoot)
+            ? Path.GetFullPath(legacyProjectsRoot)
+            : usingDefaultRoot
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "ARSAS",
+                    "IO Testing Projects")
+                : string.Empty;
     }
 
     public async Task<NativeFatEvidenceHydrationResult> HydrateAsync(
@@ -54,9 +73,7 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
         // Snapshot canonical identity synchronously on the caller/UI thread. Everything
         // after this point is file IO / JSON work and does not enumerate the live collection.
         var identity = CaptureIdentity(device);
-        var canonicalKeys = device.Points
-            .Select(NativeFatCanonicalEvidenceOverlay.BuildRowKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var canonical = CaptureCanonicalIdentity(device);
         var stopwatch = Stopwatch.StartNew();
         var path = SnapshotPath(identity.DeviceId);
 
@@ -66,7 +83,25 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             if (!File.Exists(path))
             {
+                // First native launch may still have evidence in the pre-P1 persistent
+                // project snapshot. Read it passively and map only uniquely covered rows.
+                var legacy = await TryHydrateLegacySnapshotAsync(
+                    identity,
+                    canonical,
+                    cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
+                if (legacy != null)
+                {
+                    return new NativeFatEvidenceHydrationResult(
+                        true,
+                        true,
+                        legacy.EvidenceByRow.Count,
+                        legacy.IgnoredRows,
+                        stopwatch.ElapsedMilliseconds,
+                        $"Restored {legacy.EvidenceByRow.Count} legacy FAT evidence row(s) for {identity.DeviceName} in {stopwatch.ElapsedMilliseconds} ms without opening the legacy workspace.",
+                        legacy.EvidenceByRow);
+                }
+
                 return EmptyResult(
                     stopwatch.ElapsedMilliseconds,
                     $"No saved FAT evidence exists yet for {identity.DeviceName}.");
@@ -86,20 +121,15 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
             foreach (var pair in document.EvidenceByRow ?? new Dictionary<string, NativeFatEvidenceSlotState>())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!canonicalKeys.Contains(pair.Key))
+                if (!canonical.RowKeys.Contains(pair.Key))
                 {
                     ignored++;
                     continue;
                 }
 
                 var source = pair.Value;
-                if (source == null ||
-                    (string.IsNullOrWhiteSpace(source.Value1) &&
-                     string.IsNullOrWhiteSpace(source.Value2) &&
-                     string.IsNullOrWhiteSpace(source.Result)))
-                {
+                if (source == null || IsEmpty(source))
                     continue;
-                }
 
                 loaded[pair.Key] = Clone(source);
             }
@@ -207,6 +237,352 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
         _ioGate.Dispose();
     }
 
+    private async Task<LegacyHydration?> TryHydrateLegacySnapshotAsync(
+        NativeFatDeviceIdentity identity,
+        CanonicalEvidenceIdentity canonical,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_legacyProjectsRoot) || !Directory.Exists(_legacyProjectsRoot))
+            return null;
+
+        string[] candidates;
+        try
+        {
+            candidates = Directory
+                .EnumerateFiles(_legacyProjectsRoot, "project.snapshot.json", SearchOption.AllDirectories)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var bytes = await File.ReadAllBytesAsync(candidate, cancellationToken).ConfigureAwait(false);
+                using var document = JsonDocument.Parse(bytes);
+                if (!TryGetProjectIeds(document.RootElement, out var ieds) ||
+                    !TryFindLegacyIed(ieds, identity, out var legacyIed))
+                {
+                    continue;
+                }
+
+                // Newest matching snapshot is authoritative, including an intentionally
+                // empty evidence set. Never resurrect older evidence after a later clear.
+                return ExtractLegacyEvidence(legacyIed, canonical);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
+            {
+                // A damaged/unreadable unrelated historical snapshot must not block FAT.
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryGetProjectIeds(JsonElement root, out JsonElement ieds)
+    {
+        ieds = default;
+        if (!root.TryGetProperty("project", out var project) ||
+            !project.TryGetProperty("ieds", out ieds) ||
+            ieds.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryFindLegacyIed(
+        JsonElement ieds,
+        NativeFatDeviceIdentity identity,
+        out JsonElement legacyIed)
+    {
+        legacyIed = default;
+        JsonElement? nameAndIp = null;
+        JsonElement? uniqueIp = null;
+        var ipMatches = 0;
+
+        foreach (var ied in ieds.EnumerateArray())
+        {
+            var liveDeviceId = GetString(ied, "liveDeviceId");
+            if (!string.IsNullOrWhiteSpace(liveDeviceId) &&
+                liveDeviceId.Equals(identity.DeviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                legacyIed = ied;
+                return true;
+            }
+
+            var ip = GetString(ied, "ipAddress");
+            if (!ip.Equals(identity.IpAddress, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            ipMatches++;
+            uniqueIp = ied;
+            if (GetString(ied, "iedName").Equals(identity.DeviceName, StringComparison.OrdinalIgnoreCase))
+                nameAndIp = ied;
+        }
+
+        if (nameAndIp.HasValue)
+        {
+            legacyIed = nameAndIp.Value;
+            return true;
+        }
+
+        if (ipMatches == 1 && uniqueIp.HasValue)
+        {
+            legacyIed = uniqueIp.Value;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static LegacyHydration ExtractLegacyEvidence(
+        JsonElement legacyIed,
+        CanonicalEvidenceIdentity canonical)
+    {
+        var loaded = new Dictionary<string, NativeFatEvidenceSlotState>(StringComparer.OrdinalIgnoreCase);
+        var ignored = 0;
+        if (!legacyIed.TryGetProperty("testPoints", out var testPoints) ||
+            testPoints.ValueKind != JsonValueKind.Array)
+        {
+            return new LegacyHydration(loaded, ignored);
+        }
+
+        foreach (var point in testPoints.EnumerateArray())
+        {
+            if (!point.TryGetProperty("runtime", out var runtime) || runtime.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var value1 = GetEvidenceRaw(runtime, "value1Evidence");
+            if (string.IsNullOrWhiteSpace(value1))
+                value1 = GetEvidenceRaw(runtime, "onEvidence");
+            var value2 = GetEvidenceRaw(runtime, "value2Evidence");
+            if (string.IsNullOrWhiteSpace(value2))
+                value2 = GetEvidenceRaw(runtime, "offEvidence");
+            var result = ReadLegacyResult(point, runtime, value1, value2);
+
+            if (string.IsNullOrWhiteSpace(value1) &&
+                string.IsNullOrWhiteSpace(value2) &&
+                string.IsNullOrWhiteSpace(result))
+            {
+                continue;
+            }
+
+            var rowKey = ResolveLegacyRowKey(point, canonical);
+            if (string.IsNullOrWhiteSpace(rowKey))
+            {
+                ignored++;
+                continue;
+            }
+
+            if (!loaded.TryGetValue(rowKey, out var slot))
+            {
+                slot = new NativeFatEvidenceSlotState();
+                loaded[rowKey] = slot;
+            }
+
+            if (string.IsNullOrWhiteSpace(slot.Value1) && !string.IsNullOrWhiteSpace(value1))
+                slot.Value1 = value1;
+            if (string.IsNullOrWhiteSpace(slot.Value2) && !string.IsNullOrWhiteSpace(value2))
+                slot.Value2 = value2;
+            if (string.IsNullOrWhiteSpace(slot.Result) && !string.IsNullOrWhiteSpace(result))
+                slot.Result = result;
+        }
+
+        return new LegacyHydration(loaded, ignored);
+    }
+
+    private static string? ResolveLegacyRowKey(
+        JsonElement point,
+        CanonicalEvidenceIdentity canonical)
+    {
+        var matches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in new[]
+                 {
+                     "sourceIecReference",
+                     "eventLogSearchReference",
+                     "reportDisplayReference",
+                     "objectReference",
+                     "signalAddress"
+                 })
+        {
+            var reference = GetString(point, property);
+            foreach (var alias in ReferenceAliases(reference))
+            {
+                if (canonical.AliasToRowKey.TryGetValue(alias, out var rowKey) &&
+                    !string.IsNullOrWhiteSpace(rowKey))
+                {
+                    matches.Add(rowKey);
+                }
+            }
+        }
+
+        return matches.Count == 1 ? matches.First() : null;
+    }
+
+    private static string ReadLegacyResult(
+        JsonElement point,
+        JsonElement runtime,
+        string value1,
+        string value2)
+    {
+        var state = ReadStateOrdinal(runtime);
+        if (state == 5) return "PASS";
+        if (state == 6) return "REVIEW";
+        if (state == 7) return "FAILED";
+
+        var reviewStatus = GetString(point, "reviewStatus").Trim();
+        if (reviewStatus.Equals("PASS", StringComparison.OrdinalIgnoreCase) ||
+            reviewStatus.Equals("REVIEW", StringComparison.OrdinalIgnoreCase) ||
+            reviewStatus.Equals("FAILED", StringComparison.OrdinalIgnoreCase))
+        {
+            return reviewStatus.ToUpperInvariant();
+        }
+
+        var captureMode = ReadCaptureModeOrdinal(point);
+        return captureMode == 1 &&
+               !string.IsNullOrWhiteSpace(value1) &&
+               !string.IsNullOrWhiteSpace(value2)
+            ? "COMPLETE"
+            : string.Empty;
+    }
+
+    private static int ReadStateOrdinal(JsonElement runtime)
+    {
+        if (!runtime.TryGetProperty("state", out var state))
+            return -1;
+        if (state.ValueKind == JsonValueKind.Number && state.TryGetInt32(out var ordinal))
+            return ordinal;
+        if (state.ValueKind != JsonValueKind.String)
+            return -1;
+
+        return (state.GetString() ?? string.Empty).Trim() switch
+        {
+            "Passed" => 5,
+            "Review" => 6,
+            "Failed" => 7,
+            _ => -1
+        };
+    }
+
+    private static int ReadCaptureModeOrdinal(JsonElement point)
+    {
+        if (!point.TryGetProperty("captureMode", out var mode))
+            return -1;
+        if (mode.ValueKind == JsonValueKind.Number && mode.TryGetInt32(out var ordinal))
+            return ordinal;
+        if (mode.ValueKind == JsonValueKind.String &&
+            string.Equals(mode.GetString(), "OperatorSnapshot", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+        return 0;
+    }
+
+    private static string GetEvidenceRaw(JsonElement runtime, string property)
+    {
+        if (!runtime.TryGetProperty(property, out var evidence) ||
+            evidence.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ||
+            evidence.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        return GetString(evidence, "rawValue").Trim();
+    }
+
+    private static string GetString(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value))
+            return string.Empty;
+        return value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? string.Empty
+                : value.ToString();
+    }
+
+    private static CanonicalEvidenceIdentity CaptureCanonicalIdentity(Iec61850MonitorDevice device)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var aliases = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var point in device.Points)
+        {
+            var key = NativeFatCanonicalEvidenceOverlay.BuildRowKey(point);
+            keys.Add(key);
+            AddAliases(aliases, point.IecReference, key);
+            AddAliases(aliases, point.IecTelegram, key);
+        }
+        return new CanonicalEvidenceIdentity(keys, aliases);
+    }
+
+    private static void AddAliases(
+        Dictionary<string, string?> aliases,
+        string? reference,
+        string rowKey)
+    {
+        foreach (var alias in ReferenceAliases(reference))
+        {
+            if (aliases.TryGetValue(alias, out var existing))
+            {
+                if (!string.Equals(existing, rowKey, StringComparison.OrdinalIgnoreCase))
+                    aliases[alias] = null;
+            }
+            else
+            {
+                aliases[alias] = rowKey;
+            }
+        }
+    }
+
+    private static IEnumerable<string> ReferenceAliases(string? reference)
+    {
+        var normalized = NormalizeReference(reference);
+        if (normalized.Length == 0)
+            yield break;
+
+        yield return normalized;
+        var withoutFc = RemoveFunctionalConstraint(normalized);
+        if (!withoutFc.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+            yield return withoutFc;
+    }
+
+    private static string NormalizeReference(string? reference)
+    {
+        var text = (reference ?? string.Empty)
+            .Trim()
+            .Replace('$', '.')
+            .Replace("..", ".", StringComparison.Ordinal)
+            .ToLowerInvariant();
+        while (text.Contains("..", StringComparison.Ordinal))
+            text = text.Replace("..", ".", StringComparison.Ordinal);
+        return text.Trim('.');
+    }
+
+    private static string RemoveFunctionalConstraint(string normalized)
+    {
+        var slash = normalized.IndexOf('/');
+        if (slash < 0 || slash >= normalized.Length - 1)
+            return normalized;
+
+        var domain = normalized[..(slash + 1)];
+        var path = normalized[(slash + 1)..].Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (path.Length < 3 || !FunctionalConstraintTokens.Contains(path[1]))
+            return normalized;
+
+        return domain + string.Join('.', path.Where((_, index) => index != 1));
+    }
+
     private static NativeFatDeviceIdentity CaptureIdentity(Iec61850MonitorDevice device)
         => new(
             device.DeviceId,
@@ -220,6 +596,11 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
             Value2 = source.Value2,
             Result = source.Result
         };
+
+    private static bool IsEmpty(NativeFatEvidenceSlotState slot)
+        => string.IsNullOrWhiteSpace(slot.Value1) &&
+           string.IsNullOrWhiteSpace(slot.Value2) &&
+           string.IsNullOrWhiteSpace(slot.Result);
 
     private static NativeFatEvidenceHydrationResult EmptyResult(long elapsedMilliseconds, string message)
         => new(
@@ -240,6 +621,14 @@ public sealed class NativeFatEvidenceHydrationService : IDisposable
         string DeviceId,
         string DeviceName,
         string IpAddress);
+
+    private sealed record CanonicalEvidenceIdentity(
+        HashSet<string> RowKeys,
+        Dictionary<string, string?> AliasToRowKey);
+
+    private sealed record LegacyHydration(
+        IReadOnlyDictionary<string, NativeFatEvidenceSlotState> EvidenceByRow,
+        int IgnoredRows);
 
     private sealed class NativeFatEvidenceDocument
     {
