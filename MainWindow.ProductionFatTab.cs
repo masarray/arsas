@@ -85,7 +85,10 @@ public partial class MainWindow
         var effectiveStatus = isBusy && !string.IsNullOrWhiteSpace(statusText)
             ? $"{statusText}"
             : statusText;
-        return BuildNativeFatCanonicalWorkspace(effectiveStatus);
+
+        var surface = BuildNativeFatCanonicalWorkspace(effectiveStatus);
+        ApplyNativeFatP4CColumnContract();
+        return surface;
     }
 
     internal void ShowProductionFatBootstrapState(string message, bool isBusy)
