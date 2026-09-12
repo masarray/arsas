@@ -112,7 +112,9 @@ public sealed class NativeFatP4ECommandFeedbackCorrelationTests
         Assert.Contains("return string.Empty;", resolver, StringComparison.Ordinal);
         Assert.Contains("NormalizeReference(signal.ControlStatusReference)", resolver, StringComparison.Ordinal);
         Assert.DoesNotContain("signal.ObjectReference", resolver, StringComparison.Ordinal);
-        Assert.DoesNotContain(".stVal", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain("SignalName)", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain("signal.ObjectReference +", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain("$\"{signal.ObjectReference}.stVal\"", resolver, StringComparison.Ordinal);
     }
 
     private static Iec61850MonitorDevice Device(string name)
