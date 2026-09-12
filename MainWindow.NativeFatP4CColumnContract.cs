@@ -1,4 +1,5 @@
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
 
