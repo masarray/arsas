@@ -11,9 +11,9 @@ public sealed record NativeFatPrintPreviewRow(
     string Quality,
     string LiveValue,
     string Value1,
-    string Value1Timestamp,
+    string Value1TimestampText,
     string Value2,
-    string Value2Timestamp,
+    string Value2TimestampText,
     string Result);
 
 /// <summary>
