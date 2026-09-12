@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services.IoTesting;
@@ -9,13 +10,15 @@ public sealed record NativeFatPrintPreviewRow(
     string Quality,
     string LiveValue,
     string Value1,
+    string Value1Timestamp,
     string Value2,
+    string Value2Timestamp,
     string Result);
 
 /// <summary>
 /// Immutable selected-IED-only report input for native Engineering FAT.
-/// Capture copies the exact P4C visible contract from canonical Engineering rows plus
-/// sparse evidence overlay. No live row/evidence object is retained after Capture returns.
+/// Capture copies the exact native FAT row order plus sparse evidence overlay. No live
+/// row/evidence object is retained after Capture returns and acquisition is never restarted.
 /// </summary>
 public sealed class NativeFatPrintPreviewSnapshot
 {
@@ -53,32 +56,23 @@ public sealed class NativeFatPrintPreviewSnapshot
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(cache);
 
-        // Materialize in the current canonical Engineering row order. Every value below
-        // is copied now; P4D never binds back to device.Points or EvidenceByRow.
-        // Value 1/2 deliberately use the exact operator-facing P4B display text so the
-        // relay/ARSAS timestamp visible in FAT is preserved in Print Preview and PDF.
         var rows = device.Points.Select(point =>
         {
-            var value1 = NativeFatCanonicalEvidenceOverlay.ReadDisplay(
-                cache,
-                point,
-                NativeFatEvidenceField.Value1).Trim();
-            var value2 = NativeFatCanonicalEvidenceOverlay.ReadDisplay(
-                cache,
-                point,
-                NativeFatEvidenceField.Value2).Trim();
-            var result = NativeFatCanonicalEvidenceOverlay.ReadRaw(
-                cache,
-                point,
-                NativeFatEvidenceField.Result).Trim();
+            var value1 = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1);
+            var value2 = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2);
+            var capture1 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value1);
+            var capture2 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value2);
+            var result = NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result);
 
             return new NativeFatPrintPreviewRow(
-                Copy(point.SignalName),
+                point.SignalName ?? string.Empty,
                 Copy(point.IecTelegram),
                 Copy(point.Quality),
                 Display(point.DisplayValue),
                 Display(value1),
+                DisplayTimestamp(capture1),
                 Display(value2),
+                DisplayTimestamp(capture2),
                 Display(result));
         }).ToArray();
 
@@ -89,6 +83,14 @@ public sealed class NativeFatPrintPreviewSnapshot
             Copy(device.IpAddress),
             device.Port,
             rows);
+    }
+
+    private static string DisplayTimestamp(FatValueEvidence? evidence)
+    {
+        if (evidence is null)
+            return "—";
+        var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
+        return timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 
     private static bool HasEvidence(string? value)
