@@ -90,12 +90,16 @@ internal static class NativeFatP4DReportAdapter
                 Muted));
         }
 
-        return new IoFatReportLayoutPlan(
+        var baseLayout = new IoFatReportLayoutPlan(
             snapshot.DeviceId,
             snapshot.CapturedAt,
             draft,
             pages.Select((commands, index) =>
                 new IoFatReportPagePlan(index + 1, PageWidth, PageHeight, commands.ToArray())).ToArray());
+
+        // Final acceptance sign-off is part of the exact immutable layout shared by preview
+        // and Save PDF. Fields stay blank by design; no operator identity/evidence is invented.
+        return NativeFatReportFinalization.AppendSignOff(baseLayout, snapshot);
     }
 
     private static List<IoFatReportCommand> NewPage(
