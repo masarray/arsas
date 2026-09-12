@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -9,6 +10,8 @@ namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
+    private bool _nativeFatObservationStatusHooked;
+
     /// <summary>
     /// Native FAT is a thin view over the canonical IEC Explorer rows. The grid keeps
     /// SelectedDevice.Points as its ItemsSource and adds only sparse evidence columns.
@@ -19,6 +22,15 @@ public partial class MainWindow
     {
         if (_nativeFatCanonicalGrid == null)
             return;
+
+        if (!_nativeFatObservationStatusHooked)
+        {
+            // Keep observation progress on the same evidence event authority as V1/V2/Result.
+            // The callback is posted at Background priority so the ARM click's generic status
+            // cannot overwrite the more useful row-level "1 / 2" or "2 / 2" confirmation.
+            _nativeFatArmCoordinator.EvidenceChanged += NativeFatObservationStatus_EvidenceChanged;
+            _nativeFatObservationStatusHooked = true;
+        }
 
         _nativeFatCanonicalGrid.Columns.Clear();
         _nativeFatCanonicalGrid.FrozenColumnCount = 2;
@@ -44,6 +56,36 @@ public partial class MainWindow
             });
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceColumn(this, "Result", NativeFatEvidenceField.Result, 110));
+    }
+
+    private void NativeFatObservationStatus_EvidenceChanged(object? sender, NativeFatEvidenceChangedEventArgs e)
+    {
+        void UpdateObservationStatus()
+        {
+            if (_nativeFatStatusText == null ||
+                !string.Equals(_nativeFatBoundIedKey, e.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                !_nativeFatSessionByIed.TryGetValue(e.DeviceId, out var cache))
+            {
+                return;
+            }
+
+            var value1 = NativeFatCanonicalEvidenceOverlay.Read(cache, e.Point, NativeFatEvidenceField.Value1);
+            var value2 = NativeFatCanonicalEvidenceOverlay.Read(cache, e.Point, NativeFatEvidenceField.Value2);
+            var observations = (string.IsNullOrWhiteSpace(value1) ? 0 : 1) +
+                               (string.IsNullOrWhiteSpace(value2) ? 0 : 1);
+            var result = NativeFatCanonicalEvidenceOverlay.Read(cache, e.Point, NativeFatEvidenceField.Result);
+            var signal = string.IsNullOrWhiteSpace(e.Point.SignalName)
+                ? e.Point.IecTelegram
+                : e.Point.SignalName.Trim();
+
+            _nativeFatStatusText.Text = string.IsNullOrWhiteSpace(result)
+                ? $"{signal} · {observations} / 2 observations"
+                : $"{signal} · {observations} / 2 observations · {result}";
+        }
+
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(UpdateObservationStatus));
     }
 
     // Retained as an isolated formatter for report/tests and compatibility paths. The visible
