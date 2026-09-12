@@ -77,16 +77,8 @@ public partial class MainWindow
         TryInstallProductionFatTabPivot();
     }
 
-    private FrameworkElement BuildProductionFatPermanentHost(
-        string? statusText = null,
-        bool isBusy = false)
-    {
-        var effectiveStatus = isBusy && !string.IsNullOrWhiteSpace(statusText)
-            ? $"{statusText}"
-            : statusText;
-
-        return BuildNativeFatCanonicalWorkspace(effectiveStatus);
-    }
+    private FrameworkElement BuildProductionFatPermanentHost()
+        => BuildNativeFatCanonicalWorkspace();
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
