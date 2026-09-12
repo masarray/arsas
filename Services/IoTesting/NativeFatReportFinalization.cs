@@ -51,10 +51,11 @@ internal static class NativeFatReportFinalization
     {
         var commands = new List<IoFatReportCommand>();
 
-        Text(commands, Margin, 566d, 490d, "ARSAS | IEC 61850 FAT", IoFatReportFontKind.Bold, 7.2d, Muted);
+        NativeFatReportBranding.AddLogo(commands, PageWidth - Margin - 102d, 582d);
+        Text(commands, Margin, 566d, 490d, "IEC 61850 FAT", IoFatReportFontKind.Bold, 7.2d, Muted);
         Text(commands, Margin, 544d, 520d, "FAT Acceptance Sign-Off", IoFatReportFontKind.Bold, 17.2d, Navy);
         Text(commands, Margin, 522d, 540d,
-            "Final acceptance record for the immutable IEC 61850 FAT evidence contained in this report.",
+            "Final acceptance record for the IEC 61850 FAT evidence in this report.",
             IoFatReportFontKind.Regular, 8.0d, Muted);
         Line(commands, Margin, 498d, PageWidth - Margin, 498d, Border, 0.8d);
 
@@ -79,7 +80,7 @@ internal static class NativeFatReportFinalization
 
         Line(commands, Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
         Text(commands, Margin, 24d, 620d,
-            $"Immutable FAT snapshot · {createdAt:yyyy-MM-dd HH:mm:ss zzz} · blank sign-off fields are intentionally not prefilled",
+            $"FAT evidence captured · {createdAt:yyyy-MM-dd HH:mm:ss zzz}",
             IoFatReportFontKind.Regular, 6.2d, Muted);
         Text(commands, PageWidth - Margin - 118d, 24d, 118d,
             $"Page {pageNumber} / {totalPages}",
