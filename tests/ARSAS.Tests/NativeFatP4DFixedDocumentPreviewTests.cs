@@ -97,7 +97,9 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
 
         Assert.Equal("52_ACB1 Status", snapshot.Rows[0].Signal);
         Assert.Equal("COMPLETE", snapshot.Rows[0].Result);
+        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
         Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value1TimestampText));
+        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value2TimestampText));
         Assert.True(layout.Pages.Count >= 2);
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "TESTED BY");
@@ -141,7 +143,10 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Contains("string Quality", snapshot, StringComparison.Ordinal);
         Assert.Contains("string Value1TimestampText", snapshot, StringComparison.Ordinal);
         Assert.Contains("string Value2TimestampText", snapshot, StringComparison.Ordinal);
-        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadDisplay", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadRaw", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadCapture", snapshot, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture1)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture2)", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Type", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Status", snapshot, StringComparison.Ordinal);
     }
