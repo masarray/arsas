@@ -99,10 +99,10 @@ public partial class MainWindow
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
 
-        // M2 permanent FAT host: authority establishment is also a readiness trigger.
-        // This covers SCL refresh on the same SelectedDevice, where PropertyChanged for
-        // SelectedDevice would otherwise not fire.
-        QueueProductionFatEngineeringBootstrap();
+        // P5 native FAT is a thin view over SelectedDevice.Points. Re-synchronize after
+        // static DataSet authority refresh so same-IED SCL refreshes are visible without
+        // reviving the retired Engineering -> legacy IoTest bootstrap.
+        SynchronizeProductionFatSelectedIed();
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)

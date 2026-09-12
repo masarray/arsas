@@ -9,24 +9,12 @@ public sealed class ProductionFatM7CleanupRegressionTests
         var bridge = File.ReadAllText(Path.Combine(repoRoot, "MainWindow.NativeFatWorkspace.cs"));
         var productionTab = File.ReadAllText(Path.Combine(repoRoot, "MainWindow.ProductionFatTab.cs"));
 
-        Assert.False(
-            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatExport.cs")),
-            "The retired native FAT export must not return; production FAT owns report/export delivery.");
-        Assert.False(
-            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatReportPreview.cs")),
-            "The retired native FAT side-panel preview must not return. Production FAT owns one in-place report preview.");
-        Assert.False(
-            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatHistoryInspector.cs")),
-            "The retired side-panel history inspector must not return as a second FAT presentation stack.");
-        Assert.False(
-            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatExplorerSync.cs")),
-            "The retired native FAT Explorer reconciler must not return; Engineering selection and production FAT own synchronization.");
-        Assert.False(
-            File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatPersistenceSafety.cs")),
-            "The retired native FAT persistence runtime must not return; production FAT storage remains the persistence authority.");
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatExport.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatReportPreview.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatHistoryInspector.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatExplorerSync.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.NativeFatPersistenceSafety.cs")));
 
-        // MainWindow.NativeFatWorkspace.cs is now only a compatibility bridge for the
-        // canonical seventh shell slot. It must never regain its own FAT runtime/state.
         Assert.Contains("private const int NativeFatWorkspaceIndex = 6", bridge, StringComparison.Ordinal);
         Assert.Contains("QueueNativeFatNavigationGeometry", bridge, StringComparison.Ordinal);
         Assert.DoesNotContain("DataGrid", bridge, StringComparison.Ordinal);
@@ -38,8 +26,6 @@ public sealed class ProductionFatM7CleanupRegressionTests
         Assert.DoesNotContain("BuildNativeFatWorkspaceContent", bridge, StringComparison.Ordinal);
         Assert.DoesNotContain("RegisterNativeFatWorkspace", bridge, StringComparison.Ordinal);
 
-        // Production FAT mounts directly into the canonical XAML slot. There must be no
-        // compatibility-field handshake with the retired native runtime.
         Assert.Contains("NativeFatTab.Content = BuildProductionFatPermanentHost();", productionTab, StringComparison.Ordinal);
         Assert.Contains("NativeFatTab.Content = surface;", productionTab, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton.ToolTip", productionTab, StringComparison.Ordinal);
@@ -52,7 +38,7 @@ public sealed class ProductionFatM7CleanupRegressionTests
     }
 
     [Fact]
-    public void ProductionReportPreviewAndExport_RemainSingleAuthority()
+    public void ExplicitCompatibilityReportPreviewAndExport_RemainAvailableAtBoundary()
     {
         var repoRoot = FindRepoRoot();
         var productionPreview = File.ReadAllText(Path.Combine(repoRoot, "IoListTestingWindow.PrintPreview.cs"));
@@ -67,13 +53,17 @@ public sealed class ProductionFatM7CleanupRegressionTests
     }
 
     [Fact]
-    public void Cleanup_DoesNotRetireProductionCapturePreflightOrEngineeringAcquisitionAuthority()
+    public void Cleanup_RetiresAutomaticBootstrapButKeepsExplicitProductionPreflightAuthority()
     {
-        var bootstrap = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
+        var repoRoot = FindRepoRoot();
         var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatProductionControllerAdapter.cs"));
         var contract = File.ReadAllText(FindRepoFile("docs/FAT_ENGINEERING_WORKSTATION_CONTRACT.md"));
 
-        Assert.Contains("AdoptEngineeringRuntimeWorkspaces", bootstrap, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatEngineeringBootstrap.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatNoFlicker.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Services", "IoTesting", "IoFatEngineeringWorkspaceProjectionService.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Services", "IoTesting", "IoFatCanonicalEvidenceMigrationService.cs")));
+
         Assert.Contains("IoTestSessionPreflight.Validate", adapter, StringComparison.Ordinal);
         Assert.Contains("IoFatProductionControllerAdapter", adapter, StringComparison.Ordinal);
         Assert.Contains("production FAT", contract, StringComparison.OrdinalIgnoreCase);

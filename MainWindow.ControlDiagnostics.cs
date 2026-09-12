@@ -475,10 +475,13 @@ public partial class MainWindow
 
     private static string ResolveControlFeedbackKey(SignalDefinition signal)
     {
-        var reference = string.IsNullOrWhiteSpace(signal.ControlStatusReference)
-            ? $"{signal.ObjectReference}.stVal"
-            : signal.ControlStatusReference;
-        return NormalizeReference(reference);
+        // P4E fail-closed contract: stable command confirmation is allowed only when live
+        // control discovery supplied an explicit status reference. Never infer .stVal from
+        // ObjectReference, SignalName, row order, or any runtime identifier.
+        if (string.IsNullOrWhiteSpace(signal.ControlStatusReference))
+            return string.Empty;
+
+        return NormalizeReference(signal.ControlStatusReference);
     }
 
     private async Task ExpirePositionCommandAsync(ActivePositionCommand state)

@@ -74,6 +74,7 @@ public partial class MainWindow
 
     private readonly ConditionalWeakTable<Button, Marker> _configuredCommandButtons = new();
     private readonly ConditionalWeakTable<Button, TactileButtonState> _tactileButtonStates = new();
+    private readonly ConditionalWeakTable<SignalDefinition, Marker> _controlSafetyDefaultsApplied = new();
     private readonly HashSet<string> _controlModelPreloadAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _controlModelPreloadGate = new(1, 1);
 
@@ -170,6 +171,8 @@ public partial class MainWindow
         if (button.DataContext is not SignalDefinition signal)
             return;
 
+        EnsureDefaultControlSafetyChecks(signal);
+
         var content = button.Content?.ToString()?.Trim() ?? string.Empty;
         if (content.Equals("Technical details", StringComparison.OrdinalIgnoreCase) ||
             content.Equals("Not available", StringComparison.OrdinalIgnoreCase))
@@ -212,6 +215,20 @@ public partial class MainWindow
         _configuredCommandButtons.Add(button, new Marker());
     }
 
+    private void EnsureDefaultControlSafetyChecks(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        _controlSafetyDefaultsApplied.GetValue(signal, current =>
+        {
+            // Safe command defaults are applied to the model once, not painted into XAML.
+            // After this first initialization the operator remains free to clear either flag;
+            // the periodic command-panel UX refresh must never force a user choice back on.
+            current.ControlInterlockCheck = true;
+            current.ControlSynchroCheck = true;
+            return new Marker();
+        });
+    }
+
     private static bool IsCommandActionButton(string content)
         => content is "Open" or "Close" or "True" or "False" or "Raise" or "Lower" or "Set";
 
@@ -251,6 +268,9 @@ public partial class MainWindow
         {
             foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
             {
+                foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
+                    EnsureDefaultControlSafetyChecks(signal);
+
                 // One MMS association is serialized. Do not queue background ctlModel
                 // inspection while an operator command owns the session.
                 if (device.CommandSignals.Any(signal => signal.ControlCommandBusy))

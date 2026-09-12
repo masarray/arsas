@@ -16,36 +16,26 @@ public sealed class ProductionFatM2PermanentHostRegressionTests
     }
 
     [Fact]
-    public void EngineeringStaticDataSet_FatBootstrapIsNavigationGated()
+    public void NormalFatEntry_HasNoAutomaticEngineeringBootstrapOwner()
     {
-        var bootstrap = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
+        var root = FindRepoRoot();
+        var tab = Read("MainWindow.ProductionFatTab.cs");
 
-        Assert.DoesNotContain(
-            "window.QueueProductionFatEngineeringBootstrap();\n    }\n\n    private void ProductionFatEngineeringBootstrap_SelectionChanged",
-            bootstrap,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "e.PropertyName != nameof(SelectedDevice) || MainTabs.SelectedIndex != NativeFatWorkspaceIndex",
-            bootstrap,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "!_productionFatEngineeringBootstrapInstalled || MainTabs.SelectedIndex != NativeFatWorkspaceIndex",
-            bootstrap,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "_productionFatEngineeringBootstrapBusy ||\n            MainTabs.SelectedIndex != NativeFatWorkspaceIndex",
-            bootstrap,
-            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(root, "MainWindow.ProductionFatEngineeringBootstrap.cs")));
+        Assert.False(File.Exists(Path.Combine(root, "MainWindow.ProductionFatNoFlicker.cs")));
+        Assert.False(File.Exists(Path.Combine(root, "Services", "IoTesting", "IoFatEngineeringWorkspaceProjectionService.cs")));
+
+        Assert.Contains("BuildNativeFatCanonicalWorkspace()", tab, StringComparison.Ordinal);
+        Assert.Contains("BindNativeFatCanonicalRows();", tab, StringComparison.Ordinal);
+        Assert.DoesNotContain("QueueProductionFatEngineeringBootstrap", tab, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowIoTestingWorkspaceAsync", tab, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AutomaticFatBootstrap_PreservesStaticReportOnlyAuthority()
+    public void ExplicitCompatibilityStaticReportOnlyAuthority_RemainsAvailableAtBoundary()
     {
-        var bootstrap = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
         var authority = Read("MainWindow.SharedStaticDataSetAuthority.cs");
 
-        Assert.Contains("PreserveSharedStaticDataSetAuthority(device);", bootstrap, StringComparison.Ordinal);
-        Assert.DoesNotContain("MarkSharedSelectionAuthority(device);", bootstrap, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("UseHybrid", authority, StringComparison.Ordinal);
         Assert.Contains("_sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);", authority, StringComparison.Ordinal);
