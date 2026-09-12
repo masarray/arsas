@@ -25,10 +25,10 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
         var columnContract = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
         var overlaySource = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatCanonicalEvidenceOverlay.cs"));
 
-        // P4C is the single column authority; evidence field declarations intentionally
-        // live there rather than in the canonical grid builder.
         Assert.Contains("NativeFatEvidenceField.Value1", columnContract, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value1Timestamp", columnContract, StringComparison.Ordinal);
         Assert.Contains("NativeFatEvidenceField.Value2", columnContract, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value2Timestamp", columnContract, StringComparison.Ordinal);
         Assert.Contains("NativeFatEvidenceField.Result", columnContract, StringComparison.Ordinal);
         Assert.Contains("NativeFatIedSessionCacheState", gridSource, StringComparison.Ordinal);
         Assert.Contains("TryBuildRowKey(point.DeviceName, point.IecTelegram", overlaySource, StringComparison.Ordinal);
@@ -56,13 +56,13 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
 
         Assert.Contains("FindResource(\"ModernDataGrid\") as Style", gridSource, StringComparison.Ordinal);
         Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
-        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 140);", columnContract, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 125);", columnContract, StringComparison.Ordinal);
+        Assert.Contains("new NativeFatEvidenceColumn(this, \"V1 Timestamp\", NativeFatEvidenceField.Value1Timestamp, 185)", columnContract, StringComparison.Ordinal);
+        Assert.Contains("new NativeFatEvidenceColumn(this, \"V2 Timestamp\", NativeFatEvidenceField.Value2Timestamp, 185)", columnContract, StringComparison.Ordinal);
         Assert.Contains("VirtualizingPanel.SetVirtualizationMode(_nativeFatCanonicalGrid, VirtualizationMode.Recycling);", gridSource, StringComparison.Ordinal);
         Assert.Contains("RowStyle = BuildEngineeringLiveRowStyle()", gridSource, StringComparison.Ordinal);
         Assert.Contains("CellStyle = BuildEngineeringLiveCellStyle()", gridSource, StringComparison.Ordinal);
 
-        // Engineering FAT must inherit the shared 32 px authority rather than the
-        // legacy IoList FAT local 40 px row family.
         Assert.DoesNotContain("RowHeight = 40", gridSource, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight = 40", gridSource, StringComparison.Ordinal);
     }
