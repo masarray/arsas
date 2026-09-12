@@ -6,16 +6,41 @@ namespace ARSAS.Tests;
 public sealed class NativeFatCanonicalEvidenceOverlayTests
 {
     [Fact]
-    public void BuildRowKey_ReusesEngineeringPointKeyInsteadOfDisplayName()
+    public void BuildRowKey_UsesIedNameAndIecTelegram_NotDeviceIdOrDisplayName()
     {
-        var first = Point("dev-1", "Trip", "AA1E1F06R4LD0/GGIO1.Ind1.stVal");
-        var second = Point("dev-1", "Trip", "AA1E1F06R4LD0/GGIO1.Ind2.stVal");
+        var first = Point("runtime-a", "Trip A", "AA1E1F06R4LD0/GGIO1.Ind1.stVal");
+        var recreated = Point("runtime-b", "Renamed display text", "AA1E1F06R4LD0/GGIO1.Ind1.stVal");
+        var secondSignal = Point("runtime-a", "Trip A", "AA1E1F06R4LD0/GGIO1.Ind2.stVal");
 
-        Assert.Equal(first.PointKey, NativeFatCanonicalEvidenceOverlay.BuildRowKey(first));
-        Assert.Equal(second.PointKey, NativeFatCanonicalEvidenceOverlay.BuildRowKey(second));
+        Assert.Equal("aa1e1f06r4|ld0/ggio1.ind1.stval", NativeFatCanonicalEvidenceOverlay.BuildRowKey(first));
+        Assert.Equal(
+            NativeFatCanonicalEvidenceOverlay.BuildRowKey(first),
+            NativeFatCanonicalEvidenceOverlay.BuildRowKey(recreated));
         Assert.NotEqual(
             NativeFatCanonicalEvidenceOverlay.BuildRowKey(first),
-            NativeFatCanonicalEvidenceOverlay.BuildRowKey(second));
+            NativeFatCanonicalEvidenceOverlay.BuildRowKey(secondSignal));
+        Assert.DoesNotContain("runtime-a", NativeFatCanonicalEvidenceOverlay.BuildRowKey(first), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Trip A", NativeFatCanonicalEvidenceOverlay.BuildRowKey(first), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MissingStableIdentity_FailsClosedWithoutSignalNameFallback()
+    {
+        var cache = new NativeFatIedSessionCacheState();
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = "runtime-a",
+            DeviceName = "AA1E1F06R4",
+            SignalName = "CSWI.Pos",
+            IecReference = string.Empty,
+            IecDataType = "BOOLEAN"
+        };
+
+        NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value1, "SHOULD-NOT-BIND");
+
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.BuildRowKey(point));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Empty(cache.EvidenceByRow);
     }
 
     [Fact]

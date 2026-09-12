@@ -93,8 +93,26 @@ public sealed class NativeFatArmCoordinator : IDisposable
         var armed = new ArmedDevice(device.DeviceId, cache, DateTimeOffset.Now);
         var seeded = 0;
 
+        // P4A: only one-to-one IEDName + IEC Telegram identities may own evidence.
+        // Missing or duplicate identities are skipped instead of being guessed by order,
+        // SignalName, SelectedIndex or runtime DeviceId.
+        var identityCounts = device.Points
+            .Select(point => NativeFatCanonicalEvidenceOverlay.TryBuildRowKey(point, out var key)
+                ? key
+                : string.Empty)
+            .Where(key => key.Length > 0)
+            .GroupBy(key => key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
         foreach (var point in device.Points)
         {
+            if (!NativeFatCanonicalEvidenceOverlay.TryBuildRowKey(point, out var rowKey) ||
+                !identityCounts.TryGetValue(rowKey, out var identityCount) ||
+                identityCount != 1)
+            {
+                continue;
+            }
+
             PropertyChangedEventHandler handler = (_, args) =>
             {
                 if (args.PropertyName is nameof(Iec61850MonitorPoint.Value) or nameof(Iec61850MonitorPoint.DisplayValue))
@@ -105,6 +123,18 @@ public sealed class NativeFatArmCoordinator : IDisposable
             armed.Subscriptions.Add(new PointSubscription(point, handler));
             if (ObserveCanonicalValue(armed, point))
                 seeded++;
+        }
+
+        if (armed.Subscriptions.Count == 0)
+        {
+            stopwatch.Stop();
+            return new NativeFatArmResult(
+                false,
+                false,
+                0,
+                0,
+                stopwatch.ElapsedMilliseconds,
+                $"{device.Name} has no uniquely addressable IEDName + IEC Telegram FAT rows; evidence was not armed.");
         }
 
         _armedDevices[device.DeviceId] = armed;
@@ -143,11 +173,12 @@ public sealed class NativeFatArmCoordinator : IDisposable
         if (!IsEvidenceCandidate(point, value))
             return false;
 
+        if (!NativeFatCanonicalEvidenceOverlay.TryBuildRowKey(point, out var rowKey))
+            return false;
+
         lock (armed.Gate)
         {
-            if (!armed.Cache.EvidenceByRow.TryGetValue(
-                    NativeFatCanonicalEvidenceOverlay.BuildRowKey(point),
-                    out var slot))
+            if (!armed.Cache.EvidenceByRow.TryGetValue(rowKey, out var slot))
             {
                 NativeFatCanonicalEvidenceOverlay.Write(
                     armed.Cache,
