@@ -59,6 +59,21 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
     }
 
     [Fact]
+    public void P4C_EvidenceEventSurfacesOneOfTwoThenTwoOfTwoWithCompleteResult()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
+        var overlay = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatCanonicalEvidenceOverlay.cs"));
+
+        Assert.Contains("_nativeFatArmCoordinator.EvidenceChanged += NativeFatObservationStatus_EvidenceChanged", source, StringComparison.Ordinal);
+        Assert.Contains("DispatcherPriority.Background", source, StringComparison.Ordinal);
+        Assert.Contains("{observations} / 2 observations", source, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value1", source, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value2", source, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Result", source, StringComparison.Ordinal);
+        Assert.Contains("HasValue1(slot) && HasValue2(slot) ? \"COMPLETE\"", overlay, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void P4C_CanonicalGridBuilderHasNoLegacyColumnInstallationPath()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
