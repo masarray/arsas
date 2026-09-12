@@ -7,14 +7,13 @@ namespace ArIED61850Tester;
 
 /// <summary>
 /// Engineering FAT pivot. The normal FAT destination is a native view over the exact
-/// Engineering live-row collection; the legacy IoListTestingWindow host remains available
-/// only for explicit/manual compatibility workflows.
+/// Engineering live-row collection. The legacy IoListTestingWindow host remains available
+/// only for explicit/manual compatibility workflows and is never bootstrapped by navigation.
 /// </summary>
 public partial class MainWindow
 {
     private bool _productionFatTabInstalled;
     private IoListTestingWindow? _productionFatWindow;
-    private FrameworkElement? _productionFatSurface;
     private DispatcherTimer? _productionFatInstallRetry;
 
     internal bool ProductionFatTabReady => _productionFatTabInstalled && NativeFatTab != null;
@@ -59,8 +58,8 @@ public partial class MainWindow
         _productionFatTabInstalled = true;
         NativeFatTab.Content = BuildProductionFatPermanentHost();
 
-        // P1A: FAT installation is a view bind only. Do not queue the historical
-        // Engineering -> IoTest projection/bootstrap from normal FAT navigation.
+        // P5 normal-entry boundary: installing/navigating FAT is only a canonical view bind.
+        // No Engineering -> IoTest projection/bootstrap module exists on this path.
         SynchronizeProductionFatSelectedIed();
 
         NavNativeFatButton.ToolTip = "Factory Acceptance Test · canonical Engineering rows + sparse evidence";
@@ -87,23 +86,6 @@ public partial class MainWindow
             : statusText;
 
         return BuildNativeFatCanonicalWorkspace(effectiveStatus);
-    }
-
-    internal void ShowProductionFatBootstrapState(string message, bool isBusy)
-    {
-        if (!ProductionFatTabReady || _productionFatWindow is { IsLoaded: true })
-            return;
-
-        // Legacy bootstrap diagnostics must not replace the canonical native FAT grid.
-        // Surface the message in the header while keeping Engineering rows visible.
-        if (_nativeFatStatusText != null)
-        {
-            _nativeFatStatusText.Text = message;
-            return;
-        }
-
-        NativeFatTab.Content = BuildProductionFatPermanentHost(message, isBusy);
-        SynchronizeProductionFatSelectedIed();
     }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -153,7 +135,6 @@ public partial class MainWindow
 
         SaveNativeFatSessionState();
         _productionFatWindow = window;
-        _productionFatSurface = surface;
         surface.DataContext = window;
         NativeFatTab.Content = surface;
         if (_persistentWorkbench != null)
@@ -178,7 +159,6 @@ public partial class MainWindow
 
         window.Closed -= ProductionFatWindow_Closed;
         _productionFatWindow = null;
-        _productionFatSurface = null;
         NativeFatTab.Content = BuildProductionFatPermanentHost();
         SynchronizeProductionFatSelectedIed();
     }
@@ -197,7 +177,6 @@ public partial class MainWindow
         _productionFatInstallRetry?.Stop();
         _productionFatInstallRetry = null;
         _productionFatWindow = null;
-        _productionFatSurface = null;
         if (_nativeFatCanonicalGrid != null)
             _nativeFatCanonicalGrid.CellEditEnding -= NativeFatCanonicalGrid_CellEditEnding;
         DisposeNativeFatArmCoordinator();
