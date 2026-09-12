@@ -55,13 +55,15 @@ public sealed class NativeFatPrintPreviewSnapshot
 
         // Materialize in the current canonical Engineering row order. Every value below
         // is copied now; P4D never binds back to device.Points or EvidenceByRow.
+        // Value 1/2 deliberately use the exact operator-facing P4B display text so the
+        // relay/ARSAS timestamp visible in FAT is preserved in Print Preview and PDF.
         var rows = device.Points.Select(point =>
         {
-            var value1 = NativeFatCanonicalEvidenceOverlay.ReadRaw(
+            var value1 = NativeFatCanonicalEvidenceOverlay.ReadDisplay(
                 cache,
                 point,
                 NativeFatEvidenceField.Value1).Trim();
-            var value2 = NativeFatCanonicalEvidenceOverlay.ReadRaw(
+            var value2 = NativeFatCanonicalEvidenceOverlay.ReadDisplay(
                 cache,
                 point,
                 NativeFatEvidenceField.Value2).Trim();
