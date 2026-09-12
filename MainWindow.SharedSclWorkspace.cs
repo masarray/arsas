@@ -1,72 +1,65 @@
-using System.IO;
-using System.Windows;
 using ArIED61850Tester.Models;
-using ArIED61850Tester.Models.IoTesting;
 using ArIED61850Tester.Services;
-using ArIED61850Tester.Services.IoTesting;
 
 namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
-    private enum SclSignalSelectionMode
-    {
-        StaticDataSet,
-        Manual
-    }
-
-    // This records that the operator has made an explicit selection decision for the
-    // shared SCL device. It is intentionally separate from "any selected signal" so an
-    // intentionally empty manual selection is preserved when Engineering opens FAT.
-    private readonly HashSet<string> _sharedSclSelectionAuthorityDeviceIds =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    // Keep the operator's acquisition intent independently of transient runtime teardown.
-    // FAT and Engineering share one device/workspace, so entering FAT must never demote an
-    // explicitly selected Static DataSet report-only workspace into generic Hybrid/MMS.
-    private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    // Prompted Static DataSet selection is consumed by the same number of IEDs that were
-    // presented in that decision. This closes the golden #1888 hole where the FAT import
-    // path called MarkSharedSelectionAuthority and accidentally downgraded an explicit
-    // Static DataSet choice back to Hybrid before the window was shown.
+    private readonly HashSet<string> _sharedSclSelectionAuthorityDeviceIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _sharedSclStaticDataSetAuthorityDeviceIds = new(StringComparer.OrdinalIgnoreCase);
     private int _pendingSharedStaticSelectionAssignments;
 
-    private bool IsSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
-        => _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId) ||
-           Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
+    private bool UsesSharedSclSelectionAuthority(Iec61850MonitorDevice? device)
+        => device != null && _sharedSclSelectionAuthorityDeviceIds.Contains(device.DeviceId);
 
-    private SclSignalSelectionMode? PromptSclSignalSelectionMode(Window owner, int iedCount)
+    private bool UsesSharedStaticDataSetAuthority(Iec61850MonitorDevice? device)
+        => device != null && _sharedSclStaticDataSetAuthorityDeviceIds.Contains(device.DeviceId);
+
+    private void SynchronizeAllEngineeringSelectionsToFat(Iec61850MonitorDevice? device)
     {
-        var dialog = new SclSignalSelectionModeWindow(iedCount)
-        {
-            Owner = owner
-        };
-        if (dialog.ShowDialog() != true)
-        {
-            _pendingSharedStaticSelectionAssignments = 0;
-            return null;
-        }
+        if (device == null)
+            return;
 
-        var mode = dialog.UseStaticDataSet
-            ? SclSignalSelectionMode.StaticDataSet
-            : SclSignalSelectionMode.Manual;
-        _pendingSharedStaticSelectionAssignments = mode == SclSignalSelectionMode.StaticDataSet
-            ? Math.Max(1, iedCount)
-            : 0;
-        return mode;
+        foreach (var signal in device.Signals)
+            signal.IsSelectedForFat = signal.IsSelected;
     }
 
-    private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
+    private void SetSharedSclSelectionAuthority(Iec61850MonitorDevice device, bool enabled)
     {
-        // Static DataSet remains the protocol authority established by the report-only
-        // baseline. Materialize every ARIEC-owned member first, then select exactly one
-        // presentation/runtime row per literal static membership. A browsed alias carrying
-        // DataSetReference is not enough authority and must not inflate the live plan.
-        var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
-        RegisterRecoveredDataSetSignals(device, merge);
-        var authoritativeSignals = Iec61850StaticDataSetAuthoritySelection.Build(device);
+        if (enabled)
+            _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+        else
+            _sharedSclSelectionAuthorityDeviceIds.Remove(device.DeviceId);
+    }
+
+    private void SetSharedStaticDataSetAuthority(Iec61850MonitorDevice device, bool enabled)
+    {
+        if (enabled)
+            _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
+        else
+            _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
+    }
+
+    private void PreserveSharedStaticDataSetAuthority(Iec61850MonitorDevice device)
+    {
+        SetSharedSclSelectionAuthority(device, true);
+        SetSharedStaticDataSetAuthority(device, true);
+        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+    }
+
+    private void ApplySharedStaticDataSetSelectionAuthority(
+        Iec61850MonitorDevice device,
+        SclWorkspaceStaticDataSetMergeResult merge)
+    {
+        if (device == null)
+            return;
+
+        var authoritativeSignals = merge.AuthoritativeSignals
+            .Where(signal => signal != null)
+            .ToHashSet();
+
+        // Static DataSet mode is report-only by design. Selection here identifies exact
+        // report membership and must never fall through to cyclic process polling.
         Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
 
         device.BeginBulkSignalSelection();
@@ -99,10 +92,10 @@ public partial class MainWindow
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
 
-        // M2 permanent FAT host: authority establishment is also a readiness trigger.
-        // This covers SCL refresh on the same SelectedDevice, where PropertyChanged for
-        // SelectedDevice would otherwise not fire.
-        QueueProductionFatEngineeringBootstrap();
+        // P5 native FAT is a thin view over SelectedDevice.Points. Re-synchronize the
+        // canonical view after static DataSet authority refresh so a same-IED SCL refresh
+        // is visible immediately without reviving the retired Engineering -> IoTest bootstrap.
+        SynchronizeProductionFatSelectedIed();
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)
@@ -123,121 +116,40 @@ public partial class MainWindow
     {
         // The initial FAT import historically reached this helper for both branches. If the
         // immediately preceding operator decision was Static DataSet, preserve that explicit
-        // report-only authority instead of silently demoting it to Hybrid.
-        if (_pendingSharedStaticSelectionAssignments > 0)
+        // report-only authority instead of silently downgrading it to shared polling mode.
+        if (UsesSharedStaticDataSetAuthority(device) || _pendingSharedStaticSelectionAssignments > 0)
         {
-            ApplyStaticDataSetSelection(device);
+            PreserveSharedStaticDataSetAuthority(device);
+            if (_pendingSharedStaticSelectionAssignments > 0)
+                _pendingSharedStaticSelectionAssignments--;
             return;
         }
 
-        // Manual selection restores the normal Smart/Hybrid acquisition contract.
-        _sharedSclStaticDataSetAuthorityDeviceIds.Remove(device.DeviceId);
+        SetSharedSclSelectionAuthority(device, true);
+        SetSharedStaticDataSetAuthority(device, false);
+        Iec61850MonitoringModeRegistry.UseSharedSelection(device);
+    }
+
+    private void ClearSharedSelectionAuthority(Iec61850MonitorDevice device)
+    {
+        SetSharedSclSelectionAuthority(device, false);
+        SetSharedStaticDataSetAuthority(device, false);
         Iec61850MonitoringModeRegistry.UseHybrid(device);
-        _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+    }
+
+    private void ApplySharedSclSelectionAuthority(Iec61850MonitorDevice device)
+    {
+        SynchronizeAllEngineeringSelectionsToFat(device);
+        MarkSharedSelectionAuthority(device);
         SaveSignalSelectionMemory(device);
+        device.RefreshComputed();
     }
 
-    private string[] CurrentEngineeringSclSourcePaths()
-        => Devices
-            .Select(device => device.SclSourcePath)
-            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-    private void RegisterSharedSclSourcePaths(
-        IoTestProject project,
-        IEnumerable<IoTestIedPlan> ieds,
-        IReadOnlyCollection<IoFatSourceInput> sourceInputs)
+    private void ClearSharedSclSelectionAuthority(Iec61850MonitorDevice device)
     {
-        var uniquePathByFileName = sourceInputs
-            .GroupBy(input => Path.GetFileName(input.FilePath), StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() == 1)
-            .ToDictionary(
-                group => group.Key,
-                group => Path.GetFullPath(group.Single().FilePath),
-                StringComparer.OrdinalIgnoreCase);
-        var sourceById = project.Sources.ToDictionary(source => source.SourceId, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var ied in ieds)
-        {
-            var device = ResolveIoTestDevice(ied.LiveDeviceId)
-                         ?? ResolveIoTestDevice(ied.IpAddress)
-                         ?? ResolveIoTestDevice(ied.IedName);
-            if (device is null)
-                continue;
-
-            IoFatSourceDescriptor? source = null;
-            var sourceId = ied.TestPoints
-                .Select(point => point.SignalAddress)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) && sourceById.ContainsKey(value));
-            if (!string.IsNullOrWhiteSpace(sourceId))
-                source = sourceById[sourceId];
-
-            // Manual-only SCL workspaces can legitimately have zero static DataSet rows,
-            // so source identity must not depend on finding a FAT point first.
-            if (source is null && !string.IsNullOrWhiteSpace(device.SclSourceSha256))
-            {
-                source = project.Sources.FirstOrDefault(candidate => candidate.Sha256.Equals(
-                    device.SclSourceSha256,
-                    StringComparison.OrdinalIgnoreCase));
-            }
-            if (source is null && project.Sources.Count == 1)
-                source = project.Sources[0];
-            if (source is null && !string.IsNullOrWhiteSpace(device.SclSourcePath))
-            {
-                var currentName = Path.GetFileName(device.SclSourcePath);
-                source = project.Sources.FirstOrDefault(candidate => candidate.FileName.Equals(
-                    currentName,
-                    StringComparison.OrdinalIgnoreCase));
-            }
-            if (source is null || !uniquePathByFileName.TryGetValue(source.FileName, out var sourcePath))
-                continue;
-
-            device.SclSourcePath = sourcePath;
-            device.SclSourceSha256 = source.Sha256;
-        }
-    }
-
-    private async Task ApplyManualSelectionToFatProjectAsync(
-        IoTestProject project,
-        IEnumerable<IoTestIedPlan> ieds,
-        Window owner,
-        bool resetSelection)
-    {
-        foreach (var ied in ieds)
-        {
-            var device = ResolveIoTestDevice(ied.LiveDeviceId)
-                         ?? ResolveIoTestDevice(ied.IpAddress)
-                         ?? ResolveIoTestDevice(ied.IedName);
-            if (device is null)
-                continue;
-
-            if (resetSelection)
-            {
-                ClearSharedSignalSelection(device);
-                foreach (var point in ied.TestPoints)
-                    point.WorkspaceSelected = false;
-            }
-
-            await OpenSignalSelectionWizardAsync(
-                device,
-                autoStartAfterSave: false,
-                ownerOverride: owner);
-
-            // The FAT window is not yet attached during an initial FAT import, so perform
-            // the same bridge operation explicitly. Selected non-DataSet SCL signals are
-            // materialized here as persistent FAT rows; existing FAT TEST/disposition state
-            // is never rewritten by Engineering selection.
-            foreach (var signal in device.Signals)
-            {
-                IoFatEngineeringSelectionBridge.ApplyEngineeringSignalSelection(
-                    signal,
-                    signal.IsSelected,
-                    ied,
-                    device);
-            }
-
-            MarkSharedSelectionAuthority(device);
-        }
+        ClearSharedSignalSelection(device);
+        ClearSharedSelectionAuthority(device);
+        SaveSignalSelectionMemory(device);
+        device.RefreshComputed();
     }
 }
