@@ -46,8 +46,6 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
                 DateTimeOffset.UtcNow);
             await service.SaveAsync(before, saved);
 
-            // Simulate application/runtime recreation plus the exact row-order inversion that
-            // previously allowed CSWI evidence to appear on an unrelated THD row.
             var after = Device("runtime-after", "AA1E1F06R4");
             var thdAfter = Point(
                 after,
@@ -79,7 +77,10 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
             Assert.Equal("LD0/MMXU1.ThdPPV.phsA.cVal.mag.f", snapshot.Rows[0].IecTelegram);
             Assert.Equal("LD0/CSWI1.Pos.stVal", snapshot.Rows[1].IecTelegram);
             Assert.Equal("—", snapshot.Rows[0].Value1);
-            Assert.StartsWith("Open [01] - ", snapshot.Rows[1].Value1, StringComparison.Ordinal);
+            Assert.Equal("Open [01]", snapshot.Rows[1].Value1);
+            Assert.NotEqual("—", snapshot.Rows[1].Value1TimestampText);
+            Assert.Equal("Closed [10]", snapshot.Rows[1].Value2);
+            Assert.NotEqual("—", snapshot.Rows[1].Value2TimestampText);
         }
         finally
         {
@@ -180,7 +181,8 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
             DateTimeOffset.UtcNow);
 
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
-        Assert.Equal($"{rawValue} - 2026-09-12 06:46:31.958", snapshot.Rows[0].Value1);
+        Assert.Equal(rawValue, snapshot.Rows[0].Value1);
+        Assert.Equal("2026-09-12 06:46:31.958", snapshot.Rows[0].Value1TimestampText);
     }
 
     [Fact]
