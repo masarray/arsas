@@ -37,6 +37,7 @@ public partial class MainWindow
     /// P1C reuses the Engineering grid visual authority and virtualization contract.
     /// P1D makes Start FAT an ARM-only operation over those already-live row objects.
     /// P2 hydrates only sparse evidence asynchronously; canonical rows and live Value never wait.
+    /// P3 builds no report until Print Preview is clicked, then renders an immutable selected-IED snapshot.
     /// </summary>
     private FrameworkElement BuildNativeFatCanonicalWorkspace(string? statusText = null)
     {
@@ -104,6 +105,19 @@ public partial class MainWindow
             Margin = new Thickness(0, 0, 12, 0)
         };
         actionPanel.Children.Add(_nativeFatRowCountText);
+
+        _nativeFatPrintPreviewButton = new Button
+        {
+            Content = "Print Preview",
+            MinWidth = 104,
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 8, 0),
+            Style = TryFindResource("SoftButton") as Style,
+            IsEnabled = false,
+            ToolTip = "Capture an immutable Print Preview for the selected Engineering IED only."
+        };
+        _nativeFatPrintPreviewButton.Click += NativeFatPrintPreviewButton_Click;
+        actionPanel.Children.Add(_nativeFatPrintPreviewButton);
 
         _nativeFatStartButton = new Button
         {
@@ -243,6 +257,8 @@ public partial class MainWindow
             ? "FAT · select an Engineering IED"
             : $"FAT · {device.Name} · {device.IpAddress}:{device.Port}";
         _nativeFatRowCountText!.Text = device == null ? "0 rows" : $"{device.Points.Count} rows";
+        if (_nativeFatPrintPreviewButton != null)
+            _nativeFatPrintPreviewButton.IsEnabled = device?.Points.Count > 0;
 
         RestoreNativeFatSessionState(device);
         UpdateNativeFatArmUi(device);
@@ -669,6 +685,9 @@ public partial class MainWindow
         if (_nativeFatStartButton != null)
             _nativeFatStartButton.Click -= NativeFatStartButton_Click;
         _nativeFatStartButton = null;
+        if (_nativeFatPrintPreviewButton != null)
+            _nativeFatPrintPreviewButton.Click -= NativeFatPrintPreviewButton_Click;
+        _nativeFatPrintPreviewButton = null;
 
         if (_nativeFatCanonicalGrid != null)
         {
