@@ -10,6 +10,30 @@ public partial class MainWindow
 {
     private const string NativeFatPrintPreviewTitle = "IEC 61850 FAT Evidence Report";
     private const string NativeFatPrintPreviewSubtitle = "Static DataSet verification · generic Value 1 / Value 2 evidence · source identity preserved";
+    private Button? _nativeFatPrintPreviewButton;
+
+    private void NativeFatPrintPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        if (device == null || device.Points.Count == 0)
+        {
+            SetStatus("FAT · select an Engineering IED with canonical rows before opening Print Preview");
+            return;
+        }
+
+        // Commit the current operator evidence cell before copying the report snapshot.
+        // Capture is intentionally invoked only from this click path: normal FAT navigation,
+        // row binding, hydration, and acquisition never build a hidden report.
+        _nativeFatCanonicalGrid?.CommitEdit(DataGridEditingUnit.Cell, true);
+        _nativeFatCanonicalGrid?.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var snapshot = NativeFatPrintPreviewSnapshot.Capture(
+            device,
+            GetNativeFatSession(device.DeviceId));
+        ShowNativeFatPrintPreview(snapshot);
+        SetStatus(
+            $"FAT · Print Preview captured {snapshot.Rows.Count} immutable canonical row(s) for {snapshot.IedName}");
+    }
 
     /// <summary>
     /// P3 renderer. This method receives only an immutable selected-IED snapshot and never
