@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -74,6 +75,78 @@ public sealed class NativeFatP2EvidenceHydrationTests
         finally
         {
             TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task FirstNativeOpen_PassivelyHydratesUniqueLegacyEvidenceWithoutOpeningLegacyWorkspace()
+    {
+        var nativeRoot = TempRoot();
+        var legacyRoot = TempRoot();
+        try
+        {
+            var device = Device();
+            var point = Point(device.DeviceId, "Breaker", "AA1E1F06R4LD0/XCBR1.Pos.stVal");
+            device.Points.Add(point);
+
+            var legacyProject = new
+            {
+                project = new
+                {
+                    ieds = new[]
+                    {
+                        new
+                        {
+                            iedName = "AA1E1F06R4",
+                            ipAddress = "192.168.81.103",
+                            liveDeviceId = device.DeviceId,
+                            testPoints = new[]
+                            {
+                                new
+                                {
+                                    testPointId = "scl-manual-7496d038be4fdc18e340",
+                                    sourceIecReference = "LD0/XCBR1$ST$Pos$stVal",
+                                    eventLogSearchReference = "",
+                                    reportDisplayReference = "",
+                                    objectReference = "LD0/XCBR1$ST$Pos$stVal",
+                                    signalAddress = "",
+                                    captureMode = 0,
+                                    reviewStatus = "",
+                                    runtime = new
+                                    {
+                                        state = 5,
+                                        value1Evidence = new { rawValue = "Open [01]" },
+                                        value2Evidence = new { rawValue = "Closed [10]" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            var legacyDirectory = Path.Combine(legacyRoot, "legacy-project");
+            Directory.CreateDirectory(legacyDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(legacyDirectory, "project.snapshot.json"),
+                JsonSerializer.Serialize(legacyProject));
+
+            using var service = new NativeFatEvidenceHydrationService(nativeRoot, legacyRoot);
+            var result = await service.HydrateAsync(device);
+            var restored = new NativeFatIedSessionCacheState();
+            NativeFatCanonicalEvidenceOverlay.MergeMissing(restored, result.EvidenceByRow);
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.SnapshotFound);
+            Assert.Equal(1, result.LoadedRows);
+            Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Value1));
+            Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Value2));
+            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Result));
+            Assert.Single(device.Points);
+        }
+        finally
+        {
+            TryDelete(nativeRoot);
+            TryDelete(legacyRoot);
         }
     }
 
