@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
