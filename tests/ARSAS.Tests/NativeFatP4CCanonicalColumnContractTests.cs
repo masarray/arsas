@@ -6,8 +6,8 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
     public void P4C_FatExposesExactlyExplorerColumnsPlusEvidence()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
-        var tabSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
         var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+        var tabSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
 
         var signal = source.IndexOf("AddCanonicalTextColumn(\"Signal\"", StringComparison.Ordinal);
         var telegram = source.IndexOf("AddCanonicalTextColumn(\"IEC Telegram\"", StringComparison.Ordinal);
@@ -26,7 +26,8 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         Assert.True(result > value2);
 
         Assert.Contains("_nativeFatCanonicalGrid.Columns.Clear();", source, StringComparison.Ordinal);
-        Assert.Contains("ApplyNativeFatP4CColumnContract();", tabSource, StringComparison.Ordinal);
+        Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyNativeFatP4CColumnContract();", tabSource, StringComparison.Ordinal);
         Assert.Contains("_nativeFatCanonicalGrid.ItemsSource = device?.Points;", gridSource, StringComparison.Ordinal);
 
         Assert.DoesNotContain("\"Status\"", source, StringComparison.Ordinal);
@@ -37,6 +38,22 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         Assert.DoesNotContain("\"Timestamp\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ObservableCollection<Iec61850MonitorPoint>", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new Iec61850MonitorPoint", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4C_CanonicalGridBuilderHasNoLegacyColumnInstallationPath()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+
+        Assert.Contains("ApplyNativeFatP4CColumnContract();", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Status\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Type\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Address\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Message\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Data Reference\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTextColumn(\"Timestamp\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddCanonicalTemplateColumn(\"Value\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new NativeFatEvidenceColumn(this, \"Value 1\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
