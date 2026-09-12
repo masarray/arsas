@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services.IoTesting;
 
@@ -13,6 +14,9 @@ public partial class MainWindow
     private readonly Dictionary<string, NativeFatIedSessionCacheState> _nativeFatSessionByIed =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly NativeFatArmCoordinator _nativeFatArmCoordinator = new();
+    private readonly NativeFatEvidenceHydrationService _nativeFatEvidenceHydrationService = new();
+    private readonly Dictionary<string, CancellationTokenSource> _nativeFatEvidencePersistCtsByIed =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private DataGrid? _nativeFatCanonicalGrid;
     private TextBlock? _nativeFatIedText;
@@ -21,6 +25,10 @@ public partial class MainWindow
     private Button? _nativeFatStartButton;
     private string? _nativeFatBoundIedKey;
     private bool _nativeFatArmEventsHooked;
+    private CancellationTokenSource? _nativeFatEvidenceHydrationCts;
+    private DispatcherTimer? _nativeFatEvidenceClock;
+    private int _nativeFatEvidenceClockPhase;
+    private long _nativeFatEvidenceHydrationGeneration;
 
     /// <summary>
     /// P1A: FAT renders the exact Engineering live-row objects. There is no projection,
@@ -28,6 +36,7 @@ public partial class MainWindow
     /// P1B adds only three sparse evidence columns keyed outside those canonical rows.
     /// P1C reuses the Engineering grid visual authority and virtualization contract.
     /// P1D makes Start FAT an ARM-only operation over those already-live row objects.
+    /// P2 hydrates only sparse evidence asynchronously; canonical rows and live Value never wait.
     /// </summary>
     private FrameworkElement BuildNativeFatCanonicalWorkspace(string? statusText = null)
     {
@@ -134,6 +143,7 @@ public partial class MainWindow
         ScrollViewer.SetCanContentScroll(_nativeFatCanonicalGrid, true);
         ScrollViewer.SetHorizontalScrollBarVisibility(_nativeFatCanonicalGrid, ScrollBarVisibility.Auto);
         _nativeFatCanonicalGrid.CellEditEnding += NativeFatCanonicalGrid_CellEditEnding;
+        _nativeFatCanonicalGrid.BeginningEdit += NativeFatCanonicalGrid_BeginningEdit;
 
         AddCanonicalTextColumn("Status", nameof(Iec61850MonitorPoint.Status), 90);
         AddCanonicalTextColumn("Type", nameof(Iec61850MonitorPoint.IecDataType), 84);
@@ -220,12 +230,13 @@ public partial class MainWindow
         _nativeFatCanonicalGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         _nativeFatCanonicalGrid.CommitEdit(DataGridEditingUnit.Row, true);
         SaveNativeFatSessionState();
+        CancelNativeFatEvidenceHydration(resetOldState: true);
 
         var device = SelectedDevice;
         _nativeFatBoundIedKey = device?.DeviceId;
 
-        // P1A invariant: this is the exact same collection used by Engineering.
-        // No Select/ToList/projection/wrapper is allowed here.
+        // P1A invariant: canonical rows and live values bind FIRST and synchronously.
+        // P2 evidence hydration starts only after this exact Engineering collection is visible.
         _nativeFatCanonicalGrid.ItemsSource = device?.Points;
 
         _nativeFatIedText!.Text = device == null
@@ -235,6 +246,160 @@ public partial class MainWindow
 
         RestoreNativeFatSessionState(device);
         UpdateNativeFatArmUi(device);
+        BeginNativeFatEvidenceHydration(device);
+    }
+
+    private void BeginNativeFatEvidenceHydration(Iec61850MonitorDevice? device)
+    {
+        if (device == null)
+        {
+            StopNativeFatEvidenceClock();
+            return;
+        }
+
+        var cache = GetNativeFatSession(device.DeviceId);
+        if (cache.EvidenceHydrationState == NativeFatEvidenceHydrationState.Resolved)
+        {
+            StopNativeFatEvidenceClock();
+            RefreshAllVisibleNativeFatEvidenceCells();
+            return;
+        }
+
+        var generation = Interlocked.Increment(ref _nativeFatEvidenceHydrationGeneration);
+        var cts = new CancellationTokenSource();
+        _nativeFatEvidenceHydrationCts = cts;
+        cache.EvidenceHydrationGeneration = generation;
+        cache.EvidenceHydrationState = NativeFatEvidenceHydrationState.Hydrating;
+        cache.EvidenceHydrationError = string.Empty;
+        cache.EvidenceHydratedAt = null;
+
+        StartNativeFatEvidenceClock();
+        RefreshAllVisibleNativeFatEvidenceCells();
+        _ = HydrateNativeFatEvidenceAsync(device, cache, generation, cts.Token);
+    }
+
+    private async Task HydrateNativeFatEvidenceAsync(
+        Iec61850MonitorDevice device,
+        NativeFatIedSessionCacheState cache,
+        long generation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _nativeFatEvidenceHydrationService.HydrateAsync(device, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (generation != cache.EvidenceHydrationGeneration ||
+                !string.Equals(_nativeFatBoundIedKey, device.DeviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            cache.LastHydrationElapsedMilliseconds = result.ElapsedMilliseconds;
+            if (result.Succeeded)
+            {
+                var merged = NativeFatCanonicalEvidenceOverlay.MergeMissing(cache, result.EvidenceByRow);
+                cache.EvidenceHydrationState = NativeFatEvidenceHydrationState.Resolved;
+                cache.EvidenceHydratedAt = DateTimeOffset.Now;
+                cache.EvidenceHydrationError = string.Empty;
+
+                var armed = cache.IsArmed || _nativeFatArmCoordinator.IsArmed(device.DeviceId);
+                var evidenceStatus = result.SnapshotFound
+                    ? $"evidence ready · {merged} persisted row(s) restored in {result.ElapsedMilliseconds} ms"
+                    : $"evidence ready · no saved evidence · {result.ElapsedMilliseconds} ms";
+                UpdateNativeFatArmUi(
+                    device,
+                    armed
+                        ? $"FAT armed · shared Engineering acquisition untouched · {evidenceStatus}"
+                        : $"Canonical Engineering live rows · {evidenceStatus}");
+            }
+            else
+            {
+                cache.EvidenceHydrationState = NativeFatEvidenceHydrationState.Failed;
+                cache.EvidenceHydratedAt = DateTimeOffset.Now;
+                cache.EvidenceHydrationError = result.Message;
+                UpdateNativeFatArmUi(
+                    device,
+                    $"Canonical rows are live · saved FAT evidence could not be hydrated: {result.Message}");
+            }
+
+            Trace.WriteLine(
+                $"[FAT P2] evidence hydration completed in {result.ElapsedMilliseconds} ms; " +
+                $"ied={device.Name}; deviceId={device.DeviceId}; found={result.SnapshotFound}; " +
+                $"loaded={result.LoadedRows}; ignored={result.IgnoredRows}; succeeded={result.Succeeded}; " +
+                "canonicalRowsBlocked=false; networkCalls=0; rowRebuilds=0.");
+        }
+        catch (OperationCanceledException)
+        {
+            if (generation == cache.EvidenceHydrationGeneration &&
+                cache.EvidenceHydrationState == NativeFatEvidenceHydrationState.Hydrating)
+            {
+                cache.EvidenceHydrationState = NativeFatEvidenceHydrationState.NotStarted;
+            }
+        }
+        finally
+        {
+            if (generation == cache.EvidenceHydrationGeneration &&
+                string.Equals(_nativeFatBoundIedKey, device.DeviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                StopNativeFatEvidenceClock();
+                RefreshAllVisibleNativeFatEvidenceCells();
+            }
+        }
+    }
+
+    private void StartNativeFatEvidenceClock()
+    {
+        _nativeFatEvidenceClock ??= CreateNativeFatEvidenceClock();
+        if (!_nativeFatEvidenceClock.IsEnabled)
+            _nativeFatEvidenceClock.Start();
+    }
+
+    private DispatcherTimer CreateNativeFatEvidenceClock()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(320)
+        };
+        timer.Tick += NativeFatEvidenceClock_Tick;
+        return timer;
+    }
+
+    private void NativeFatEvidenceClock_Tick(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_nativeFatBoundIedKey) ||
+            !_nativeFatSessionByIed.TryGetValue(_nativeFatBoundIedKey, out var cache) ||
+            !cache.IsEvidenceHydrating)
+        {
+            StopNativeFatEvidenceClock();
+            return;
+        }
+
+        _nativeFatEvidenceClockPhase = (_nativeFatEvidenceClockPhase + 1) % 3;
+        RefreshAllVisibleNativeFatEvidenceCells();
+    }
+
+    private void StopNativeFatEvidenceClock()
+    {
+        _nativeFatEvidenceClock?.Stop();
+        _nativeFatEvidenceClockPhase = 0;
+    }
+
+    private void CancelNativeFatEvidenceHydration(bool resetOldState)
+    {
+        _nativeFatEvidenceHydrationCts?.Cancel();
+        _nativeFatEvidenceHydrationCts?.Dispose();
+        _nativeFatEvidenceHydrationCts = null;
+
+        if (resetOldState &&
+            !string.IsNullOrWhiteSpace(_nativeFatBoundIedKey) &&
+            _nativeFatSessionByIed.TryGetValue(_nativeFatBoundIedKey, out var oldCache) &&
+            oldCache.EvidenceHydrationState == NativeFatEvidenceHydrationState.Hydrating)
+        {
+            oldCache.EvidenceHydrationState = NativeFatEvidenceHydrationState.NotStarted;
+        }
+
+        StopNativeFatEvidenceClock();
     }
 
     private void UpdateNativeFatArmUi(Iec61850MonitorDevice? device, string? overrideStatus = null)
@@ -262,7 +427,9 @@ public partial class MainWindow
 
         _nativeFatStatusText.Text = overrideStatus ?? (armed
             ? $"FAT armed · shared Engineering acquisition untouched · {device.Points.Count} canonical row(s)"
-            : "Canonical Engineering live rows · Start FAT only arms evidence; acquisition remains untouched");
+            : cache.IsEvidenceHydrating
+                ? "Canonical Engineering rows are live · restoring only FAT evidence in background"
+                : "Canonical Engineering live rows · Start FAT only arms evidence; acquisition remains untouched");
     }
 
     private void NativeFatStartButton_Click(object sender, RoutedEventArgs e)
@@ -306,10 +473,59 @@ public partial class MainWindow
             return;
         }
 
+        ScheduleNativeFatEvidencePersist(e.DeviceId);
         if (!string.Equals(_nativeFatBoundIedKey, e.DeviceId, StringComparison.OrdinalIgnoreCase))
             return;
 
         RefreshNativeFatEvidenceCells(e.Point);
+    }
+
+    private void ScheduleNativeFatEvidencePersist(string deviceId)
+    {
+        var device = Devices.FirstOrDefault(candidate =>
+            candidate.DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
+        if (device == null || !_nativeFatSessionByIed.TryGetValue(deviceId, out var cache))
+            return;
+
+        if (_nativeFatEvidencePersistCtsByIed.Remove(deviceId, out var previous))
+        {
+            previous.Cancel();
+            previous.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _nativeFatEvidencePersistCtsByIed[deviceId] = cts;
+        _ = PersistNativeFatEvidenceAfterDebounceAsync(device, cache, cts);
+    }
+
+    private async Task PersistNativeFatEvidenceAfterDebounceAsync(
+        Iec61850MonitorDevice device,
+        NativeFatIedSessionCacheState cache,
+        CancellationTokenSource owner)
+    {
+        try
+        {
+            await Task.Delay(350, owner.Token);
+            await _nativeFatEvidenceHydrationService.SaveAsync(device, cache, owner.Token);
+            Trace.WriteLine(
+                $"[FAT P2] sparse evidence persisted asynchronously; ied={device.Name}; deviceId={device.DeviceId}; dispatcherBlocked=false.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Trace.WriteLine($"[FAT P2] sparse evidence persistence failed for {device.Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (_nativeFatEvidencePersistCtsByIed.TryGetValue(device.DeviceId, out var current) &&
+                ReferenceEquals(current, owner))
+            {
+                _nativeFatEvidencePersistCtsByIed.Remove(device.DeviceId);
+                owner.Dispose();
+            }
+        }
     }
 
     private void RefreshNativeFatEvidenceCells(Iec61850MonitorPoint point)
@@ -322,6 +538,15 @@ public partial class MainWindow
             if (column.GetCellContent(point) is TextBlock textBlock)
                 textBlock.Text = ReadNativeFatEvidence(point, column.Field);
         }
+    }
+
+    private void RefreshAllVisibleNativeFatEvidenceCells()
+    {
+        if (_nativeFatCanonicalGrid == null)
+            return;
+
+        foreach (var point in _nativeFatCanonicalGrid.Items.OfType<Iec61850MonitorPoint>())
+            RefreshNativeFatEvidenceCells(point);
     }
 
     private void SaveNativeFatSessionState()
@@ -381,7 +606,22 @@ public partial class MainWindow
             return string.Empty;
         }
 
-        return NativeFatCanonicalEvidenceOverlay.Read(cache, point, field);
+        var evidence = NativeFatCanonicalEvidenceOverlay.Read(cache, point, field);
+        if (!string.IsNullOrWhiteSpace(evidence))
+            return evidence;
+
+        return cache.IsEvidenceHydrating
+            ? NativeFatEvidenceLoadingPresentation.RollingDots(_nativeFatEvidenceClockPhase)
+            : string.Empty;
+    }
+
+    private void NativeFatCanonicalGrid_BeginningEdit(object? sender, DataGridBeginningEditEventArgs e)
+    {
+        if (e.Column is not NativeFatEvidenceColumn || string.IsNullOrWhiteSpace(_nativeFatBoundIedKey))
+            return;
+
+        if (_nativeFatSessionByIed.TryGetValue(_nativeFatBoundIedKey, out var cache) && cache.IsEvidenceHydrating)
+            e.Cancel = true;
     }
 
     private void NativeFatCanonicalGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
@@ -398,10 +638,26 @@ public partial class MainWindow
         var cache = GetNativeFatSession(_nativeFatBoundIedKey);
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, evidenceColumn.Field, editor.Text);
         cache.ActiveRowKey = NativeFatCanonicalEvidenceOverlay.BuildRowKey(point);
+        ScheduleNativeFatEvidencePersist(_nativeFatBoundIedKey);
     }
 
     private void DisposeNativeFatArmCoordinator()
     {
+        CancelNativeFatEvidenceHydration(resetOldState: false);
+        if (_nativeFatEvidenceClock != null)
+        {
+            _nativeFatEvidenceClock.Tick -= NativeFatEvidenceClock_Tick;
+            _nativeFatEvidenceClock.Stop();
+            _nativeFatEvidenceClock = null;
+        }
+
+        foreach (var cts in _nativeFatEvidencePersistCtsByIed.Values)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+        _nativeFatEvidencePersistCtsByIed.Clear();
+
         if (_nativeFatArmEventsHooked)
         {
             _nativeFatArmCoordinator.EvidenceChanged -= NativeFatArmCoordinator_EvidenceChanged;
@@ -409,9 +665,16 @@ public partial class MainWindow
         }
 
         _nativeFatArmCoordinator.Dispose();
+        _nativeFatEvidenceHydrationService.Dispose();
         if (_nativeFatStartButton != null)
             _nativeFatStartButton.Click -= NativeFatStartButton_Click;
         _nativeFatStartButton = null;
+
+        if (_nativeFatCanonicalGrid != null)
+        {
+            _nativeFatCanonicalGrid.CellEditEnding -= NativeFatCanonicalGrid_CellEditEnding;
+            _nativeFatCanonicalGrid.BeginningEdit -= NativeFatCanonicalGrid_BeginningEdit;
+        }
     }
 
     private sealed class NativeFatEvidenceColumn : DataGridColumn
