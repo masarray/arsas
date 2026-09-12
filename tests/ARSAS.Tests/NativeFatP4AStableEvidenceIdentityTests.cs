@@ -111,9 +111,8 @@ public sealed class NativeFatP4AStableEvidenceIdentityTests
 
         Assert.Contains("point.DeviceName", overlay, StringComparison.Ordinal);
         Assert.Contains("point.IecTelegram", overlay, StringComparison.Ordinal);
-        Assert.Contains("runtime DeviceId", overlay, StringComparison.Ordinal);
-        Assert.Contains("not used here", overlay, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectedIndex", overlay, StringComparison.Ordinal);
+        Assert.Contains("Runtime DeviceId, row index, SelectedIndex and display labels are never evidence identity.", overlay, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedIndex", ExtractMethod(overlay, "internal static bool TryBuildRowKey(string? iedName, string? iecTelegram, out string rowKey)"), StringComparison.Ordinal);
         Assert.Contains("identityCount != 1", arm, StringComparison.Ordinal);
         Assert.Contains("SignalName, SelectedIndex or runtime DeviceId", arm, StringComparison.Ordinal);
     }
@@ -146,6 +145,21 @@ public sealed class NativeFatP4AStableEvidenceIdentityTests
             SourceMode = "Static DataSet reporting",
             Value = value
         };
+
+    private static string ExtractMethod(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find method '{signature}'.");
+        var openBrace = source.IndexOf('{', start);
+        Assert.True(openBrace >= 0, $"Could not find opening brace for '{signature}'.");
+        var depth = 0;
+        for (var index = openBrace; index < source.Length; index++)
+        {
+            if (source[index] == '{') depth++;
+            else if (source[index] == '}' && --depth == 0) return source[start..(index + 1)];
+        }
+        throw new InvalidDataException($"Method '{signature}' has no balanced closing brace.");
+    }
 
     private static string FindRepoFile(string relativePath)
         => Path.Combine(FindRepoRoot(), relativePath);
