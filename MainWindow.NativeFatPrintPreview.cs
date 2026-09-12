@@ -24,8 +24,7 @@ public partial class MainWindow
         ChevronLeft,
         ChevronRight,
         RefreshCw,
-        Save,
-        X
+        Save
     }
 
     private void NativeFatPrintPreviewButton_Click(object sender, RoutedEventArgs e)
@@ -49,7 +48,7 @@ public partial class MainWindow
     /// <summary>
     /// Professional native preview: immutable selected-IED snapshot -> shared layout adapter ->
     /// existing FixedDocument renderer. The stock DocumentViewer toolbar is hidden and the
-    /// ARSAS/Lucide-style toolbar owns print, zoom, fit, page navigation, refresh and Save PDF.
+    /// ARSAS/Lucide-style toolbar owns print, zoom, whole-page fit, page navigation, refresh and Save PDF.
     /// Preview and Save PDF always consume the exact same IoFatReportLayoutPlan instance.
     /// </summary>
     private void ShowNativeFatPrintPreview(NativeFatPrintPreviewSnapshot snapshot)
@@ -86,6 +85,7 @@ public partial class MainWindow
         var toolbarGrid = new Grid();
         toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         titleStack.Children.Add(new TextBlock
@@ -117,8 +117,8 @@ public partial class MainWindow
         var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(16, 0, 0, 0)
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var pageText = new TextBlock
@@ -177,7 +177,7 @@ public partial class MainWindow
         actions.Children.Add(IconButton(NativePreviewLucideIcon.Minus, "Zoom out", viewer.DecreaseZoom));
         actions.Children.Add(zoomText);
         actions.Children.Add(IconButton(NativePreviewLucideIcon.Plus, "Zoom in", viewer.IncreaseZoom));
-        actions.Children.Add(IconButton(NativePreviewLucideIcon.Maximize2, "Fit report page to width", viewer.FitToWidth));
+        actions.Children.Add(IconButton(NativePreviewLucideIcon.Maximize2, "Fit whole report page", () => FitNativeReportPage(viewer)));
         actions.Children.Add(IconButton(NativePreviewLucideIcon.ChevronLeft, "Previous page", viewer.PreviousPage));
         actions.Children.Add(pageText);
         actions.Children.Add(IconButton(NativePreviewLucideIcon.ChevronRight, "Next page", viewer.NextPage));
@@ -195,6 +195,13 @@ public partial class MainWindow
             currentLayout = NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true);
             viewer.Document = IoFatReportPreviewDocumentBuilder.Render(currentLayout);
             summary.Text = NativeFatPreviewSummary(currentSnapshot);
+            preview.Dispatcher.BeginInvoke(
+                () =>
+                {
+                    FitNativeReportPage(viewer);
+                    UpdateViewerState();
+                },
+                DispatcherPriority.Background);
             SetStatus($"FAT · Print Preview refreshed from {currentSnapshot.IedName} evidence");
         }));
 
@@ -211,7 +218,6 @@ public partial class MainWindow
         };
         savePdfButton.Click += (_, _) => SaveNativeFatPreviewPdf(preview, currentSnapshot, currentLayout);
         actions.Children.Add(savePdfButton);
-        actions.Children.Add(IconButton(NativePreviewLucideIcon.X, "Close preview", preview.Close));
 
         Grid.SetColumn(actions, 1);
         toolbarGrid.Children.Add(actions);
@@ -221,7 +227,7 @@ public partial class MainWindow
         viewer.Loaded += (_, _) =>
         {
             CollapseNativeDocumentViewerChrome(viewer);
-            viewer.FitToWidth();
+            FitNativeReportPage(viewer);
             preview.Dispatcher.BeginInvoke(UpdateViewerState, DispatcherPriority.Background);
         };
         viewer.PageViewsChanged += (_, _) => UpdateViewerState();
@@ -230,6 +236,17 @@ public partial class MainWindow
 
         preview.Content = root;
         preview.Show();
+    }
+
+    private static void FitNativeReportPage(DocumentViewer viewer)
+    {
+        ArgumentNullException.ThrowIfNull(viewer);
+
+        viewer.FitToWidth();
+        var widthZoom = viewer.Zoom;
+        viewer.FitToHeight();
+        var heightZoom = viewer.Zoom;
+        viewer.Zoom = Math.Min(widthZoom, heightZoom);
     }
 
     private void CommitNativeFatEvidenceEdits()
@@ -274,7 +291,6 @@ public partial class MainWindow
             NativePreviewLucideIcon.ChevronRight => "M9,18 L15,12 L9,6",
             NativePreviewLucideIcon.RefreshCw => "M3,12 A9,9 0 0 1 12,3 A9.75,9.75 0 0 1 18.74,5.74 L21,8 M21,3 L21,8 L16,8 M21,12 A9,9 0 0 1 12,21 A9.75,9.75 0 0 1 5.26,18.26 L3,16 M8,16 L3,16 L3,21",
             NativePreviewLucideIcon.Save => "M15.2,3 A2,2 0 0 1 16.6,3.6 L20.4,7.4 A2,2 0 0 1 21,8.8 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M17,21 L17,14 A1,1 0 0 0 16,13 L8,13 A1,1 0 0 0 7,14 L7,21 M7,3 L7,7 A1,1 0 0 0 8,8 L15,8",
-            NativePreviewLucideIcon.X => "M18,6 L6,18 M6,6 L18,18",
             _ => "M5,12 L19,12"
         };
 
