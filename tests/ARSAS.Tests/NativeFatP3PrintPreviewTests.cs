@@ -29,12 +29,12 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal(2, snapshot.Rows.Count);
         Assert.Equal("Breaker", snapshot.Rows[0].Signal);
         Assert.Equal("Trip", snapshot.Rows[1].Signal);
+        Assert.Equal("LD0/XCBR1.Pos.stVal", snapshot.Rows[0].IecTelegram);
+        Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
         Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
-        Assert.Equal("COMPLETE", snapshot.Rows[0].Status);
-        Assert.Equal("WAITING V2", snapshot.Rows[1].Status);
         Assert.Equal("1/2 complete", snapshot.ProgressText);
     }
 
@@ -53,17 +53,19 @@ public sealed class NativeFatP3PrintPreviewTests
 
         point.Value = "Closed [10]";
         point.SignalName = "MUTATED";
+        point.Quality = "Questionable";
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value1, "NEW-V1");
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value2, "NEW-V2");
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Result, "REVIEW");
 
         Assert.Single(snapshot.Rows);
         Assert.Equal("Breaker", snapshot.Rows[0].Signal);
+        Assert.Equal("LD0/XCBR1.Pos.stVal", snapshot.Rows[0].IecTelegram);
+        Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
         Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
-        Assert.Equal("COMPLETE", snapshot.Rows[0].Status);
     }
 
     [Fact]
@@ -85,7 +87,7 @@ public sealed class NativeFatP3PrintPreviewTests
     }
 
     [Fact]
-    public void P3_PreviewIsLazySelectedIedOnlyAndKeepsLegacyVisibleContract()
+    public void P3_PreviewCaptureRemainsLazySelectedIedOnly()
     {
         var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
         var previewSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatPrintPreview.cs"));
@@ -104,25 +106,10 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Contains("ShowNativeFatPrintPreview(snapshot)", click, StringComparison.Ordinal);
         Assert.Contains("SelectedDevice", click, StringComparison.Ordinal);
 
-        Assert.Contains("IEC 61850 FAT Evidence Report", previewSource, StringComparison.Ordinal);
-        Assert.Contains("Static DataSet verification · generic Value 1 / Value 2 evidence · source identity preserved", previewSource, StringComparison.Ordinal);
-        foreach (var header in new[]
-                 {
-                     "Signal",
-                     "IEC 61850 reference",
-                     "Type",
-                     "Live value",
-                     "Value 1",
-                     "Value 2",
-                     "Status",
-                     "Result"
-                 })
-        {
-            Assert.Contains($"AddPreviewColumn(grid, \"{header}\"", previewSource, StringComparison.Ordinal);
-        }
-
         Assert.Contains("device.Points.Select", snapshotSource, StringComparison.Ordinal);
         Assert.Contains("Array.AsReadOnly", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("Copy(point.IecTelegram)", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("Copy(point.Quality)", snapshotSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Iec61850MonitorPoint Point", snapshotSource, StringComparison.Ordinal);
 
         foreach (var forbidden in new[]
