@@ -32,8 +32,8 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("LD0/XCBR1.Pos.stVal", snapshot.Rows[0].IecTelegram);
         Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
-        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
-        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.StartsWith("Open [01] - ", snapshot.Rows[0].Value1, StringComparison.Ordinal);
+        Assert.StartsWith("Closed [10] - ", snapshot.Rows[0].Value2, StringComparison.Ordinal);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
         Assert.Equal("1/2 complete", snapshot.ProgressText);
     }
@@ -50,6 +50,8 @@ public sealed class NativeFatP3PrintPreviewTests
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Result, "PASS");
 
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
+        var capturedValue1 = snapshot.Rows[0].Value1;
+        var capturedValue2 = snapshot.Rows[0].Value2;
 
         point.Value = "Closed [10]";
         point.SignalName = "MUTATED";
@@ -63,8 +65,10 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("LD0/XCBR1.Pos.stVal", snapshot.Rows[0].IecTelegram);
         Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
-        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
-        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.Equal(capturedValue1, snapshot.Rows[0].Value1);
+        Assert.Equal(capturedValue2, snapshot.Rows[0].Value2);
+        Assert.StartsWith("Open [01] - ", snapshot.Rows[0].Value1, StringComparison.Ordinal);
+        Assert.StartsWith("Closed [10] - ", snapshot.Rows[0].Value2, StringComparison.Ordinal);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
     }
 
@@ -110,6 +114,7 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Contains("Array.AsReadOnly", snapshotSource, StringComparison.Ordinal);
         Assert.Contains("Copy(point.IecTelegram)", snapshotSource, StringComparison.Ordinal);
         Assert.Contains("Copy(point.Quality)", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadDisplay", snapshotSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Iec61850MonitorPoint Point", snapshotSource, StringComparison.Ordinal);
 
         foreach (var forbidden in new[]
