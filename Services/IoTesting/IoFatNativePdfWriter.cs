@@ -17,10 +17,35 @@ internal static class IoFatNativePdfWriter
 {
     public static byte[] Build(IoFatReportLayoutPlan layout, IoTestProject project)
     {
-        ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(project);
+        var primaryReference = project.Ieds
+            .SelectMany(ied => ied.TestPoints)
+            .Select(point => point.ObjectReference)
+            .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference))
+            ?? project.ProjectId;
+        return Build(layout, project.ProjectName, primaryReference);
+    }
+
+    /// <summary>
+    /// P4D layout-first PDF path. Native FAT already owns an immutable canonical snapshot,
+    /// so PDF serialization receives the exact same layout instance as DocumentViewer and
+    /// needs only document metadata, never a reconstructed IoTestProject/runtime workspace.
+    /// </summary>
+    public static byte[] Build(
+        IoFatReportLayoutPlan layout,
+        string reportName,
+        string primaryReference)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
         if (layout.Pages.Count == 0)
             throw new InvalidOperationException("At least one PDF page is required.");
+
+        var safeReportName = string.IsNullOrWhiteSpace(reportName)
+            ? "ARSAS FAT"
+            : reportName.Trim();
+        var safePrimaryReference = string.IsNullOrWhiteSpace(primaryReference)
+            ? layout.ProjectId
+            : primaryReference.Trim();
 
         var fonts = IoFatReportTypography.ResolvePdfFonts();
         var objects = new List<byte[]>();
@@ -52,13 +77,8 @@ internal static class IoFatNativePdfWriter
             pageIds.Add(pageId);
         }
 
-        var primaryReference = project.Ieds
-            .SelectMany(ied => ied.TestPoints)
-            .Select(point => point.ObjectReference)
-            .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference))
-            ?? project.ProjectId;
-        var title = $"{project.ProjectName} - IEC 61850 FAT Evidence Report";
-        var subject = $"Customer-readable FAT summary. Detailed evidence is retained in the ARSAS project and Excel export. Primary IEC 61850 reference: {primaryReference}";
+        var title = $"{safeReportName} - IEC 61850 FAT Evidence Report";
+        var subject = $"Immutable IEC 61850 FAT evidence report. Primary IEC 61850 reference: {safePrimaryReference}";
         var infoId = AddObject(
             $"<< /Title ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(title))}) " +
             $"/Subject ({EscapeLiteral(IoFatReportLayoutEngine.SanitizeReportText(subject))}) " +
