@@ -63,7 +63,7 @@ internal static class NativeFatP4DReportAdapter
                 Margin,
                 y - 20d,
                 600d,
-                "No canonical FAT row is present in this snapshot.",
+                "No FAT signal is available for this report.",
                 IoFatReportFontKind.Bold,
                 8.5d,
                 Attention));
@@ -76,7 +76,7 @@ internal static class NativeFatP4DReportAdapter
                 Margin,
                 24d,
                 520d,
-                $"Immutable Engineering FAT snapshot · {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss zzz}",
+                $"FAT evidence captured · {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss zzz}",
                 IoFatReportFontKind.Regular,
                 6.2d,
                 Muted));
@@ -110,6 +110,7 @@ internal static class NativeFatP4DReportAdapter
         var page = new List<IoFatReportCommand>();
         pages.Add(page);
 
+        NativeFatReportBranding.AddLogo(page, PageWidth - Margin - 102d, 582d);
         page.Add(new IoFatReportTextCommand(
             Margin,
             562d,
@@ -122,7 +123,7 @@ internal static class NativeFatP4DReportAdapter
             Margin,
             542d,
             560d,
-            "Canonical Explorer snapshot · sparse FAT evidence · no acquisition restart",
+            "Factory Acceptance Test · IEC 61850 signal evidence",
             IoFatReportFontKind.Regular,
             7.6d,
             Muted));
@@ -185,6 +186,7 @@ internal static class NativeFatP4DReportAdapter
         double height,
         ref double y)
     {
+        var reportResult = ReportResult(row.Result);
         var cells = new[]
         {
             Clean(row.Signal),
@@ -195,7 +197,7 @@ internal static class NativeFatP4DReportAdapter
             Clean(row.Value1TimestampText),
             Clean(row.Value2),
             Clean(row.Value2TimestampText),
-            Clean(row.Result)
+            reportResult
         };
 
         var x = Margin;
@@ -231,7 +233,7 @@ internal static class NativeFatP4DReportAdapter
                         ? IoFatReportFontKind.Mono
                         : index is 0 or 8 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
                     isTimestamp ? 4.9d : 5.8d,
-                    index == 8 ? ResultColor(row.Result) : Ink));
+                    index == 8 ? ResultColor(reportResult) : Ink));
             }
 
             x += Widths[index];
@@ -254,10 +256,17 @@ internal static class NativeFatP4DReportAdapter
         return lines;
     }
 
+    private static string ReportResult(string? result)
+    {
+        var value = Clean(result);
+        return value.Equals("COMPLETE", StringComparison.OrdinalIgnoreCase) ? "OK" : value;
+    }
+
     private static IoFatReportColor ResultColor(string? result)
     {
         var value = Clean(result);
-        if (value.Contains("PASS", StringComparison.OrdinalIgnoreCase) ||
+        if (value.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("PASS", StringComparison.OrdinalIgnoreCase) ||
             value.Contains("COMPLETE", StringComparison.OrdinalIgnoreCase))
             return Pass;
         if (value.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
