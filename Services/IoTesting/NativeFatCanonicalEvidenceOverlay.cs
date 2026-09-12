@@ -93,14 +93,101 @@ public static class NativeFatCanonicalEvidenceOverlay
                     break;
             }
 
-            // Keep the overlay genuinely sparse. Clearing the last evidence value removes
-            // the entry rather than leaving a shadow row behind.
-            if (string.IsNullOrWhiteSpace(slot.Value1) &&
-                string.IsNullOrWhiteSpace(slot.Value2) &&
-                string.IsNullOrWhiteSpace(slot.Result))
+            RemoveIfEmpty(cache, key, slot);
+        }
+    }
+
+    /// <summary>
+    /// P2 merge rule: persisted evidence may fill missing cells but may never overwrite
+    /// evidence captured after hydration started. This lets Start FAT remain usable while
+    /// disk hydration is still completing.
+    /// </summary>
+    public static int MergeMissing(
+        NativeFatIedSessionCacheState cache,
+        IReadOnlyDictionary<string, NativeFatEvidenceSlotState> hydratedEvidence)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(hydratedEvidence);
+
+        var mergedRows = 0;
+        lock (cache.EvidenceByRow)
+        {
+            foreach (var pair in hydratedEvidence)
             {
-                cache.EvidenceByRow.Remove(key);
+                var incoming = pair.Value;
+                if (incoming == null ||
+                    (string.IsNullOrWhiteSpace(incoming.Value1) &&
+                     string.IsNullOrWhiteSpace(incoming.Value2) &&
+                     string.IsNullOrWhiteSpace(incoming.Result)))
+                {
+                    continue;
+                }
+
+                if (!cache.EvidenceByRow.TryGetValue(pair.Key, out var current))
+                {
+                    cache.EvidenceByRow[pair.Key] = Clone(incoming);
+                    mergedRows++;
+                    continue;
+                }
+
+                var changed = false;
+                if (string.IsNullOrWhiteSpace(current.Value1) && !string.IsNullOrWhiteSpace(incoming.Value1))
+                {
+                    current.Value1 = incoming.Value1;
+                    changed = true;
+                }
+                if (string.IsNullOrWhiteSpace(current.Value2) && !string.IsNullOrWhiteSpace(incoming.Value2))
+                {
+                    current.Value2 = incoming.Value2;
+                    changed = true;
+                }
+                if (string.IsNullOrWhiteSpace(current.Result) && !string.IsNullOrWhiteSpace(incoming.Result))
+                {
+                    current.Result = incoming.Result;
+                    changed = true;
+                }
+
+                if (changed)
+                    mergedRows++;
             }
+        }
+
+        return mergedRows;
+    }
+
+    public static IReadOnlyDictionary<string, NativeFatEvidenceSlotState> Snapshot(
+        NativeFatIedSessionCacheState cache)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        lock (cache.EvidenceByRow)
+        {
+            return cache.EvidenceByRow.ToDictionary(
+                pair => pair.Key,
+                pair => Clone(pair.Value),
+                StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static NativeFatEvidenceSlotState Clone(NativeFatEvidenceSlotState source)
+        => new()
+        {
+            Value1 = source.Value1,
+            Value2 = source.Value2,
+            Result = source.Result
+        };
+
+    private static void RemoveIfEmpty(
+        NativeFatIedSessionCacheState cache,
+        string key,
+        NativeFatEvidenceSlotState slot)
+    {
+        // Keep the overlay genuinely sparse. Clearing the last evidence value removes
+        // the entry rather than leaving a shadow row behind.
+        if (string.IsNullOrWhiteSpace(slot.Value1) &&
+            string.IsNullOrWhiteSpace(slot.Value2) &&
+            string.IsNullOrWhiteSpace(slot.Result))
+        {
+            cache.EvidenceByRow.Remove(key);
         }
     }
 }
