@@ -15,12 +15,14 @@ internal static class NativeFatP4DReportAdapter
     private const double ContentBottom = 52d;
     private const double HeaderHeight = 24d;
     private const double MinimumRowHeight = 30d;
-    private const int TelegramCharsPerLine = 46;
+    private const int TelegramCharsPerLine = 38;
 
     // Exact P4C visible contract. Total width = 782 pt (842 - 2 * 30 margin).
-    private static readonly double[] Widths = [110d, 245d, 80d, 85d, 85d, 85d, 92d];
+    // Timestamp columns are intentionally first-class columns so the immutable report mirrors
+    // the FAT grid rather than collapsing observation metadata into Value 1 / Value 2 text.
+    private static readonly double[] Widths = [90d, 200d, 65d, 70d, 62d, 90d, 62d, 90d, 53d];
     private static readonly string[] Headers =
-        ["Signal", "IEC Telegram", "Quality", "Live Value", "Value 1", "Value 2", "Result"];
+        ["Signal", "IEC Telegram", "Quality", "Live Value", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Result"];
 
     private static readonly IoFatReportColor Navy = IoFatReportColor.FromHex("0F172A");
     private static readonly IoFatReportColor Blue = IoFatReportColor.FromHex("2563EB");
@@ -158,12 +160,12 @@ internal static class NativeFatP4DReportAdapter
         {
             page.Add(new IoFatReportRectCommand(x, y, Widths[index], HeaderHeight, 0d, SoftBlue, Border, 0.45d));
             page.Add(new IoFatReportTextCommand(
-                x + 5d,
+                x + 4d,
                 y - 15.5d,
-                Widths[index] - 10d,
+                Widths[index] - 8d,
                 Headers[index],
                 IoFatReportFontKind.Bold,
-                6.2d,
+                index is 5 or 7 ? 5.25d : 5.8d,
                 Blue));
             x += Widths[index];
         }
@@ -186,7 +188,9 @@ internal static class NativeFatP4DReportAdapter
             Clean(row.Quality),
             Clean(row.LiveValue),
             Clean(row.Value1),
+            Clean(row.Value1TimestampText),
             Clean(row.Value2),
+            Clean(row.Value2TimestampText),
             Clean(row.Result)
         };
 
@@ -201,26 +205,29 @@ internal static class NativeFatP4DReportAdapter
                 foreach (var line in WrapTelegram(row.IecTelegram))
                 {
                     page.Add(new IoFatReportTextCommand(
-                        x + 5d,
+                        x + 4d,
                         lineY,
-                        Widths[index] - 10d,
+                        Widths[index] - 8d,
                         line,
                         IoFatReportFontKind.Mono,
-                        5.6d,
+                        5.35d,
                         Ink));
                     lineY -= 8.6d;
                 }
             }
             else
             {
+                var isTimestamp = index is 5 or 7;
                 page.Add(new IoFatReportTextCommand(
-                    x + 5d,
+                    x + 4d,
                     y - 18d,
-                    Widths[index] - 10d,
+                    Widths[index] - 8d,
                     cells[index],
-                    index is 0 or 6 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
-                    6.2d,
-                    index == 6 ? ResultColor(row.Result) : Ink));
+                    isTimestamp
+                        ? IoFatReportFontKind.Mono
+                        : index is 0 or 8 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
+                    isTimestamp ? 4.9d : 5.8d,
+                    index == 8 ? ResultColor(row.Result) : Ink));
             }
 
             x += Widths[index];
