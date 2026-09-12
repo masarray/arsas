@@ -5,6 +5,8 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     [Fact]
     public void EngineeringProjection_ReusesParsedSclWorkspaceWithoutOpeningXmlAgain()
     {
+        // This service remains available to explicit/manual compatibility workflows.
+        // P5 removes it only from normal native FAT navigation/runtime ownership.
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs"));
 
         Assert.Contains("device.SclWorkspace", source, StringComparison.Ordinal);
@@ -17,27 +19,40 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     }
 
     [Fact]
-    public void ProductionFatTab_EntryReusesExistingHostWithoutLegacyProjectionBootstrap()
+    public void ProductionFatTab_NormalEntryHasNoLegacyProjectionBootstrapModule()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
-        var queueStart = source.IndexOf("private void QueueProductionFatEngineeringBootstrap()", StringComparison.Ordinal);
-        var legacyStart = source.IndexOf("private async Task EnsureProductionFatFromEngineeringAsync()", queueStart, StringComparison.Ordinal);
+        var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
+        var repoRoot = FindRepoRoot();
 
-        Assert.True(queueStart >= 0, "P1A requires one explicit Engineering -> FAT navigation gateway.");
-        Assert.True(legacyStart > queueStart, "Legacy bootstrap may remain isolated, but it must not own FAT navigation.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatEngineeringBootstrap.cs")),
+            "P5 removes the automatic Engineering -> legacy IoTest bootstrap module from normal FAT navigation.");
 
-        var queue = source[queueStart..legacyStart];
-        Assert.Contains("_productionFatEngineeringBootstrapCts?.Cancel();", queue, StringComparison.Ordinal);
-        Assert.Contains("SynchronizeProductionFatSelectedIed();", queue, StringComparison.Ordinal);
-        Assert.DoesNotContain("EnsureProductionFatFromEngineeringAsync", queue, StringComparison.Ordinal);
-        Assert.DoesNotContain("IoFatEngineeringWorkspaceProjectionService.BuildAsync", queue, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenDescribedSourcesAsync", queue, StringComparison.Ordinal);
-        Assert.DoesNotContain("ShowIoTestingWorkspaceAsync", queue, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenSclFatTesting_Click", queue, StringComparison.Ordinal);
+        Assert.Contains("NativeFatTab.Content = BuildProductionFatPermanentHost();", source, StringComparison.Ordinal);
+        Assert.Contains("SynchronizeProductionFatSelectedIed();", source, StringComparison.Ordinal);
+        Assert.Contains("BindNativeFatCanonicalRows();", source, StringComparison.Ordinal);
+
+        foreach (var forbidden in new[]
+                 {
+                     "QueueProductionFatEngineeringBootstrap",
+                     "EnsureProductionFatFromEngineeringAsync",
+                     "IoFatEngineeringWorkspaceProjectionService",
+                     "IoTestWorkspaceBootstrapService",
+                     "OpenDescribedSourcesAsync",
+                     "ShowIoTestingWorkspaceAsync",
+                     "ShowProductionFatBootstrapState"
+                 })
+        {
+            Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
+        }
+
+        // Explicit/manual compatibility remains a deliberate, operator-invoked boundary.
+        Assert.Contains("MountProductionFatWorkspace", source, StringComparison.Ordinal);
+        Assert.Contains("FAT compatibility workspace", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ProductionFatTab_RegistersExactEngineeringRuntimeWorkspacesForSharedAcquisition()
+    public void ExplicitCompatibilityProjection_CanStillAdoptExactEngineeringRuntimeWorkspaces()
     {
         var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatSclProjectImportService.cs"));
 
@@ -94,14 +109,15 @@ public sealed class ProductionFatEngineeringTabRegressionTests
     }
 
     [Fact]
-    public void ProductionFatSafetyBoundary_KeepsEngineeringAuthorityAndStrictPreflightCoverage()
+    public void ExplicitLegacyMigrationSafety_RemainsAvailableWithoutOwningNormalFatRuntime()
     {
-        var bootstrapSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
+        var migrationSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatCanonicalEvidenceMigrationService.cs"));
         var fieldRegressionSource = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/ProductionFatP0FieldRegressionTests.cs"));
         var preflightSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSessionPreflight.cs"));
         var preflightTests = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/IoTestSessionPreflightTests.cs"));
 
-        Assert.Contains("RetireManualWorkspaceRowsForStaticDataSetMode", bootstrapSource, StringComparison.Ordinal);
+        Assert.Contains("MigrateAndRemoveLegacyManualRows", migrationSource, StringComparison.Ordinal);
+        Assert.Contains("IsLegacyManualWorkspaceRow", migrationSource, StringComparison.Ordinal);
         Assert.Contains("AutomaticStaticDataSetScope_RetiresManualAliasBeforeSessionPreflight", fieldRegressionSource, StringComparison.Ordinal);
         Assert.Contains("IoTestSessionPreflight.Validate", fieldRegressionSource, StringComparison.Ordinal);
         Assert.Contains("RetireRedundantManualWorkspaceRows", preflightSource, StringComparison.Ordinal);
