@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class NativeFatP4CCanonicalColumnContractTests
 {
     [Fact]
-    public void P4C_FatExposesExactlyExplorerColumnsPlusEvidence()
+    public void P4C_FatExposesExactNineColumnExplorerEvidenceContract()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
         var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
@@ -14,7 +14,9 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         var quality = source.IndexOf("AddCanonicalTextColumn(\"Quality\"", StringComparison.Ordinal);
         var liveValue = source.IndexOf("AddCanonicalTemplateColumn(\"Live Value\"", StringComparison.Ordinal);
         var value1 = source.IndexOf("\"Value 1\", NativeFatEvidenceField.Value1", StringComparison.Ordinal);
+        var timestamp1 = source.IndexOf("\"V1 Timestamp\", NativeFatEvidenceField.Value1Timestamp", StringComparison.Ordinal);
         var value2 = source.IndexOf("\"Value 2\", NativeFatEvidenceField.Value2", StringComparison.Ordinal);
+        var timestamp2 = source.IndexOf("\"V2 Timestamp\", NativeFatEvidenceField.Value2Timestamp", StringComparison.Ordinal);
         var result = source.IndexOf("\"Result\", NativeFatEvidenceField.Result", StringComparison.Ordinal);
 
         Assert.True(signal >= 0);
@@ -22,8 +24,10 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         Assert.True(quality > telegram);
         Assert.True(liveValue > quality);
         Assert.True(value1 > liveValue);
-        Assert.True(value2 > value1);
-        Assert.True(result > value2);
+        Assert.True(timestamp1 > value1);
+        Assert.True(value2 > timestamp1);
+        Assert.True(timestamp2 > value2);
+        Assert.True(result > timestamp2);
 
         Assert.Contains("_nativeFatCanonicalGrid.Columns.Clear();", source, StringComparison.Ordinal);
         Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
@@ -35,9 +39,23 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         Assert.DoesNotContain("\"Address\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Message\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Data Reference\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Timestamp\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ObservableCollection<Iec61850MonitorPoint>", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new Iec61850MonitorPoint", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4C_TimestampColumnsShareTheEvidenceRefreshAuthority()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
+        var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+        var overlay = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatCanonicalEvidenceOverlay.cs"));
+
+        Assert.Contains("NativeFatEvidenceField.Value1Timestamp", source, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value2Timestamp", source, StringComparison.Ordinal);
+        Assert.Contains("IsReadOnly = true", source, StringComparison.Ordinal);
+        Assert.Contains("Columns.OfType<NativeFatEvidenceColumn>()", gridSource, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value1Timestamp => TimestampValue(slot.Value1Evidence)", overlay, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value2Timestamp => TimestampValue(slot.Value2Evidence)", overlay, StringComparison.Ordinal);
     }
 
     [Fact]
