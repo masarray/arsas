@@ -260,7 +260,7 @@ public static class NativeFatEvidenceLoadingPresentation
     /// No cell owns a timer or animation object.
     /// </summary>
     public static string RollingDots(int phase)
-        => Math.Abs(phase) % 3 switch
+        => (Math.Abs(phase) % 3) switch
         {
             0 => "·",
             1 => "··",
