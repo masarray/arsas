@@ -3,22 +3,6 @@ namespace ARSAS.Tests;
 public sealed class ProductionFatEngineeringTabRegressionTests
 {
     [Fact]
-    public void EngineeringProjection_ReusesParsedSclWorkspaceWithoutOpeningXmlAgain()
-    {
-        // This service remains available to explicit/manual compatibility workflows.
-        // P5 removes it only from normal native FAT navigation/runtime ownership.
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs"));
-
-        Assert.Contains("device.SclWorkspace", source, StringComparison.Ordinal);
-        Assert.Contains("FatSclWorkspaceImportService.Import(workspaceSources)", source, StringComparison.Ordinal);
-        Assert.Contains("ENGINEERING_SCL_DATASET_AUTHORITY", source, StringComparison.Ordinal);
-        Assert.Contains("IoFatSourceWorkspaceService.DescribeAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SclWorkspaceService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenAsync(", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("LoadScl", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ProductionFatTab_NormalEntryHasNoLegacyProjectionBootstrapModule()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
@@ -27,6 +11,9 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         Assert.False(
             File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatEngineeringBootstrap.cs")),
             "P5 removes the automatic Engineering -> legacy IoTest bootstrap module from normal FAT navigation.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "Services", "IoTesting", "IoFatEngineeringWorkspaceProjectionService.cs")),
+            "P5 removes the obsolete Engineering -> IoTest projection service rather than leaving a dormant second-row authority.");
 
         Assert.Contains("NativeFatTab.Content = BuildProductionFatPermanentHost();", source, StringComparison.Ordinal);
         Assert.Contains("SynchronizeProductionFatSelectedIed();", source, StringComparison.Ordinal);
@@ -46,19 +33,9 @@ public sealed class ProductionFatEngineeringTabRegressionTests
             Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
         }
 
-        // Explicit/manual compatibility remains a deliberate, operator-invoked boundary.
+        // Explicit/manual compatibility remains a deliberate operator boundary only.
         Assert.Contains("MountProductionFatWorkspace", source, StringComparison.Ordinal);
         Assert.Contains("FAT compatibility workspace", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ExplicitCompatibilityProjection_CanStillAdoptExactEngineeringRuntimeWorkspaces()
-    {
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatSclProjectImportService.cs"));
-
-        Assert.Contains("AdoptEngineeringRuntimeWorkspaces", source, StringComparison.Ordinal);
-        Assert.Contains("SetRuntimeWorkspaces(stable)", source, StringComparison.Ordinal);
-        Assert.Contains("workspace.WorkspaceKey", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -106,23 +83,6 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         Assert.Contains("ActivateGooseSubscriberWorkspace()", source, StringComparison.Ordinal);
         Assert.Contains("ClearDiagnosticAlert()", source, StringComparison.Ordinal);
         Assert.Contains("UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true)", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ExplicitLegacyMigrationSafety_RemainsAvailableWithoutOwningNormalFatRuntime()
-    {
-        var migrationSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatCanonicalEvidenceMigrationService.cs"));
-        var fieldRegressionSource = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/ProductionFatP0FieldRegressionTests.cs"));
-        var preflightSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSessionPreflight.cs"));
-        var preflightTests = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/IoTestSessionPreflightTests.cs"));
-
-        Assert.Contains("MigrateAndRemoveLegacyManualRows", migrationSource, StringComparison.Ordinal);
-        Assert.Contains("IsLegacyManualWorkspaceRow", migrationSource, StringComparison.Ordinal);
-        Assert.Contains("AutomaticStaticDataSetScope_RetiresManualAliasBeforeSessionPreflight", fieldRegressionSource, StringComparison.Ordinal);
-        Assert.Contains("IoTestSessionPreflight.Validate", fieldRegressionSource, StringComparison.Ordinal);
-        Assert.Contains("RetireRedundantManualWorkspaceRows", preflightSource, StringComparison.Ordinal);
-        Assert.Contains("multiple enabled test points", preflightSource, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Validate_RejectsDuplicateEnabledLiveReference", preflightTests, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
