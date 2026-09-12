@@ -278,7 +278,7 @@ public partial class MainWindow
             _ => "M5,12 L19,12"
         };
 
-        var path = new Path
+        var path = new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(geometry),
             Fill = Brushes.Transparent,
@@ -374,7 +374,7 @@ public partial class MainWindow
     private static string BuildNativeFatPdfFileName(string? iedName)
     {
         var source = string.IsNullOrWhiteSpace(iedName) ? "IED" : iedName.Trim();
-        var invalid = Path.GetInvalidFileNameChars();
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
         var safe = new string(source.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
         if (safe.Length == 0)
             safe = "IED";
