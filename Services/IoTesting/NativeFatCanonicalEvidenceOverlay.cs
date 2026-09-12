@@ -12,18 +12,14 @@ public enum NativeFatEvidenceField
 }
 
 /// <summary>
-/// Sparse FAT-only evidence keyed by the stable IEC 61850 identity of the canonical
-/// Engineering row: IEDName + IEC Telegram. DeviceId, row index, selected index and
-/// display labels are deliberately excluded so evidence cannot jump to another signal
-/// after reordering or recreation of the Engineering runtime device.
+/// Sparse FAT-only evidence keyed exclusively by stable IEC identity: IEDName + IEC Telegram.
+/// Runtime DeviceId, row index, SelectedIndex and display labels are never evidence identity.
 /// </summary>
 public static class NativeFatCanonicalEvidenceOverlay
 {
     public static string BuildRowKey(Iec61850MonitorPoint point)
     {
         ArgumentNullException.ThrowIfNull(point);
-        // P4A compatibility note: point.PointKey is intentionally not used here because
-        // it contains the runtime DeviceId and is not stable across Engineering recreation.
         return TryBuildRowKey(point, out var rowKey) ? rowKey : string.Empty;
     }
 
@@ -47,20 +43,31 @@ public static class NativeFatCanonicalEvidenceOverlay
         return true;
     }
 
-    /// <summary>
-    /// Default/operator-facing read used by the native FAT grid. Value 1 / Value 2 include
-    /// the evidence timestamp while Result remains plain text.
-    /// </summary>
     public static string Read(
         NativeFatIedSessionCacheState cache,
         Iec61850MonitorPoint point,
         NativeFatEvidenceField field)
-        => ReadDisplay(cache, point, field);
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(point);
+        if (!TryBuildRowKey(point, out var key))
+            return string.Empty;
 
-    /// <summary>
-    /// Raw evidence value used for semantic comparison, persistence tests and report adapters
-    /// that carry timestamp metadata separately.
-    /// </summary>
+        lock (cache.EvidenceByRow)
+        {
+            if (!cache.EvidenceByRow.TryGetValue(key, out var slot))
+                return string.Empty;
+
+            return field switch
+            {
+                NativeFatEvidenceField.Value1 => RawValue(slot.Value1Evidence, slot.Value1),
+                NativeFatEvidenceField.Value2 => RawValue(slot.Value2Evidence, slot.Value2),
+                NativeFatEvidenceField.Result => ResolveResult(slot),
+                _ => string.Empty
+            };
+        }
+    }
+
     public static string ReadRaw(
         NativeFatIedSessionCacheState cache,
         Iec61850MonitorPoint point,
@@ -68,7 +75,6 @@ public static class NativeFatCanonicalEvidenceOverlay
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
-
         if (!TryBuildRowKey(point, out var key))
             return string.Empty;
 
@@ -88,9 +94,8 @@ public static class NativeFatCanonicalEvidenceOverlay
     }
 
     /// <summary>
-    /// Operator-facing evidence text. P4B deliberately keeps timestamp out of the raw value
-    /// so comparisons remain type-safe while the grid/report can show "value - timestamp".
-    /// IED time is preferred; ARSAS capture time is the explicit fallback.
+    /// Compatibility display form retained for legacy/manual consumers. Native FAT no longer
+    /// uses this combined text because values and timestamps have dedicated columns.
     /// </summary>
     public static string ReadDisplay(
         NativeFatIedSessionCacheState cache,
@@ -99,7 +104,6 @@ public static class NativeFatCanonicalEvidenceOverlay
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
-
         if (!TryBuildRowKey(point, out var key))
             return string.Empty;
 
@@ -112,7 +116,7 @@ public static class NativeFatCanonicalEvidenceOverlay
             {
                 NativeFatEvidenceField.Value1 => DisplayValue(slot.Value1Evidence, slot.Value1),
                 NativeFatEvidenceField.Value2 => DisplayValue(slot.Value2Evidence, slot.Value2),
-                NativeFatEvidenceField.Result => slot.Result,
+                NativeFatEvidenceField.Result => ResolveResult(slot),
                 _ => string.Empty
             };
         }
@@ -125,7 +129,6 @@ public static class NativeFatCanonicalEvidenceOverlay
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
-
         if (!TryBuildRowKey(point, out var key))
             return null;
 
@@ -143,10 +146,6 @@ public static class NativeFatCanonicalEvidenceOverlay
         }
     }
 
-    /// <summary>
-    /// Compatibility/operator write. Value slots still become structured evidence, using
-    /// the current point metadata and ARSAS time when there is no separate acquisition event.
-    /// </summary>
     public static void Write(
         NativeFatIedSessionCacheState cache,
         Iec61850MonitorPoint point,
@@ -155,35 +154,24 @@ public static class NativeFatCanonicalEvidenceOverlay
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
-
         if (!TryBuildRowKey(point, out var key))
             return;
 
         var supplied = value ?? string.Empty;
         if ((field is NativeFatEvidenceField.Value1 or NativeFatEvidenceField.Value2) &&
-            string.Equals(
-                ReadDisplay(cache, point, field).Trim(),
-                supplied.Trim(),
-                StringComparison.Ordinal))
+            string.Equals(ReadRaw(cache, point, field).Trim(), supplied.Trim(), StringComparison.Ordinal))
         {
-            // WPF editing starts from the rendered "value - timestamp" text. Committing an
-            // untouched cell must preserve the original evidence metadata, not recapture it.
             return;
         }
 
         var text = (field is NativeFatEvidenceField.Value1 or NativeFatEvidenceField.Value2)
             ? StripDisplayTimestamp(supplied)
-            : supplied;
+            : supplied.Trim();
+
         if ((field is NativeFatEvidenceField.Value1 or NativeFatEvidenceField.Value2) &&
             !string.IsNullOrWhiteSpace(text))
         {
-            WriteCapture(
-                cache,
-                point,
-                field,
-                text,
-                FatEvidenceCaptureKind.OperatorRecapture,
-                DateTimeOffset.Now);
+            WriteCapture(cache, point, field, text, FatEvidenceCaptureKind.OperatorRecapture, DateTimeOffset.Now);
             return;
         }
 
@@ -193,7 +181,6 @@ public static class NativeFatCanonicalEvidenceOverlay
             {
                 if (string.IsNullOrWhiteSpace(text))
                     return;
-
                 slot = new NativeFatEvidenceSlotState();
                 cache.EvidenceByRow[key] = slot;
             }
@@ -266,13 +253,7 @@ public static class NativeFatCanonicalEvidenceOverlay
         }
     }
 
-    /// <summary>
-    /// Rolls the latest Value 2 observation into Value 1 without losing its original
-    /// relay/ARSAS timestamp or source metadata.
-    /// </summary>
-    public static bool PromoteValue2ToValue1(
-        NativeFatIedSessionCacheState cache,
-        Iec61850MonitorPoint point)
+    public static bool PromoteValue2ToValue1(NativeFatIedSessionCacheState cache, Iec61850MonitorPoint point)
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(point);
@@ -289,36 +270,27 @@ public static class NativeFatCanonicalEvidenceOverlay
                 return false;
 
             slot.Value1 = raw;
-            slot.Value1Evidence = slot.Value2Evidence is null
-                ? null
-                : slot.Value2Evidence with { Slot = FatValueSlot.Value1 };
+            slot.Value1Evidence = slot.Value2Evidence is null ? null : slot.Value2Evidence with { Slot = FatValueSlot.Value1 };
             return true;
         }
     }
 
-    /// <summary>
-    /// Persisted evidence may fill missing cells but may never overwrite evidence captured
-    /// after hydration started. Structured metadata moves with its raw value atomically.
-    /// </summary>
     public static int MergeMissing(
         NativeFatIedSessionCacheState cache,
         IReadOnlyDictionary<string, NativeFatEvidenceSlotState> hydratedEvidence)
     {
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(hydratedEvidence);
-
         var mergedRows = 0;
+
         lock (cache.EvidenceByRow)
         {
             foreach (var pair in hydratedEvidence)
             {
-                if (string.IsNullOrWhiteSpace(pair.Key))
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value is null || IsEmpty(pair.Value))
                     continue;
 
                 var incoming = pair.Value;
-                if (incoming == null || IsEmpty(incoming))
-                    continue;
-
                 if (!cache.EvidenceByRow.TryGetValue(pair.Key, out var current))
                 {
                     cache.EvidenceByRow[pair.Key] = Clone(incoming);
@@ -344,7 +316,6 @@ public static class NativeFatCanonicalEvidenceOverlay
                     current.Result = incoming.Result;
                     changed = true;
                 }
-
                 if (changed)
                     mergedRows++;
             }
@@ -353,8 +324,7 @@ public static class NativeFatCanonicalEvidenceOverlay
         return mergedRows;
     }
 
-    public static IReadOnlyDictionary<string, NativeFatEvidenceSlotState> Snapshot(
-        NativeFatIedSessionCacheState cache)
+    public static IReadOnlyDictionary<string, NativeFatEvidenceSlotState> Snapshot(NativeFatIedSessionCacheState cache)
     {
         ArgumentNullException.ThrowIfNull(cache);
         lock (cache.EvidenceByRow)
@@ -379,6 +349,13 @@ public static class NativeFatCanonicalEvidenceOverlay
         while (text.Contains("..", StringComparison.Ordinal))
             text = text.Replace("..", ".", StringComparison.Ordinal);
         return text.Trim('.');
+    }
+
+    private static string ResolveResult(NativeFatEvidenceSlotState slot)
+    {
+        if (!string.IsNullOrWhiteSpace(slot.Result))
+            return slot.Result.Trim();
+        return HasValue1(slot) && HasValue2(slot) ? "COMPLETE" : string.Empty;
     }
 
     private static string StripDisplayTimestamp(string value)
@@ -406,7 +383,6 @@ public static class NativeFatCanonicalEvidenceOverlay
             return string.Empty;
         if (evidence is null)
             return raw;
-
         var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
         return $"{raw} - {timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)}";
     }
@@ -435,10 +411,7 @@ public static class NativeFatCanonicalEvidenceOverlay
             Result = source.Result
         };
 
-    private static void RemoveIfEmpty(
-        NativeFatIedSessionCacheState cache,
-        string key,
-        NativeFatEvidenceSlotState slot)
+    private static void RemoveIfEmpty(NativeFatIedSessionCacheState cache, string key, NativeFatEvidenceSlotState slot)
     {
         if (IsEmpty(slot))
             cache.EvidenceByRow.Remove(key);
