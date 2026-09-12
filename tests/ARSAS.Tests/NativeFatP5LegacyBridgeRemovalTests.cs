@@ -55,6 +55,7 @@ public sealed class NativeFatP5LegacyBridgeRemovalTests
     {
         var root = FindRepoRoot();
         var selection = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSignalSelectionService.cs"));
+        var importer = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatSclProjectImportService.cs"));
 
         foreach (var relativePath in new[]
                  {
@@ -71,6 +72,7 @@ public sealed class NativeFatP5LegacyBridgeRemovalTests
 
         Assert.DoesNotContain("ENGINEERING_SCL_DATASET_AUTHORITY", selection, StringComparison.Ordinal);
         Assert.DoesNotContain("EngineeringSclDataSetAuthorityBindingStatus", selection, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdoptEngineeringRuntimeWorkspaces", importer, StringComparison.Ordinal);
     }
 
     [Fact]
