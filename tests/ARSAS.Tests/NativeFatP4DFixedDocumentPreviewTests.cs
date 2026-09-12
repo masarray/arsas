@@ -42,7 +42,10 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Contains("internal static void SaveLayout(", pdfService, StringComparison.Ordinal);
         Assert.Contains("GenerateLayout(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
         Assert.Contains("IoFatNativePdfWriter.Build(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
-        Assert.Contains("public static byte[] Build(\n        IoFatReportLayoutPlan layout,\n        string reportName,", pdfWriter, StringComparison.Ordinal);
+        Assert.Contains("public static byte[] Build(", pdfWriter, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportLayoutPlan layout,", pdfWriter, StringComparison.Ordinal);
+        Assert.Contains("string reportName,", pdfWriter, StringComparison.Ordinal);
+        Assert.Contains("string primaryReference)", pdfWriter, StringComparison.Ordinal);
     }
 
     [Fact]
