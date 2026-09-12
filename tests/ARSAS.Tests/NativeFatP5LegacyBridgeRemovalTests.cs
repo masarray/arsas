@@ -51,12 +51,26 @@ public sealed class NativeFatP5LegacyBridgeRemovalTests
     }
 
     [Fact]
-    public void P5_AutomaticEngineeringBootstrapModuleIsPhysicallyRemoved()
+    public void P5_ObsoleteAutomaticBridgeFilesAndProjectionAuthorityArePhysicallyRemoved()
     {
         var root = FindRepoRoot();
-        Assert.False(
-            File.Exists(Path.Combine(root, "MainWindow.ProductionFatEngineeringBootstrap.cs")),
-            "Normal native FAT must not regain the automatic Engineering -> legacy IoTest bootstrap module.");
+        var selection = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSignalSelectionService.cs"));
+
+        foreach (var relativePath in new[]
+                 {
+                     "MainWindow.ProductionFatEngineeringBootstrap.cs",
+                     "MainWindow.ProductionFatNoFlicker.cs",
+                     Path.Combine("Services", "IoTesting", "IoFatEngineeringWorkspaceProjectionService.cs"),
+                     Path.Combine("Services", "IoTesting", "IoFatCanonicalEvidenceMigrationService.cs")
+                 })
+        {
+            Assert.False(
+                File.Exists(Path.Combine(root, relativePath)),
+                $"P5 requires obsolete automatic FAT bridge file '{relativePath}' to remain retired.");
+        }
+
+        Assert.DoesNotContain("ENGINEERING_SCL_DATASET_AUTHORITY", selection, StringComparison.Ordinal);
+        Assert.DoesNotContain("EngineeringSclDataSetAuthorityBindingStatus", selection, StringComparison.Ordinal);
     }
 
     [Fact]
