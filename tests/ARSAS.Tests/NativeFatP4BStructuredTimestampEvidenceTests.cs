@@ -35,15 +35,18 @@ public sealed class NativeFatP4BStructuredTimestampEvidenceTests
         Assert.Equal(31, evidence.IedTimestamp!.Value.Second);
         Assert.Equal(958, evidence.IedTimestamp.Value.Millisecond);
         Assert.Equal(
-            "True - 2026-09-12 06:46:31.958",
+            "True",
             NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal(
+            "2026-09-12 06:46:31.958",
+            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1Timestamp));
         Assert.Equal(
             "True",
             NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
     }
 
     [Fact]
-    public void CaptureWithoutRelayTimestamp_UsesArsasCaptureTimeAsDisplayFallback()
+    public void CaptureWithoutRelayTimestamp_UsesArsasCaptureTimeAsTimestampFallback()
     {
         using var coordinator = new NativeFatArmCoordinator();
         var device = Device("runtime-fallback");
@@ -68,9 +71,10 @@ public sealed class NativeFatP4BStructuredTimestampEvidenceTests
         Assert.NotNull(evidence);
         Assert.Null(evidence!.IedTimestamp);
         Assert.InRange(evidence.CapturedAt, before, after);
+        Assert.Equal("1247.32", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
         Assert.Equal(
-            $"1247.32 - {evidence.CapturedAt:yyyy-MM-dd HH:mm:ss.fff}",
-            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
+            $"{evidence.CapturedAt:yyyy-MM-dd HH:mm:ss.fff}",
+            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1Timestamp));
     }
 
     [Fact]
@@ -107,11 +111,17 @@ public sealed class NativeFatP4BStructuredTimestampEvidenceTests
         Assert.Equal("Open [01]", value2!.RawValue);
         Assert.Equal(300, value2.IedTimestamp!.Value.Millisecond);
         Assert.Equal(
-            "Closed [10] - 2026-09-12 06:46:31.200",
+            "Closed [10]",
             NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
         Assert.Equal(
-            "Open [01] - 2026-09-12 06:46:32.300",
+            "2026-09-12 06:46:31.200",
+            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1Timestamp));
+        Assert.Equal(
+            "Open [01]",
             NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal(
+            "2026-09-12 06:46:32.300",
+            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2Timestamp));
     }
 
     [Fact]
@@ -161,8 +171,11 @@ public sealed class NativeFatP4BStructuredTimestampEvidenceTests
             Assert.Equal(77, capture.Sequence);
             Assert.Equal(958, capture.IedTimestamp!.Value.Millisecond);
             Assert.Equal(
-                "True - 2026-09-12 06:46:31.958",
+                "True",
                 NativeFatCanonicalEvidenceOverlay.Read(restored, recreatedPoint, NativeFatEvidenceField.Value1));
+            Assert.Equal(
+                "2026-09-12 06:46:31.958",
+                NativeFatCanonicalEvidenceOverlay.Read(restored, recreatedPoint, NativeFatEvidenceField.Value1Timestamp));
         }
         finally
         {
@@ -190,12 +203,15 @@ public sealed class NativeFatP4BStructuredTimestampEvidenceTests
             new DateTimeOffset(2026, 9, 12, 8, 1, 3, TimeSpan.FromHours(7)));
         var before = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value1);
         var rendered = NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1);
+        var renderedTimestamp = NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1Timestamp);
 
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value1, rendered);
         var after = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value1);
 
         Assert.Same(before, after);
-        Assert.Equal("False - 2026-09-12 08:01:02.345", rendered);
+        Assert.Equal("False", rendered);
+        Assert.Equal("2026-09-12 08:01:02.345", renderedTimestamp);
+        Assert.Equal(renderedTimestamp, NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1Timestamp));
     }
 
     private static Iec61850MonitorDevice Device(string deviceId)
