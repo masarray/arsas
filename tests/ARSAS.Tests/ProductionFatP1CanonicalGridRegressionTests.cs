@@ -39,6 +39,7 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
     public void P1C_NativeFatUsesEngineeringGridStyleTemplateAndVirtualizationContract()
     {
         var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+        var columnContract = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
         var engineeringXaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
         var appXaml = File.ReadAllText(FindRepoFile("App.xaml"));
 
@@ -51,7 +52,8 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
         Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", engineeringXaml, StringComparison.Ordinal);
 
         Assert.Contains("FindResource(\"ModernDataGrid\") as Style", gridSource, StringComparison.Ordinal);
-        Assert.Contains("AddCanonicalTemplateColumn(\"Value\", \"ProcessValueBadgeTemplate\", 125);", gridSource, StringComparison.Ordinal);
+        Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 140);", columnContract, StringComparison.Ordinal);
         Assert.Contains("VirtualizingPanel.SetVirtualizationMode(_nativeFatCanonicalGrid, VirtualizationMode.Recycling);", gridSource, StringComparison.Ordinal);
         Assert.Contains("RowStyle = BuildEngineeringLiveRowStyle()", gridSource, StringComparison.Ordinal);
         Assert.Contains("CellStyle = BuildEngineeringLiveCellStyle()", gridSource, StringComparison.Ordinal);
