@@ -32,8 +32,10 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("LD0/XCBR1.Pos.stVal", snapshot.Rows[0].IecTelegram);
         Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
-        Assert.StartsWith("Open [01] - ", snapshot.Rows[0].Value1, StringComparison.Ordinal);
-        Assert.StartsWith("Closed [10] - ", snapshot.Rows[0].Value2, StringComparison.Ordinal);
+        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
+        Assert.NotEqual("—", snapshot.Rows[0].Value1TimestampText);
+        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.NotEqual("—", snapshot.Rows[0].Value2TimestampText);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
         Assert.Equal("1/2 complete", snapshot.ProgressText);
     }
@@ -51,7 +53,9 @@ public sealed class NativeFatP3PrintPreviewTests
 
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
         var capturedValue1 = snapshot.Rows[0].Value1;
+        var capturedValue1Timestamp = snapshot.Rows[0].Value1TimestampText;
         var capturedValue2 = snapshot.Rows[0].Value2;
+        var capturedValue2Timestamp = snapshot.Rows[0].Value2TimestampText;
 
         point.Value = "Closed [10]";
         point.SignalName = "MUTATED";
@@ -66,9 +70,11 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("Good", snapshot.Rows[0].Quality);
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
         Assert.Equal(capturedValue1, snapshot.Rows[0].Value1);
+        Assert.Equal(capturedValue1Timestamp, snapshot.Rows[0].Value1TimestampText);
         Assert.Equal(capturedValue2, snapshot.Rows[0].Value2);
-        Assert.StartsWith("Open [01] - ", snapshot.Rows[0].Value1, StringComparison.Ordinal);
-        Assert.StartsWith("Closed [10] - ", snapshot.Rows[0].Value2, StringComparison.Ordinal);
+        Assert.Equal(capturedValue2Timestamp, snapshot.Rows[0].Value2TimestampText);
+        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
+        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
     }
 
@@ -114,7 +120,10 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Contains("Array.AsReadOnly", snapshotSource, StringComparison.Ordinal);
         Assert.Contains("Copy(point.IecTelegram)", snapshotSource, StringComparison.Ordinal);
         Assert.Contains("Copy(point.Quality)", snapshotSource, StringComparison.Ordinal);
-        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadDisplay", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadRaw", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadCapture", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture1)", snapshotSource, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture2)", snapshotSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Iec61850MonitorPoint Point", snapshotSource, StringComparison.Ordinal);
 
         foreach (var forbidden in new[]
