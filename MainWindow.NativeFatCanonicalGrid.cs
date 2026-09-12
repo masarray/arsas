@@ -38,6 +38,7 @@ public partial class MainWindow
     /// P1D makes Start FAT an ARM-only operation over those already-live row objects.
     /// P2 hydrates only sparse evidence asynchronously; canonical rows and live Value never wait.
     /// P3 builds no report until Print Preview is clicked, then renders an immutable selected-IED snapshot.
+    /// P4C makes the canonical workspace itself own the exact seven-column FAT thin-view contract.
     /// </summary>
     private FrameworkElement BuildNativeFatCanonicalWorkspace(string? statusText = null)
     {
@@ -159,17 +160,9 @@ public partial class MainWindow
         _nativeFatCanonicalGrid.CellEditEnding += NativeFatCanonicalGrid_CellEditEnding;
         _nativeFatCanonicalGrid.BeginningEdit += NativeFatCanonicalGrid_BeginningEdit;
 
-        AddCanonicalTextColumn("Status", nameof(Iec61850MonitorPoint.Status), 90);
-        AddCanonicalTextColumn("Type", nameof(Iec61850MonitorPoint.IecDataType), 84);
-        AddCanonicalTextColumn("Address", nameof(Iec61850MonitorPoint.IecTelegram), 210);
-        AddCanonicalTextColumn("Message", nameof(Iec61850MonitorPoint.SignalName), 180);
-        AddCanonicalTextColumn("Data Reference", nameof(Iec61850MonitorPoint.IecReference), 290);
-        AddCanonicalTextColumn("Quality", nameof(Iec61850MonitorPoint.Quality), 105);
-        AddCanonicalTextColumn("Timestamp", nameof(Iec61850MonitorPoint.DeviceTimestamp), 155);
-        AddCanonicalTemplateColumn("Value", "ProcessValueBadgeTemplate", 125);
-        _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Value 1", NativeFatEvidenceField.Value1, 104));
-        _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Value 2", NativeFatEvidenceField.Value2, 104));
-        _nativeFatCanonicalGrid.Columns.Add(new NativeFatEvidenceColumn(this, "Result", NativeFatEvidenceField.Result, 104));
+        // P4C single authority: the canonical workspace owns the exact seven-column FAT view.
+        // ProductionFatTab must not clear/rebuild columns after this point.
+        ApplyNativeFatP4CColumnContract();
 
         Grid.SetRow(_nativeFatCanonicalGrid, 2);
         root.Children.Add(_nativeFatCanonicalGrid);
