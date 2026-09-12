@@ -37,16 +37,16 @@ public sealed class NativeFatP1DArmCoordinatorTests
         Assert.Equal(1, result.SeededValue1Rows);
         Assert.Single(device.Points);
         Assert.Same(canonicalReference, device.Points[0]);
-        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
-        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
 
         point.Value = "Closed [10]";
 
         Assert.Single(device.Points);
         Assert.Same(canonicalReference, device.Points[0]);
-        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
-        Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2));
-        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result));
+        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Result));
     }
 
     [Fact]
@@ -63,9 +63,9 @@ public sealed class NativeFatP1DArmCoordinatorTests
         point.Value = "True";
         point.Value = "False";
 
-        Assert.Equal("True", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
-        Assert.Equal("False", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2));
-        Assert.Equal("REVIEW", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result));
+        Assert.Equal("True", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal("False", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal("REVIEW", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Result));
     }
 
     [Fact]

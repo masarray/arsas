@@ -39,7 +39,7 @@ public sealed class NativeFatCanonicalEvidenceOverlayTests
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value1, "SHOULD-NOT-BIND");
 
         Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.BuildRowKey(point));
-        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
         Assert.Empty(cache.EvidenceByRow);
     }
 
@@ -50,7 +50,7 @@ public sealed class NativeFatCanonicalEvidenceOverlayTests
         var point = Point("dev-1", "Breaker", "AA1E1F06R4LD0/XCBR1.Pos.stVal");
 
         Assert.Equal(string.Empty,
-            NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
         Assert.Empty(cache.EvidenceByRow);
     }
 
@@ -65,9 +65,9 @@ public sealed class NativeFatCanonicalEvidenceOverlayTests
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Result, "PASS");
 
         Assert.Single(cache.EvidenceByRow);
-        Assert.Equal("OPEN", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value1));
-        Assert.Equal("CLOSE", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Value2));
-        Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result));
+        Assert.Equal("OPEN", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal("CLOSE", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Result));
 
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value1, "");
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, NativeFatEvidenceField.Value2, "");

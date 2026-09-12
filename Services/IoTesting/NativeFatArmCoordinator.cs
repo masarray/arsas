@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Threading;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
@@ -115,7 +118,16 @@ public sealed class NativeFatArmCoordinator : IDisposable
 
             PropertyChangedEventHandler handler = (_, args) =>
             {
-                if (args.PropertyName is nameof(Iec61850MonitorPoint.Value) or nameof(Iec61850MonitorPoint.DisplayValue))
+                if (args.PropertyName is not (nameof(Iec61850MonitorPoint.Value) or nameof(Iec61850MonitorPoint.DisplayValue)))
+                    return;
+
+                // The Engineering UI applies Value before timestamp/quality/source/sequence in
+                // one dispatcher flush. Post the capture to that same synchronization context so
+                // P4B reads one coherent sample after the remaining metadata has been applied.
+                var context = SynchronizationContext.Current;
+                if (context is DispatcherSynchronizationContext)
+                    context.Post(_ => ObserveCanonicalValue(armed, point), null);
+                else
                     ObserveCanonicalValue(armed, point);
             };
 
@@ -180,22 +192,26 @@ public sealed class NativeFatArmCoordinator : IDisposable
         {
             if (!armed.Cache.EvidenceByRow.TryGetValue(rowKey, out var slot))
             {
-                NativeFatCanonicalEvidenceOverlay.Write(
+                NativeFatCanonicalEvidenceOverlay.WriteCapture(
                     armed.Cache,
                     point,
                     NativeFatEvidenceField.Value1,
-                    value);
+                    value,
+                    FatEvidenceCaptureKind.AutomaticValue,
+                    DateTimeOffset.Now);
                 RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value1);
                 return true;
             }
 
             if (string.IsNullOrWhiteSpace(slot.Value1))
             {
-                NativeFatCanonicalEvidenceOverlay.Write(
+                NativeFatCanonicalEvidenceOverlay.WriteCapture(
                     armed.Cache,
                     point,
                     NativeFatEvidenceField.Value1,
-                    value);
+                    value,
+                    FatEvidenceCaptureKind.AutomaticValue,
+                    DateTimeOffset.Now);
                 RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value1);
                 return true;
             }
@@ -205,11 +221,13 @@ public sealed class NativeFatArmCoordinator : IDisposable
                 if (Iec61850MonitorPoint.AreSemanticallyEquivalent(slot.Value1, value))
                     return false;
 
-                NativeFatCanonicalEvidenceOverlay.Write(
+                NativeFatCanonicalEvidenceOverlay.WriteCapture(
                     armed.Cache,
                     point,
                     NativeFatEvidenceField.Value2,
-                    value);
+                    value,
+                    FatEvidenceCaptureKind.AutomaticTransition,
+                    DateTimeOffset.Now);
                 RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value2);
                 return true;
             }
@@ -221,18 +239,18 @@ public sealed class NativeFatArmCoordinator : IDisposable
 
             // Keep the current pair aligned to the latest meaningful transition without
             // touching Result, which remains an operator/report assessment field.
-            NativeFatCanonicalEvidenceOverlay.Write(
+            NativeFatCanonicalEvidenceOverlay.PromoteValue2ToValue1(
                 armed.Cache,
-                point,
-                NativeFatEvidenceField.Value1,
-                slot.Value2);
+                point);
             RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value1);
 
-            NativeFatCanonicalEvidenceOverlay.Write(
+            NativeFatCanonicalEvidenceOverlay.WriteCapture(
                 armed.Cache,
                 point,
                 NativeFatEvidenceField.Value2,
-                value);
+                value,
+                FatEvidenceCaptureKind.AutomaticTransition,
+                DateTimeOffset.Now);
             RaiseEvidenceChanged(armed.DeviceId, point, NativeFatEvidenceField.Value2);
             return true;
         }

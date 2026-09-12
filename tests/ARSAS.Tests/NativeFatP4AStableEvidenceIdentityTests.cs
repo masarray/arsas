@@ -38,10 +38,10 @@ public sealed class NativeFatP4AStableEvidenceIdentityTests
         Assert.Equal(cswiAfter, reordered[1]);
         Assert.Equal(
             "Open [01]",
-            NativeFatCanonicalEvidenceOverlay.Read(cache, cswiAfter, NativeFatEvidenceField.Value1));
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, cswiAfter, NativeFatEvidenceField.Value1));
         Assert.Equal(
             string.Empty,
-            NativeFatCanonicalEvidenceOverlay.Read(cache, thdAfter, NativeFatEvidenceField.Value1));
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, thdAfter, NativeFatEvidenceField.Value1));
     }
 
     [Fact]
@@ -98,9 +98,9 @@ public sealed class NativeFatP4AStableEvidenceIdentityTests
 
         Assert.True(result.Succeeded);
         Assert.Equal(1, result.ArmedRows);
-        Assert.Equal("False", NativeFatCanonicalEvidenceOverlay.Read(cache, unique, NativeFatEvidenceField.Value1));
-        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, duplicateA, NativeFatEvidenceField.Value1));
-        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(cache, duplicateB, NativeFatEvidenceField.Value1));
+        Assert.Equal("False", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, unique, NativeFatEvidenceField.Value1));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, duplicateA, NativeFatEvidenceField.Value1));
+        Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, duplicateB, NativeFatEvidenceField.Value1));
     }
 
     [Fact]

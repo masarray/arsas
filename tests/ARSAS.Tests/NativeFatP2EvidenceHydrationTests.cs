@@ -33,10 +33,10 @@ public sealed class NativeFatP2EvidenceHydrationTests
             Assert.True(result.SnapshotFound);
             Assert.Equal(1, result.LoadedRows);
             Assert.Equal(1, merged);
-            Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.Read(restored, first, NativeFatEvidenceField.Value1));
-            Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.Read(restored, first, NativeFatEvidenceField.Value2));
-            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.Read(restored, first, NativeFatEvidenceField.Result));
-            Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.Read(restored, second, NativeFatEvidenceField.Value1));
+            Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, first, NativeFatEvidenceField.Value1));
+            Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, first, NativeFatEvidenceField.Value2));
+            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, first, NativeFatEvidenceField.Result));
+            Assert.Equal(string.Empty, NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, second, NativeFatEvidenceField.Value1));
             Assert.Equal(2, device.Points.Count);
         }
         finally
@@ -68,9 +68,9 @@ public sealed class NativeFatP2EvidenceHydrationTests
 
             NativeFatCanonicalEvidenceOverlay.MergeMissing(live, result.EvidenceByRow);
 
-            Assert.Equal("NEW-LIVE-V1", NativeFatCanonicalEvidenceOverlay.Read(live, point, NativeFatEvidenceField.Value1));
-            Assert.Equal("OLD-V2", NativeFatCanonicalEvidenceOverlay.Read(live, point, NativeFatEvidenceField.Value2));
-            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.Read(live, point, NativeFatEvidenceField.Result));
+            Assert.Equal("NEW-LIVE-V1", NativeFatCanonicalEvidenceOverlay.ReadRaw(live, point, NativeFatEvidenceField.Value1));
+            Assert.Equal("OLD-V2", NativeFatCanonicalEvidenceOverlay.ReadRaw(live, point, NativeFatEvidenceField.Value2));
+            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.ReadRaw(live, point, NativeFatEvidenceField.Result));
         }
         finally
         {
@@ -138,9 +138,9 @@ public sealed class NativeFatP2EvidenceHydrationTests
             Assert.True(result.Succeeded);
             Assert.True(result.SnapshotFound);
             Assert.Equal(1, result.LoadedRows);
-            Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Value1));
-            Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Value2));
-            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.Read(restored, point, NativeFatEvidenceField.Result));
+            Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, point, NativeFatEvidenceField.Value1));
+            Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, point, NativeFatEvidenceField.Value2));
+            Assert.Equal("PASS", NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, point, NativeFatEvidenceField.Result));
             Assert.Single(device.Points);
         }
         finally

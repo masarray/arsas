@@ -59,15 +59,15 @@ public sealed class NativeFatPrintPreviewSnapshot
         // is copied now; the preview never binds back to device.Points or EvidenceByRow.
         var rows = device.Points.Select(point =>
         {
-            var value1 = NativeFatCanonicalEvidenceOverlay.Read(
+            var value1 = NativeFatCanonicalEvidenceOverlay.ReadRaw(
                 cache,
                 point,
                 NativeFatEvidenceField.Value1).Trim();
-            var value2 = NativeFatCanonicalEvidenceOverlay.Read(
+            var value2 = NativeFatCanonicalEvidenceOverlay.ReadRaw(
                 cache,
                 point,
                 NativeFatEvidenceField.Value2).Trim();
-            var result = NativeFatCanonicalEvidenceOverlay.Read(
+            var result = NativeFatCanonicalEvidenceOverlay.ReadRaw(
                 cache,
                 point,
                 NativeFatEvidenceField.Result).Trim();

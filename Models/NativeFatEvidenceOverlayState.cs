@@ -1,12 +1,18 @@
+using ArIED61850Tester.Models.IoTesting;
+
 namespace ArIED61850Tester.Models;
 
 /// <summary>
-/// FAT-only evidence payload layered over a canonical Engineering row.
+/// FAT-only evidence payload layered over one canonical Engineering row.
+/// Value1/Value2 keep their raw text for backwards compatibility while the structured
+/// FatValueEvidence objects preserve timestamp, quality, acquisition source and sequence.
 /// </summary>
 public sealed class NativeFatEvidenceSlotState
 {
     public string Value1 { get; set; } = string.Empty;
     public string Value2 { get; set; } = string.Empty;
+    public FatValueEvidence? Value1Evidence { get; set; }
+    public FatValueEvidence? Value2Evidence { get; set; }
     public string Result { get; set; } = string.Empty;
 }
 
@@ -19,8 +25,8 @@ public enum NativeFatEvidenceHydrationState
 }
 
 /// <summary>
-/// Per-IED UI/evidence state. EvidenceByRow is sparse and keyed by the canonical
-/// Engineering point key; it is not a second signal/row collection.
+/// Per-IED UI/evidence state. EvidenceByRow is sparse and keyed by stable
+/// IEDName + IEC Telegram identity; it is not a second signal/row collection.
 /// </summary>
 public sealed class NativeFatIedSessionCacheState
 {
