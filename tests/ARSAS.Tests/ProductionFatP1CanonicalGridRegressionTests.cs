@@ -22,13 +22,16 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
     public void P1B_EvidenceColumnsRemainSparseOverlayNotRowWrappers()
     {
         var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
+        var columnContract = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
         var overlaySource = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatCanonicalEvidenceOverlay.cs"));
 
-        Assert.Contains("NativeFatEvidenceField.Value1", gridSource, StringComparison.Ordinal);
-        Assert.Contains("NativeFatEvidenceField.Value2", gridSource, StringComparison.Ordinal);
-        Assert.Contains("NativeFatEvidenceField.Result", gridSource, StringComparison.Ordinal);
+        // P4C is the single column authority; evidence field declarations intentionally
+        // live there rather than in the canonical grid builder.
+        Assert.Contains("NativeFatEvidenceField.Value1", columnContract, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Value2", columnContract, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceField.Result", columnContract, StringComparison.Ordinal);
         Assert.Contains("NativeFatIedSessionCacheState", gridSource, StringComparison.Ordinal);
-        Assert.Contains("point.PointKey", overlaySource, StringComparison.Ordinal);
+        Assert.Contains("TryBuildRowKey(point.DeviceName, point.IecTelegram", overlaySource, StringComparison.Ordinal);
         Assert.Contains("cache.EvidenceByRow.Remove(key)", overlaySource, StringComparison.Ordinal);
 
         Assert.DoesNotContain("ObservableCollection<Iec61850MonitorPoint>", gridSource, StringComparison.Ordinal);
