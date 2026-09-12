@@ -1,3 +1,7 @@
+using System.Text;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Services.IoTesting;
+
 namespace ARSAS.Tests;
 
 public sealed class NativeFatP4DFixedDocumentPreviewTests
@@ -21,6 +25,69 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Contains("public static FixedDocument Render(", renderer, StringComparison.Ordinal);
         Assert.Contains("IoFatReportLayoutPlan layout", renderer, StringComparison.Ordinal);
         Assert.Contains("new FixedDocument()", renderer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4D_SavePdfSerializesTheExactLayoutAlreadyRenderedInPreview()
+    {
+        var preview = File.ReadAllText(FindRepoFile("MainWindow.NativeFatPrintPreview.cs"));
+        var pdfService = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatPdfReportService.cs"));
+        var pdfWriter = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatNativePdfWriter.cs"));
+
+        Assert.Contains("var layout = NativeFatP4DReportAdapter.Build(snapshot, draft: true);", preview, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportPreviewDocumentBuilder.Render(layout)", preview, StringComparison.Ordinal);
+        Assert.Contains("Content = \"Save PDF\"", preview, StringComparison.Ordinal);
+        Assert.Contains("IoFatPdfReportService.SaveLayout(", preview, StringComparison.Ordinal);
+        Assert.Contains("layout,", preview, StringComparison.Ordinal);
+        Assert.Contains("internal static void SaveLayout(", pdfService, StringComparison.Ordinal);
+        Assert.Contains("GenerateLayout(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
+        Assert.Contains("IoFatNativePdfWriter.Build(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
+        Assert.Contains("public static byte[] Build(\n        IoFatReportLayoutPlan layout,\n        string reportName,", pdfWriter, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4D_LayoutFirstPdfWriterProducesNativePdfWithoutIoTestProjectRebuild()
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            DeviceId = "runtime-p4d",
+            Name = "AA1E1F06R4",
+            IpAddress = "192.168.81.103",
+            Port = 102
+        };
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.Name,
+            SignalName = "Breaker",
+            IecReference = "AA1E1F06R4LD0/XCBR1.Pos.stVal",
+            Quality = "Good",
+            Value = "Open [01]"
+        };
+        device.Points.Add(point);
+        var cache = new NativeFatIedSessionCacheState();
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value1,
+            "Open [01]",
+            ArIED61850Tester.Models.IoTesting.FatEvidenceCaptureKind.OperatorSnapshot,
+            DateTimeOffset.UtcNow);
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value2,
+            "Closed [10]",
+            ArIED61850Tester.Models.IoTesting.FatEvidenceCaptureKind.OperatorSnapshot,
+            DateTimeOffset.UtcNow);
+
+        var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
+        var layout = NativeFatP4DReportAdapter.Build(snapshot, draft: true);
+        var bytes = IoFatPdfReportService.GenerateLayout(layout, snapshot.IedName, snapshot.Rows[0].IecTelegram);
+
+        Assert.NotEmpty(layout.Pages);
+        Assert.True(bytes.Length > 32);
+        Assert.Equal("%PDF-1.4", Encoding.ASCII.GetString(bytes, 0, 8));
     }
 
     [Fact]
@@ -52,6 +119,7 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
 
         Assert.Contains("string IecTelegram", snapshot, StringComparison.Ordinal);
         Assert.Contains("string Quality", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadDisplay", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Type", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Status", snapshot, StringComparison.Ordinal);
     }
