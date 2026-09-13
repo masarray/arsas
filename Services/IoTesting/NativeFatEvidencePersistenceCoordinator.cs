@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
