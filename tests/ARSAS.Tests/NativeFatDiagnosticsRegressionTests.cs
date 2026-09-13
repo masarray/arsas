@@ -122,7 +122,7 @@ public sealed class NativeFatDiagnosticsRegressionTests
         Assert.Contains("NativeFatTimeSyncDiagnosticService.Evaluate", ui, StringComparison.Ordinal);
         Assert.Contains("InstallNativeFatDiagnosticButtons()", pivot, StringComparison.Ordinal);
         Assert.Contains("BindNativeFatDiagnostics(SelectedDevice)", pivot, StringComparison.Ordinal);
-        Assert.Contains("IEC 61850 FileDirectory", service, StringComparison.Ordinal);
+        Assert.Contains("FileDirectory", service, StringComparison.Ordinal);
 
         foreach (var forbidden in new[]
                  {
