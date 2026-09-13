@@ -94,7 +94,7 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
             state.Latest = snapshot;
             state.Generation++;
             if (state.Worker == null || state.Worker.IsCompleted)
-                state.Worker = Task.Run(() => RunWorkerAsync(snapshot.StableIedName, state));
+                state.Worker = Task.Run(() => RunWorkerAsync(state));
         }
     }
 
@@ -125,7 +125,7 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
         }
     }
 
-    private async Task RunWorkerAsync(string stableIedName, IedWriteState state)
+    private async Task RunWorkerAsync(IedWriteState state)
     {
         while (true)
         {
@@ -146,7 +146,7 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
                 Trace.WriteLine(
                     $"[FAT durability] persisted frozen evidence; ied={snapshot.Device.Name}; generation={generation}; rows={NativeFatCanonicalEvidenceOverlay.Snapshot(snapshot.Cache).Count}.");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 Trace.WriteLine(
                     $"[FAT durability] evidence persistence failed for {snapshot.Device.Name}: {ex.Message}");
