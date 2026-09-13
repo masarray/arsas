@@ -24,12 +24,9 @@ internal sealed class NativeFatEvidenceDurabilitySnapshot
     internal NativeFatIedSessionCacheState Cache { get; }
     internal string StableIedName { get; }
 
-    internal static NativeFatEvidenceDurabilitySnapshot Capture(
-        Iec61850MonitorDevice source,
-        NativeFatIedSessionCacheState sourceCache)
+    internal static Iec61850MonitorDevice FreezeCanonicalIdentity(Iec61850MonitorDevice source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(sourceCache);
 
         var detachedDevice = new Iec61850MonitorDevice
         {
@@ -39,9 +36,8 @@ internal sealed class NativeFatEvidenceDurabilitySnapshot
             Port = source.Port
         };
 
-        // SaveAsync needs only canonical row identity. Copy that identity now so a later
-        // RemoveDevicePoints/Points.Clear cannot turn a valid evidence snapshot into an
-        // empty snapshot while a debounced/background write is still pending.
+        // SaveAsync needs only canonical row identity. Copy it once for the lifetime of this
+        // runtime IED so later captures copy only sparse evidence rather than thousands of rows.
         foreach (var point in source.Points)
         {
             detachedDevice.Points.Add(new Iec61850MonitorPoint
@@ -54,22 +50,39 @@ internal sealed class NativeFatEvidenceDurabilitySnapshot
             });
         }
 
+        return detachedDevice;
+    }
+
+    internal static NativeFatEvidenceDurabilitySnapshot Capture(
+        Iec61850MonitorDevice source,
+        NativeFatIedSessionCacheState sourceCache)
+        => CaptureFrozen(FreezeCanonicalIdentity(source), sourceCache);
+
+    internal static NativeFatEvidenceDurabilitySnapshot CaptureFrozen(
+        Iec61850MonitorDevice frozenDevice,
+        NativeFatIedSessionCacheState sourceCache)
+    {
+        ArgumentNullException.ThrowIfNull(frozenDevice);
+        ArgumentNullException.ThrowIfNull(sourceCache);
+
         var detachedCache = new NativeFatIedSessionCacheState();
         NativeFatCanonicalEvidenceOverlay.MergeMissing(
             detachedCache,
             NativeFatCanonicalEvidenceOverlay.Snapshot(sourceCache));
 
-        return new NativeFatEvidenceDurabilitySnapshot(detachedDevice, detachedCache);
+        return new NativeFatEvidenceDurabilitySnapshot(frozenDevice, detachedCache);
     }
 }
 
 /// <summary>
 /// Lightweight per-IED persistence worker. There is no permanent thread: a worker exists
-/// only while an IED has dirty evidence. Writes for the same stable IEDName are serialized
-/// and the newest generation is always persisted last.
+/// only while an IED has dirty evidence. Writes for the same stable IEDName are serialized,
+/// short bursts are coalesced, and the newest generation is always persisted last.
 /// </summary>
 internal sealed class NativeFatEvidencePersistenceCoordinator
 {
+    private static readonly TimeSpan CoalesceWindow = TimeSpan.FromMilliseconds(120);
+
     private readonly NativeFatEvidenceHydrationService _service;
     private readonly object _gate = new();
     private readonly Dictionary<string, IedWriteState> _stateByIed =
@@ -130,6 +143,10 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
     {
         while (true)
         {
+            // Preserve the old write-throttling intent without retaining the old live-device
+            // race: the payload is already frozen, so IED teardown during this window is safe.
+            await Task.Delay(CoalesceWindow).ConfigureAwait(false);
+
             NativeFatEvidenceDurabilitySnapshot snapshot;
             long generation;
             lock (_gate)
@@ -161,8 +178,8 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
                     return;
                 }
 
-                // Evidence changed while this write was in flight. Loop immediately and
-                // persist only the newest frozen generation after the older write completes.
+                // Evidence changed while this write was in flight. Loop, coalesce the burst,
+                // and persist only the newest frozen generation after the older write.
             }
         }
     }
