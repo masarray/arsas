@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -9,17 +10,17 @@ using ArIED61850Tester.Services.IoTesting;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Release durability guard for native FAT evidence. Capture persistence is frozen at the
-/// evidence event/edit boundary, before an Engineering IED can clear/remove its live rows.
-/// This intentionally leaves the canonical WPF binding/recycling path unchanged.
+/// Native FAT evidence lifecycle: auto-load by stable IEDName, capture-only Start FAT,
+/// detached sparse persistence, and no dependency on Engineering Points during file IO.
 /// </summary>
 public partial class MainWindow
 {
     private bool _nativeFatEvidenceDurabilityInstalled;
     private DataGrid? _nativeFatEvidenceDurabilityGrid;
+    private NativeFatEvidenceStore? _nativeFatEvidenceStore;
     private NativeFatEvidencePersistenceCoordinator? _nativeFatEvidencePersistenceCoordinator;
-    private readonly Dictionary<string, Iec61850MonitorDevice> _nativeFatFrozenIdentityByRuntimeIed =
-        new(StringComparer.OrdinalIgnoreCase);
+    private CancellationTokenSource? _nativeFatEvidenceStoreLoadCts;
+    private long _nativeFatEvidenceStoreLoadGeneration;
 
     [ModuleInitializer]
     internal static void RegisterNativeFatEvidenceDurability()
@@ -36,8 +37,6 @@ public partial class MainWindow
         if (sender is not MainWindow window || window._nativeFatEvidenceDurabilityInstalled)
             return;
 
-        // Production FAT builds its canonical grid during Loaded. Hook after that install so
-        // the durability handler runs in addition to, not instead of, the proven binding path.
         window.Dispatcher.BeginInvoke(
             new Action(window.InstallNativeFatEvidenceDurability),
             DispatcherPriority.ApplicationIdle);
@@ -49,18 +48,34 @@ public partial class MainWindow
             return;
 
         _nativeFatEvidenceDurabilityInstalled = true;
+        _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
         _nativeFatEvidencePersistenceCoordinator ??=
-            new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceHydrationService);
+            new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceStore);
 
         _nativeFatArmCoordinator.EvidenceChanged += NativeFatEvidenceDurability_EvidenceChanged;
         MainTabs.SelectionChanged += NativeFatEvidenceDurability_MainTabsSelectionChanged;
+        PropertyChanged += NativeFatEvidenceDurability_MainWindowPropertyChanged;
+        Closed += NativeFatEvidenceDurability_MainWindowClosed;
         EnsureNativeFatEvidenceDurabilityGridHook();
+
+        // Load the already-selected IED too. This covers SCL/IEDs opened before this
+        // ApplicationIdle hook was installed.
+        BeginNativeFatEvidenceStoreLoad(SelectedDevice);
     }
 
     private void NativeFatEvidenceDurability_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ReferenceEquals(e.Source, MainTabs))
-            EnsureNativeFatEvidenceDurabilityGridHook();
+        if (!ReferenceEquals(e.Source, MainTabs))
+            return;
+
+        EnsureNativeFatEvidenceDurabilityGridHook();
+        BeginNativeFatEvidenceStoreLoad(SelectedDevice);
+    }
+
+    private void NativeFatEvidenceDurability_MainWindowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SelectedDevice))
+            BeginNativeFatEvidenceStoreLoad(SelectedDevice);
     }
 
     private void EnsureNativeFatEvidenceDurabilityGridHook()
@@ -105,8 +120,8 @@ public partial class MainWindow
             return;
         }
 
-        // Make the durability guard order-independent from the existing binding handler.
-        // Write is idempotent for an unchanged V1/V2 value, so either handler may run first.
+        // Keep this order-independent from the existing binding handler. The write is
+        // idempotent for unchanged V1/V2 values.
         var cache = GetNativeFatSession(_nativeFatBoundIedKey);
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, evidenceColumn.Field, editor.Text);
         cache.ActiveRowKey = NativeFatCanonicalEvidenceOverlay.BuildRowKey(point);
@@ -120,27 +135,141 @@ public partial class MainWindow
         if (device == null || !_nativeFatSessionByIed.TryGetValue(deviceId, out var cache))
             return;
 
-        // Cancel the old 350 ms live-device debounce. Its SaveAsync would enumerate
-        // device.Points later and can therefore observe an already-cleared IED workspace.
+        // Retire the old live-device debounce for this generation. Its SaveAsync walks
+        // device.Points later; the new store writes only the already-detached sparse payload.
         if (_nativeFatEvidencePersistCtsByIed.Remove(deviceId, out var pending))
         {
             pending.Cancel();
             pending.Dispose();
         }
 
-        if (!_nativeFatFrozenIdentityByRuntimeIed.TryGetValue(deviceId, out var frozenDevice) ||
-            frozenDevice.Points.Count != device.Points.Count)
-        {
-            frozenDevice = NativeFatEvidenceDurabilitySnapshot.FreezeCanonicalIdentity(device);
-            _nativeFatFrozenIdentityByRuntimeIed[deviceId] = frozenDevice;
-        }
-
-        var frozen = NativeFatEvidenceDurabilitySnapshot.CaptureFrozen(frozenDevice, cache);
+        _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
         _nativeFatEvidencePersistenceCoordinator ??=
-            new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceHydrationService);
-        _nativeFatEvidencePersistenceCoordinator.Queue(frozen);
+            new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceStore);
+
+        var snapshot = NativeFatEvidenceDurabilitySnapshot.Capture(device, cache);
+        _nativeFatEvidencePersistenceCoordinator.Queue(snapshot);
 
         Trace.WriteLine(
-            $"[FAT durability] queued frozen evidence at {reason}; ied={device.Name}; deviceId={device.DeviceId}; canonicalRows={frozen.Device.Points.Count}.");
+            $"[FAT evidence store] queued detached sparse evidence at {reason}; " +
+            $"ied={device.Name}; deviceId={device.DeviceId}; evidenceRows={snapshot.EvidenceByRow.Count}.");
+    }
+
+    private void BeginNativeFatEvidenceStoreLoad(Iec61850MonitorDevice? device)
+    {
+        _nativeFatEvidenceStoreLoadCts?.Cancel();
+        _nativeFatEvidenceStoreLoadCts?.Dispose();
+        _nativeFatEvidenceStoreLoadCts = null;
+
+        if (device == null || string.IsNullOrWhiteSpace(device.Name))
+            return;
+
+        _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
+        var generation = Interlocked.Increment(ref _nativeFatEvidenceStoreLoadGeneration);
+        var cts = new CancellationTokenSource();
+        _nativeFatEvidenceStoreLoadCts = cts;
+        _ = LoadNativeFatEvidenceStoreAsync(
+            device.DeviceId,
+            device.Name,
+            generation,
+            cts.Token);
+    }
+
+    private async Task LoadNativeFatEvidenceStoreAsync(
+        string runtimeDeviceId,
+        string iedName,
+        long generation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
+            var result = await _nativeFatEvidenceStore.LoadAsync(iedName, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (generation != _nativeFatEvidenceStoreLoadGeneration)
+                return;
+
+            var cache = GetNativeFatSession(runtimeDeviceId);
+            if (result.Succeeded && result.SnapshotFound)
+            {
+                ReplaceNativeFatEvidenceForIed(cache, iedName, result.EvidenceByRow);
+                cache.EvidenceHydrationState = NativeFatEvidenceHydrationState.Resolved;
+                cache.EvidenceHydratedAt = DateTimeOffset.Now;
+                cache.EvidenceHydrationError = string.Empty;
+
+                if (string.Equals(_nativeFatBoundIedKey, runtimeDeviceId, StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshAllVisibleNativeFatEvidenceCells();
+                    RefreshNativeFatEvidenceBindingRuntime();
+                    UpdateNativeFatArmUi(
+                        Devices.FirstOrDefault(candidate => candidate.DeviceId.Equals(runtimeDeviceId, StringComparison.OrdinalIgnoreCase)),
+                        $"Canonical Engineering live rows · evidence ready · {result.LoadedRows} persisted row(s) auto-loaded by IEDName");
+                }
+
+                // Reading an older hash-named snapshot is transparent. The next capture will
+                // write the readable IEDName file; do not rewrite merely because a tab opened.
+                Trace.WriteLine(
+                    $"[FAT evidence store] auto-loaded; ied={iedName}; deviceId={runtimeDeviceId}; " +
+                    $"rows={result.LoadedRows}; ignored={result.IgnoredRows}; source={result.SourcePath}; " +
+                    $"elapsedMs={result.ElapsedMilliseconds}; StartFATRequired=false.");
+            }
+            else if (!result.Succeeded)
+            {
+                Trace.WriteLine(
+                    $"[FAT evidence store] auto-load failed for {iedName}: {result.Message}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static void ReplaceNativeFatEvidenceForIed(
+        NativeFatIedSessionCacheState cache,
+        string iedName,
+        IReadOnlyDictionary<string, NativeFatEvidenceSlotState> evidenceByRow)
+    {
+        var ownerPrefix = NativeFatCanonicalEvidenceOverlay.NormalizeIedName(iedName) + "|";
+        lock (cache.EvidenceByRow)
+        {
+            foreach (var key in cache.EvidenceByRow.Keys
+                         .Where(key => key.StartsWith(ownerPrefix, StringComparison.OrdinalIgnoreCase))
+                         .ToArray())
+            {
+                cache.EvidenceByRow.Remove(key);
+            }
+
+            foreach (var pair in evidenceByRow)
+                cache.EvidenceByRow[pair.Key] = pair.Value;
+        }
+    }
+
+    private void NativeFatEvidenceDurability_MainWindowClosed(object? sender, EventArgs e)
+    {
+        _nativeFatEvidenceStoreLoadCts?.Cancel();
+        _nativeFatEvidenceStoreLoadCts?.Dispose();
+        _nativeFatEvidenceStoreLoadCts = null;
+
+        try
+        {
+            _nativeFatEvidencePersistenceCoordinator?.DrainAllAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Trace.WriteLine($"[FAT evidence store] final drain failed: {ex.Message}");
+        }
+
+        _nativeFatArmCoordinator.EvidenceChanged -= NativeFatEvidenceDurability_EvidenceChanged;
+        MainTabs.SelectionChanged -= NativeFatEvidenceDurability_MainTabsSelectionChanged;
+        PropertyChanged -= NativeFatEvidenceDurability_MainWindowPropertyChanged;
+        Closed -= NativeFatEvidenceDurability_MainWindowClosed;
+        if (_nativeFatEvidenceDurabilityGrid != null)
+            _nativeFatEvidenceDurabilityGrid.CellEditEnding -= NativeFatEvidenceDurability_CellEditEnding;
+        _nativeFatEvidenceDurabilityGrid = null;
+
+        _nativeFatEvidenceStore?.Dispose();
+        _nativeFatEvidenceStore = null;
+        _nativeFatEvidencePersistenceCoordinator = null;
     }
 }
