@@ -80,6 +80,7 @@ public partial class MainWindow
     private FrameworkElement BuildProductionFatPermanentHost()
     {
         var host = BuildNativeFatCanonicalWorkspace();
+        InstallNativeFatEvidenceBindingRuntime();
         InstallNativeFatDiagnosticButtons();
         return host;
     }
@@ -119,6 +120,7 @@ public partial class MainWindow
 
         BindNativeFatCanonicalRows();
         BindNativeFatDiagnostics(SelectedDevice);
+        RefreshNativeFatEvidenceBindingRuntime();
     }
 
     // Compatibility host contract: the global Engineering IED Explorer and shared Command Dock remain authoritative.
@@ -168,6 +170,10 @@ public partial class MainWindow
 
     private void ProductionFat_MainWindowClosed(object? sender, EventArgs e)
     {
+        // Persistence is fail-closed: write the latest sparse snapshot before any debounce
+        // cancellation or service disposal can discard the final FAT transition.
+        FlushNativeFatEvidenceBeforeShutdown();
+
         PropertyChanged -= ProductionFat_MainWindowPropertyChanged;
         MainTabs.SelectionChanged -= ProductionFat_MainTabsSelectionChanged;
         Closed -= ProductionFat_MainWindowClosed;
@@ -176,6 +182,7 @@ public partial class MainWindow
         _productionFatWindow = null;
         if (_nativeFatCanonicalGrid != null)
             _nativeFatCanonicalGrid.CellEditEnding -= NativeFatCanonicalGrid_CellEditEnding;
+        DisposeNativeFatEvidenceBindingRuntime();
         DisposeNativeFatDiagnostics();
         DisposeNativeFatArmCoordinator();
         _nativeFatCanonicalGrid = null;
