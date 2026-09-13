@@ -108,17 +108,20 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Equal("52_ACB1 Status", snapshot.Rows[0].Signal);
         Assert.Equal("COMPLETE", snapshot.Rows[0].Result);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
-        Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value1TimestampText));
+        Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value1TimestampText);
         Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
-        Assert.False(string.IsNullOrWhiteSpace(snapshot.Rows[0].Value2TimestampText));
-        Assert.Contains("OK", reportText);
+        Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value2TimestampText);
+        Assert.Contains("Complete", reportText);
         Assert.DoesNotContain("COMPLETE", reportText);
+        Assert.Contains("Evidence complete: 1 / 1 signals", reportText);
         Assert.Contains("ARSAS", reportText);
         Assert.DoesNotContain(reportText, text => text.Contains("COMTRADE", StringComparison.OrdinalIgnoreCase));
         Assert.True(layout.Pages.Count >= 2);
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "TESTED BY");
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "WITNESSED BY");
         Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "APPROVED BY");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "Title / Role");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "IED: AA1E1F06R4 · Report: IEC 61850 FAT Evidence");
         Assert.True(bytes.Length > 32);
         Assert.Equal("%PDF-1.4", Encoding.ASCII.GetString(bytes, 0, 8));
     }
@@ -130,12 +133,18 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
         var finalization = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportFinalization.cs"));
         var branding = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportBranding.cs"));
+        var formatting = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportFormatting.cs"));
 
         Assert.Contains("IoFatSignalDisplayNameFormatter.Format(point.SignalName, point.IecReference)", snapshot, StringComparison.Ordinal);
         Assert.Contains("NativeFatReportBranding.AddLogo", adapter, StringComparison.Ordinal);
         Assert.Contains("NativeFatReportBranding.AddLogo", finalization, StringComparison.Ordinal);
         Assert.Contains("\"ARSAS\"", branding, StringComparison.Ordinal);
-        Assert.Contains("return value.Equals(\"COMPLETE\", StringComparison.OrdinalIgnoreCase) ? \"OK\" : value;", adapter, StringComparison.Ordinal);
+        Assert.Contains("? \"Complete\"", adapter, StringComparison.Ordinal);
+        Assert.Contains("Evidence complete:", snapshot, StringComparison.Ordinal);
+        Assert.Contains("dd/MM/yyyy HH:mm:ss.fff", formatting, StringComparison.Ordinal);
+        Assert.Contains("ToLocalTime()", formatting, StringComparison.Ordinal);
+        Assert.Contains("Acceptance sign-off for the IEC 61850 FAT evidence documented in this report.", finalization, StringComparison.Ordinal);
+        Assert.Contains("Title / Role", finalization, StringComparison.Ordinal);
 
         foreach (var internalCopy in new[]
                  {
@@ -157,27 +166,28 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         var snapshot = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatPrintPreviewSnapshot.cs"));
 
         var signal = adapter.IndexOf("\"Signal\"", StringComparison.Ordinal);
-        var telegram = adapter.IndexOf("\"IEC Telegram\"", StringComparison.Ordinal);
+        var reference = adapter.IndexOf("\"IEC 61850 Reference\"", StringComparison.Ordinal);
         var quality = adapter.IndexOf("\"Quality\"", StringComparison.Ordinal);
         var value1 = adapter.IndexOf("\"Value 1\"", StringComparison.Ordinal);
         var timestamp1 = adapter.IndexOf("\"V1 Timestamp\"", StringComparison.Ordinal);
         var value2 = adapter.IndexOf("\"Value 2\"", StringComparison.Ordinal);
         var timestamp2 = adapter.IndexOf("\"V2 Timestamp\"", StringComparison.Ordinal);
-        var result = adapter.IndexOf("\"Result\"", StringComparison.Ordinal);
+        var status = adapter.IndexOf("\"Evidence Status\"", StringComparison.Ordinal);
 
         Assert.True(signal >= 0);
-        Assert.True(telegram > signal);
-        Assert.True(quality > telegram);
+        Assert.True(reference > signal);
+        Assert.True(quality > reference);
         Assert.True(value1 > quality);
         Assert.True(timestamp1 > value1);
         Assert.True(value2 > timestamp1);
         Assert.True(timestamp2 > value2);
-        Assert.True(result > timestamp2);
+        Assert.True(status > timestamp2);
 
         Assert.DoesNotContain("\"Live Value\"", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("Clean(row.LiveValue)", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("WrapTelegram(", adapter, StringComparison.Ordinal);
-        Assert.Contains("private static readonly double[] Widths = [72d, 280d, 44d, 76d, 92d, 76d, 92d, 50d];", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IEC Telegram\"", adapter, StringComparison.Ordinal);
+        Assert.Contains("private static readonly double[] Widths = [66d, 280d, 40d, 72d, 92d, 72d, 92d, 68d];", adapter, StringComparison.Ordinal);
         Assert.Contains("TelegramFontSize(row.IecTelegram)", adapter, StringComparison.Ordinal);
         Assert.Contains("TableRowHeight = 30d", adapter, StringComparison.Ordinal);
         Assert.Contains("TableBodyFontSize = 7.2d", adapter, StringComparison.Ordinal);
@@ -197,6 +207,7 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadCapture", snapshot, StringComparison.Ordinal);
         Assert.Contains("DisplayTimestamp(capture1)", snapshot, StringComparison.Ordinal);
         Assert.Contains("DisplayTimestamp(capture2)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportFormatting.LocalTimestamp(timestamp)", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Type", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("string Status", snapshot, StringComparison.Ordinal);
     }

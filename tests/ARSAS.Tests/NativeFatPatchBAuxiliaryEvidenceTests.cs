@@ -1,3 +1,4 @@
+using System.Globalization;
 using AR.Iec61850.FaultRecords;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services.IoTesting;
@@ -40,11 +41,10 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
                 Files = files
             }
         };
+        var verifiedAt = new DateTimeOffset(2026, 9, 10, 8, 32, 0, TimeSpan.Zero);
+        var recordAt = new DateTimeOffset(2026, 9, 10, 8, 31, 0, TimeSpan.Zero);
         var cache = new NativeFatAuxiliaryEvidenceCache();
-        cache.RecordComtradeDiscovery(
-            device,
-            records,
-            new DateTimeOffset(2026, 9, 10, 8, 32, 0, TimeSpan.Zero));
+        cache.RecordComtradeDiscovery(device, records, verifiedAt);
 
         var auxiliary = cache.Capture(device);
         records.Clear();
@@ -59,16 +59,20 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
 
         Assert.Single(snapshot.AuxiliaryEvidence.ComtradeRecords);
         Assert.Equal("FAULT_001", snapshot.AuxiliaryEvidence.ComtradeRecords[0].RecordName);
-        Assert.Contains("IEC 61850 Fault Record (COMTRADE)", text);
+        Assert.Contains("IEC 61850 Fault Records (COMTRADE)", text);
         Assert.Contains("Available Fault Records", text);
         Assert.Contains("Record Name", text);
-        Assert.Contains("Record Date", text);
-        Assert.Contains("Size", text);
-        Assert.Contains("Result", text);
+        Assert.Contains("File Timestamp", text);
+        Assert.Contains("Total Size", text);
+        Assert.Contains("Status", text);
         Assert.Contains("FAULT_001", text);
-        Assert.Contains("2026-09-10 08:31:00 UTC", text);
+        Assert.Contains(recordAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss.fff", CultureInfo.InvariantCulture), text);
+        Assert.Contains(text, value => value.Contains(
+            $"Fault record directory verified · {verifiedAt.ToLocalTime():dd/MM/yyyy HH:mm:ss.fff}",
+            StringComparison.Ordinal));
         Assert.Contains("1.5 KB", text);
-        Assert.Contains("OK", text);
+        Assert.Contains("Complete", text);
+        Assert.DoesNotContain(text, value => value.Contains(" UTC", StringComparison.Ordinal));
         Assert.Equal("%PDF-1.4", System.Text.Encoding.ASCII.GetString(pdf, 0, 8));
         for (var index = 0; index < layout.Pages.Count; index++)
         {
@@ -86,7 +90,7 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
         var cache = new NativeFatAuxiliaryEvidenceCache();
 
         Assert.DoesNotContain(
-            "IEC 61850 Fault Record (COMTRADE)",
+            "IEC 61850 Fault Records (COMTRADE)",
             ReportText(Build(device, cache)));
 
         cache.RecordComtradeDiscovery(
@@ -94,13 +98,13 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
             [new Iec61850FaultRecordSet { RecordId = "EMPTY", BaseName = "EMPTY" }],
             DateTimeOffset.UtcNow);
         Assert.DoesNotContain(
-            "IEC 61850 Fault Record (COMTRADE)",
+            "IEC 61850 Fault Records (COMTRADE)",
             ReportText(Build(device, cache)));
 
         cache.RecordComtradeDiscovery(device, [ValidRecord("FAULT_002")], DateTimeOffset.UtcNow);
         cache.ClearComtrade(device);
         Assert.DoesNotContain(
-            "IEC 61850 Fault Record (COMTRADE)",
+            "IEC 61850 Fault Records (COMTRADE)",
             ReportText(Build(device, cache)));
     }
 
@@ -114,11 +118,9 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
             "OK",
             "LTMS evidence is present and cross-checked by a fresh good-quality IEC timestamp.",
             false);
+        var evaluatedAt = new DateTimeOffset(2026, 9, 10, 8, 40, 0, TimeSpan.Zero);
 
-        cache.RecordTimeSyncEvaluation(
-            device,
-            diagnostic,
-            new DateTimeOffset(2026, 9, 10, 8, 40, 0, TimeSpan.Zero));
+        cache.RecordTimeSyncEvaluation(device, diagnostic, evaluatedAt);
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(
             device,
             new NativeFatIedSessionCacheState(),
@@ -130,9 +132,12 @@ public sealed class NativeFatPatchBAuxiliaryEvidenceTests
         Assert.Equal(2, snapshot.AuxiliaryEvidence.TimeSync.SupportingPoints.Count);
         Assert.Contains("IEC 61850 Time Synchronization Evidence", text);
         Assert.Contains("Time Sync OK", text);
+        Assert.Contains("IEC 61850 Reference", text);
         Assert.Contains(text, value => value.Contains("LTMS verified", StringComparison.Ordinal));
         Assert.Contains("AA1E1F06R4LD0/LLN0.LTMS", text);
         Assert.Contains("AA1E1F06R4LD0/XCBR1.Pos.stVal", text);
+        Assert.Contains(evaluatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss.fff", CultureInfo.InvariantCulture), text);
+        Assert.DoesNotContain(text, value => value.Contains(" UTC", StringComparison.Ordinal));
     }
 
     [Theory]

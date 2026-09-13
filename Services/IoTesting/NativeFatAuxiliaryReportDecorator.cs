@@ -77,16 +77,16 @@ internal static class NativeFatAuxiliaryReportDecorator
         var commands = new List<IoFatReportCommand>();
         AddHeader(
             commands,
-            "IEC 61850 Fault Record (COMTRADE)",
+            "IEC 61850 Fault Records (COMTRADE)",
             continued ? "Available Fault Records · continued" : "Available Fault Records");
         AddScopeCard(
             commands,
             snapshot,
-            $"FileDirectory verified · {verifiedAtUtc.ToUniversalTime():yyyy-MM-dd HH:mm:ss 'UTC'}",
-            $"{snapshot.AuxiliaryEvidence.ComtradeRecords.Count:N0} record(s)");
+            $"Fault record directory verified · {NativeFatReportFormatting.LocalTimestamp(verifiedAtUtc)} · Local time",
+            RecordCountText(snapshot.AuxiliaryEvidence.ComtradeRecords.Count));
 
         var widths = new[] { 330d, 190d, 160d, 102d };
-        var headers = new[] { "Record Name", "Record Date", "Size", "Result" };
+        var headers = new[] { "Record Name", "File Timestamp", "Total Size", "Status" };
         var y = 438d;
         DrawTableHeader(commands, widths, headers, y);
         y -= TableHeaderHeight;
@@ -96,15 +96,15 @@ internal static class NativeFatAuxiliaryReportDecorator
             var values = new[]
             {
                 Fit(record.RecordName, 66),
-                record.RecordDateUtc?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture) ?? "—",
+                NativeFatReportFormatting.LocalTimestamp(record.RecordDateUtc),
                 FormatSize(record.KnownSizeBytes, record.HasUnknownSize),
-                "OK"
+                "Complete"
             };
             DrawRow(commands, widths, values, y, TableRowHeight, resultColumn: 3);
             y -= TableRowHeight;
         }
 
-        AddFooter(commands, pageNumber, createdAt, "Verified IEC 61850 FileDirectory evidence.");
+        AddFooter(commands, pageNumber, createdAt, "Fault record directory verified via IEC 61850 file services.");
         return new IoFatReportPagePlan(pageNumber, PageWidth, PageHeight, commands);
     }
 
@@ -119,7 +119,7 @@ internal static class NativeFatAuxiliaryReportDecorator
         AddScopeCard(
             commands,
             snapshot,
-            $"Evaluated · {evidence.VerifiedAtUtc.ToUniversalTime():yyyy-MM-dd HH:mm:ss 'UTC'}",
+            $"Evaluated · {NativeFatReportFormatting.LocalTimestamp(evidence.VerifiedAtUtc)} · Local time",
             "Time Sync OK");
 
         Rect(commands, Margin, 438d, ContentWidth, 68d, 4d, SoftPass, Border, 0.65d);
@@ -143,7 +143,7 @@ internal static class NativeFatAuxiliaryReportDecorator
             Navy);
 
         var widths = new[] { 82d, 226d, 92d, 68d, 158d, 88d, 68d };
-        var headers = new[] { "Evidence", "IEC Reference", "Value", "Quality", "IED Timestamp", "Delta", "Result" };
+        var headers = new[] { "Evidence", "IEC 61850 Reference", "Value", "Quality", "IED Timestamp", "Delta", "Result" };
         var y = 330d;
         DrawTableHeader(commands, widths, headers, y);
         y -= TableHeaderHeight;
@@ -155,8 +155,8 @@ internal static class NativeFatAuxiliaryReportDecorator
                 Fit(point.Role, 14),
                 Fit(FirstNonEmpty(point.IecReference, point.SignalName), 42),
                 Fit(point.Value, 16),
-                Fit(point.Quality, 12),
-                Fit(point.DeviceTimestamp, 28),
+                Fit(NativeFatReportFormatting.Quality(point.Quality), 12),
+                Fit(NativeFatReportFormatting.LocalTimestamp(point.DeviceTimestamp), 28),
                 point.DeltaSeconds.HasValue
                     ? $"{point.DeltaSeconds.Value:0.000} s"
                     : "—",
@@ -186,10 +186,10 @@ internal static class NativeFatAuxiliaryReportDecorator
         string result)
     {
         Rect(commands, Margin, 482d, ContentWidth, 34d, 3d, SoftBlue, Border, 0.6d);
-        Text(commands, Margin + 10d, 461d, 390d,
-            $"{Clean(snapshot.IedName)} · {Clean(snapshot.IpAddress)}:{snapshot.Port}",
+        Text(commands, Margin + 10d, 461d, 300d,
+            $"IED: {Clean(snapshot.IedName)} · Endpoint: {Clean(snapshot.IpAddress)}:{snapshot.Port}",
             IoFatReportFontKind.Bold, 8.0d, Ink);
-        Text(commands, Margin + 350d, 461d, 280d, detail, IoFatReportFontKind.Regular, 6.8d, Muted);
+        Text(commands, Margin + 310d, 461d, 340d, detail, IoFatReportFontKind.Regular, 6.6d, Muted);
         Text(commands, PageWidth - Margin - 118d, 461d, 108d, result, IoFatReportFontKind.Bold, 7.5d, Pass);
     }
 
@@ -244,13 +244,16 @@ internal static class NativeFatAuxiliaryReportDecorator
         string note)
     {
         Line(commands, Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
-        Text(commands, Margin, 24d, 620d,
-            $"FAT evidence captured · {createdAt:yyyy-MM-dd HH:mm:ss zzz}  |  {note}",
+        Text(commands, Margin, 24d, 650d,
+            $"FAT evidence captured · {NativeFatReportFormatting.LocalTimestamp(createdAt)} · Local time  |  {note}",
             IoFatReportFontKind.Regular, 6.5d, Muted);
         Text(commands, PageWidth - Margin - 118d, 24d, 118d,
             $"Page {pageNumber} / {pageNumber}",
             IoFatReportFontKind.Regular, 6.5d, Muted);
     }
+
+    private static string RecordCountText(int count)
+        => count == 1 ? "1 record" : $"{count:N0} records";
 
     private static string FormatSize(long knownSizeBytes, bool hasUnknownSize)
     {

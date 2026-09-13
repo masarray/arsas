@@ -22,11 +22,11 @@ internal static class NativeFatP4DReportAdapter
 
     // Customer-facing evidence table. Total width = 782 pt (842 - 2 * 30 margin).
     // Live Value is intentionally omitted from the report: FAT evidence is Value 1 / Value 2.
-    // The reclaimed width is prioritized for IEC Telegram and evidence timestamps so the
-    // printable table stays readable while the IEC identity remains on one line.
-    private static readonly double[] Widths = [72d, 280d, 44d, 76d, 92d, 76d, 92d, 50d];
+    // IEC 61850 Reference keeps the dominant width; the status column is widened enough for
+    // the explicit customer-facing "Evidence Status" wording without sacrificing timestamps.
+    private static readonly double[] Widths = [66d, 280d, 40d, 72d, 92d, 72d, 92d, 68d];
     private static readonly string[] Headers =
-        ["Signal", "IEC Telegram", "Quality", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Result"];
+        ["Signal", "IEC 61850 Reference", "Quality", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Evidence Status"];
 
     private static readonly IoFatReportColor Navy = IoFatReportColor.FromHex("0F172A");
     private static readonly IoFatReportColor Blue = IoFatReportColor.FromHex("2563EB");
@@ -79,8 +79,8 @@ internal static class NativeFatP4DReportAdapter
             pages[index].Add(new IoFatReportTextCommand(
                 Margin,
                 24d,
-                520d,
-                $"FAT evidence captured · {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss zzz}",
+                560d,
+                $"FAT evidence captured · {NativeFatReportFormatting.LocalTimestamp(snapshot.CapturedAt)} · Local time",
                 IoFatReportFontKind.Regular,
                 6.5d,
                 Muted));
@@ -128,7 +128,7 @@ internal static class NativeFatP4DReportAdapter
             Margin,
             542d,
             560d,
-            "Factory Acceptance Test · IEC 61850 signal evidence",
+            "Factory Acceptance Test · IEC 61850 Signal Evidence",
             IoFatReportFontKind.Regular,
             7.6d,
             Muted));
@@ -146,15 +146,15 @@ internal static class NativeFatP4DReportAdapter
             499d,
             470d,
             continued
-                ? $"{Clean(snapshot.IedName)} (continued) · {Clean(snapshot.IpAddress)}:{snapshot.Port}"
-                : $"{Clean(snapshot.IedName)} · {Clean(snapshot.IpAddress)}:{snapshot.Port}",
+                ? $"IED: {Clean(snapshot.IedName)} (continued) · Endpoint: {Clean(snapshot.IpAddress)}:{snapshot.Port}"
+                : $"IED: {Clean(snapshot.IedName)} · Endpoint: {Clean(snapshot.IpAddress)}:{snapshot.Port}",
             IoFatReportFontKind.Bold,
             8.6d,
             Ink));
         page.Add(new IoFatReportTextCommand(
-            PageWidth - Margin - 220d,
+            PageWidth - Margin - 250d,
             499d,
-            208d,
+            238d,
             snapshot.ProgressText,
             IoFatReportFontKind.Bold,
             8.2d,
@@ -175,7 +175,7 @@ internal static class NativeFatP4DReportAdapter
                 Widths[index] - 8d,
                 Headers[index],
                 IoFatReportFontKind.Bold,
-                index is 4 or 6 ? 6.2d : 6.8d,
+                index is 4 or 6 ? 6.2d : index is 1 or 7 ? 6.4d : 6.8d,
                 Blue));
             x += Widths[index];
         }
@@ -196,7 +196,7 @@ internal static class NativeFatP4DReportAdapter
         {
             Clean(row.Signal),
             string.Empty,
-            Clean(row.Quality),
+            NativeFatReportFormatting.Quality(row.Quality),
             Clean(row.Value1),
             Clean(row.Value1TimestampText),
             Clean(row.Value2),
@@ -251,9 +251,6 @@ internal static class NativeFatP4DReportAdapter
         if (text.Length == 0)
             return TelegramBaseFontSize;
 
-        // Conservative monospace estimate: ~0.62 em per glyph. The normal case keeps the
-        // larger readable size; unusually long IEC references shrink only as much as needed
-        // to stay on one physical report row instead of wrapping or clipping.
         var availableWidth = Widths[1] - 8d;
         var fitted = availableWidth / (text.Length * 0.62d);
         return Math.Clamp(fitted, TelegramMinimumFontSize, TelegramBaseFontSize);
@@ -262,13 +259,17 @@ internal static class NativeFatP4DReportAdapter
     private static string ReportResult(string? result)
     {
         var value = Clean(result);
-        return value.Equals("COMPLETE", StringComparison.OrdinalIgnoreCase) ? "OK" : value;
+        return value.Equals("COMPLETE", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("OK", StringComparison.OrdinalIgnoreCase)
+            ? "Complete"
+            : value;
     }
 
     private static IoFatReportColor ResultColor(string? result)
     {
         var value = Clean(result);
-        if (value.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
+        if (value.Equals("Complete", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
             value.Contains("PASS", StringComparison.OrdinalIgnoreCase) ||
             value.Contains("COMPLETE", StringComparison.OrdinalIgnoreCase))
             return Pass;

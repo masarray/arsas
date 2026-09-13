@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -51,7 +50,7 @@ public sealed class NativeFatPrintPreviewSnapshot
     public IReadOnlyList<NativeFatPrintPreviewRow> Rows => _rows;
     public NativeFatAuxiliaryEvidenceSnapshot AuxiliaryEvidence { get; }
     public int CompleteCount => _rows.Count(row => HasEvidence(row.Value1) && HasEvidence(row.Value2));
-    public string ProgressText => $"{CompleteCount}/{_rows.Count} complete";
+    public string ProgressText => $"Evidence complete: {CompleteCount} / {_rows.Count} signals";
 
     public static NativeFatPrintPreviewSnapshot Capture(
         Iec61850MonitorDevice device,
@@ -100,7 +99,7 @@ public sealed class NativeFatPrintPreviewSnapshot
         if (evidence is null)
             return "—";
         var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
-        return timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        return NativeFatReportFormatting.LocalTimestamp(timestamp);
     }
 
     private static bool HasEvidence(string? value)
