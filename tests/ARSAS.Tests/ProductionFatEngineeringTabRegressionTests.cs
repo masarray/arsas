@@ -3,45 +3,39 @@ namespace ARSAS.Tests;
 public sealed class ProductionFatEngineeringTabRegressionTests
 {
     [Fact]
-    public void EngineeringProjection_ReusesParsedSclWorkspaceWithoutOpeningXmlAgain()
+    public void ProductionFatTab_NormalEntryHasNoLegacyProjectionBootstrapModule()
     {
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs"));
+        var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
+        var repoRoot = FindRepoRoot();
 
-        Assert.Contains("device.SclWorkspace", source, StringComparison.Ordinal);
-        Assert.Contains("FatSclWorkspaceImportService.Import(workspaceSources)", source, StringComparison.Ordinal);
-        Assert.Contains("ENGINEERING_SCL_DATASET_AUTHORITY", source, StringComparison.Ordinal);
-        Assert.Contains("IoFatSourceWorkspaceService.DescribeAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SclWorkspaceService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenAsync(", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("LoadScl", source, StringComparison.Ordinal);
-    }
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "MainWindow.ProductionFatEngineeringBootstrap.cs")),
+            "P5 removes the automatic Engineering -> legacy IoTest bootstrap module from normal FAT navigation.");
+        Assert.False(
+            File.Exists(Path.Combine(repoRoot, "Services", "IoTesting", "IoFatEngineeringWorkspaceProjectionService.cs")),
+            "P5 removes the obsolete Engineering -> IoTest projection service rather than leaving a dormant second-row authority.");
 
-    [Fact]
-    public void ProductionFatTab_AutoBootstrapsFromSelectedEngineeringStaticDataSet()
-    {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
+        Assert.Contains("NativeFatTab.Content = BuildProductionFatPermanentHost();", source, StringComparison.Ordinal);
+        Assert.Contains("SynchronizeProductionFatSelectedIed();", source, StringComparison.Ordinal);
+        Assert.Contains("BindNativeFatCanonicalRows();", source, StringComparison.Ordinal);
 
-        Assert.Contains("QueueProductionFatEngineeringBootstrap();", source, StringComparison.Ordinal);
-        Assert.Contains("selected?.SclWorkspace", source, StringComparison.Ordinal);
-        Assert.Contains("DesignModel.DataSets.Sum", source, StringComparison.Ordinal);
-        Assert.Contains("IoFatEngineeringWorkspaceProjectionService.BuildAsync", source, StringComparison.Ordinal);
-        Assert.Contains("AdoptEngineeringRuntimeWorkspaces", source, StringComparison.Ordinal);
-        Assert.Contains("IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync", source, StringComparison.Ordinal);
-        Assert.Contains("projection.DescribedSources", source, StringComparison.Ordinal);
-        Assert.Contains("SynchronizeImportedSclFatWithEngineering", source, StringComparison.Ordinal);
-        Assert.Contains("ShowIoTestingWorkspaceAsync", source, StringComparison.Ordinal);
-        Assert.Contains("no SCL re-import", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenSclFatTesting_Click", source, StringComparison.Ordinal);
-    }
+        foreach (var forbidden in new[]
+                 {
+                     "QueueProductionFatEngineeringBootstrap",
+                     "EnsureProductionFatFromEngineeringAsync",
+                     "IoFatEngineeringWorkspaceProjectionService",
+                     "IoTestWorkspaceBootstrapService",
+                     "OpenDescribedSourcesAsync",
+                     "ShowIoTestingWorkspaceAsync",
+                     "ShowProductionFatBootstrapState"
+                 })
+        {
+            Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
+        }
 
-    [Fact]
-    public void ProductionFatTab_RegistersExactEngineeringRuntimeWorkspacesForSharedAcquisition()
-    {
-        var source = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatSclProjectImportService.cs"));
-
-        Assert.Contains("AdoptEngineeringRuntimeWorkspaces", source, StringComparison.Ordinal);
-        Assert.Contains("SetRuntimeWorkspaces(stable)", source, StringComparison.Ordinal);
-        Assert.Contains("workspace.WorkspaceKey", source, StringComparison.Ordinal);
+        // Explicit/manual compatibility remains a deliberate operator boundary only.
+        Assert.Contains("MountProductionFatWorkspace", source, StringComparison.Ordinal);
+        Assert.Contains("FAT compatibility workspace", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,22 +83,6 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         Assert.Contains("ActivateGooseSubscriberWorkspace()", source, StringComparison.Ordinal);
         Assert.Contains("ClearDiagnosticAlert()", source, StringComparison.Ordinal);
         Assert.Contains("UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true)", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ProductionFatSafetyBoundary_KeepsEngineeringAuthorityAndStrictPreflightCoverage()
-    {
-        var bootstrapSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatEngineeringBootstrap.cs"));
-        var fieldRegressionSource = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/ProductionFatP0FieldRegressionTests.cs"));
-        var preflightSource = File.ReadAllText(FindRepoFile("Services/IoTesting/IoTestSessionPreflight.cs"));
-        var preflightTests = File.ReadAllText(FindRepoFile("tests/ARSAS.Tests/IoTestSessionPreflightTests.cs"));
-
-        Assert.Contains("RetireManualWorkspaceRowsForStaticDataSetMode", bootstrapSource, StringComparison.Ordinal);
-        Assert.Contains("AutomaticStaticDataSetScope_RetiresManualAliasBeforeSessionPreflight", fieldRegressionSource, StringComparison.Ordinal);
-        Assert.Contains("IoTestSessionPreflight.Validate", fieldRegressionSource, StringComparison.Ordinal);
-        Assert.Contains("RetireRedundantManualWorkspaceRows", preflightSource, StringComparison.Ordinal);
-        Assert.Contains("multiple enabled test points", preflightSource, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Validate_RejectsDuplicateEnabledLiveReference", preflightTests, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)

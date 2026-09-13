@@ -3,26 +3,21 @@ namespace ARSAS.Tests;
 public sealed class WorkspaceModeSwitchTests
 {
     [Fact]
-    public void MainWindow_AlwaysExposesEngineeringAndPersistentIoFatWorkspaceModes()
+    public void MainWindow_DoesNotInstallTheObsoleteEngineeringIoFatSwitcher()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.WorkspaceModeSwitch.cs"));
 
-        Assert.Contains("ENGINEERING", source, StringComparison.Ordinal);
-        Assert.Contains("IO LIST FAT", source, StringComparison.Ordinal);
-        Assert.Contains("IO LIST FAT · LOADED", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorkspaceModeSwitchTag", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RegisterWorkspaceModeSwitch", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("InstallWorkspaceModeSwitch", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_workspaceFatButton", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenOrResumeIoFatWorkspace_Click", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenIoFatWorkspaceMenu", source, StringComparison.Ordinal);
         Assert.Contains("_loadedIoFatWindow", source, StringComparison.Ordinal);
-        Assert.Contains("ShowLoadedIoFatWorkspace", source, StringComparison.Ordinal);
-        Assert.Contains("CurrentEngineeringSclSourcePaths", source, StringComparison.Ordinal);
-        Assert.Contains("OpenSclFatSourcesAsync(sharedSources, selectionMode: null)", source, StringComparison.Ordinal);
-        Assert.Contains("Continue loaded FAT project", source, StringComparison.Ordinal);
-        Assert.Contains("Import SCL / CID files", source, StringComparison.Ordinal);
-        Assert.Contains("Add SCL / CID to loaded FAT workspace", source, StringComparison.Ordinal);
-        Assert.Contains("OpenSclForLoadedFatAppendAsync(loaded)", source, StringComparison.Ordinal);
-        Assert.Contains("OpenSclFatTesting_Click", source, StringComparison.Ordinal);
-        Assert.Contains("Import another IO List Excel workbook", source, StringComparison.Ordinal);
-        Assert.Contains("Open another portable .arsas project", source, StringComparison.Ordinal);
+        Assert.Contains("RegisterLoadedIoFatWindow", source, StringComparison.Ordinal);
+        Assert.Contains("ShowEngineeringWorkspaceFromFat", source, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement", source, StringComparison.Ordinal);
-        Assert.Contains("FrameworkElement.LoadedEvent", source, StringComparison.Ordinal);
+        Assert.Contains("LoadedIoFatWindow_Closed", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -98,12 +93,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("loaded.Close();", source, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.BeginInvoke(openReplacement", source, StringComparison.Ordinal);
 
-        // P0.4 keeps SCL additive while workbook/project opens remain explicit replacement.
-        Assert.Contains("OpenSclForLoadedFatAppendAsync(loaded)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "QueueIoFatWorkspaceReplacement(\n            () => OpenSclFatTesting_Click",
-            source,
-            StringComparison.Ordinal);
+        // Workbook/project opens remain explicit replacement. SCL import is owned by the
+        // canonical MainWindow workflow now that the obsolete header switcher is gone.
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click", hostSource, StringComparison.Ordinal);
         Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click", hostSource, StringComparison.Ordinal);
     }

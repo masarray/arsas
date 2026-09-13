@@ -25,10 +25,6 @@ public sealed class ProductionFatP0FieldRegressionTests
             primaryLiveLeaf);
 
         var ied = Ied(staticPoint, manualAlias);
-
-        // Field regression: a persisted scl-manual-* row may be restored before live
-        // binding proves that both rows collapse to the same primary leaf. Start FAT must
-        // self-heal that stale overlay instead of presenting a scope-not-ready dialog.
         var ready = IoTestSessionPreflight.Validate(ied);
 
         Assert.True(ready.Succeeded, ready.Message);
@@ -38,8 +34,6 @@ public sealed class ProductionFatP0FieldRegressionTests
         Assert.True(manualAlias.IsIncludedInFat);
         Assert.Equal(primaryLiveLeaf, manualAlias.LiveSignalReference);
 
-        // The broad automatic-static cleanup is now idempotent because preflight already
-        // retired the exact live-leaf shadow alias without touching evidence/test state.
         var retired = IoFatEngineeringSelectionBridge.RetireManualWorkspaceRowsForStaticDataSetMode(ied);
         Assert.Equal(0, retired);
     }
@@ -67,7 +61,6 @@ public sealed class ProductionFatP0FieldRegressionTests
             primaryLiveLeaf);
 
         var ied = Ied(staticPoint, restoredManualAlias);
-
         var ready = IoTestSessionPreflight.Validate(ied);
 
         Assert.True(ready.Succeeded, ready.Message);
@@ -101,7 +94,6 @@ public sealed class ProductionFatP0FieldRegressionTests
             primaryLiveLeaf);
 
         var ied = Ied(staticPoint, ambiguousLegacyPoint);
-
         var blocked = IoTestSessionPreflight.Validate(ied);
 
         Assert.False(blocked.Succeeded);
@@ -123,56 +115,6 @@ public sealed class ProductionFatP0FieldRegressionTests
         Assert.True(manual.WorkspaceSelected);
         Assert.True(manual.TestEnabled);
         Assert.True(manual.IsIncludedInFat);
-    }
-
-    [Fact]
-    public void EngineeringBootstrap_AppliesStaticCleanupBeforeProductionWindowIsShown()
-    {
-        var source = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
-        var synchronize = source.IndexOf("SynchronizeImportedSclFatWithEngineering(launch.Project);", StringComparison.Ordinal);
-        var retire = source.IndexOf("RetireManualWorkspaceRowsForStaticDataSetMode", StringComparison.Ordinal);
-        var show = source.IndexOf("await ShowIoTestingWorkspaceAsync(launch, importWarningCount: 0);", StringComparison.Ordinal);
-
-        Assert.True(synchronize >= 0, "Engineering/FAT synchronization call is missing.");
-        Assert.True(retire > synchronize, "Static DataSet cleanup must happen after shared selection synchronization so newly-created manual aliases are also retired.");
-        Assert.True(show > retire, "Static DataSet cleanup must complete before the production FAT workspace/session can be exposed.");
-    }
-
-    [Fact]
-    public void EngineeringBootstrap_ReusesDescribedSourcesWhileStagingStillVerifiesSha256()
-    {
-        var projection = Read("Services/IoTesting/IoFatEngineeringWorkspaceProjectionService.cs");
-        var bootstrap = Read("MainWindow.ProductionFatEngineeringBootstrap.cs");
-        var bootstrapService = Read("Services/IoTesting/IoTestWorkspaceBootstrapService.cs");
-        var persistence = Read("Services/IoTesting/IoTestProjectPersistenceService.cs");
-        var sourceWorkspace = Read("Services/IoTesting/IoFatSourceWorkspaceService.cs");
-
-        Assert.Contains("IReadOnlyList<IoFatDescribedSource> DescribedSources", projection, StringComparison.Ordinal);
-        Assert.Equal(
-            1,
-            projection.Split("IoFatSourceWorkspaceService.DescribeAsync", StringSplitOptions.None).Length - 1);
-        Assert.Contains("projection.DescribedSources", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("IoTestWorkspaceBootstrapService.OpenDescribedSourcesAsync", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
-        Assert.Contains("IoTestWorkspacePersistence.OpenDescribedSourcesAsync", bootstrapService, StringComparison.Ordinal);
-        Assert.Contains("StageDescribedAsync", persistence, StringComparison.Ordinal);
-        Assert.Contains("CopyVerifiedAsync", sourceWorkspace, StringComparison.Ordinal);
-        Assert.Contains("IsVerifiedStagedCopyAsync", sourceWorkspace, StringComparison.Ordinal);
-        Assert.Contains("SHA256.HashDataAsync(stream", sourceWorkspace, StringComparison.Ordinal);
-        Assert.Contains("VerifyHash(bytes, expectedSha256", sourceWorkspace, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EmbeddedAutomaticBootstrap_NeverHidesEngineeringWindow()
-    {
-        var source = Read("MainWindow.ProductionFatNoFlicker.cs");
-
-        Assert.Contains("public new void Hide()", source, StringComparison.Ordinal);
-        Assert.Contains("ShouldKeepEngineeringVisibleDuringProductionFatBootstrap", source, StringComparison.Ordinal);
-        Assert.Contains("_productionFatEngineeringBootstrapBusy", source, StringComparison.Ordinal);
-        Assert.Contains("ProductionFatTabReady", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("MainTabs.SelectedIndex == NativeFatWorkspaceIndex", source, StringComparison.Ordinal);
-        Assert.Contains("base.Hide();", source, StringComparison.Ordinal);
     }
 
     private static IoTestPointPlan StaticPoint(string staticReference)
@@ -237,22 +179,4 @@ public sealed class ProductionFatP0FieldRegressionTests
             IpAddress = "192.168.81.103",
             TestPoints = points.ToList()
         };
-
-    private static string Read(string relativePath)
-        => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
-
-    private static string FindRepoFile(string relativePath)
-    {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory != null)
-        {
-            var candidate = Path.Combine(directory.FullName, relativePath);
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            $"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
-    }
 }
