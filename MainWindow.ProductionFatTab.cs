@@ -78,7 +78,11 @@ public partial class MainWindow
     }
 
     private FrameworkElement BuildProductionFatPermanentHost()
-        => BuildNativeFatCanonicalWorkspace();
+    {
+        var host = BuildNativeFatCanonicalWorkspace();
+        InstallNativeFatDiagnosticButtons();
+        return host;
+    }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -114,6 +118,7 @@ public partial class MainWindow
         }
 
         BindNativeFatCanonicalRows();
+        BindNativeFatDiagnostics(SelectedDevice);
     }
 
     // Compatibility host contract: the global Engineering IED Explorer and shared Command Dock remain authoritative.
@@ -171,6 +176,7 @@ public partial class MainWindow
         _productionFatWindow = null;
         if (_nativeFatCanonicalGrid != null)
             _nativeFatCanonicalGrid.CellEditEnding -= NativeFatCanonicalGrid_CellEditEnding;
+        DisposeNativeFatDiagnostics();
         DisposeNativeFatArmCoordinator();
         _nativeFatCanonicalGrid = null;
         _nativeFatIedText = null;
