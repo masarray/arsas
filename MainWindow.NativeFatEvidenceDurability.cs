@@ -106,7 +106,11 @@ public partial class MainWindow
             return;
         }
 
-        QueueFrozenNativeFatEvidence(e.DeviceId, "capture");
+        QueueFrozenNativeFatEvidence(
+            e.DeviceId,
+            "capture",
+            e.Point.DeviceName,
+            e.Point.IpAddress);
     }
 
     private void NativeFatEvidenceDurability_CellEditEnding(
@@ -127,14 +131,27 @@ public partial class MainWindow
         var cache = GetNativeFatSession(_nativeFatBoundIedKey);
         NativeFatCanonicalEvidenceOverlay.Write(cache, point, evidenceColumn.Field, editor.Text);
         cache.ActiveRowKey = NativeFatCanonicalEvidenceOverlay.BuildRowKey(point);
-        QueueFrozenNativeFatEvidence(_nativeFatBoundIedKey, "operator edit");
+        QueueFrozenNativeFatEvidence(
+            _nativeFatBoundIedKey,
+            "operator edit",
+            point.DeviceName,
+            point.IpAddress);
     }
 
-    private void QueueFrozenNativeFatEvidence(string deviceId, string reason)
+    private void QueueFrozenNativeFatEvidence(
+        string deviceId,
+        string reason,
+        string? fallbackIedName = null,
+        string? fallbackIpAddress = null)
     {
+        if (!_nativeFatSessionByIed.TryGetValue(deviceId, out var cache))
+            return;
+
         var device = Devices.FirstOrDefault(candidate =>
             candidate.DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
-        if (device == null || !_nativeFatSessionByIed.TryGetValue(deviceId, out var cache))
+        var iedName = device?.Name ?? fallbackIedName ?? string.Empty;
+        var ipAddress = device?.IpAddress ?? fallbackIpAddress ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(iedName))
             return;
 
         // Retire the old live-device debounce for this generation. Its SaveAsync walks
@@ -149,12 +166,15 @@ public partial class MainWindow
         _nativeFatEvidencePersistenceCoordinator ??=
             new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceStore);
 
-        var snapshot = NativeFatEvidenceDurabilitySnapshot.Capture(device, cache);
+        var snapshot = device != null
+            ? NativeFatEvidenceDurabilitySnapshot.Capture(device, cache)
+            : NativeFatEvidenceDurabilitySnapshot.Capture(deviceId, iedName, ipAddress, cache);
         _nativeFatEvidencePersistenceCoordinator.Queue(snapshot);
 
         Trace.WriteLine(
             $"[FAT evidence store] queued detached sparse evidence at {reason}; " +
-            $"ied={device.Name}; deviceId={device.DeviceId}; evidenceRows={snapshot.EvidenceByRow.Count}.");
+            $"ied={iedName}; deviceId={deviceId}; evidenceRows={snapshot.EvidenceByRow.Count}; " +
+            $"liveDevicePresent={device != null}.");
     }
 
     private void BeginNativeFatEvidenceStoreLoad(Iec61850MonitorDevice? device)
