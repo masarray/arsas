@@ -5,91 +5,77 @@ using ArIED61850Tester.Models.IoTesting;
 namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
-/// Immutable FAT evidence write input captured while the Engineering IED and its canonical
-/// rows are still alive. Persistence must never enumerate a live WPF-bound collection after
-/// an IED has started closing/removing from the Engineering workspace.
+/// Immutable sparse FAT evidence captured at the evidence-change boundary. It contains only
+/// stable IED identity and detached evidence; it never retains Engineering Points or WPF rows.
 /// </summary>
 internal sealed class NativeFatEvidenceDurabilitySnapshot
 {
     private NativeFatEvidenceDurabilitySnapshot(
-        Iec61850MonitorDevice device,
-        NativeFatIedSessionCacheState cache)
+        string deviceId,
+        string iedName,
+        string ipAddress,
+        IReadOnlyDictionary<string, NativeFatEvidenceSlotState> evidenceByRow)
     {
-        Device = device;
-        Cache = cache;
-        StableIedName = NativeFatCanonicalEvidenceOverlay.NormalizeIedName(device.Name);
+        DeviceId = deviceId;
+        IedName = iedName;
+        IpAddress = ipAddress;
+        StableIedName = NativeFatCanonicalEvidenceOverlay.NormalizeIedName(iedName);
+        EvidenceByRow = evidenceByRow;
     }
 
-    internal Iec61850MonitorDevice Device { get; }
-    internal NativeFatIedSessionCacheState Cache { get; }
+    internal string DeviceId { get; }
+    internal string IedName { get; }
+    internal string IpAddress { get; }
     internal string StableIedName { get; }
-
-    internal static Iec61850MonitorDevice FreezeCanonicalIdentity(Iec61850MonitorDevice source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-
-        var detachedDevice = new Iec61850MonitorDevice
-        {
-            DeviceId = source.DeviceId,
-            Name = source.Name,
-            IpAddress = source.IpAddress,
-            Port = source.Port
-        };
-
-        // SaveAsync needs only canonical row identity. Copy it once for the lifetime of this
-        // runtime IED so later captures copy only sparse evidence rather than thousands of rows.
-        foreach (var point in source.Points)
-        {
-            detachedDevice.Points.Add(new Iec61850MonitorPoint
-            {
-                DeviceId = point.DeviceId,
-                DeviceName = point.DeviceName,
-                IpAddress = point.IpAddress,
-                SignalName = point.SignalName,
-                IecReference = point.IecReference
-            });
-        }
-
-        return detachedDevice;
-    }
+    internal IReadOnlyDictionary<string, NativeFatEvidenceSlotState> EvidenceByRow { get; }
 
     internal static NativeFatEvidenceDurabilitySnapshot Capture(
         Iec61850MonitorDevice source,
         NativeFatIedSessionCacheState sourceCache)
-        => CaptureFrozen(FreezeCanonicalIdentity(source), sourceCache);
-
-    internal static NativeFatEvidenceDurabilitySnapshot CaptureFrozen(
-        Iec61850MonitorDevice frozenDevice,
-        NativeFatIedSessionCacheState sourceCache)
     {
-        ArgumentNullException.ThrowIfNull(frozenDevice);
+        ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(sourceCache);
 
-        var detachedCache = new NativeFatIedSessionCacheState();
-        NativeFatCanonicalEvidenceOverlay.MergeMissing(
-            detachedCache,
-            NativeFatCanonicalEvidenceOverlay.Snapshot(sourceCache));
+        var detached = NativeFatCanonicalEvidenceOverlay.Snapshot(sourceCache)
+            .ToDictionary(
+                pair => pair.Key,
+                pair => Clone(pair.Value),
+                StringComparer.OrdinalIgnoreCase);
 
-        return new NativeFatEvidenceDurabilitySnapshot(frozenDevice, detachedCache);
+        return new NativeFatEvidenceDurabilitySnapshot(
+            source.DeviceId,
+            source.Name,
+            source.IpAddress,
+            detached);
     }
+
+    private static NativeFatEvidenceSlotState Clone(NativeFatEvidenceSlotState source)
+        => new()
+        {
+            Value1 = source.Value1Evidence?.RawValue ?? source.Value1,
+            Value2 = source.Value2Evidence?.RawValue ?? source.Value2,
+            Value1Evidence = source.Value1Evidence,
+            Value2Evidence = source.Value2Evidence,
+            Result = source.Result
+        };
 }
 
 /// <summary>
-/// Lightweight per-IED persistence worker. There is no permanent thread: a worker exists
-/// only while an IED has dirty evidence. Writes for the same stable IEDName are serialized,
-/// short bursts are coalesced, and the newest generation is always persisted last.
+/// Lightweight per-IED persistence worker. No permanent thread exists: a worker is created
+/// only while one stable IEDName has dirty evidence, coalesces short bursts, and serializes
+/// writes so the newest generation is always the final JSON on disk.
 /// </summary>
 internal sealed class NativeFatEvidencePersistenceCoordinator
 {
     private static readonly TimeSpan CoalesceWindow = TimeSpan.FromMilliseconds(120);
 
-    private readonly NativeFatEvidenceHydrationService _service;
+    private readonly NativeFatEvidenceStore _store;
     private readonly object _gate = new();
     private readonly Dictionary<string, IedWriteState> _stateByIed =
         new(StringComparer.OrdinalIgnoreCase);
 
-    internal NativeFatEvidencePersistenceCoordinator(NativeFatEvidenceHydrationService service)
-        => _service = service ?? throw new ArgumentNullException(nameof(service));
+    internal NativeFatEvidencePersistenceCoordinator(NativeFatEvidenceStore store)
+        => _store = store ?? throw new ArgumentNullException(nameof(store));
 
     internal void Queue(NativeFatEvidenceDurabilitySnapshot snapshot)
     {
@@ -139,12 +125,32 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
         }
     }
 
+    internal async Task DrainAllAsync()
+    {
+        while (true)
+        {
+            Task[] workers;
+            lock (_gate)
+            {
+                workers = _stateByIed.Values
+                    .Select(state => state.Worker)
+                    .Where(worker => worker != null)
+                    .Cast<Task>()
+                    .Distinct()
+                    .ToArray();
+            }
+
+            if (workers.Length == 0)
+                return;
+
+            await Task.WhenAll(workers).ConfigureAwait(false);
+        }
+    }
+
     private async Task RunWorkerAsync(IedWriteState state)
     {
         while (true)
         {
-            // Preserve the old write-throttling intent without retaining the old live-device
-            // race: the payload is already frozen, so IED teardown during this window is safe.
             await Task.Delay(CoalesceWindow).ConfigureAwait(false);
 
             NativeFatEvidenceDurabilitySnapshot snapshot;
@@ -158,16 +164,15 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
 
             try
             {
-                await _service
-                    .SaveAsync(snapshot.Device, snapshot.Cache, CancellationToken.None)
-                    .ConfigureAwait(false);
+                await _store.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
                 Trace.WriteLine(
-                    $"[FAT durability] persisted frozen evidence; ied={snapshot.Device.Name}; generation={generation}; rows={NativeFatCanonicalEvidenceOverlay.Snapshot(snapshot.Cache).Count}.");
+                    $"[FAT evidence store] persisted {snapshot.EvidenceByRow.Count} sparse row(s); " +
+                    $"ied={snapshot.IedName}; generation={generation}.");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 Trace.WriteLine(
-                    $"[FAT durability] evidence persistence failed for {snapshot.Device.Name}: {ex.Message}");
+                    $"[FAT evidence store] persistence failed for {snapshot.IedName}: {ex.Message}");
             }
 
             lock (_gate)
@@ -177,9 +182,6 @@ internal sealed class NativeFatEvidencePersistenceCoordinator
                     state.Worker = null;
                     return;
                 }
-
-                // Evidence changed while this write was in flight. Loop, coalesce the burst,
-                // and persist only the newest frozen generation after the older write.
             }
         }
     }
