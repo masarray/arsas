@@ -76,7 +76,15 @@ public partial class MainWindow
             return;
 
         foreach (var device in e.NewItems.OfType<Iec61850MonitorDevice>())
-            BeginNativeFatEvidenceStoreLoad(device);
+        {
+            var addedDevice = device;
+            // Open SCL inserts a new device before ApplySclWorkspaceToDevice assigns the
+            // authoritative workspace.IedName. Defer one dispatcher turn so the store lookup
+            // never runs against the constructor placeholder name "IED".
+            Dispatcher.BeginInvoke(
+                new Action(() => BeginNativeFatEvidenceStoreLoad(addedDevice)),
+                DispatcherPriority.Background);
+        }
     }
 
     private void NativeFatEvidenceDurability_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
