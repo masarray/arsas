@@ -106,7 +106,7 @@ public partial class FaultRecordWindow
             StatusText = $"Opening {Path.GetFileName(cfgPath)} in the native COMTRADE workspace…";
             ShowToast("Loading COMTRADE record with native ArdIrec core…", ToastKind.Information);
 
-            // P1A's reference DatReader eagerly decodes the record while opening. Keep that work
+            // ArdIrec's reference DatReader eagerly decodes the record while opening. Keep that work
             // off WPF's dispatcher thread so large field records do not freeze the Fault Records UI.
             var nativeOpen = await Task.Run(() =>
             {
@@ -134,68 +134,27 @@ public partial class FaultRecordWindow
                 }
             }
 
-            var nativeError = nativeOpen.Error;
+            var nativeError = string.IsNullOrWhiteSpace(nativeOpen.Error)
+                ? "The ArdIrec native COMTRADE bridge could not open this record."
+                : nativeOpen.Error;
 
-            // P1 rolls out native-first while preserving the proven P0 viewer as a compatibility
-            // fallback. This keeps field workflows available if the native DLL is absent or a
-            // workstation exposes an interop issue during the parity phase.
-            StatusText = $"Native COMTRADE workspace unavailable; using compatibility viewer. {nativeError}";
-            ShowToast("Opening compatibility COMTRADE Viewer…", ToastKind.Information);
-
-            if (!ArdIrecViewerLauncher.TryLaunch(cfgPath, out var process, out var launchError) || process is null)
-            {
-                var combinedError = string.IsNullOrWhiteSpace(nativeError)
-                    ? launchError
-                    : $"Native workspace: {nativeError}{Environment.NewLine}{Environment.NewLine}Compatibility viewer: {launchError}";
-                StatusText = $"COMTRADE viewer could not open {Path.GetFileName(cfgPath)}.";
-                ShowToast("COMTRADE Viewer could not be started.", ToastKind.Error);
-                MessageBox.Show(
-                    this,
-                    combinedError,
-                    "COMTRADE Viewer",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
-            using (process)
-            {
-                var activated = false;
-                for (var attempt = 0; attempt < 6; attempt++)
-                {
-                    await Task.Delay(attempt == 0 ? 350 : 220).ConfigureAwait(true);
-
-                    process.Refresh();
-                    if (process.HasExited)
-                    {
-                        var earlyExitError = ArdIrecViewerLauncher.DescribeEarlyExit(process, cfgPath);
-                        StatusText = $"COMTRADE compatibility viewer failed for {Path.GetFileName(cfgPath)}: {earlyExitError}";
-                        ShowToast("COMTRADE Viewer closed during startup.", ToastKind.Error);
-                        MessageBox.Show(
-                            this,
-                            earlyExitError,
-                            "COMTRADE Viewer startup failed",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
-                        return;
-                    }
-
-                    if (!activated)
-                        activated = ArdIrecViewerLauncher.TryActivateViewerWindow(process);
-                }
-
-                StatusText = $"Opened {Path.GetFileName(cfgPath)} in the compatibility COMTRADE Viewer.";
-                ShowToast("COMTRADE record opened in compatibility viewer.", ToastKind.Success);
-            }
+            StatusText = $"Native COMTRADE workspace could not open {Path.GetFileName(cfgPath)}: {nativeError}";
+            ShowToast("Native COMTRADE workspace unavailable.", ToastKind.Error);
+            MessageBox.Show(
+                this,
+                nativeError,
+                "Native COMTRADE workspace",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or SEHException or BadImageFormatException)
         {
-            StatusText = $"COMTRADE startup failed for {row.RecordName}: {ex.Message}";
-            ShowToast("COMTRADE Viewer startup failed.", ToastKind.Error);
+            StatusText = $"Native COMTRADE startup failed for {row.RecordName}: {ex.Message}";
+            ShowToast("Native COMTRADE workspace startup failed.", ToastKind.Error);
             MessageBox.Show(
                 this,
                 ex.Message,
-                "COMTRADE Viewer startup failed",
+                "Native COMTRADE workspace startup failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }

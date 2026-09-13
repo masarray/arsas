@@ -156,7 +156,7 @@ internal static class ArdIrecNativeBridge
 
             _loadError = failures.Count > 0
                 ? "ArdIrec native bridge is present but could not be loaded. " + string.Join(" | ", failures)
-                : "ArdIrec native bridge is not installed. P0 Qt viewer remains available as fallback.";
+                : "ArdIrec native bridge is not installed with this ARSAS build.";
             api = null;
             error = _loadError;
             return false;
