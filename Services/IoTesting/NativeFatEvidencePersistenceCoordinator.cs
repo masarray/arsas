@@ -34,6 +34,15 @@ internal sealed class NativeFatEvidenceDurabilitySnapshot
         NativeFatIedSessionCacheState sourceCache)
     {
         ArgumentNullException.ThrowIfNull(source);
+        return Capture(source.DeviceId, source.Name, source.IpAddress, sourceCache);
+    }
+
+    internal static NativeFatEvidenceDurabilitySnapshot Capture(
+        string deviceId,
+        string iedName,
+        string ipAddress,
+        NativeFatIedSessionCacheState sourceCache)
+    {
         ArgumentNullException.ThrowIfNull(sourceCache);
 
         var detached = NativeFatCanonicalEvidenceOverlay.Snapshot(sourceCache)
@@ -43,9 +52,9 @@ internal sealed class NativeFatEvidenceDurabilitySnapshot
                 StringComparer.OrdinalIgnoreCase);
 
         return new NativeFatEvidenceDurabilitySnapshot(
-            source.DeviceId,
-            source.Name,
-            source.IpAddress,
+            deviceId?.Trim() ?? string.Empty,
+            iedName?.Trim() ?? string.Empty,
+            ipAddress?.Trim() ?? string.Empty,
             detached);
     }
 
