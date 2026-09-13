@@ -31,7 +31,8 @@ public sealed class NativeFatPrintPreviewSnapshot
         string iedName,
         string ipAddress,
         int port,
-        IReadOnlyCollection<NativeFatPrintPreviewRow> rows)
+        IReadOnlyCollection<NativeFatPrintPreviewRow> rows,
+        NativeFatAuxiliaryEvidenceSnapshot auxiliaryEvidence)
     {
         CapturedAt = capturedAt;
         DeviceId = deviceId;
@@ -39,6 +40,7 @@ public sealed class NativeFatPrintPreviewSnapshot
         IpAddress = ipAddress;
         Port = port;
         _rows = Array.AsReadOnly(rows.ToArray());
+        AuxiliaryEvidence = auxiliaryEvidence.Copy();
     }
 
     public DateTimeOffset CapturedAt { get; }
@@ -47,12 +49,14 @@ public sealed class NativeFatPrintPreviewSnapshot
     public string IpAddress { get; }
     public int Port { get; }
     public IReadOnlyList<NativeFatPrintPreviewRow> Rows => _rows;
+    public NativeFatAuxiliaryEvidenceSnapshot AuxiliaryEvidence { get; }
     public int CompleteCount => _rows.Count(row => HasEvidence(row.Value1) && HasEvidence(row.Value2));
     public string ProgressText => $"{CompleteCount}/{_rows.Count} complete";
 
     public static NativeFatPrintPreviewSnapshot Capture(
         Iec61850MonitorDevice device,
-        NativeFatIedSessionCacheState cache)
+        NativeFatIedSessionCacheState cache,
+        NativeFatAuxiliaryEvidenceSnapshot? auxiliaryEvidence = null)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(cache);
@@ -87,7 +91,8 @@ public sealed class NativeFatPrintPreviewSnapshot
             Copy(device.Name),
             Copy(device.IpAddress),
             device.Port,
-            rows);
+            rows,
+            auxiliaryEvidence ?? NativeFatAuxiliaryEvidenceSnapshot.Empty);
     }
 
     private static string DisplayTimestamp(FatValueEvidence? evidence)

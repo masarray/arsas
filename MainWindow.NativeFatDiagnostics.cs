@@ -16,6 +16,7 @@ public partial class MainWindow
     private CancellationTokenSource? _nativeFatComtradeDiscoveryCts;
     private long _nativeFatComtradeDiscoveryGeneration;
     private DispatcherTimer? _nativeFatDiagnosticRefreshTimer;
+    private readonly NativeFatAuxiliaryEvidenceCache _nativeFatAuxiliaryEvidenceCache = new();
 
     private void InstallNativeFatDiagnosticButtons()
     {
@@ -82,6 +83,7 @@ public partial class MainWindow
 
         if (!device.IsConnected || string.IsNullOrWhiteSpace(device.IpAddress))
         {
+            _nativeFatAuxiliaryEvidenceCache.ClearComtrade(device);
             _nativeFatComtradeButton.Content = "COMTRADE —";
             _nativeFatComtradeButton.IsEnabled = false;
             _nativeFatComtradeButton.ToolTip = "FileDirectory evidence is unavailable while the selected IED is disconnected.";
@@ -119,6 +121,12 @@ public partial class MainWindow
             var catalog = await client.DiscoverAsync(remoteDirectory: null, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
+            await _nativeFatAuxiliaryEvidenceCache.RecordComtradeDiscoveryAsync(
+                device,
+                catalog.Records,
+                DateTimeOffset.UtcNow,
+                cancellationToken);
+
             if (generation != _nativeFatComtradeDiscoveryGeneration ||
                 !string.Equals(SelectedDevice?.DeviceId, device.DeviceId, StringComparison.OrdinalIgnoreCase) ||
                 _nativeFatComtradeButton == null)
@@ -139,6 +147,8 @@ public partial class MainWindow
         {
             if (generation != _nativeFatComtradeDiscoveryGeneration || _nativeFatComtradeButton == null)
                 return;
+
+            _nativeFatAuxiliaryEvidenceCache.ClearComtrade(device);
 
             _nativeFatComtradeButton.Content = "COMTRADE —";
             _nativeFatComtradeButton.ToolTip =
@@ -174,7 +184,9 @@ public partial class MainWindow
         if (device == null)
             return;
 
-        var diagnostic = NativeFatTimeSyncDiagnosticService.Evaluate(device, DateTimeOffset.UtcNow);
+        var evaluatedAt = DateTimeOffset.UtcNow;
+        var diagnostic = NativeFatTimeSyncDiagnosticService.Evaluate(device, evaluatedAt);
+        _nativeFatAuxiliaryEvidenceCache.RecordTimeSyncEvaluation(device, diagnostic, evaluatedAt);
         var text = BuildNativeFatTimeSyncDiagnosticText(device, diagnostic);
         var body = new TextBox
         {
@@ -280,13 +292,17 @@ public partial class MainWindow
 
         if (device == null || device.Points.Count == 0)
         {
+            if (device != null)
+                _nativeFatAuxiliaryEvidenceCache.ClearTimeSync(device);
             _nativeFatTimeSyncButton.Content = "Time Sync Review";
             _nativeFatTimeSyncButton.IsEnabled = false;
             _nativeFatTimeSyncButton.ToolTip = "No canonical live rows are available for device-side time evidence.";
             return;
         }
 
-        var diagnostic = NativeFatTimeSyncDiagnosticService.Evaluate(device, DateTimeOffset.UtcNow);
+        var evaluatedAt = DateTimeOffset.UtcNow;
+        var diagnostic = NativeFatTimeSyncDiagnosticService.Evaluate(device, evaluatedAt);
+        _nativeFatAuxiliaryEvidenceCache.RecordTimeSyncEvaluation(device, diagnostic, evaluatedAt);
         _nativeFatTimeSyncButton.IsEnabled = true;
         _nativeFatTimeSyncButton.Content = diagnostic.IsSynchronized
             ? "Time Sync OK"

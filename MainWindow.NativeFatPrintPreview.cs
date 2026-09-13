@@ -40,7 +40,8 @@ public partial class MainWindow
         CommitNativeFatEvidenceEdits();
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(
             device,
-            GetNativeFatSession(device.DeviceId));
+            GetNativeFatSession(device.DeviceId),
+            _nativeFatAuxiliaryEvidenceCache.Capture(device));
         ShowNativeFatPrintPreview(snapshot);
         SetStatus(
             $"FAT · Print Preview captured {snapshot.Rows.Count} immutable canonical row(s) for {snapshot.IedName}");
@@ -209,7 +210,8 @@ public partial class MainWindow
             CommitNativeFatEvidenceEdits();
             currentSnapshot = NativeFatPrintPreviewSnapshot.Capture(
                 device,
-                GetNativeFatSession(device.DeviceId));
+                GetNativeFatSession(device.DeviceId),
+                _nativeFatAuxiliaryEvidenceCache.Capture(device));
             RenderCurrentLayout();
             SetStatus($"FAT · Print Preview refreshed from {currentSnapshot.IedName} evidence");
         }));

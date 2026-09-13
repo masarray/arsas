@@ -97,9 +97,10 @@ internal static class NativeFatP4DReportAdapter
             pages.Select((commands, index) =>
                 new IoFatReportPagePlan(index + 1, PageWidth, PageHeight, commands.ToArray())).ToArray());
 
-        // Final acceptance sign-off is part of the exact immutable layout shared by preview
-        // and Save PDF. Fields stay blank by design; no operator identity/evidence is invented.
-        return NativeFatReportFinalization.AppendSignOff(baseLayout, snapshot);
+        // Auxiliary pages consume only evidence already copied into the immutable snapshot.
+        // Final acceptance sign-off remains the last page shared by Preview and Save PDF.
+        var withAuxiliaryEvidence = NativeFatAuxiliaryReportDecorator.AppendSuccessfulEvidence(baseLayout, snapshot);
+        return NativeFatReportFinalization.AppendSignOff(withAuxiliaryEvidence, snapshot);
     }
 
     private static List<IoFatReportCommand> NewPage(

@@ -4,7 +4,8 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// Finalizes the immutable native FAT layout without rebuilding an IoTestProject.
 /// The sign-off page is intentionally blank evidence: it provides the controlled
 /// TESTED BY / WITNESSED BY / APPROVED BY acceptance fields and never invents names,
-/// signatures, dates, COMTRADE records, or time-sync evidence.
+/// signatures or dates. Auxiliary evidence is appended from the immutable snapshot before
+/// this finalization step; this class never invents COMTRADE or time-sync facts.
 /// </summary>
 internal static class NativeFatReportFinalization
 {
