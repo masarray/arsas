@@ -19,6 +19,9 @@ internal static class MainWindowFieldPresentationFix
 {
     private const string IedTimestampHeader = "IED Timestamp";
     private const string SignalHeader = "Signal";
+    internal static SolidColorBrush CommandTargetForegroundBrush { get; } = FrozenBrush(0x58, 0x6B, 0x82);
+    internal static SolidColorBrush CommandTargetBackgroundBrush { get; } = FrozenBrush(0xF4, 0xF7, 0xFB);
+    internal static SolidColorBrush CommandTargetBorderBrush { get; } = FrozenBrush(0xD6, 0xE0, 0xEC);
 
     [ModuleInitializer]
     internal static void Register()
@@ -148,12 +151,36 @@ internal static class MainWindowFieldPresentationFix
 
     private static void ApplyDarkCommandHeaderContrast(MainWindow window)
     {
-        if (window.FindName("CommandPanelExpander") is not Expander expander || expander.Header is not DependencyObject header)
+        if (window.FindName("CommandPanelExpander") is not Expander expander)
+            return;
+
+        ApplyDarkCommandHeaderContrast(expander);
+    }
+
+    internal static void ApplyDarkCommandHeaderContrast(Expander expander)
+    {
+        if (expander.Header is not DependencyObject header)
             return;
 
         expander.Foreground = Brushes.White;
+        var targetBadge = VisualDescendants<Border>(header)
+            .FirstOrDefault(border => Equals(border.Tag, "P0CommandTargetBadge"));
+        var targetTexts = targetBadge == null
+            ? new HashSet<TextBlock>()
+            : VisualDescendants<TextBlock>(targetBadge).ToHashSet();
+
+        if (targetBadge != null)
+        {
+            targetBadge.Background = CommandTargetBackgroundBrush;
+            targetBadge.BorderBrush = CommandTargetBorderBrush;
+        }
+
         foreach (var text in VisualDescendants<TextBlock>(header).Prepend(header as TextBlock).OfType<TextBlock>())
-            text.Foreground = Brushes.White;
+        {
+            text.Foreground = targetTexts.Contains(text)
+                ? CommandTargetForegroundBrush
+                : Brushes.White;
+        }
     }
 
     /// <summary>
@@ -214,6 +241,13 @@ internal static class MainWindowFieldPresentationFix
             foreach (var descendant in VisualDescendants<T>(child))
                 yield return descendant;
         }
+    }
+
+    private static SolidColorBrush FrozenBrush(byte red, byte green, byte blue)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(red, green, blue));
+        brush.Freeze();
+        return brush;
     }
 
     private sealed class RoundedIedTimestampConverter : IValueConverter

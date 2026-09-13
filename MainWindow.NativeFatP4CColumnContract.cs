@@ -36,29 +36,29 @@ public partial class MainWindow
         _nativeFatCanonicalGrid.FrozenColumnCount = 2;
 
         AddCanonicalTextColumn("Signal", nameof(Iec61850MonitorPoint.SignalName), 190);
-        AddCanonicalTextColumn("IEC Telegram", nameof(Iec61850MonitorPoint.IecTelegram), 320);
+        AddCanonicalTextColumn("IEC Telegram", nameof(Iec61850MonitorPoint.IecTelegram), 370);
         AddCanonicalTextColumn("Quality", nameof(Iec61850MonitorPoint.Quality), 95);
-        AddCanonicalTemplateColumn("Live Value", "ProcessValueBadgeTemplate", 125);
+        AddCanonicalTemplateColumn("Live Value", "ProcessValueBadgeTemplate", 150);
 
         // P0 field hardening: evidence text is bound to the current DataContext. WPF row
         // recycling therefore re-evaluates IEDName + IEC Telegram for the newly assigned
         // canonical point instead of carrying imperative TextBlock.Text from a previous row.
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceBindingColumn("Value 1", NativeFatEvidenceField.Value1, 120, ReadNativeFatEvidence));
+            new NativeFatEvidenceBindingColumn("Value 1", NativeFatEvidenceField.Value1, 155, ReadNativeFatEvidence));
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceBindingColumn("V1 Timestamp", NativeFatEvidenceField.Value1Timestamp, 185, ReadNativeFatEvidence)
             {
                 IsReadOnly = true
             });
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceBindingColumn("Value 2", NativeFatEvidenceField.Value2, 120, ReadNativeFatEvidence));
+            new NativeFatEvidenceBindingColumn("Value 2", NativeFatEvidenceField.Value2, 155, ReadNativeFatEvidence));
         _nativeFatCanonicalGrid.Columns.Add(
             new NativeFatEvidenceBindingColumn("V2 Timestamp", NativeFatEvidenceField.Value2Timestamp, 185, ReadNativeFatEvidence)
             {
                 IsReadOnly = true
             });
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceBindingColumn("Result", NativeFatEvidenceField.Result, 110, ReadNativeFatEvidence));
+            new NativeFatEvidenceBindingColumn("Result", NativeFatEvidenceField.Result, 68, ReadNativeFatEvidence));
     }
 
     private void NativeFatObservationStatus_EvidenceChanged(object? sender, NativeFatEvidenceChangedEventArgs e)

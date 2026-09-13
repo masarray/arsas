@@ -63,14 +63,14 @@ public sealed class MainWindowTopBarLayoutRegressionTests
     }
 
     [Fact]
-    public void CompactHeader_DoesNotRemoveWorkspaceFunctions()
+    public void CompactHeader_HasNoLegacyWorkspaceSwitcherLayoutPath()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("engineeringText.Text = medium ? \"ENGINEERING\" : \"ENG\"", source, StringComparison.Ordinal);
-        Assert.Contains("loaded ? \"FAT · LOADED\" : \"FAT\"", source, StringComparison.Ordinal);
-        Assert.Contains("WorkspaceModeChild_SizeChanged", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("modeShell.Visibility = Visibility.Collapsed", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyWorkspaceSwitchDensity", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorkspaceModeChild_SizeChanged", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ARSAS_WORKSPACE_MODE_SWITCH", source, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)

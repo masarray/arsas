@@ -30,6 +30,11 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
         Assert.True(result > timestamp2);
 
         Assert.Contains("_nativeFatCanonicalGrid.Columns.Clear();", source, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTextColumn(\"IEC Telegram\", nameof(Iec61850MonitorPoint.IecTelegram), 370);", source, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 150);", source, StringComparison.Ordinal);
+        Assert.Contains("new NativeFatEvidenceBindingColumn(\"Value 1\", NativeFatEvidenceField.Value1, 155, ReadNativeFatEvidence)", source, StringComparison.Ordinal);
+        Assert.Contains("new NativeFatEvidenceBindingColumn(\"Value 2\", NativeFatEvidenceField.Value2, 155, ReadNativeFatEvidence)", source, StringComparison.Ordinal);
+        Assert.Contains("new NativeFatEvidenceBindingColumn(\"Result\", NativeFatEvidenceField.Result, 68, ReadNativeFatEvidence)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyNativeFatP4CColumnContract();", tabSource, StringComparison.Ordinal);
         Assert.Contains("_nativeFatCanonicalGrid.ItemsSource = device?.Points;", gridSource, StringComparison.Ordinal);

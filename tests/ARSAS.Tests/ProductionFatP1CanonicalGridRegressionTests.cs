@@ -56,7 +56,7 @@ public sealed class ProductionFatP1CanonicalGridRegressionTests
 
         Assert.Contains("FindResource(\"ModernDataGrid\") as Style", gridSource, StringComparison.Ordinal);
         Assert.Contains("ApplyNativeFatP4CColumnContract();", gridSource, StringComparison.Ordinal);
-        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 125);", columnContract, StringComparison.Ordinal);
+        Assert.Contains("AddCanonicalTemplateColumn(\"Live Value\", \"ProcessValueBadgeTemplate\", 150);", columnContract, StringComparison.Ordinal);
         Assert.Contains("new NativeFatEvidenceBindingColumn(\"V1 Timestamp\", NativeFatEvidenceField.Value1Timestamp, 185, ReadNativeFatEvidence)", columnContract, StringComparison.Ordinal);
         Assert.Contains("new NativeFatEvidenceBindingColumn(\"V2 Timestamp\", NativeFatEvidenceField.Value2Timestamp, 185, ReadNativeFatEvidence)", columnContract, StringComparison.Ordinal);
         Assert.Contains("VirtualizingPanel.SetVirtualizationMode(_nativeFatCanonicalGrid, VirtualizationMode.Recycling);", gridSource, StringComparison.Ordinal);
