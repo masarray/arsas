@@ -153,7 +153,8 @@ internal static class NativeFatReportLogoService
         converted.CopyPixels(bgra, bgraStride, 0);
 
         var rgb = new byte[checked(width * height * 3)];
-        for (var sourceOffset = 0, targetOffset = 0; sourceOffset < bgra.Length; sourceOffset += 4, targetOffset += 3)
+        var targetOffset = 0;
+        for (var sourceOffset = 0; sourceOffset < bgra.Length; sourceOffset += 4, targetOffset += 3)
         {
             var blue = bgra[sourceOffset];
             var green = bgra[sourceOffset + 1];
