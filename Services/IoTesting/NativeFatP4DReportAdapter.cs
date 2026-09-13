@@ -23,7 +23,7 @@ internal static class NativeFatP4DReportAdapter
     // Customer-facing evidence table. Total width = 782 pt (842 - 2 * 30 margin).
     // Live Value is intentionally omitted from the report: FAT evidence is Value 1 / Value 2.
     // IEC 61850 Reference keeps the dominant width; the status column is widened enough for
-    // the explicit customer-facing "Evidence Status" wording without sacrificing timestamps.
+    // the explicit customer-facing Evidence Status wording without sacrificing timestamps.
     private static readonly double[] Widths = [66d, 280d, 40d, 72d, 92d, 72d, 92d, 68d];
     private static readonly string[] Headers =
         ["Signal", "IEC 61850 Reference", "Quality", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Evidence Status"];

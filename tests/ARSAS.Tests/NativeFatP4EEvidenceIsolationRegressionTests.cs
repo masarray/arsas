@@ -182,7 +182,10 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
 
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
         Assert.Equal(rawValue, snapshot.Rows[0].Value1);
-        Assert.Equal("2026-09-12 06:46:31.958", snapshot.Rows[0].Value1TimestampText);
+        var expectedLocal = DateTimeOffset.Parse("2026-09-12T06:46:31.958+07:00")
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(expectedLocal, snapshot.Rows[0].Value1TimestampText);
     }
 
     [Fact]

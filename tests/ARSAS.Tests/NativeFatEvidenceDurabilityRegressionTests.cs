@@ -114,10 +114,16 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             var preview = NativeFatPrintPreviewSnapshot.Capture(after, restored);
             var previewCswi = Assert.Single(
                 preview.Rows.Where(row => row.IecTelegram.Equals(cswiAfter.IecTelegram, StringComparison.OrdinalIgnoreCase)));
+            var expectedV1 = DateTimeOffset.Parse("2026-09-13T14:10:11.123+07:00")
+                .ToLocalTime()
+                .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+            var expectedV2 = DateTimeOffset.Parse("2026-09-13T14:10:19.456+07:00")
+                .ToLocalTime()
+                .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
             Assert.Equal("Closed [10]", previewCswi.Value1);
-            Assert.Equal("2026-09-13 14:10:11.123", previewCswi.Value1TimestampText);
+            Assert.Equal(expectedV1, previewCswi.Value1TimestampText);
             Assert.Equal("Open [01]", previewCswi.Value2);
-            Assert.Equal("2026-09-13 14:10:19.456", previewCswi.Value2TimestampText);
+            Assert.Equal(expectedV2, previewCswi.Value2TimestampText);
             Assert.Equal("COMPLETE", previewCswi.Result);
         }
         finally

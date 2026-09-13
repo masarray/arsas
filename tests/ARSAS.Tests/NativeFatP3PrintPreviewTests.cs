@@ -37,7 +37,7 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
         Assert.NotEqual("—", snapshot.Rows[0].Value2TimestampText);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
-        Assert.Equal("1/2 complete", snapshot.ProgressText);
+        Assert.Equal("Evidence complete: 1 / 2 signals", snapshot.ProgressText);
     }
 
     [Fact]
