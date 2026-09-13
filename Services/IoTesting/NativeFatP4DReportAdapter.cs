@@ -13,16 +13,18 @@ internal static class NativeFatP4DReportAdapter
     private const double Margin = 30d;
     private const double ContentTop = 466d;
     private const double ContentBottom = 52d;
-    private const double HeaderHeight = 24d;
-    private const double MinimumRowHeight = 30d;
-    private const int TelegramCharsPerLine = 38;
+    private const double HeaderHeight = 25d;
+    private const double MinimumRowHeight = 32d;
+    private const double TelegramBaseFontSize = 6.2d;
+    private const double TelegramMinimumFontSize = 4.6d;
 
-    // Exact P4C visible contract. Total width = 782 pt (842 - 2 * 30 margin).
-    // Timestamp columns are intentionally first-class columns so the immutable report mirrors
-    // the FAT grid rather than collapsing observation metadata into Value 1 / Value 2 text.
-    private static readonly double[] Widths = [90d, 200d, 65d, 70d, 62d, 90d, 62d, 90d, 53d];
+    // Customer-facing evidence table. Total width = 782 pt (842 - 2 * 30 margin).
+    // Live Value is intentionally omitted from the report: FAT evidence is Value 1 / Value 2.
+    // The reclaimed width is prioritized for IEC Telegram and evidence timestamps so the
+    // printable table stays readable while the IEC identity remains on one line.
+    private static readonly double[] Widths = [72d, 280d, 44d, 76d, 92d, 76d, 92d, 50d];
     private static readonly string[] Headers =
-        ["Signal", "IEC Telegram", "Quality", "Live Value", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Result"];
+        ["Signal", "IEC Telegram", "Quality", "Value 1", "V1 Timestamp", "Value 2", "V2 Timestamp", "Result"];
 
     private static readonly IoFatReportColor Navy = IoFatReportColor.FromHex("0F172A");
     private static readonly IoFatReportColor Blue = IoFatReportColor.FromHex("2563EB");
@@ -167,11 +169,11 @@ internal static class NativeFatP4DReportAdapter
             page.Add(new IoFatReportRectCommand(x, y, Widths[index], HeaderHeight, 0d, SoftBlue, Border, 0.45d));
             page.Add(new IoFatReportTextCommand(
                 x + 4d,
-                y - 15.5d,
+                y - 16.5d,
                 Widths[index] - 8d,
                 Headers[index],
                 IoFatReportFontKind.Bold,
-                index is 5 or 7 ? 5.25d : 5.8d,
+                index is 4 or 6 ? 5.8d : 6.4d,
                 Blue));
             x += Widths[index];
         }
@@ -179,7 +181,7 @@ internal static class NativeFatP4DReportAdapter
     }
 
     private static double GetRowHeight(NativeFatPrintPreviewRow row)
-        => Math.Max(MinimumRowHeight, 12d + (WrapTelegram(row.IecTelegram).Count * 8.6d));
+        => MinimumRowHeight;
 
     private static void DrawRow(
         List<IoFatReportCommand> page,
@@ -193,7 +195,6 @@ internal static class NativeFatP4DReportAdapter
             Clean(row.Signal),
             string.Empty,
             Clean(row.Quality),
-            Clean(row.LiveValue),
             Clean(row.Value1),
             Clean(row.Value1TimestampText),
             Clean(row.Value2),
@@ -208,33 +209,28 @@ internal static class NativeFatP4DReportAdapter
 
             if (index == 1)
             {
-                var lineY = y - 12d;
-                foreach (var line in WrapTelegram(row.IecTelegram))
-                {
-                    page.Add(new IoFatReportTextCommand(
-                        x + 4d,
-                        lineY,
-                        Widths[index] - 8d,
-                        line,
-                        IoFatReportFontKind.Mono,
-                        5.35d,
-                        Ink));
-                    lineY -= 8.6d;
-                }
+                page.Add(new IoFatReportTextCommand(
+                    x + 4d,
+                    y - 19d,
+                    Widths[index] - 8d,
+                    Clean(row.IecTelegram),
+                    IoFatReportFontKind.Mono,
+                    TelegramFontSize(row.IecTelegram),
+                    Ink));
             }
             else
             {
-                var isTimestamp = index is 5 or 7;
+                var isTimestamp = index is 4 or 6;
                 page.Add(new IoFatReportTextCommand(
                     x + 4d,
-                    y - 18d,
+                    y - 19d,
                     Widths[index] - 8d,
                     cells[index],
                     isTimestamp
                         ? IoFatReportFontKind.Mono
-                        : index is 0 or 8 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
-                    isTimestamp ? 4.9d : 5.8d,
-                    index == 8 ? ResultColor(reportResult) : Ink));
+                        : index is 0 or 7 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
+                    isTimestamp ? 5.6d : 6.5d,
+                    index == 7 ? ResultColor(reportResult) : Ink));
             }
 
             x += Widths[index];
@@ -243,18 +239,18 @@ internal static class NativeFatP4DReportAdapter
         y -= height;
     }
 
-    private static IReadOnlyList<string> WrapTelegram(string? value)
+    private static double TelegramFontSize(string? value)
     {
         var text = Clean(value);
         if (text.Length == 0)
-            return ["—"];
-        if (text.Length <= TelegramCharsPerLine)
-            return [text];
+            return TelegramBaseFontSize;
 
-        var lines = new List<string>();
-        for (var offset = 0; offset < text.Length; offset += TelegramCharsPerLine)
-            lines.Add(text.Substring(offset, Math.Min(TelegramCharsPerLine, text.Length - offset)));
-        return lines;
+        // Conservative monospace estimate: ~0.62 em per glyph. The normal case keeps the
+        // larger readable size; unusually long IEC references shrink only as much as needed
+        // to stay on one physical report row instead of wrapping or clipping.
+        var availableWidth = Widths[1] - 8d;
+        var fitted = availableWidth / (text.Length * 0.62d);
+        return Math.Clamp(fitted, TelegramMinimumFontSize, TelegramBaseFontSize);
     }
 
     private static string ReportResult(string? result)
