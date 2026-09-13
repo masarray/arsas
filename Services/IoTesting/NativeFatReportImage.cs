@@ -23,6 +23,12 @@ internal sealed record NativeFatReportLogo(
     byte[] RgbPixels,
     string SourceName);
 
+internal readonly record struct NativeFatLogoPlacement(
+    double X,
+    double TopY,
+    double Width,
+    double Height);
+
 /// <summary>
 /// Native FAT report logo authority. The default mark is the real packaged ARSAS app icon.
 /// Custom logos are decoded once and stored in the immutable report command stream, so Preview
@@ -31,10 +37,20 @@ internal sealed record NativeFatReportLogo(
 internal static class NativeFatReportLogoService
 {
     private const int MaxPixelDimension = 512;
-    private const double NativeLogoX = 710d;
+    private const byte VisibleAlphaThreshold = 8;
+
+    // Legacy synthetic ARSAS mark coordinates retained only so the decorator can remove it.
+    private const double LegacySyntheticLogoX = 710d;
     private const double LegacySyntheticLogoTop = 582d;
-    private const double NativeLogoTop = 576d;
-    private const double NativeLogoSize = 22d;
+    private const double LegacySyntheticLogoSize = 22d;
+
+    // Professional adaptive header slot. The top header has substantially more room than the
+    // legacy 22 x 22 icon box. Wide corporate wordmarks can now use the available width while
+    // square/circular marks use the full height without distortion or cropping.
+    private const double HeaderLogoSlotLeft = 656d;
+    private const double HeaderLogoSlotTopY = 578d;
+    private const double HeaderLogoSlotWidth = 156d;
+    private const double HeaderLogoSlotHeight = 42d;
 
     private static readonly string[] DefaultLogoUris =
     [
@@ -84,9 +100,6 @@ internal static class NativeFatReportLogoService
                 var commands = new List<IoFatReportCommand>(page.Commands.Count + 1);
                 foreach (var command in page.Commands)
                 {
-                    // The base layout still carries the legacy synthetic icon/wordmark so
-                    // older non-image report paths remain structurally compatible. Native
-                    // Preview/PDF replaces the complete legacy mark with the real app icon.
                     if (IsLegacyBrandingCommand(command))
                         continue;
                     commands.Add(command);
@@ -94,14 +107,18 @@ internal static class NativeFatReportLogoService
 
                 if (logo != null)
                 {
-                    commands.Add(new IoFatReportImageCommand(
-                        NativeLogoX,
-                        NativeLogoTop,
-                        NativeLogoSize,
-                        NativeLogoSize,
-                        logo.PixelWidth,
-                        logo.PixelHeight,
-                        logo.RgbPixels));
+                    var placement = CalculatePlacement(logo);
+                    if (placement.Width > 0d && placement.Height > 0d)
+                    {
+                        commands.Add(new IoFatReportImageCommand(
+                            placement.X,
+                            placement.TopY,
+                            placement.Width,
+                            placement.Height,
+                            logo.PixelWidth,
+                            logo.PixelHeight,
+                            logo.RgbPixels));
+                    }
                 }
 
                 return new IoFatReportPagePlan(page.PageNumber, page.Width, page.Height, commands.ToArray());
@@ -111,23 +128,47 @@ internal static class NativeFatReportLogoService
         return new IoFatReportLayoutPlan(layout.ProjectId, layout.CreatedAt, layout.Draft, pages);
     }
 
+    /// <summary>
+    /// Uniform-fit placement inside one fixed header field. This deliberately preserves aspect
+    /// ratio: wide logos consume width, square/circular logos consume height, and neither is
+    /// stretched or cropped. The result is right-aligned and vertically centered in the slot.
+    /// </summary>
+    internal static NativeFatLogoPlacement CalculatePlacement(NativeFatReportLogo logo)
+    {
+        ArgumentNullException.ThrowIfNull(logo);
+        if (logo.PixelWidth <= 0 || logo.PixelHeight <= 0)
+            return default;
+
+        var scale = Math.Min(
+            HeaderLogoSlotWidth / logo.PixelWidth,
+            HeaderLogoSlotHeight / logo.PixelHeight);
+        if (!double.IsFinite(scale) || scale <= 0d)
+            return default;
+
+        var width = logo.PixelWidth * scale;
+        var height = logo.PixelHeight * scale;
+        var x = HeaderLogoSlotLeft + HeaderLogoSlotWidth - width;
+        var topY = HeaderLogoSlotTopY - ((HeaderLogoSlotHeight - height) / 2d);
+        return new NativeFatLogoPlacement(x, topY, width, height);
+    }
+
     private static bool IsLegacyBrandingCommand(IoFatReportCommand command)
     {
         if (command is IoFatReportRectCommand rect)
         {
-            return Near(rect.X, NativeLogoX) &&
+            return Near(rect.X, LegacySyntheticLogoX) &&
                    Near(rect.TopY, LegacySyntheticLogoTop) &&
-                   Near(rect.Width, NativeLogoSize) &&
-                   Near(rect.Height, NativeLogoSize);
+                   Near(rect.Width, LegacySyntheticLogoSize) &&
+                   Near(rect.Height, LegacySyntheticLogoSize);
         }
 
         if (command is IoFatReportTextCommand text)
         {
             var syntheticA = string.Equals(text.Text, "A", StringComparison.Ordinal) &&
-                             Near(text.X, NativeLogoX + 5.2d) &&
+                             Near(text.X, LegacySyntheticLogoX + 5.2d) &&
                              Near(text.BaselineY, LegacySyntheticLogoTop - 15.2d);
             var legacyWordmark = string.Equals(text.Text, "ARSAS", StringComparison.Ordinal) &&
-                                 Near(text.X, NativeLogoX + 29d) &&
+                                 Near(text.X, LegacySyntheticLogoX + 29d) &&
                                  Near(text.BaselineY, LegacySyntheticLogoTop - 15.4d);
             return syntheticA || legacyWordmark;
         }
@@ -142,6 +183,11 @@ internal static class NativeFatReportLogoService
             BitmapCreateOptions.PreservePixelFormat,
             BitmapCacheOption.OnLoad);
         BitmapSource source = decoder.Frames[0];
+
+        // Remove transparent canvas padding before sizing. Corporate PNGs often contain a
+        // large transparent artboard; fitting the full canvas would make the visible logo look
+        // artificially tiny even when the destination slot itself is large.
+        source = TrimTransparentPadding(source);
 
         var largest = Math.Max(source.PixelWidth, source.PixelHeight);
         if (largest > MaxPixelDimension)
@@ -174,6 +220,59 @@ internal static class NativeFatReportLogoService
         }
 
         return new NativeFatReportLogo(width, height, rgb, sourceName);
+    }
+
+    private static BitmapSource TrimTransparentPadding(BitmapSource source)
+    {
+        var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0d);
+        var width = converted.PixelWidth;
+        var height = converted.PixelHeight;
+        if (width <= 0 || height <= 0)
+            return converted;
+
+        var stride = checked(width * 4);
+        var pixels = new byte[checked(stride * height)];
+        converted.CopyPixels(pixels, stride, 0);
+        var bounds = FindVisibleBounds(pixels, width, height);
+        if (bounds.IsEmpty ||
+            (bounds.X == 0 && bounds.Y == 0 && bounds.Width == width && bounds.Height == height))
+        {
+            return converted;
+        }
+
+        return new CroppedBitmap(converted, bounds);
+    }
+
+    internal static Int32Rect FindVisibleBounds(byte[] bgra, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(bgra);
+        if (width <= 0 || height <= 0 || bgra.Length < checked(width * height * 4))
+            return Int32Rect.Empty;
+
+        var minX = width;
+        var minY = height;
+        var maxX = -1;
+        var maxY = -1;
+
+        for (var y = 0; y < height; y++)
+        {
+            var rowOffset = y * width * 4;
+            for (var x = 0; x < width; x++)
+            {
+                var alpha = bgra[rowOffset + (x * 4) + 3];
+                if (alpha <= VisibleAlphaThreshold)
+                    continue;
+
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+        }
+
+        return maxX < minX || maxY < minY
+            ? Int32Rect.Empty
+            : new Int32Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     private static byte CompositeOnWhite(byte channel, byte alpha)
