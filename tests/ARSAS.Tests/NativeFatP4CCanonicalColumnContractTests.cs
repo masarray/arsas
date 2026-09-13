@@ -47,13 +47,14 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
     public void P4C_TimestampColumnsShareTheEvidenceRefreshAuthority()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
-        var gridSource = File.ReadAllText(FindRepoFile("MainWindow.NativeFatCanonicalGrid.cs"));
         var overlay = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatCanonicalEvidenceOverlay.cs"));
+        var binding = File.ReadAllText(FindRepoFile("MainWindow.NativeFatEvidenceBindingRuntime.cs"));
 
         Assert.Contains("NativeFatEvidenceField.Value1Timestamp", source, StringComparison.Ordinal);
         Assert.Contains("NativeFatEvidenceField.Value2Timestamp", source, StringComparison.Ordinal);
         Assert.Contains("IsReadOnly = true", source, StringComparison.Ordinal);
-        Assert.Contains("Columns.OfType<NativeFatEvidenceColumn>()", gridSource, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceBindingColumn", source, StringComparison.Ordinal);
+        Assert.Contains("GetBindingExpression(TextBlock.TextProperty)?.UpdateTarget()", binding, StringComparison.Ordinal);
         Assert.Contains("NativeFatEvidenceField.Value1Timestamp => TimestampValue(slot.Value1Evidence)", overlay, StringComparison.Ordinal);
         Assert.Contains("NativeFatEvidenceField.Value2Timestamp => TimestampValue(slot.Value2Evidence)", overlay, StringComparison.Ordinal);
     }
@@ -93,12 +94,15 @@ public sealed class NativeFatP4CCanonicalColumnContractTests
     public void P4C_ColumnBindingsUseCanonicalExplorerRowProperties()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NativeFatP4CColumnContract.cs"));
+        var binding = File.ReadAllText(FindRepoFile("MainWindow.NativeFatEvidenceBindingRuntime.cs"));
 
         Assert.Contains("nameof(Iec61850MonitorPoint.SignalName)", source, StringComparison.Ordinal);
         Assert.Contains("nameof(Iec61850MonitorPoint.IecTelegram)", source, StringComparison.Ordinal);
         Assert.Contains("nameof(Iec61850MonitorPoint.Quality)", source, StringComparison.Ordinal);
         Assert.Contains("\"ProcessValueBadgeTemplate\"", source, StringComparison.Ordinal);
-        Assert.Contains("NativeFatEvidenceColumn", source, StringComparison.Ordinal);
+        Assert.Contains("NativeFatEvidenceBindingColumn", source, StringComparison.Ordinal);
+        Assert.Contains("Path = new PropertyPath(\".\")", binding, StringComparison.Ordinal);
+        Assert.Contains("value is Iec61850MonitorPoint point", binding, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
