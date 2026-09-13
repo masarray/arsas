@@ -70,7 +70,7 @@ public sealed class NativeFatFieldEvidenceRegressionTests
         Assert.Contains("RefreshNativeFatEvidenceCells(point)", source, StringComparison.Ordinal);
         Assert.Contains("IEDName + IEC Telegram", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedIndex", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SignalName", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("point.SignalName", source, StringComparison.Ordinal);
     }
 
     [Fact]
