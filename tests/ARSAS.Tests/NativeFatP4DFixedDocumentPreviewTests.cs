@@ -151,7 +151,7 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
     }
 
     [Fact]
-    public void P4D_ReportAdapterLocksExactNineColumnP4CContract()
+    public void P4D_ReportAdapterUsesReadableEightColumnEvidenceContract()
     {
         var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
         var snapshot = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatPrintPreviewSnapshot.cs"));
@@ -159,7 +159,6 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         var signal = adapter.IndexOf("\"Signal\"", StringComparison.Ordinal);
         var telegram = adapter.IndexOf("\"IEC Telegram\"", StringComparison.Ordinal);
         var quality = adapter.IndexOf("\"Quality\"", StringComparison.Ordinal);
-        var live = adapter.IndexOf("\"Live Value\"", StringComparison.Ordinal);
         var value1 = adapter.IndexOf("\"Value 1\"", StringComparison.Ordinal);
         var timestamp1 = adapter.IndexOf("\"V1 Timestamp\"", StringComparison.Ordinal);
         var value2 = adapter.IndexOf("\"Value 2\"", StringComparison.Ordinal);
@@ -169,12 +168,19 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.True(signal >= 0);
         Assert.True(telegram > signal);
         Assert.True(quality > telegram);
-        Assert.True(live > quality);
-        Assert.True(value1 > live);
+        Assert.True(value1 > quality);
         Assert.True(timestamp1 > value1);
         Assert.True(value2 > timestamp1);
         Assert.True(timestamp2 > value2);
         Assert.True(result > timestamp2);
+
+        Assert.DoesNotContain("\"Live Value\"", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Clean(row.LiveValue)", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("WrapTelegram(", adapter, StringComparison.Ordinal);
+        Assert.Contains("private static readonly double[] Widths = [72d, 280d, 44d, 76d, 92d, 76d, 92d, 50d];", adapter, StringComparison.Ordinal);
+        Assert.Contains("TelegramFontSize(row.IecTelegram)", adapter, StringComparison.Ordinal);
+        Assert.Contains("MinimumRowHeight = 32d", adapter, StringComparison.Ordinal);
+        Assert.Contains("isTimestamp ? 5.6d : 6.5d", adapter, StringComparison.Ordinal);
 
         Assert.DoesNotContain("\"Type\"", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Status\"", adapter, StringComparison.Ordinal);
