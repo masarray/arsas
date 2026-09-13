@@ -40,22 +40,25 @@ public partial class MainWindow
         AddCanonicalTextColumn("Quality", nameof(Iec61850MonitorPoint.Quality), 95);
         AddCanonicalTemplateColumn("Live Value", "ProcessValueBadgeTemplate", 125);
 
+        // P0 field hardening: evidence text is bound to the current DataContext. WPF row
+        // recycling therefore re-evaluates IEDName + IEC Telegram for the newly assigned
+        // canonical point instead of carrying imperative TextBlock.Text from a previous row.
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceColumn(this, "Value 1", NativeFatEvidenceField.Value1, 120));
+            new NativeFatEvidenceBindingColumn("Value 1", NativeFatEvidenceField.Value1, 120, ReadNativeFatEvidence));
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceColumn(this, "V1 Timestamp", NativeFatEvidenceField.Value1Timestamp, 185)
+            new NativeFatEvidenceBindingColumn("V1 Timestamp", NativeFatEvidenceField.Value1Timestamp, 185, ReadNativeFatEvidence)
             {
                 IsReadOnly = true
             });
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceColumn(this, "Value 2", NativeFatEvidenceField.Value2, 120));
+            new NativeFatEvidenceBindingColumn("Value 2", NativeFatEvidenceField.Value2, 120, ReadNativeFatEvidence));
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceColumn(this, "V2 Timestamp", NativeFatEvidenceField.Value2Timestamp, 185)
+            new NativeFatEvidenceBindingColumn("V2 Timestamp", NativeFatEvidenceField.Value2Timestamp, 185, ReadNativeFatEvidence)
             {
                 IsReadOnly = true
             });
         _nativeFatCanonicalGrid.Columns.Add(
-            new NativeFatEvidenceColumn(this, "Result", NativeFatEvidenceField.Result, 110));
+            new NativeFatEvidenceBindingColumn("Result", NativeFatEvidenceField.Result, 110, ReadNativeFatEvidence));
     }
 
     private void NativeFatObservationStatus_EvidenceChanged(object? sender, NativeFatEvidenceChangedEventArgs e)
@@ -89,8 +92,7 @@ public partial class MainWindow
     }
 
     // Retained as an isolated formatter for report/tests and compatibility paths. The visible
-    // grid now routes timestamp fields through NativeFatEvidenceColumn so the existing evidence
-    // refresh loop updates Value, Timestamp and Result atomically after capture and hydration.
+    // grid routes all evidence fields through NativeFatEvidenceBindingColumn.
     private string ReadNativeFatTimestamp(Iec61850MonitorPoint point, NativeFatEvidenceField field)
     {
         if (string.IsNullOrWhiteSpace(_nativeFatBoundIedKey) ||
@@ -108,9 +110,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Compatibility timestamp column retained for source/binary compatibility. The production
-    /// P4C grid uses read-only NativeFatEvidenceColumn timestamp fields so its established
-    /// RefreshNativeFatEvidenceCells loop refreshes all five evidence cells together.
+    /// Compatibility timestamp column retained for source/binary compatibility. Production
+    /// native FAT uses NativeFatEvidenceBindingColumn for timestamp fields as well.
     /// </summary>
     private sealed class NativeFatEvidenceTimestampColumn : DataGridColumn
     {
