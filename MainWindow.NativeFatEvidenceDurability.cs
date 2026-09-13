@@ -20,6 +20,8 @@ public partial class MainWindow
     private NativeFatEvidenceStore? _nativeFatEvidenceStore;
     private NativeFatEvidencePersistenceCoordinator? _nativeFatEvidencePersistenceCoordinator;
     private CancellationTokenSource? _nativeFatEvidenceStoreLoadCts;
+    private readonly HashSet<string> _nativeFatEvidenceStoreLoadedSessions =
+        new(StringComparer.OrdinalIgnoreCase);
     private long _nativeFatEvidenceStoreLoadGeneration;
 
     [ModuleInitializer]
@@ -157,12 +159,16 @@ public partial class MainWindow
 
     private void BeginNativeFatEvidenceStoreLoad(Iec61850MonitorDevice? device)
     {
+        if (device == null || string.IsNullOrWhiteSpace(device.Name))
+            return;
+
+        var sessionKey = BuildNativeFatEvidenceStoreSessionKey(device.DeviceId, device.Name);
+        if (_nativeFatEvidenceStoreLoadedSessions.Contains(sessionKey))
+            return;
+
         _nativeFatEvidenceStoreLoadCts?.Cancel();
         _nativeFatEvidenceStoreLoadCts?.Dispose();
         _nativeFatEvidenceStoreLoadCts = null;
-
-        if (device == null || string.IsNullOrWhiteSpace(device.Name))
-            return;
 
         _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
         var generation = Interlocked.Increment(ref _nativeFatEvidenceStoreLoadGeneration);
@@ -171,6 +177,7 @@ public partial class MainWindow
         _ = LoadNativeFatEvidenceStoreAsync(
             device.DeviceId,
             device.Name,
+            sessionKey,
             generation,
             cts.Token);
     }
@@ -178,6 +185,7 @@ public partial class MainWindow
     private async Task LoadNativeFatEvidenceStoreAsync(
         string runtimeDeviceId,
         string iedName,
+        string sessionKey,
         long generation,
         CancellationToken cancellationToken)
     {
@@ -189,6 +197,9 @@ public partial class MainWindow
 
             if (generation != _nativeFatEvidenceStoreLoadGeneration)
                 return;
+
+            if (result.Succeeded)
+                _nativeFatEvidenceStoreLoadedSessions.Add(sessionKey);
 
             var cache = GetNativeFatSession(runtimeDeviceId);
             if (result.Succeeded && result.SnapshotFound)
@@ -207,8 +218,6 @@ public partial class MainWindow
                         $"Canonical Engineering live rows · evidence ready · {result.LoadedRows} persisted row(s) auto-loaded by IEDName");
                 }
 
-                // Reading an older hash-named snapshot is transparent. The next capture will
-                // write the readable IEDName file; do not rewrite merely because a tab opened.
                 Trace.WriteLine(
                     $"[FAT evidence store] auto-loaded; ied={iedName}; deviceId={runtimeDeviceId}; " +
                     $"rows={result.LoadedRows}; ignored={result.IgnoredRows}; source={result.SourcePath}; " +
@@ -224,6 +233,9 @@ public partial class MainWindow
         {
         }
     }
+
+    private static string BuildNativeFatEvidenceStoreSessionKey(string deviceId, string iedName)
+        => $"{deviceId.Trim().ToLowerInvariant()}|{NativeFatCanonicalEvidenceOverlay.NormalizeIedName(iedName)}";
 
     private static void ReplaceNativeFatEvidenceForIed(
         NativeFatIedSessionCacheState cache,
@@ -267,6 +279,7 @@ public partial class MainWindow
         if (_nativeFatEvidenceDurabilityGrid != null)
             _nativeFatEvidenceDurabilityGrid.CellEditEnding -= NativeFatEvidenceDurability_CellEditEnding;
         _nativeFatEvidenceDurabilityGrid = null;
+        _nativeFatEvidenceStoreLoadedSessions.Clear();
 
         _nativeFatEvidenceStore?.Dispose();
         _nativeFatEvidenceStore = null;
