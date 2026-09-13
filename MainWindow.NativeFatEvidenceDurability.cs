@@ -18,6 +18,8 @@ public partial class MainWindow
     private bool _nativeFatEvidenceDurabilityInstalled;
     private DataGrid? _nativeFatEvidenceDurabilityGrid;
     private NativeFatEvidencePersistenceCoordinator? _nativeFatEvidencePersistenceCoordinator;
+    private readonly Dictionary<string, Iec61850MonitorDevice> _nativeFatFrozenIdentityByRuntimeIed =
+        new(StringComparer.OrdinalIgnoreCase);
 
     [ModuleInitializer]
     internal static void RegisterNativeFatEvidenceDurability()
@@ -126,7 +128,14 @@ public partial class MainWindow
             pending.Dispose();
         }
 
-        var frozen = NativeFatEvidenceDurabilitySnapshot.Capture(device, cache);
+        if (!_nativeFatFrozenIdentityByRuntimeIed.TryGetValue(deviceId, out var frozenDevice) ||
+            frozenDevice.Points.Count != device.Points.Count)
+        {
+            frozenDevice = NativeFatEvidenceDurabilitySnapshot.FreezeCanonicalIdentity(device);
+            _nativeFatFrozenIdentityByRuntimeIed[deviceId] = frozenDevice;
+        }
+
+        var frozen = NativeFatEvidenceDurabilitySnapshot.CaptureFrozen(frozenDevice, cache);
         _nativeFatEvidencePersistenceCoordinator ??=
             new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceHydrationService);
         _nativeFatEvidencePersistenceCoordinator.Queue(frozen);
