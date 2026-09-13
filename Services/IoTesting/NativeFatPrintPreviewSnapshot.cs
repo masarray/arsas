@@ -63,7 +63,10 @@ public sealed class NativeFatPrintPreviewSnapshot
             var value2 = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2);
             var capture1 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value1);
             var capture2 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value2);
-            var result = NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result);
+            var rawResult = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Result);
+            var result = !string.IsNullOrWhiteSpace(rawResult)
+                ? rawResult.Trim()
+                : HasEvidence(value1) && HasEvidence(value2) ? "COMPLETE" : string.Empty;
             var displaySignal = IoFatSignalDisplayNameFormatter.Format(point.SignalName, point.IecReference);
 
             return new NativeFatPrintPreviewRow(

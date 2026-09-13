@@ -363,9 +363,13 @@ public static class NativeFatCanonicalEvidenceOverlay
 
     private static string ResolveResult(NativeFatEvidenceSlotState slot)
     {
-        if (!string.IsNullOrWhiteSpace(slot.Result))
-            return slot.Result.Trim();
-        return HasValue1(slot) && HasValue2(slot) ? "COMPLETE" : string.Empty;
+        var result = !string.IsNullOrWhiteSpace(slot.Result)
+            ? slot.Result.Trim()
+            : HasValue1(slot) && HasValue2(slot) ? "COMPLETE" : string.Empty;
+
+        // COMPLETE remains the native/raw evidence state. Customer/operator-facing reads
+        // present the completed state as OK; ReadRaw and persisted slot.Result stay untouched.
+        return result.Equals("COMPLETE", StringComparison.OrdinalIgnoreCase) ? "OK" : result;
     }
 
     private static string StripDisplayTimestamp(string value)

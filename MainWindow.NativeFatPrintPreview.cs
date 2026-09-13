@@ -24,6 +24,7 @@ public partial class MainWindow
         ChevronLeft,
         ChevronRight,
         RefreshCw,
+        ImagePlus,
         Save
     }
 
@@ -56,7 +57,9 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var currentSnapshot = snapshot;
+        var currentLogo = NativeFatReportLogoService.TryLoadDefault();
         var currentLayout = NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true);
+        currentLayout = NativeFatReportLogoService.Apply(currentLayout, currentLogo);
         var document = IoFatReportPreviewDocumentBuilder.Render(currentLayout);
 
         var preview = new Window
@@ -152,6 +155,21 @@ public partial class MainWindow
             zoomText.Text = $"{viewer.Zoom:0}%";
         }
 
+        void RenderCurrentLayout()
+        {
+            currentLayout = NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true);
+            currentLayout = NativeFatReportLogoService.Apply(currentLayout, currentLogo);
+            viewer.Document = IoFatReportPreviewDocumentBuilder.Render(currentLayout);
+            summary.Text = NativeFatPreviewSummary(currentSnapshot);
+            preview.Dispatcher.BeginInvoke(
+                () =>
+                {
+                    FitNativeReportPage(viewer);
+                    UpdateViewerState();
+                },
+                DispatcherPriority.Background);
+        }
+
         Button IconButton(NativePreviewLucideIcon icon, string toolTip, Action action)
         {
             var button = new Button
@@ -192,18 +210,52 @@ public partial class MainWindow
             currentSnapshot = NativeFatPrintPreviewSnapshot.Capture(
                 device,
                 GetNativeFatSession(device.DeviceId));
-            currentLayout = NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true);
-            viewer.Document = IoFatReportPreviewDocumentBuilder.Render(currentLayout);
-            summary.Text = NativeFatPreviewSummary(currentSnapshot);
-            preview.Dispatcher.BeginInvoke(
-                () =>
-                {
-                    FitNativeReportPage(viewer);
-                    UpdateViewerState();
-                },
-                DispatcherPriority.Background);
+            RenderCurrentLayout();
             SetStatus($"FAT · Print Preview refreshed from {currentSnapshot.IedName} evidence");
         }));
+
+        var addLogoButton = new Button
+        {
+            Height = 30,
+            MinWidth = 92,
+            Padding = new Thickness(9, 0, 10, 0),
+            Margin = new Thickness(8, 0, 2, 0),
+            Style = TryFindResource("SoftButton") as Style,
+            ToolTip = "Replace the report logo for this Preview and its Save PDF output.",
+            Cursor = Cursors.Hand,
+            Content = BuildNativePreviewLabeledContent(NativePreviewLucideIcon.ImagePlus, "Add Logo")
+        };
+        addLogoButton.Click += (_, _) =>
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Add Report Logo",
+                Filter = "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|PNG image (*.png)|*.png|JPEG image (*.jpg;*.jpeg)|*.jpg;*.jpeg",
+                Multiselect = false,
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog(preview) != true)
+                return;
+
+            try
+            {
+                currentLogo = NativeFatReportLogoService.LoadFromFile(dialog.FileName);
+                RenderCurrentLayout();
+                SetStatus($"FAT · report logo added · {System.IO.Path.GetFileName(dialog.FileName)}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException)
+            {
+                SetStatus($"FAT · report logo could not be loaded · {ex.Message}");
+                MessageBox.Show(
+                    preview,
+                    ex.Message,
+                    "Add Logo",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        };
+        actions.Children.Add(addLogoButton);
 
         var savePdfButton = new Button
         {
@@ -256,7 +308,7 @@ public partial class MainWindow
     }
 
     private static string NativeFatPreviewSummary(NativeFatPrintPreviewSnapshot snapshot)
-        => $"{snapshot.IedName} · {snapshot.Rows.Count} row(s) · {snapshot.ProgressText} · captured {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss zzz}";
+        => $"{snapshot.IedName} · {snapshot.Rows.Count} row(s) · {snapshot.ProgressText} · captured {snapshot.CapturedAt:dd-MM-yyyy}";
 
     private static FrameworkElement BuildNativePreviewLabeledContent(NativePreviewLucideIcon icon, string label)
     {
@@ -290,6 +342,7 @@ public partial class MainWindow
             NativePreviewLucideIcon.ChevronLeft => "M15,18 L9,12 L15,6",
             NativePreviewLucideIcon.ChevronRight => "M9,18 L15,12 L9,6",
             NativePreviewLucideIcon.RefreshCw => "M3,12 A9,9 0 0 1 12,3 A9.75,9.75 0 0 1 18.74,5.74 L21,8 M21,3 L21,8 L16,8 M21,12 A9,9 0 0 1 12,21 A9.75,9.75 0 0 1 5.26,18.26 L3,16 M8,16 L3,16 L3,21",
+            NativePreviewLucideIcon.ImagePlus => "M3,5 L15,5 L15,19 L3,19 Z M5.5,15.5 L8.5,12.5 L10.8,14.8 L13,12.6 M17,6 L21,6 M19,4 L19,8 M7.5,9 A1,1 0 1 0 7.5,9.01",
             NativePreviewLucideIcon.Save => "M15.2,3 A2,2 0 0 1 16.6,3.6 L20.4,7.4 A2,2 0 0 1 21,8.8 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M17,21 L17,14 A1,1 0 0 0 16,13 L8,13 A1,1 0 0 0 7,14 L7,21 M7,3 L7,7 A1,1 0 0 0 8,8 L15,8",
             _ => "M5,12 L19,12"
         };

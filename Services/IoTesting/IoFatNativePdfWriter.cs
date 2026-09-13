@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -67,13 +68,28 @@ internal static class IoFatNativePdfWriter
 
         foreach (var page in layout.Pages)
         {
+            var pageImages = page.Commands.OfType<IoFatReportImageCommand>().ToArray();
+            var imageObjectIds = new List<int>(pageImages.Length);
+            foreach (var image in pageImages)
+                imageObjectIds.Add(AddImageObject(image, AddObjectBytes));
+
             var content = BuildPageContent(page);
             var contentBytes = Encoding.ASCII.GetBytes(content);
             var contentId = AddObjectBytes(BuildStreamObject(contentBytes));
+
+            var resources = new StringBuilder()
+                .Append("/Font << /F1 ").Append(fontRegularId).Append(" 0 R /F2 ").Append(fontBoldId).Append(" 0 R >>");
+            if (imageObjectIds.Count > 0)
+            {
+                resources.Append(" /XObject <<");
+                for (var index = 0; index < imageObjectIds.Count; index++)
+                    resources.Append(" /Im").Append(index + 1).Append(' ').Append(imageObjectIds[index]).Append(" 0 R");
+                resources.Append(" >>");
+            }
+
             var pageId = AddObject(
                 $"<< /Type /Page /Parent {pagesId} 0 R /MediaBox [0 0 {Number(page.Width)} {Number(page.Height)}] " +
-                $"/Resources << /Font << /F1 {fontRegularId} 0 R /F2 {fontBoldId} 0 R >> >> " +
-                $"/Contents {contentId} 0 R >>");
+                $"/Resources << {resources} >> /Contents {contentId} 0 R >>");
             pageIds.Add(pageId);
         }
 
@@ -133,6 +149,31 @@ internal static class IoFatNativePdfWriter
             $"/Widths [{widths}] /FontDescriptor {descriptorId} 0 R /Encoding /WinAnsiEncoding >>");
     }
 
+    private static int AddImageObject(
+        IoFatReportImageCommand image,
+        Func<byte[], int> addBinaryObject)
+    {
+        if (image.PixelWidth <= 0 || image.PixelHeight <= 0 ||
+            image.RgbPixels.Length != image.PixelWidth * image.PixelHeight * 3)
+        {
+            throw new InvalidOperationException("Report image RGB payload is invalid.");
+        }
+
+        var compressed = Compress(image.RgbPixels);
+        var header =
+            $"<< /Type /XObject /Subtype /Image /Width {image.PixelWidth} /Height {image.PixelHeight} " +
+            $"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {compressed.Length} >>\nstream\n";
+        return addBinaryObject(BuildBinaryStreamObject(compressed, header));
+    }
+
+    private static byte[] Compress(byte[] payload)
+    {
+        using var output = new MemoryStream();
+        using (var compressor = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            compressor.Write(payload, 0, payload.Length);
+        return output.ToArray();
+    }
+
     private static byte[] BuildStreamObject(byte[] payload)
         => BuildBinaryStreamObject(payload, $"<< /Length {payload.Length.ToString(CultureInfo.InvariantCulture)} >>\nstream\n");
 
@@ -153,6 +194,7 @@ internal static class IoFatNativePdfWriter
     private static string BuildPageContent(IoFatReportPagePlan page)
     {
         var output = new StringBuilder(32_000);
+        var imageIndex = 0;
         foreach (var command in page.Commands)
         {
             switch (command)
@@ -168,6 +210,10 @@ internal static class IoFatNativePdfWriter
                     break;
                 case IoFatReportRectCommand rect:
                     WriteRect(output, rect);
+                    break;
+                case IoFatReportImageCommand image:
+                    imageIndex++;
+                    WriteImage(output, image, imageIndex);
                     break;
             }
         }
@@ -241,6 +287,15 @@ internal static class IoFatNativePdfWriter
             .Append(Number(command.X + radius - curve)).Append(' ').Append(Number(y)).Append(' ')
             .Append(Number(command.X + radius)).Append(' ').Append(Number(y))
             .Append(command.StrokeThickness > 0d ? " c B\n" : " c f\n");
+    }
+
+    private static void WriteImage(StringBuilder output, IoFatReportImageCommand command, int imageIndex)
+    {
+        var y = command.TopY - command.Height;
+        output.Append("q ")
+            .Append(Number(command.Width)).Append(" 0 0 ").Append(Number(command.Height)).Append(' ')
+            .Append(Number(command.X)).Append(' ').Append(Number(y)).Append(" cm ")
+            .Append("/Im").Append(imageIndex).Append(" Do Q\n");
     }
 
     private static string Fill(IoFatReportColor color)
