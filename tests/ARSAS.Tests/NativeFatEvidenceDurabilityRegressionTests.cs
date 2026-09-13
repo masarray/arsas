@@ -7,17 +7,17 @@ namespace ARSAS.Tests;
 public sealed class NativeFatEvidenceDurabilityRegressionTests
 {
     [Fact]
-    public async Task ImmediateIedTeardown_PersistsAndRehydratesCapturedEvidenceAndPreview()
+    public async Task IedOwnedStore_LoadsBeforeRowsExist_AndSurvivesImmediateTeardown()
     {
         var root = Path.Combine(
             Path.GetTempPath(),
-            "arsas-native-fat-durability-" + Guid.NewGuid().ToString("N"));
+            "arsas-native-fat-store-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
 
         try
         {
-            using var service = new NativeFatEvidenceHydrationService(root);
-            var coordinator = new NativeFatEvidencePersistenceCoordinator(service);
+            using var store = new NativeFatEvidenceStore(root);
+            var coordinator = new NativeFatEvidencePersistenceCoordinator(store);
 
             var before = Device("runtime-before");
             var cswiBefore = Point(before, "CSWI Pos", "Q0/CSWI1.Pos.stVal", "Closed [10]");
@@ -48,14 +48,34 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
                 FatEvidenceCaptureKind.AutomaticTransition,
                 DateTimeOffset.Parse("2026-09-13T14:10:19.456+07:00"));
 
-            // This is the field failure sequence: freeze at capture, then Engineering removes
-            // the old canonical rows immediately while persistence continues in the worker.
-            var frozen = NativeFatEvidenceDurabilitySnapshot.Capture(before, cache);
-            coordinator.Queue(frozen);
+            // Capture evidence first, then tear down every Engineering row immediately.
+            // The worker must never need before.Points again.
+            coordinator.Queue(NativeFatEvidenceDurabilitySnapshot.Capture(before, cache));
             before.Points.Clear();
             await coordinator.DrainAsync(before.Name);
 
+            var path = store.SnapshotPath(before.Name);
+            Assert.Equal("AA1EIF06R4.native-fat-evidence.json", Path.GetFileName(path));
+            Assert.True(File.Exists(path));
+
+            var json = await File.ReadAllTextAsync(path);
+            Assert.Contains("\"deviceName\":\"AA1EIF06R4\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"value1\":\"Closed [10]\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"value2\":\"Open [01]\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"result\":\"COMPLETE\"", json, StringComparison.Ordinal);
+
+            // Reopen creates a different runtime DeviceId. Load happens before canonical rows
+            // exist and therefore cannot depend on Start FAT, Points, row order or selection.
             var after = Device("runtime-after");
+            var load = await store.LoadAsync(after.Name);
+            Assert.True(load.Succeeded);
+            Assert.True(load.SnapshotFound);
+            Assert.Equal(1, load.LoadedRows);
+
+            var restored = new NativeFatIedSessionCacheState();
+            NativeFatCanonicalEvidenceOverlay.MergeMissing(restored, load.EvidenceByRow);
+
+            // Canonical rows materialize later from the SCL/Engineering workspace.
             var thdAfter = Point(
                 after,
                 "ThdPPV PhsBC",
@@ -65,12 +85,6 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             after.Points.Add(thdAfter);
             after.Points.Add(cswiAfter);
 
-            var hydration = await service.HydrateAsync(after);
-            var restored = new NativeFatIedSessionCacheState();
-            NativeFatCanonicalEvidenceOverlay.MergeMissing(restored, hydration.EvidenceByRow);
-
-            Assert.True(hydration.Succeeded);
-            Assert.True(hydration.SnapshotFound);
             Assert.Equal(
                 "Closed [10]",
                 NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, cswiAfter, NativeFatEvidenceField.Value1));
@@ -86,6 +100,9 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             Assert.Equal(
                 "OK",
                 NativeFatCanonicalEvidenceOverlay.Read(restored, cswiAfter, NativeFatEvidenceField.Result));
+            Assert.Equal(
+                "COMPLETE",
+                NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, cswiAfter, NativeFatEvidenceField.Result));
 
             Assert.Equal(
                 string.Empty,
@@ -93,9 +110,6 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             Assert.Equal(
                 string.Empty,
                 NativeFatCanonicalEvidenceOverlay.ReadRaw(restored, thdAfter, NativeFatEvidenceField.Value2));
-            Assert.Equal(
-                string.Empty,
-                NativeFatCanonicalEvidenceOverlay.Read(restored, thdAfter, NativeFatEvidenceField.Result));
 
             var preview = NativeFatPrintPreviewSnapshot.Capture(after, restored);
             var previewCswi = Assert.Single(
@@ -117,6 +131,49 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             {
             }
         }
+    }
+
+    [Fact]
+    public async Task LoadedPair_StartFatDoesNotOverwriteUntilARealTransitionOccurs()
+    {
+        var device = Device("runtime-reopen");
+        var point = Point(device, "CSWI Pos", "Q0/CSWI1.Pos.stVal", "Open [01]");
+        device.Points.Add(point);
+
+        var cache = new NativeFatIedSessionCacheState();
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value1,
+            "Closed [10]",
+            FatEvidenceCaptureKind.AutomaticValue,
+            DateTimeOffset.Parse("2026-09-13T14:10:11.123+07:00"));
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value2,
+            "Open [01]",
+            FatEvidenceCaptureKind.AutomaticTransition,
+            DateTimeOffset.Parse("2026-09-13T14:10:19.456+07:00"));
+
+        using var arm = new NativeFatArmCoordinator();
+        var changes = new List<NativeFatEvidenceChangedEventArgs>();
+        arm.EvidenceChanged += (_, e) => changes.Add(e);
+
+        var armed = arm.Arm(device, cache);
+        Assert.True(armed.Succeeded);
+        Assert.Equal(0, armed.SeededValue1Rows);
+        Assert.Empty(changes);
+        Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
+
+        point.Value = "Closed [10]";
+        await Task.Delay(25);
+
+        Assert.Equal("Open [01]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1));
+        Assert.Equal("Closed [10]", NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2));
+        Assert.Equal("OK", NativeFatCanonicalEvidenceOverlay.Read(cache, point, NativeFatEvidenceField.Result));
+        Assert.NotEmpty(changes);
     }
 
     [Fact]
