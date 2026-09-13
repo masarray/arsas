@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -19,10 +20,10 @@ public partial class MainWindow
     private DataGrid? _nativeFatEvidenceDurabilityGrid;
     private NativeFatEvidenceStore? _nativeFatEvidenceStore;
     private NativeFatEvidencePersistenceCoordinator? _nativeFatEvidencePersistenceCoordinator;
-    private CancellationTokenSource? _nativeFatEvidenceStoreLoadCts;
+    private readonly Dictionary<string, CancellationTokenSource> _nativeFatEvidenceStoreLoadCtsBySession =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _nativeFatEvidenceStoreLoadedSessions =
         new(StringComparer.OrdinalIgnoreCase);
-    private long _nativeFatEvidenceStoreLoadGeneration;
 
     [ModuleInitializer]
     internal static void RegisterNativeFatEvidenceDurability()
@@ -55,14 +56,27 @@ public partial class MainWindow
             new NativeFatEvidencePersistenceCoordinator(_nativeFatEvidenceStore);
 
         _nativeFatArmCoordinator.EvidenceChanged += NativeFatEvidenceDurability_EvidenceChanged;
+        Devices.CollectionChanged += NativeFatEvidenceDurability_DevicesCollectionChanged;
         MainTabs.SelectionChanged += NativeFatEvidenceDurability_MainTabsSelectionChanged;
         PropertyChanged += NativeFatEvidenceDurability_MainWindowPropertyChanged;
         Closed += NativeFatEvidenceDurability_MainWindowClosed;
         EnsureNativeFatEvidenceDurabilityGridHook();
 
-        // Load the already-selected IED too. This covers SCL/IEDs opened before this
-        // ApplicationIdle hook was installed.
-        BeginNativeFatEvidenceStoreLoad(SelectedDevice);
+        // Prepare every IED already present in the Engineering workspace. This is intentionally
+        // independent of FAT tab activation and Start FAT, and also covers multi-IED SCL files.
+        foreach (var device in Devices)
+            BeginNativeFatEvidenceStoreLoad(device);
+    }
+
+    private void NativeFatEvidenceDurability_DevicesCollectionChanged(
+        object? sender,
+        NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems == null)
+            return;
+
+        foreach (var device in e.NewItems.OfType<Iec61850MonitorDevice>())
+            BeginNativeFatEvidenceStoreLoad(device);
     }
 
     private void NativeFatEvidenceDurability_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -183,40 +197,33 @@ public partial class MainWindow
             return;
 
         var sessionKey = BuildNativeFatEvidenceStoreSessionKey(device.DeviceId, device.Name);
-        if (_nativeFatEvidenceStoreLoadedSessions.Contains(sessionKey))
+        if (_nativeFatEvidenceStoreLoadedSessions.Contains(sessionKey) ||
+            _nativeFatEvidenceStoreLoadCtsBySession.ContainsKey(sessionKey))
+        {
             return;
-
-        _nativeFatEvidenceStoreLoadCts?.Cancel();
-        _nativeFatEvidenceStoreLoadCts?.Dispose();
-        _nativeFatEvidenceStoreLoadCts = null;
+        }
 
         _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
-        var generation = Interlocked.Increment(ref _nativeFatEvidenceStoreLoadGeneration);
         var cts = new CancellationTokenSource();
-        _nativeFatEvidenceStoreLoadCts = cts;
+        _nativeFatEvidenceStoreLoadCtsBySession[sessionKey] = cts;
         _ = LoadNativeFatEvidenceStoreAsync(
             device.DeviceId,
             device.Name,
             sessionKey,
-            generation,
-            cts.Token);
+            cts);
     }
 
     private async Task LoadNativeFatEvidenceStoreAsync(
         string runtimeDeviceId,
         string iedName,
         string sessionKey,
-        long generation,
-        CancellationToken cancellationToken)
+        CancellationTokenSource owner)
     {
         try
         {
             _nativeFatEvidenceStore ??= new NativeFatEvidenceStore();
-            var result = await _nativeFatEvidenceStore.LoadAsync(iedName, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (generation != _nativeFatEvidenceStoreLoadGeneration)
-                return;
+            var result = await _nativeFatEvidenceStore.LoadAsync(iedName, owner.Token);
+            owner.Token.ThrowIfCancellationRequested();
 
             if (result.Succeeded)
                 _nativeFatEvidenceStoreLoadedSessions.Add(sessionKey);
@@ -252,6 +259,15 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
         }
+        finally
+        {
+            if (_nativeFatEvidenceStoreLoadCtsBySession.TryGetValue(sessionKey, out var current) &&
+                ReferenceEquals(current, owner))
+            {
+                _nativeFatEvidenceStoreLoadCtsBySession.Remove(sessionKey);
+                owner.Dispose();
+            }
+        }
     }
 
     private static string BuildNativeFatEvidenceStoreSessionKey(string deviceId, string iedName)
@@ -279,9 +295,12 @@ public partial class MainWindow
 
     private void NativeFatEvidenceDurability_MainWindowClosed(object? sender, EventArgs e)
     {
-        _nativeFatEvidenceStoreLoadCts?.Cancel();
-        _nativeFatEvidenceStoreLoadCts?.Dispose();
-        _nativeFatEvidenceStoreLoadCts = null;
+        foreach (var cts in _nativeFatEvidenceStoreLoadCtsBySession.Values)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+        _nativeFatEvidenceStoreLoadCtsBySession.Clear();
 
         try
         {
@@ -293,6 +312,7 @@ public partial class MainWindow
         }
 
         _nativeFatArmCoordinator.EvidenceChanged -= NativeFatEvidenceDurability_EvidenceChanged;
+        Devices.CollectionChanged -= NativeFatEvidenceDurability_DevicesCollectionChanged;
         MainTabs.SelectionChanged -= NativeFatEvidenceDurability_MainTabsSelectionChanged;
         PropertyChanged -= NativeFatEvidenceDurability_MainWindowPropertyChanged;
         Closed -= NativeFatEvidenceDurability_MainWindowClosed;
