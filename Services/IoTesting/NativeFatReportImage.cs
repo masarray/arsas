@@ -32,7 +32,8 @@ internal static class NativeFatReportLogoService
 {
     private const int MaxPixelDimension = 512;
     private const double NativeLogoX = 710d;
-    private const double NativeLogoTop = 582d;
+    private const double LegacySyntheticLogoTop = 582d;
+    private const double NativeLogoTop = 576d;
     private const double NativeLogoSize = 22d;
 
     private static readonly string[] DefaultLogoUris =
@@ -83,10 +84,10 @@ internal static class NativeFatReportLogoService
                 var commands = new List<IoFatReportCommand>(page.Commands.Count + 1);
                 foreach (var command in page.Commands)
                 {
-                    // Retire only the synthetic blue-square + "A" part of the old mark.
-                    // The adjacent ARSAS wordmark remains as text; the icon itself comes from
-                    // the real packaged asset (or the operator-selected logo).
-                    if (IsSyntheticIconCommand(command))
+                    // The base layout still carries the legacy synthetic icon/wordmark so
+                    // older non-image report paths remain structurally compatible. Native
+                    // Preview/PDF replaces the complete legacy mark with the real app icon.
+                    if (IsLegacyBrandingCommand(command))
                         continue;
                     commands.Add(command);
                 }
@@ -110,21 +111,25 @@ internal static class NativeFatReportLogoService
         return new IoFatReportLayoutPlan(layout.ProjectId, layout.CreatedAt, layout.Draft, pages);
     }
 
-    private static bool IsSyntheticIconCommand(IoFatReportCommand command)
+    private static bool IsLegacyBrandingCommand(IoFatReportCommand command)
     {
         if (command is IoFatReportRectCommand rect)
         {
             return Near(rect.X, NativeLogoX) &&
-                   Near(rect.TopY, NativeLogoTop) &&
+                   Near(rect.TopY, LegacySyntheticLogoTop) &&
                    Near(rect.Width, NativeLogoSize) &&
                    Near(rect.Height, NativeLogoSize);
         }
 
         if (command is IoFatReportTextCommand text)
         {
-            return string.Equals(text.Text, "A", StringComparison.Ordinal) &&
-                   Near(text.X, NativeLogoX + 5.2d) &&
-                   Near(text.BaselineY, NativeLogoTop - 15.2d);
+            var syntheticA = string.Equals(text.Text, "A", StringComparison.Ordinal) &&
+                             Near(text.X, NativeLogoX + 5.2d) &&
+                             Near(text.BaselineY, LegacySyntheticLogoTop - 15.2d);
+            var legacyWordmark = string.Equals(text.Text, "ARSAS", StringComparison.Ordinal) &&
+                                 Near(text.X, NativeLogoX + 29d) &&
+                                 Near(text.BaselineY, LegacySyntheticLogoTop - 15.4d);
+            return syntheticA || legacyWordmark;
         }
 
         return false;

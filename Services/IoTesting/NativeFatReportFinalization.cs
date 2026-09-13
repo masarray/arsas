@@ -59,12 +59,9 @@ internal static class NativeFatReportFinalization
             IoFatReportFontKind.Regular, 8.0d, Muted);
         Line(commands, Margin, 498d, PageWidth - Margin, 498d, Border, 0.8d);
 
-        Rect(commands, 590d, 568d, 222d, 64d, 4d, SoftBlue, Border, 0.7d);
-        Text(commands, 601d, 554d, 200d, "IED / REPORT SCOPE", IoFatReportFontKind.Bold, 5.9d, Muted);
-        Text(commands, 601d, 538d, 200d, Clean(snapshot.IedName), IoFatReportFontKind.Bold, 8.2d, Navy);
-        Text(commands, 601d, 523d, 200d, Clean(snapshot.DeviceId), IoFatReportFontKind.Mono, 5.8d, Blue);
-        Text(commands, 601d, 511d, 200d, "FOR FAT RECORD", IoFatReportFontKind.Regular, 5.8d, Muted);
-
+        // Keep the upper-right header clear for the report logo. IED identity is already
+        // carried by the preceding evidence pages; duplicating a scope card here caused a
+        // visual collision and added no sign-off evidence.
         Text(commands, Margin, 470d, ContentWidth,
             "By signing below, the parties acknowledge the FAT execution and evidence recorded in the preceding pages.",
             IoFatReportFontKind.Regular, 7.2d, Ink);
