@@ -13,7 +13,12 @@ internal static class NativeFatAuxiliaryReportDecorator
     private const double PageHeight = 595d;
     private const double Margin = 30d;
     private const double ContentWidth = PageWidth - (Margin * 2d);
-    private const int ComtradeRowsPerPage = 8;
+    private const int ComtradeRowsPerPage = 10;
+    private const double TableHeaderHeight = 26d;
+    private const double TableRowHeight = 30d;
+    private const double TableBodyFontSize = 7.2d;
+    private const double TableMonoFontSize = 6.2d;
+    private const double TableHeaderFontSize = 6.8d;
 
     private static readonly IoFatReportColor Navy = IoFatReportColor.FromHex("0F172A");
     private static readonly IoFatReportColor Blue = IoFatReportColor.FromHex("2563EB");
@@ -84,11 +89,10 @@ internal static class NativeFatAuxiliaryReportDecorator
         var headers = new[] { "Record Name", "Record Date", "Size", "Result" };
         var y = 438d;
         DrawTableHeader(commands, widths, headers, y);
-        y -= 28d;
+        y -= TableHeaderHeight;
 
         foreach (var record in records)
         {
-            const double rowHeight = 42d;
             var values = new[]
             {
                 Fit(record.RecordName, 66),
@@ -96,8 +100,8 @@ internal static class NativeFatAuxiliaryReportDecorator
                 FormatSize(record.KnownSizeBytes, record.HasUnknownSize),
                 "OK"
             };
-            DrawRow(commands, widths, values, y, rowHeight, resultColumn: 3);
-            y -= rowHeight;
+            DrawRow(commands, widths, values, y, TableRowHeight, resultColumn: 3);
+            y -= TableRowHeight;
         }
 
         AddFooter(commands, pageNumber, createdAt, "Verified IEC 61850 FileDirectory evidence.");
@@ -119,12 +123,12 @@ internal static class NativeFatAuxiliaryReportDecorator
             "Time Sync OK");
 
         Rect(commands, Margin, 438d, ContentWidth, 68d, 4d, SoftPass, Border, 0.65d);
-        Text(commands, Margin + 12d, 417d, 110d, "RESULT", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Text(commands, Margin + 12d, 417d, 110d, "RESULT", IoFatReportFontKind.Bold, 6.4d, Muted);
         Text(commands, Margin + 12d, 394d, 110d, "OK", IoFatReportFontKind.Bold, 13.2d, Pass);
-        Text(commands, Margin + 126d, 417d, ContentWidth - 138d, "VERIFICATION BASIS", IoFatReportFontKind.Bold, 6.1d, Muted);
+        Text(commands, Margin + 126d, 417d, ContentWidth - 138d, "VERIFICATION BASIS", IoFatReportFontKind.Bold, 6.4d, Muted);
         var summaryLines = Wrap(evidence.Summary, 104, 2);
         for (var index = 0; index < summaryLines.Count; index++)
-            Text(commands, Margin + 126d, 399d - (index * 12d), ContentWidth - 138d, summaryLines[index], IoFatReportFontKind.Regular, 7.0d, Ink);
+            Text(commands, Margin + 126d, 399d - (index * 12d), ContentWidth - 138d, summaryLines[index], IoFatReportFontKind.Regular, 7.4d, Ink);
 
         Text(
             commands,
@@ -135,18 +139,17 @@ internal static class NativeFatAuxiliaryReportDecorator
                 ? $"LTMS verified · {evidence.FreshPrimaryTimestampCount:N0} fresh independent IEC timestamp(s)"
                 : $"LTMS not exposed · {evidence.FreshPrimaryTimestampCount:N0} fresh independent IEC timestamps verified",
             IoFatReportFontKind.Bold,
-            7.1d,
+            7.4d,
             Navy);
 
         var widths = new[] { 82d, 226d, 92d, 68d, 158d, 88d, 68d };
         var headers = new[] { "Evidence", "IEC Reference", "Value", "Quality", "IED Timestamp", "Delta", "Result" };
         var y = 330d;
         DrawTableHeader(commands, widths, headers, y);
-        y -= 28d;
+        y -= TableHeaderHeight;
 
         foreach (var point in evidence.SupportingPoints)
         {
-            const double rowHeight = 48d;
             var values = new[]
             {
                 Fit(point.Role, 14),
@@ -159,8 +162,8 @@ internal static class NativeFatAuxiliaryReportDecorator
                     : "—",
                 "OK"
             };
-            DrawRow(commands, widths, values, y, rowHeight, resultColumn: 6);
-            y -= rowHeight;
+            DrawRow(commands, widths, values, y, TableRowHeight, resultColumn: 6);
+            y -= TableRowHeight;
         }
 
         AddFooter(commands, pageNumber, createdAt, "Read-only evaluator; SNTP activity alone does not grant OK.");
@@ -185,9 +188,9 @@ internal static class NativeFatAuxiliaryReportDecorator
         Rect(commands, Margin, 482d, ContentWidth, 34d, 3d, SoftBlue, Border, 0.6d);
         Text(commands, Margin + 10d, 461d, 390d,
             $"{Clean(snapshot.IedName)} · {Clean(snapshot.IpAddress)}:{snapshot.Port}",
-            IoFatReportFontKind.Bold, 7.5d, Ink);
-        Text(commands, Margin + 350d, 461d, 280d, detail, IoFatReportFontKind.Regular, 6.4d, Muted);
-        Text(commands, PageWidth - Margin - 118d, 461d, 108d, result, IoFatReportFontKind.Bold, 7.0d, Pass);
+            IoFatReportFontKind.Bold, 8.0d, Ink);
+        Text(commands, Margin + 350d, 461d, 280d, detail, IoFatReportFontKind.Regular, 6.8d, Muted);
+        Text(commands, PageWidth - Margin - 118d, 461d, 108d, result, IoFatReportFontKind.Bold, 7.5d, Pass);
     }
 
     private static void DrawTableHeader(
@@ -199,8 +202,8 @@ internal static class NativeFatAuxiliaryReportDecorator
         var x = Margin;
         for (var index = 0; index < headers.Count; index++)
         {
-            Rect(commands, x, y, widths[index], 28d, 0d, SoftBlue, Border, 0.45d);
-            Text(commands, x + 5d, y - 18d, widths[index] - 10d, headers[index], IoFatReportFontKind.Bold, 6.2d, Blue);
+            Rect(commands, x, y, widths[index], TableHeaderHeight, 0d, SoftBlue, Border, 0.45d);
+            Text(commands, x + 5d, CenteredBaseline(y, TableHeaderHeight), widths[index] - 10d, headers[index], IoFatReportFontKind.Bold, TableHeaderFontSize, Blue);
             x += widths[index];
         }
     }
@@ -214,21 +217,25 @@ internal static class NativeFatAuxiliaryReportDecorator
         int resultColumn)
     {
         var x = Margin;
+        var baseline = CenteredBaseline(y, height);
         for (var index = 0; index < values.Count; index++)
         {
             Rect(commands, x, y, widths[index], height, 0d, White, Border, 0.4d);
             Text(
                 commands,
                 x + 5d,
-                y - (height / 2d) - 2d,
+                baseline,
                 widths[index] - 10d,
                 values[index],
                 index == resultColumn ? IoFatReportFontKind.Bold : index is 1 or 4 or 5 ? IoFatReportFontKind.Mono : IoFatReportFontKind.Regular,
-                index is 1 or 4 or 5 ? 5.6d : 6.4d,
+                index is 1 or 4 or 5 ? TableMonoFontSize : TableBodyFontSize,
                 index == resultColumn ? Pass : Ink);
             x += widths[index];
         }
     }
+
+    private static double CenteredBaseline(double top, double height)
+        => top - (height / 2d) - 2d;
 
     private static void AddFooter(
         ICollection<IoFatReportCommand> commands,
@@ -239,10 +246,10 @@ internal static class NativeFatAuxiliaryReportDecorator
         Line(commands, Margin, 42d, PageWidth - Margin, 42d, Border, 0.6d);
         Text(commands, Margin, 24d, 620d,
             $"FAT evidence captured · {createdAt:yyyy-MM-dd HH:mm:ss zzz}  |  {note}",
-            IoFatReportFontKind.Regular, 6.2d, Muted);
+            IoFatReportFontKind.Regular, 6.5d, Muted);
         Text(commands, PageWidth - Margin - 118d, 24d, 118d,
             $"Page {pageNumber} / {pageNumber}",
-            IoFatReportFontKind.Regular, 6.2d, Muted);
+            IoFatReportFontKind.Regular, 6.5d, Muted);
     }
 
     private static string FormatSize(long knownSizeBytes, bool hasUnknownSize)

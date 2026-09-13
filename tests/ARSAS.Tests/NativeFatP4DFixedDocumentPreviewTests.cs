@@ -179,8 +179,11 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.DoesNotContain("WrapTelegram(", adapter, StringComparison.Ordinal);
         Assert.Contains("private static readonly double[] Widths = [72d, 280d, 44d, 76d, 92d, 76d, 92d, 50d];", adapter, StringComparison.Ordinal);
         Assert.Contains("TelegramFontSize(row.IecTelegram)", adapter, StringComparison.Ordinal);
-        Assert.Contains("MinimumRowHeight = 32d", adapter, StringComparison.Ordinal);
-        Assert.Contains("isTimestamp ? 5.6d : 6.5d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableRowHeight = 30d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableBodyFontSize = 7.2d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableTimestampFontSize = 6.2d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TelegramBaseFontSize = 6.8d", adapter, StringComparison.Ordinal);
+        Assert.Contains("CenteredBaseline(y, height)", adapter, StringComparison.Ordinal);
 
         Assert.DoesNotContain("\"Type\"", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Status\"", adapter, StringComparison.Ordinal);

@@ -13,10 +13,12 @@ internal static class NativeFatP4DReportAdapter
     private const double Margin = 30d;
     private const double ContentTop = 466d;
     private const double ContentBottom = 52d;
-    private const double HeaderHeight = 25d;
-    private const double MinimumRowHeight = 32d;
-    private const double TelegramBaseFontSize = 6.2d;
-    private const double TelegramMinimumFontSize = 4.6d;
+    private const double HeaderHeight = 26d;
+    private const double TableRowHeight = 30d;
+    private const double TableBodyFontSize = 7.2d;
+    private const double TableTimestampFontSize = 6.2d;
+    private const double TelegramBaseFontSize = 6.8d;
+    private const double TelegramMinimumFontSize = 5.2d;
 
     // Customer-facing evidence table. Total width = 782 pt (842 - 2 * 30 margin).
     // Live Value is intentionally omitted from the report: FAT evidence is Value 1 / Value 2.
@@ -80,7 +82,7 @@ internal static class NativeFatP4DReportAdapter
                 520d,
                 $"FAT evidence captured · {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss zzz}",
                 IoFatReportFontKind.Regular,
-                6.2d,
+                6.5d,
                 Muted));
             pages[index].Add(new IoFatReportTextCommand(
                 PageWidth - Margin - 100d,
@@ -88,7 +90,7 @@ internal static class NativeFatP4DReportAdapter
                 100d,
                 $"Page {index + 1} / {pages.Count}",
                 IoFatReportFontKind.Regular,
-                6.2d,
+                6.5d,
                 Muted));
         }
 
@@ -169,11 +171,11 @@ internal static class NativeFatP4DReportAdapter
             page.Add(new IoFatReportRectCommand(x, y, Widths[index], HeaderHeight, 0d, SoftBlue, Border, 0.45d));
             page.Add(new IoFatReportTextCommand(
                 x + 4d,
-                y - 16.5d,
+                CenteredBaseline(y, HeaderHeight),
                 Widths[index] - 8d,
                 Headers[index],
                 IoFatReportFontKind.Bold,
-                index is 4 or 6 ? 5.8d : 6.4d,
+                index is 4 or 6 ? 6.2d : 6.8d,
                 Blue));
             x += Widths[index];
         }
@@ -181,7 +183,7 @@ internal static class NativeFatP4DReportAdapter
     }
 
     private static double GetRowHeight(NativeFatPrintPreviewRow row)
-        => MinimumRowHeight;
+        => TableRowHeight;
 
     private static void DrawRow(
         List<IoFatReportCommand> page,
@@ -202,6 +204,7 @@ internal static class NativeFatP4DReportAdapter
             reportResult
         };
 
+        var baseline = CenteredBaseline(y, height);
         var x = Margin;
         for (var index = 0; index < cells.Length; index++)
         {
@@ -211,7 +214,7 @@ internal static class NativeFatP4DReportAdapter
             {
                 page.Add(new IoFatReportTextCommand(
                     x + 4d,
-                    y - 19d,
+                    baseline,
                     Widths[index] - 8d,
                     Clean(row.IecTelegram),
                     IoFatReportFontKind.Mono,
@@ -223,13 +226,13 @@ internal static class NativeFatP4DReportAdapter
                 var isTimestamp = index is 4 or 6;
                 page.Add(new IoFatReportTextCommand(
                     x + 4d,
-                    y - 19d,
+                    baseline,
                     Widths[index] - 8d,
                     cells[index],
                     isTimestamp
                         ? IoFatReportFontKind.Mono
                         : index is 0 or 7 ? IoFatReportFontKind.Bold : IoFatReportFontKind.Regular,
-                    isTimestamp ? 5.6d : 6.5d,
+                    isTimestamp ? TableTimestampFontSize : TableBodyFontSize,
                     index == 7 ? ResultColor(reportResult) : Ink));
             }
 
@@ -238,6 +241,9 @@ internal static class NativeFatP4DReportAdapter
 
         y -= height;
     }
+
+    private static double CenteredBaseline(double top, double height)
+        => top - (height / 2d) - 2d;
 
     private static double TelegramFontSize(string? value)
     {
