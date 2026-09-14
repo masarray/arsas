@@ -7,13 +7,5 @@
     "abi": 1,
     "relativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll"
   },
-  "qt": {
-    "version": "6.8.3",
-    "arch": "win64_msvc2022_64"
-  },
-  "runtime": {
-    "relativeExecutable": "Tools/ArdIrec/ardirec.exe",
-    "launchArgument": "--arsas-open"
-  },
-  "purpose": "Pinned ArdIrec P1 engine for ARSAS COMTRADE integration. The native bridge is the preferred in-process path; the Qt runtime remains a compatibility fallback until WPF analysis parity is complete. Change this commit only through a deliberate engine upgrade."
+  "purpose": "Pinned ArdIrec native core/bridge for the in-process ARSAS COMTRADE workspace. External ArdIrec desktop/Qt runtime packaging and process launching are intentionally unsupported. Change this commit only through a deliberate engine upgrade."
 }
