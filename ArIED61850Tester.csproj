@@ -32,6 +32,8 @@
     <ArIec61850LockValidator>$(MSBuildProjectDirectory)\scripts\validate-ariec61850-lock.ps1</ArIec61850LockValidator>
     <ArIec61850PowerShell Condition="'$(OS)' == 'Windows_NT'">powershell</ArIec61850PowerShell>
     <ArIec61850PowerShell Condition="'$(OS)' != 'Windows_NT'">pwsh</ArIec61850PowerShell>
+    <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == '' and '$(ARSAS_ARDIREC_BRIDGE_PATH)' != ''">$(ARSAS_ARDIREC_BRIDGE_PATH)</ArdIrecBridgePath>
+    <ArdIrecBridgeRequired Condition="'$(ArdIrecBridgeRequired)' == ''">false</ArdIrecBridgeRequired>
   </PropertyGroup>
 
   <ItemGroup>
@@ -58,6 +60,19 @@
     <None Update="engines\ARIEC61850.lock.json"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
+    <None Update="engines\ARDIREC.lock.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ArdIrecBridgePath)' != '' and Exists('$(ArdIrecBridgePath)')">
+    <EmbeddedResource Include="$(ArdIrecBridgePath)"
+                      LogicalName="ArIED61850Tester.Native.ardirec_bridge.dll" />
+    <None Include="$(ArdIrecBridgePath)"
+          Link="Tools\ArdIrec\ardirec_bridge.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          Condition="'$(PublishSingleFile)' != 'true'" />
   </ItemGroup>
 
   <ItemGroup>
@@ -76,6 +91,12 @@
            Text="ARIEC61850 lock validator was not found at '$(ArIec61850LockValidator)'." />
     <Error Condition="!Exists('$(ArIec61850LockPath)')"
            Text="ARIEC61850 integration lock was not found at '$(ArIec61850LockPath)'." />
+  </Target>
+
+  <Target Name="ValidateArdIrecBridgePackaging" BeforeTargets="PrepareForBuild"
+          Condition="'$(ArdIrecBridgeRequired)' == 'true'">
+    <Error Condition="'$(ArdIrecBridgePath)' == '' or !Exists('$(ArdIrecBridgePath)')"
+           Text="Pinned ArdIrec native bridge was not found at '$(ArdIrecBridgePath)'. Official Windows packaging requires ardirec_bridge.dll." />
   </Target>
 
   <Target Name="ValidateArIec61850Revision"
