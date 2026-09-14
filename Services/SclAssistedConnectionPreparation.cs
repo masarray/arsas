@@ -32,7 +32,8 @@ public static class SclAssistedConnectionPreparationBuilder
         string iedName,
         string accessPointName,
         string host,
-        int port)
+        int port,
+        int maximumVariableReferencesPerRead = ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -51,6 +52,11 @@ public static class SclAssistedConnectionPreparationBuilder
             errors.Add("A TCP endpoint is required before SCL-assisted connect.");
         if (normalizedPort is < 1 or > 65535)
             errors.Add($"TCP port must be in 1..65535; received {normalizedPort}.");
+        if (maximumVariableReferencesPerRead is < 1 or > ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead)
+        {
+            errors.Add(
+                $"Initial Read batch size must be in 1..{ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead}; received {maximumVariableReferencesPerRead}.");
+        }
 
         if (errors.Count > 0)
             return Fail(errors, warnings);
@@ -155,7 +161,7 @@ public static class SclAssistedConnectionPreparationBuilder
             initialReadPlan = ArMms.InitialFcReadPlanner.FromSclModel(
                 design.Model,
                 domains.ExpectedDomains,
-                ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead);
+                maximumVariableReferencesPerRead);
             warnings.AddRange(initialReadPlan.Warnings);
             if (!initialReadPlan.IsValid)
                 errors.AddRange(initialReadPlan.Errors);
