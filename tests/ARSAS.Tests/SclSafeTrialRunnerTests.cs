@@ -1,3 +1,4 @@
+using AR.Iec61850.Mms;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -5,7 +6,7 @@ namespace ARSAS.Tests;
 public sealed class SclSafeTrialRunnerTests
 {
     [Fact]
-    public void CommandParser_UsesExplicitSclIdentityAndSafeMmsDefaults()
+    public void CommandParser_UsesExplicitSclIdentityAndIedScoutLikeBatchDefault()
     {
         var source = Path.Combine(Path.GetTempPath(), "trial.cid");
         var args = new[]
@@ -24,7 +25,25 @@ public sealed class SclSafeTrialRunnerTests
         Assert.Equal("AP1", command.AccessPointName);
         Assert.Equal("192.0.2.10", command.Host);
         Assert.Equal(102, command.Port);
+        Assert.Equal(MmsReadBatchCodec.MaximumVariableReferencesPerRead, command.MaximumVariableReferencesPerRead);
         Assert.EndsWith(".json", command.EvidencePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CommandParser_SingleReferenceMode_UsesExactlyOneVariablePerRead()
+    {
+        var args = new[]
+        {
+            SclSafeTrialCommand.SingleReferenceSwitch,
+            "trial.cid",
+            "IED01",
+            "AP1",
+            "192.0.2.10"
+        };
+
+        Assert.True(SclSafeTrialCommand.TryParse(args, out var command, out var error), error);
+        Assert.NotNull(command);
+        Assert.Equal(1, command!.MaximumVariableReferencesPerRead);
     }
 
     [Theory]
