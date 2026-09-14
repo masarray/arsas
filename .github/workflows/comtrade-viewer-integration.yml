@@ -39,13 +39,14 @@ jobs:
         with:
           path: ARSAS
 
-      - name: Resolve immutable ArdIrec native bridge lock
+      - name: Resolve immutable field-tested ArdIrec bridge lock
         shell: powershell
         run: |
           $lockPath = ".\ARSAS\engines\ARDIREC.lock.json"
           $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
 
-          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+          if ($lock.schema -ne 3 -or
+              $lock.repository -notmatch '^[^/]+/[^/]+$' -or
               [string]::IsNullOrWhiteSpace([string]$lock.ref) -or
               $lock.ref -notmatch '^[A-Za-z0-9._/-]+$') {
             throw "ArdIrec repository/ref lock is invalid."
@@ -53,13 +54,13 @@ jobs:
           if ($lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ArdIrec commit lock is invalid."
           }
-          if ($lock.integrationMode -ne 'in-process-native-bridge-only' -or
-              $lock.bridge.abi -ne 1 -or
+          if ($lock.bridge.abi -ne 1 -or
+              $lock.bridge.mode -ne 'native-only' -or
               $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
             throw "ArdIrec native bridge contract is invalid."
           }
 
-          $required = @('cursor-measurement','channel-semantics','value-representation','status-state','digital-edge-snap','phasor','harmonics','distance-locus')
+          $required = @('cursor_measurement','channel_semantics','value_representation','status_state','digital_edge_snap','phasor','harmonics','distance_locus')
           $declared = @($lock.bridge.requiredCapabilities)
           foreach ($capability in $required) {
             if ($declared -notcontains $capability) {
@@ -126,8 +127,8 @@ jobs:
 
           if ($bridge -notmatch 'ardirec_bridge\.dll' -or
               $bridge -notmatch 'ExpectedAbiVersion = 1' -or
-              $bridge -notmatch 'GetHarmonicSpectrum|Harmonic' -or
-              $bridge -notmatch 'DistanceLocus|GetDistance' -or
+              $bridge -notmatch 'Harmonic' -or
+              $bridge -notmatch 'Distance' -or
               $bootstrap -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
               $project -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
               $project -notmatch 'Tools\\ArdIrec\\ardirec_bridge\.dll') {

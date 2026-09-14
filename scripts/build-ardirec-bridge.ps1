@@ -17,12 +17,13 @@ if (-not (Test-Path $lockPath -PathType Leaf)) {
 }
 
 $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
-if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+if ($lock.schema -ne 3 -or
+    $lock.repository -notmatch '^[^/]+/[^/]+$' -or
     [string]::IsNullOrWhiteSpace([string]$lock.ref) -or
     $lock.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
     $lock.commit -notmatch '^[0-9a-f]{40}$' -or
-    $lock.integrationMode -ne 'in-process-native-bridge-only' -or
     $lock.bridge.abi -ne 1 -or
+    $lock.bridge.mode -ne 'native-only' -or
     $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
     throw "ArdIrec native bridge lock metadata is invalid."
 }
@@ -31,15 +32,12 @@ $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $destinationBridge = Join-Path $output "ardirec_bridge.dll"
 
-# Reuse the already-built bridge within one CI/release job. The source revision is immutable
-# because it is resolved from ARDIREC.lock.json before this output path is used.
 if (Test-Path $destinationBridge -PathType Leaf) {
     Write-Host "==> Reusing pinned ArdIrec bridge: $destinationBridge"
     Write-Output $destinationBridge
     exit 0
 }
 
-$ownsSource = $false
 if ([string]::IsNullOrWhiteSpace($ArdIrecSource)) {
     $sourceRoot = Join-Path ([System.IO.Path]::GetTempPath()) "arsas-ardirec-$($lock.commit)"
     if (-not (Test-Path (Join-Path $sourceRoot ".git") -PathType Container)) {
@@ -53,7 +51,6 @@ if ([string]::IsNullOrWhiteSpace($ArdIrecSource)) {
         if ($LASTEXITCODE -ne 0) { throw "Could not checkout pinned ArdIrec revision $($lock.commit)." }
     }
     $ArdIrecSource = $sourceRoot
-    $ownsSource = $true
 }
 
 $source = (Resolve-Path $ArdIrecSource).Path
