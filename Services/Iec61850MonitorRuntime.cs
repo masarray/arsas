@@ -1190,12 +1190,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     ? BuildPlanAcquisitionLabel(plan, plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase))
                     : state.AcquisitionLabel;
 
-                var reportQuality = update.HasQuality && IsUsefulProcessField(update.Quality)
-                    ? NormalizeQuality(update.Quality)
-                    : state.HasValue ? state.Quality : "Pending / q not supplied";
-                var reportTimestamp = update.HasTimestamp && IsUsefulProcessField(update.Timestamp)
-                    ? update.Timestamp
-                    : state.HasValue ? state.DeviceTimestamp : "-";
+                var reportEnvelope = Iec61850ProductionTelemetryNormalizer.FromComponents(
+                    update.HasValue ? update.Value : null,
+                    update.HasValue ? display : "-",
+                    update.HasQuality && IsUsefulProcessField(update.Quality) ? update.Quality : null,
+                    update.HasTimestamp && IsUsefulProcessField(update.Timestamp) ? update.Timestamp : null,
+                    new DateTimeOffset(DateTime.SpecifyKind(receivedUtc, DateTimeKind.Utc)),
+                    update.Reference);
+                var reportQuality = reportEnvelope.QualityText;
+                var reportTimestamp = Iec61850ProductionTelemetryNormalizer.SourceTimestampTextOrUnknown(
+                    reportEnvelope,
+                    update.Timestamp);
 
                 ApplyValueUpdate(
                     session,
@@ -1214,7 +1219,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
                             : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
                     trustReportEdge: true,
-                    hasProcessValue: update.HasValue);
+                    hasProcessValue: reportEnvelope.HasProcessValue);
                 }
             }
 
@@ -1430,8 +1435,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 var rich = resolved.Value as Iec61850ReadValue;
                 var raw = Iec61850ReadValue.Unwrap(resolved.Value);
                 var display = Iec61850ValueFormatter.Format(raw, point.IecDataType, point.Unit);
-                var quality = rich?.HasQuality == true ? rich.Quality : state.Quality;
-                var deviceTimestamp = rich?.HasDeviceTimestamp == true ? rich.DeviceTimestamp : state.DeviceTimestamp;
+                // Never carry forward stale Good/q or relay time when the current network read
+                // did not actually supply them. Companion reads may enrich this sample, but if
+                // they fail the defensive envelope below keeps quality Unknown and source time '-'.
+                var quality = rich?.HasQuality == true ? rich.Quality : string.Empty;
+                var deviceTimestamp = rich?.HasDeviceTimestamp == true ? rich.DeviceTimestamp : string.Empty;
 
                 if ((rich?.HasQuality != true || rich?.HasDeviceTimestamp != true) &&
                     nowUtc >= session.RecoveryWarmupUntilUtc &&
@@ -1449,8 +1457,19 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     deviceTimestamp = companions.DeviceTimestamp;
                 }
 
-                var normalizedQuality = NormalizeQuality(quality);
-                var normalizedTimestamp = string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp;
+                var receivedAtUtc = rich?.ReceivedAtUtc ?? DateTimeOffset.UtcNow;
+                var envelope = Iec61850ProductionTelemetryNormalizer.FromComponents(
+                    raw,
+                    display,
+                    quality,
+                    deviceTimestamp,
+                    receivedAtUtc,
+                    point.IecReference,
+                    resolved.EffectiveReference);
+                var normalizedQuality = envelope.QualityText;
+                var normalizedTimestamp = Iec61850ProductionTelemetryNormalizer.SourceTimestampTextOrUnknown(
+                    envelope,
+                    deviceTimestamp);
                 if (reportAssigned && state.AwaitingCommandReportEdge &&
                     nowUtc >= state.CommandReportDeadlineUtc && !state.CommandReportMissLogged)
                 {
@@ -1514,7 +1533,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     reason,
                     DateTime.UtcNow,
                     status,
-                    trustReportEdge: false);
+                    trustReportEdge: false,
+                    hasProcessValue: envelope.HasProcessValue);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

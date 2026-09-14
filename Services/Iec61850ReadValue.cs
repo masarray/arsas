@@ -12,8 +12,19 @@ public sealed class Iec61850ReadValue
     public string ReadReference { get; init; } = string.Empty;
     public string Projection { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Local receipt time. This is deliberately separate from DeviceTimestamp: an absent or
+    /// malformed relay timestamp must never be replaced with the PC clock and presented as
+    /// source evidence.
+    /// </summary>
+    public DateTimeOffset ReceivedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+
     public bool HasQuality => !string.IsNullOrWhiteSpace(Quality) && Quality != "-";
     public bool HasDeviceTimestamp => !string.IsNullOrWhiteSpace(DeviceTimestamp) && DeviceTimestamp != "-";
+    public DateTimeOffset? SourceTimestampUtc => Iec61850TelemetryEnvelope.TryParseSourceTimestampUtc(DeviceTimestamp);
+
+    public Iec61850TelemetryEnvelope ToTelemetryEnvelope()
+        => Iec61850TelemetryEnvelope.FromReadValue(this, ReceivedAtUtc);
 
     public override string ToString()
     {
