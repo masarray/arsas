@@ -620,7 +620,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, 5);
+        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
         MainTabs.SelectedIndex = index;
         UpdateNavigationVisuals(index, animate: true);
     }
@@ -654,7 +654,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        var target = Math.Clamp(index, 0, 5) * 150d;
+        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
+
+        // MainWindow is the single owner of all seven Engineering destinations.
+        // Keep the same density used by the proven workstation shell while allowing
+        // enough width for the Explorer label and the new canonical FAT sibling.
+        var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
+        var shellWidth = availableWidth >= 1700d ? 1085d : availableWidth >= 1380d ? 995d : 805d;
+        WorkflowNavShell.Width = shellWidth;
+        WorkflowNavShell.MinWidth = shellWidth;
+
+        var contentWidth = Math.Max(0d, shellWidth - WorkflowNavShell.Padding.Left - WorkflowNavShell.Padding.Right);
+        var cellWidth = contentWidth / 7d;
+        WorkflowPill.Width = Math.Max(1d, cellWidth - 2d);
+        var target = index * cellWidth;
+
         if (animate)
         {
             var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(190))
@@ -669,7 +683,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             WorkflowPillTranslate.X = target;
         }
 
-        var buttons = new[] { NavExplorerButton, NavLiveButton, NavEventsButton, NavAlarmButton, NavGooseButton, NavDiagnosticsButton };
+        var buttons = new[]
+        {
+            NavExplorerButton,
+            NavLiveButton,
+            NavEventsButton,
+            NavAlarmButton,
+            NavGooseButton,
+            NavDiagnosticsButton,
+            NavNativeFatButton
+        };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));
     }

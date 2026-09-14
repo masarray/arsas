@@ -1,0 +1,257 @@
+using System.Text;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Services.IoTesting;
+
+namespace ARSAS.Tests;
+
+public sealed class NativeFatP4DFixedDocumentPreviewTests
+{
+    [Fact]
+    public void P4D_PreviewUsesExistingFixedDocumentAuthorityWithProfessionalToolbar()
+    {
+        var preview = File.ReadAllText(FindRepoFile("MainWindow.NativeFatPrintPreview.cs"));
+        var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
+        var renderer = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatReportPreviewDocumentBuilder.cs"));
+
+        Assert.Contains("NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true)", preview, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportPreviewDocumentBuilder.Render(currentLayout)", preview, StringComparison.Ordinal);
+        Assert.Contains("new DocumentViewer", preview, StringComparison.Ordinal);
+        Assert.Contains("CollapseNativeDocumentViewerChrome(viewer)", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.Printer", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.Minus", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.Plus", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.Maximize2", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.ChevronLeft", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.ChevronRight", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.RefreshCw", preview, StringComparison.Ordinal);
+        Assert.Contains("NativePreviewLucideIcon.Save", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("NativePreviewLucideIcon.X", preview, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment = HorizontalAlignment.Center", preview, StringComparison.Ordinal);
+        Assert.Contains("FitNativeReportPage(viewer)", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.FitToWidth()", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.FitToHeight()", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.Zoom = Math.Min(widthZoom, heightZoom)", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("new DataGrid", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource = snapshot.Rows", preview, StringComparison.Ordinal);
+
+        Assert.Contains("IoFatReportLayoutPlan Build", adapter, StringComparison.Ordinal);
+        Assert.Contains("public static FixedDocument Render(", renderer, StringComparison.Ordinal);
+        Assert.Contains("IoFatReportLayoutPlan layout", renderer, StringComparison.Ordinal);
+        Assert.Contains("new FixedDocument()", renderer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4D_SavePdfSerializesTheExactLayoutCurrentlyRenderedInPreview()
+    {
+        var preview = File.ReadAllText(FindRepoFile("MainWindow.NativeFatPrintPreview.cs"));
+        var pdfService = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatPdfReportService.cs"));
+        var pdfWriter = File.ReadAllText(FindRepoFile("Services/IoTesting/IoFatNativePdfWriter.cs"));
+
+        Assert.Contains("var currentLayout = NativeFatP4DReportAdapter.Build(currentSnapshot, draft: true);", preview, StringComparison.Ordinal);
+        Assert.Contains("Document = document", preview, StringComparison.Ordinal);
+        Assert.Contains("viewer.Document = IoFatReportPreviewDocumentBuilder.Render(currentLayout)", preview, StringComparison.Ordinal);
+        Assert.Contains("BuildNativePreviewLabeledContent(NativePreviewLucideIcon.Save, \"Save PDF\")", preview, StringComparison.Ordinal);
+        Assert.Contains("SaveNativeFatPreviewPdf(preview, currentSnapshot, currentLayout)", preview, StringComparison.Ordinal);
+        Assert.Contains("IoFatPdfReportService.SaveLayout(", preview, StringComparison.Ordinal);
+        Assert.Contains("layout,", preview, StringComparison.Ordinal);
+        Assert.Contains("internal static void SaveLayout(", pdfService, StringComparison.Ordinal);
+        Assert.Contains("GenerateLayout(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
+        Assert.Contains("IoFatNativePdfWriter.Build(layout, reportName, primaryReference)", pdfService, StringComparison.Ordinal);
+        Assert.Contains("public static byte[] Build(", pdfWriter, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4D_LayoutFirstPdfWriterProducesNativePdfWithoutIoTestProjectRebuild()
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            DeviceId = "runtime-p4d",
+            Name = "AA1E1F06R4",
+            IpAddress = "192.168.81.103",
+            Port = 102
+        };
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.Name,
+            SignalName = "52_ACB1 Status",
+            IecReference = "AA1E1F06R4LD0/XCBR1.Pos.stVal",
+            Quality = "Good",
+            Value = "Open [01]"
+        };
+        device.Points.Add(point);
+        var cache = new NativeFatIedSessionCacheState();
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value1,
+            "Open [01]",
+            ArIED61850Tester.Models.IoTesting.FatEvidenceCaptureKind.OperatorSnapshot,
+            DateTimeOffset.UtcNow.AddSeconds(-1));
+        NativeFatCanonicalEvidenceOverlay.WriteCapture(
+            cache,
+            point,
+            NativeFatEvidenceField.Value2,
+            "Closed [10]",
+            ArIED61850Tester.Models.IoTesting.FatEvidenceCaptureKind.OperatorSnapshot,
+            DateTimeOffset.UtcNow);
+
+        var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
+        var layout = NativeFatP4DReportAdapter.Build(snapshot, draft: true);
+        var bytes = IoFatPdfReportService.GenerateLayout(layout, snapshot.IedName, snapshot.Rows[0].IecTelegram);
+        var reportText = layout.Pages
+            .SelectMany(page => page.Commands)
+            .OfType<IoFatReportTextCommand>()
+            .Select(command => command.Text)
+            .ToArray();
+
+        Assert.Equal("52_ACB1 Status", snapshot.Rows[0].Signal);
+        Assert.Equal("COMPLETE", snapshot.Rows[0].Result);
+        Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
+        Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value1TimestampText);
+        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value2TimestampText);
+        Assert.Contains("Complete", reportText);
+        Assert.DoesNotContain("COMPLETE", reportText);
+        Assert.Contains("Evidence complete: 1 / 1 signals", reportText);
+        Assert.Contains("ARSAS", reportText);
+        Assert.DoesNotContain(reportText, text => text.Contains("COMTRADE", StringComparison.OrdinalIgnoreCase));
+        Assert.True(layout.Pages.Count >= 2);
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "TESTED BY");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "WITNESSED BY");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "APPROVED BY");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "Title / Role");
+        Assert.Contains(layout.Pages[^1].Commands.OfType<IoFatReportTextCommand>(), command => command.Text == "IED: AA1E1F06R4 · Report: IEC 61850 FAT Evidence");
+        Assert.True(bytes.Length > 32);
+        Assert.Equal("%PDF-1.4", Encoding.ASCII.GetString(bytes, 0, 8));
+    }
+
+    [Fact]
+    public void P4D_ReportUsesSharedSignalNamingAndCustomerFacingCopy()
+    {
+        var snapshot = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatPrintPreviewSnapshot.cs"));
+        var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
+        var finalization = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportFinalization.cs"));
+        var branding = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportBranding.cs"));
+        var formatting = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatReportFormatting.cs"));
+
+        Assert.Contains("IoFatSignalDisplayNameFormatter.Format(point.SignalName, point.IecReference)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportBranding.AddLogo", adapter, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportBranding.AddLogo", finalization, StringComparison.Ordinal);
+        Assert.Contains("\"ARSAS\"", branding, StringComparison.Ordinal);
+        Assert.Contains("? \"Complete\"", adapter, StringComparison.Ordinal);
+        Assert.Contains("Evidence complete:", snapshot, StringComparison.Ordinal);
+        Assert.Contains("dd/MM/yyyy HH:mm:ss.fff", formatting, StringComparison.Ordinal);
+        Assert.Contains("ToLocalTime()", formatting, StringComparison.Ordinal);
+        Assert.Contains("Acceptance sign-off for the IEC 61850 FAT evidence documented in this report.", finalization, StringComparison.Ordinal);
+        Assert.Contains("Title / Role", finalization, StringComparison.Ordinal);
+
+        foreach (var internalCopy in new[]
+                 {
+                     "Canonical Explorer snapshot",
+                     "Immutable Engineering FAT snapshot",
+                     "Final acceptance record for the immutable",
+                     "blank sign-off fields are intentionally not prefilled"
+                 })
+        {
+            Assert.DoesNotContain(internalCopy, adapter, StringComparison.Ordinal);
+            Assert.DoesNotContain(internalCopy, finalization, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void P4D_ReportAdapterUsesReadableEightColumnEvidenceContract()
+    {
+        var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
+        var snapshot = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatPrintPreviewSnapshot.cs"));
+
+        var signal = adapter.IndexOf("\"Signal\"", StringComparison.Ordinal);
+        var reference = adapter.IndexOf("\"IEC 61850 Reference\"", StringComparison.Ordinal);
+        var quality = adapter.IndexOf("\"Quality\"", StringComparison.Ordinal);
+        var value1 = adapter.IndexOf("\"Value 1\"", StringComparison.Ordinal);
+        var timestamp1 = adapter.IndexOf("\"V1 Timestamp\"", StringComparison.Ordinal);
+        var value2 = adapter.IndexOf("\"Value 2\"", StringComparison.Ordinal);
+        var timestamp2 = adapter.IndexOf("\"V2 Timestamp\"", StringComparison.Ordinal);
+        var status = adapter.IndexOf("\"Evidence Status\"", StringComparison.Ordinal);
+
+        Assert.True(signal >= 0);
+        Assert.True(reference > signal);
+        Assert.True(quality > reference);
+        Assert.True(value1 > quality);
+        Assert.True(timestamp1 > value1);
+        Assert.True(value2 > timestamp1);
+        Assert.True(timestamp2 > value2);
+        Assert.True(status > timestamp2);
+
+        Assert.DoesNotContain("\"Live Value\"", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Clean(row.LiveValue)", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("WrapTelegram(", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IEC Telegram\"", adapter, StringComparison.Ordinal);
+        Assert.Contains("private static readonly double[] Widths = [66d, 280d, 40d, 72d, 92d, 72d, 92d, 68d];", adapter, StringComparison.Ordinal);
+        Assert.Contains("TelegramFontSize(row.IecTelegram)", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableRowHeight = 30d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableBodyFontSize = 7.2d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TableTimestampFontSize = 6.2d", adapter, StringComparison.Ordinal);
+        Assert.Contains("TelegramBaseFontSize = 6.8d", adapter, StringComparison.Ordinal);
+        Assert.Contains("CenteredBaseline(y, height)", adapter, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("\"Type\"", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Status\"", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IEC 61850 reference\"", adapter, StringComparison.Ordinal);
+
+        Assert.Contains("string IecTelegram", snapshot, StringComparison.Ordinal);
+        Assert.Contains("string Quality", snapshot, StringComparison.Ordinal);
+        Assert.Contains("string Value1TimestampText", snapshot, StringComparison.Ordinal);
+        Assert.Contains("string Value2TimestampText", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadRaw", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatCanonicalEvidenceOverlay.ReadCapture", snapshot, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture1)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("DisplayTimestamp(capture2)", snapshot, StringComparison.Ordinal);
+        Assert.Contains("NativeFatReportFormatting.LocalTimestamp(timestamp)", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("string Type", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("string Status", snapshot, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P4D_PreviewDoesNotReintroduceRuntimeOrSclBootstrap()
+    {
+        var preview = File.ReadAllText(FindRepoFile("MainWindow.NativeFatPrintPreview.cs"));
+        var adapter = File.ReadAllText(FindRepoFile("Services/IoTesting/NativeFatP4DReportAdapter.cs"));
+
+        foreach (var forbidden in new[]
+                 {
+                     "ConnectAndDiscoverAsync",
+                     "StartMonitoringAsync",
+                     "PrepareIoTestIedForFatAsync",
+                     "OpenDescribedSourcesAsync",
+                     "IoFatEngineeringWorkspaceProjectionService",
+                     "FatSclWorkspaceImportService",
+                     "new IoTestProject"
+                 })
+        {
+            Assert.DoesNotContain(forbidden, preview, StringComparison.Ordinal);
+            Assert.DoesNotContain(forbidden, adapter, StringComparison.Ordinal);
+        }
+    }
+
+    private static string FindRepoFile(string relativePath)
+        => Path.Combine(FindRepoRoot(), relativePath);
+
+    private static string FindRepoRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "MainWindow.xaml")) &&
+                Directory.Exists(Path.Combine(directory.FullName, "tests", "ARSAS.Tests")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException(
+            $"Could not locate repository root from '{AppContext.BaseDirectory}'.");
+    }
+}

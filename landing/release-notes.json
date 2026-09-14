@@ -1,45 +1,45 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.35",
-  "title": "Field-stable FAT continuity, semantic signals and relay fascia",
-  "titleId": "Kontinuitas FAT, semantic signal, dan relay fascia yang lebih stabil",
-  "summary": "ARSAS 1.6.35 carries the field-accepted relay fascia and monitoring-state LEDs, context-aware IEC 61850 signal presentation, Engineering-to-FAT progress continuation for the same SCL content, and persistent multi-RCB selection across virtualized scrolling.",
-  "summaryId": "ARSAS 1.6.35 membawa relay fascia dan LED status monitoring yang sudah diterima di field, presentasi signal IEC 61850 context-aware, kelanjutan progress Engineering-ke-FAT untuk konten SCL yang sama, serta pilihan multi-RCB yang tetap tersimpan saat grid virtualized di-scroll.",
+  "version": "1.6.36",
+  "title": "In-process COMTRADE workstation and safer FAT evidence continuity",
+  "titleId": "COMTRADE in-process dan kontinuitas evidence FAT yang lebih aman",
+  "summary": "ARSAS 1.6.36 keeps COMTRADE analysis inside the ARSAS workstation with the field-accepted native analysis bridge, restores the rich disturbance-analysis surfaces, converges FAT and Live Monitor UX, and hardens FAT evidence capture and restart persistence.",
+  "summaryId": "ARSAS 1.6.36 menjaga analisis COMTRADE tetap di dalam workstation ARSAS dengan native analysis bridge yang sudah diterima di field, memulihkan surface analisis gangguan yang lengkap, merapikan UX FAT dan Live Monitor, serta memperkuat capture dan persistence evidence FAT saat restart.",
   "highlights": [
-    "The IED card uses the black relay fascia with monitoring-state LEDs: LIVE is green and the first Stop state is red.",
-    "Engineering, FAT and report preview share context-aware signal naming, including phase-aware analog names and logical-node-qualified switching positions.",
-    "Opening FAT again from Engineering can restore local progress for the same SCL content while incompatible point evidence remains fail-closed.",
-    "Legacy SAS multi-RCB selections remain durable while the WPF DataGrid virtualizes and recycles rows during scrolling."
+    "Fault Records opens COMTRADE in-process inside ARSAS; the external ArdIrec Qt desktop UI is not launched or packaged.",
+    "The field-accepted disturbance workstation restores Time Signals, Phasor, Harmonics, six-loop distance Locus, cursor measurements and recorded-value engineering semantics.",
+    "The FAT workspace now follows the same Engineering card/header language, while Live Monitor keeps title, bounded search and filters on one compact row.",
+    "FAT capture now requires a real initialized live IEC 61850 observation, preventing offline SCL placeholders from becoming commissioning evidence.",
+    "FAT evidence resumes across ordinary application restarts and harmless IED display-name changes using durable SCL or endpoint identity, while damaged state files are preserved non-destructively."
   ],
   "highlightsId": [
-    "IED card menggunakan black relay fascia dengan LED mengikuti status monitoring: LIVE berwarna hijau dan kondisi Stop pertama berwarna merah.",
-    "Engineering, FAT, dan report preview memakai context-aware signal naming yang sama, termasuk nama analog berbasis phase dan switching position yang dibedakan berdasarkan logical node.",
-    "Saat FAT dibuka kembali dari Engineering, progress lokal untuk konten SCL yang sama dapat direstore sementara evidence point yang tidak kompatibel tetap fail-closed.",
-    "Pilihan multi-RCB Legacy SAS tetap tersimpan saat WPF DataGrid melakukan virtualisasi dan recycle row ketika di-scroll."
+    "Fault Records membuka COMTRADE secara in-process di dalam ARSAS; UI desktop Qt ArdIrec eksternal tidak dijalankan maupun dipaketkan.",
+    "Workstation disturbance yang sudah diterima di field memulihkan Time Signals, Phasor, Harmonics, distance Locus enam loop, cursor measurement, dan semantics engineering untuk recorded value.",
+    "Workspace FAT kini memakai bahasa card/header yang sama dengan Engineering, sementara Live Monitor menempatkan title, bounded search, dan filter dalam satu baris yang ringkas.",
+    "Capture FAT sekarang mensyaratkan observasi IEC 61850 live yang benar-benar sudah terinisialisasi sehingga placeholder SCL offline tidak dapat menjadi commissioning evidence.",
+    "Evidence FAT dapat dilanjutkan setelah restart aplikasi biasa dan perubahan display name IED yang aman menggunakan identity SCL atau endpoint yang durable, sementara file state yang rusak tetap dipertahankan secara non-destruktif."
   ],
   "improvements": [
-    "Canonical IEC references remain unchanged for binding, report identity, evidence and persistence while operator-facing labels gain useful phase and logical-node context.",
-    "FAT continuation can recognize the same SCL content across compatible source presentation changes without weakening per-point configuration matching.",
-    "RCB selection state is owned by the row model rather than transient visual containers, preventing scroll-induced selection loss.",
-    "The stable Windows release is gated by full regression tests, portable and installer smoke tests, SHA-256 checksums, SPDX SBOM, provenance and GitHub attestations."
+    "Official Windows packaging pins the native-only ArdIrec bridge and explicitly rejects ardirec.exe and Qt runtime files.",
+    "COMTRADE release validation exercises the managed bridge plus native cursor, phasor, harmonics and distance-locus capabilities before packaging.",
+    "FAT persistence no longer depends on ephemeral runtime DeviceId and keeps an already collision-safe evidence path stable across display-name changes.",
+    "The stable Windows release pipeline runs full application regressions, portable and installer smoke tests, SHA-256 checksums, SPDX SBOM, provenance and GitHub attestations before publication."
   ],
   "improvementsId": [
-    "Canonical IEC reference tetap tidak berubah untuk binding, report identity, evidence, dan persistence sementara label operator mendapat konteks phase dan logical node yang lebih jelas.",
-    "FAT continuation dapat mengenali konten SCL yang sama pada perubahan presentasi source yang kompatibel tanpa melemahkan per-point configuration matching.",
-    "State pilihan RCB dimiliki oleh row model, bukan visual container sementara, sehingga scrolling tidak lagi menghilangkan selection.",
-    "Stable release Windows digate oleh regression test lengkap, portable dan installer smoke test, checksum SHA-256, SPDX SBOM, provenance, serta GitHub attestation."
+    "Packaging Windows resmi mengunci native-only ArdIrec bridge dan secara eksplisit menolak ardirec.exe serta file runtime Qt.",
+    "Validasi release COMTRADE menguji managed bridge beserta capability native cursor, phasor, harmonics, dan distance-locus sebelum packaging.",
+    "Persistence FAT tidak lagi bergantung pada runtime DeviceId yang ephemeral dan mempertahankan path evidence yang sudah collision-safe ketika display name berubah.",
+    "Pipeline stable release Windows menjalankan regression test aplikasi lengkap, smoke test portable dan installer, checksum SHA-256, SPDX SBOM, provenance, serta GitHub attestation sebelum publikasi."
   ],
   "knownLimitations": [
     "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
-    "Adding an SCL source does not automatically start or switch the active FAT evidence session; the operator selects and starts each IED explicitly.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
     "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
-    "Penambahan source SCL tidak otomatis memulai atau memindahkan evidence session FAT aktif; operator memilih dan memulai setiap IED secara eksplisit.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
@@ -55,11 +55,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.35 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.35",
-    "caption": "ARSAS 1.6.35 keeps IEC 61850 engineering identity consistent across Engineering, FAT and report evidence while preserving field-tested operator continuity.",
-    "captionId": "ARSAS 1.6.35 menjaga identitas engineering IEC 61850 tetap konsisten di Engineering, FAT, dan report evidence sekaligus mempertahankan kontinuitas operator yang sudah diuji di field."
+    "alt": "ARSAS 1.6.36 Engineering, FAT and in-process COMTRADE workstation",
+    "altId": "Workstation Engineering, FAT, dan COMTRADE in-process ARSAS 1.6.36",
+    "caption": "ARSAS 1.6.36 keeps live IEC 61850 engineering and FAT evidence continuity while COMTRADE analysis remains inside the ARSAS workstation.",
+    "captionId": "ARSAS 1.6.36 menjaga kontinuitas engineering IEC 61850 live dan evidence FAT sementara analisis COMTRADE tetap berada di dalam workstation ARSAS."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.35"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.36"
 }

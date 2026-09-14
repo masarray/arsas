@@ -45,6 +45,36 @@ public static class IoTestWorkspaceBootstrapService
         ArgumentNullException.ThrowIfNull(sessionFactory);
 
         var described = await IoFatSourceWorkspaceService.DescribeAsync(sourceInputs, cancellationToken).ConfigureAwait(false);
+        return await OpenDescribedSourcesAsync(
+            importedProject,
+            described,
+            localProjectsRoot,
+            evidenceRoot,
+            sessionFactory,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Continues FAT bootstrap with source identities already SHA-256-described upstream.
+    /// The persistence layer accepts the same immutable descriptions and still verifies the
+    /// bytes again while staging them, so this removes redundant full-file hashing without
+    /// weakening the source/evidence boundary.
+    /// </summary>
+    public static async Task<IoTestWorkspaceLaunchResult> OpenDescribedSourcesAsync(
+        IoTestProject importedProject,
+        IReadOnlyCollection<IoFatDescribedSource> describedSources,
+        string localProjectsRoot,
+        string evidenceRoot,
+        Func<IoTestProject, string, IoTestSessionController> sessionFactory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importedProject);
+        ArgumentNullException.ThrowIfNull(describedSources);
+        ArgumentNullException.ThrowIfNull(sessionFactory);
+        if (describedSources.Count == 0)
+            throw new InvalidDataException("A FAT workspace must contain at least one source file.");
+
+        var described = describedSources.ToArray();
         IoFatSourceIdentity.AttachOrValidate(importedProject, described.Select(source => source.Source).ToArray());
 
         var localDirectory = ProjectDirectory(localProjectsRoot, importedProject);
@@ -61,21 +91,23 @@ public static class IoTestWorkspaceBootstrapService
         {
             if (!string.IsNullOrWhiteSpace(restoreSnapshotPath) && File.Exists(restoreSnapshotPath))
             {
+                // Isolate the canonical persisted snapshot BEFORE attempting selective restore.
+                // Otherwise a rejected/invalid partial restore could fall through to
+                // IoTestWorkspacePersistence.OpenDescribedSourcesAsync(), which is allowed to restore a
+                // matching snapshot wholesale. Engineering is the fresh plan authority here:
+                // the old snapshot is read-only evidence input, never a replacement project.
+                if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Directory.CreateDirectory(localDirectory);
+                    File.Move(snapshotPath, backupPath, true);
+                    movedSnapshot = true;
+                    restoreSnapshotPath = backupPath;
+                }
+
                 try
                 {
                     ApplySnapshotProgress(importedProject, restoreSnapshotPath);
                     restored = true;
-
-                    // The snapshot at the canonical current path is temporarily moved so
-                    // persistence cannot replace the freshly imported IEC model wholesale.
-                    // A compatible SCL snapshot discovered under an older staging/project
-                    // identity is read-only input; the new current path is saved normally.
-                    if (restoreSnapshotPath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Directory.CreateDirectory(localDirectory);
-                        File.Move(snapshotPath, backupPath, true);
-                        movedSnapshot = true;
-                    }
                 }
                 catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
                 {
@@ -86,10 +118,10 @@ public static class IoTestWorkspaceBootstrapService
             var session = sessionFactory(importedProject, evidenceRoot);
             try
             {
-                var opened = await IoTestWorkspacePersistence.OpenSourcesAsync(
+                var opened = await IoTestWorkspacePersistence.OpenDescribedSourcesAsync(
                     importedProject,
                     session,
-                    sourceInputs,
+                    described,
                     localProjectsRoot,
                     evidenceRoot,
                     cancellationToken).ConfigureAwait(false);
@@ -248,7 +280,8 @@ public static class IoTestWorkspaceBootstrapService
             var iedKey = IoTestPerIedProgressIdentity.IedKey(ied);
             if (!currentIedIdentityCounts.TryGetValue(iedKey, out var currentIdentityCount) ||
                 currentIdentityCount != 1 ||
-                !savedIedsByIdentity.TryGetValue(iedKey, out var savedIed))
+                !savedIedsByIdentity.TryGetValue(iedKey, out var savedIed) ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, savedIed))
             {
                 continue;
             }
@@ -443,8 +476,11 @@ public static class IoTestWorkspaceBootstrapService
             var savedIed = savedIeds.FirstOrDefault(candidate =>
                 OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
                 OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
-            if (savedIed.ValueKind != JsonValueKind.Object)
+            if (savedIed.ValueKind != JsonValueKind.Object ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, savedIed))
+            {
                 continue;
+            }
 
             var existingIds = ied.TestPoints
                 .Select(point => point.TestPointId)
@@ -541,8 +577,11 @@ public static class IoTestWorkspaceBootstrapService
             var saved = savedIeds.FirstOrDefault(candidate =>
                 OptionalString(candidate, "iedName", string.Empty).Equals(ied.IedName, StringComparison.OrdinalIgnoreCase) &&
                 OptionalString(candidate, "ipAddress", string.Empty).Equals(ied.IpAddress, StringComparison.OrdinalIgnoreCase));
-            if (saved.ValueKind != JsonValueKind.Object)
+            if (saved.ValueKind != JsonValueKind.Object ||
+                !IoTestPerIedProgressIdentity.PersistedIedOwnershipMatches(ied, saved))
+            {
                 continue;
+            }
 
             ied.LatestComtradeFiles = OptionalString(saved, "latestComtradeFiles", string.Empty);
             ied.LatestComtradeRemotePath = OptionalString(saved, "latestComtradeRemotePath", string.Empty);

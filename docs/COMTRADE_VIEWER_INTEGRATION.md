@@ -2,37 +2,15 @@
 
 ## Product direction
 
-ARSAS is the operator-facing product. ArdIrec supplies the COMTRADE parsing and analysis engine. Users should not need to locate a downloaded record manually or install/open a second product themselves.
+ARSAS is the operator-facing product. ArdIrec supplies the pinned COMTRADE parsing/analysis core through a small native C ABI bridge. Users do not install, locate, or launch a second viewer application.
 
-The operator workflow remains stable across implementation phases:
+The operator workflow is:
 
-`IED -> Fault Records -> Download -> Downloaded -> Open -> COMTRADE analysis`
+`IED -> Fault Records -> Download -> Downloaded -> Open -> ARSAS COMTRADE Workspace`
 
-## P0 — compatibility viewer
+## Native-only architecture
 
-P0 intentionally kept the proven IEC 61850 file-transfer path unchanged and integrated the existing ArdIrec Qt desktop application as an internal compatibility viewer.
-
-ARSAS responsibilities:
-
-1. Use `FaultRecordRow.LocalDirectory` as the local record authority.
-2. Show **Open** only for rows whose local state is `Downloaded`.
-3. Require a local `.cfg` and same-stem `.dat` companion before opening.
-4. Launch the compatibility viewer with `--arsas-open <absolute cfg path>` using `ProcessStartInfo.ArgumentList`.
-5. Report invalid local packages without changing their transfer state.
-
-ArdIrec compatibility responsibilities:
-
-1. Keep standalone `ardirec.exe <record.cfg>` and `ardirec.exe --open <record.cfg>` compatibility.
-2. Accept `--arsas-open <record.cfg>`.
-3. Preserve Unicode paths through Qt application arguments.
-4. Present hosted mode as **ARSAS — COMTRADE Viewer**.
-5. Keep parsing/analysis on the existing ArdIrec code path.
-
-P0 is proven and remains available as a fallback during P1 parity work.
-
-## P1 — in-process native engine
-
-P1 removes the normal process boundary. The preferred architecture is:
+COMTRADE **Open** is an in-process ARSAS workflow:
 
 ```text
 ARSAS.exe
@@ -44,143 +22,91 @@ ARSAS.exe
        |
        | stable C ABI v1
        v
-  Tools/ArdIrec/ardirec_bridge.dll
+  ardirec_bridge.dll
        |
        v
   ardirec_core
   ConfigParser / DatReader / analysis primitives
 ```
 
-There is no second parser in C#. `ardirec_bridge.dll` is a small ABI adapter over the same `ardirec_core` used by ArdIrec. The managed side owns an opaque record handle and requests metadata or channel data through bulk-copy calls.
+There is no second COMTRADE parser in C# and there is no external ArdIrec process fallback. `ardirec_bridge.dll` is the ABI adapter over the same ArdIrec core. The managed side owns an opaque native record handle and requests metadata or channel data through bulk-copy calls.
 
-### P1A scope
+The legacy Qt desktop launcher, `ardirec.exe` packaging, `ARSAS_ARDIREC_PATH`, `ARDIREC_VIEWER_PATH`, process activation code, and Qt runtime deployment are intentionally unsupported by ARSAS.
 
-P1A establishes the native boundary and the first ARSAS-native WPF workspace:
+## Current native workspace scope
 
-- ABI versioning and opaque native record lifetime.
-- UTF-8 CFG open and existing ArdIrec bundle discovery.
-- Record metadata and analog/digital channel metadata.
-- Analog samples, digital states and raw timestamps.
-- COMTRADE `TIMEMULT` applied when presenting the time axis.
-- Native ARSAS `COMTRADE Workspace` window.
-- Signal list and lightweight WPF analog/digital rendering.
-- Native record decode performed off the WPF UI thread.
-- Native-first Fault Records **Open** action.
-- Automatic fallback to the proven P0 Qt viewer when the native bridge is absent or cannot open a record.
-- Explicit **Full analysis** action inside the native workspace so field users can access the existing complete analysis surface until P1B/P1C reach parity.
+The native integration provides:
 
-For initial field validation, the WPF workspace limits one selected-channel preview to the first 500,000 frames. This is an explicit P1A boundary rather than a parser limitation.
-
-### P1B.1 — waveform navigation
-
-P1B.1 adds operator navigation on top of the P1A native record ownership model without changing the bridge ABI:
-
+- ABI versioning and opaque native record lifetime,
+- UTF-8 CFG open,
+- CFG/DAT package resolution inside the downloaded fault-record directory,
+- record metadata and analog/digital channel metadata,
+- analog samples, digital states and raw timestamps,
+- COMTRADE `TIMEMULT` aware time presentation,
+- ARSAS-native `COMTRADE Workspace` window,
+- native record decode off the WPF UI thread,
 - bounded zoom/pan/reset viewport math,
-- COMTRADE timestamp-based X positioning rather than assuming uniform frame spacing,
-- `TIMEMULT`-aware time readout,
-- trigger reference derived from COMTRADE start/trigger timestamps,
-- Cursor A/B placement and measurements,
-- Δt and analog Δvalue readout,
-- wheel zoom, Shift+wheel pan, Alt/middle drag pan and double-click reset,
-- compact navigation toolbar with live readout and explicit **Reset view**,
-- transition-driven digital rendering so steady records do not emit one WPF draw command per frame.
+- timestamp-based X positioning,
+- trigger reference and Cursor A/B measurements,
+- display-oriented decimation and transition-driven digital rendering.
 
-The P1A 500,000-frame loaded-preview boundary intentionally remains in P1B.1. Navigation correctness and interaction are separated from the large-record transport/decimation problem so the two concerns can be validated independently.
-
-### P1B.2 target — full-record and multi-track workstation
-
-P1B.2 should reuse the P1B.1 navigation/time primitives while removing the loaded-preview limitation:
-
-- efficient native full-record range access and display-oriented decimation for large records,
-- stacked multi-track analog/digital waveform layout,
-- one shared time viewport across visible tracks,
-- shared trigger and Cursor A/B references across tracks,
-- digital transition navigation,
-- bounded memory use so opening a long disturbance record does not require copying every visible channel into managed memory at once.
-
-### P1C target
-
-P1C closes analysis parity before the Qt fallback can be retired:
-
-- phasor view,
-- harmonics,
-- table/instant/RMS views,
-- remaining ArdIrec analysis surfaces required by field workflows,
-- final field comparison against the compatibility viewer.
+Any analysis surface not yet implemented natively must be added to the ARSAS workspace; it must not reintroduce an external viewer process.
 
 ## Runtime discovery
 
-P1 native bridge discovery order:
+The native bridge discovery order is:
 
-1. `ARSAS_ARDIREC_BRIDGE_PATH`
-2. `Tools/ArdIrec/ardirec_bridge.dll` beside ARSAS
-3. `ArdIrec/ardirec_bridge.dll` beside ARSAS
-4. `ardirec_bridge.dll` beside ARSAS
+1. `ARSAS_ARDIREC_BRIDGE_PATH` for explicit development/integration-test override,
+2. `Tools/ArdIrec/ardirec_bridge.dll` beside ARSAS,
+3. `ArdIrec/ardirec_bridge.dll` beside ARSAS,
+4. `ardirec_bridge.dll` beside ARSAS.
 
-P0 compatibility viewer discovery remains available through `ARSAS_ARDIREC_PATH`, `ARDIREC_VIEWER_PATH`, and the staged `Tools/ArdIrec/ardirec.exe` layout.
-
-The complete installer/folder layout during P1 parity is:
+Official folder/installer packages publish the bridge at:
 
 ```text
 ARSAS/
   ARSAS.exe
   Tools/
     ArdIrec/
-      ardirec_bridge.dll   # preferred P1 path
-      ardirec.exe          # P0 compatibility fallback / Full analysis
-      Qt6*.dll
-      qml/
-      plugins/
-      ...windeployqt runtime...
+      ardirec_bridge.dll
 ```
 
-The legacy portable single-EXE remains a separate compatibility artifact and does not claim to embed the native/Qt runtime tree. The installer/folder distribution is the complete P1 field-validation package.
+The official portable package remains a real single EXE. The same pinned bridge is embedded as a managed resource and materialized into the user's local ARSAS native cache at startup when no physical bridge is present. The bootstrap then sets `ARSAS_ARDIREC_BRIDGE_PATH` for the normal bridge loader.
 
 ## Reproducible integration
 
-The ARSAS pipeline must never resolve an unpinned "latest" ArdIrec build.
+The ARSAS pipeline never resolves an unpinned "latest" ArdIrec build.
 
-Current P1 contract:
+Current contract:
 
-1. The ArdIrec native C ABI bridge is merged to `masarray/ardirec` `main`.
-2. `engines/ARDIREC.lock.json` uses schema 2 and pins an exact merged `main` commit.
-3. The lock requires bridge ABI `1` at `Tools/ArdIrec/ardirec_bridge.dll`.
-4. Qt remains pinned to 6.8.3 / `win64_msvc2022_64` for the compatibility fallback.
-5. `scripts/stage-ardirec-viewer.ps1` builds ArdIrec core, bridge and desktop targets, runs ArdIrec regression/bridge tests, stages `ardirec_bridge.dll`, then deploys the Qt fallback runtime.
-6. The dedicated COMTRADE integration workflow verifies both the native DLL and P0 fallback runtime from the same immutable ArdIrec revision.
-7. The Windows installer workflow executes the ARSAS managed wrapper against a real binary CFG/DAT fixture from a Unicode path containing spaces.
-8. `scripts/build-windows-installer.ps1` independently validates lock schema 2 / bridge ABI 1, requires the staged bridge and compatibility runtime, and executes the managed -> C ABI -> `ardirec_core` smoke against the ARSAS-owned release fixture before Inno Setup can produce an installer.
-9. Installer smoke validation requires `ardirec_bridge.dll` as an installed product component.
-10. The production release workflow inherits the same packaging guard because it stages the pinned ArdIrec revision and invokes the guarded installer builder. Release provenance records the exact ArdIrec repository/commit used to build both native and compatibility paths.
+1. `engines/ARDIREC.lock.json` pins an exact `masarray/ardirec` `main` commit.
+2. The lock requires bridge ABI `1` at `Tools/ArdIrec/ardirec_bridge.dll`.
+3. `scripts/build-ardirec-bridge.ps1` checks out/validates the pinned source, configures ArdIrec with desktop/Qt disabled, builds the core + C ABI bridge, and runs native regression tests.
+4. `scripts/publish-windows-portable.ps1` requires the pinned bridge for official Windows packaging.
+5. Folder/installer publish copies the physical bridge to `Tools/ArdIrec/ardirec_bridge.dll`.
+6. Single-file publish embeds the bridge in `ARSAS.exe`; `ArdIrecEmbeddedBridgeBootstrap` materializes it for native loading.
+7. The COMTRADE integration workflow rejects any reintroduction of `Process.Start`, `TryLaunch`, `ardirec.exe`, `ARSAS_ARDIREC_PATH`, or `ARDIREC_VIEWER_PATH` in the application launch path.
+8. The installer workflow exercises the managed wrapper against a real CFG/DAT fixture from a Unicode path containing spaces.
+9. Installer/release smoke validation requires `ardirec_bridge.dll` and explicitly rejects the legacy ArdIrec executable/Qt runtime from the installed product.
+10. Release provenance records the exact ArdIrec repository, commit, ABI, and bridge location used by the package.
 
-## P1A acceptance criteria
+## Acceptance criteria
 
-P1A is ready for field testing when:
+The native COMTRADE integration is acceptable when:
 
 - existing IEC 61850 Fault Records scan/download/re-download behavior is unchanged,
-- **Open** still owns its click gesture independently of download selection,
-- the pinned ArdIrec bridge builds and passes its native smoke tests on Windows,
-- ARSAS can load the pinned bridge with ABI 1,
-- a real binary CFG/DAT fixture is opened through .NET -> C ABI -> `ardirec_core`,
+- **Open** owns its click gesture independently of download selection,
+- the pinned ArdIrec bridge builds and passes native tests on Windows,
+- ARSAS loads ABI 1 and opens a real binary CFG/DAT fixture through `.NET -> C ABI -> ardirec_core`,
 - metadata, analog samples, digital states and timestamps cross the ABI correctly,
 - COMTRADE time presentation respects `TIMEMULT`,
-- clicking **Open** normally creates **ARSAS — COMTRADE Workspace** without creating the Qt viewer process,
-- native record open and selected-channel loading do not block the WPF UI thread,
-- **Full analysis** can open the same record in the complete compatibility analysis surface while native parity is unfinished,
-- missing/incompatible bridge conditions fall back to P0 rather than breaking the field workflow,
-- the installer contains both native bridge and compatibility runtime,
-- the installer builder refuses a package with an invalid P1 lock or missing native bridge,
-- Build ARSAS, COMTRADE integration, SV regression and Windows installer validation are green on the final P1A head.
+- clicking **Open** creates the ARSAS native COMTRADE workspace without creating another viewer process,
+- native record open and channel loading do not block the WPF UI thread,
+- missing/incompatible bridge conditions fail clearly inside ARSAS rather than launching a fallback program,
+- installer packages contain the native bridge and no ArdIrec desktop/Qt runtime,
+- portable single-EXE packages contain the same pinned bridge as an embedded resource,
+- Build ARSAS, COMTRADE integration, IO/FAT regression, and Windows installer validation are green on the final head.
 
-## P1B.1 acceptance criteria
+## Historical note
 
-P1B.1 is ready when:
-
-- zoom and pan never escape the loaded frame range,
-- cursor placement is based on the nearest COMTRADE timestamp in the visible window,
-- trigger and cursor time readouts respect `TIMEMULT`,
-- multi-rate/non-uniform timestamp spacing is reflected on the X axis,
-- Reset view restores the full loaded preview and clears cursors,
-- steady digital channels render transition-first rather than frame-first,
-- existing P1A native-open/fallback/installer behavior remains green,
-- Build ARSAS, COMTRADE integration, SV regression and Windows installer validation are green on the final P1B.1 head.
+Early P0/P1 development used an ArdIrec Qt compatibility viewer while the native workspace was being established. That process boundary is retired. Historical references to the Qt fallback are not part of the current product contract and must not be restored as a production fallback.
