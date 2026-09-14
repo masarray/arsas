@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace ArIED61850Tester;
 
@@ -22,8 +23,14 @@ public partial class MainWindow
 
     private static void IedOnboarding_MainWindowLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is MainWindow window)
-            window.ConvergeIedOnboardingActions();
+        if (sender is not MainWindow window)
+            return;
+
+        // Other modular Loaded handlers may still be building the Explorer hero. Defer
+        // one dispatcher turn so this convergence always wins regardless of module-init order.
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            new Action(window.ConvergeIedOnboardingActions));
     }
 
     private void ConvergeIedOnboardingActions()
@@ -53,7 +60,7 @@ public partial class MainWindow
             addButton.Click += AddIedChooser_Click;
             addButton.ToolTip = "Add an IED from SCL (recommended) or discover a live IED by IP";
 
-            if (parent is Grid actionGrid && siblingButtons.Any(button => ButtonHasLabel(button, "Connect All")))
+            if (parent is Grid && siblingButtons.Any(button => ButtonHasLabel(button, "Connect All")))
             {
                 Grid.SetColumn(addButton, 0);
                 Grid.SetColumnSpan(addButton, 3);
@@ -126,7 +133,7 @@ public partial class MainWindow
 
         var openScl = BuildAddIedMenuItem(
             "Open SCL  •  Recommended",
-            "Import SCD, CID, ICD, IID, SSD or XML and add its IED workspace(s). ");
+            "Import SCD, CID, ICD, IID, SSD or XML and add its IED workspace(s).");
         openScl.Click += (_, _) => OpenScl_Click(button, new RoutedEventArgs());
         menu.Items.Add(openScl);
 
