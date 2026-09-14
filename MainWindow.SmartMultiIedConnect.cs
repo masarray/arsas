@@ -86,7 +86,7 @@ public partial class MainWindow
                 TrackSmartConnectDevice(device);
         }
 
-        RefreshSmartConnectAction();
+        QueueSmartConnectRefresh();
     }
 
     private void TrackSmartConnectDevice(Iec61850MonitorDevice device)
@@ -107,6 +107,24 @@ public partial class MainWindow
 
     private void SmartConnectDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Ignore high-frequency discovery/progress/value notifications. The button only
+        // depends on eligibility state, so it should never add work to the render loop.
+        if (e.PropertyName is not (
+                nameof(Iec61850MonitorDevice.IsConnected) or
+                nameof(Iec61850MonitorDevice.IsMonitoring) or
+                nameof(Iec61850MonitorDevice.IsBusy) or
+                nameof(Iec61850MonitorDevice.IpAddress) or
+                nameof(Iec61850MonitorDevice.RequiresEndpointBinding) or
+                nameof(Iec61850MonitorDevice.CanPlayAction)))
+        {
+            return;
+        }
+
+        QueueSmartConnectRefresh();
+    }
+
+    private void QueueSmartConnectRefresh()
+    {
         if (_smartConnectButton == null)
             return;
 
@@ -122,7 +140,8 @@ public partial class MainWindow
             .ToArray();
 
     private static bool IsConnectableOfflineDevice(Iec61850MonitorDevice device)
-        => !device.IsConnected &&
+        => !device.IsDemo &&
+           !device.IsConnected &&
            !device.IsMonitoring &&
            !device.IsBusy &&
            !device.RequiresEndpointBinding &&
@@ -136,13 +155,17 @@ public partial class MainWindow
 
         var connectableCount = GetConnectableOfflineDevices().Length;
         var useful = Devices.Count >= 2 && connectableCount > 0;
+        var show = useful && !_connectAllInProgress;
 
         // While a batch owns the eligible devices the action disappears. It returns only
         // if another offline/connectable IED remains after that batch has settled.
-        _smartConnectButton.Visibility = useful && !_connectAllInProgress
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        _smartConnectButton.IsEnabled = useful && !_connectAllInProgress;
+        _smartConnectButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        _smartConnectButton.IsEnabled = show;
+
+        // The original action grid reserves a six-pixel spacer below Connect All. Collapse
+        // that spacer with the button so the remaining Add IED action does not float low.
+        if (_smartConnectButton.Parent is Grid actionGrid && actionGrid.RowDefinitions.Count > 1)
+            actionGrid.RowDefinitions[1].Height = show ? new GridLength(6) : new GridLength(0);
 
         if (_smartConnectLabel != null)
             _smartConnectLabel.Text = $"Connect {connectableCount} Offline";
