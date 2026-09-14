@@ -18,8 +18,10 @@ if (-not (Test-Path $lockPath -PathType Leaf)) {
 
 $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
 if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
-    $lock.ref -ne 'main' -or
+    [string]::IsNullOrWhiteSpace([string]$lock.ref) -or
+    $lock.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
     $lock.commit -notmatch '^[0-9a-f]{40}$' -or
+    $lock.integrationMode -ne 'in-process-native-bridge-only' -or
     $lock.bridge.abi -ne 1 -or
     $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
     throw "ArdIrec native bridge lock metadata is invalid."
