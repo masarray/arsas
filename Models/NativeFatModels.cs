@@ -10,8 +10,9 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public sealed class NativeFatDeviceState
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public string DeviceId { get; set; } = string.Empty;
+    public string PersistenceIdentity { get; set; } = string.Empty;
     public string IedName { get; set; } = string.Empty;
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedUtc { get; set; } = DateTimeOffset.UtcNow;
@@ -133,7 +134,13 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
     public string StatusText => IsHistorical ? "HISTORICAL" : State.Value1 == null && State.Value2 == null ? "READY" : "CAPTURED";
     public int HistoryCount => State.History?.Count ?? 0;
     public string HistoryText => HistoryCount == 0 ? "—" : $"{HistoryCount} record{(HistoryCount == 1 ? string.Empty : "s")}";
-    public bool CanCapture => _sourceSignal != null || _sourcePoint != null;
+
+    /// <summary>
+    /// FAT evidence is allowed only after the runtime has delivered a real IEC 61850
+    /// sample. Engineering/SCL metadata is useful for projection, but must never be
+    /// mistaken for observed commissioning evidence.
+    /// </summary>
+    public bool CanCapture => HasLiveObservation(_sourcePoint);
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? StateChanged;
@@ -230,10 +237,25 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
             Value = LiveValue,
             Quality = Quality,
             DeviceTimestamp = DeviceTimestamp,
-            SourceMode = _sourcePoint?.SourceMode ?? _sourceSignal?.ReportPlan ?? "Explorer",
+            SourceMode = _sourcePoint?.SourceMode ?? "IEC 61850 runtime",
             Sequence = _sourcePoint?.Sequence ?? 0,
             CapturedUtc = DateTimeOffset.UtcNow
         };
+
+    private static bool HasLiveObservation(Iec61850MonitorPoint? point)
+        => point is not null &&
+           point.Sequence > 0 &&
+           point.Status.Equals("Live", StringComparison.OrdinalIgnoreCase) &&
+           IsObservedValue(point.Value);
+
+    private static bool IsObservedValue(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return text.Length > 0 &&
+               text != "-" &&
+               !text.Equals("Pending", StringComparison.OrdinalIgnoreCase) &&
+               !text.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void AppendHistory(string action)
     {
@@ -284,12 +306,18 @@ public sealed class NativeFatSignalRow : INotifyPropertyChanged, IDisposable
             case nameof(Iec61850MonitorPoint.Value):
             case nameof(Iec61850MonitorPoint.DisplayValue):
                 Raise(nameof(LiveValue));
+                Raise(nameof(CanCapture));
                 break;
             case nameof(Iec61850MonitorPoint.Quality):
                 Raise(nameof(Quality));
+                Raise(nameof(CanCapture));
                 break;
             case nameof(Iec61850MonitorPoint.DeviceTimestamp):
                 Raise(nameof(DeviceTimestamp));
+                Raise(nameof(CanCapture));
+                break;
+            case nameof(Iec61850MonitorPoint.Status):
+                Raise(nameof(CanCapture));
                 break;
             default:
                 return;
