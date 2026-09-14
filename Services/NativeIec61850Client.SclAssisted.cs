@@ -20,10 +20,27 @@ public sealed class SclAssistedClientConnectResult
 
 public sealed partial class NativeIec61850Client
 {
+    public Task<SclAssistedClientConnectResult> ConnectUsingSclAsync(
+        string sclXml,
+        string iedName,
+        string accessPointName,
+        string host,
+        int port,
+        CancellationToken cancellationToken)
+        => ConnectUsingSclAsync(
+            sclXml,
+            iedName,
+            accessPointName,
+            host,
+            port,
+            ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead,
+            cancellationToken);
+
     /// <summary>
     /// Opens the ARIEC61850 SCL-assisted online path: exact SCL association identity,
     /// Domain/VMD reconciliation, then bounded sequential FC-root initial Reads.
-    /// This method never performs full live discovery or silently falls back to it.
+    /// The explicit batch-size argument supports controlled interoperability trials;
+    /// it never enables discovery or a silent automatic fallback.
     /// </summary>
     public async Task<SclAssistedClientConnectResult> ConnectUsingSclAsync(
         string sclXml,
@@ -31,6 +48,7 @@ public sealed partial class NativeIec61850Client
         string accessPointName,
         string host,
         int port,
+        int maximumVariableReferencesPerRead,
         CancellationToken cancellationToken)
     {
         var totalWatch = Stopwatch.StartNew();
@@ -58,7 +76,8 @@ public sealed partial class NativeIec61850Client
             iedName,
             accessPointName,
             _host,
-            _port);
+            _port,
+            maximumVariableReferencesPerRead);
         if (!preparation.IsSuccess ||
             preparation.AssociationPlan is null ||
             preparation.InitialReadDesign is null ||
@@ -175,7 +194,7 @@ public sealed partial class NativeIec61850Client
                 $"SCL-assisted MMS: domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
                 $"FC-roots={initialRead.Plan.Targets.Count}, successfulReads={initialRead.SuccessfulTargetCount}, " +
                 $"failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
-                $"projectionErrors={projectionErrors}, fullDiscovery=skipped.";
+                $"projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, fullDiscovery=skipped.";
             LastConnectionFailureKind = string.Empty;
             LastConnectionTechnicalSummary = online.Domains?.Summary ?? online.Message;
             LastErrorMessage = partial
