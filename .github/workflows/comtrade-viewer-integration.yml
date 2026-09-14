@@ -107,6 +107,7 @@ jobs:
           $bootstrapPath = ".\ARSAS\Services\ArdIrecEmbeddedBridgeBootstrap.cs"
           $projectPath = ".\ARSAS\ArIED61850Tester.csproj"
           $workspacePath = ".\ARSAS\ComtradeWorkspaceWindow.xaml"
+          $locusViewPath = ".\ARSAS\Controls\ComtradeLocusView.cs"
 
           $open = Get-Content $openPath -Raw
           $launcher = Get-Content $launcherPath -Raw
@@ -114,6 +115,7 @@ jobs:
           $bootstrap = Get-Content $bootstrapPath -Raw
           $project = Get-Content $projectPath -Raw
           $workspace = Get-Content $workspacePath -Raw
+          $locusView = Get-Content $locusViewPath -Raw
 
           if ($open -notmatch 'ArdIrecNativeBridge\.TryOpen' -or
               $open -notmatch 'ComtradeWorkspaceWindow' -or
@@ -135,8 +137,10 @@ jobs:
             throw "Field-tested native ArdIrec analysis/packaging contract is incomplete."
           }
 
-          if ($workspace -notmatch 'Harmonics' -or $workspace -notmatch 'Locus' -or $workspace -notmatch 'Phasor') {
-            throw "Production COMTRADE workstation analysis surfaces are missing."
+          if ($workspace -notmatch 'ComtradePhasorView' -or
+              $workspace -notmatch 'ComtradeHarmonicsWorkstationView' -or
+              $locusView -notmatch 'class\s+ComtradeLocusView') {
+            throw "Production COMTRADE Phasor, Harmonics or Locus analysis surface is missing."
           }
 
           Write-Host "COMTRADE Open uses the field-tested in-process workstation with Phasor, Harmonics and Locus; no Qt/external ArdIrec process launch remains."
