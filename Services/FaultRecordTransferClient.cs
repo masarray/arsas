@@ -11,6 +11,7 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
 {
     private readonly MmsClientSession _session = new();
     private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private CancellationTokenSource? _associationLifetimeCancellation;
     private Iec61850FaultRecordService? _service;
     private string _host = string.Empty;
     private int _port = 102;
@@ -130,8 +131,7 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
         await _operationGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            _service = null;
-            await _session.DisposeAsync().ConfigureAwait(false);
+            await ResetAssociationCoreAsync().ConfigureAwait(false);
         }
         finally
         {
@@ -151,34 +151,80 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
         if (sameEndpoint && IsSessionHealthy())
             return;
 
-        // The connection operation token must not own the lifetime of a reusable MMS
-        // receive pump. A completed scan token is replaced before download; without this
-        // rebind the old cancellation would stop confirmed-service response routing while
-        // the association still appeared to be MmsInitiated.
         if (_session.IsTransportConnected ||
             _session.IsMmsInitiated ||
-            _session.IsReceivePumpRunning)
+            _session.IsReceivePumpRunning ||
+            _associationLifetimeCancellation is not null)
+        {
+            await ResetAssociationCoreAsync().ConfigureAwait(false);
+        }
+
+        // The receive pump must be owned by the MMS association, not by a single Scan/Download
+        // UI operation. Stopping and restarting an active receive on the same COTP association
+        // can invalidate some real IED transports. Instead, create the association-owned token
+        // before ConnectAsync so the pump is born with the correct lifetime and never needs a
+        // post-connect rebind. The caller token is linked only for the connect handshake itself.
+        var associationLifetime = new CancellationTokenSource();
+        _associationLifetimeCancellation = associationLifetime;
+        using var connectCancellation = cancellationToken.Register(
+            static state => ((CancellationTokenSource)state!).Cancel(),
+            associationLifetime);
+
+        try
+        {
+            await _session.ConnectAsync(
+                normalizedHost,
+                normalizedPort,
+                TimeSpan.FromSeconds(8),
+                associationLifetime.Token).ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!IsSessionHealthy())
+            {
+                throw new InvalidOperationException(
+                    $"The dedicated fault-record association is not operational after connect. {ConnectionState}.");
+            }
+
+            _host = normalizedHost;
+            _port = normalizedPort;
+            _service = new Iec61850FaultRecordService(_session);
+        }
+        catch
+        {
+            await ResetAssociationCoreAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task ResetAssociationCoreAsync()
+    {
+        _service = null;
+
+        var lifetime = _associationLifetimeCancellation;
+        _associationLifetimeCancellation = null;
+        if (lifetime is not null)
+        {
+            try
+            {
+                if (!lifetime.IsCancellationRequested)
+                    lifetime.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Defensive only. This client is the single owner, so a disposed lifetime should
+                // never normally be observed here.
+            }
+        }
+
+        try
         {
             await _session.DisposeAsync().ConfigureAwait(false);
         }
-
-        _service = null;
-        await _session.ConnectAsync(
-            normalizedHost,
-            normalizedPort,
-            TimeSpan.FromSeconds(8),
-            cancellationToken).ConfigureAwait(false);
-        await _session.RebindReceivePumpToSessionLifetimeAsync(cancellationToken).ConfigureAwait(false);
-
-        if (!IsSessionHealthy())
+        finally
         {
-            throw new InvalidOperationException(
-                $"The dedicated fault-record association is not operational after connect. {ConnectionState}.");
+            lifetime?.Dispose();
         }
-
-        _host = normalizedHost;
-        _port = normalizedPort;
-        _service = new Iec61850FaultRecordService(_session);
     }
 
     private async Task<Iec61850FaultRecordDownloadResult> DownloadCoreAsync(

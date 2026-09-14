@@ -80,9 +80,56 @@ public partial class MainWindow
     private FrameworkElement BuildProductionFatPermanentHost()
     {
         var host = BuildNativeFatCanonicalWorkspace();
+        ConvergeNativeFatWorkspaceShell(host);
         InstallNativeFatEvidenceBindingRuntime();
         InstallNativeFatDiagnosticButtons();
-        return host;
+
+        return new Border
+        {
+            Style = TryFindResource("WorkspaceCard") as Style,
+            Padding = new Thickness(12),
+            Child = host
+        };
+    }
+
+    private void ConvergeNativeFatWorkspaceShell(FrameworkElement host)
+    {
+        if (host is not Grid root)
+            return;
+
+        // Match Event Log / Live Monitor workspace geometry: one WorkspaceCard owns the
+        // surface, its content uses 12 px inset, a flat header, a 10 px header-to-grid gap,
+        // then the shared ModernDataGrid. FAT-specific nested card chrome made this tab look
+        // like a separate application even though it is a sibling Engineering destination.
+        root.Margin = new Thickness(0);
+
+        var header = root.Children
+            .OfType<Border>()
+            .FirstOrDefault(child => Grid.GetRow(child) == 0);
+        if (header != null)
+        {
+            header.Padding = new Thickness(0);
+            header.CornerRadius = new CornerRadius(0);
+            header.Background = null;
+            header.BorderBrush = null;
+            header.BorderThickness = new Thickness(0);
+        }
+
+        if (_nativeFatIedText != null && TryFindResource("WorkspaceTitle") is Style titleStyle)
+        {
+            _nativeFatIedText.Style = titleStyle;
+            _nativeFatIedText.ClearValue(TextBlock.FontSizeProperty);
+            _nativeFatIedText.ClearValue(TextBlock.FontWeightProperty);
+            _nativeFatIedText.ClearValue(TextBlock.ForegroundProperty);
+        }
+
+        if (_nativeFatStatusText != null && TryFindResource("WorkspaceSubtitle") is Style subtitleStyle)
+        {
+            _nativeFatStatusText.Style = subtitleStyle;
+            _nativeFatStatusText.Margin = new Thickness(0, 2, 0, 0);
+            _nativeFatStatusText.ClearValue(TextBlock.FontSizeProperty);
+            _nativeFatStatusText.ClearValue(TextBlock.ForegroundProperty);
+        }
     }
 
     private void ProductionFat_MainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)

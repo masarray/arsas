@@ -11,6 +11,7 @@ public sealed class NativeFatStateStoreRegressionTests
         var device = CreateDevice("device-a", "Relay A");
         var original = CreateSignal("Trip original", "IED1LD0/GGIO1.Ind1.stVal");
         device.Signals.Add(original);
+        device.Points.Add(CreateLivePoint(device, original, "True"));
 
         var state = new NativeFatDeviceState();
         NativeFatStateStore.Reconcile(state, device);
@@ -21,9 +22,7 @@ public sealed class NativeFatStateStoreRegressionTests
 
         using (var row = Assert.Single(NativeFatStateStore.BuildRows(state, device)))
         {
-            original.Value = "True";
-            original.Quality = "Good";
-            original.DeviceTimestamp = "2026-09-09 08:15:01.125";
+            Assert.True(row.CanCapture);
             Assert.True(row.CaptureValue(1));
             row.SetResult(NativeFatResult.Pass);
         }
@@ -105,31 +104,38 @@ public sealed class NativeFatStateStoreRegressionTests
     }
 
     [Fact]
-    public async Task SaveLoad_RestartAndIedRename_ResumeByStableDeviceId()
+    public async Task SaveLoad_RestartAndIedRename_ResumeByStableEndpointIdentity()
     {
         using var temp = new TemporaryDirectory();
-        var device = CreateDevice("stable-device-01", "Relay Before Rename");
+        var device = CreateDevice("runtime-device-before-restart", "Relay Before Rename");
         var signal = CreateSignal("Breaker status", "IED1LD0/GGIO1.Ind2.stVal");
         device.Signals.Add(signal);
+        device.Points.Add(CreateLivePoint(device, signal, "False"));
 
         var store = new NativeFatStateStore(temp.Path);
         var state = await store.LoadAndReconcileAsync(device);
         using (var row = Assert.Single(NativeFatStateStore.BuildRows(state, device)))
         {
-            signal.Value = "False";
-            signal.Quality = "Good";
+            Assert.True(row.CanCapture);
             Assert.True(row.CaptureValue(1));
             row.SetResult(NativeFatResult.Review);
         }
         await store.SaveAsync(state);
         var originalPath = state.StoragePath;
+        var originalIdentity = state.PersistenceIdentity;
 
-        device.Name = "Relay After Rename";
+        // A normal application restart creates a new runtime DeviceId. The configured
+        // endpoint is the durable identity when no SCL source identity is available.
+        var restartedDevice = CreateDevice("runtime-device-after-restart", "Relay After Rename");
+        restartedDevice.Signals.Add(CreateSignal("Breaker status", "IED1LD0/GGIO1.Ind2.stVal"));
+
         var restartedStore = new NativeFatStateStore(temp.Path);
-        var resumed = await restartedStore.LoadAndReconcileAsync(device);
+        var resumed = await restartedStore.LoadAndReconcileAsync(restartedDevice);
 
         var resumedSignal = Assert.Single(resumed.Signals);
         Assert.Equal("Relay After Rename", resumed.IedName);
+        Assert.Equal("runtime-device-after-restart", resumed.DeviceId);
+        Assert.Equal(originalIdentity, resumed.PersistenceIdentity);
         Assert.Equal(NativeFatResult.Review, resumedSignal.Result);
         Assert.Equal("False", resumedSignal.Value1?.Value);
         Assert.Equal(originalPath, resumed.StoragePath);
@@ -137,23 +143,28 @@ public sealed class NativeFatStateStoreRegressionTests
     }
 
     [Fact]
-    public async Task SameDisplayNameDifferentDeviceIds_NeverShareOneStateFile()
+    public async Task SameDisplayNameDifferentEndpoints_NeverShareOneStateFile()
     {
         using var temp = new TemporaryDirectory();
         var store = new NativeFatStateStore(temp.Path);
 
         var first = CreateDevice("device-one", "Duplicate IED Name");
+        first.IpAddress = "192.0.2.10";
         first.Signals.Add(CreateSignal("DI 1", "IED1LD0/GGIO1.Ind1.stVal"));
         var firstState = await store.LoadAndReconcileAsync(first);
         firstState.Signals.Single().Result = NativeFatResult.Pass;
         await store.SaveAsync(firstState);
 
         var second = CreateDevice("device-two", "Duplicate IED Name");
+        second.IpAddress = "192.0.2.11";
         second.Signals.Add(CreateSignal("DI 1", "IED1LD0/GGIO1.Ind1.stVal"));
         var secondState = await store.LoadAndReconcileAsync(second);
         secondState.Signals.Single().Result = NativeFatResult.Fail;
         await store.SaveAsync(secondState);
 
+        Assert.NotEqual(
+            NativeFatStateStore.BuildPersistenceIdentity(first),
+            NativeFatStateStore.BuildPersistenceIdentity(second));
         Assert.NotEqual(firstState.StoragePath, secondState.StoragePath);
         Assert.Equal(2, Directory.GetFiles(temp.Path, "*.json").Length);
 
@@ -286,6 +297,27 @@ public sealed class NativeFatStateStoreRegressionTests
         Assert.True(signal.CanPublishAsSignal, $"Test signal '{reference}' must be publishable by Explorer policy.");
         return signal;
     }
+
+    private static Iec61850MonitorPoint CreateLivePoint(
+        Iec61850MonitorDevice device,
+        SignalDefinition signal,
+        string value)
+        => new()
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.Name,
+            IpAddress = device.IpAddress,
+            SignalName = signal.Name,
+            IecReference = signal.ObjectReference,
+            FunctionalConstraint = signal.FunctionalConstraint,
+            IecDataType = signal.DataType,
+            Value = value,
+            Quality = "Good",
+            DeviceTimestamp = "2026-09-09 08:15:01.125",
+            SourceMode = "BRCB",
+            Status = "Live",
+            Sequence = 1
+        };
 
     private sealed class TemporaryDirectory : IDisposable
     {

@@ -50,67 +50,73 @@ public sealed class NativeFatStateStore
         ArgumentNullException.ThrowIfNull(device);
         Directory.CreateDirectory(_rootDirectory);
 
-        // New native FAT files include a short deterministic hash of stable DeviceId.
-        // Two relays may legitimately share the same display IEDName, so a name-only
-        // filename is not a safe multi-IED persistence identity.
-        var preferredPath = GetPreferredPath(device.Name, device.DeviceId);
-        var candidate = await TryReadAsync(preferredPath, cancellationToken).ConfigureAwait(false);
-        if (IsForDevice(candidate, device))
-        {
-            candidate!.StoragePath = preferredPath;
-            Normalize(candidate, device);
-            return candidate;
-        }
+        // Runtime DeviceId is intentionally ephemeral. FAT commissioning evidence must
+        // survive application restarts, so schema 2 keys storage by SCL identity when
+        // available and otherwise by the configured MMS endpoint.
+        var persistenceIdentity = BuildPersistenceIdentity(device);
+        var preferredPath = GetPreferredPath(device.Name, persistenceIdentity);
         var preferredPathOccupied = File.Exists(preferredPath);
-
-        // P2 preview builds used name-only filenames. Read them once for compatibility,
-        // but migrate the next save to the collision-safe preferred path. The old file is
-        // intentionally left untouched as recoverable commissioning evidence.
         var legacyPath = GetLegacyPath(device.Name);
-        if (!legacyPath.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
-        {
-            var legacy = await TryReadAsync(legacyPath, cancellationToken).ConfigureAwait(false);
-            if (IsForDevice(legacy, device))
-            {
-                legacy!.StoragePath = preferredPathOccupied
-                    ? GetNonDestructiveRecoveryPath(preferredPath)
-                    : preferredPath;
-                Normalize(legacy, device);
-                return legacy;
-            }
-        }
 
-        // IED display names can change. Resolve by stable DeviceId before creating a new
-        // state so a harmless rename cannot strand the operator's previous FAT evidence.
-        foreach (var path in Directory.EnumerateFiles(_rootDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        var paths = new List<string> { preferredPath, legacyPath };
+        paths.AddRange(Directory.EnumerateFiles(_rootDirectory, "*.json", SearchOption.TopDirectoryOnly));
+
+        var legacyNameMatches = new List<(string Path, NativeFatDeviceState State)>();
+        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (path.Equals(preferredPath, StringComparison.OrdinalIgnoreCase) ||
-                path.Equals(legacyPath, StringComparison.OrdinalIgnoreCase))
-            {
+            var candidate = await TryReadAsync(path, cancellationToken).ConfigureAwait(false);
+            if (candidate == null)
                 continue;
+
+            if (IsForDevice(candidate, device, persistenceIdentity))
+            {
+                // Once a schema-2 file already carries the durable persistence identity,
+                // keep its collision-safe path stable across harmless display-name changes.
+                // Only schema-1/name-only evidence is migrated to the schema-2 preferred path.
+                candidate.StoragePath = !string.IsNullOrWhiteSpace(candidate.PersistenceIdentity)
+                    ? path
+                    : SelectStoragePathForMigration(
+                        path,
+                        preferredPath,
+                        preferredPathOccupied);
+                Normalize(candidate, device, persistenceIdentity);
+                return candidate;
             }
 
-            var probed = await TryReadAsync(path, cancellationToken).ConfigureAwait(false);
-            if (!IsForDevice(probed, device))
-                continue;
+            // Schema-1 files have no stable persistence identity. DeviceId cannot be used
+            // after restart, so a legacy name match is accepted only when it is unique.
+            // Ambiguity is deliberately treated as a new state rather than guessing and
+            // attaching one relay's commissioning evidence to another relay.
+            if (string.IsNullOrWhiteSpace(candidate.PersistenceIdentity) &&
+                candidate.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                legacyNameMatches.Add((path, candidate));
+            }
+        }
 
-            // Preserve an already collision-safe file across display-name changes rather
-            // than creating a duplicate file every time the user renames an IED card.
-            probed!.StoragePath = path;
-            Normalize(probed, device);
-            return probed;
+        if (legacyNameMatches.Count == 1)
+        {
+            var legacy = legacyNameMatches[0];
+            legacy.State.StoragePath = SelectStoragePathForMigration(
+                legacy.Path,
+                preferredPath,
+                preferredPathOccupied);
+            Normalize(legacy.State, device, persistenceIdentity);
+            return legacy.State;
         }
 
         // An occupied preferred path that is unreadable or belongs to a different device
         // is evidence, not scratch space. Start a recovery state beside it; never overwrite
-        // the original simply because deserialization failed.
+        // the original simply because deserialization or identity validation failed.
         var storagePath = preferredPathOccupied
             ? GetNonDestructiveRecoveryPath(preferredPath)
             : preferredPath;
         return new NativeFatDeviceState
         {
+            SchemaVersion = 2,
             DeviceId = device.DeviceId,
+            PersistenceIdentity = persistenceIdentity,
             IedName = device.Name,
             CreatedUtc = DateTimeOffset.UtcNow,
             UpdatedUtc = DateTimeOffset.UtcNow,
@@ -123,10 +129,13 @@ public sealed class NativeFatStateStore
         ArgumentNullException.ThrowIfNull(state);
         Directory.CreateDirectory(_rootDirectory);
         state.UpdatedUtc = DateTimeOffset.UtcNow;
-        state.SchemaVersion = Math.Max(1, state.SchemaVersion);
+        state.SchemaVersion = Math.Max(2, state.SchemaVersion);
 
+        var identity = string.IsNullOrWhiteSpace(state.PersistenceIdentity)
+            ? BuildLegacyFallbackIdentity(state.DeviceId)
+            : state.PersistenceIdentity;
         var path = string.IsNullOrWhiteSpace(state.StoragePath)
-            ? GetPreferredPath(state.IedName, state.DeviceId)
+            ? GetPreferredPath(state.IedName, identity)
             : state.StoragePath;
         var tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
 
@@ -173,7 +182,9 @@ public sealed class NativeFatStateStore
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(device);
 
+        state.SchemaVersion = Math.Max(2, state.SchemaVersion);
         state.DeviceId = device.DeviceId;
+        state.PersistenceIdentity = BuildPersistenceIdentity(device);
         state.IedName = device.Name;
         state.Signals ??= new List<NativeFatSignalState>();
 
@@ -290,6 +301,25 @@ public sealed class NativeFatStateStore
         return publishable;
     }
 
+    public static string BuildPersistenceIdentity(Iec61850MonitorDevice device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        if (!string.IsNullOrWhiteSpace(device.SclSourceSha256))
+        {
+            var sha = NormalizeIdentityPart(device.SclSourceSha256);
+            var ied = NormalizeIdentityPart(
+                string.IsNullOrWhiteSpace(device.SclIedName) ? device.Name : device.SclIedName);
+            var accessPoint = NormalizeIdentityPart(device.SclAccessPointName);
+            return $"scl|{sha}|{ied}|{accessPoint}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(device.IpAddress))
+            return $"endpoint|{NormalizeIdentityPart(device.IpAddress)}:{Math.Max(1, device.Port)}";
+
+        return BuildLegacyFallbackIdentity(device.DeviceId);
+    }
+
     private static Iec61850MonitorPoint? FindPointByReference(
         Iec61850MonitorDevice device,
         NativeFatSignalState saved)
@@ -332,22 +362,36 @@ public sealed class NativeFatStateStore
         }
     }
 
-    private static bool IsForDevice(NativeFatDeviceState? state, Iec61850MonitorDevice device)
+    private static bool IsForDevice(
+        NativeFatDeviceState? state,
+        Iec61850MonitorDevice device,
+        string persistenceIdentity)
     {
         if (state == null)
             return false;
-        if (!string.IsNullOrWhiteSpace(state.DeviceId) &&
-            state.DeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase))
-            return true;
 
-        return string.IsNullOrWhiteSpace(state.DeviceId) &&
-               state.IedName.Equals(device.Name, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(state.PersistenceIdentity))
+        {
+            return state.PersistenceIdentity.Equals(
+                persistenceIdentity,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Exact runtime DeviceId remains a safe schema-1 compatibility match inside the
+        // same session. Cross-restart migration is handled separately and only when the
+        // legacy IED-name candidate is unambiguous.
+        return !string.IsNullOrWhiteSpace(state.DeviceId) &&
+               state.DeviceId.Equals(device.DeviceId, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void Normalize(NativeFatDeviceState state, Iec61850MonitorDevice device)
+    private static void Normalize(
+        NativeFatDeviceState state,
+        Iec61850MonitorDevice device,
+        string persistenceIdentity)
     {
-        state.SchemaVersion = Math.Max(1, state.SchemaVersion);
+        state.SchemaVersion = Math.Max(2, state.SchemaVersion);
         state.DeviceId = device.DeviceId;
+        state.PersistenceIdentity = persistenceIdentity;
         state.IedName = device.Name;
         state.Signals ??= new List<NativeFatSignalState>();
         foreach (var signal in state.Signals)
@@ -360,11 +404,24 @@ public sealed class NativeFatStateStore
         }
     }
 
-    private string GetPreferredPath(string? iedName, string? deviceId)
+    private string SelectStoragePathForMigration(
+        string sourcePath,
+        string preferredPath,
+        bool preferredPathOccupied)
+    {
+        if (sourcePath.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
+            return preferredPath;
+
+        // Move the next save to the stable schema-2 path when it is free. If something
+        // already occupies that path, preserve both files instead of overwriting evidence.
+        return preferredPathOccupied ? sourcePath : preferredPath;
+    }
+
+    private string GetPreferredPath(string? iedName, string? persistenceIdentity)
     {
         var stem = SanitizeFileStem(iedName);
-        var deviceHash = StableDeviceHash(deviceId);
-        var fileStem = string.IsNullOrWhiteSpace(deviceHash) ? stem : $"{stem}__{deviceHash}";
+        var identityHash = StableIdentityHash(persistenceIdentity);
+        var fileStem = string.IsNullOrWhiteSpace(identityHash) ? stem : $"{stem}__{identityHash}";
         return Path.Combine(_rootDirectory, fileStem + ".json");
     }
 
@@ -386,14 +443,20 @@ public sealed class NativeFatStateStore
         return Path.Combine(directory, $"{stem}__RECOVERY_{Guid.NewGuid():N}{extension}");
     }
 
-    private static string StableDeviceHash(string? deviceId)
+    private static string StableIdentityHash(string? identity)
     {
-        if (string.IsNullOrWhiteSpace(deviceId))
+        if (string.IsNullOrWhiteSpace(identity))
             return string.Empty;
 
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(deviceId.Trim()));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(identity.Trim().ToLowerInvariant()));
         return Convert.ToHexString(bytes.AsSpan(0, 6));
     }
+
+    private static string NormalizeIdentityPart(string? value)
+        => (value ?? string.Empty).Trim().ToLowerInvariant();
+
+    private static string BuildLegacyFallbackIdentity(string? deviceId)
+        => $"device|{NormalizeIdentityPart(deviceId)}";
 
     private static string SanitizeFileStem(string? value)
     {

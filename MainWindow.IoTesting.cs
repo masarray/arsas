@@ -32,7 +32,6 @@ public partial class MainWindow
     {
         base.OnInitialized(e);
         InitializeClockSyncLifecycle();
-        Dispatcher.BeginInvoke(new Action(InstallFirstRunTestingChoices), DispatcherPriority.Loaded);
     }
 
     private void InstallFirstRunTestingChoices()
