@@ -6,6 +6,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -21,6 +22,20 @@ public partial class App : Application
     {
         WindowsApplicationIdentity.Apply();
         base.OnStartup(e);
+
+        if (SclSafeTrialCommand.IsRequested(e.Args))
+        {
+            var trial = SclSafeTrialRunner.RunAsync(e.Args, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+            MessageBox.Show(
+                $"{trial.Message}\n\nEvidence: {trial.EvidencePath}",
+                trial.IsSuccess ? "SCL Safe Trial — PASS" : "SCL Safe Trial — NOT PROVEN",
+                MessageBoxButton.OK,
+                trial.IsSuccess ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            Shutdown(trial.ExitCode);
+            return;
+        }
 
         // P2 installs one calm industrial visual system before StartupUri materializes.
         // Existing XAML keeps its semantic resource keys while the overlay replaces
