@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ArMms = AR.Iec61850.Mms;
 using ArScl = AR.Iec61850.Scl;
 using AR.Iec61850.Discovery;
@@ -11,6 +12,9 @@ public sealed class SclAssistedClientConnectResult
     public ArScl.SclAssistedMmsOnlineResult? Online { get; init; }
     public ArMms.InitialFcReadExecutionResult? InitialRead { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+    public TimeSpan AssociationValidationDuration { get; init; }
+    public TimeSpan InitialReadDuration { get; init; }
+    public TimeSpan TotalDuration { get; init; }
     public string Message { get; init; } = string.Empty;
 }
 
@@ -29,6 +33,10 @@ public sealed partial class NativeIec61850Client
         int port,
         CancellationToken cancellationToken)
     {
+        var totalWatch = Stopwatch.StartNew();
+        var associationDuration = TimeSpan.Zero;
+        var initialReadDuration = TimeSpan.Zero;
+
         await DisposeControlSessionsAsync().ConfigureAwait(false);
         LastErrorMessage = string.Empty;
         LastConnectionFailureKind = string.Empty;
@@ -61,21 +69,26 @@ public sealed partial class NativeIec61850Client
                 ? "SCL-assisted connection preparation failed."
                 : string.Join(" | ", preparation.Errors);
             LastConnectionTechnicalSummary = LastErrorMessage;
+            totalWatch.Stop();
             return new SclAssistedClientConnectResult
             {
                 Preparation = preparation,
                 Warnings = preparation.Warnings,
+                TotalDuration = totalWatch.Elapsed,
                 Message = LastErrorMessage
             };
         }
 
         try
         {
+            var associationWatch = Stopwatch.StartNew();
             var online = await _session.ConnectSclAssistedAsync(
                 preparation.AssociationPlan,
                 preparation.DomainInventory,
                 TimeSpan.FromSeconds(8),
                 cancellationToken).ConfigureAwait(false);
+            associationWatch.Stop();
+            associationDuration = associationWatch.Elapsed;
 
             if (!online.IsCompatible)
             {
@@ -83,19 +96,25 @@ public sealed partial class NativeIec61850Client
                 LastErrorMessage = online.Message;
                 LastConnectionTechnicalSummary = online.Domains?.Summary ?? online.Message;
                 await _session.DisposeAsync().ConfigureAwait(false);
+                totalWatch.Stop();
                 return new SclAssistedClientConnectResult
                 {
                     Preparation = preparation,
                     Online = online,
                     Warnings = preparation.Warnings,
+                    AssociationValidationDuration = associationDuration,
+                    TotalDuration = totalWatch.Elapsed,
                     Message = LastErrorMessage
                 };
             }
 
+            var readWatch = Stopwatch.StartNew();
             var initialRead = await _session.ExecuteInitialFcReadPlanAsync(
                 preparation.InitialReadPlan,
                 TimeSpan.FromSeconds(5),
                 cancellationToken).ConfigureAwait(false);
+            readWatch.Stop();
+            initialReadDuration = readWatch.Elapsed;
 
             if (initialRead.Status is ArMms.InitialFcReadExecutionStatus.InvalidPlan
                 or ArMms.InitialFcReadExecutionStatus.SessionNotReady
@@ -106,12 +125,16 @@ public sealed partial class NativeIec61850Client
                 LastErrorMessage = initialRead.Message;
                 LastConnectionTechnicalSummary = initialRead.Message;
                 await _session.DisposeAsync().ConfigureAwait(false);
+                totalWatch.Stop();
                 return new SclAssistedClientConnectResult
                 {
                     Preparation = preparation,
                     Online = online,
                     InitialRead = initialRead,
                     Warnings = preparation.Warnings,
+                    AssociationValidationDuration = associationDuration,
+                    InitialReadDuration = initialReadDuration,
+                    TotalDuration = totalWatch.Elapsed,
                     Message = LastErrorMessage
                 };
             }
@@ -168,6 +191,7 @@ public sealed partial class NativeIec61850Client
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
+            totalWatch.Stop();
             return new SclAssistedClientConnectResult
             {
                 IsSuccess = true,
@@ -175,16 +199,21 @@ public sealed partial class NativeIec61850Client
                 Online = online,
                 InitialRead = initialRead,
                 Warnings = warnings,
+                AssociationValidationDuration = associationDuration,
+                InitialReadDuration = initialReadDuration,
+                TotalDuration = totalWatch.Elapsed,
                 Message = LastDiscoverySummary
             };
         }
         catch (OperationCanceledException)
         {
+            totalWatch.Stop();
             await _session.DisposeAsync().ConfigureAwait(false);
             throw;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
         {
+            totalWatch.Stop();
             LastConnectionFailureKind = "SCL_ASSISTED_RUNTIME_FAILURE";
             LastErrorMessage = $"SCL-assisted MMS connection failed: {ex.GetType().Name}: {ex.Message}";
             LastConnectionTechnicalSummary = LastErrorMessage;
@@ -193,6 +222,9 @@ public sealed partial class NativeIec61850Client
             {
                 Preparation = preparation,
                 Warnings = preparation.Warnings,
+                AssociationValidationDuration = associationDuration,
+                InitialReadDuration = initialReadDuration,
+                TotalDuration = totalWatch.Elapsed,
                 Message = LastErrorMessage
             };
         }
