@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
+using ArMms = AR.Iec61850.Mms;
 
 namespace ArIED61850Tester.Services;
 
@@ -11,26 +12,34 @@ public sealed record SclSafeTrialCommand(
     string AccessPointName,
     string Host,
     int Port,
+    int MaximumVariableReferencesPerRead,
     string EvidencePath)
 {
     public const string Switch = "--scl-safe-trial";
+    public const string SingleReferenceSwitch = "--scl-safe-trial-single";
 
     public static bool IsRequested(IReadOnlyList<string> args)
-        => args.Any(argument => string.Equals(argument, Switch, StringComparison.OrdinalIgnoreCase));
+        => args.Any(argument =>
+            string.Equals(argument, Switch, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(argument, SingleReferenceSwitch, StringComparison.OrdinalIgnoreCase));
 
     public static bool TryParse(IReadOnlyList<string> args, out SclSafeTrialCommand? command, out string error)
     {
         command = null;
         error = string.Empty;
-        if (args.Count == 0 || !string.Equals(args[0], Switch, StringComparison.OrdinalIgnoreCase))
+        if (args.Count == 0 ||
+            (!string.Equals(args[0], Switch, StringComparison.OrdinalIgnoreCase) &&
+             !string.Equals(args[0], SingleReferenceSwitch, StringComparison.OrdinalIgnoreCase)))
         {
-            error = $"Expected {Switch} as the first argument.";
+            error = $"Expected {Switch} or {SingleReferenceSwitch} as the first argument.";
             return false;
         }
 
         if (args.Count < 5)
         {
-            error = "Usage: ARSAS.exe --scl-safe-trial <SCL/CID path> <IED name> <AccessPoint name> <host/IP> [port] [evidence JSON path]";
+            error =
+                $"Usage: ARSAS.exe {Switch} <SCL/CID path> <IED name> <AccessPoint name> <host/IP> [port] [evidence JSON path]. " +
+                $"Use {SingleReferenceSwitch} with the same arguments for a controlled one-variable-per-Read interoperability trial.";
             return false;
         }
 
@@ -51,13 +60,27 @@ public sealed record SclSafeTrialCommand(
             return false;
         }
 
+        var maximumVariableReferencesPerRead = string.Equals(
+            args[0],
+            SingleReferenceSwitch,
+            StringComparison.OrdinalIgnoreCase)
+            ? 1
+            : ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead;
+
         var evidencePath = args.Count >= 7 && !string.IsNullOrWhiteSpace(args[6])
             ? Path.GetFullPath(args[6])
             : Path.Combine(
                 Path.GetTempPath(),
-                $"ARSAS-SCL-Trial-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.json");
+                $"ARSAS-SCL-Trial-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{maximumVariableReferencesPerRead}ref-{Guid.NewGuid():N}.json");
 
-        command = new SclSafeTrialCommand(sclPath, iedName, accessPointName, host, port, evidencePath);
+        command = new SclSafeTrialCommand(
+            sclPath,
+            iedName,
+            accessPointName,
+            host,
+            port,
+            maximumVariableReferencesPerRead,
+            evidencePath);
         return true;
     }
 }
@@ -111,6 +134,7 @@ public static class SclSafeTrialRunner
                 command.AccessPointName,
                 command.Host,
                 command.Port,
+                command.MaximumVariableReferencesPerRead,
                 cancellationToken).ConfigureAwait(false);
 
             diagnostic = client.CaptureDiagnosticSnapshot("SCL safe trial");
@@ -134,7 +158,7 @@ public static class SclSafeTrialRunner
 
         var evidence = new
         {
-            schema = "arsas-scl-safe-trial-v1",
+            schema = "arsas-scl-safe-trial-v2",
             capturedAtUtc = DateTimeOffset.UtcNow,
             safety = new
             {
@@ -143,7 +167,8 @@ public static class SclSafeTrialRunner
                 writesAllowed = false,
                 controlAllowed = false,
                 reportEnableAllowed = false,
-                dynamicDataSetAllowed = false
+                dynamicDataSetAllowed = false,
+                automaticReadFallbackAllowed = false
             },
             source = new
             {
@@ -154,7 +179,20 @@ public static class SclSafeTrialRunner
                 host = command.Host,
                 port = command.Port
             },
-            timing = new { totalMilliseconds = stopwatch.Elapsed.TotalMilliseconds },
+            trialMode = new
+            {
+                maximumVariableReferencesPerRead = command.MaximumVariableReferencesPerRead,
+                label = command.MaximumVariableReferencesPerRead == 1
+                    ? "single-reference-control"
+                    : "iedscout-like-bounded-batch"
+            },
+            timing = new
+            {
+                processTotalMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
+                connectionTotalMilliseconds = result?.TotalDuration.TotalMilliseconds ?? 0d,
+                associationAndDomainValidationMilliseconds = result?.AssociationValidationDuration.TotalMilliseconds ?? 0d,
+                initialReadMilliseconds = result?.InitialReadDuration.TotalMilliseconds ?? 0d
+            },
             result = new
             {
                 success = result?.IsSuccess == true,
@@ -221,7 +259,7 @@ public static class SclSafeTrialRunner
             $"ARSAS-SCL-Trial-Invalid-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.json");
         var evidence = new
         {
-            schema = "arsas-scl-safe-trial-v1",
+            schema = "arsas-scl-safe-trial-v2",
             capturedAtUtc = DateTimeOffset.UtcNow,
             success = false,
             exitCode = 30,
