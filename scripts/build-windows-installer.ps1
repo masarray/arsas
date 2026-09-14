@@ -44,13 +44,24 @@ if (-not (Test-Path $ardirecLockPath -PathType Leaf)) {
 }
 
 $ardirecLock = Get-Content $ardirecLockPath -Raw | ConvertFrom-Json
-if ($ardirecLock.schema -ne 2 -or
+$expectedFieldTestedCommit = '7dbc7149db668126a493ce338264363a6ec5ec00'
+if ($ardirecLock.schema -ne 3 -or
     $ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
-    $ardirecLock.ref -ne 'main' -or
-    $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+    [string]::IsNullOrWhiteSpace([string]$ardirecLock.ref) -or
+    $ardirecLock.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
+    $ardirecLock.commit -ne $expectedFieldTestedCommit -or
     $ardirecLock.bridge.abi -ne 1 -or
+    $ardirecLock.bridge.mode -ne 'native-only' -or
     $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
-    throw "ArdIrec native integration lock is invalid. The installer requires pinned bridge ABI 1."
+    throw "ArdIrec native integration lock is invalid. The installer requires the schema-3 native-only field-tested bridge pin."
+}
+
+$requiredCapabilities = @('cursor_measurement','channel_semantics','value_representation','status_state','digital_edge_snap','phasor','harmonics','distance_locus')
+$declaredCapabilities = @($ardirecLock.bridge.requiredCapabilities)
+foreach ($capability in $requiredCapabilities) {
+    if ($declaredCapabilities -notcontains $capability) {
+        throw "ArdIrec native integration lock is missing required capability '$capability'."
+    }
 }
 
 $requiredFiles = @(
@@ -103,14 +114,14 @@ $previousFixtureCfg = $env:ARSAS_NATIVE_COMTRADE_TEST_CFG
 try {
     $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridgePath
     $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $fixtureCfg
-    Write-Host "==> Validating native COMTRADE bridge through ARSAS managed interop"
+    Write-Host "==> Validating native COMTRADE bridge and Locus session through ARSAS managed interop"
     & dotnet test $testProject `
         -c Release `
         --no-build `
         --no-restore `
-        --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests"
+        --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
     if ($LASTEXITCODE -ne 0) {
-        throw "Staged native COMTRADE bridge failed the managed integration smoke test."
+        throw "Staged native COMTRADE bridge failed the managed bridge/Locus integration smoke test."
     }
 }
 finally {
