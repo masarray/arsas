@@ -71,10 +71,15 @@ public sealed class NativeFatStateStore
 
             if (IsForDevice(candidate, device, persistenceIdentity))
             {
-                candidate.StoragePath = SelectStoragePathForMigration(
-                    path,
-                    preferredPath,
-                    preferredPathOccupied);
+                // Once a schema-2 file already carries the durable persistence identity,
+                // keep its collision-safe path stable across harmless display-name changes.
+                // Only schema-1/name-only evidence is migrated to the schema-2 preferred path.
+                candidate.StoragePath = !string.IsNullOrWhiteSpace(candidate.PersistenceIdentity)
+                    ? path
+                    : SelectStoragePathForMigration(
+                        path,
+                        preferredPath,
+                        preferredPathOccupied);
                 Normalize(candidate, device, persistenceIdentity);
                 return candidate;
             }
