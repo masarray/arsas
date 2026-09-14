@@ -96,12 +96,8 @@ jobs:
               $ardirecLock.ref -ne 'main' -or
               $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
               $ardirecLock.bridge.abi -ne 1 -or
-              $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll' -or
-              $ardirecLock.qt.version -ne '6.8.3' -or
-              $ardirecLock.qt.arch -ne 'win64_msvc2022_64' -or
-              $ardirecLock.runtime.relativeExecutable -ne 'Tools/ArdIrec/ardirec.exe' -or
-              $ardirecLock.runtime.launchArgument -ne '--arsas-open') {
-            throw "ArdIrec P1 lock metadata is invalid."
+              $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+            throw "ArdIrec native bridge lock metadata is invalid."
           }
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -126,7 +122,7 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
-      - name: Checkout immutable ArdIrec P1 engine revision
+      - name: Checkout immutable ArdIrec native engine revision
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
@@ -146,13 +142,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install Qt 6.8.3 for COMTRADE fallback
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.8.3'
-          arch: 'win64_msvc2022_64'
-          cache: true
 
       - name: Verify source and licensing boundaries
         shell: powershell
@@ -181,7 +170,7 @@ jobs:
           path: ArIED61850Tester/TestResults/*.trx
           if-no-files-found: error
 
-      - name: Publish installer source folder
+      - name: Publish installer source folder with pinned native bridge
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -190,33 +179,26 @@ jobs:
             -SingleFile $false `
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
-            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec"
 
-      - name: Stage pinned ArdIrec P1 native bridge and Qt fallback
-        shell: powershell
-        run: |
-          .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
-            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
-            -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64" `
-            -BuildDirectory "$env:RUNNER_TEMP\ardirec-release-build"
-
-      - name: Exercise managed P1 bridge before release packaging
+      - name: Exercise managed native bridge before release packaging
         shell: powershell
         run: |
           $publish = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64"
           $bridge = Join-Path $publish "Tools\ArdIrec\ardirec_bridge.dll"
           $fixture = "$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\fixtures\comtrade\p1-release-smoke.cfg"
-          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not staged: $bridge" }
-          if (-not (Test-Path $fixture -PathType Leaf)) { throw "ARSAS P1 release fixture was not found: $fixture" }
+          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not published: $bridge" }
+          if (-not (Test-Path $fixture -PathType Leaf)) { throw "ARSAS native release fixture was not found: $fixture" }
 
           $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridge
           $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $fixture
           dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
             -c Release --no-build --no-restore `
             --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests"
-          if ($LASTEXITCODE -ne 0) { throw "Release managed ArdIrec P1 bridge integration test failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Release managed ArdIrec native bridge integration test failed." }
 
-      - name: Publish real portable single EXE
+      - name: Publish real portable single EXE with embedded native bridge
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -225,7 +207,8 @@ jobs:
             -SingleFile $true `
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
-            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec"
 
       - name: Smoke-test real portable single EXE
         shell: powershell
@@ -283,18 +266,26 @@ jobs:
             "AR.Iec61850.Transports.Npcap.dll",
             "SharpPcap.dll",
             "PacketDotNet.dll",
-            "Tools\ArdIrec\ardirec_bridge.dll",
+            "Tools\ArdIrec\ardirec_bridge.dll"
+          )
+          foreach ($file in $requiredInstalledFiles) {
+            $path = Join-Path $installRoot $file
+            if (-not (Test-Path $path -PathType Leaf)) {
+              throw "Installed package is incomplete: $path"
+            }
+          }
+
+          foreach ($forbidden in @(
             "Tools\ArdIrec\ardirec.exe",
             "Tools\ArdIrec\Qt6Core.dll",
             "Tools\ArdIrec\Qt6Gui.dll",
             "Tools\ArdIrec\Qt6Qml.dll",
             "Tools\ArdIrec\Qt6Quick.dll",
             "Tools\ArdIrec\platforms\qwindows.dll"
-          )
-          foreach ($file in $requiredInstalledFiles) {
-            $path = Join-Path $installRoot $file
-            if (-not (Test-Path $path -PathType Leaf)) {
-              throw "Installed package is incomplete: $path"
+          )) {
+            $path = Join-Path $installRoot $forbidden
+            if (Test-Path $path) {
+              throw "External ArdIrec/Qt runtime must not be packaged: $path"
             }
           }
 
@@ -385,7 +376,7 @@ jobs:
               $provenance.comtradeViewerCommit -ne $env:ARDIREC_COMMIT -or
               $provenance.comtradeBridgeAbi -ne 1 -or
               $provenance.comtradeBridgeRelativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
-            throw "Release provenance does not match the tested app, IEC engine and COMTRADE P1 bridge revisions."
+            throw "Release provenance does not match the tested app, IEC engine and native COMTRADE bridge revisions."
           }
 
       - name: Attest installer artifact digest
@@ -483,7 +474,6 @@ jobs:
               commit = $env:ARDIREC_COMMIT
               nativeBridgeAbi = [int]$env:ARDIREC_BRIDGE_ABI
               nativeBridgeRelativeLibrary = $env:ARDIREC_BRIDGE_RELATIVE_LIBRARY
-              relativeExecutable = "Tools/ArdIrec/ardirec.exe"
             }
             installer = [ordered]@{
               name = "ARSAS-Windows-x64-Setup.exe"
