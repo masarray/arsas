@@ -19,11 +19,14 @@ public sealed class G1ControlCorrectnessRegressionTests
             json.GetProperty("sourcePullRequest").GetInt32() >= 95,
             "A reviewed post-G2.4 engine pin must retain the field-proven G1/G1.1 ancestry contract.");
 
-        var purpose = json.GetProperty("purpose").GetString() ?? string.Empty;
+        var baseline = json.GetProperty("fieldProvenBaseline");
+        Assert.Equal("11ab2304482600c19ba979f4fc9021ddb46b9af9", baseline.GetProperty("commit").GetString());
+        Assert.Equal(111, baseline.GetProperty("sourcePullRequest").GetInt32());
+        var purpose = baseline.GetProperty("purpose").GetString() ?? string.Empty;
 
-        // Engine consumers may advance the immutable pin for a proven missing capability,
-        // but the field-proven G1/G2.3/P0/P1 ancestry and all reporting/control safety
-        // statements must remain explicit in the lock provenance.
+        // Engine consumers may advance the immutable trial pin for a proven missing capability,
+        // but the structured field-proven baseline must retain the G1/G2.3/P0/P1 ancestry and
+        // all reporting/control safety statements verbatim.
         Assert.Contains("a18e550d07f7bbe4ff7753c180b02615075f6292", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("signed primitive constraints", purpose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ordered SBO/SBOw-to-Operate wire evidence", purpose, StringComparison.OrdinalIgnoreCase);
