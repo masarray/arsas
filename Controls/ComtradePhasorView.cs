@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Controls;
 
@@ -34,9 +36,13 @@ public sealed class ComtradePhasorView : FrameworkElement
 
     private PreparedPhasorPanel _voltagePanel = PreparedPhasorPanel.Empty;
     private PreparedPhasorPanel _currentPanel = PreparedPhasorPanel.Empty;
+    private const double PresentationTimeConstantMs = 78.0;
     private string _headerLabel = "Fundamental phasors at C1";
     private string _referenceDetail = "Select a valid analysis reference";
     private string _message = string.Empty;
+    private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+    private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    private long _lastPresentationTimestamp;
 
     internal void ShowPhasors(
         string referenceLabel,
@@ -47,8 +53,17 @@ public sealed class ComtradePhasorView : FrameworkElement
         var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;
         _headerLabel = $"Fundamental phasors at {resolvedReference}";
         _referenceDetail = referenceDetail ?? string.Empty;
-        _voltagePanel = PreparePanel(voltageVectors);
-        _currentPanel = PreparePanel(currentVectors);
+
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _lastPresentationTimestamp == 0
+            ? double.PositiveInfinity
+            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
+        _lastPresentationTimestamp = now;
+
+        _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, voltageVectors, elapsedMilliseconds);
+        _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, currentVectors, elapsedMilliseconds);
+        _voltagePanel = PreparePanel(_smoothedVoltageVectors);
+        _currentPanel = PreparePanel(_smoothedCurrentVectors);
         _message = string.Empty;
         InvalidateVisual();
     }
@@ -60,6 +75,9 @@ public sealed class ComtradePhasorView : FrameworkElement
         _referenceDetail = message ?? string.Empty;
         _voltagePanel = PreparedPhasorPanel.Empty;
         _currentPanel = PreparedPhasorPanel.Empty;
+        _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+        _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+        _lastPresentationTimestamp = 0;
         _message = message ?? string.Empty;
         InvalidateVisual();
     }
@@ -109,6 +127,51 @@ public sealed class ComtradePhasorView : FrameworkElement
             DrawPanel(dc, new Rect(content.Left, content.Top + panelHeight + gap, content.Width, content.Height - panelHeight - gap),
                 "CURRENT PHASORS", _currentPanel, dpi);
         }
+    }
+
+    private static ComtradePhasorVector[] SmoothVectors(
+        IReadOnlyList<ComtradePhasorVector> previous,
+        IReadOnlyList<ComtradePhasorVector>? target,
+        double elapsedMilliseconds)
+    {
+        if (target is null || target.Count == 0)
+            return Array.Empty<ComtradePhasorVector>();
+
+        var topologyMatches = previous.Count == target.Count && previous.Count > 0;
+        if (topologyMatches)
+        {
+            for (var index = 0; index < target.Count; index++)
+            {
+                if (!string.Equals(previous[index].Label, target[index].Label, StringComparison.Ordinal) ||
+                    !string.Equals(previous[index].Phase, target[index].Phase, StringComparison.Ordinal) ||
+                    !string.Equals(previous[index].Units, target[index].Units, StringComparison.Ordinal))
+                {
+                    topologyMatches = false;
+                    break;
+                }
+            }
+        }
+
+        var output = new ComtradePhasorVector[target.Count];
+        if (!topologyMatches)
+        {
+            for (var index = 0; index < target.Count; index++)
+                output[index] = target[index];
+            return output; // First sample/topology change snaps: no artificial ramp from zero.
+        }
+
+        for (var index = 0; index < target.Count; index++)
+        {
+            var before = previous[index];
+            var next = target[index];
+            output[index] = new ComtradePhasorVector(
+                next.Label,
+                next.Phase,
+                next.Units,
+                PresentationEasingMath.Smooth(before.MagnitudeRms, next.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),
+                PresentationEasingMath.SmoothAngleDegrees(before.AngleDegrees, next.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));
+        }
+        return output;
     }
 
     private static PreparedPhasorPanel PreparePanel(IReadOnlyList<ComtradePhasorVector>? source)

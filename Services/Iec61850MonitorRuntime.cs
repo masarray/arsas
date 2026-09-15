@@ -536,8 +536,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (result.ServiceAccepted || result.FeedbackConfirmed || result.IsSuccess)
             RecordSuccessfulIo(session);
 
-        if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
-            ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);
+        // IMPORTANT: a successful/confirmed IEC 61850 control service is command-path evidence,
+        // not process-image authority. Never synthesize or inject stVal from Operate/SBO feedback here.
+        // The monitored state changes only through the independent acquisition path (RCB/report or
+        // an explicit authoritative MMS read performed by the monitor), matching IED engineering tools.
 
         var wireState = result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
             ? "NOT SENT TO IED"
