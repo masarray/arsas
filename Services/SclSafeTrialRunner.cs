@@ -184,7 +184,7 @@ public static class SclSafeTrialRunner
                 maximumVariableReferencesPerRead = command.MaximumVariableReferencesPerRead,
                 label = command.MaximumVariableReferencesPerRead == 1
                     ? "single-reference-control"
-                    : "iedscout-like-bounded-batch"
+                    : "bounded-multi-reference"
             },
             timing = new
             {
