@@ -5,12 +5,18 @@ namespace ARSAS.Tests;
 public sealed class P0Build1888RecoveryRegressionTests
 {
     [Fact]
-    public void P0_KeepsExactArIec61850GoldenPin()
+    public void P0_KeepsExactArIec61850GoldenBaselineAcrossReviewedTrialPin()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json")));
+        var root = document.RootElement;
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commit").GetString() ?? string.Empty);
+        Assert.True(root.GetProperty("sourcePullRequest").GetInt32() >= 125);
+
+        var baseline = root.GetProperty("fieldProvenBaseline");
         Assert.Equal(
             "11ab2304482600c19ba979f4fc9021ddb46b9af9",
-            document.RootElement.GetProperty("commit").GetString());
+            baseline.GetProperty("commit").GetString());
+        Assert.Equal(111, baseline.GetProperty("sourcePullRequest").GetInt32());
     }
 
     [Fact]
