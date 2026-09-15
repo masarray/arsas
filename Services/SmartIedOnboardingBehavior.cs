@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
@@ -82,21 +83,25 @@ public static class SmartIedOnboardingBehavior
                 _window.Devices.CollectionChanged += Devices_CollectionChanged;
             }
 
-            ReconcileDeviceSubscriptions();
-            _window.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Loaded,
-                new Action(RefreshVisuals));
+            DispatchUi(() =>
+            {
+                ReconcileDeviceSubscriptions();
+                RefreshVisuals();
+            }, DispatcherPriority.Loaded);
         }
 
-        private void Window_ContentRendered(object? sender, EventArgs e) => RefreshVisuals();
+        private void Window_ContentRendered(object? sender, EventArgs e)
+            => DispatchUi(RefreshVisuals, DispatcherPriority.Loaded);
 
         private void Devices_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
-            ReconcileDeviceSubscriptions();
-            RefreshConnectAll();
-            _window.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Background,
-                new Action(RefreshVisuals));
+            // Observable model changes can be raised by protocol/runtime workers. Never
+            // enumerate the visual tree or mutate WPF controls from that originating thread.
+            DispatchUi(() =>
+            {
+                ReconcileDeviceSubscriptions();
+                RefreshVisuals();
+            });
         }
 
         private void ReconcileDeviceSubscriptions()
@@ -127,12 +132,18 @@ public static class SmartIedOnboardingBehavior
                 or null
                 or "")
             {
-                RefreshConnectAll();
+                // IsBusy/IsConnected/IsMonitoring commonly change from MMS/report workers.
+                // RefreshConnectAll touches DependencyObjects, so always marshal it through
+                // the MainWindow dispatcher instead of inheriting the model event thread.
+                DispatchUi(RefreshConnectAll);
             }
         }
 
         private void RefreshVisuals()
         {
+            if (!_window.Dispatcher.CheckAccess())
+                throw new InvalidOperationException("Smart IED onboarding visual refresh must run on the MainWindow dispatcher.");
+
             var buttons = Descendants<Button>(_window).ToArray();
 
             var exactOpenSclButtons = buttons
@@ -237,6 +248,9 @@ public static class SmartIedOnboardingBehavior
 
         private void RefreshConnectAll()
         {
+            if (!_window.Dispatcher.CheckAccess())
+                throw new InvalidOperationException("Smart IED bulk action refresh must run on the MainWindow dispatcher.");
+
             if (_connectAllButton is null)
                 return;
 
@@ -250,6 +264,21 @@ public static class SmartIedOnboardingBehavior
                 label.Text = state.Label;
             else if (_connectAllButton.Content is string)
                 _connectAllButton.Content = state.Label;
+        }
+
+        private void DispatchUi(Action action, DispatcherPriority priority = DispatcherPriority.Background)
+        {
+            var dispatcher = _window.Dispatcher;
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+                return;
+
+            if (dispatcher.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            dispatcher.BeginInvoke(priority, action);
         }
 
         private static void RaiseExistingClick(Button? button)
