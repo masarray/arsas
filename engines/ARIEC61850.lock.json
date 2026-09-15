@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "e41def0a2676efb8a143905798155f6bccc6f047",
+  "commit": "2413d07cae3e94cbc209ae125d735f735e2f8acb",
   "sourcePullRequest": 125,
-  "purpose": "Canonical protocol-only golden-wire SCL-assisted trial pin. This exact SHA is built from the immutable ARSAS field-proven engine baseline recorded below and passed the dedicated convergence CI. It adds SCL-derived association identity, Domain/VMD reconciliation, bounded sequential initial FC-root Reads, and trusted static-report activation without hidden full discovery, network DataSet-directory browsing, implicit GI, or proactive BRCB ResvTms. PR #125 is an evidence/trial lane and is not a merge authority for ARIEC main; ARSAS checks out this immutable SHA directly.",
+  "purpose": "Canonical protocol-only golden-wire SCL-assisted trial pin. This exact SHA is built from the immutable ARSAS field-proven engine baseline recorded below and passed the dedicated convergence CI. It adds SCL-derived association identity, Domain/VMD reconciliation, bounded sequential initial FC-root Reads, trusted static-report activation without hidden full discovery, network DataSet-directory browsing, implicit GI, or proactive BRCB ResvTms, and accepts quoted Edition-1/vendor OSI-AP-Title lexical forms such as \"1,1,1,999,1\" while preserving the raw SCL parameter for diagnostics. PR #125 is an evidence/trial lane and is not a merge authority for ARIEC main; ARSAS checks out this immutable SHA directly.",
   "fieldProvenBaseline": {
     "commit": "11ab2304482600c19ba979f4fc9021ddb46b9af9",
     "sourcePullRequest": 111,
