@@ -124,7 +124,7 @@ public static class SclAssistedConnectionPreparationBuilder
 
         var association = ArScl.SclAssistedMmsAssociationPlanBuilder.BuildExact(
             effectiveRemote,
-            ArScl.MmsLocalAssociationProfile.ExistingRuntimeDefault);
+            ArScl.MmsLocalAssociationProfile.SclInteroperabilityDefault);
         warnings.AddRange(association.Warnings);
         if (!association.IsSuccess || association.Plan is null)
         {
