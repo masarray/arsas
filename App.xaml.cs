@@ -79,6 +79,12 @@ public partial class App : Application
         // tiny P2 adapter when windows activate so newly opened FAT workspaces also
         // inherit the selected industrial theme without touching engine workflows.
         P2BlueSteelGreigeUx.ApplyToOpenWindows(this);
+
+        // Keep IED onboarding task-first without replacing the existing protocol owners:
+        // Add IED offers SCL-first or live-IP discovery, and bulk connect is surfaced only
+        // when more than one loaded IED makes the action useful.
+        if (Current?.MainWindow is MainWindow mainWindow)
+            SmartIedOnboardingBehavior.Install(mainWindow);
     }
 
     private void InstallP2BlueSteelGreigeTheme()
