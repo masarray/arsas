@@ -18,13 +18,24 @@ public sealed class SclAssistedClientConnectResult
     public string Message { get; init; } = string.Empty;
 }
 
+internal sealed class TrustedSclInitialValue
+{
+    public string Reference { get; init; } = string.Empty;
+    public string FunctionalConstraint { get; init; } = string.Empty;
+    public string SclBType { get; init; } = string.Empty;
+    public object? Value { get; init; }
+}
+
 public sealed partial class NativeIec61850Client
 {
     private readonly Dictionary<string, ArMms.MmsDataSetDirectoryResult> _trustedSclDataSetDirectories =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TrustedSclInitialValue> _trustedSclInitialValues =
+        new(StringComparer.OrdinalIgnoreCase);
     private bool _trustedSclOnlineAuthorityActive;
 
     internal bool HasTrustedSclOnlineAuthority => _trustedSclOnlineAuthorityActive;
+    internal int TrustedSclInitialValueCount => _trustedSclOnlineAuthorityActive ? _trustedSclInitialValues.Count : 0;
 
     internal IReadOnlyList<ArMms.MmsReportControlCandidate> TrustedSclReportControls
         => _trustedSclOnlineAuthorityActive && _lastDiscovery is not null
@@ -44,10 +55,24 @@ public sealed partial class NativeIec61850Client
             out directory!);
     }
 
+    internal bool TryGetTrustedSclInitialValue(
+        string reference,
+        out TrustedSclInitialValue value)
+    {
+        value = null!;
+        if (!_trustedSclOnlineAuthorityActive)
+            return false;
+
+        return _trustedSclInitialValues.TryGetValue(
+            NormalizeTrustedSclReference(reference),
+            out value!);
+    }
+
     private void ResetTrustedSclOnlineAuthority()
     {
         _trustedSclOnlineAuthorityActive = false;
         _trustedSclDataSetDirectories.Clear();
+        _trustedSclInitialValues.Clear();
     }
 
     public Task<SclAssistedClientConnectResult> ConnectUsingSclAsync(
@@ -207,6 +232,22 @@ public sealed partial class NativeIec61850Client
                     NormalizeTrustedSclReference(directory.DataSetReference)] = directory;
             }
 
+            foreach (var leaf in initialRead.Batches
+                         .SelectMany(batch => batch.Projections)
+                         .SelectMany(projection => projection.Leaves))
+            {
+                if (string.IsNullOrWhiteSpace(leaf.Reference))
+                    continue;
+
+                _trustedSclInitialValues[NormalizeTrustedSclReference(leaf.Reference)] = new TrustedSclInitialValue
+                {
+                    Reference = leaf.Reference,
+                    FunctionalConstraint = leaf.FunctionalConstraint,
+                    SclBType = leaf.SclBType,
+                    Value = ConvertTrustedSclInitialValue(leaf.Value)
+                };
+            }
+
             _lastDiscovery = new ArMms.MmsDiscoveryResult
             {
                 Snapshot = new ArMms.MmsDiscoverySnapshot
@@ -232,7 +273,7 @@ public sealed partial class NativeIec61850Client
                 $"SCL-assisted MMS: domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
                 $"FC-roots={initialRead.Plan.Targets.Count}, successfulReads={initialRead.SuccessfulTargetCount}, " +
                 $"failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
-                $"projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
+                $"initialValueCache={_trustedSclInitialValues.Count}, projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
                 $"staticDataSets={dataSetDirectories.Count}, staticRCB={reportInventory.ReportControls.Count}, fullDiscovery=skipped.";
             LastConnectionFailureKind = string.Empty;
             LastConnectionTechnicalSummary = online.Domains?.Summary ?? online.Message;
@@ -313,7 +354,7 @@ public sealed partial class NativeIec61850Client
 
         foreach (var report in model.ReportControls)
         {
-            var reference = ConcreteFirstStaticRcbReference(report.Reference);
+            var reference = ConcreteFirstStaticRcbReference(report.Reference, report.Indexed);
             var candidate = new ArMms.MmsReportControlCandidate
             {
                 Domain = report.Domain,
@@ -448,17 +489,47 @@ public sealed partial class NativeIec61850Client
             : $"{logicalNode}${functionalConstraint}${dataPath}";
     }
 
-    private static string ConcreteFirstStaticRcbReference(string reference)
+    private static string ConcreteFirstStaticRcbReference(string reference, bool indexed)
     {
         var normalized = reference?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(normalized))
-            return string.Empty;
+        if (string.IsNullOrWhiteSpace(normalized) || !indexed)
+            return normalized;
 
         var separator = Math.Max(normalized.LastIndexOf('$'), normalized.LastIndexOf('.'));
         var leaf = separator >= 0 ? normalized[(separator + 1)..] : normalized;
         return leaf.Length > 0 && !char.IsDigit(leaf[^1])
             ? normalized + "01"
             : normalized;
+    }
+
+    private static object? ConvertTrustedSclInitialValue(ArMms.MmsDataValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return value.Kind switch
+        {
+            ArMms.MmsDataKind.Boolean or
+            ArMms.MmsDataKind.Integer or
+            ArMms.MmsDataKind.Unsigned or
+            ArMms.MmsDataKind.FloatingPoint or
+            ArMms.MmsDataKind.VisibleString or
+            ArMms.MmsDataKind.MmsString or
+            ArMms.MmsDataKind.UtcTime => value.Value,
+            ArMms.MmsDataKind.BitString => FormatTrustedSclBitString(value.RawValue),
+            ArMms.MmsDataKind.OctetString or ArMms.MmsDataKind.BinaryTime =>
+                Convert.ToHexString(value.RawValue.ToArray()),
+            _ => value.Value
+        };
+    }
+
+    private static string FormatTrustedSclBitString(IReadOnlyList<byte> raw)
+    {
+        if (raw.Count == 0)
+            return "bits(00,unused=0)";
+
+        var unusedBits = raw[0];
+        var data = raw.Skip(1).ToArray();
+        var hex = data.Length == 0 ? "00" : Convert.ToHexString(data);
+        return $"bits({hex},unused={unusedBits})";
     }
 
     private static string StaticRcbLeaf(string reference)
