@@ -6,8 +6,10 @@ namespace ArIED61850Tester.Services;
 /// <summary>
 /// Golden-wire static-report adapter used only after a successful trusted-SCL online
 /// connection. DataSet membership and configured RCB identity come from the exact SCL
-/// source that established the association. No live DataSet-directory browse, dynamic
-/// DataSet mutation, or implicit GI is permitted on this path.
+/// source that established the association. No live DataSet-directory browse or dynamic
+/// DataSet mutation is permitted on this path. Normal Play requests one explicit one-shot
+/// GI after the receiver is installed and the trusted static RCB is armed so the initial
+/// DataSet image is delivered without cyclic MMS polling.
 /// </summary>
 public sealed partial class NativeIec61850Client
 {
@@ -126,7 +128,7 @@ public sealed partial class NativeIec61850Client
                 $"Use {directory.Members.Count} ordered DataSet member(s) from the verified SCL source.",
                 "Install InformationReport receiver before RCB activation.",
                 "Primary wire sequence: whole-RCB Read, optional URCB Resv, RptEna=true, two whole-RCB readbacks.",
-                "BRCB ResvTms is retry-only after a real direct-RptEna rejection; GI remains off."
+                "BRCB ResvTms is retry-only after a real direct-RptEna rejection; request one explicit GI=true after activation for the initial image."
             },
             Warnings = Array.Empty<string>()
         };
@@ -135,7 +137,7 @@ public sealed partial class NativeIec61850Client
         var start = await RunMmsOperationAsync(
             () => _session.StartStaticSclReportMonitorAsync(
                 subscription,
-                triggerGeneralInterrogation: false,
+                triggerGeneralInterrogation: true,
                 cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
@@ -180,7 +182,7 @@ public sealed partial class NativeIec61850Client
         {
             IsSuccess = true,
             PlanId = plan.PlanId,
-            Message = $"Trusted SCL {plan.EngineAcquisitionKind} monitor active. {start.Message}",
+            Message = $"Trusted SCL {plan.EngineAcquisitionKind} monitor active with one-shot GI startup request. {start.Message}",
             SubscriptionSummary = subscription.Summary,
             MemberCount = subscription.Members.Count,
             WriteStepCount = start.WriteSteps.Count,
