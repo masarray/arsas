@@ -69,6 +69,30 @@ public sealed class SmartIedOnboardingRegressionTests
         Assert.DoesNotContain("Operate", behavior, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Onboarding_ModelEvents_MarshalVisualRefreshThroughMainWindowDispatcher()
+    {
+        var behavior = Read("Services/SmartIedOnboardingBehavior.cs");
+
+        var propertyChangedStart = behavior.IndexOf(
+            "private void Device_PropertyChanged",
+            StringComparison.Ordinal);
+        var refreshVisualsStart = behavior.IndexOf(
+            "private void RefreshVisuals",
+            StringComparison.Ordinal);
+        Assert.True(propertyChangedStart >= 0 && refreshVisualsStart > propertyChangedStart);
+
+        var propertyChangedBody = behavior[propertyChangedStart..refreshVisualsStart];
+        Assert.Contains("DispatchUi(RefreshConnectAll)", propertyChangedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("{\n                RefreshConnectAll();\n            }", propertyChangedBody, StringComparison.Ordinal);
+
+        Assert.Contains("private void DispatchUi(Action action", behavior, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.CheckAccess()", behavior, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.BeginInvoke(priority, action)", behavior, StringComparison.Ordinal);
+        Assert.Contains("Smart IED onboarding visual refresh must run on the MainWindow dispatcher", behavior, StringComparison.Ordinal);
+        Assert.Contains("Smart IED bulk action refresh must run on the MainWindow dispatcher", behavior, StringComparison.Ordinal);
+    }
+
     private static string Read(string relativePath)
         => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 
