@@ -39,7 +39,9 @@ public sealed class SclGoldenWireIntegrationContractTests
         var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.TrustedSclStaticReporting.cs"));
         Assert.Contains("TryGetTrustedSclDataSetDirectory", source, StringComparison.Ordinal);
         Assert.Contains("StartStaticSclReportMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("triggerGeneralInterrogation: false", source, StringComparison.Ordinal);
+        Assert.Contains("triggerGeneralInterrogation: true", source, StringComparison.Ordinal);
+        Assert.Contains("one explicit GI=true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("triggerGeneralInterrogation: false", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("DefineNamedVariableList", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartPersistentReportMonitorAsync", source, StringComparison.Ordinal);
