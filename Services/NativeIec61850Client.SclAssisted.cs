@@ -34,10 +34,15 @@ public sealed partial class NativeIec61850Client
     internal bool TryGetTrustedSclDataSetDirectory(
         string dataSetReference,
         out ArMms.MmsDataSetDirectoryResult directory)
-        => _trustedSclOnlineAuthorityActive &&
-           _trustedSclDataSetDirectories.TryGetValue(
-               NormalizeTrustedSclReference(dataSetReference),
-               out directory!);
+    {
+        directory = null!;
+        if (!_trustedSclOnlineAuthorityActive)
+            return false;
+
+        return _trustedSclDataSetDirectories.TryGetValue(
+            NormalizeTrustedSclReference(dataSetReference),
+            out directory!);
+    }
 
     private void ResetTrustedSclOnlineAuthority()
     {

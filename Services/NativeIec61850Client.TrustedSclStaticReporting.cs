@@ -165,8 +165,10 @@ public sealed partial class NativeIec61850Client
             };
         }
 
-        plan.ReportControlReference = start.Session.ReportControl.Reference;
-        plan.DataSetReference = start.Session.Plan.DataSetReference;
+        if (!string.IsNullOrWhiteSpace(start.Session.ReportControl.Reference))
+            plan.ReportControlReference = start.Session.ReportControl.Reference;
+        if (!string.IsNullOrWhiteSpace(start.Session.Plan.DataSetReference))
+            plan.DataSetReference = start.Session.Plan.DataSetReference;
         plan.Buffered = start.Session.ReportControl.Buffered;
         plan.IsEngineAuthoritative = true;
         plan.EngineAcquisitionKind = plan.Buffered ? "StaticBrcb" : "StaticUrcb";
