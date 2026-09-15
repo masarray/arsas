@@ -6,7 +6,7 @@ namespace ARSAS.Tests;
 public sealed class SclSafeTrialRunnerTests
 {
     [Fact]
-    public void CommandParser_UsesExplicitSclIdentityAndIedScoutLikeBatchDefault()
+    public void CommandParser_UsesExplicitSclIdentityAndBoundedBatchDefault()
     {
         var source = Path.Combine(Path.GetTempPath(), "trial.cid");
         var args = new[]
