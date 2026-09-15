@@ -1,0 +1,213 @@
+name: ARSAS targeted control and analyzer fix
+
+on:
+  push:
+    branches:
+      - fix/real-ied-feedback-smooth-analyzers
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused source patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected source block not found in {path}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 1) Strict IEC 61850 control/process separation: never inject command result into monitored stVal.
+          replace_exact(
+              'Services/Iec61850MonitorRuntime.cs',
+              '''        if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")\n            ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);\n\n''',
+              '''        // IMPORTANT: a successful/confirmed IEC 61850 control service is command-path evidence,\n        // not process-image authority. Never synthesize or inject stVal from Operate/SBO feedback here.\n        // The monitored state changes only through the independent acquisition path (RCB/report or\n        // an explicit authoritative MMS read performed by the monitor), matching IED engineering tools.\n\n''')
+
+          # 2) Command window must not display the command result as if it were the actual process position.
+          replace_exact(
+              'ControlCommandWindow.xaml.cs',
+              '''            CommandStage = result.Stage;\n            CommandStatus = BuildCommandResultText(result);\n            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")\n                CurrentValue = result.FeedbackValue;\n            SetResultTone(result.IsSuccess ? "Success" : "Error");\n''',
+              '''            CommandStage = result.IsSuccess && !TestMode ? "Command accepted" : result.Stage;\n            CommandStatus = BuildCommandResultText(result);\n            if (result.IsSuccess && !TestMode)\n            {\n                CommandStatus += " Command accepted by the IEC 61850 control service. Waiting for independent IED process feedback; monitored stVal is not changed from the command path.";\n            }\n            SetResultTone(result.IsSuccess ? "Success" : "Error");\n''')
+          replace_exact(
+              'ControlCommandWindow.xaml.cs',
+              '''        if (!string.IsNullOrWhiteSpace(result.FeedbackElapsedText) && result.FeedbackElapsedText != "-")\n            details.Add($"Process feedback: {result.FeedbackElapsedText}.");\n''',
+              '''        if (!string.IsNullOrWhiteSpace(result.FeedbackElapsedText) && result.FeedbackElapsedText != "-")\n            details.Add($"Control-side feedback verification: {result.FeedbackElapsedText}. This does not overwrite monitored stVal.");\n''')
+
+          # 3) Time-based easing math shared by phasor + harmonics presentation only.
+          Path('Services/PresentationEasingMath.cs').write_text(r'''namespace ArIED61850Tester.Services;
+
+/// <summary>
+/// Allocation-free presentation easing helpers. These functions are intentionally presentation-only:
+/// raw COMTRADE/IEC 61850 engineering values remain untouched and authoritative.
+/// </summary>
+public static class PresentationEasingMath
+{
+    public static double ExponentialAlpha(double elapsedMilliseconds, double timeConstantMilliseconds)
+    {
+        if (!double.IsFinite(timeConstantMilliseconds) || timeConstantMilliseconds <= 0.0)
+            return 1.0;
+        if (double.IsPositiveInfinity(elapsedMilliseconds))
+            return 1.0;
+        if (!double.IsFinite(elapsedMilliseconds) || elapsedMilliseconds <= 0.0)
+            return 0.0;
+
+        // Time-based, therefore visually consistent when the UI cadence changes.
+        var alpha = 1.0 - Math.Exp(-elapsedMilliseconds / timeConstantMilliseconds);
+        return Math.Clamp(alpha, 0.0, 1.0);
+    }
+
+    public static double Smooth(double current, double target, double elapsedMilliseconds, double timeConstantMilliseconds)
+    {
+        if (!double.IsFinite(target)) return current;
+        if (!double.IsFinite(current)) return target;
+        var alpha = ExponentialAlpha(elapsedMilliseconds, timeConstantMilliseconds);
+        return current + ((target - current) * alpha);
+    }
+
+    public static double ShortestAngleDeltaDegrees(double currentDegrees, double targetDegrees)
+    {
+        if (!double.IsFinite(currentDegrees) || !double.IsFinite(targetDegrees))
+            return 0.0;
+        var delta = (targetDegrees - currentDegrees) % 360.0;
+        if (delta >= 180.0) delta -= 360.0;
+        if (delta < -180.0) delta += 360.0;
+        return delta;
+    }
+
+    public static double NormalizeAngleDegrees(double degrees)
+    {
+        if (!double.IsFinite(degrees)) return 0.0;
+        var normalized = degrees % 360.0;
+        if (normalized >= 180.0) normalized -= 360.0;
+        if (normalized < -180.0) normalized += 360.0;
+        return normalized;
+    }
+
+    public static double SmoothAngleDegrees(double currentDegrees, double targetDegrees, double elapsedMilliseconds, double timeConstantMilliseconds)
+    {
+        if (!double.IsFinite(targetDegrees)) return NormalizeAngleDegrees(currentDegrees);
+        if (!double.IsFinite(currentDegrees)) return NormalizeAngleDegrees(targetDegrees);
+        var alpha = ExponentialAlpha(elapsedMilliseconds, timeConstantMilliseconds);
+        return NormalizeAngleDegrees(currentDegrees + (ShortestAngleDeltaDegrees(currentDegrees, targetDegrees) * alpha));
+    }
+}
+''', encoding='utf-8')
+
+          # 4) Phasor: smooth only display vectors at analysis-result cadence; no timer, no raw-value mutation.
+          replace_exact(
+              'Controls/ComtradePhasorView.cs',
+              '''using System.Globalization;\nusing System.Windows;\nusing System.Windows.Media;\n''',
+              '''using System.Diagnostics;\nusing System.Globalization;\nusing System.Windows;\nusing System.Windows.Media;\nusing ArIED61850Tester.Services;\n''')
+          replace_exact(
+              'Controls/ComtradePhasorView.cs',
+              '''    private string _headerLabel = "Fundamental phasors at C1";\n    private string _referenceDetail = "Select a valid analysis reference";\n    private string _message = string.Empty;\n''',
+              '''    private const double PresentationTimeConstantMs = 78.0;\n    private string _headerLabel = "Fundamental phasors at C1";\n    private string _referenceDetail = "Select a valid analysis reference";\n    private string _message = string.Empty;\n    private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();\n    private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();\n    private long _lastPresentationTimestamp;\n''')
+          replace_exact(
+              'Controls/ComtradePhasorView.cs',
+              '''        var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;\n        _headerLabel = $"Fundamental phasors at {resolvedReference}";\n        _referenceDetail = referenceDetail ?? string.Empty;\n        _voltagePanel = PreparePanel(voltageVectors);\n        _currentPanel = PreparePanel(currentVectors);\n        _message = string.Empty;\n        InvalidateVisual();\n''',
+              '''        var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;\n        _headerLabel = $"Fundamental phasors at {resolvedReference}";\n        _referenceDetail = referenceDetail ?? string.Empty;\n\n        var now = Stopwatch.GetTimestamp();\n        var elapsedMilliseconds = _lastPresentationTimestamp == 0\n            ? double.PositiveInfinity\n            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;\n        _lastPresentationTimestamp = now;\n\n        _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, voltageVectors, elapsedMilliseconds);\n        _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, currentVectors, elapsedMilliseconds);\n        _voltagePanel = PreparePanel(_smoothedVoltageVectors);\n        _currentPanel = PreparePanel(_smoothedCurrentVectors);\n        _message = string.Empty;\n        InvalidateVisual();\n''')
+          replace_exact(
+              'Controls/ComtradePhasorView.cs',
+              '''        _voltagePanel = PreparedPhasorPanel.Empty;\n        _currentPanel = PreparedPhasorPanel.Empty;\n        _message = message ?? string.Empty;\n        InvalidateVisual();\n''',
+              '''        _voltagePanel = PreparedPhasorPanel.Empty;\n        _currentPanel = PreparedPhasorPanel.Empty;\n        _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();\n        _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();\n        _lastPresentationTimestamp = 0;\n        _message = message ?? string.Empty;\n        InvalidateVisual();\n''')
+          replace_exact(
+              'Controls/ComtradePhasorView.cs',
+              '''    private static PreparedPhasorPanel PreparePanel(IReadOnlyList<ComtradePhasorVector>? source)\n''',
+              '''    private static ComtradePhasorVector[] SmoothVectors(\n        IReadOnlyList<ComtradePhasorVector> previous,\n        IReadOnlyList<ComtradePhasorVector>? target,\n        double elapsedMilliseconds)\n    {\n        if (target is null || target.Count == 0)\n            return Array.Empty<ComtradePhasorVector>();\n\n        var topologyMatches = previous.Count == target.Count && previous.Count > 0;\n        if (topologyMatches)\n        {\n            for (var index = 0; index < target.Count; index++)\n            {\n                if (!string.Equals(previous[index].Label, target[index].Label, StringComparison.Ordinal) ||\n                    !string.Equals(previous[index].Phase, target[index].Phase, StringComparison.Ordinal) ||\n                    !string.Equals(previous[index].Units, target[index].Units, StringComparison.Ordinal))\n                {\n                    topologyMatches = false;\n                    break;\n                }\n            }\n        }\n\n        var output = new ComtradePhasorVector[target.Count];\n        if (!topologyMatches)\n        {\n            for (var index = 0; index < target.Count; index++)\n                output[index] = target[index];\n            return output; // First sample / topology change snaps immediately: no artificial ramp from zero.\n        }\n\n        for (var index = 0; index < target.Count; index++)\n        {\n            var before = previous[index];\n            var next = target[index];\n            output[index] = new ComtradePhasorVector(\n                next.Label,\n                next.Phase,\n                next.Units,\n                PresentationEasingMath.Smooth(before.MagnitudeRms, next.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),\n                PresentationEasingMath.SmoothAngleDegrees(before.AngleDegrees, next.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));\n        }\n        return output;\n    }\n\n    private static PreparedPhasorPanel PreparePanel(IReadOnlyList<ComtradePhasorVector>? source)\n''')
+
+          # 5) Harmonics workstation: smooth display spectra only; preserve raw/native spectrum and analysis result.
+          replace_exact(
+              'Controls/ComtradeHarmonicsWorkstationView.cs',
+              '''using System.Globalization;\nusing System.Windows;\n''',
+              '''using System.Diagnostics;\nusing System.Globalization;\nusing System.Windows;\n''')
+          replace_exact(
+              'Controls/ComtradeHarmonicsWorkstationView.cs',
+              '''    private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n    private PreparedSpectrumRow[] _preparedRows = Array.Empty<PreparedSpectrumRow>();\n''',
+              '''    private const double PresentationTimeConstantMs = 92.0;\n    private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n    private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n    private long _lastPresentationTimestamp;\n    private PreparedSpectrumRow[] _preparedRows = Array.Empty<PreparedSpectrumRow>();\n''')
+          replace_exact(
+              'Controls/ComtradeHarmonicsWorkstationView.cs',
+              '''        _title = title ?? string.Empty;\n        _subtitle = subtitle ?? string.Empty;\n        _spectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n        _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);\n''',
+              '''        _title = title ?? string.Empty;\n        _subtitle = subtitle ?? string.Empty;\n        var targetSpectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n        var now = Stopwatch.GetTimestamp();\n        var elapsedMilliseconds = _lastPresentationTimestamp == 0\n            ? double.PositiveInfinity\n            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;\n        _lastPresentationTimestamp = now;\n        _smoothedSpectra = SmoothSpectra(_smoothedSpectra, targetSpectra, elapsedMilliseconds);\n        _spectra = _smoothedSpectra;\n        _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);\n''')
+          replace_exact(
+              'Controls/ComtradeHarmonicsWorkstationView.cs',
+              '''        _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n        _preparedRows = Array.Empty<PreparedSpectrumRow>();\n        _maximumDisplayedOrder = -1;\n''',
+              '''        _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n        _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n        _lastPresentationTimestamp = 0;\n        _preparedRows = Array.Empty<PreparedSpectrumRow>();\n        _maximumDisplayedOrder = -1;\n''')
+          replace_exact(
+              'Controls/ComtradeHarmonicsWorkstationView.cs',
+              '''    private static PreparedSpectrumRow[] PrepareRows(\n''',
+              '''    private static ComtradeHarmonicOverviewSpectrum[] SmoothSpectra(\n        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> previous,\n        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> target,\n        double elapsedMilliseconds)\n    {\n        if (target.Count == 0)\n            return Array.Empty<ComtradeHarmonicOverviewSpectrum>();\n\n        var topologyMatches = previous.Count == target.Count && previous.Count > 0;\n        if (topologyMatches)\n        {\n            for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)\n            {\n                var before = previous[spectrumIndex];\n                var next = target[spectrumIndex];\n                if (!string.Equals(before.SignalName, next.SignalName, StringComparison.Ordinal) ||\n                    !string.Equals(before.Units, next.Units, StringComparison.Ordinal) ||\n                    before.Bins.Count != next.Bins.Count)\n                {\n                    topologyMatches = false;\n                    break;\n                }\n                for (var binIndex = 0; binIndex < next.Bins.Count; binIndex++)\n                {\n                    if (before.Bins[binIndex].Order != next.Bins[binIndex].Order)\n                    {\n                        topologyMatches = false;\n                        break;\n                    }\n                }\n                if (!topologyMatches) break;\n            }\n        }\n\n        var result = new ComtradeHarmonicOverviewSpectrum[target.Count];\n        for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)\n        {\n            var next = target[spectrumIndex];\n            if (!topologyMatches)\n            {\n                result[spectrumIndex] = next with { Bins = next.Bins.ToArray() };\n                continue; // First sample / channel-set change snaps; smoothing never invents a ramp from zero.\n            }\n\n            var before = previous[spectrumIndex];\n            var bins = new ComtradeHarmonicDisplayBin[next.Bins.Count];\n            for (var binIndex = 0; binIndex < bins.Length; binIndex++)\n            {\n                var previousBin = before.Bins[binIndex];\n                var targetBin = next.Bins[binIndex];\n                bins[binIndex] = new ComtradeHarmonicDisplayBin(\n                    targetBin.Order,\n                    PresentationEasingMath.Smooth(previousBin.MagnitudeRms, targetBin.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),\n                    PresentationEasingMath.Smooth(previousBin.PercentOfFundamental, targetBin.PercentOfFundamental, elapsedMilliseconds, PresentationTimeConstantMs),\n                    PresentationEasingMath.SmoothAngleDegrees(previousBin.AngleDegrees, targetBin.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));\n            }\n\n            result[spectrumIndex] = new ComtradeHarmonicOverviewSpectrum(\n                next.SignalName,\n                next.Units,\n                PresentationEasingMath.Smooth(before.DcComponent, next.DcComponent, elapsedMilliseconds, PresentationTimeConstantMs),\n                PresentationEasingMath.Smooth(before.FundamentalRms, next.FundamentalRms, elapsedMilliseconds, PresentationTimeConstantMs),\n                PresentationEasingMath.Smooth(before.ThdPercent, next.ThdPercent, elapsedMilliseconds, PresentationTimeConstantMs),\n                next.DominantOrder,\n                PresentationEasingMath.Smooth(before.DominantRms, next.DominantRms, elapsedMilliseconds, PresentationTimeConstantMs),\n                PresentationEasingMath.Smooth(before.DominantPercent, next.DominantPercent, elapsedMilliseconds, PresentationTimeConstantMs),\n                next.EstimatedSampleRateHz,\n                next.MaximumResolvableOrder,\n                bins);\n        }\n        return result;\n    }\n\n    private static PreparedSpectrumRow[] PrepareRows(\n''')
+
+          # 6) Regression tests: control success cannot mutate monitored stVal + easing math is cadence-independent/angle-safe.
+          g1 = Path('tests/ARSAS.Tests/G1ControlCorrectnessRegressionTests.cs')
+          g1_text = g1.read_text(encoding='utf-8')
+          anchor = '''    [Fact]\n    public void CdcDerivation_MapsRepresentativeControlModelClasses()\n'''
+          if anchor not in g1_text:
+              raise SystemExit('G1 test insertion anchor not found')
+          test_block = r'''    [Fact]
+    public void OperateSuccess_DoesNotInjectCommandFeedbackIntoMonitoredProcessState()
+    {
+        var runtimeSource = File.ReadAllText(Path.GetFullPath("../../../../Services/Iec61850MonitorRuntime.cs"));
+        var commandWindowSource = File.ReadAllText(Path.GetFullPath("../../../../ControlCommandWindow.xaml.cs"));
+
+        Assert.DoesNotContain("ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue)", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CurrentValue = result.FeedbackValue", commandWindowSource, StringComparison.Ordinal);
+        Assert.Contains("Waiting for independent IED process feedback", commandWindowSource, StringComparison.Ordinal);
+        Assert.Contains("not process-image authority", runtimeSource, StringComparison.Ordinal);
+    }
+
+'''
+          g1.write_text(g1_text.replace(anchor, test_block + anchor, 1), encoding='utf-8')
+
+          Path('tests/ARSAS.Tests/PresentationEasingMathTests.cs').write_text(r'''using ArIED61850Tester.Services;
+using Xunit;
+
+namespace ARSAS.Tests;
+
+public sealed class PresentationEasingMathTests
+{
+    [Fact]
+    public void ExponentialSmoothing_IsTimeBased_NotFrameCountBased()
+    {
+        const double tau = 80.0;
+        var halfStep = PresentationEasingMath.Smooth(0.0, 1.0, 16.67, tau);
+        var twoSteps = PresentationEasingMath.Smooth(halfStep, 1.0, 16.67, tau);
+        var oneStep = PresentationEasingMath.Smooth(0.0, 1.0, 33.34, tau);
+        Assert.Equal(oneStep, twoSteps, 12);
+    }
+
+    [Fact]
+    public void AngleSmoothing_UsesShortestPathAcrossPlusMinus180()
+    {
+        Assert.Equal(2.0, PresentationEasingMath.ShortestAngleDeltaDegrees(179.0, -179.0), 10);
+        Assert.Equal(-2.0, PresentationEasingMath.ShortestAngleDeltaDegrees(-179.0, 179.0), 10);
+    }
+
+    [Fact]
+    public void InfiniteElapsedTime_SnapsToTarget()
+    {
+        Assert.Equal(1.0, PresentationEasingMath.ExponentialAlpha(double.PositiveInfinity, 80.0));
+        Assert.Equal(42.0, PresentationEasingMath.Smooth(10.0, 42.0, double.PositiveInfinity, 80.0), 10);
+    }
+}
+''', encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/arsas-targeted-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: separate control feedback and smooth analyzers"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
