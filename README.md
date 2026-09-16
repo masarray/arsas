@@ -33,9 +33,18 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
 </div>
 
-> **Current stable release: ARSAS v1.6.20.** This release adds a true self-contained Windows portable single EXE, preserves the validated installer path, and includes the protection-relay fascia and status-placement QA improvements described below.
+> **Current ARSAS application version: v1.6.37.** The current source line aligns live RCB instance presentation with IEDScout-style runtime slots while preserving canonical source-backed ReportControl identity, and makes in-process COMTRADE Phasor, Harmonics, and distance Locus interaction smoother without changing authoritative native engineering values.
 >
-> **Verified release pipeline:** installer + `ARSAS-Windows-x64-Portable.exe` + SHA-256 checksums + SPDX SBOM + provenance and attestations. Public binaries remain unsigned with Authenticode, so SmartScreen warnings are possible.
+> **Published-package boundary:** download version, file size, SHA-256, SBOM, provenance, and attestation claims remain tied to the latest actually published stable GitHub Release. `main` moving to a newer application version does not by itself advance public binary evidence.
+
+## What changed in v1.6.37
+
+- **IEDScout-aligned live RCB instances** — Legacy SAS RCB selection presents concrete instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, and `Unbuffer02` when the connected IED actually exposes them, without adding duplicate logical placeholder rows.
+- **Canonical source-backed SCL export** — an opened engineering source preserves the logical `ReportControl` identity and `RptEnabled` indexing metadata; declarative `RptEnabled@max` is never used to invent runtime instance names.
+- **Clear RCB occupancy** — the compact occupancy indicator is yellow when a client is using the RCB and green otherwise, while engineering detail stays available without alarm-like captions.
+- **Smooth COMTRADE Phasor and Harmonics** — presentation follows the latest exact native ArdIrec analysis target at display cadence and converges exactly after a bounded settle interval.
+- **Smooth distance Locus interaction** — Locus follows the same latest-target principle and resets transient presentation state across PRI/SEC basis changes so incompatible engineering bases are never interpolated together.
+- **Native authority preserved** — cursor identity, recorded samples, raw values, analysis targets, and exported evidence remain exact; easing is presentation-only and does not create a second analysis queue.
 
 ## What changed in v1.6.20
 
@@ -65,6 +74,8 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 | A multi-IED test loses device ownership and diagnostics. | Maintain an independent association, model, monitoring state, events, files, control context, and diagnostics for every IED. |
 | A FAT team must rebuild IO List evidence manually. | Import the approved workbook, bind exact IEC 61850 references, record ordered **OFF → ON → OFF** evidence, and export Excel, native PDF, or a resumable `.arsas` project. |
 | GOOSE or SMV analysis requires repeated navigation and adapter selection. | Enter directly from the selected IED card, resolve the routed NIC when it is unique, and start passive capture with a safe manual fallback. |
+| Runtime RCB slots and saved SCL identity do not line up cleanly. | Show the concrete live instances exposed by the IED while preserving the canonical logical ReportControl identity for source-backed SCL export. |
+| Disturbance analysis feels disconnected from the IEC 61850 workflow. | Open downloaded COMTRADE records inside ARSAS and use the pinned native ArdIrec bridge for cursor, Phasor, Harmonics, and distance Locus analysis. |
 | Integration failures become vague messages. | Preserve identity, references, DataSet membership, RCB options, protocol stage, negative response, timing, and copyable diagnostic evidence. |
 
 ARSAS shortens the path from **“the IED is reachable”** to **“the engineer has usable, attributable evidence.”** It does not turn an unsupported or ambiguous result into a false success.
@@ -141,17 +152,18 @@ The workflow preserves the existing stream-identity and continuity guards. `smpC
 
 ## Capability status
 
-| IEC 61850 area | Status | Current stable scope |
+| IEC 61850 area | Status | Current scope |
 |---|---|---|
 | **MMS client and model discovery** | Available | Association, physical identity, complete LD/LN/DO/DA hierarchy, values, quality, timestamps, DataSets, RCBs, types, and diagnostics. |
 | **IO List FAT evidence** | Available | Rev.3 import, exact event-log reference, one-IED sessions, OFF → ON → OFF evidence, reconnect handling, autosave, native executive PDF, Excel result, and portable `.arsas`. |
 | **Workspace continuity** | Available | Loaded Engineering/FAT mode switching without repetitive file dialogs; explicit replacement for another workbook or project. |
 | **Live discovery to SCL** | Available | Single-IED Edition 2 IID or Edition 1 ICD from the last complete typed discovery. |
-| **Selected-RCB CID export** | Available | Read-only availability audit, exact live RCB name, verified DataSet members/options, and bounded Edition 1/2 CID output. |
+| **RCB inspection and source-backed export** | Available | Concrete live runtime instances remain visible online; source-backed export preserves canonical logical ReportControl identity and `RptEnabled` indexing metadata without inventing runtime slot names. |
 | **Reporting and live monitoring** | Available | BRCB/URCB inspection, immediate reads, exact coverage, bounded recovery, visible polling fallback, multi-IED monitoring, and SOE. |
 | **GOOSE subscriber** | Available | Read-only Npcap capture, one-click IED context, APPID/VLAN/MAC, sequence, TAL, ordered payload, timeline, and model binding. |
 | **Sampled Values / SMV** | Engineering preview | One-click IED context and bounded two-cycle raw waveform evidence; calibrated scaling, complete semantic mapping, synchronization proof, and sustained-performance validation remain bounded work. |
 | **IEC 61850 file transfer** | Available | MMS browsing/download, segmented responses, grouped records, reconnect boundaries, duplicate handling, and detailed diagnostics. |
+| **In-process COMTRADE** | Available | Pinned native ArdIrec bridge with exact cursor, Phasor, Harmonics, six-loop distance Locus, bounded display easing, and no external viewer process. |
 | **Smart Control** | Available / guarded | Live `ctlModel`, Direct and SBO sequences, Test/interlock/synchrocheck context, CommandTermination, timing, and mapped feedback. |
 | **Full visual SCL authoring** | Planned | Complete visual project editing, communication, DataSets, control blocks, diff, and reusable project output. |
 
@@ -164,9 +176,9 @@ See [ROADMAP.md](ROADMAP.md) for definitions of done and explicit non-goals.
 | [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) | Recommended for normal use, Start Menu integration, uninstall support, and verified update workflow. |
 | [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) | Run the self-contained single EXE without installing ARSAS or .NET on an approved workstation. |
 | [SHA-256 checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt) | Verify the exact installer and portable package. |
-| [ARSAS v1.6.20 release](https://github.com/masarray/arsas/releases/tag/v1.6.20) | Release scope, assets, generated notes, SBOM, and provenance. |
+| [Latest tagged ARSAS release](https://github.com/masarray/arsas/releases/latest) | Authoritative public release scope, assets, checksums, SBOM, provenance, and publication state. |
 
-The public Windows binaries are currently **not Authenticode-signed**, so Windows SmartScreen may show an unrecognized-publisher warning. Verify the published SHA-256 value before use.
+The public Windows binaries are currently **not Authenticode-signed** unless the tagged release evidence states otherwise, so Windows SmartScreen may show an unrecognized-publisher warning. Verify the published SHA-256 value before use.
 
 ## System requirements
 
@@ -222,9 +234,9 @@ See the bilingual [Quick Start](https://masarray.github.io/arsas/quick-start.htm
                        Approved IEDs          Approved capture network
 ```
 
-Protocol parsing, transport behavior, typed contracts, schema profiles, SCL conversion/export, and reusable validation belong in [ARIEC61850](https://github.com/masarray/ARIEC61850). ARSAS owns the Windows workflow, project state, visualization, diagnostics, IO List test coordination, Excel/PDF evidence, and engineer-facing packaging.
+Protocol parsing, transport behavior, typed contracts, schema profiles, SCL conversion/export, and reusable validation belong in [ARIEC61850](https://github.com/masarray/ARIEC61850). ARSAS owns the Windows workflow, project state, visualization, diagnostics, IO List test coordination, Excel/PDF evidence, and engineer-facing packaging. The in-process COMTRADE workspace uses the separately pinned ArdIrec native bridge for disturbance-record parsing and analysis.
 
-Detailed notes: [Architecture](docs/ARCHITECTURE.md) · [IO List FAT Evidence](docs/IO_LIST_FAT_EVIDENCE.md) · [Engine compatibility](ENGINE_COMPATIBILITY.md)
+Detailed notes: [Architecture](docs/ARCHITECTURE.md) · [IO List FAT Evidence](docs/IO_LIST_FAT_EVIDENCE.md) · [COMTRADE integration](docs/COMTRADE_VIEWER_INTEGRATION.md) · [SCL export](docs/SCL_EXPORT.md) · [Engine compatibility](ENGINE_COMPATIBILITY.md)
 
 ## Build from source
 
