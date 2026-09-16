@@ -15,9 +15,9 @@
     <Product>ARSAS</Product>
     <AssemblyTitle>ARSAS - IEC 61850 Engineering Workstation</AssemblyTitle>
     <Description>Open-source Windows IEC 61850 engineering workstation for MMS model discovery, reporting, independent multi-IED monitoring, GOOSE subscription, fault-record file transfer, Sampled Values engineering and evidence export, SCL workflows, diagnostics, sequence of events, and guarded control validation.</Description>
-    <Version>1.6.36</Version>
-    <AssemblyVersion>1.6.36.0</AssemblyVersion>
-    <FileVersion>1.6.36.0</FileVersion>
+    <Version>1.6.37</Version>
+    <AssemblyVersion>1.6.37.0</AssemblyVersion>
+    <FileVersion>1.6.37.0</FileVersion>
     <PackageProjectUrl>https://github.com/masarray/arsas</PackageProjectUrl>
     <RepositoryUrl>https://github.com/masarray/arsas</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -33,6 +33,7 @@
     <ArIec61850PowerShell Condition="'$(OS)' == 'Windows_NT'">powershell</ArIec61850PowerShell>
     <ArIec61850PowerShell Condition="'$(OS)' != 'Windows_NT'">pwsh</ArIec61850PowerShell>
     <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == '' and '$(ARSAS_ARDIREC_BRIDGE_PATH)' != ''">$(ARSAS_ARDIREC_BRIDGE_PATH)</ArdIrecBridgePath>
+    <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == ''">$(MSBuildProjectDirectory)\Tools\ArdIrec\ardirec_bridge.dll</ArdIrecBridgePath>
     <ArdIrecBridgeRequired Condition="'$(ArdIrecBridgeRequired)' == ''">false</ArdIrecBridgeRequired>
   </PropertyGroup>
 
