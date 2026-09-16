@@ -6,11 +6,18 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow
 {
     private const int P1D4PhasorCacheCapacity = 64;
+    private const int P1D4PresentationSettleFrames = 8;
 
     // P1D.4 field-scrub path. Visual cursor motion is synchronous and cheap; native analysis is
     // coalesced at WPF composition cadence with at most one worker in flight. A final mouse-up
     // revision invalidates any older in-flight result so the view cannot flash back to a stale
     // phasor/harmonic frame after the user has already stopped scrubbing.
+    //
+    // Native results remain authoritative and latest-only. After a result arrives, the exact same
+    // immutable result is re-presented for a small bounded number of composition frames so the
+    // presentation-only easing inside the Phasor/Harmonics controls can converge smoothly even
+    // after native calculation has gone idle. No additional native work is issued by this settle
+    // path, and a newer pointer target always pre-empts it.
     private bool _p1d4ScrubRenderingHooked;
     private bool _p1d4ScrubWorkerRunning;
     private bool _p1d4ScrubDirty;
@@ -23,6 +30,9 @@ public partial class ComtradeWorkspaceWindow
     private IReadOnlyList<ComtradePhasorChannelDescriptor>? _p1d4CurrentChannels;
     private readonly BoundedFifoCache<ulong, ComtradePhasorWorkspaceResult> _p1d4PhasorFrameCache =
         new(P1D4PhasorCacheCapacity);
+    private P1D4LiveAnalysisRequest? _p1d4PresentationRequest;
+    private P1D4LiveAnalysisOutcome? _p1d4PresentationOutcome;
+    private int _p1d4PresentationFramesRemaining;
 
     private void QueueP1D4LiveAnalysisScrub(bool isFinal)
     {
@@ -68,6 +78,9 @@ public partial class ComtradeWorkspaceWindow
         _p1d4ScrubDirty = false;
         _p1d4FinalRequested = false;
         _p1d4OwnedAnalysisMode = null;
+        _p1d4PresentationRequest = null;
+        _p1d4PresentationOutcome = null;
+        _p1d4PresentationFramesRemaining = 0;
         unchecked { _p1d4TargetRevision++; }
         _p1d4SettledRevision = _p1d4TargetRevision;
         _p1d4ScrubCts?.Cancel();
@@ -82,22 +95,33 @@ public partial class ComtradeWorkspaceWindow
             StopP1D4LiveAnalysisRenderingPump();
             return;
         }
-        if (_p1d4ScrubWorkerRunning || !_p1d4ScrubDirty)
+        if (_p1d4ScrubWorkerRunning)
             return;
+
+        // When native work is idle, keep moving only the presentation layer toward the last exact
+        // result. This makes final Phasor/Harmonics motion continuous instead of stopping at the
+        // last native-result step. New input always wins because dirty work is handled first.
+        if (!_p1d4ScrubDirty)
+        {
+            if (AdvanceP1D4PresentationFrame())
+                return;
+            StopP1D4LiveAnalysisRenderingPump();
+            return;
+        }
 
         _p1d4ScrubDirty = false;
         var final = _p1d4FinalRequested;
         _p1d4FinalRequested = false;
         if (!TryCreateP1D4LiveAnalysisRequest(final, out var request))
         {
-            if (!_p1d4ScrubDirty)
+            if (!_p1d4ScrubDirty && !AdvanceP1D4PresentationFrame())
                 StopP1D4LiveAnalysisRenderingPump();
             return;
         }
 
         if (IsP1D4AnalysisAlreadyRendered(request))
         {
-            if (!_p1d4ScrubDirty)
+            if (!_p1d4ScrubDirty && !AdvanceP1D4PresentationFrame())
                 StopP1D4LiveAnalysisRenderingPump();
             return;
         }
@@ -176,29 +200,57 @@ public partial class ComtradeWorkspaceWindow
                 return;
             }
 
-            if (request.Mode == AnalysisMode.Phasor && outcome.Phasor is { } phasor)
-            {
-                PresentPhasor(request.ReferenceFrame, request.ReferenceMilliseconds, phasor);
-                return;
-            }
-
-            if (request.Mode == AnalysisMode.Harmonics && outcome.Harmonics is { Count: > 0 } overview)
-            {
-                PresentP1D4HarmonicOverview(
-                    request.ReferenceFrame,
-                    request.ReferenceMilliseconds,
-                    request.HarmonicSignature,
-                    overview);
-            }
+            _p1d4PresentationRequest = request;
+            _p1d4PresentationOutcome = outcome;
+            _p1d4PresentationFramesRemaining = P1D4PresentationSettleFrames;
+            PresentP1D4LiveAnalysisFrame(request, outcome);
         }
         finally
         {
             _p1d4ScrubWorkerRunning = false;
-            if (_p1d4ScrubDirty && _analysisMode != AnalysisMode.Waveform)
+            if ((_p1d4ScrubDirty || _p1d4PresentationFramesRemaining > 0) &&
+                _analysisMode != AnalysisMode.Waveform)
                 EnsureP1D4LiveAnalysisRenderingPump();
             else
                 StopP1D4LiveAnalysisRenderingPump();
         }
+    }
+
+    private void PresentP1D4LiveAnalysisFrame(
+        P1D4LiveAnalysisRequest request,
+        P1D4LiveAnalysisOutcome outcome)
+    {
+        if (request.Mode == AnalysisMode.Phasor && outcome.Phasor is { } phasor)
+        {
+            PresentPhasor(request.ReferenceFrame, request.ReferenceMilliseconds, phasor);
+            return;
+        }
+
+        if (request.Mode == AnalysisMode.Harmonics && outcome.Harmonics is { Count: > 0 } overview)
+        {
+            PresentP1D4HarmonicOverview(
+                request.ReferenceFrame,
+                request.ReferenceMilliseconds,
+                request.HarmonicSignature,
+                overview);
+        }
+    }
+
+    private bool AdvanceP1D4PresentationFrame()
+    {
+        if (_p1d4PresentationFramesRemaining <= 0 ||
+            _p1d4PresentationRequest is not { } request ||
+            _p1d4PresentationOutcome is not { } outcome ||
+            request.Mode != _analysisMode ||
+            !ShouldPresentP1D4LiveAnalysis(request))
+        {
+            _p1d4PresentationFramesRemaining = 0;
+            return false;
+        }
+
+        PresentP1D4LiveAnalysisFrame(request, outcome);
+        _p1d4PresentationFramesRemaining--;
+        return _p1d4PresentationFramesRemaining > 0;
     }
 
     /// <summary>
