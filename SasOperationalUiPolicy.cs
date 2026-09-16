@@ -24,7 +24,7 @@ internal static class SasOperationalUiPolicy
     private static readonly ConditionalWeakTable<object, object> FilteredViews = new();
     private static readonly string[] NavigationButtonNames =
     {
-        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton"
+        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton", "NavNativeFatButton"
     };
 
     [ModuleInitializer]

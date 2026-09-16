@@ -1,0 +1,113 @@
+using System.Collections.ObjectModel;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Models.IoTesting;
+
+namespace ArIED61850Tester.Services.IoTesting;
+
+public sealed record NativeFatPrintPreviewRow(
+    string Signal,
+    string IecTelegram,
+    string Quality,
+    string LiveValue,
+    string Value1,
+    string Value1TimestampText,
+    string Value2,
+    string Value2TimestampText,
+    string Result);
+
+/// <summary>
+/// Immutable selected-IED-only report input for native Engineering FAT.
+/// Capture copies the exact native FAT row order plus sparse evidence overlay. No live
+/// row/evidence object is retained after Capture returns and acquisition is never restarted.
+/// </summary>
+public sealed class NativeFatPrintPreviewSnapshot
+{
+    private readonly ReadOnlyCollection<NativeFatPrintPreviewRow> _rows;
+
+    private NativeFatPrintPreviewSnapshot(
+        DateTimeOffset capturedAt,
+        string deviceId,
+        string iedName,
+        string ipAddress,
+        int port,
+        IReadOnlyCollection<NativeFatPrintPreviewRow> rows,
+        NativeFatAuxiliaryEvidenceSnapshot auxiliaryEvidence)
+    {
+        CapturedAt = capturedAt;
+        DeviceId = deviceId;
+        IedName = iedName;
+        IpAddress = ipAddress;
+        Port = port;
+        _rows = Array.AsReadOnly(rows.ToArray());
+        AuxiliaryEvidence = auxiliaryEvidence.Copy();
+    }
+
+    public DateTimeOffset CapturedAt { get; }
+    public string DeviceId { get; }
+    public string IedName { get; }
+    public string IpAddress { get; }
+    public int Port { get; }
+    public IReadOnlyList<NativeFatPrintPreviewRow> Rows => _rows;
+    public NativeFatAuxiliaryEvidenceSnapshot AuxiliaryEvidence { get; }
+    public int CompleteCount => _rows.Count(row => HasEvidence(row.Value1) && HasEvidence(row.Value2));
+    public string ProgressText => $"Evidence complete: {CompleteCount} / {_rows.Count} signals";
+
+    public static NativeFatPrintPreviewSnapshot Capture(
+        Iec61850MonitorDevice device,
+        NativeFatIedSessionCacheState cache,
+        NativeFatAuxiliaryEvidenceSnapshot? auxiliaryEvidence = null)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(cache);
+
+        var rows = device.Points.Select(point =>
+        {
+            var value1 = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value1);
+            var value2 = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Value2);
+            var capture1 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value1);
+            var capture2 = NativeFatCanonicalEvidenceOverlay.ReadCapture(cache, point, NativeFatEvidenceField.Value2);
+            var rawResult = NativeFatCanonicalEvidenceOverlay.ReadRaw(cache, point, NativeFatEvidenceField.Result);
+            var result = !string.IsNullOrWhiteSpace(rawResult)
+                ? rawResult.Trim()
+                : HasEvidence(value1) && HasEvidence(value2) ? "COMPLETE" : string.Empty;
+            var displaySignal = IoFatSignalDisplayNameFormatter.Format(point.SignalName, point.IecReference);
+
+            return new NativeFatPrintPreviewRow(
+                Copy(displaySignal),
+                Copy(point.IecTelegram),
+                Copy(point.Quality),
+                Display(point.DisplayValue),
+                Display(value1),
+                DisplayTimestamp(capture1),
+                Display(value2),
+                DisplayTimestamp(capture2),
+                Display(result));
+        }).ToArray();
+
+        return new NativeFatPrintPreviewSnapshot(
+            DateTimeOffset.Now,
+            Copy(device.DeviceId),
+            Copy(device.Name),
+            Copy(device.IpAddress),
+            device.Port,
+            rows,
+            auxiliaryEvidence ?? NativeFatAuxiliaryEvidenceSnapshot.Empty);
+    }
+
+    private static string DisplayTimestamp(FatValueEvidence? evidence)
+    {
+        if (evidence is null)
+            return "—";
+        var timestamp = evidence.IedTimestamp ?? evidence.CapturedAt;
+        return NativeFatReportFormatting.LocalTimestamp(timestamp);
+    }
+
+    private static bool HasEvidence(string? value)
+        => !string.IsNullOrWhiteSpace(value) && value.Trim() != "—";
+
+    private static string Copy(string? value)
+        => value?.Trim() ?? string.Empty;
+
+    private static string Display(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+}

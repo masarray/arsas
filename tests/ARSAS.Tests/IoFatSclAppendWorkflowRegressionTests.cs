@@ -3,20 +3,23 @@ namespace ARSAS.Tests;
 public sealed class IoFatSclAppendWorkflowRegressionTests
 {
     [Fact]
-    public void P04_LoadedFatRoutesSclToAppendInsteadOfWorkspaceReplacement()
+    public void P04_LegacyWorkspaceOwnsExplicitSclAppendWithoutAHeaderSwitcherEntryPoint()
     {
-        var modeSwitch = ReadRepoFile("MainWindow.WorkspaceModeSwitch.cs");
+        var lifecycle = ReadRepoFile("MainWindow.WorkspaceModeSwitch.cs");
+        var addIed = ReadRepoFile("IoListTestingWindow.AddIed.cs");
+        var append = ReadRepoFile("MainWindow.IoTesting.SclAppend.cs");
+        var host = ReadRepoFile("MainWindow.IoTesting.cs");
 
-        Assert.Contains("Add SCL / CID to loaded FAT workspace", modeSwitch, StringComparison.Ordinal);
-        Assert.Contains("OpenSclForLoadedFatAppendAsync(loaded)", modeSwitch, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "QueueIoFatWorkspaceReplacement(\n            () => OpenSclFatTesting_Click",
-            modeSwitch,
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("InstallWorkspaceModeSwitch", lifecycle, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenIoFatWorkspaceMenu", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("ImportAdditionalSclSourcesAsync(engineeringWindow, dialog.FileNames)", addIed, StringComparison.Ordinal);
+        Assert.Contains("AppendSclIedsToLoadedFatAsync(this, sclPaths)", addIed, StringComparison.Ordinal);
+        Assert.Contains("Title = \"Add IEC 61850 SCL to loaded FAT workspace\"", append, StringComparison.Ordinal);
+        Assert.Contains("ImportAdditionalSclSourcesAsync(this, dialog.FileNames)", append, StringComparison.Ordinal);
 
         // Workbook and portable project opens intentionally retain replacement semantics.
-        Assert.Contains("() => OpenIoListTesting_Click(this, new RoutedEventArgs())", modeSwitch, StringComparison.Ordinal);
-        Assert.Contains("() => OpenIoListPackage_Click(this, new RoutedEventArgs())", modeSwitch, StringComparison.Ordinal);
+        Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListTesting_Click(sender, e))", host, StringComparison.Ordinal);
+        Assert.Contains("QueueIoFatWorkspaceReplacement(() => OpenIoListPackage_Click(sender, e))", host, StringComparison.Ordinal);
     }
 
     [Fact]

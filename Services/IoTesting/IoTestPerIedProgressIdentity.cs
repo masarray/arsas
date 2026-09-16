@@ -7,8 +7,9 @@ namespace ArIED61850Tester.Services.IoTesting;
 
 /// <summary>
 /// Stable identity contract for restoring persisted FAT progress onto a freshly imported plan.
-/// IED ownership is technical-key + IP scoped; point progress is accepted only when the
-/// evidence-critical configuration fingerprint still matches.
+/// IED ownership is IEC technical identity + endpoint scoped and, when both sides know it,
+/// additionally bound to the Engineering live DeviceId. Point progress is accepted only when
+/// the evidence-critical configuration fingerprint still matches.
 /// </summary>
 public static class IoTestPerIedProgressIdentity
 {
@@ -20,6 +21,44 @@ public static class IoTestPerIedProgressIdentity
 
     public static string IedKey(string? iedName, string? ipAddress)
         => $"{NormalizeIdentity(iedName)}|{NormalizeIp(ipAddress)}";
+
+    /// <summary>
+    /// Strong persisted-owner key for new snapshots. DeviceId is deliberately additive:
+    /// legacy snapshots did not persist it, so endpoint + IEC identity remains the migration
+    /// fallback only when either side does not yet know a DeviceId. Once both sides know it,
+    /// a mismatch is a hard fail-closed ownership boundary.
+    /// </summary>
+    public static string IedPersistenceAuthorityKey(IoTestIedPlan ied)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        return IedPersistenceAuthorityKey(ied.LiveDeviceId, ied.IedName, ied.IpAddress);
+    }
+
+    public static string IedPersistenceAuthorityKey(
+        string? deviceId,
+        string? iedName,
+        string? ipAddress)
+        => $"{NormalizeIdentity(deviceId)}|{NormalizeIdentity(iedName)}|{NormalizeIp(ipAddress)}";
+
+    public static bool PersistedIedOwnershipMatches(IoTestIedPlan currentIed, JsonElement savedIed)
+    {
+        ArgumentNullException.ThrowIfNull(currentIed);
+
+        var savedName = OptionalString(savedIed, "iedName", string.Empty);
+        var savedIp = OptionalString(savedIed, "ipAddress", string.Empty);
+        if (!IedKey(currentIed).Equals(IedKey(savedName, savedIp), StringComparison.Ordinal))
+            return false;
+
+        var currentDeviceId = NormalizeIdentity(currentIed.LiveDeviceId);
+        var savedDeviceId = NormalizeIdentity(OptionalString(savedIed, "liveDeviceId", string.Empty));
+
+        // Backward compatibility is intentionally one-way: old snapshots without DeviceId
+        // may still restore through exact IEC identity + IP + point fingerprints. As soon as
+        // both snapshots/current Engineering context carry DeviceId, it becomes mandatory.
+        return currentDeviceId.Length == 0 ||
+               savedDeviceId.Length == 0 ||
+               currentDeviceId.Equals(savedDeviceId, StringComparison.Ordinal);
+    }
 
     public static string PointConfigurationFingerprint(IoTestPointPlan point)
         => PointConfigurationFingerprintCore(point, includeSignalAddress: true);

@@ -3,7 +3,7 @@ namespace ARSAS.Tests;
 public sealed class MainWindowTopBarLayoutRegressionTests
 {
     [Fact]
-    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSixDestinationLabels()
+    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSevenDestinationGeometry()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
@@ -14,20 +14,22 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         Assert.Contains("\"Alarm\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
         Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton", source, StringComparison.Ordinal);
         Assert.Contains("var labels = wide ? FullLabels : CompactLabels", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SelectionPill_IsDerivedFromActualSixCellNavWidth_NotFixed150Pixels()
+    public void SelectionPill_IsDerivedFromActualSevenCellNavWidth_NotFixed150Pixels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("var cellWidth = contentWidth / 6d", source, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 5) * cellWidth", source, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 7d", source, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth", source, StringComparison.Ordinal);
         Assert.Contains("pill.Width = Math.Max(1d, cellWidth - 2d)", source, StringComparison.Ordinal);
         Assert.Contains("FindName(\"WorkflowPillTranslate\") as TranslateTransform", source, StringComparison.Ordinal);
         Assert.Contains("pill.RenderTransform is TransformGroup", source, StringComparison.Ordinal);
         Assert.DoesNotContain("* 150d", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("contentWidth / 6d", source, StringComparison.Ordinal);
         Assert.DoesNotContain("contentWidth / 5d", source, StringComparison.Ordinal);
     }
 
@@ -41,6 +43,7 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         Assert.Contains("Button.ClickEvent", source, StringComparison.Ordinal);
         Assert.Contains("OnMainWindowButtonClick", source, StringComparison.Ordinal);
         Assert.Contains("NavAlarmButton", source, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton", source, StringComparison.Ordinal);
         Assert.Contains("A repeated click on the already-selected tab", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.Loaded", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ContextIdle", source, StringComparison.Ordinal);
@@ -60,14 +63,14 @@ public sealed class MainWindowTopBarLayoutRegressionTests
     }
 
     [Fact]
-    public void CompactHeader_DoesNotRemoveWorkspaceFunctions()
+    public void CompactHeader_HasNoLegacyWorkspaceSwitcherLayoutPath()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("engineeringText.Text = medium ? \"ENGINEERING\" : \"ENG\"", source, StringComparison.Ordinal);
-        Assert.Contains("loaded ? \"FAT · LOADED\" : \"FAT\"", source, StringComparison.Ordinal);
-        Assert.Contains("WorkspaceModeChild_SizeChanged", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("modeShell.Visibility = Visibility.Collapsed", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyWorkspaceSwitchDensity", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorkspaceModeChild_SizeChanged", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ARSAS_WORKSPACE_MODE_SWITCH", source, StringComparison.Ordinal);
+        Assert.Contains("NavNativeFatButton", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)

@@ -26,6 +26,18 @@ internal static class ComtradeTimeMath
         return rawTimestamp * multiplier / 1000.0;
     }
 
+    /// <summary>
+    /// Converts a COMTRADE DAT timestamp to elapsed milliseconds from the first recorded sample.
+    /// Some legacy/third-party records start DAT timestamps at one sample period rather than zero;
+    /// StartTime still describes the first recorded sample. Subtracting the first raw timestamp is
+    /// therefore required before comparing sample time with the CFG trigger offset.
+    /// </summary>
+    internal static double ToRecordMilliseconds(uint rawTimestamp, uint firstRawTimestamp, double timeMultiplier)
+    {
+        var multiplier = timeMultiplier > 0 && double.IsFinite(timeMultiplier) ? timeMultiplier : 1.0;
+        return (rawTimestamp - (double)firstRawTimestamp) * multiplier / 1000.0;
+    }
+
     internal static bool TryGetTriggerOffsetMilliseconds(string startText, string triggerText, out double offsetMilliseconds)
     {
         offsetMilliseconds = 0;
