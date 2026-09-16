@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "product": "ARSAS",
   "version": "1.6.37",
-  "title": "IEDScout-aligned RCB export and smoother COMTRADE interaction",
-  "titleId": "Export RCB selaras IEDScout dan interaksi COMTRADE lebih halus",
-  "summary": "ARSAS 1.6.37 is a focused reliability and UX update for Legacy SAS RCB export and the in-process COMTRADE workstation. Live RCB instances are presented like IEDScout while source-backed IID/SCL export keeps the canonical logical ReportControl identity, and COMTRADE Phasor, Harmonics and distance Locus presentation now follows native analysis targets smoothly without changing authoritative engineering values.",
-  "summaryId": "ARSAS 1.6.37 adalah pembaruan reliability dan UX yang terfokus untuk export RCB Legacy SAS dan workstation COMTRADE in-process. Instance RCB live ditampilkan seperti IEDScout sementara export IID/SCL source-backed tetap mempertahankan identity logical ReportControl yang canonical, dan presentation COMTRADE Phasor, Harmonics, serta distance Locus kini mengikuti target native analysis secara lebih halus tanpa mengubah nilai engineering yang authoritative.",
+  "title": "Runtime-aligned RCB export and smoother COMTRADE interaction",
+  "titleId": "Export RCB selaras runtime dan interaksi COMTRADE lebih halus",
+  "summary": "ARSAS 1.6.37 is a focused reliability and UX update for Legacy SAS RCB export and the in-process COMTRADE workstation. Live RCB instances are presented as concrete runtime slots exposed by the connected IED while source-backed IID/SCL export keeps the canonical logical ReportControl identity, and COMTRADE Phasor, Harmonics and distance Locus presentation now follows native analysis targets smoothly without changing authoritative engineering values.",
+  "summaryId": "ARSAS 1.6.37 adalah pembaruan reliability dan UX yang terfokus untuk export RCB Legacy SAS dan workstation COMTRADE in-process. Instance RCB live ditampilkan sebagai slot runtime konkret yang benar-benar diekspos oleh IED terhubung sementara export IID/SCL source-backed tetap mempertahankan identity logical ReportControl yang canonical, dan presentation COMTRADE Phasor, Harmonics, serta distance Locus kini mengikuti target native analysis secara lebih halus tanpa mengubah nilai engineering yang authoritative.",
   "highlights": [
     "Legacy SAS RCB selection now presents concrete live instances such as Buffer01/Buffer02 and Unbuffer01/Unbuffer02 when those instances are actually exposed by the connected IED, without showing a duplicate logical Buffer/Unbuffer row.",
-    "Source-backed RCB export preserves the canonical SCL ReportControl identity and RptEnabled indexing metadata, matching the separation between online runtime instances and saved engineering model used by IEDScout.",
+    "Source-backed RCB export preserves the canonical SCL ReportControl identity and RptEnabled indexing metadata, keeping online runtime instances separate from the saved engineering model.",
     "RCB occupancy is shown with a calm square-only indicator: yellow when a client is using the RCB and green otherwise, while detailed engineering evidence remains available without alarming status captions.",
     "COMTRADE Phasor and Harmonics views ease toward the latest exact native result at display cadence, with bounded settle time and exact convergence to the authoritative analysis target.",
     "Distance Locus cursor presentation now uses the same latest-target principle and resets transient presentation state across PRI/SEC engineering-basis changes so unrelated unit bases are never interpolated together."
   ],
   "highlightsId": [
     "Pemilihan RCB Legacy SAS kini menampilkan instance live konkret seperti Buffer01/Buffer02 dan Unbuffer01/Unbuffer02 ketika instance tersebut benar-benar diekspos oleh IED yang terhubung, tanpa menampilkan row logical Buffer/Unbuffer duplikat.",
-    "Export RCB source-backed mempertahankan identity SCL ReportControl canonical dan metadata indexing RptEnabled, mengikuti pemisahan antara instance runtime online dan engineering model tersimpan seperti pada IEDScout.",
+    "Export RCB source-backed mempertahankan identity SCL ReportControl canonical dan metadata indexing RptEnabled, dengan pemisahan yang jelas antara instance runtime online dan engineering model tersimpan.",
     "Occupancy RCB ditampilkan dengan indikator kotak yang tenang: kuning ketika RCB sedang digunakan client dan hijau untuk kondisi lainnya, sementara evidence engineering detail tetap tersedia tanpa caption status yang mengkhawatirkan.",
     "View COMTRADE Phasor dan Harmonics melakukan easing menuju hasil native exact terbaru pada display cadence, dengan settle time terbatas dan konvergensi exact ke target analysis authoritative.",
     "Presentation cursor Distance Locus kini memakai prinsip latest-target yang sama dan mereset transient presentation state saat basis engineering PRI/SEC berubah sehingga unit basis yang berbeda tidak pernah diinterpolasikan bersama."
