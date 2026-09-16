@@ -82,18 +82,30 @@ public partial class MainWindow
         if (sourceInventory == null)
             return liveRows;
 
-        // Never let an older/source SCL hide RCBs that the connected IED actually
-        // exposes. Source-backed rows are preferred for exact export identity, then
-        // unmatched live-discovery rows are appended as first-class export choices.
+        // Present concrete live instances when the IED exposes them, but never append the
+        // corresponding logical SCL ReportControl as a duplicate row. For example, a source
+        // `Buffer` with RptEnabled max=2 may appear online as Buffer01 + Buffer02. The source
+        // logical identity remains export authority; the concrete instance names are UX/runtime evidence.
         var rows = BuildSourceBackedRcbRows(device, sourceInventory, availability).ToList();
         var seen = rows
             .Select(row => NormalizeRcbReference(row.Reference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceBackedSelectionKeys = rows
+            .Where(row => row.IsSourceBacked && !string.IsNullOrWhiteSpace(row.SourceSelectionKey))
+            .Select(row => row.SourceSelectionKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var logicalSourceReferences = sourceInventory.ReportControls
+            .Where(descriptor => sourceBackedSelectionKeys.Contains(descriptor.SelectionKey))
+            .Select(descriptor => NormalizeRcbReference(descriptor.DisplayReference))
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var liveRow in liveRows)
         {
             var key = NormalizeRcbReference(liveRow.Reference);
+            if (logicalSourceReferences.Contains(key))
+                continue;
             if (!seen.Add(key))
                 continue;
             rows.Add(liveRow);
@@ -361,6 +373,7 @@ public partial class MainWindow
                     SchemaProfile = schema,
                     SelectedReportControl = new SclReportControlSelection(row.SourceSelectionKey, row.ExportName),
                     RemoveUnreferencedDataSets = false,
+                    PreserveSourceReportControlIdentity = true,
                     ToolId = "ARIEC61850"
                 }), cancellationToken);
 

@@ -183,15 +183,13 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="STATUS" Width="1.2*">
+                    <DataGridTemplateColumn Header="STATUS" Width="82">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="12,0,8,0"
-                                            VerticalAlignment="Center" ToolTip="{Binding Reason}">
-                                    <Ellipse Width="7" Height="7" Fill="{Binding StatusBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding StatusText}" Margin="7,0,0,0" FontWeight="SemiBold"
-                                               Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/>
-                                </StackPanel>
+                                <Grid Margin="12,0,8,0" VerticalAlignment="Center" ToolTip="{Binding Reason}">
+                                    <Border Width="11" Height="11" CornerRadius="1" Background="{Binding StatusBrush}"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
