@@ -27,6 +27,42 @@ public static class PresentationEasingMath
         return current + ((target - current) * alpha);
     }
 
+    public static double ClampFrameElapsedMilliseconds(
+        double elapsedMilliseconds,
+        double fallbackMilliseconds = 1000.0 / 60.0,
+        double maximumMilliseconds = 50.0)
+    {
+        var fallback = double.IsFinite(fallbackMilliseconds) && fallbackMilliseconds > 0.0
+            ? fallbackMilliseconds
+            : 1000.0 / 60.0;
+        var maximum = double.IsFinite(maximumMilliseconds) && maximumMilliseconds >= fallback
+            ? maximumMilliseconds
+            : Math.Max(50.0, fallback);
+        if (!double.IsFinite(elapsedMilliseconds) || elapsedMilliseconds <= 0.0)
+            return fallback;
+        return Math.Min(elapsedMilliseconds, maximum);
+    }
+
+    public static bool IsNear(
+        double current,
+        double target,
+        double relativeTolerance = 1e-4,
+        double absoluteTolerance = 1e-6)
+    {
+        if (!double.IsFinite(current) || !double.IsFinite(target))
+            return current.Equals(target);
+
+        var relative = double.IsFinite(relativeTolerance) && relativeTolerance > 0.0
+            ? relativeTolerance
+            : 0.0;
+        var absolute = double.IsFinite(absoluteTolerance) && absoluteTolerance > 0.0
+            ? absoluteTolerance
+            : 0.0;
+        var scale = Math.Max(Math.Abs(current), Math.Abs(target));
+        var tolerance = Math.Max(absolute, relative * scale);
+        return Math.Abs(current - target) <= tolerance;
+    }
+
     public static double ShortestAngleDeltaDegrees(double currentDegrees, double targetDegrees)
     {
         if (!double.IsFinite(currentDegrees) || !double.IsFinite(targetDegrees))
