@@ -33,7 +33,6 @@
     <ArIec61850PowerShell Condition="'$(OS)' == 'Windows_NT'">powershell</ArIec61850PowerShell>
     <ArIec61850PowerShell Condition="'$(OS)' != 'Windows_NT'">pwsh</ArIec61850PowerShell>
     <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == '' and '$(ARSAS_ARDIREC_BRIDGE_PATH)' != ''">$(ARSAS_ARDIREC_BRIDGE_PATH)</ArdIrecBridgePath>
-    <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == ''">$(MSBuildProjectDirectory)\Tools\ArdIrec\ardirec_bridge.dll</ArdIrecBridgePath>
     <ArdIrecBridgeRequired Condition="'$(ArdIrecBridgeRequired)' == ''">false</ArdIrecBridgeRequired>
   </PropertyGroup>
 
