@@ -135,7 +135,10 @@ public static class Iec61850StaticControlStatusProjectionService
                     LiteralEquals(signal.DisplayReference, memberReference) &&
                     LiteralEquals(signal.ObjectReference, exactFeedbackReference));
                 if (existingFeedback is not null)
+                {
+                    PromoteRuntimeFeedbackSemantics(existingFeedback, descriptor, cdc);
                     continue;
+                }
 
                 var feedback = CreateRuntimeFeedback(
                     descriptor,
@@ -160,6 +163,11 @@ public static class Iec61850StaticControlStatusProjectionService
 
     internal static bool IsControllableCdc(string? cdc)
         => ControllableCdcs.Contains((cdc ?? string.Empty).Trim());
+
+    internal static string ResolveRuntimeFeedbackDataType(string? cdc, string? mmsType, string? sclBType)
+        => string.Equals((cdc ?? string.Empty).Trim(), "DPC", StringComparison.OrdinalIgnoreCase)
+            ? "Dbpos"
+            : FirstNonEmpty(mmsType, sclBType, "Unknown");
 
     private static string ResolveExactFeedbackReference(
         Iec61850SignalDescriptor descriptor,
@@ -299,7 +307,7 @@ public static class Iec61850StaticControlStatusProjectionService
             ObjectReference = exactFeedbackReference,
             DisplayReference = memberReference,
             FunctionalConstraint = fc,
-            DataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown"),
+            DataType = ResolveRuntimeFeedbackDataType(cdc, descriptor.MmsType, descriptor.SclBType),
             Category = category,
             Confidence = "High",
             DataSetReference = membership.DataSetReference,
@@ -320,6 +328,19 @@ public static class Iec61850StaticControlStatusProjectionService
             Quality = "Unknown",
             DeviceTimestamp = "-"
         };
+    }
+
+    private static void PromoteRuntimeFeedbackSemantics(
+        SignalDefinition feedback,
+        Iec61850SignalDescriptor descriptor,
+        string cdc)
+    {
+        var semanticType = ResolveRuntimeFeedbackDataType(cdc, descriptor.MmsType, descriptor.SclBType);
+        if (semanticType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase))
+        {
+            feedback.DataType = semanticType;
+            feedback.Category = "Position";
+        }
     }
 
     private static Iec61850StaticControlStatusProjectionResult EmptyResult()
