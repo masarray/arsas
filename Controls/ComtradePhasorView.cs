@@ -36,13 +36,21 @@ public sealed class ComtradePhasorView : FrameworkElement
 
     private PreparedPhasorPanel _voltagePanel = PreparedPhasorPanel.Empty;
     private PreparedPhasorPanel _currentPanel = PreparedPhasorPanel.Empty;
-    private const double PresentationTimeConstantMs = 78.0;
+    private const double PresentationTimeConstantMs = 54.0;
     private string _headerLabel = "Fundamental phasors at C1";
     private string _referenceDetail = "Select a valid analysis reference";
     private string _message = string.Empty;
     private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
     private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    private ComtradePhasorVector[] _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+    private ComtradePhasorVector[] _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    private bool _presentationRenderingHooked;
     private long _lastPresentationTimestamp;
+
+    public ComtradePhasorView()
+    {
+        Unloaded += (_, _) => StopPresentationPump();
+    }
 
     internal void ShowPhasors(
         string referenceLabel,
@@ -53,18 +61,22 @@ public sealed class ComtradePhasorView : FrameworkElement
         var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;
         _headerLabel = $"Fundamental phasors at {resolvedReference}";
         _referenceDetail = referenceDetail ?? string.Empty;
+        _targetVoltageVectors = voltageVectors?.ToArray() ?? Array.Empty<ComtradePhasorVector>();
+        _targetCurrentVectors = currentVectors?.ToArray() ?? Array.Empty<ComtradePhasorVector>();
 
-        var now = Stopwatch.GetTimestamp();
-        var elapsedMilliseconds = _lastPresentationTimestamp == 0
-            ? double.PositiveInfinity
-            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
-        _lastPresentationTimestamp = now;
+        if (!VectorTopologyMatches(_smoothedVoltageVectors, _targetVoltageVectors))
+            _smoothedVoltageVectors = _targetVoltageVectors.ToArray();
+        if (!VectorTopologyMatches(_smoothedCurrentVectors, _targetCurrentVectors))
+            _smoothedCurrentVectors = _targetCurrentVectors.ToArray();
 
-        _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, voltageVectors, elapsedMilliseconds);
-        _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, currentVectors, elapsedMilliseconds);
         _voltagePanel = PreparePanel(_smoothedVoltageVectors);
         _currentPanel = PreparePanel(_smoothedCurrentVectors);
         _message = string.Empty;
+        if (VectorsSettled(_smoothedVoltageVectors, _targetVoltageVectors) &&
+            VectorsSettled(_smoothedCurrentVectors, _targetCurrentVectors))
+            StopPresentationPump();
+        else
+            EnsurePresentationPump();
         InvalidateVisual();
     }
 
@@ -77,9 +89,75 @@ public sealed class ComtradePhasorView : FrameworkElement
         _currentPanel = PreparedPhasorPanel.Empty;
         _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
         _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
-        _lastPresentationTimestamp = 0;
+        _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+        _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
+        StopPresentationPump();
         _message = message ?? string.Empty;
         InvalidateVisual();
+    }
+
+    private void EnsurePresentationPump()
+    {
+        if (_presentationRenderingHooked) return;
+        _lastPresentationTimestamp = Stopwatch.GetTimestamp();
+        CompositionTarget.Rendering += PresentationFrame;
+        _presentationRenderingHooked = true;
+    }
+
+    private void StopPresentationPump()
+    {
+        if (_presentationRenderingHooked)
+            CompositionTarget.Rendering -= PresentationFrame;
+        _presentationRenderingHooked = false;
+        _lastPresentationTimestamp = 0;
+    }
+
+    private void PresentationFrame(object? sender, EventArgs e)
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _lastPresentationTimestamp == 0
+            ? 16.67
+            : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 1.0, 50.0);
+        _lastPresentationTimestamp = now;
+
+        _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, elapsedMilliseconds);
+        _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, _targetCurrentVectors, elapsedMilliseconds);
+        var settled = VectorsSettled(_smoothedVoltageVectors, _targetVoltageVectors) &&
+                      VectorsSettled(_smoothedCurrentVectors, _targetCurrentVectors);
+        if (settled)
+        {
+            _smoothedVoltageVectors = _targetVoltageVectors.ToArray();
+            _smoothedCurrentVectors = _targetCurrentVectors.ToArray();
+        }
+        _voltagePanel = PreparePanel(_smoothedVoltageVectors);
+        _currentPanel = PreparePanel(_smoothedCurrentVectors);
+        InvalidateVisual();
+        if (settled) StopPresentationPump();
+    }
+
+    private static bool VectorTopologyMatches(IReadOnlyList<ComtradePhasorVector> left, IReadOnlyList<ComtradePhasorVector> right)
+    {
+        if (left.Count != right.Count || left.Count == 0) return left.Count == 0 && right.Count == 0;
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!string.Equals(left[index].Label, right[index].Label, StringComparison.Ordinal) ||
+                !string.Equals(left[index].Phase, right[index].Phase, StringComparison.Ordinal) ||
+                !string.Equals(left[index].Units, right[index].Units, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool VectorsSettled(IReadOnlyList<ComtradePhasorVector> current, IReadOnlyList<ComtradePhasorVector> target)
+    {
+        if (!VectorTopologyMatches(current, target)) return false;
+        for (var index = 0; index < target.Count; index++)
+        {
+            if (!PresentationEasingMath.IsSettled(current[index].MagnitudeRms, target[index].MagnitudeRms, 1e-7, 5e-4) ||
+                Math.Abs(PresentationEasingMath.ShortestAngleDeltaDegrees(current[index].AngleDegrees, target[index].AngleDegrees)) > 0.08)
+                return false;
+        }
+        return true;
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -168,8 +246,8 @@ public sealed class ComtradePhasorView : FrameworkElement
                 next.Label,
                 next.Phase,
                 next.Units,
-                PresentationEasingMath.Smooth(before.MagnitudeRms, next.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),
-                PresentationEasingMath.SmoothAngleDegrees(before.AngleDegrees, next.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));
+                PresentationEasingMath.SmoothAndSnap(before.MagnitudeRms, next.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs, 1e-7, 5e-4),
+                PresentationEasingMath.SmoothAngleAndSnapDegrees(before.AngleDegrees, next.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));
         }
         return output;
     }

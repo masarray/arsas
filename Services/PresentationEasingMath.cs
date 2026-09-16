@@ -53,4 +53,36 @@ public static class PresentationEasingMath
         var alpha = ExponentialAlpha(elapsedMilliseconds, timeConstantMilliseconds);
         return NormalizeAngleDegrees(currentDegrees + (ShortestAngleDeltaDegrees(currentDegrees, targetDegrees) * alpha));
     }
+
+    public static bool IsSettled(double current, double target, double absoluteTolerance, double relativeTolerance = 0.0)
+    {
+        if (!double.IsFinite(current) || !double.IsFinite(target)) return current.Equals(target);
+        var tolerance = Math.Max(Math.Max(0.0, absoluteTolerance), Math.Abs(target) * Math.Max(0.0, relativeTolerance));
+        return Math.Abs(target - current) <= tolerance;
+    }
+
+    public static double SmoothAndSnap(
+        double current,
+        double target,
+        double elapsedMilliseconds,
+        double timeConstantMilliseconds,
+        double absoluteTolerance,
+        double relativeTolerance = 0.0)
+    {
+        var next = Smooth(current, target, elapsedMilliseconds, timeConstantMilliseconds);
+        return IsSettled(next, target, absoluteTolerance, relativeTolerance) ? target : next;
+    }
+
+    public static double SmoothAngleAndSnapDegrees(
+        double currentDegrees,
+        double targetDegrees,
+        double elapsedMilliseconds,
+        double timeConstantMilliseconds,
+        double toleranceDegrees = 0.08)
+    {
+        var next = SmoothAngleDegrees(currentDegrees, targetDegrees, elapsedMilliseconds, timeConstantMilliseconds);
+        return Math.Abs(ShortestAngleDeltaDegrees(next, targetDegrees)) <= Math.Max(0.0, toleranceDegrees)
+            ? NormalizeAngleDegrees(targetDegrees)
+            : next;
+    }
 }

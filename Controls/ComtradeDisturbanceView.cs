@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -100,6 +101,15 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
     private double _viewEndMilliseconds;
     private double? _cursor1Milliseconds;
     private double? _cursor2Milliseconds;
+    private double? _presentedCursor1Milliseconds;
+    private double? _presentedCursor2Milliseconds;
+    private bool _cursorPresentationRenderingHooked;
+    private long _cursorPresentationTimestamp;
+    private DrawingGroup? _staticLayer;
+    private double _staticLayerWidth = double.NaN;
+    private double _staticLayerHeight = double.NaN;
+    private Rect _lastTimelinePlot;
+    private const double CursorPresentationTimeConstantMs = 38.0;
     private Rect _lastPlot;
     private PointerMode _pointerMode;
     private Point _pointerStartPoint;
@@ -125,6 +135,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         Focusable = true;
         Cursor = Cursors.Cross;
         ToolTip = "Wheel: scroll signals • Ctrl+wheel: zoom • Drag plot: pan • Drag C1/C2: move • Right-click: C2 • cursors snap to digital edges";
+        Unloaded += (_, _) => StopCursorPresentationPump();
     }
 
     internal void ShowTracks(
@@ -146,9 +157,12 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         {
             _cursor1Milliseconds = null;
             _cursor2Milliseconds = null;
+            _presentedCursor1Milliseconds = null;
+            _presentedCursor2Milliseconds = null;
         }
 
         Height = Math.Max(330, TopMargin + BottomAxisHeight + _tracks.Sum(track => TrackHeight(track) + TrackGap));
+        InvalidateStaticLayer();
         InvalidateVisual();
         RaiseNavigationChanged();
     }
@@ -162,8 +176,12 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         _viewEndMilliseconds = 0;
         _cursor1Milliseconds = null;
         _cursor2Milliseconds = null;
+        _presentedCursor1Milliseconds = null;
+        _presentedCursor2Milliseconds = null;
+        StopCursorPresentationPump();
         Height = 330;
         ToolTip = message;
+        InvalidateStaticLayer();
         InvalidateVisual();
     }
 
@@ -187,6 +205,9 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
             nominalFrequencyHz);
         _cursor1Milliseconds = cursors.Cursor1Milliseconds;
         _cursor2Milliseconds = cursors.Cursor2Milliseconds;
+        _presentedCursor1Milliseconds = _cursor1Milliseconds;
+        _presentedCursor2Milliseconds = _cursor2Milliseconds;
+        StopCursorPresentationPump();
         InvalidateVisual();
         RaiseNavigationChanged();
     }
@@ -212,7 +233,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
             _cursor1Milliseconds = milliseconds;
         else
             _cursor2Milliseconds = milliseconds;
-        InvalidateVisual();
+        EnsureCursorPresentationPump();
         RaiseNavigationChanged();
     }
 
@@ -222,6 +243,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
             return;
         _viewStartMilliseconds = _fullStartMilliseconds;
         _viewEndMilliseconds = _fullEndMilliseconds;
+        InvalidateStaticLayer();
         InvalidateVisual();
         RaiseNavigationChanged();
     }
@@ -247,11 +269,42 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         if (bounds.Width < 320 || bounds.Height < 160)
             return;
 
+        EnsureStaticLayer(bounds);
+        if (_staticLayer is not null)
+            dc.DrawDrawing(_staticLayer);
+        if (_tracks.Count == 0 || !_lastTimelinePlot.IsEmpty)
+        {
+            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            var semibold = new Typeface("Segoe UI Semibold");
+            DrawCursor(dc, _lastTimelinePlot, _presentedCursor1Milliseconds ?? _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
+            DrawCursor(dc, _lastTimelinePlot, _presentedCursor2Milliseconds ?? _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
+        }
+    }
+
+    private void EnsureStaticLayer(Rect bounds)
+    {
+        if (_staticLayer is not null &&
+            Math.Abs(_staticLayerWidth - bounds.Width) <= 0.25 &&
+            Math.Abs(_staticLayerHeight - bounds.Height) <= 0.25)
+            return;
+
+        _staticLayerWidth = bounds.Width;
+        _staticLayerHeight = bounds.Height;
+        var group = new DrawingGroup();
+        using (var dc = group.Open())
+            DrawStaticContent(dc, bounds);
+        group.Freeze();
+        _staticLayer = group;
+    }
+
+    private void DrawStaticContent(DrawingContext dc, Rect bounds)
+    {
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var body = new Typeface("Segoe UI");
         var semibold = new Typeface("Segoe UI Semibold");
         var plotWidth = Math.Max(80, bounds.Width - LabelWidth - RightMargin);
         _lastPlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(80, bounds.Height - TopMargin - BottomAxisHeight));
+        _lastTimelinePlot = Rect.Empty;
 
         if (_tracks.Count == 0 || _viewEndMilliseconds <= _viewStartMilliseconds)
         {
@@ -276,11 +329,16 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         }
 
         var tracksBottom = Math.Min(bounds.Height - BottomAxisHeight, y - TrackGap);
-        var timelinePlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(1, tracksBottom - TopMargin));
-        DrawTrigger(dc, timelinePlot, dpi, semibold);
-        DrawCursor(dc, timelinePlot, _cursor1Milliseconds, "C1", Color.FromRgb(221, 142, 32), dpi, semibold);
-        DrawCursor(dc, timelinePlot, _cursor2Milliseconds, "C2", Color.FromRgb(36, 172, 211), dpi, semibold);
+        _lastTimelinePlot = new Rect(LabelWidth, TopMargin, plotWidth, Math.Max(1, tracksBottom - TopMargin));
+        DrawTrigger(dc, _lastTimelinePlot, dpi, semibold);
         DrawTimeAxis(dc, new Rect(LabelWidth, tracksBottom, plotWidth, BottomAxisHeight), dpi, body, semibold);
+    }
+
+    private void InvalidateStaticLayer()
+    {
+        _staticLayer = null;
+        _staticLayerWidth = double.NaN;
+        _staticLayerHeight = double.NaN;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -460,9 +518,64 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         else
             _cursor2Milliseconds = value;
 
-        InvalidateVisual();
+        EnsureCursorPresentationPump();
         RaiseNavigationChanged();
         CursorChanged?.Invoke(this, new ComtradeDisturbanceCursorChangedEventArgs(cursor, value, tolerance, isFinal, snapped));
+    }
+
+    private void EnsureCursorPresentationPump()
+    {
+        if (_presentedCursor1Milliseconds is null && _cursor1Milliseconds is not null)
+            _presentedCursor1Milliseconds = _cursor1Milliseconds;
+        if (_presentedCursor2Milliseconds is null && _cursor2Milliseconds is not null)
+            _presentedCursor2Milliseconds = _cursor2Milliseconds;
+        if (_cursorPresentationRenderingHooked) return;
+        _cursorPresentationTimestamp = Stopwatch.GetTimestamp();
+        CompositionTarget.Rendering += CursorPresentationFrame;
+        _cursorPresentationRenderingHooked = true;
+    }
+
+    private void StopCursorPresentationPump()
+    {
+        if (_cursorPresentationRenderingHooked)
+            CompositionTarget.Rendering -= CursorPresentationFrame;
+        _cursorPresentationRenderingHooked = false;
+        _cursorPresentationTimestamp = 0;
+    }
+
+    private void CursorPresentationFrame(object? sender, EventArgs e)
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _cursorPresentationTimestamp == 0
+            ? 16.67
+            : Math.Clamp(Stopwatch.GetElapsedTime(_cursorPresentationTimestamp, now).TotalMilliseconds, 1.0, 50.0);
+        _cursorPresentationTimestamp = now;
+
+        var moving1 = AdvancePresentedCursor(ref _presentedCursor1Milliseconds, _cursor1Milliseconds, elapsedMilliseconds);
+        var moving2 = AdvancePresentedCursor(ref _presentedCursor2Milliseconds, _cursor2Milliseconds, elapsedMilliseconds);
+        InvalidateVisual();
+        if (!moving1 && !moving2)
+            StopCursorPresentationPump();
+    }
+
+    private bool AdvancePresentedCursor(ref double? presented, double? target, double elapsedMilliseconds)
+    {
+        if (target is null)
+        {
+            presented = null;
+            return false;
+        }
+        if (presented is null || !double.IsFinite(presented.Value))
+        {
+            presented = target;
+            return false;
+        }
+
+        var snapTolerance = Math.Max(0.0005,
+            Math.Max(0.001, _viewEndMilliseconds - _viewStartMilliseconds) / Math.Max(1.0, _lastPlot.Width) * 0.12);
+        presented = PresentationEasingMath.SmoothAndSnap(
+            presented.Value, target.Value, elapsedMilliseconds, CursorPresentationTimeConstantMs, snapTolerance);
+        return !PresentationEasingMath.IsSettled(presented.Value, target.Value, snapTolerance);
     }
 
     private bool TrySnapToVisibleDigitalEdge(double requestedMilliseconds, double toleranceMilliseconds, out double snappedMilliseconds)
@@ -691,6 +804,7 @@ public sealed class ComtradeDisturbanceView : FrameworkElement
         if (start + span > _fullEndMilliseconds) start = _fullEndMilliseconds - span;
         _viewStartMilliseconds = start;
         _viewEndMilliseconds = start + span;
+        InvalidateStaticLayer();
     }
 
     private double MinimumViewSpan() => Math.Max(0.001, (_fullEndMilliseconds - _fullStartMilliseconds) / 5000.0);

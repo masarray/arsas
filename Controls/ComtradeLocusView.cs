@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -38,6 +39,11 @@ internal sealed class ComtradeLocusView : FrameworkElement
     private IReadOnlyList<ComtradeLocusSeries> _phase = Array.Empty<ComtradeLocusSeries>();
     private IReadOnlyList<ComtradeDistancePoint> _cursor1 = Array.Empty<ComtradeDistancePoint>();
     private IReadOnlyList<ComtradeDistancePoint> _cursor2 = Array.Empty<ComtradeDistancePoint>();
+    private IReadOnlyList<ComtradeDistancePoint> _targetCursor1 = Array.Empty<ComtradeDistancePoint>();
+    private IReadOnlyList<ComtradeDistancePoint> _targetCursor2 = Array.Empty<ComtradeDistancePoint>();
+    private bool _cursorPresentationRenderingHooked;
+    private long _cursorPresentationTimestamp;
+    private const double CursorPresentationTimeConstantMs = 46.0;
     private DrawingGroup? _staticLayer;
     private double _staticWidth = double.NaN;
     private double _staticHeight = double.NaN;
@@ -49,6 +55,7 @@ internal sealed class ComtradeLocusView : FrameworkElement
         SnapsToDevicePixels = true;
         Focusable = false;
         MouseWheel += OnMouseWheel;
+        Unloaded += (_, _) => StopCursorPresentationPump();
     }
 
     internal void ShowMessage(string title, string message)
@@ -59,6 +66,9 @@ internal sealed class ComtradeLocusView : FrameworkElement
         _phase = Array.Empty<ComtradeLocusSeries>();
         _cursor1 = Array.Empty<ComtradeDistancePoint>();
         _cursor2 = Array.Empty<ComtradeDistancePoint>();
+        _targetCursor1 = Array.Empty<ComtradeDistancePoint>();
+        _targetCursor2 = Array.Empty<ComtradeDistancePoint>();
+        StopCursorPresentationPump();
         InvalidateStatic();
     }
 
@@ -81,9 +91,99 @@ internal sealed class ComtradeLocusView : FrameworkElement
         IReadOnlyList<ComtradeDistancePoint>? cursor1,
         IReadOnlyList<ComtradeDistancePoint>? cursor2)
     {
-        _cursor1 = cursor1 ?? Array.Empty<ComtradeDistancePoint>();
-        _cursor2 = cursor2 ?? Array.Empty<ComtradeDistancePoint>();
+        _targetCursor1 = cursor1?.ToArray() ?? Array.Empty<ComtradeDistancePoint>();
+        _targetCursor2 = cursor2?.ToArray() ?? Array.Empty<ComtradeDistancePoint>();
+        if (!CursorTopologyMatches(_cursor1, _targetCursor1)) _cursor1 = _targetCursor1.ToArray();
+        if (!CursorTopologyMatches(_cursor2, _targetCursor2)) _cursor2 = _targetCursor2.ToArray();
+        if (CursorSetsSettled(_cursor1, _targetCursor1) && CursorSetsSettled(_cursor2, _targetCursor2))
+            StopCursorPresentationPump();
+        else
+            EnsureCursorPresentationPump();
         InvalidateVisual();
+    }
+
+    private void EnsureCursorPresentationPump()
+    {
+        if (_cursorPresentationRenderingHooked) return;
+        _cursorPresentationTimestamp = Stopwatch.GetTimestamp();
+        CompositionTarget.Rendering += CursorPresentationFrame;
+        _cursorPresentationRenderingHooked = true;
+    }
+
+    private void StopCursorPresentationPump()
+    {
+        if (_cursorPresentationRenderingHooked)
+            CompositionTarget.Rendering -= CursorPresentationFrame;
+        _cursorPresentationRenderingHooked = false;
+        _cursorPresentationTimestamp = 0;
+    }
+
+    private void CursorPresentationFrame(object? sender, EventArgs e)
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _cursorPresentationTimestamp == 0
+            ? 16.67
+            : Math.Clamp(Stopwatch.GetElapsedTime(_cursorPresentationTimestamp, now).TotalMilliseconds, 1.0, 50.0);
+        _cursorPresentationTimestamp = now;
+        _cursor1 = SmoothCursorSet(_cursor1, _targetCursor1, elapsedMilliseconds);
+        _cursor2 = SmoothCursorSet(_cursor2, _targetCursor2, elapsedMilliseconds);
+        var settled = CursorSetsSettled(_cursor1, _targetCursor1) && CursorSetsSettled(_cursor2, _targetCursor2);
+        if (settled)
+        {
+            _cursor1 = _targetCursor1.ToArray();
+            _cursor2 = _targetCursor2.ToArray();
+        }
+        InvalidateVisual();
+        if (settled) StopCursorPresentationPump();
+    }
+
+    private static ComtradeDistancePoint[] SmoothCursorSet(
+        IReadOnlyList<ComtradeDistancePoint> current,
+        IReadOnlyList<ComtradeDistancePoint> target,
+        double elapsedMilliseconds)
+    {
+        if (!CursorTopologyMatches(current, target)) return target.ToArray();
+        var result = new ComtradeDistancePoint[target.Count];
+        for (var index = 0; index < target.Count; index++)
+        {
+            var before = current[index];
+            var next = target[index];
+            if (!before.Valid || !next.Valid)
+            {
+                result[index] = next;
+                continue;
+            }
+            result[index] = next with
+            {
+                R = PresentationEasingMath.SmoothAndSnap(before.R, next.R, elapsedMilliseconds, CursorPresentationTimeConstantMs, 1e-7, 6e-4),
+                X = PresentationEasingMath.SmoothAndSnap(before.X, next.X, elapsedMilliseconds, CursorPresentationTimeConstantMs, 1e-7, 6e-4),
+                Magnitude = PresentationEasingMath.SmoothAndSnap(before.Magnitude, next.Magnitude, elapsedMilliseconds, CursorPresentationTimeConstantMs, 1e-7, 6e-4),
+                AngleDegrees = PresentationEasingMath.SmoothAngleAndSnapDegrees(before.AngleDegrees, next.AngleDegrees, elapsedMilliseconds, CursorPresentationTimeConstantMs),
+                MeasuringCurrent = PresentationEasingMath.SmoothAndSnap(before.MeasuringCurrent, next.MeasuringCurrent, elapsedMilliseconds, CursorPresentationTimeConstantMs, 1e-7, 6e-4)
+            };
+        }
+        return result;
+    }
+
+    private static bool CursorTopologyMatches(IReadOnlyList<ComtradeDistancePoint> left, IReadOnlyList<ComtradeDistancePoint> right)
+    {
+        if (left.Count != right.Count || left.Count == 0) return left.Count == 0 && right.Count == 0;
+        for (var index = 0; index < left.Count; index++)
+            if (left[index].Loop != right[index].Loop) return false;
+        return true;
+    }
+
+    private static bool CursorSetsSettled(IReadOnlyList<ComtradeDistancePoint> current, IReadOnlyList<ComtradeDistancePoint> target)
+    {
+        if (!CursorTopologyMatches(current, target)) return false;
+        for (var index = 0; index < target.Count; index++)
+        {
+            if (current[index].Valid != target[index].Valid) return false;
+            if (!target[index].Valid) continue;
+            if (!PresentationEasingMath.IsSettled(current[index].R, target[index].R, 1e-7, 6e-4) ||
+                !PresentationEasingMath.IsSettled(current[index].X, target[index].X, 1e-7, 6e-4)) return false;
+        }
+        return true;
     }
 
     protected override void OnRender(DrawingContext dc)
