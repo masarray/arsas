@@ -8,10 +8,12 @@ public sealed class ComtradePresentationAnimationRegressionTests
         var phasor = File.ReadAllText(FindRepoFile("Controls/ComtradePhasorView.cs"));
         var harmonic = File.ReadAllText(FindRepoFile("Controls/ComtradeHarmonicsWorkstationView.cs"));
 
+        // Retargeting restarts the settle deadline without resetting an already-running frame clock.
         Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", phasor, StringComparison.Ordinal);
         Assert.Contains("_presentationAnimationStartedTimestamp = now;", phasor, StringComparison.Ordinal);
         Assert.Contains("if (_presentationRenderingHooked) return;", phasor, StringComparison.Ordinal);
 
+        // Harmonic composition frames mutate reusable numeric buffers; static assets stay cached.
         Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", harmonic, StringComparison.Ordinal);
         Assert.Contains("AdvancePreparedRows(_preparedRows, elapsedMilliseconds)", harmonic, StringComparison.Ordinal);
         Assert.Contains("TargetMagnitudes", harmonic, StringComparison.Ordinal);
