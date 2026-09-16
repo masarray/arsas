@@ -37,50 +37,65 @@ public sealed class ComtradePhasorView : FrameworkElement
     private PreparedPhasorPanel _voltagePanel = PreparedPhasorPanel.Empty;
     private PreparedPhasorPanel _currentPanel = PreparedPhasorPanel.Empty;
     private const double PresentationTimeConstantMs = 78.0;
+    private const double PresentationAnimationMaximumMs = 260.0;
     private string _headerLabel = "Fundamental phasors at C1";
     private string _referenceDetail = "Select a valid analysis reference";
     private string _message = string.Empty;
+    private ComtradePhasorVector[] _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+    private ComtradePhasorVector[] _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
     private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
     private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    private bool _presentationRenderingHooked;
     private long _lastPresentationTimestamp;
+    private long _presentationAnimationStartedTimestamp;
 
-    internal void ShowPhasors(
-        string referenceLabel,
-        string referenceDetail,
-        IReadOnlyList<ComtradePhasorVector> voltageVectors,
-        IReadOnlyList<ComtradePhasorVector> currentVectors)
-    {
-        var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;
-        _headerLabel = $"Fundamental phasors at {resolvedReference}";
-        _referenceDetail = referenceDetail ?? string.Empty;
+    public ComtradePhasorView()
+{
+    Unloaded += (_, _) => StopPresentationAnimation();
+}
 
-        var now = Stopwatch.GetTimestamp();
-        var elapsedMilliseconds = _lastPresentationTimestamp == 0
-            ? double.PositiveInfinity
-            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
-        _lastPresentationTimestamp = now;
+internal void ShowPhasors(
+    string referenceLabel,
+    string referenceDetail,
+    IReadOnlyList<ComtradePhasorVector> voltageVectors,
+    IReadOnlyList<ComtradePhasorVector> currentVectors)
+{
+    var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;
+    _headerLabel = $"Fundamental phasors at {resolvedReference}";
+    _referenceDetail = referenceDetail ?? string.Empty;
+    _targetVoltageVectors = CloneVectors(voltageVectors);
+    _targetCurrentVectors = CloneVectors(currentVectors);
 
-        _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, voltageVectors, elapsedMilliseconds);
-        _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, currentVectors, elapsedMilliseconds);
-        _voltagePanel = PreparePanel(_smoothedVoltageVectors);
-        _currentPanel = PreparePanel(_smoothedCurrentVectors);
-        _message = string.Empty;
-        InvalidateVisual();
-    }
+    // First sample/topology changes snap. Normal scrub updates keep the current
+    // presentation and converge to the newest exact native target on composition frames.
+    _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, 0.0);
+    _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, _targetCurrentVectors, 0.0);
+    RefreshPreparedPanels();
+    _message = string.Empty;
+
+    if (VectorsDiffer(_smoothedVoltageVectors, _targetVoltageVectors) ||
+        VectorsDiffer(_smoothedCurrentVectors, _targetCurrentVectors))
+        StartPresentationAnimation();
+    else
+        StopPresentationAnimation();
+    InvalidateVisual();
+}
 
     internal void ShowMessage(string title, string message)
-    {
-        var resolvedTitle = string.IsNullOrWhiteSpace(title) ? "Phasor" : title;
-        _headerLabel = $"Fundamental phasors at {resolvedTitle}";
-        _referenceDetail = message ?? string.Empty;
-        _voltagePanel = PreparedPhasorPanel.Empty;
-        _currentPanel = PreparedPhasorPanel.Empty;
-        _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
-        _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
-        _lastPresentationTimestamp = 0;
-        _message = message ?? string.Empty;
-        InvalidateVisual();
-    }
+{
+    var resolvedTitle = string.IsNullOrWhiteSpace(title) ? "Phasor" : title;
+    _headerLabel = $"Fundamental phasors at {resolvedTitle}";
+    _referenceDetail = message ?? string.Empty;
+    StopPresentationAnimation();
+    _voltagePanel = PreparedPhasorPanel.Empty;
+    _currentPanel = PreparedPhasorPanel.Empty;
+    _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+    _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+    _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+    _message = message ?? string.Empty;
+    InvalidateVisual();
+}
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -128,6 +143,80 @@ public sealed class ComtradePhasorView : FrameworkElement
                 "CURRENT PHASORS", _currentPanel, dpi);
         }
     }
+
+    private void StartPresentationAnimation()
+{
+    var now = Stopwatch.GetTimestamp();
+    _lastPresentationTimestamp = now;
+    _presentationAnimationStartedTimestamp = now;
+    if (_presentationRenderingHooked) return;
+    CompositionTarget.Rendering += PresentationCompositionFrame;
+    _presentationRenderingHooked = true;
+}
+
+private void StopPresentationAnimation()
+{
+    if (_presentationRenderingHooked)
+    {
+        CompositionTarget.Rendering -= PresentationCompositionFrame;
+        _presentationRenderingHooked = false;
+    }
+    _lastPresentationTimestamp = 0;
+    _presentationAnimationStartedTimestamp = 0;
+}
+
+private void PresentationCompositionFrame(object? sender, EventArgs e)
+{
+    if (!_presentationRenderingHooked) return;
+    var now = Stopwatch.GetTimestamp();
+    var dt = _lastPresentationTimestamp == 0
+        ? 16.0
+        : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 0.0, 50.0);
+    _lastPresentationTimestamp = now;
+    _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, dt);
+    _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, _targetCurrentVectors, dt);
+
+    var age = _presentationAnimationStartedTimestamp == 0
+        ? PresentationAnimationMaximumMs
+        : Stopwatch.GetElapsedTime(_presentationAnimationStartedTimestamp, now).TotalMilliseconds;
+    if (age >= PresentationAnimationMaximumMs)
+    {
+        // Presentation may ease; the settled engineering display is the exact native target.
+        _smoothedVoltageVectors = CloneVectors(_targetVoltageVectors);
+        _smoothedCurrentVectors = CloneVectors(_targetCurrentVectors);
+        StopPresentationAnimation();
+    }
+    RefreshPreparedPanels();
+    InvalidateVisual();
+}
+
+private void RefreshPreparedPanels()
+{
+    _voltagePanel = PreparePanel(_smoothedVoltageVectors);
+    _currentPanel = PreparePanel(_smoothedCurrentVectors);
+}
+
+private static ComtradePhasorVector[] CloneVectors(IReadOnlyList<ComtradePhasorVector>? source)
+{
+    if (source is null || source.Count == 0) return Array.Empty<ComtradePhasorVector>();
+    var result = new ComtradePhasorVector[source.Count];
+    for (var i = 0; i < source.Count; i++) result[i] = source[i];
+    return result;
+}
+
+private static bool VectorsDiffer(IReadOnlyList<ComtradePhasorVector> left, IReadOnlyList<ComtradePhasorVector> right)
+{
+    if (left.Count != right.Count) return true;
+    for (var i = 0; i < left.Count; i++)
+    {
+        var a = left[i]; var b = right[i];
+        if (!string.Equals(a.Label, b.Label, StringComparison.Ordinal) ||
+  !string.Equals(a.Phase, b.Phase, StringComparison.Ordinal) ||
+  !string.Equals(a.Units, b.Units, StringComparison.Ordinal) ||
+  !a.MagnitudeRms.Equals(b.MagnitudeRms) || !a.AngleDegrees.Equals(b.AngleDegrees)) return true;
+    }
+    return false;
+}
 
     private static ComtradePhasorVector[] SmoothVectors(
         IReadOnlyList<ComtradePhasorVector> previous,
