@@ -127,12 +127,17 @@ public sealed partial class NativeIec61850Client
                 28d, 4, 10));
 
             var directoryWatch = Stopwatch.StartNew();
+            // Once this caller owns the application MMS gate, keep that gate until the
+            // shared directory flight itself completes. A UI/waiter cancellation must
+            // not release the gate while the engine continues the association-scoped
+            // discovery in the background.
             var discovery = await _session
-                .DiscoverSmartSingleFlightAsync(smartOptions, cancellationToken)
+                .DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)
                 .ConfigureAwait(false);
             directoryWatch.Stop();
             _lastDiscovery = discovery;
 
+            cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.ProbingLogicalNodes,
                 "Smart MMS type discovery: Logical Node hierarchy probes…",
