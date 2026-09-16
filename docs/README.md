@@ -1,14 +1,19 @@
 # ARSAS Documentation
 
-This directory contains the engineering, validation, licensing, provenance, and operating-boundary documents for the ARSAS Windows IEC 61850 engineering workstation.
+This directory contains the engineering, validation, licensing, provenance, release, and operating-boundary documents for the ARSAS Windows IEC 61850 engineering workstation.
+
+The current application version on `main` is **ARSAS 1.6.37**. Public binary identity remains tied to the latest actually published stable GitHub Release and its verified package evidence.
 
 ## Start here
 
 | Document | Purpose |
 |---|---|
-| [Project README](../README.md) | Product overview, feature summary, quick start, build instructions, and public claim boundary. |
+| [Project README](../README.md) | Product overview, current-version summary, feature scope, quick start, build instructions, and public claim boundary. |
 | [IO List FAT Evidence Testing](IO_LIST_FAT_EVIDENCE.md) | Imported SDI test plans, OFF → ON → OFF evidence, Excel/PDF export, portable `.arsas` projects, integrity checks, and cross-laptop continuation. |
 | [Architecture](ARCHITECTURE.md) | Multi-IED ownership, model identity, report-first acquisition, runtime scaling, and timestamp semantics. |
+| [SCL export](SCL_EXPORT.md) | Live-discovery and source-backed SCL export, including the 1.6.37 logical ReportControl versus runtime RCB-instance boundary. |
+| [COMTRADE viewer integration](COMTRADE_VIEWER_INTEGRATION.md) | Native ArdIrec bridge, in-process cursor/Phasor/Harmonics/Locus analysis, packaging, and presentation-only easing contract. |
+| [Windows releases](WINDOWS_RELEASES.md) | Installer and portable single-EXE packaging, exact release gates, checksums, SBOM, provenance, attestations, and publication boundary. |
 | [GOOSE Subscriber](GOOSE_SUBSCRIBER.md) | Read-only Npcap capture, ARIEC61850 GOOSE decoding, SCL/live-discovery DataSet binding, ordered `allData` leaf semantics, diagnostics, and field validation. |
 | [Validation checklist](VALIDATION_CHECKLIST.md) | Discovery, reporting, monitoring, recovery, evidence, and control acceptance checks. |
 | [UI validation](UI_VALIDATION.md) | Windows scaling, keyboard workflow, accessibility, multi-IED, and command-panel checks. |
@@ -55,8 +60,10 @@ This directory contains the engineering, validation, licensing, provenance, and 
 Public documentation should:
 
 - distinguish configured SCL context from the live MMS model;
+- distinguish logical source `ReportControl` identity from concrete live RCB client/runtime instances;
+- distinguish exact native COMTRADE analysis from presentation-only interpolation;
 - distinguish protocol readiness from switching authority and operational safety;
-- distinguish current `main` development behavior from the latest published stable installer;
+- distinguish current `main` behavior from the latest actually published stable installer and portable binary;
 - state whether evidence comes from unit tests, deterministic fixtures, loopback, simulator, laboratory IEDs, or field use;
 - avoid universal interoperability, formal conformance, document-signature, or acceptance claims;
 - use synthetic or contributor-owned examples;
