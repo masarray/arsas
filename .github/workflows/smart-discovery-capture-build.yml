@@ -41,6 +41,7 @@ jobs:
         run: |
           $helper = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
           $optimization = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryOptimization.cs -Raw
+          $lifecycle = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
           $patcher = Get-Content .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -Raw
           $targets = Get-Content .\ArIED61850Tester\Directory.Build.targets -Raw
           if ($helper -notmatch 'DiscoverSmartAsync' -or
@@ -50,10 +51,15 @@ jobs:
               $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
               $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
               $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or
+              $optimization -notmatch 'IsSmartDiscoveryAuthorityBoundToCurrentAssociation' -or
+              $lifecycle -notmatch 'ResetSmartDiscoveryAuthority' -or
+              $lifecycle -notmatch '_smartDiscoveryAuthorityHost' -or
+              $lifecycle -notmatch '_smartDiscoveryAuthorityPort' -or
               $helper -notmatch '_smartDiscoveryCaptureGate' -or
               $patcher -notmatch 'DiscoverSignalsSmartForCaptureAsync' -or
+              $patcher -notmatch 'ResetSmartDiscoveryAuthority' -or
               $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
-            throw 'Smart discovery R2 capture routing or optimization authority is incomplete.'
+            throw 'Smart discovery R2 capture routing, optimization authority, or association lifecycle invalidation is incomplete.'
           }
           if ($helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
               $helper -match 'FinalizeDiscoveredSignals') {
@@ -85,12 +91,15 @@ jobs:
       - name: Build Release
         run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
 
-      - name: Verify smart route was installed
+      - name: Verify smart route and lifecycle reset were installed
         shell: powershell
         run: |
           $native = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.cs -Raw
           if ($native -notmatch 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
             throw 'Build-time smart discovery route was not installed.'
+          }
+          if ($native -notmatch '_lastDiscovery = null;\s*_liveModel = null;\s*ResetSmartDiscoveryAuthority\(\);') {
+            throw 'Build-time smart discovery authority reset was not installed into ConnectAsync.'
           }
 
       - name: Run ARSAS regression tests
@@ -124,8 +133,8 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: PR134 R2 bounded smart discovery + hierarchy-first types + indexed CPU projection + association reuse",
-            "CI invariant: no reflection fallback or second full signal finalization in the smart critical path",
+            "Mode: PR134 R2 bounded smart discovery + hierarchy-first types + indexed CPU projection + association-bound reuse",
+            "CI invariant: no reflection fallback, no second full signal finalization, explicit reconnect invalidation in smart critical path",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
