@@ -22,7 +22,7 @@ jobs:
           if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw 'Invalid ARIEC61850 field-capture pin.'
           }
-          if ($lock.commit -ne '040718027b92681b89f2e04ce048a53fe225a1c7') {
+          if ($lock.commit -ne '1b7cbbe8af3dfbc2a15086cb2c3e5eff02e006bb') {
             throw "Unexpected engine commit: $($lock.commit)"
           }
           $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
@@ -44,10 +44,11 @@ jobs:
           $lifecycle = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
           $patcher = Get-Content .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -Raw
           $targets = Get-Content .\ArIED61850Tester\Directory.Build.targets -Raw
-          if ($helper -notmatch 'DiscoverSmartAsync' -or
+          if ($helper -notmatch 'DiscoverSmartSingleFlightAsync' -or
               $helper -notmatch 'LiveIedVariableTypeProbeExecutor' -or
               $helper -notmatch 'variableTypeAttributes' -or
-              $helper -notmatch 'SMART-CAPTURE PR134 R2' -or
+              $helper -notmatch 'SMART-CAPTURE PR134 R3' -or
+              $helper -notmatch '_mmsIoGate.WaitAsync' -or
               $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
               $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
               $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or
@@ -59,11 +60,11 @@ jobs:
               $patcher -notmatch 'DiscoverSignalsSmartForCaptureAsync' -or
               $patcher -notmatch 'ResetSmartDiscoveryAuthority' -or
               $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
-            throw 'Smart discovery R2 capture routing, optimization authority, or association lifecycle invalidation is incomplete.'
+            throw 'Smart discovery R3 capture routing, single-flight, optimization authority, or association lifecycle invalidation is incomplete.'
           }
           if ($helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
               $helper -match 'FinalizeDiscoveredSignals') {
-            throw 'Smart discovery R2 critical path regressed to reflection fallback or second full finalization.'
+            throw 'Smart discovery R3 critical path regressed to reflection fallback or second full finalization.'
           }
 
       - name: Checkout immutable ARIEC61850 PR 134 engine
@@ -75,9 +76,14 @@ jobs:
           $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
           if ($actual -ne $env:ARIEC61850_COMMIT) { throw "Engine SHA mismatch: $actual" }
           $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
+          $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
           $hierarchy = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedVariableTypeHierarchy.cs -Raw
-          if ($smart -notmatch 'DiscoverSmartAsync' -or $hierarchy -notmatch 'ProbeSmartAsync') {
-            throw 'Pinned engine does not expose the required smart discovery APIs.'
+          if ($smart -notmatch 'DiscoverSmartAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $singleFlight -notmatch 'WaitAsync\(cancellationToken\)' -or
+              $singleFlight -notmatch 'incompleteChains=0' -or
+              $hierarchy -notmatch 'ProbeSmartAsync') {
+            throw 'Pinned engine does not expose the required R3 smart discovery single-flight APIs/invariants.'
           }
 
       - name: Setup .NET 8
@@ -133,8 +139,8 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: PR134 R2 bounded smart discovery + hierarchy-first types + indexed CPU projection + association-bound reuse",
-            "CI invariant: no reflection fallback, no second full signal finalization, explicit reconnect invalidation in smart critical path",
+            "Mode: PR134 R3 association single-flight + hierarchy-first types + indexed CPU projection + association-bound reuse",
+            "CI invariant: app MMS gate excludes legacy workflows during smart publication; waiter cancellation does not cancel shared engine discovery; partial discovery is not cached",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
