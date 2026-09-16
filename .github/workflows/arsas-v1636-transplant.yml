@@ -1,0 +1,51 @@
+name: ARSAS v1.6.36 targeted transplant
+
+on:
+  push:
+    branches:
+      - fix/v1636-real-ied-feedback-smooth-analyzers
+
+permissions:
+  contents: write
+
+jobs:
+  transplant:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply only the validated source hunks onto v1.6.36 field-proven branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin fix/real-ied-feedback-smooth-analyzers
+          git show --binary 063f05c796013c41657b5970001d63daeac8cf5c -- \
+            ControlCommandWindow.xaml.cs \
+            Controls/ComtradeHarmonicsWorkstationView.cs \
+            Controls/ComtradePhasorView.cs \
+            Services/Iec61850MonitorRuntime.cs \
+            Services/PresentationEasingMath.cs \
+            tests/ARSAS.Tests/G1ControlCorrectnessRegressionTests.cs \
+            tests/ARSAS.Tests/PresentationEasingMathTests.cs \
+            > /tmp/arsas-targeted.patch
+          git apply --3way --index /tmp/arsas-targeted.patch
+          git diff --cached --check
+          if grep -n 'ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue)' Services/Iec61850MonitorRuntime.cs; then
+            echo 'Synthetic monitored stVal injection still present.' >&2
+            exit 1
+          fi
+          grep -q 'Waiting for independent IED process feedback' ControlCommandWindow.xaml.cs
+          grep -q 'ShortestAngleDeltaDegrees' Services/PresentationEasingMath.cs
+      - name: Commit field-proven transplant
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/arsas-v1636-transplant.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(v1636): real IED feedback and smooth analyzers'
+          git push origin HEAD:fix/v1636-real-ied-feedback-smooth-analyzers
