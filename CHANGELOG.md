@@ -4,6 +4,25 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.37 — 2026-09-16
+
+### Added
+
+- Legacy SAS RCB selection presents concrete live instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, and `Unbuffer02` when the connected IED actually exposes them, without adding duplicate logical placeholder rows.
+- The in-process COMTRADE workstation provides native cursor, Phasor, Harmonics, and six-loop distance Locus analysis through the pinned ArdIrec bridge.
+
+### Changed
+
+- Source-backed IID/SCL export preserves the canonical logical `ReportControl` identity and `RptEnabled` indexing metadata instead of copying concrete runtime client-slot names into the saved engineering model.
+- RCB occupancy uses a square-only indicator: yellow when a client is using the RCB and green otherwise, while detailed engineering evidence remains available separately.
+- COMTRADE Phasor, Harmonics, and distance Locus presentation eases toward the latest exact native analysis target at display cadence with bounded settling; raw data and authoritative analysis values remain exact.
+- Distance Locus presentation resets transient smoothing across PRI/SEC engineering-basis changes so unrelated unit bases are never interpolated together.
+
+### Fixed
+
+- Declarative `RptEnabled@max` metadata can no longer become authority for inventing runtime RCB instance names during source-backed export.
+- COMTRADE presentation smoothing remains latest-target only and does not add a second analysis queue or periodic background work after settling.
+
 ## 1.6.33 — 2026-09-02
 
 ### Added

@@ -48,9 +48,29 @@ The native integration provides:
 - bounded zoom/pan/reset viewport math,
 - timestamp-based X positioning,
 - trigger reference and Cursor A/B measurements,
-- display-oriented decimation and transition-driven digital rendering.
+- display-oriented decimation and transition-driven digital rendering,
+- native phasor analysis,
+- native harmonics analysis,
+- six-loop distance Locus analysis with PRI/SEC engineering-basis handling.
 
 Any analysis surface not yet implemented natively must be added to the ARSAS workspace; it must not reintroduce an external viewer process.
+
+## ARSAS 1.6.37 presentation contract
+
+Native ArdIrec analysis remains the engineering authority. ARSAS 1.6.37 adds bounded presentation smoothing so rapid cursor interaction does not make Phasor, Harmonics, or distance Locus views look stepped or mechanically delayed.
+
+The contract is deliberately narrow:
+
+- cursor selection and native analysis targets are exact and immediate;
+- native analysis remains latest-wins; presentation smoothing does not create a second analysis queue;
+- Phasor vectors ease toward the newest native target at display cadence and converge exactly after a bounded settle interval;
+- Harmonics display values ease toward the newest native target using one composition-frame pump and reusable presentation buffers;
+- distance Locus follows the latest exact native cursor target and resets transient presentation state when PRI/SEC engineering basis changes;
+- first samples and topology/basis changes may snap instead of interpolating incompatible states;
+- raw samples, cursor identity, recorded values, exported evidence, and native analysis results are never replaced by smoothed values;
+- composition callbacks detach after settling or when the view unloads, so smoothing does not become background periodic work.
+
+The purpose is visual continuity only. It must never change fault-record truth, relay quantities, channel semantics, or engineering evidence.
 
 ## Runtime discovery
 
@@ -89,6 +109,7 @@ Current contract:
 8. The installer workflow exercises the managed wrapper against a real CFG/DAT fixture from a Unicode path containing spaces.
 9. Installer/release smoke validation requires `ardirec_bridge.dll` and explicitly rejects the legacy ArdIrec executable/Qt runtime from the installed product.
 10. Release provenance records the exact ArdIrec repository, commit, ABI, and bridge location used by the package.
+11. Regression coverage guards presentation-frame pacing separately from the authoritative native latest-wins analysis path.
 
 ## Acceptance criteria
 
@@ -102,6 +123,8 @@ The native COMTRADE integration is acceptable when:
 - COMTRADE time presentation respects `TIMEMULT`,
 - clicking **Open** creates the ARSAS native COMTRADE workspace without creating another viewer process,
 - native record open and channel loading do not block the WPF UI thread,
+- cursor, Phasor, Harmonics, and distance Locus use the pinned native analysis path,
+- presentation easing converges to the exact latest native target and never becomes an alternate data authority,
 - missing/incompatible bridge conditions fail clearly inside ARSAS rather than launching a fallback program,
 - installer packages contain the native bridge and no ArdIrec desktop/Qt runtime,
 - portable single-EXE packages contain the same pinned bridge as an embedded resource,
