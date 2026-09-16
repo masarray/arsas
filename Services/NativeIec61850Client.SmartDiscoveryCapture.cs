@@ -18,11 +18,20 @@ public sealed partial class NativeIec61850Client
     {
         // Protect one physical MMS association from accidental concurrent discovery
         // (double-click, overlapping runtime requests, or future background consumers).
-        // Waiting callers reuse the completed association-scoped authority below.
+        // The MMS operation gate additionally prevents report/read workflows from
+        // entering a legacy discovery path before the smart authority is published.
         await _smartDiscoveryCaptureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await DiscoverSignalsSmartForCaptureCoreAsync(cancellationToken, progress).ConfigureAwait(false);
+            await _mmsIoGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await DiscoverSignalsSmartForCaptureCoreAsync(cancellationToken, progress).ConfigureAwait(false);
+            }
+            finally
+            {
+                _mmsIoGate.Release();
+            }
         }
         finally
         {
@@ -47,8 +56,8 @@ public sealed partial class NativeIec61850Client
         try
         {
             // A second discovery request on the same association must be wire-free. The
-            // authority marker is reference-bound to _lastDiscovery/_liveModel, both of
-            // which are reset by the normal connection lifecycle before a new IED/session.
+            // authority marker is reference-bound to _lastDiscovery/_liveModel and also
+            // explicitly bound to the current host/port association lifecycle.
             if (TryGetSmartDiscoveryAuthority(out var cachedDiscovery, out var cachedModel))
             {
                 progress?.Report(new IedDiscoveryProgress(
@@ -88,7 +97,7 @@ public sealed partial class NativeIec61850Client
                 var cachedRawVariables = cachedSnapshot.DomainVariables.Values.Sum(values => values.Count);
 
                 LastDiscoverySummary =
-                    $"SMART-CAPTURE PR134 R2; association authority=reused; wire discovery=skipped; " +
+                    $"SMART-CAPTURE PR134 R3; association authority=reused; engine single-flight=reused; wire discovery=skipped; " +
                     $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
@@ -114,12 +123,12 @@ public sealed partial class NativeIec61850Client
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.DiscoveringDirectory,
-                "Smart MMS discovery: bounded parallel directory scan…",
+                "Smart MMS discovery: association single-flight bounded directory scan…",
                 28d, 4, 10));
 
             var directoryWatch = Stopwatch.StartNew();
             var discovery = await _session
-                .DiscoverSmartAsync(smartOptions, cancellationToken)
+                .DiscoverSmartSingleFlightAsync(smartOptions, cancellationToken)
                 .ConfigureAwait(false);
             directoryWatch.Stop();
             _lastDiscovery = discovery;
@@ -201,7 +210,7 @@ public sealed partial class NativeIec61850Client
 
             totalWatch.Stop();
             LastDiscoverySummary =
-                $"SMART-CAPTURE PR134 R2; association authority=new; " +
+                $"SMART-CAPTURE PR134 R3; association authority=new; engine single-flight=new; app MMS gate=exclusive; " +
                 $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
                 $"{discovery.Summary} {_liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
                 $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +
