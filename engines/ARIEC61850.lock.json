@@ -2,9 +2,14 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "d50e5bcb9fd428fe3d80ac72f8d4015a575cfda5",
-  "sourcePullRequest": 125,
-  "purpose": "Canonical protocol-only golden-wire SCL-assisted physical-trial pin. This exact SHA is built from the immutable ARSAS field-proven engine baseline recorded below and passed the dedicated convergence CI. It adds SCL-derived association identity, Domain/VMD reconciliation, bounded sequential initial FC-root Reads, trusted static-report activation without hidden full discovery or network DataSet-directory browsing, accepts quoted Edition-1/vendor OSI-AP-Title lexical forms such as \"1,1,1,999,1\" while preserving the raw SCL parameter for diagnostics, and preserves scoped DataSet/RCB authority including ReportControl indexed semantics for trusted-SCL live monitoring. For normal Play, ARSAS explicitly requests one startup GI only after the InformationReport receiver is registered, RCB activation succeeds, and two whole-RCB readbacks complete; BRCB direct RptEna remains primary with ResvTms retry-only, while URCB Resv precedes RptEna when exposed. Explicit GI acceptance is a startup success gate: rejection unregisters the monitor, disables RptEna, releases any touched reservation, and returns failure instead of a misleading active monitor with Unknown initial values. Safe-trial keeps GI disabled and performs no RCB writes. PR #125 is an evidence/trial lane and is not a merge authority for ARIEC main; ARSAS checks out this immutable SHA directly.",
+  "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
+  "sourcePullRequest": 132,
+  "purpose": "Temporary ARSAS 1.6.36 combined-workstream qualification pin for the exact green ARIEC convergence head. ARIEC .NET CI #603 passed on this SHA, including provenance/source/license verification, restore, build, tests, and diagnostics. The convergence preserves the trusted-SCL golden-wire contracts used by ARSAS: SCL-authoritative DataSet/RCB identity, LDevice ldName and ReportControl indexed semantics, quoted Edition-1/vendor OSI-AP-Title compatibility, Domain/VMD reconciliation, bounded sequential initial FC-root Reads, receiver-before-write report registration, URCB Resv -> RptEna, BRCB direct RptEna with ResvTms retry-only, two whole-RCB verification reads, one-shot GI after routing is registered, GI fail-closed cleanup, no cyclic process polling, no network DataSet-directory browse, and no dynamic DataSet mutation on the trusted-SCL path. The same convergence also locks buffered BRCB latest-state semantics through the canonical runtime value plane and preserves SCL RptEnabled@max only as diagnostics metadata; it is never authority to synthesize concrete runtime RCB names.",
+  "previousTrialPin": {
+    "commit": "d50e5bcb9fd428fe3d80ac72f8d4015a575cfda5",
+    "sourcePullRequest": 125,
+    "purpose": "Previous ARSAS 1.6.36 trusted-SCL golden-wire trial pin retained for explicit ancestry."
+  },
   "fieldProvenBaseline": {
     "commit": "11ab2304482600c19ba979f4fc9021ddb46b9af9",
     "sourcePullRequest": 111,
