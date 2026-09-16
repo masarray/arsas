@@ -25,23 +25,39 @@ jobs:
           if ($lock.commit -ne '040718027b92681b89f2e04ce048a53fe225a1c7') {
             throw "Unexpected engine commit: $($lock.commit)"
           }
+          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
+          if ($arsasCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid cloned ARSAS commit: $arsasCommit"
+          }
           "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           $version = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
           "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "ARSAS field source: $arsasCommit"
 
       - name: Verify smart capture sources
         shell: powershell
         run: |
           $helper = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $optimization = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryOptimization.cs -Raw
           $patcher = Get-Content .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -Raw
           $targets = Get-Content .\ArIED61850Tester\Directory.Build.targets -Raw
           if ($helper -notmatch 'DiscoverSmartAsync' -or
               $helper -notmatch 'LiveIedVariableTypeProbeExecutor' -or
               $helper -notmatch 'variableTypeAttributes' -or
+              $helper -notmatch 'SMART-CAPTURE PR134 R2' -or
+              $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
+              $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
+              $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or
+              $helper -notmatch '_smartDiscoveryCaptureGate' -or
               $patcher -notmatch 'DiscoverSignalsSmartForCaptureAsync' -or
               $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
-            throw 'Smart discovery capture routing is incomplete.'
+            throw 'Smart discovery R2 capture routing or optimization authority is incomplete.'
+          }
+          if ($helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
+              $helper -match 'FinalizeDiscoveredSignals') {
+            throw 'Smart discovery R2 critical path regressed to reflection fallback or second full finalization.'
           }
 
       - name: Checkout immutable ARIEC61850 PR 134 engine
@@ -105,10 +121,11 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Portable EXE smoke test failed: $($process.ExitCode)" }
           @(
             "ARSAS smart discovery field-capture build",
-            "ARSAS commit: $env:GITHUB_SHA",
+            "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: bounded smart structural discovery + hierarchy-first smart type probes",
+            "Mode: PR134 R2 bounded smart discovery + hierarchy-first types + indexed CPU projection + association reuse",
+            "CI invariant: no reflection fallback or second full signal finalization in the smart critical path",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
