@@ -4,7 +4,9 @@ param(
     [bool]$SingleFile = $true,
     [bool]$SelfContained = $true,
     [string]$EngineProject = "",
-    [string]$NpcapProject = ""
+    [string]$NpcapProject = "",
+    [string]$ArdIrecBridgePath = "",
+    [string]$ArdIrecSource = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +54,37 @@ if ($normalizedVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?
 }
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
 
+if ([string]::IsNullOrWhiteSpace($ArdIrecBridgePath)) {
+    $bridgeBuilder = Join-Path $root "scripts\build-ardirec-bridge.ps1"
+    if (-not (Test-Path $bridgeBuilder -PathType Leaf)) {
+        throw "ArdIrec bridge builder was not found: $bridgeBuilder"
+    }
+
+    $bridgeOutputDirectory = Join-Path $root "obj\ardirec-native\$Runtime"
+    $builderArguments = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $bridgeBuilder,
+        "-OutputDirectory", $bridgeOutputDirectory
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ArdIrecSource)) {
+        $builderArguments += @("-ArdIrecSource", $ArdIrecSource)
+    }
+
+    $powershell = if ($env:OS -eq "Windows_NT") { "powershell" } else { "pwsh" }
+    $bridgeBuilderOutput = & $powershell @builderArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pinned ArdIrec native bridge build failed with exit code $LASTEXITCODE."
+    }
+    $ArdIrecBridgePath = [string]($bridgeBuilderOutput | Select-Object -Last 1)
+}
+
+$ArdIrecBridgePath = [System.IO.Path]::GetFullPath($ArdIrecBridgePath.Trim())
+if (-not (Test-Path $ArdIrecBridgePath -PathType Leaf)) {
+    throw "Pinned ArdIrec native bridge was not found: $ArdIrecBridgePath"
+}
+Write-Host "==> Packaging ArdIrec native bridge: $ArdIrecBridgePath"
+
 $outputRoot = Join-Path $root "dist"
 $folderPublishDir = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime"
 $singlePublishDir = Join-Path $outputRoot ".single-file-$normalizedVersion-$Runtime"
@@ -89,6 +122,8 @@ $publishArguments = @(
     "-p:InformationalVersion=$normalizedVersion",
     "-p:ArIec61850Project=$EngineProject",
     "-p:ArIec61850NpcapProject=$NpcapProject",
+    "-p:ArdIrecBridgePath=$ArdIrecBridgePath",
+    "-p:ArdIrecBridgeRequired=true",
     "-o", $publishDir
 )
 
@@ -96,6 +131,8 @@ if ($SingleFile) {
     # WPF and packet-capture dependencies use reflection, content files and native loading.
     # Keep trimming disabled and let the .NET bundle extract its runtime payload into the
     # current user's writable bundle cache. Distribution still consists of exactly one EXE.
+    # ArdIrec's bridge is embedded as a managed resource and materialized by
+    # ArdIrecEmbeddedBridgeBootstrap when the native COMTRADE workspace is first available.
     $publishArguments += "-p:IncludeNativeLibrariesForSelfExtract=true"
     $publishArguments += "-p:IncludeAllContentForSelfExtract=true"
     $publishArguments += "-p:EnableCompressionInSingleFile=true"
@@ -124,7 +161,7 @@ if ($SingleFile) {
         throw "Versioned portable single EXE was not produced: $singleExePath"
     }
 
-    Write-Host "==> Real portable single EXE: $singleExePath"
+    Write-Host "==> Real portable single EXE with embedded ArdIrec bridge: $singleExePath"
     Write-Output $singleExePath
     exit 0
 }
@@ -141,7 +178,9 @@ $requiredInstallerFiles = @(
     "THIRD_PARTY_NOTICES.md",
     "NOTICE",
     "LICENSING.md",
-    "engines\ARIEC61850.lock.json"
+    "engines\ARIEC61850.lock.json",
+    "engines\ARDIREC.lock.json",
+    "Tools\ArdIrec\ardirec_bridge.dll"
 )
 foreach ($runtimeFile in $requiredInstallerFiles) {
     $runtimePath = Join-Path $publishDir $runtimeFile

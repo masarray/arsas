@@ -76,7 +76,7 @@ public static class IoFatEngineeringSelectionBridge
 
                 foreach (var staticPoint in FindStaticDataSetRuntimeCoverage(
                              ied,
-                             manualPoint.ObjectReference,
+                             EffectiveRuntimeReference(manualPoint),
                              manualPoint.FunctionalConstraint))
                 {
                     if (staticPoint.WorkspaceSelected)
@@ -284,8 +284,7 @@ public static class IoFatEngineeringSelectionBridge
         var requiredFc = functionalConstraint?.Trim() ?? string.Empty;
         return ied.TestPoints
             .Where(IoTestSignalSelectionService.IsSclDataSetAuthority)
-            .Where(point => IoTestLiveBindingService.NormalizeReference(point.ObjectReference)
-                .Equals(runtime, StringComparison.OrdinalIgnoreCase))
+            .Where(point => CoversRuntimeReference(point, runtime))
             .Where(point => requiredFc.Length == 0 ||
                             string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
                             point.FunctionalConstraint.Equals(requiredFc, StringComparison.OrdinalIgnoreCase))
@@ -306,15 +305,59 @@ public static class IoFatEngineeringSelectionBridge
         return changed;
     }
 
+    /// <summary>
+    /// Automatic Engineering -> FAT bootstrap is a Static DataSet workflow. Static FCDA/FCD
+    /// membership is therefore the complete FAT workspace authority for that bootstrap.
+    /// Persisted/manual SCL rows are retained for audit/evidence continuity but are removed
+    /// from the shared active workspace so they cannot shadow an authoritative static member
+    /// after both references resolve to the same primary live leaf.
+    /// </summary>
+    internal static int RetireManualWorkspaceRowsForStaticDataSetMode(IoTestIedPlan ied)
+    {
+        ArgumentNullException.ThrowIfNull(ied);
+        if (!ied.TestPoints.Any(IoTestSignalSelectionService.IsSclDataSetAuthority))
+            return 0;
+
+        var changed = 0;
+        foreach (var point in ied.TestPoints.Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority))
+        {
+            if (!point.WorkspaceSelected)
+                continue;
+
+            point.WorkspaceSelected = false;
+            changed++;
+        }
+
+        return changed;
+    }
+
     private static HashSet<IoTestPointPlan> FindRedundantManualWorkspacePoints(IoTestIedPlan ied)
         => ied.TestPoints
             .Where(IoTestSignalSelectionService.IsSclWorkspaceAuthority)
             .Where(point => FindStaticDataSetRuntimeCoverage(
                     ied,
-                    point.ObjectReference,
+                    EffectiveRuntimeReference(point),
                     point.FunctionalConstraint)
                 .Count > 0)
             .ToHashSet();
+
+    private static string EffectiveRuntimeReference(IoTestPointPlan point)
+    {
+        var live = IoTestLiveBindingService.NormalizeReference(point.LiveSignalReference);
+        return live.Length > 0
+            ? live
+            : IoTestLiveBindingService.NormalizeReference(point.ObjectReference);
+    }
+
+    private static bool CoversRuntimeReference(IoTestPointPlan point, string normalizedRuntimeReference)
+    {
+        var live = IoTestLiveBindingService.NormalizeReference(point.LiveSignalReference);
+        if (live.Length > 0 && live.Equals(normalizedRuntimeReference, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return IoTestLiveBindingService.NormalizeReference(point.ObjectReference)
+            .Equals(normalizedRuntimeReference, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool HasSameRuntimeIdentity(
         IoTestPointPlan point,
@@ -323,8 +366,7 @@ public static class IoFatEngineeringSelectionBridge
     {
         var runtime = IoTestLiveBindingService.NormalizeReference(runtimeReference);
         if (runtime.Length == 0 ||
-            !IoTestLiveBindingService.NormalizeReference(point.ObjectReference)
-                .Equals(runtime, StringComparison.OrdinalIgnoreCase))
+            !CoversRuntimeReference(point, runtime))
         {
             return false;
         }

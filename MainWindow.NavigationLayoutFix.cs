@@ -10,10 +10,10 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Owns the responsive geometry of the MainWindow workflow header.
 ///
-/// The original XAML used a 760 px shell split into six equal columns while the
+/// The original XAML used a 760 px shell split into seven equal columns while the
 /// selection pill moved in hard-coded 150 px steps. That was barely large enough for
-/// short labels and clipped "IEC 61850 Explorer" / "GOOSE Subscriber" once the center
-/// workspace switch and live connection/status chips were also present. This behavior
+/// short labels and clipped "IEC 61850 Explorer" / "GOOSE Subscriber" once connection
+/// and status chips were also present. This behavior
 /// keeps the header single-line at normal desktop sizes, deliberately compacts labels
 /// at smaller widths, and derives the selection pill from the real nav cell width.
 /// </summary>
@@ -62,7 +62,7 @@ internal static class MainWindowNavigationLayoutFix
         if (sender is not MainWindow window)
             return;
 
-        // Loaded may be raised again after window hide/show (e.g. IO List FAT switch).
+        // Loaded may be raised again after a window hide/show lifecycle.
         // Remove first so the responsive hooks always exist exactly once.
         window.SizeChanged -= MainWindow_SizeChanged;
         window.SizeChanged += MainWindow_SizeChanged;
@@ -76,9 +76,8 @@ internal static class MainWindowNavigationLayoutFix
         ApplyResponsiveLayout(window);
         QueuePillCorrection(window, animate: false);
 
-        // WorkspaceModeSwitch is installed by a separate Loaded class handler. Run one
-        // deferred pass so its dynamically inserted controls are included regardless of
-        // module/class-handler registration order.
+        // Run one deferred pass after all Loaded handlers have finished so the final
+        // navigation geometry is based on the materialized header.
         window.Dispatcher.BeginInvoke(
             DispatcherPriority.ContextIdle,
             new Action(() =>
@@ -93,7 +92,7 @@ internal static class MainWindowNavigationLayoutFix
         if (sender is not MainWindow window || e.Source is not Button button)
             return;
 
-        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton"))
+        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavNativeFatButton"))
             return;
 
         // A repeated click on the already-selected tab does not raise SelectionChanged,
@@ -109,19 +108,6 @@ internal static class MainWindowNavigationLayoutFix
 
         ApplyResponsiveLayout(window);
         QueuePillCorrection(window, animate: false);
-    }
-
-    private static void WorkspaceModeChild_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (sender is not FrameworkElement element || Window.GetWindow(element) is not MainWindow window)
-            return;
-
-        // The FAT button can change to "... LOADED" after the window is already shown.
-        // Re-apply the current breakpoint so that state text is compacted intentionally
-        // instead of making the top bar overflow.
-        window.Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
-            new Action(() => ApplyResponsiveLayout(window)));
     }
 
     private static void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -184,7 +170,6 @@ internal static class MainWindowNavigationLayoutFix
         }
 
         UpdatePillGeometry(window, shellWidth);
-        ApplyWorkspaceSwitchDensity(window, wide, medium);
     }
 
     private static Button?[] GetNavigationButtons(MainWindow window)
@@ -195,7 +180,8 @@ internal static class MainWindowNavigationLayoutFix
             window.FindName("NavEventsButton") as Button,
             window.FindName("NavAlarmButton") as Button,
             window.FindName("NavGooseButton") as Button,
-            window.FindName("NavDiagnosticsButton") as Button
+            window.FindName("NavDiagnosticsButton") as Button,
+            window.FindName("NavNativeFatButton") as Button
         ];
 
     private static void UpdatePillGeometry(MainWindow window, double shellWidth)
@@ -204,55 +190,14 @@ internal static class MainWindowNavigationLayoutFix
             return;
 
         // Border padding owns 10 px horizontally. The nav grid itself is divided into
-        // six equal star columns, so this is the exact width used by each button cell.
+        // seven equal star columns, so this is the exact width used by each button cell.
         var contentWidth = Math.Max(0d, shellWidth - 10d);
-        var cellWidth = contentWidth / 6d;
+        var cellWidth = contentWidth / 7d;
         pill.Width = Math.Max(1d, cellWidth - 2d);
         pill.Height = 36;
         pill.HorizontalAlignment = HorizontalAlignment.Left;
         pill.VerticalAlignment = VerticalAlignment.Center;
         pill.ClipToBounds = false;
-    }
-
-    private static void ApplyWorkspaceSwitchDensity(MainWindow window, bool wide, bool medium)
-    {
-        // WorkspaceModeSwitch is inserted dynamically into header column 1. At wide
-        // desktop widths retain the descriptive labels. At compact widths reduce only
-        // those redundant mode labels; the actual workspace functions remain present.
-        if (window.Content is not Grid root)
-            return;
-
-        var header = root.Children.OfType<Grid>().FirstOrDefault(child => Grid.GetRow(child) == 0);
-        if (header == null)
-            return;
-
-        var modeShell = header.Children.OfType<FrameworkElement>()
-            .FirstOrDefault(child => Equals(child.Tag, "ARSAS_WORKSPACE_MODE_SWITCH")) as Border;
-        if (modeShell?.Child is not StackPanel modes)
-            return;
-
-        modeShell.Margin = new Thickness(wide ? 10 : 6, 0, wide ? 10 : 6, 0);
-
-        if (modes.Children.Count > 0 && modes.Children[0] is Border engineering &&
-            engineering.Child is TextBlock engineeringText)
-        {
-            engineeringText.Text = medium ? "ENGINEERING" : "ENG";
-            engineering.Padding = new Thickness(medium ? 12 : 9, 7, medium ? 12 : 9, 7);
-        }
-
-        if (modes.Children.Count > 1 && modes.Children[1] is Button fatButton)
-        {
-            fatButton.SizeChanged -= WorkspaceModeChild_SizeChanged;
-            fatButton.SizeChanged += WorkspaceModeChild_SizeChanged;
-
-            // Do not overwrite the LOADED state used by WorkspaceModeSwitch; compact it
-            // while preserving that state signal.
-            var loaded = fatButton.Content?.ToString()?.Contains("LOADED", StringComparison.OrdinalIgnoreCase) == true;
-            fatButton.Content = medium
-                ? loaded ? "IO LIST FAT · LOADED" : "IO LIST FAT"
-                : loaded ? "FAT · LOADED" : "FAT";
-            fatButton.Padding = new Thickness(medium ? 12 : 9, 7, medium ? 12 : 9, 7);
-        }
     }
 
     private static void QueuePillCorrection(MainWindow window, bool animate)
@@ -279,8 +224,8 @@ internal static class MainWindowNavigationLayoutFix
         if (contentWidth <= 0d)
             contentWidth = Math.Max(0d, shell.Width - shell.Padding.Left - shell.Padding.Right);
 
-        var cellWidth = contentWidth / 6d;
-        var target = Math.Clamp(tabs.SelectedIndex, 0, 5) * cellWidth;
+        var cellWidth = contentWidth / 7d;
+        var target = Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth;
         pill.Width = Math.Max(1d, cellWidth - 2d);
 
         translate.BeginAnimation(TranslateTransform.XProperty, null);

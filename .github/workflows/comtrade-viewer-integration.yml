@@ -7,12 +7,18 @@ on:
       - "ComtradeWorkspaceWindow*.cs"
       - "ComtradeWorkspaceWindow.xaml"
       - "Controls/Comtrade*.cs"
-      - "Services/ArdIrec*.cs"
+      - "ArIED61850Tester.csproj"
+      - "Services/ArdIrecNativeBridge.cs"
+      - "Services/ArdIrecLocusNativeSession.cs"
+      - "Services/ArdIrecEmbeddedBridgeBootstrap.cs"
+      - "Services/ArdIrecViewerLauncher.cs"
       - "Services/Comtrade*.cs"
-      - "tests/ARSAS.Tests/ArdIrec*Tests.cs"
-      - "tests/ARSAS.Tests/Comtrade*Tests.cs"
-      - "scripts/stage-ardirec-viewer.ps1"
-      - "engines/ARIEC61850.lock.json"
+      - "Properties/AssemblyInfo.Tests.cs"
+      - "tests/ARSAS.Tests/ArdIrecNativeBridgeIntegrationTests.cs"
+      - "tests/ARSAS.Tests/ArdIrecLocusNativeSessionIntegrationTests.cs"
+      - "tests/ARSAS.Tests/Comtrade*.cs"
+      - "scripts/build-ardirec-bridge.ps1"
+      - "scripts/publish-windows-portable.ps1"
       - "engines/ARDIREC.lock.json"
       - "docs/COMTRADE_VIEWER_INTEGRATION.md"
       - ".github/workflows/comtrade-viewer-integration.yml"
@@ -23,9 +29,9 @@ permissions:
 
 jobs:
   windows-viewer-integration:
-    name: Qualify native ARSAS COMTRADE workstation
+    name: Build pinned ArdIrec native bridge and enforce in-process routing
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
 
     steps:
       - name: Checkout ARSAS
@@ -33,40 +39,38 @@ jobs:
         with:
           path: ARSAS
 
-      - name: Resolve immutable engine locks
+      - name: Resolve immutable field-tested ArdIrec bridge lock
         shell: powershell
         run: |
-          $iecLock = Get-Content ".\ARSAS\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
-          if ($iecLock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $iecLock.commit -notmatch '^[0-9a-f]{40}$') {
-            throw "ARIEC61850 lock metadata is invalid."
-          }
+          $lockPath = ".\ARSAS\engines\ARDIREC.lock.json"
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
 
-          $lock = Get-Content ".\ARSAS\engines\ARDIREC.lock.json" -Raw | ConvertFrom-Json
           if ($lock.schema -ne 3 -or
               $lock.repository -notmatch '^[^/]+/[^/]+$' -or
-              $lock.commit -notmatch '^[0-9a-f]{40}$' -or
-              $lock.bridge.abi -ne 1 -or
-              $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll' -or
-              $lock.bridge.mode -ne 'native-only') {
-            throw "ArdIrec P1D.5 bridge-only lock metadata is invalid."
+              [string]::IsNullOrWhiteSpace([string]$lock.ref) -or
+              $lock.ref -notmatch '^[A-Za-z0-9._/-]+$') {
+            throw "ArdIrec repository/ref lock is invalid."
+          }
+          if ($lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ArdIrec commit lock is invalid."
+          }
+          if ($lock.bridge.abi -ne 1 -or
+              $lock.bridge.mode -ne 'native-only' -or
+              $lock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+            throw "ArdIrec native bridge contract is invalid."
           }
 
-          "ARIEC61850_REPOSITORY=$($iecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_COMMIT=$($iecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $required = @('cursor_measurement','channel_semantics','value_representation','status_state','digital_edge_snap','phasor','harmonics','distance_locus')
+          $declared = @($lock.bridge.requiredCapabilities)
+          foreach ($capability in $required) {
+            if ($declared -notcontains $capability) {
+              throw "ArdIrec lock is missing required field-tested capability '$capability'."
+            }
+          }
+
           "ARDIREC_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REF=$($lock.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Checkout immutable ARIEC61850 revision
-        shell: powershell
-        run: |
-          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
-          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
-          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
-          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
-          if ($actual -ne $env:ARIEC61850_COMMIT) {
-            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
-          }
 
       - name: Checkout immutable ArdIrec revision
         shell: powershell
@@ -79,62 +83,64 @@ jobs:
             throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
           }
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Build and test ARSAS
+      - name: Build and test pinned native bridge
         shell: powershell
         run: |
-          dotnet restore .\ARSAS\ArIED61850Tester.sln
-          if ($LASTEXITCODE -ne 0) { throw "Solution restore failed." }
-          dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { throw "Solution build failed." }
-          dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
-          if ($LASTEXITCODE -ne 0) { throw "Application regression tests failed." }
-
-      - name: Build test and stage native ArdIrec bridge
-        shell: powershell
-        run: |
-          $publish = Join-Path $env:RUNNER_TEMP "arsas-comtrade-publish"
-          if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
-          New-Item -ItemType Directory -Path $publish -Force | Out-Null
-          .\ARSAS\scripts\stage-ardirec-viewer.ps1 `
+          $stage = Join-Path $env:RUNNER_TEMP "arsas-native-comtrade"
+          .\ARSAS\scripts\build-ardirec-bridge.ps1 `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
-            -PublishedDirectory $publish `
-            -BuildDirectory "$env:RUNNER_TEMP\ardirec-bridge-build"
-          "COMTRADE_PUBLISH=$publish" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            -OutputDirectory $stage `
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-native-build"
 
-      - name: Verify bridge-only deployment contract
-        shell: powershell
-        run: |
-          $bridge = Join-Path $env:COMTRADE_PUBLISH "Tools\ArdIrec\ardirec_bridge.dll"
-          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not staged: $bridge" }
-          foreach ($relative in @(
-            "Tools\ArdIrec\ardirec.exe",
-            "Tools\ArdIrec\Qt6Core.dll",
-            "Tools\ArdIrec\Qt6Gui.dll",
-            "Tools\ArdIrec\Qt6Qml.dll",
-            "Tools\ArdIrec\Qt6Quick.dll",
-            "Tools\ArdIrec\platforms\qwindows.dll"
-          )) {
-            $path = Join-Path $env:COMTRADE_PUBLISH $relative
-            if (Test-Path $path) { throw "Removed Qt/desktop fallback returned to package: $path" }
+          $bridge = Join-Path $stage "ardirec_bridge.dll"
+          if (-not (Test-Path $bridge -PathType Leaf)) {
+            throw "Pinned ArdIrec native bridge was not staged: $bridge"
           }
-          "ARSAS_ARDIREC_BRIDGE_PATH=$bridge" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NATIVE_BRIDGE_PATH=$bridge" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Exercise managed bridge and distance locus against ArdIrec fixtures
+      - name: Enforce field-tested native-only ARSAS COMTRADE routing
         shell: powershell
         run: |
-          $basic = Join-Path $env:RUNNER_TEMP "COMTRADE üñîçødé 日本 with spaces"
-          New-Item -ItemType Directory -Path $basic -Force | Out-Null
-          Copy-Item ".\ArdIrec\tests\data\minimal_1999.cfg" (Join-Path $basic "minimal_1999.cfg") -Force
-          Copy-Item ".\ArdIrec\tests\data\minimal_1999.dat" (Join-Path $basic "minimal_1999.dat") -Force
-          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = Join-Path $basic "minimal_1999.cfg"
-          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = Join-Path $env:GITHUB_WORKSPACE "ArdIrec\tests\data\distance_p1.cfg"
+          $openPath = ".\ARSAS\FaultRecordWindow.ComtradeOpen.cs"
+          $launcherPath = ".\ARSAS\Services\ArdIrecViewerLauncher.cs"
+          $bridgePath = ".\ARSAS\Services\ArdIrecNativeBridge.cs"
+          $bootstrapPath = ".\ARSAS\Services\ArdIrecEmbeddedBridgeBootstrap.cs"
+          $projectPath = ".\ARSAS\ArIED61850Tester.csproj"
+          $workspacePath = ".\ARSAS\ComtradeWorkspaceWindow.xaml"
+          $locusViewPath = ".\ARSAS\Controls\ComtradeLocusView.cs"
 
-          dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj `
-            -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
-          if ($LASTEXITCODE -ne 0) { throw "Managed ArdIrec bridge/locus integration test failed." }
+          $open = Get-Content $openPath -Raw
+          $launcher = Get-Content $launcherPath -Raw
+          $bridge = Get-Content $bridgePath -Raw
+          $bootstrap = Get-Content $bootstrapPath -Raw
+          $project = Get-Content $projectPath -Raw
+          $workspace = Get-Content $workspacePath -Raw
+          $locusView = Get-Content $locusViewPath -Raw
+
+          if ($open -notmatch 'ArdIrecNativeBridge\.TryOpen' -or
+              $open -notmatch 'ComtradeWorkspaceWindow' -or
+              $open -match 'Process\.Start|TryLaunch\(') {
+            throw "Fault-record Open must route only to the in-process native COMTRADE workspace."
+          }
+
+          if ($launcher -match 'Process\.Start|ProcessStartInfo|ardirec\.exe|ARSAS_ARDIREC_PATH|ARDIREC_VIEWER_PATH|TryLaunch\(') {
+            throw "External ArdIrec process-launch compatibility code is not allowed."
+          }
+
+          if ($bridge -notmatch 'ardirec_bridge\.dll' -or
+              $bridge -notmatch 'ExpectedAbiVersion = 1' -or
+              $bridge -notmatch 'Harmonic' -or
+              $bridge -notmatch 'Distance' -or
+              $bootstrap -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
+              $project -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
+              $project -notmatch 'Tools\\ArdIrec\\ardirec_bridge\.dll') {
+            throw "Field-tested native ArdIrec analysis/packaging contract is incomplete."
+          }
+
+          if ($workspace -notmatch 'ComtradePhasorView' -or
+              $workspace -notmatch 'ComtradeHarmonicsWorkstationView' -or
+              $locusView -notmatch 'class\s+ComtradeLocusView') {
+            throw "Production COMTRADE Phasor, Harmonics or Locus analysis surface is missing."
+          }
+
+          Write-Host "COMTRADE Open uses the field-tested in-process workstation with Phasor, Harmonics and Locus; no Qt/external ArdIrec process launch remains."

@@ -24,21 +24,17 @@ public sealed class IoFatSharedWorkspaceRuntimeDedupRegressionTests
         var manual = ManualPoint(runtime);
         var ied = Ied(staticA, staticB, manual);
 
-        var blocked = IoTestSessionPreflight.Validate(ied);
-        Assert.False(blocked.Succeeded);
-        Assert.Contains("multiple enabled test points", blocked.Message, StringComparison.OrdinalIgnoreCase);
+        var ready = IoTestSessionPreflight.Validate(ied);
 
-        var retired = IoFatEngineeringSelectionBridge.RetireRedundantManualWorkspaceRows(ied);
-
-        Assert.Equal(1, retired);
+        Assert.True(ready.Succeeded, ready.Message);
         Assert.False(manual.WorkspaceSelected);
         Assert.True(manual.TestEnabled);
         Assert.True(manual.IsIncludedInFat);
         Assert.True(staticA.WorkspaceSelected);
         Assert.True(staticB.WorkspaceSelected);
 
-        var ready = IoTestSessionPreflight.Validate(ied);
-        Assert.True(ready.Succeeded, ready.Message);
+        var retired = IoFatEngineeringSelectionBridge.RetireRedundantManualWorkspaceRows(ied);
+        Assert.Equal(0, retired);
     }
 
     [Fact]

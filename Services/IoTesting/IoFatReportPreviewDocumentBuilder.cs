@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using ArIED61850Tester.Models.IoTesting;
 
@@ -61,6 +62,9 @@ internal static class IoFatReportPreviewDocumentBuilder
                         break;
                     case IoFatReportTextCommand text:
                         AddText(fixedPage, pagePlan.Height, text);
+                        break;
+                    case IoFatReportImageCommand image:
+                        AddImage(fixedPage, pagePlan.Height, image);
                         break;
                 }
             }
@@ -156,6 +160,41 @@ internal static class IoFatReportPreviewDocumentBuilder
             top,
             Math.Max(4d, command.Width * DipPerPdfPoint),
             Math.Max(fontSize + 6d, fontSize * 1.65d));
+    }
+
+    private static void AddImage(FixedPage page, double pageHeight, IoFatReportImageCommand command)
+    {
+        if (command.PixelWidth <= 0 || command.PixelHeight <= 0 ||
+            command.RgbPixels.Length != command.PixelWidth * command.PixelHeight * 3)
+        {
+            return;
+        }
+
+        var bitmap = BitmapSource.Create(
+            command.PixelWidth,
+            command.PixelHeight,
+            96d,
+            96d,
+            PixelFormats.Rgb24,
+            null,
+            command.RgbPixels,
+            command.PixelWidth * 3);
+        bitmap.Freeze();
+
+        var image = new Image
+        {
+            Source = bitmap,
+            Stretch = Stretch.Uniform,
+            SnapsToDevicePixels = true
+        };
+
+        Add(
+            page,
+            image,
+            command.X * DipPerPdfPoint,
+            (pageHeight - command.TopY) * DipPerPdfPoint,
+            command.Width * DipPerPdfPoint,
+            command.Height * DipPerPdfPoint);
     }
 
     private static void Add(FixedPage page, UIElement element, double x, double y, double width, double height)

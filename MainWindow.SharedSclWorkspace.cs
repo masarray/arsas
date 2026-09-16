@@ -98,6 +98,11 @@ public partial class MainWindow
         // shared monitor to start and never changes acquisition method.
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
+
+        // P5 native FAT is a thin view over SelectedDevice.Points. Re-synchronize after
+        // static DataSet authority refresh so same-IED SCL refreshes are visible without
+        // reviving the retired Engineering -> legacy IoTest bootstrap.
+        SynchronizeProductionFatSelectedIed();
     }
 
     private void ClearSharedSignalSelection(Iec61850MonitorDevice device)

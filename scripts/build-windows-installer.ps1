@@ -44,13 +44,24 @@ if (-not (Test-Path $ardirecLockPath -PathType Leaf)) {
 }
 
 $ardirecLock = Get-Content $ardirecLockPath -Raw | ConvertFrom-Json
+$expectedFieldTestedCommit = '7dbc7149db668126a493ce338264363a6ec5ec00'
 if ($ardirecLock.schema -ne 3 -or
     $ardirecLock.repository -notmatch '^[^/]+/[^/]+$' -or
-    $ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+    [string]::IsNullOrWhiteSpace([string]$ardirecLock.ref) -or
+    $ardirecLock.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
+    $ardirecLock.commit -ne $expectedFieldTestedCommit -or
     $ardirecLock.bridge.abi -ne 1 -or
-    $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll' -or
-    $ardirecLock.bridge.mode -ne 'native-only') {
-    throw "ArdIrec P1D.5 integration lock is invalid. The installer requires native-only bridge ABI 1."
+    $ardirecLock.bridge.mode -ne 'native-only' -or
+    $ardirecLock.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+    throw "ArdIrec native integration lock is invalid. The installer requires the schema-3 native-only field-tested bridge pin."
+}
+
+$requiredCapabilities = @('cursor_measurement','channel_semantics','value_representation','status_state','digital_edge_snap','phasor','harmonics','distance_locus')
+$declaredCapabilities = @($ardirecLock.bridge.requiredCapabilities)
+foreach ($capability in $requiredCapabilities) {
+    if ($declaredCapabilities -notcontains $capability) {
+        throw "ArdIrec native integration lock is missing required capability '$capability'."
+    }
 }
 
 $requiredFiles = @(
@@ -60,6 +71,7 @@ $requiredFiles = @(
     "PacketDotNet.dll",
     "LICENSE",
     "README.txt",
+    "engines\ARDIREC.lock.json",
     "Tools\ArdIrec\ardirec_bridge.dll"
 )
 foreach ($file in $requiredFiles) {
@@ -69,7 +81,7 @@ foreach ($file in $requiredFiles) {
     }
 }
 
-$forbiddenDesktopFallbackFiles = @(
+$forbiddenRuntimeFiles = @(
     "Tools\ArdIrec\ardirec.exe",
     "Tools\ArdIrec\Qt6Core.dll",
     "Tools\ArdIrec\Qt6Gui.dll",
@@ -77,16 +89,16 @@ $forbiddenDesktopFallbackFiles = @(
     "Tools\ArdIrec\Qt6Quick.dll",
     "Tools\ArdIrec\platforms\qwindows.dll"
 )
-foreach ($file in $forbiddenDesktopFallbackFiles) {
+foreach ($file in $forbiddenRuntimeFiles) {
     $candidate = Join-Path $PublishedDirectory $file
     if (Test-Path $candidate) {
-        throw "Installer source violates the P1D.5 bridge-only contract. Removed desktop fallback is present: $candidate"
+        throw "Installer source must remain native-only; external ArdIrec/Qt runtime was found: $candidate"
     }
 }
 
-# Run the managed -> C ABI -> ardirec_core smoke on the exact native bridge that is about to be
-# packaged. This fixture belongs to ARSAS, so release validation does not depend on an external
-# COMTRADE test-data path after the bridge has been staged.
+# Run the managed -> C ABI -> ardirec_core smoke on the exact bridge that is about to be
+# packaged. The fixture belongs to ARSAS, so release validation does not depend on an external
+# test-data path after the engine has been staged.
 $testProject = Join-Path $root "tests\ARSAS.Tests\ARSAS.Tests.csproj"
 $testAssembly = Join-Path $root "tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll"
 $fixtureCfg = Join-Path $root "tests\fixtures\comtrade\p1-release-smoke.cfg"
@@ -94,7 +106,7 @@ $bridgePath = Join-Path $PublishedDirectory "Tools\ArdIrec\ardirec_bridge.dll"
 if (-not (Test-Path $testProject -PathType Leaf) -or
     -not (Test-Path $testAssembly -PathType Leaf) -or
     -not (Test-Path $fixtureCfg -PathType Leaf)) {
-    throw "P1 managed bridge smoke prerequisites are missing. Build the Release test project before packaging the installer."
+    throw "Native managed bridge smoke prerequisites are missing. Build the Release test project before packaging the installer."
 }
 
 $previousBridgePath = $env:ARSAS_ARDIREC_BRIDGE_PATH
@@ -102,14 +114,14 @@ $previousFixtureCfg = $env:ARSAS_NATIVE_COMTRADE_TEST_CFG
 try {
     $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridgePath
     $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $fixtureCfg
-    Write-Host "==> Validating staged P1D.5 COMTRADE bridge through ARSAS managed interop"
+    Write-Host "==> Validating native COMTRADE bridge and Locus session through ARSAS managed interop"
     & dotnet test $testProject `
         -c Release `
         --no-build `
         --no-restore `
-        --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests"
+        --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
     if ($LASTEXITCODE -ne 0) {
-        throw "Staged P1D.5 COMTRADE bridge failed the managed integration smoke test."
+        throw "Staged native COMTRADE bridge failed the managed bridge/Locus integration smoke test."
     }
 }
 finally {

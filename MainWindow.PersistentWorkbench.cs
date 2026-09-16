@@ -222,14 +222,14 @@ public partial class MainWindow
             Text = "TARGET · NONE",
             FontSize = 10.2,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x58, 0x6B, 0x82)),
+            Foreground = MainWindowFieldPresentationFix.CommandTargetForegroundBrush,
             VerticalAlignment = VerticalAlignment.Center
         };
         var targetBadge = new Border
         {
             Tag = "P0CommandTargetBadge",
-            Background = new SolidColorBrush(Color.FromRgb(0xF4, 0xF7, 0xFB)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD6, 0xE0, 0xEC)),
+            Background = MainWindowFieldPresentationFix.CommandTargetBackgroundBrush,
+            BorderBrush = MainWindowFieldPresentationFix.CommandTargetBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(7),
             Padding = new Thickness(7, 3, 7, 3),

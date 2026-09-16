@@ -71,7 +71,12 @@ public static class IoFatSourceWorkspaceService
             cancellationToken.ThrowIfCancellationRequested();
             var packageEntry = IoFatSourceIdentity.BuildPackageEntry(item.Source);
             var localPath = Path.Combine(sourceDirectory, Path.GetFileName(packageEntry));
-            await CopyVerifiedAsync(item.OriginalPath, localPath, item.Source.Sha256, cancellationToken).ConfigureAwait(false);
+            await CopyVerifiedAsync(
+                item.OriginalPath,
+                localPath,
+                item.Source.Sha256,
+                item.Source.Length,
+                cancellationToken).ConfigureAwait(false);
             staged.Add(new IoFatWorkspaceSource(item.Source, localPath, packageEntry));
         }
         return staged;
@@ -159,11 +164,52 @@ public static class IoFatSourceWorkspaceService
         string sourcePath,
         string destination,
         string expectedSha256,
+        long expectedLength,
         CancellationToken cancellationToken)
     {
+        // The local FAT source path is content-addressed by SourceId/SHA-256. Re-opening the
+        // same Engineering SCL must not rewrite identical bytes on every FAT-tab entry.
+        // Verify the staged copy before reuse; corruption falls back to the normal source
+        // read + SHA-256 verification + atomic replacement path.
+        if (await IsVerifiedStagedCopyAsync(
+                destination,
+                expectedSha256,
+                expectedLength,
+                cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
         var bytes = await File.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false);
         VerifyHash(bytes, expectedSha256, $"source '{Path.GetFileName(sourcePath)}'");
+        if (expectedLength > 0 && bytes.LongLength != expectedLength)
+            throw new InvalidDataException($"The source '{Path.GetFileName(sourcePath)}' length changed after its FAT identity was described.");
         await WriteFileAtomicAsync(destination, bytes, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> IsVerifiedStagedCopyAsync(
+        string path,
+        string expectedSha256,
+        long expectedLength,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(path))
+            return false;
+
+        var info = new FileInfo(path);
+        if (expectedLength > 0 && info.Length != expectedLength)
+            return false;
+
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            64 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        var actual = Convert.ToHexString(hash).ToLowerInvariant();
+        return actual.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ZipArchiveEntry RequiredEntry(ZipArchive archive, string name)

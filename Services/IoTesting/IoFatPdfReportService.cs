@@ -46,10 +46,40 @@ public static class IoFatPdfReportService
         return IoFatSupplementalReportLayoutDecorator.AppendFileServiceEvidence(reportProject, layout);
     }
 
+    /// <summary>
+    /// P4D native FAT export. The immutable selected-IED snapshot has already been mapped
+    /// to one report layout plan, so both DocumentViewer and PDF serialize that same plan.
+    /// No IoTestProject/runtime workspace is rebuilt for export.
+    /// </summary>
+    internal static byte[] GenerateLayout(
+        IoFatReportLayoutPlan layout,
+        string reportName,
+        string primaryReference)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        return IoFatNativePdfWriter.Build(layout, reportName, primaryReference);
+    }
+
     public static void Save(string fileName, IoTestProject project, DateTimeOffset? generatedAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         var bytes = Generate(project, generatedAt);
+        SaveBytesAtomic(fileName, bytes);
+    }
+
+    internal static void SaveLayout(
+        string fileName,
+        IoFatReportLayoutPlan layout,
+        string reportName,
+        string primaryReference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        var bytes = GenerateLayout(layout, reportName, primaryReference);
+        SaveBytesAtomic(fileName, bytes);
+    }
+
+    private static void SaveBytesAtomic(string fileName, byte[] bytes)
+    {
         var fullPath = Path.GetFullPath(fileName);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var temporary = fullPath + ".tmp-" + Guid.NewGuid().ToString("N");
