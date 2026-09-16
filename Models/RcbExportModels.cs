@@ -8,6 +8,9 @@ namespace ArIED61850Tester.Models;
 
 public sealed class RcbExportRow : ObservableObject
 {
+    private static readonly Brush ReadyIndicatorBrush = BrushFrom(22, 163, 74);
+    private static readonly Brush OccupiedIndicatorBrush = BrushFrom(234, 179, 8);
+
     private bool _isSelected;
     private int _memberCount;
     private MmsRcbOperationalAvailability _availability = MmsRcbOperationalAvailability.Unknown;
@@ -51,6 +54,7 @@ public sealed class RcbExportRow : ObservableObject
             if (!Set(ref _availability, value)) return;
             Raise(nameof(IsSelectable));
             Raise(nameof(RequiresConfirmation));
+            Raise(nameof(IsClientOccupied));
             Raise(nameof(StatusGlyph));
             Raise(nameof(StatusBrush));
         }
@@ -61,30 +65,16 @@ public sealed class RcbExportRow : ObservableObject
     public string Reason { get => _reason; set => Set(ref _reason, value?.Trim() ?? string.Empty); }
     public string Owner { get => _owner; set => Set(ref _owner, value?.Trim() ?? string.Empty); }
 
-    // Availability/ownership is evidence for the operator, not an export lock.
-    // Every discovered RCB remains selectable so the exported engineering model
-    // can truthfully represent what the IED exposes, including InUse/NoDataSet.
+    // Availability/ownership remains engineering evidence and still drives confirmation.
+    // The table intentionally presents only a calm client-occupancy indicator: yellow means
+    // an active client owns/uses the RCB; every other state is green and details stay in tooltip/evidence.
     public bool IsSelectable => true;
-
+    public bool IsClientOccupied => Availability is MmsRcbOperationalAvailability.InUse or MmsRcbOperationalAvailability.UsedByCaller;
     public bool RequiresConfirmation => HasEvidenceConflict || Availability is not MmsRcbOperationalAvailability.Available;
 
     public string MemberCountText => MemberCount > 0 ? $"{MemberCount:N0} FCDA" : "0 FCDA";
-    public string StatusGlyph => Availability switch
-    {
-        MmsRcbOperationalAvailability.Available => "✅",
-        MmsRcbOperationalAvailability.UsedByCaller => "●",
-        MmsRcbOperationalAvailability.Unknown => "⚠",
-        _ => "❌"
-    };
-    public Brush StatusBrush => HasEvidenceConflict
-        ? BrushFrom(201, 42, 50)
-        : Availability switch
-        {
-            MmsRcbOperationalAvailability.Available => BrushFrom(22, 163, 74),
-            MmsRcbOperationalAvailability.UsedByCaller => BrushFrom(37, 99, 235),
-            MmsRcbOperationalAvailability.Unknown => BrushFrom(202, 138, 4),
-            _ => BrushFrom(201, 42, 50)
-        };
+    public string StatusGlyph => "■";
+    public Brush StatusBrush => IsClientOccupied ? OccupiedIndicatorBrush : ReadyIndicatorBrush;
     public string SelectionIdentity => string.IsNullOrWhiteSpace(Reference) ? Name : Reference;
 
     public static string ToStatusText(MmsRcbOperationalAvailability availability)
