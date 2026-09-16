@@ -22,7 +22,8 @@ public sealed partial class NativeIec61850Client
         discovery = null!;
         model = null!;
 
-        if (_smartDiscoveryAuthority is null ||
+        if (!IsSmartDiscoveryAuthorityBoundToCurrentAssociation() ||
+            _smartDiscoveryAuthority is null ||
             _smartDiscoveryModelAuthority is null ||
             !ReferenceEquals(_lastDiscovery, _smartDiscoveryAuthority) ||
             !ReferenceEquals(_liveModel, _smartDiscoveryModelAuthority))
@@ -45,6 +46,7 @@ public sealed partial class NativeIec61850Client
         _smartDiscoveryModelAuthority = model;
         _smartDiscoveryTypeProbeCount = typeProbeCount;
         _smartDiscoverySuccessfulTypeProbeCount = successfulTypeProbeCount;
+        BindSmartDiscoveryAuthorityToCurrentAssociation();
     }
 
     private readonly record struct SmartProjectionStats(
