@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "040718027b92681b89f2e04ce048a53fe225a1c7",
+  "commit": "1b7cbbe8af3dfbc2a15086cb2c3e5eff02e006bb",
   "sourcePullRequest": 134,
-  "purpose": "Test-only capture build pin for ARIEC61850 PR #134. Uses bounded pipelined smart MMS directory discovery, hierarchy-first variable type probing, single-writer TPKT framing, partial-evidence preservation, and smart FC-root read support. ARIEC61850 CI run #626 passed source verification, Release build with zero warnings/errors, all 882 tests, and artifact packaging. This ARSAS branch intentionally defers historical supplemental discovery passes so field capture can measure the new bounded structural path directly. The reviewed production ancestry below remains preserved unchanged for regression authority.",
+  "purpose": "Test-only capture build pin for ARIEC61850 PR #134 R3. Uses bounded pipelined smart MMS directory discovery, hierarchy-first variable type probing, single-writer TPKT framing, partial-evidence preservation, smart FC-root reads, and association-scoped smart discovery single-flight. ARSAS additionally serializes the field-capture critical path on its MMS operation gate so report/read workflows cannot enter legacy discovery before the authoritative smart model is published. The reviewed production ancestry below remains preserved unchanged for regression authority.",
   "previousTrialPin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
     "sourcePullRequest": 132,
