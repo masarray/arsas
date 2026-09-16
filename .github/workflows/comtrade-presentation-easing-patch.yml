@@ -1,0 +1,499 @@
+name: Apply COMTRADE presentation easing patch
+
+on:
+  push:
+    branches:
+      - "fix/v1636-real-ied-feedback-smooth-analyzers"
+    paths:
+      - ".github/workflows/comtrade-presentation-easing-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/v1636-real-ied-feedback-smooth-analyzers
+          fetch-depth: 1
+
+      - name: Apply composition-driven presentation easing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_between(text: str, start_marker: str, end_marker: str, replacement: str, label: str) -> str:
+              start = text.find(start_marker)
+              if start < 0:
+                  raise SystemExit(f"{label}: start marker not found")
+              end = text.find(end_marker, start)
+              if end < 0:
+                  raise SystemExit(f"{label}: end marker not found")
+              return text[:start] + replacement + text[end:]
+
+          phasor_path = Path("Controls/ComtradePhasorView.cs")
+          phasor = phasor_path.read_text(encoding="utf-8")
+
+          old_phasor_fields = '''    private PreparedPhasorPanel _voltagePanel = PreparedPhasorPanel.Empty;
+              private PreparedPhasorPanel _currentPanel = PreparedPhasorPanel.Empty;
+              private const double PresentationTimeConstantMs = 78.0;
+              private string _headerLabel = "Fundamental phasors at C1";
+              private string _referenceDetail = "Select a valid analysis reference";
+              private string _message = string.Empty;
+              private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              private long _lastPresentationTimestamp;
+          '''.replace('              ', '')
+          new_phasor_fields = '''    private PreparedPhasorPanel _voltagePanel = PreparedPhasorPanel.Empty;
+              private PreparedPhasorPanel _currentPanel = PreparedPhasorPanel.Empty;
+              private const double PresentationTimeConstantMs = 78.0;
+              private const double PresentationAnimationMaximumMs = 260.0;
+              private string _headerLabel = "Fundamental phasors at C1";
+              private string _referenceDetail = "Select a valid analysis reference";
+              private string _message = string.Empty;
+              private ComtradePhasorVector[] _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              private ComtradePhasorVector[] _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              private ComtradePhasorVector[] _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              private ComtradePhasorVector[] _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              private bool _presentationRenderingHooked;
+              private long _lastPresentationTimestamp;
+              private long _presentationAnimationStartedTimestamp;
+          '''.replace('              ', '')
+          if old_phasor_fields not in phasor:
+              raise SystemExit("phasor field block not found exactly")
+          phasor = phasor.replace(old_phasor_fields, new_phasor_fields, 1)
+
+          new_show_phasors = '''    public ComtradePhasorView()
+              {
+                  Unloaded += (_, _) => StopPresentationAnimation();
+              }
+
+              internal void ShowPhasors(
+                  string referenceLabel,
+                  string referenceDetail,
+                  IReadOnlyList<ComtradePhasorVector> voltageVectors,
+                  IReadOnlyList<ComtradePhasorVector> currentVectors)
+              {
+                  var resolvedReference = string.IsNullOrWhiteSpace(referenceLabel) ? "Reference" : referenceLabel;
+                  _headerLabel = $"Fundamental phasors at {resolvedReference}";
+                  _referenceDetail = referenceDetail ?? string.Empty;
+
+                  _targetVoltageVectors = CloneVectors(voltageVectors);
+                  _targetCurrentVectors = CloneVectors(currentVectors);
+
+                  // A topology change or first sample snaps immediately. For the normal scrub path,
+                  // dt=0 preserves the currently displayed geometry and the composition pump then
+                  // eases it toward the newest exact native target at display cadence.
+                  _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, 0.0);
+                  _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, _targetCurrentVectors, 0.0);
+                  RefreshPreparedPanels();
+                  _message = string.Empty;
+
+                  if (VectorsDiffer(_smoothedVoltageVectors, _targetVoltageVectors) ||
+                      VectorsDiffer(_smoothedCurrentVectors, _targetCurrentVectors))
+                      StartPresentationAnimation();
+                  else
+                      StopPresentationAnimation();
+
+                  InvalidateVisual();
+              }
+
+          '''.replace('              ', '')
+          phasor = replace_between(
+              phasor,
+              "    internal void ShowPhasors(",
+              "    internal void ShowMessage(",
+              new_show_phasors,
+              "phasor ShowPhasors")
+
+          old_phasor_message = '''        _voltagePanel = PreparedPhasorPanel.Empty;
+              _currentPanel = PreparedPhasorPanel.Empty;
+              _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              _lastPresentationTimestamp = 0;
+          '''.replace('              ', '')
+          new_phasor_message = '''        StopPresentationAnimation();
+              _voltagePanel = PreparedPhasorPanel.Empty;
+              _currentPanel = PreparedPhasorPanel.Empty;
+              _targetVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              _targetCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              _smoothedVoltageVectors = Array.Empty<ComtradePhasorVector>();
+              _smoothedCurrentVectors = Array.Empty<ComtradePhasorVector>();
+              _lastPresentationTimestamp = 0;
+              _presentationAnimationStartedTimestamp = 0;
+          '''.replace('              ', '')
+          if old_phasor_message not in phasor:
+              raise SystemExit("phasor ShowMessage reset block not found")
+          phasor = phasor.replace(old_phasor_message, new_phasor_message, 1)
+
+          phasor_helpers = '''    private void StartPresentationAnimation()
+              {
+                  var now = Stopwatch.GetTimestamp();
+                  _lastPresentationTimestamp = now;
+                  _presentationAnimationStartedTimestamp = now;
+                  if (_presentationRenderingHooked) return;
+                  CompositionTarget.Rendering += PresentationCompositionFrame;
+                  _presentationRenderingHooked = true;
+              }
+
+              private void StopPresentationAnimation()
+              {
+                  if (_presentationRenderingHooked)
+                  {
+                      CompositionTarget.Rendering -= PresentationCompositionFrame;
+                      _presentationRenderingHooked = false;
+                  }
+                  _lastPresentationTimestamp = 0;
+                  _presentationAnimationStartedTimestamp = 0;
+              }
+
+              private void PresentationCompositionFrame(object? sender, EventArgs e)
+              {
+                  if (!_presentationRenderingHooked) return;
+                  var now = Stopwatch.GetTimestamp();
+                  var elapsedMilliseconds = _lastPresentationTimestamp == 0
+                      ? 16.0
+                      : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 0.0, 50.0);
+                  _lastPresentationTimestamp = now;
+
+                  _smoothedVoltageVectors = SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, elapsedMilliseconds);
+                  _smoothedCurrentVectors = SmoothVectors(_smoothedCurrentVectors, _targetCurrentVectors, elapsedMilliseconds);
+
+                  var animationAgeMilliseconds = _presentationAnimationStartedTimestamp == 0
+                      ? PresentationAnimationMaximumMs
+                      : Stopwatch.GetElapsedTime(_presentationAnimationStartedTimestamp, now).TotalMilliseconds;
+                  if (animationAgeMilliseconds >= PresentationAnimationMaximumMs)
+                  {
+                      // The animation plane is allowed to ease, but it always settles on the exact
+                      // native result. No rounded/interpolated value becomes engineering authority.
+                      _smoothedVoltageVectors = CloneVectors(_targetVoltageVectors);
+                      _smoothedCurrentVectors = CloneVectors(_targetCurrentVectors);
+                      StopPresentationAnimation();
+                  }
+
+                  RefreshPreparedPanels();
+                  InvalidateVisual();
+              }
+
+              private void RefreshPreparedPanels()
+              {
+                  _voltagePanel = PreparePanel(_smoothedVoltageVectors);
+                  _currentPanel = PreparePanel(_smoothedCurrentVectors);
+              }
+
+              private static ComtradePhasorVector[] CloneVectors(IReadOnlyList<ComtradePhasorVector>? source)
+              {
+                  if (source is null || source.Count == 0)
+                      return Array.Empty<ComtradePhasorVector>();
+                  var result = new ComtradePhasorVector[source.Count];
+                  for (var index = 0; index < source.Count; index++)
+                      result[index] = source[index];
+                  return result;
+              }
+
+              private static bool VectorsDiffer(
+                  IReadOnlyList<ComtradePhasorVector> left,
+                  IReadOnlyList<ComtradePhasorVector> right)
+              {
+                  if (left.Count != right.Count) return true;
+                  for (var index = 0; index < left.Count; index++)
+                  {
+                      var a = left[index];
+                      var b = right[index];
+                      if (!string.Equals(a.Label, b.Label, StringComparison.Ordinal) ||
+                          !string.Equals(a.Phase, b.Phase, StringComparison.Ordinal) ||
+                          !string.Equals(a.Units, b.Units, StringComparison.Ordinal) ||
+                          !a.MagnitudeRms.Equals(b.MagnitudeRms) ||
+                          !a.AngleDegrees.Equals(b.AngleDegrees))
+                          return true;
+                  }
+                  return false;
+              }
+
+          '''.replace('              ', '')
+          phasor_marker = "    private static ComtradePhasorVector[] SmoothVectors("
+          if phasor_marker not in phasor:
+              raise SystemExit("phasor SmoothVectors marker missing")
+          phasor = phasor.replace(phasor_marker, phasor_helpers + phasor_marker, 1)
+          phasor_path.write_text(phasor, encoding="utf-8", newline="\n")
+
+          harmonic_path = Path("Controls/ComtradeHarmonicsWorkstationView.cs")
+          harmonic = harmonic_path.read_text(encoding="utf-8")
+
+          old_harmonic_fields = '''    private const double PresentationTimeConstantMs = 92.0;
+              private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              private long _lastPresentationTimestamp;
+          '''.replace('              ', '')
+          new_harmonic_fields = '''    private const double PresentationTimeConstantMs = 92.0;
+              private const double PresentationAnimationMaximumMs = 300.0;
+              private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              private ComtradeHarmonicOverviewSpectrum[] _targetSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              private bool _presentationRenderingHooked;
+              private long _lastPresentationTimestamp;
+              private long _presentationAnimationStartedTimestamp;
+          '''.replace('              ', '')
+          if old_harmonic_fields not in harmonic:
+              raise SystemExit("harmonics field block not found exactly")
+          harmonic = harmonic.replace(old_harmonic_fields, new_harmonic_fields, 1)
+
+          old_ctor = '''    public ComtradeHarmonicsWorkstationView()
+              {
+                  Cursor = Cursors.Arrow;
+                  ToolTip = "Click any harmonic order to compare the same order across all visible analog channels.";
+              }
+          '''.replace('              ', '')
+          new_ctor = '''    public ComtradeHarmonicsWorkstationView()
+              {
+                  Cursor = Cursors.Arrow;
+                  ToolTip = "Click any harmonic order to compare the same order across all visible analog channels.";
+                  Unloaded += (_, _) => StopPresentationAnimation();
+              }
+          '''.replace('              ', '')
+          if old_ctor not in harmonic:
+              raise SystemExit("harmonics constructor not found")
+          harmonic = harmonic.replace(old_ctor, new_ctor, 1)
+
+          new_show_spectra = '''    internal void ShowSpectra(
+                  string title,
+                  string subtitle,
+                  IReadOnlyList<ComtradeHarmonicOverviewSpectrum> spectra)
+              {
+                  _title = title ?? string.Empty;
+                  _subtitle = subtitle ?? string.Empty;
+                  _targetSpectra = CloneSpectra(spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>());
+
+                  // Keep the raw/native result as the immutable target. dt=0 preserves the currently
+                  // displayed bars for matching channel topology; first sample/topology changes snap.
+                  _smoothedSpectra = SmoothSpectra(_smoothedSpectra, _targetSpectra, 0.0);
+                  RefreshPreparedSpectra();
+
+                  if (SpectraDiffer(_smoothedSpectra, _targetSpectra))
+                      StartPresentationAnimation();
+                  else
+                      StopPresentationAnimation();
+
+                  InvalidateVisual();
+              }
+
+          '''.replace('              ', '')
+          harmonic = replace_between(
+              harmonic,
+              "    internal void ShowSpectra(",
+              "    internal void ShowMessage(",
+              new_show_spectra,
+              "harmonics ShowSpectra")
+
+          old_harmonic_message = '''        _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              _lastPresentationTimestamp = 0;
+          '''.replace('              ', '')
+          new_harmonic_message = '''        StopPresentationAnimation();
+              _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              _targetSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+              _lastPresentationTimestamp = 0;
+              _presentationAnimationStartedTimestamp = 0;
+          '''.replace('              ', '')
+          if old_harmonic_message not in harmonic:
+              raise SystemExit("harmonics ShowMessage reset block not found")
+          harmonic = harmonic.replace(old_harmonic_message, new_harmonic_message, 1)
+
+          harmonic_helpers = '''    private void StartPresentationAnimation()
+              {
+                  var now = Stopwatch.GetTimestamp();
+                  _lastPresentationTimestamp = now;
+                  _presentationAnimationStartedTimestamp = now;
+                  if (_presentationRenderingHooked) return;
+                  CompositionTarget.Rendering += PresentationCompositionFrame;
+                  _presentationRenderingHooked = true;
+              }
+
+              private void StopPresentationAnimation()
+              {
+                  if (_presentationRenderingHooked)
+                  {
+                      CompositionTarget.Rendering -= PresentationCompositionFrame;
+                      _presentationRenderingHooked = false;
+                  }
+                  _lastPresentationTimestamp = 0;
+                  _presentationAnimationStartedTimestamp = 0;
+              }
+
+              private void PresentationCompositionFrame(object? sender, EventArgs e)
+              {
+                  if (!_presentationRenderingHooked) return;
+                  var now = Stopwatch.GetTimestamp();
+                  var elapsedMilliseconds = _lastPresentationTimestamp == 0
+                      ? 16.0
+                      : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 0.0, 50.0);
+                  _lastPresentationTimestamp = now;
+
+                  _smoothedSpectra = SmoothSpectra(_smoothedSpectra, _targetSpectra, elapsedMilliseconds);
+
+                  var animationAgeMilliseconds = _presentationAnimationStartedTimestamp == 0
+                      ? PresentationAnimationMaximumMs
+                      : Stopwatch.GetElapsedTime(_presentationAnimationStartedTimestamp, now).TotalMilliseconds;
+                  if (animationAgeMilliseconds >= PresentationAnimationMaximumMs)
+                  {
+                      // Bars/readouts settle to the exact native spectrum after the short visual
+                      // transition; interpolation never replaces the engineering result.
+                      _smoothedSpectra = CloneSpectra(_targetSpectra);
+                      StopPresentationAnimation();
+                  }
+
+                  RefreshPreparedSpectra();
+                  InvalidateVisual();
+              }
+
+              private void RefreshPreparedSpectra()
+              {
+                  _spectra = _smoothedSpectra;
+                  _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);
+                  _selectedOrder = Math.Clamp(_selectedOrder, 0, Math.Max(0, _maximumDisplayedOrder));
+                  _preparedRows = PrepareRows(_spectra, _maximumDisplayedOrder);
+                  _rowTargets.Clear();
+              }
+
+              private static ComtradeHarmonicOverviewSpectrum[] CloneSpectra(
+                  IReadOnlyList<ComtradeHarmonicOverviewSpectrum> source)
+              {
+                  if (source.Count == 0)
+                      return Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+                  var result = new ComtradeHarmonicOverviewSpectrum[source.Count];
+                  for (var index = 0; index < source.Count; index++)
+                      result[index] = source[index] with { Bins = source[index].Bins.ToArray() };
+                  return result;
+              }
+
+              private static bool SpectraDiffer(
+                  IReadOnlyList<ComtradeHarmonicOverviewSpectrum> left,
+                  IReadOnlyList<ComtradeHarmonicOverviewSpectrum> right)
+              {
+                  if (left.Count != right.Count) return true;
+                  for (var spectrumIndex = 0; spectrumIndex < left.Count; spectrumIndex++)
+                  {
+                      var a = left[spectrumIndex];
+                      var b = right[spectrumIndex];
+                      if (!string.Equals(a.SignalName, b.SignalName, StringComparison.Ordinal) ||
+                          !string.Equals(a.Units, b.Units, StringComparison.Ordinal) ||
+                          !a.DcComponent.Equals(b.DcComponent) ||
+                          !a.FundamentalRms.Equals(b.FundamentalRms) ||
+                          !a.ThdPercent.Equals(b.ThdPercent) ||
+                          a.DominantOrder != b.DominantOrder ||
+                          !a.DominantRms.Equals(b.DominantRms) ||
+                          !a.DominantPercent.Equals(b.DominantPercent) ||
+                          a.Bins.Count != b.Bins.Count)
+                          return true;
+                      for (var binIndex = 0; binIndex < a.Bins.Count; binIndex++)
+                      {
+                          var leftBin = a.Bins[binIndex];
+                          var rightBin = b.Bins[binIndex];
+                          if (leftBin.Order != rightBin.Order ||
+                              !leftBin.MagnitudeRms.Equals(rightBin.MagnitudeRms) ||
+                              !leftBin.PercentOfFundamental.Equals(rightBin.PercentOfFundamental) ||
+                              !leftBin.AngleDegrees.Equals(rightBin.AngleDegrees))
+                              return true;
+                      }
+                  }
+                  return false;
+              }
+
+          '''.replace('              ', '')
+          harmonic_marker = "    private static ComtradeHarmonicOverviewSpectrum[] SmoothSpectra("
+          if harmonic_marker not in harmonic:
+              raise SystemExit("harmonics SmoothSpectra marker missing")
+          harmonic = harmonic.replace(harmonic_marker, harmonic_helpers + harmonic_marker, 1)
+          harmonic_path.write_text(harmonic, encoding="utf-8", newline="\n")
+
+          test_path = Path("tests/ARSAS.Tests/ComtradePresentationAnimationRegressionTests.cs")
+          test_path.write_text(r'''namespace ARSAS.Tests;
+
+          public sealed class ComtradePresentationAnimationRegressionTests
+          {
+              [Fact]
+              public void PhasorPresentation_UsesCompositionFrames_AndSettlesToExactNativeTarget()
+              {
+                  var source = File.ReadAllText(FindRepoFile("Controls/ComtradePhasorView.cs"));
+                  Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", source, StringComparison.Ordinal);
+                  Assert.Contains("Unloaded += (_, _) => StopPresentationAnimation()", source, StringComparison.Ordinal);
+                  Assert.Contains("_targetVoltageVectors", source, StringComparison.Ordinal);
+                  Assert.Contains("_targetCurrentVectors", source, StringComparison.Ordinal);
+                  Assert.Contains("SmoothVectors(_smoothedVoltageVectors, _targetVoltageVectors, elapsedMilliseconds)", source, StringComparison.Ordinal);
+                  Assert.Contains("_smoothedVoltageVectors = CloneVectors(_targetVoltageVectors)", source, StringComparison.Ordinal);
+                  Assert.Contains("_smoothedCurrentVectors = CloneVectors(_targetCurrentVectors)", source, StringComparison.Ordinal);
+                  Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
+              }
+
+              [Fact]
+              public void HarmonicPresentation_UsesOneCompositionPump_AndSettlesToExactNativeSpectrum()
+              {
+                  var source = File.ReadAllText(FindRepoFile("Controls/ComtradeHarmonicsWorkstationView.cs"));
+                  Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", source, StringComparison.Ordinal);
+                  Assert.Contains("Unloaded += (_, _) => StopPresentationAnimation()", source, StringComparison.Ordinal);
+                  Assert.Contains("_targetSpectra", source, StringComparison.Ordinal);
+                  Assert.Contains("SmoothSpectra(_smoothedSpectra, _targetSpectra, elapsedMilliseconds)", source, StringComparison.Ordinal);
+                  Assert.Contains("_smoothedSpectra = CloneSpectra(_targetSpectra)", source, StringComparison.Ordinal);
+                  Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
+              }
+
+              [Fact]
+              public void NativeScrubScheduler_RemainsLatestWins_AndSingleWorker()
+              {
+                  var source = File.ReadAllText(FindRepoFile("ComtradeWorkspaceWindow.P1D4LiveScrub.cs"));
+                  Assert.Contains("if (_p1d4ScrubWorkerRunning || !_p1d4ScrubDirty)", source, StringComparison.Ordinal);
+                  Assert.Contains("_p1d4ScrubWorkerRunning = true", source, StringComparison.Ordinal);
+                  Assert.Contains("if (_p1d4ScrubDirty)", source, StringComparison.Ordinal);
+              }
+
+              private static string FindRepoFile(string relativePath)
+              {
+                  DirectoryInfo? directory = new(AppContext.BaseDirectory);
+                  while (directory != null)
+                  {
+                      var candidate = Path.Combine(directory.FullName, relativePath);
+                      if (File.Exists(candidate)) return candidate;
+                      directory = directory.Parent;
+                  }
+                  throw new FileNotFoundException(relativePath);
+              }
+          }
+          '''.replace('\n          ', '\n').lstrip(), encoding="utf-8", newline="\n")
+
+          # Fail closed if the intended architecture did not land.
+          checks = {
+              phasor_path: [
+                  "CompositionTarget.Rendering += PresentationCompositionFrame",
+                  "_smoothedVoltageVectors = CloneVectors(_targetVoltageVectors)",
+                  "Unloaded += (_, _) => StopPresentationAnimation()",
+              ],
+              harmonic_path: [
+                  "CompositionTarget.Rendering += PresentationCompositionFrame",
+                  "_smoothedSpectra = CloneSpectra(_targetSpectra)",
+                  "Unloaded += (_, _) => StopPresentationAnimation()",
+              ],
+          }
+          for path, tokens in checks.items():
+              text = path.read_text(encoding="utf-8")
+              for token in tokens:
+                  if token not in text:
+                      raise SystemExit(f"{path}: missing {token}")
+              if "DispatcherTimer" in text:
+                  raise SystemExit(f"{path}: per-control DispatcherTimer is forbidden")
+          PY
+          git diff --check
+
+      - name: Commit source fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "Ari Sulistiono"
+          git config user.email "ari.sulistiono@gmail.com"
+          rm .github/workflows/comtrade-presentation-easing-patch.yml
+          git add Controls/ComtradePhasorView.cs Controls/ComtradeHarmonicsWorkstationView.cs tests/ARSAS.Tests/ComtradePresentationAnimationRegressionTests.cs .github/workflows/comtrade-presentation-easing-patch.yml
+          git diff --cached --check
+          git commit -m "fix(comtrade): animate scrub presentation at composition cadence"
+          git push origin HEAD:fix/v1636-real-ied-feedback-smooth-analyzers
