@@ -33,13 +33,13 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
 </div>
 
-> **Current ARSAS application version: v1.6.37.** The current source line aligns live RCB instance presentation with IEDScout-style runtime slots while preserving canonical source-backed ReportControl identity, and makes in-process COMTRADE Phasor, Harmonics, and distance Locus interaction smoother without changing authoritative native engineering values.
+> **Current ARSAS application version: v1.6.37.** The current source line aligns live RCB instance presentation with concrete runtime slots exposed by the connected IED while preserving canonical source-backed ReportControl identity, and makes in-process COMTRADE Phasor, Harmonics, and distance Locus interaction smoother without changing authoritative native engineering values.
 >
 > **Published-package boundary:** download version, file size, SHA-256, SBOM, provenance, and attestation claims remain tied to the latest actually published stable GitHub Release. `main` moving to a newer application version does not by itself advance public binary evidence.
 
 ## What changed in v1.6.37
 
-- **IEDScout-aligned live RCB instances** — Legacy SAS RCB selection presents concrete instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, and `Unbuffer02` when the connected IED actually exposes them, without adding duplicate logical placeholder rows.
+- **Concrete live RCB instances** — Legacy SAS RCB selection presents concrete instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, and `Unbuffer02` when the connected IED actually exposes them, without adding duplicate logical placeholder rows.
 - **Canonical source-backed SCL export** — an opened engineering source preserves the logical `ReportControl` identity and `RptEnabled` indexing metadata; declarative `RptEnabled@max` is never used to invent runtime instance names.
 - **Clear RCB occupancy** — the compact occupancy indicator is yellow when a client is using the RCB and green otherwise, while engineering detail stays available without alarm-like captions.
 - **Smooth COMTRADE Phasor and Harmonics** — presentation follows the latest exact native ArdIrec analysis target at display cadence and converges exactly after a bounded settle interval.
