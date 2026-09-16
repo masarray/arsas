@@ -67,9 +67,13 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     private static readonly string[] OrderLabels = CreateOrderLabels();
 
     private const double PresentationTimeConstantMs = 92.0;
+    private const double PresentationAnimationMaximumMs = 300.0;
     private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    private ComtradeHarmonicOverviewSpectrum[] _targetSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
     private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    private bool _presentationRenderingHooked;
     private long _lastPresentationTimestamp;
+    private long _presentationAnimationStartedTimestamp;
     private PreparedSpectrumRow[] _preparedRows = Array.Empty<PreparedSpectrumRow>();
     private int _maximumDisplayedOrder = -1;
     private string _title = "Harmonics";
@@ -81,6 +85,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     {
         Cursor = Cursors.Arrow;
         ToolTip = "Click any harmonic order to compare the same order across all visible analog channels.";
+        Unloaded += (_, _) => StopPresentationAnimation();
     }
 
     internal void ShowSpectrum(string title, string subtitle, ComtradeHarmonicDisplaySpectrum spectrum)
@@ -103,39 +108,33 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     }
 
     internal void ShowSpectra(
-        string title,
-        string subtitle,
-        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> spectra)
-    {
-        _title = title ?? string.Empty;
-        _subtitle = subtitle ?? string.Empty;
-        var targetSpectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        var now = Stopwatch.GetTimestamp();
-        var elapsedMilliseconds = _lastPresentationTimestamp == 0
-            ? double.PositiveInfinity
-            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
-        _lastPresentationTimestamp = now;
-        _smoothedSpectra = SmoothSpectra(_smoothedSpectra, targetSpectra, elapsedMilliseconds);
-        _spectra = _smoothedSpectra;
-        _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);
-        _selectedOrder = Math.Clamp(_selectedOrder, 0, Math.Max(0, _maximumDisplayedOrder));
-        _preparedRows = PrepareRows(_spectra, _maximumDisplayedOrder);
-        _rowTargets.Clear();
-        InvalidateVisual();
-    }
+    string title,
+    string subtitle,
+    IReadOnlyList<ComtradeHarmonicOverviewSpectrum> spectra)
+{
+    _title = title ?? string.Empty;
+    _subtitle = subtitle ?? string.Empty;
+    _targetSpectra = CloneSpectra(spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>());
+    _smoothedSpectra = SmoothSpectra(_smoothedSpectra, _targetSpectra, 0.0);
+    RefreshPreparedSpectra();
+    if (SpectraDiffer(_smoothedSpectra, _targetSpectra)) StartPresentationAnimation();
+    else StopPresentationAnimation();
+    InvalidateVisual();
+}
 
     internal void ShowMessage(string title, string message)
-    {
-        _title = title ?? string.Empty;
-        _subtitle = message ?? string.Empty;
-        _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        _lastPresentationTimestamp = 0;
-        _preparedRows = Array.Empty<PreparedSpectrumRow>();
-        _maximumDisplayedOrder = -1;
-        _rowTargets.Clear();
-        InvalidateVisual();
-    }
+{
+    _title = title ?? string.Empty;
+    _subtitle = message ?? string.Empty;
+    StopPresentationAnimation();
+    _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    _targetSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    _preparedRows = Array.Empty<PreparedSpectrumRow>();
+    _maximumDisplayedOrder = -1;
+    _rowTargets.Clear();
+    InvalidateVisual();
+}
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -308,6 +307,87 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
             DrawRightAlignedText(dc, _preparedRows[0].SampleRateLabel, 8.0, BodyTypeface,
                 FooterRateBrush, new Point(bounds.Right - 16, y), dpi);
     }
+
+    private void StartPresentationAnimation()
+{
+    var now = Stopwatch.GetTimestamp();
+    _lastPresentationTimestamp = now;
+    _presentationAnimationStartedTimestamp = now;
+    if (_presentationRenderingHooked) return;
+    CompositionTarget.Rendering += PresentationCompositionFrame;
+    _presentationRenderingHooked = true;
+}
+
+private void StopPresentationAnimation()
+{
+    if (_presentationRenderingHooked)
+    {
+        CompositionTarget.Rendering -= PresentationCompositionFrame;
+        _presentationRenderingHooked = false;
+    }
+    _lastPresentationTimestamp = 0;
+    _presentationAnimationStartedTimestamp = 0;
+}
+
+private void PresentationCompositionFrame(object? sender, EventArgs e)
+{
+    if (!_presentationRenderingHooked) return;
+    var now = Stopwatch.GetTimestamp();
+    var dt = _lastPresentationTimestamp == 0
+        ? 16.0
+        : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 0.0, 50.0);
+    _lastPresentationTimestamp = now;
+    _smoothedSpectra = SmoothSpectra(_smoothedSpectra, _targetSpectra, dt);
+    var age = _presentationAnimationStartedTimestamp == 0
+        ? PresentationAnimationMaximumMs
+        : Stopwatch.GetElapsedTime(_presentationAnimationStartedTimestamp, now).TotalMilliseconds;
+    if (age >= PresentationAnimationMaximumMs)
+    {
+        _smoothedSpectra = CloneSpectra(_targetSpectra);
+        StopPresentationAnimation();
+    }
+    RefreshPreparedSpectra();
+    InvalidateVisual();
+}
+
+private void RefreshPreparedSpectra()
+{
+    _spectra = _smoothedSpectra;
+    _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);
+    _selectedOrder = Math.Clamp(_selectedOrder, 0, Math.Max(0, _maximumDisplayedOrder));
+    _preparedRows = PrepareRows(_spectra, _maximumDisplayedOrder);
+    _rowTargets.Clear();
+}
+
+private static ComtradeHarmonicOverviewSpectrum[] CloneSpectra(IReadOnlyList<ComtradeHarmonicOverviewSpectrum> source)
+{
+    if (source.Count == 0) return Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    var result = new ComtradeHarmonicOverviewSpectrum[source.Count];
+    for (var i = 0; i < source.Count; i++) result[i] = source[i] with { Bins = source[i].Bins.ToArray() };
+    return result;
+}
+
+private static bool SpectraDiffer(IReadOnlyList<ComtradeHarmonicOverviewSpectrum> left, IReadOnlyList<ComtradeHarmonicOverviewSpectrum> right)
+{
+    if (left.Count != right.Count) return true;
+    for (var i = 0; i < left.Count; i++)
+    {
+        var a = left[i]; var b = right[i];
+        if (!string.Equals(a.SignalName, b.SignalName, StringComparison.Ordinal) ||
+  !string.Equals(a.Units, b.Units, StringComparison.Ordinal) ||
+  !a.DcComponent.Equals(b.DcComponent) || !a.FundamentalRms.Equals(b.FundamentalRms) ||
+  !a.ThdPercent.Equals(b.ThdPercent) || a.DominantOrder != b.DominantOrder ||
+  !a.DominantRms.Equals(b.DominantRms) || !a.DominantPercent.Equals(b.DominantPercent) ||
+  a.Bins.Count != b.Bins.Count) return true;
+        for (var j = 0; j < a.Bins.Count; j++)
+        {
+  var x = a.Bins[j]; var y = b.Bins[j];
+  if (x.Order != y.Order || !x.MagnitudeRms.Equals(y.MagnitudeRms) ||
+      !x.PercentOfFundamental.Equals(y.PercentOfFundamental) || !x.AngleDegrees.Equals(y.AngleDegrees)) return true;
+        }
+    }
+    return false;
+}
 
     private static ComtradeHarmonicOverviewSpectrum[] SmoothSpectra(
         IReadOnlyList<ComtradeHarmonicOverviewSpectrum> previous,
