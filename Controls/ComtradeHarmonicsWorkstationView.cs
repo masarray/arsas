@@ -25,9 +25,9 @@ internal sealed record ComtradeHarmonicOverviewSpectrum(
 /// control only renders compact, aligned small multiples so several checked analog channels can be
 /// compared at the same H cursor without switching channel-by-channel.
 ///
-/// Render-path rule: spectrum normalization, harmonic lookup, engineering-value formatting and
-/// brush creation happen only when ShowSpectra receives a new immutable result. OnRender consumes
-/// prepared rows and only performs geometry/text drawing required for the current element size.
+/// Render-path rule: native results update exact cached targets at analysis cadence. Static row
+/// assets and reusable numeric buffers are rebuilt only on topology changes; composition frames
+/// mutate only numeric presentation values and never rebuild brushes, labels or per-bin arrays.
 /// </summary>
 public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
 {
@@ -67,9 +67,10 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     private static readonly string[] OrderLabels = CreateOrderLabels();
 
     private const double PresentationTimeConstantMs = 92.0;
-    private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-    private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    private const double PresentationAnimationMaximumMs = 300.0;
+    private bool _presentationRenderingHooked;
     private long _lastPresentationTimestamp;
+    private long _presentationAnimationStartedTimestamp;
     private PreparedSpectrumRow[] _preparedRows = Array.Empty<PreparedSpectrumRow>();
     private int _maximumDisplayedOrder = -1;
     private string _title = "Harmonics";
@@ -81,6 +82,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     {
         Cursor = Cursors.Arrow;
         ToolTip = "Click any harmonic order to compare the same order across all visible analog channels.";
+        Unloaded += (_, _) => StopPresentationAnimation();
     }
 
     internal void ShowSpectrum(string title, string subtitle, ComtradeHarmonicDisplaySpectrum spectrum)
@@ -110,16 +112,26 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         _title = title ?? string.Empty;
         _subtitle = subtitle ?? string.Empty;
         var targetSpectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        var now = Stopwatch.GetTimestamp();
-        var elapsedMilliseconds = _lastPresentationTimestamp == 0
-            ? double.PositiveInfinity
-            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
-        _lastPresentationTimestamp = now;
-        _smoothedSpectra = SmoothSpectra(_smoothedSpectra, targetSpectra, elapsedMilliseconds);
-        _spectra = _smoothedSpectra;
-        _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);
+        var targetMaximumOrder = ResolveMaximumDisplayedOrder(targetSpectra);
+        var topologyMatches = PreparedRowsMatchTopology(_preparedRows, targetSpectra, targetMaximumOrder);
+
+        _maximumDisplayedOrder = targetMaximumOrder;
         _selectedOrder = Math.Clamp(_selectedOrder, 0, Math.Max(0, _maximumDisplayedOrder));
-        _preparedRows = PrepareRows(_spectra, _maximumDisplayedOrder);
+
+        if (!topologyMatches)
+        {
+            _preparedRows = PrepareRows(targetSpectra, _maximumDisplayedOrder);
+            StopPresentationAnimation();
+        }
+        else
+        {
+            UpdatePreparedTargets(_preparedRows, targetSpectra, _maximumDisplayedOrder);
+            if (PreparedRowsDifferFromTarget(_preparedRows))
+                StartPresentationAnimation();
+            else
+                StopPresentationAnimation();
+        }
+
         _rowTargets.Clear();
         InvalidateVisual();
     }
@@ -128,9 +140,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     {
         _title = title ?? string.Empty;
         _subtitle = message ?? string.Empty;
-        _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
-        _lastPresentationTimestamp = 0;
+        StopPresentationAnimation();
         _preparedRows = Array.Empty<PreparedSpectrumRow>();
         _maximumDisplayedOrder = -1;
         _rowTargets.Clear();
@@ -217,7 +227,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
 
         DrawText(dc, prepared.SignalLabel, 9.5, SemiboldTypeface,
             PrimaryTextBrush, new Point(18, row.Top + 5), dpi, LabelWidth - 22);
-        DrawText(dc, prepared.ThdLabel, 7.7, BodyTypeface,
+        DrawText(dc, prepared.TargetThdLabel, 7.7, BodyTypeface,
             SecondaryTextBrush, new Point(18, row.Top + 22), dpi, LabelWidth - 22);
 
         var plot = new Rect(
@@ -227,7 +237,7 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
             Math.Max(38, row.Height - 27));
         _rowTargets.Add(new RowHitTarget(plot, maximumOrder));
 
-        DrawMagnitudeGrid(dc, plot, prepared.AxisMaximum, prepared.AxisTopLabel, dpi);
+        DrawMagnitudeGrid(dc, plot, prepared.AxisMaximum, prepared.TargetAxisTopLabel, dpi);
 
         var slot = plot.Width / Math.Max(1, maximumOrder + 1);
         var barWidth = Math.Clamp(slot * 0.64, 4.0, 38.0);
@@ -262,9 +272,9 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
 
             if (bin.MagnitudeRms <= 0 && order != 1) continue;
             var labelY = Math.Max(plot.Top + 1, barRect.Top - 23);
-            DrawCenteredText(dc, bin.PercentLabel, 7.1, SemiboldTypeface,
+            DrawCenteredText(dc, prepared.TargetPercentLabels[order], 7.1, SemiboldTypeface,
                 HarmonicLabelBrush, new Point(centerX, labelY), dpi);
-            DrawCenteredText(dc, bin.MagnitudeLabel, 6.9, BodyTypeface,
+            DrawCenteredText(dc, prepared.TargetMagnitudeLabels[order], 6.9, BodyTypeface,
                 MagnitudeLabelBrush, new Point(centerX, labelY + 10), dpi);
         }
     }
@@ -309,77 +319,72 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
                 FooterRateBrush, new Point(bounds.Right - 16, y), dpi);
     }
 
-    private static ComtradeHarmonicOverviewSpectrum[] SmoothSpectra(
-        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> previous,
-        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> target,
-        double elapsedMilliseconds)
+    private void StartPresentationAnimation()
     {
-        if (target.Count == 0)
-            return Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+        var now = Stopwatch.GetTimestamp();
+        _presentationAnimationStartedTimestamp = now;
+        if (_presentationRenderingHooked) return;
+        _lastPresentationTimestamp = now;
+        CompositionTarget.Rendering += PresentationCompositionFrame;
+        _presentationRenderingHooked = true;
+    }
 
-        var topologyMatches = previous.Count == target.Count && previous.Count > 0;
-        if (topologyMatches)
+    private void StopPresentationAnimation()
+    {
+        if (_presentationRenderingHooked)
         {
-            for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)
-            {
-                var before = previous[spectrumIndex];
-                var next = target[spectrumIndex];
-                if (!string.Equals(before.SignalName, next.SignalName, StringComparison.Ordinal) ||
-                    !string.Equals(before.Units, next.Units, StringComparison.Ordinal) ||
-                    before.Bins.Count != next.Bins.Count)
-                {
-                    topologyMatches = false;
-                    break;
-                }
-                for (var binIndex = 0; binIndex < next.Bins.Count; binIndex++)
-                {
-                    if (before.Bins[binIndex].Order != next.Bins[binIndex].Order)
-                    {
-                        topologyMatches = false;
-                        break;
-                    }
-                }
-                if (!topologyMatches) break;
-            }
+            CompositionTarget.Rendering -= PresentationCompositionFrame;
+            _presentationRenderingHooked = false;
+        }
+        _lastPresentationTimestamp = 0;
+        _presentationAnimationStartedTimestamp = 0;
+    }
+
+    private void PresentationCompositionFrame(object? sender, EventArgs e)
+    {
+        if (!_presentationRenderingHooked) return;
+
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _lastPresentationTimestamp == 0
+            ? 16.0
+            : Math.Clamp(Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds, 0.0, 50.0);
+        _lastPresentationTimestamp = now;
+
+        AdvancePreparedRows(_preparedRows, elapsedMilliseconds);
+
+        var animationAgeMilliseconds = _presentationAnimationStartedTimestamp == 0
+            ? PresentationAnimationMaximumMs
+            : Stopwatch.GetElapsedTime(_presentationAnimationStartedTimestamp, now).TotalMilliseconds;
+        if (animationAgeMilliseconds >= PresentationAnimationMaximumMs)
+        {
+            SnapPreparedRowsToTarget(_preparedRows);
+            StopPresentationAnimation();
         }
 
-        var result = new ComtradeHarmonicOverviewSpectrum[target.Count];
-        for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)
+        InvalidateVisual();
+    }
+
+    private static bool PreparedRowsMatchTopology(
+        IReadOnlyList<PreparedSpectrumRow> rows,
+        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> target,
+        int maximumOrder)
+    {
+        if (maximumOrder < 0)
+            return rows.Count == 0 && target.Count == 0;
+        if (rows.Count != target.Count)
+            return false;
+
+        for (var index = 0; index < target.Count; index++)
         {
-            var next = target[spectrumIndex];
-            if (!topologyMatches)
-            {
-                result[spectrumIndex] = next with { Bins = next.Bins.ToArray() };
-                continue; // First sample/channel-set change snaps; never invent a ramp from zero.
-            }
-
-            var before = previous[spectrumIndex];
-            var bins = new ComtradeHarmonicDisplayBin[next.Bins.Count];
-            for (var binIndex = 0; binIndex < bins.Length; binIndex++)
-            {
-                var previousBin = before.Bins[binIndex];
-                var targetBin = next.Bins[binIndex];
-                bins[binIndex] = new ComtradeHarmonicDisplayBin(
-                    targetBin.Order,
-                    PresentationEasingMath.Smooth(previousBin.MagnitudeRms, targetBin.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),
-                    PresentationEasingMath.Smooth(previousBin.PercentOfFundamental, targetBin.PercentOfFundamental, elapsedMilliseconds, PresentationTimeConstantMs),
-                    PresentationEasingMath.SmoothAngleDegrees(previousBin.AngleDegrees, targetBin.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));
-            }
-
-            result[spectrumIndex] = new ComtradeHarmonicOverviewSpectrum(
-                next.SignalName,
-                next.Units,
-                PresentationEasingMath.Smooth(before.DcComponent, next.DcComponent, elapsedMilliseconds, PresentationTimeConstantMs),
-                PresentationEasingMath.Smooth(before.FundamentalRms, next.FundamentalRms, elapsedMilliseconds, PresentationTimeConstantMs),
-                PresentationEasingMath.Smooth(before.ThdPercent, next.ThdPercent, elapsedMilliseconds, PresentationTimeConstantMs),
-                next.DominantOrder,
-                PresentationEasingMath.Smooth(before.DominantRms, next.DominantRms, elapsedMilliseconds, PresentationTimeConstantMs),
-                PresentationEasingMath.Smooth(before.DominantPercent, next.DominantPercent, elapsedMilliseconds, PresentationTimeConstantMs),
-                next.EstimatedSampleRateHz,
-                next.MaximumResolvableOrder,
-                bins);
+            var row = rows[index];
+            var spectrum = target[index];
+            if (!string.Equals(row.SignalName, spectrum.SignalName, StringComparison.Ordinal) ||
+                !string.Equals(row.Units, spectrum.Units, StringComparison.Ordinal) ||
+                row.Bins.Length != maximumOrder + 1)
+                return false;
         }
-        return result;
+
+        return true;
     }
 
     private static PreparedSpectrumRow[] PrepareRows(
@@ -393,89 +398,159 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         for (var index = 0; index < spectra.Count; index++)
         {
             var spectrum = spectra[index];
-            var bins = BuildPlotBins(spectrum, maximumOrder, out var maximumMagnitude);
-            var axisMaximum = ComtradeHarmonicsOverviewMath.NiceMagnitudeAxisMaximum(maximumMagnitude);
             var signalColor = SignalColor(spectrum.SignalName);
-            var signalBrush = FreezeBrush(signalColor);
-            var secondarySignalBrush = FreezeBrush(WithAlpha(signalColor, 190));
             var unitSuffix = string.IsNullOrWhiteSpace(spectrum.Units) ? string.Empty : $"/{spectrum.Units}";
-            var axisUnit = string.IsNullOrWhiteSpace(spectrum.Units) ? string.Empty : $" {spectrum.Units}";
-            rows[index] = new PreparedSpectrumRow(
-                bins,
-                axisMaximum,
-                signalBrush,
-                secondarySignalBrush,
-                $"{spectrum.SignalName}{unitSuffix}",
-                $"THD {spectrum.ThdPercent:G4}%",
-                $"{FormatEngineering(axisMaximum)}{axisUnit}",
-                spectrum.EstimatedSampleRateHz,
-                spectrum.EstimatedSampleRateHz > 0 ? $"{spectrum.EstimatedSampleRateHz:G6} Hz" : string.Empty);
+            var row = new PreparedSpectrumRow(
+                spectrum.SignalName,
+                spectrum.Units,
+                new PlotBin[maximumOrder + 1],
+                new double[maximumOrder + 1],
+                new double[maximumOrder + 1],
+                new string[maximumOrder + 1],
+                new string[maximumOrder + 1],
+                FreezeBrush(signalColor),
+                FreezeBrush(WithAlpha(signalColor, 190)),
+                $"{spectrum.SignalName}{unitSuffix}");
+            rows[index] = row;
+            UpdatePreparedTarget(row, spectrum, maximumOrder);
+            SnapPreparedRowToTarget(row);
         }
+
         return rows;
     }
 
-    private static PlotBin[] BuildPlotBins(
-        ComtradeHarmonicOverviewSpectrum spectrum,
-        int maximumOrder,
-        out double maximumMagnitude)
+    private static void UpdatePreparedTargets(
+        IReadOnlyList<PreparedSpectrumRow> rows,
+        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> target,
+        int maximumOrder)
     {
-        var result = new PlotBin[maximumOrder + 1];
-        maximumMagnitude = 0.0;
+        var count = Math.Min(rows.Count, target.Count);
+        for (var index = 0; index < count; index++)
+            UpdatePreparedTarget(rows[index], target[index], maximumOrder);
+    }
 
-        var dcMagnitude = Math.Abs(double.IsFinite(spectrum.DcComponent) ? spectrum.DcComponent : 0.0);
-        result[0] = CreatePlotBin(
-            0,
-            dcMagnitude,
-            ComtradeHarmonicsOverviewMath.PercentOfFundamental(dcMagnitude, spectrum.FundamentalRms),
-            0.0);
-        maximumMagnitude = dcMagnitude;
+    private static void UpdatePreparedTarget(
+        PreparedSpectrumRow row,
+        ComtradeHarmonicOverviewSpectrum target,
+        int maximumOrder)
+    {
+        var targetFundamental = DisplayMagnitude(target.FundamentalRms);
+        var maximumMagnitude = 0.0;
 
-        // MaximumDisplayedOrder is 10, so an integer bit mask is a cheaper first-bin-wins index
-        // than allocating GroupBy/Dictionary structures on every redraw.
-        var populatedMask = 1u;
+        for (var order = 0; order <= maximumOrder; order++)
+        {
+            ResolveTargetBin(target, order, targetFundamental, out var magnitude, out var angleDegrees);
+            var percent = order == 1 && targetFundamental > 0.0
+                ? 100.0
+                : ComtradeHarmonicsOverviewMath.PercentOfFundamental(magnitude, targetFundamental);
+
+            row.TargetMagnitudes[order] = magnitude;
+            row.TargetAngles[order] = angleDegrees;
+            row.TargetPercentLabels[order] = $"{percent:0.#}%";
+            row.TargetMagnitudeLabels[order] = FormatEngineering(magnitude);
+            maximumMagnitude = Math.Max(maximumMagnitude, magnitude);
+        }
+
+        row.AxisMaximum = ComtradeHarmonicsOverviewMath.NiceMagnitudeAxisMaximum(maximumMagnitude);
+        var axisUnit = string.IsNullOrWhiteSpace(target.Units) ? string.Empty : $" {target.Units}";
+        row.TargetAxisTopLabel = $"{FormatEngineering(row.AxisMaximum)}{axisUnit}";
+        row.TargetThdLabel = $"THD {DisplayScalar(target.ThdPercent):G4}%";
+        row.EstimatedSampleRateHz = target.EstimatedSampleRateHz;
+        row.SampleRateLabel = target.EstimatedSampleRateHz > 0.0 && double.IsFinite(target.EstimatedSampleRateHz)
+            ? $"{target.EstimatedSampleRateHz:G6} Hz"
+            : string.Empty;
+    }
+
+    private static void ResolveTargetBin(
+        ComtradeHarmonicOverviewSpectrum spectrum,
+        int order,
+        double fundamentalRms,
+        out double magnitude,
+        out double angleDegrees)
+    {
+        if (order == 0)
+        {
+            magnitude = Math.Abs(DisplayScalar(spectrum.DcComponent));
+            angleDegrees = 0.0;
+            return;
+        }
+
+        magnitude = order == 1 ? fundamentalRms : 0.0;
+        angleDegrees = 0.0;
         for (var index = 0; index < spectrum.Bins.Count; index++)
         {
             var source = spectrum.Bins[index];
-            var order = source.Order;
-            if (order < 1 || order > maximumOrder)
+            if (source.Order != order)
                 continue;
-            var bit = 1u << order;
-            if ((populatedMask & bit) != 0)
-                continue;
-            populatedMask |= bit;
-
-            var magnitude = order == 1 && spectrum.FundamentalRms > 0
-                ? spectrum.FundamentalRms
-                : Math.Max(0.0, double.IsFinite(source.MagnitudeRms) ? source.MagnitudeRms : 0.0);
-            var percent = order == 1
-                ? 100.0
-                : ComtradeHarmonicsOverviewMath.PercentOfFundamental(magnitude, spectrum.FundamentalRms);
-            result[order] = CreatePlotBin(order, magnitude, percent, source.AngleDegrees);
-            maximumMagnitude = Math.Max(maximumMagnitude, magnitude);
+            if (order != 1)
+                magnitude = DisplayMagnitude(source.MagnitudeRms);
+            angleDegrees = double.IsFinite(source.AngleDegrees)
+                ? PresentationEasingMath.NormalizeAngleDegrees(source.AngleDegrees)
+                : 0.0;
+            return;
         }
-
-        for (var order = 1; order <= maximumOrder; order++)
-        {
-            var bit = 1u << order;
-            if ((populatedMask & bit) != 0)
-                continue;
-            var percent = order == 1 && spectrum.FundamentalRms > 0 ? 100.0 : 0.0;
-            var magnitude = order == 1 && spectrum.FundamentalRms > 0 ? spectrum.FundamentalRms : 0.0;
-            result[order] = CreatePlotBin(order, magnitude, percent, 0.0);
-            maximumMagnitude = Math.Max(maximumMagnitude, magnitude);
-        }
-
-        return result;
     }
 
-    private static PlotBin CreatePlotBin(int order, double magnitude, double percent, double angleDegrees)
-        => new(
-            order,
-            magnitude,
-            percent,
-            angleDegrees,
-            $"{percent:0.#}%",
-            FormatEngineering(magnitude));
+    private static void AdvancePreparedRows(
+        IReadOnlyList<PreparedSpectrumRow> rows,
+        double elapsedMilliseconds)
+    {
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            for (var order = 0; order < row.Bins.Length; order++)
+            {
+                var before = row.Bins[order];
+                row.Bins[order] = new PlotBin(
+                    order,
+                    PresentationEasingMath.Smooth(
+                        before.MagnitudeRms,
+                        row.TargetMagnitudes[order],
+                        elapsedMilliseconds,
+                        PresentationTimeConstantMs),
+                    PresentationEasingMath.SmoothAngleDegrees(
+                        before.AngleDegrees,
+                        row.TargetAngles[order],
+                        elapsedMilliseconds,
+                        PresentationTimeConstantMs));
+            }
+        }
+    }
+
+    private static void SnapPreparedRowsToTarget(IReadOnlyList<PreparedSpectrumRow> rows)
+    {
+        for (var index = 0; index < rows.Count; index++)
+            SnapPreparedRowToTarget(rows[index]);
+    }
+
+    private static void SnapPreparedRowToTarget(PreparedSpectrumRow row)
+    {
+        for (var order = 0; order < row.Bins.Length; order++)
+            row.Bins[order] = new PlotBin(order, row.TargetMagnitudes[order], row.TargetAngles[order]);
+    }
+
+    private static bool PreparedRowsDifferFromTarget(IReadOnlyList<PreparedSpectrumRow> rows)
+    {
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            for (var order = 0; order < row.Bins.Length; order++)
+            {
+                var bin = row.Bins[order];
+                if (!bin.MagnitudeRms.Equals(row.TargetMagnitudes[order]) ||
+                    !PresentationEasingMath.NormalizeAngleDegrees(bin.AngleDegrees)
+                        .Equals(PresentationEasingMath.NormalizeAngleDegrees(row.TargetAngles[order])))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static double DisplayMagnitude(double value)
+        => double.IsFinite(value) ? Math.Max(0.0, value) : 0.0;
+
+    private static double DisplayScalar(double value)
+        => double.IsFinite(value) ? value : 0.0;
 
     private static int ResolveMaximumDisplayedOrder(IReadOnlyList<ComtradeHarmonicOverviewSpectrum> spectra)
     {
@@ -615,21 +690,50 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     private readonly record struct PlotBin(
         int Order,
         double MagnitudeRms,
-        double PercentOfFundamental,
-        double AngleDegrees,
-        string PercentLabel,
-        string MagnitudeLabel);
+        double AngleDegrees);
 
-    private readonly record struct PreparedSpectrumRow(
-        PlotBin[] Bins,
-        double AxisMaximum,
-        Brush SignalBrush,
-        Brush SecondarySignalBrush,
-        string SignalLabel,
-        string ThdLabel,
-        string AxisTopLabel,
-        double EstimatedSampleRateHz,
-        string SampleRateLabel);
+    private sealed class PreparedSpectrumRow
+    {
+        internal PreparedSpectrumRow(
+            string signalName,
+            string units,
+            PlotBin[] bins,
+            double[] targetMagnitudes,
+            double[] targetAngles,
+            string[] targetPercentLabels,
+            string[] targetMagnitudeLabels,
+            Brush signalBrush,
+            Brush secondarySignalBrush,
+            string signalLabel)
+        {
+            SignalName = signalName ?? string.Empty;
+            Units = units ?? string.Empty;
+            Bins = bins;
+            TargetMagnitudes = targetMagnitudes;
+            TargetAngles = targetAngles;
+            TargetPercentLabels = targetPercentLabels;
+            TargetMagnitudeLabels = targetMagnitudeLabels;
+            SignalBrush = signalBrush;
+            SecondarySignalBrush = secondarySignalBrush;
+            SignalLabel = signalLabel;
+        }
+
+        internal string SignalName { get; }
+        internal string Units { get; }
+        internal PlotBin[] Bins { get; }
+        internal double[] TargetMagnitudes { get; }
+        internal double[] TargetAngles { get; }
+        internal string[] TargetPercentLabels { get; }
+        internal string[] TargetMagnitudeLabels { get; }
+        internal Brush SignalBrush { get; }
+        internal Brush SecondarySignalBrush { get; }
+        internal string SignalLabel { get; }
+        internal double AxisMaximum { get; set; } = 1.0;
+        internal string TargetAxisTopLabel { get; set; } = string.Empty;
+        internal string TargetThdLabel { get; set; } = string.Empty;
+        internal double EstimatedSampleRateHz { get; set; }
+        internal string SampleRateLabel { get; set; } = string.Empty;
+    }
 
     private readonly record struct RowHitTarget(Rect Plot, int MaximumOrder);
 }
