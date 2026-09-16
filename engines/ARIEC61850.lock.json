@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "ref": "convergence/arsas-golden-wire-on-rcb-bootstrap",
+  "ref": "main",
   "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
   "sourcePullRequest": 132,
   "purpose": "Temporary ARSAS 1.6.36 integration pin for the exact green ARIEC convergence head. ARIEC .NET CI #603 passed on this SHA, including provenance/source/license verification, restore, build, tests, and diagnostics. The convergence preserves the trusted-SCL golden-wire contracts used by ARSAS: SCL-authoritative DataSet/RCB identity, LDevice ldName and ReportControl indexed semantics, quoted Edition-1/vendor OSI-AP-Title compatibility, Domain/VMD reconciliation, bounded sequential initial FC-root Reads, receiver-before-write report registration, URCB Resv -> RptEna, BRCB direct RptEna with ResvTms retry-only, two whole-RCB verification reads, one-shot GI after routing is registered, GI fail-closed cleanup, no cyclic process polling, no network DataSet-directory browse, and no dynamic DataSet mutation on the trusted-SCL path. The same convergence also locks buffered BRCB latest-state semantics through the canonical runtime value plane and preserves SCL RptEnabled@max only as diagnostics metadata; it is never authority to synthesize concrete runtime RCB names.",
