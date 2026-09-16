@@ -24,7 +24,7 @@ public sealed class ComtradePresentationAnimationRegressionTests
         var source = File.ReadAllText(FindRepoFile("ComtradeWorkspaceWindow.P1D4LiveScrub.cs"));
         Assert.Contains("if (_p1d4ScrubWorkerRunning || !_p1d4ScrubDirty)", source, StringComparison.Ordinal);
         Assert.Contains("_p1d4ScrubWorkerRunning = true", source, StringComparison.Ordinal);
-        Assert.Contains("if (_p1d4ScrubDirty)", source, StringComparison.Ordinal);
+        Assert.Contains("if (_p1d4ScrubDirty && _analysisMode != AnalysisMode.Waveform)", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
