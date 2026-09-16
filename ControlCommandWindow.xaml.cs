@@ -187,10 +187,12 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 },
                 _cancellation.Token);
 
-            CommandStage = result.Stage;
+            CommandStage = result.IsSuccess && !TestMode ? "Command accepted" : result.Stage;
             CommandStatus = BuildCommandResultText(result);
-            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
-                CurrentValue = result.FeedbackValue;
+            if (result.IsSuccess && !TestMode)
+            {
+                CommandStatus += " Command accepted by the IEC 61850 control service. Waiting for independent IED process feedback; monitored stVal is not changed from the command path.";
+            }
             SetResultTone(result.IsSuccess ? "Success" : "Error");
         }
         catch (OperationCanceledException)
@@ -312,7 +314,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(result.ElapsedText) && result.ElapsedText != "-")
             details.Add($"Control service: {result.ElapsedText}.");
         if (!string.IsNullOrWhiteSpace(result.FeedbackElapsedText) && result.FeedbackElapsedText != "-")
-            details.Add($"Process feedback: {result.FeedbackElapsedText}.");
+            details.Add($"Control-side feedback verification: {result.FeedbackElapsedText}. This does not overwrite monitored stVal.");
         if (!string.IsNullOrWhiteSpace(result.TotalElapsedText) && result.TotalElapsedText != "-")
             details.Add($"Total: {result.TotalElapsedText}.");
         return string.Join(" ", details.Where(text => !string.IsNullOrWhiteSpace(text)));
