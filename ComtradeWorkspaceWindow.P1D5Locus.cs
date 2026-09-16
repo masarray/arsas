@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,6 +11,7 @@ namespace ArIED61850Tester;
 public partial class ComtradeWorkspaceWindow
 {
     private const uint P1D5LocusMaximumPointsPerLoop = 900;
+    private const double P1D5LocusPresentationTimeConstantMs = 68.0;
 
     private Button? _p1d5LocusButton;
     private ComtradeLocusView? _p1d5LocusView;
@@ -22,6 +24,12 @@ public partial class ComtradeWorkspaceWindow
     private bool _p1d5LocusCursorDirty;
     private bool _p1d5LocusCursorWorkerRunning;
     private bool _p1d5LocusCursorRenderingHooked;
+    private bool _p1d5LocusPresentationRenderingHooked;
+    private long _p1d5LocusPresentationTimestamp;
+    private ComtradeDistancePoint[] _p1d5LocusPresentedCursor1 = Array.Empty<ComtradeDistancePoint>();
+    private ComtradeDistancePoint[] _p1d5LocusPresentedCursor2 = Array.Empty<ComtradeDistancePoint>();
+    private ComtradeDistancePoint[] _p1d5LocusTargetCursor1 = Array.Empty<ComtradeDistancePoint>();
+    private ComtradeDistancePoint[] _p1d5LocusTargetCursor2 = Array.Empty<ComtradeDistancePoint>();
 
     private void InitializeP1D5LocusUi()
     {
@@ -105,6 +113,8 @@ public partial class ComtradeWorkspaceWindow
         _p1d5LocusLoadCts?.Dispose();
         _p1d5LocusLoadCts = null;
         StopP1D5LocusCursorPump();
+        StopP1D5LocusPresentationPump();
+        ResetP1D5LocusPresentation();
         _p1d5LocusCursorDirty = false;
 
         _p1d5LocusSession?.Dispose();
@@ -126,6 +136,8 @@ public partial class ComtradeWorkspaceWindow
         _p1d5LocusLoadCts?.Dispose();
         _p1d5LocusLoadCts = null;
         StopP1D5LocusCursorPump();
+        StopP1D5LocusPresentationPump();
+        ResetP1D5LocusPresentation();
         _p1d5LocusSession?.Dispose();
         _p1d5LocusSession = null;
 
@@ -377,7 +389,7 @@ public partial class ComtradeWorkspaceWindow
                 ComtradeDiagnosticQueue.TryEnqueue("P1D5.Locus", "LOCUS_CURSOR_FAILURE", result.Error, null);
                 return;
             }
-            _p1d5LocusView?.SetCursorPoints(result.Cursor1, result.Cursor2);
+            QueueP1D5LocusPresentation(result.Cursor1, result.Cursor2);
         }
         catch (ObjectDisposedException)
         {
@@ -392,6 +404,139 @@ public partial class ComtradeWorkspaceWindow
             _p1d5LocusCursorWorkerRunning = false;
             if (_p1d5LocusCursorDirty && _p1d5LocusActive) EnsureP1D5LocusCursorPump();
         }
+    }
+
+    private void QueueP1D5LocusPresentation(
+        IReadOnlyList<ComtradeDistancePoint> cursor1,
+        IReadOnlyList<ComtradeDistancePoint> cursor2)
+    {
+        _p1d5LocusTargetCursor1 = cursor1?.ToArray() ?? Array.Empty<ComtradeDistancePoint>();
+        _p1d5LocusTargetCursor2 = cursor2?.ToArray() ?? Array.Empty<ComtradeDistancePoint>();
+
+        if (_p1d5LocusPresentedCursor1.Length == 0 && _p1d5LocusPresentedCursor2.Length == 0)
+        {
+            _p1d5LocusPresentedCursor1 = _p1d5LocusTargetCursor1.ToArray();
+            _p1d5LocusPresentedCursor2 = _p1d5LocusTargetCursor2.ToArray();
+            _p1d5LocusView?.SetCursorPoints(_p1d5LocusPresentedCursor1, _p1d5LocusPresentedCursor2);
+            return;
+        }
+
+        EnsureP1D5LocusPresentationPump();
+    }
+
+    private void EnsureP1D5LocusPresentationPump()
+    {
+        if (_p1d5LocusPresentationRenderingHooked) return;
+        _p1d5LocusPresentationTimestamp = 0;
+        CompositionTarget.Rendering += P1D5LocusPresentationFrame;
+        _p1d5LocusPresentationRenderingHooked = true;
+    }
+
+    private void StopP1D5LocusPresentationPump()
+    {
+        if (!_p1d5LocusPresentationRenderingHooked) return;
+        CompositionTarget.Rendering -= P1D5LocusPresentationFrame;
+        _p1d5LocusPresentationRenderingHooked = false;
+        _p1d5LocusPresentationTimestamp = 0;
+    }
+
+    private void ResetP1D5LocusPresentation()
+    {
+        _p1d5LocusPresentedCursor1 = Array.Empty<ComtradeDistancePoint>();
+        _p1d5LocusPresentedCursor2 = Array.Empty<ComtradeDistancePoint>();
+        _p1d5LocusTargetCursor1 = Array.Empty<ComtradeDistancePoint>();
+        _p1d5LocusTargetCursor2 = Array.Empty<ComtradeDistancePoint>();
+        _p1d5LocusPresentationTimestamp = 0;
+    }
+
+    private void P1D5LocusPresentationFrame(object? sender, EventArgs e)
+    {
+        if (!_p1d5LocusActive || _p1d5LocusView is null)
+        {
+            StopP1D5LocusPresentationPump();
+            return;
+        }
+
+        var now = Stopwatch.GetTimestamp();
+        var rawElapsed = _p1d5LocusPresentationTimestamp == 0
+            ? 1000.0 / 60.0
+            : Stopwatch.GetElapsedTime(_p1d5LocusPresentationTimestamp, now).TotalMilliseconds;
+        _p1d5LocusPresentationTimestamp = now;
+        var elapsed = PresentationEasingMath.ClampFrameElapsedMilliseconds(rawElapsed);
+
+        _p1d5LocusPresentedCursor1 = SmoothP1D5LocusPoints(
+            _p1d5LocusPresentedCursor1,
+            _p1d5LocusTargetCursor1,
+            elapsed);
+        _p1d5LocusPresentedCursor2 = SmoothP1D5LocusPoints(
+            _p1d5LocusPresentedCursor2,
+            _p1d5LocusTargetCursor2,
+            elapsed);
+
+        _p1d5LocusView.SetCursorPoints(_p1d5LocusPresentedCursor1, _p1d5LocusPresentedCursor2);
+        if (!P1D5LocusPointsSettled(_p1d5LocusPresentedCursor1, _p1d5LocusTargetCursor1) ||
+            !P1D5LocusPointsSettled(_p1d5LocusPresentedCursor2, _p1d5LocusTargetCursor2))
+            return;
+
+        // Finish exactly on the authoritative native result. The interpolated points exist only in
+        // the transient presentation layer and never replace frame/time/electrical source data.
+        _p1d5LocusPresentedCursor1 = _p1d5LocusTargetCursor1.ToArray();
+        _p1d5LocusPresentedCursor2 = _p1d5LocusTargetCursor2.ToArray();
+        _p1d5LocusView.SetCursorPoints(_p1d5LocusPresentedCursor1, _p1d5LocusPresentedCursor2);
+        StopP1D5LocusPresentationPump();
+    }
+
+    private static ComtradeDistancePoint[] SmoothP1D5LocusPoints(
+        IReadOnlyList<ComtradeDistancePoint> current,
+        IReadOnlyList<ComtradeDistancePoint> target,
+        double elapsedMilliseconds)
+    {
+        if (target.Count == 0)
+            return Array.Empty<ComtradeDistancePoint>();
+        if (current.Count != target.Count)
+            return target.ToArray();
+
+        var result = new ComtradeDistancePoint[target.Count];
+        for (var index = 0; index < target.Count; index++)
+        {
+            var before = current[index];
+            var next = target[index];
+            if (!before.Valid || !next.Valid || before.Loop != next.Loop ||
+                !double.IsFinite(before.R) || !double.IsFinite(before.X) ||
+                !double.IsFinite(next.R) || !double.IsFinite(next.X))
+            {
+                result[index] = next;
+                continue;
+            }
+
+            result[index] = next with
+            {
+                R = PresentationEasingMath.Smooth(
+                    before.R, next.R, elapsedMilliseconds, P1D5LocusPresentationTimeConstantMs),
+                X = PresentationEasingMath.Smooth(
+                    before.X, next.X, elapsedMilliseconds, P1D5LocusPresentationTimeConstantMs)
+            };
+        }
+        return result;
+    }
+
+    private static bool P1D5LocusPointsSettled(
+        IReadOnlyList<ComtradeDistancePoint> current,
+        IReadOnlyList<ComtradeDistancePoint> target)
+    {
+        if (current.Count != target.Count) return false;
+        for (var index = 0; index < target.Count; index++)
+        {
+            var before = current[index];
+            var next = target[index];
+            if (before.Valid != next.Valid || before.Loop != next.Loop)
+                return false;
+            if (!next.Valid) continue;
+            if (!PresentationEasingMath.IsNear(before.R, next.R) ||
+                !PresentationEasingMath.IsNear(before.X, next.X))
+                return false;
+        }
+        return true;
     }
 
     private sealed record P1D5LocusLoadResult(
