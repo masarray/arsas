@@ -63,4 +63,38 @@ public sealed class Iec61850ValueFormatterTests
 
         Assert.Equal(value, formatted);
     }
+
+    [Theory]
+    [InlineData("off", "Open [01]")]
+    [InlineData("on", "Closed [10]")]
+    [InlineData("00", "Intermediate [00]")]
+    [InlineData("11", "Bad state [11]")]
+    public void Format_Preserves_Dpc_Process_Semantics_For_Report_Values(string raw, string expected)
+    {
+        var formatted = Iec61850ValueFormatter.Format(raw, "Dbpos", string.Empty);
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Fact]
+    public void StaticControlProjection_Dpc_Overrides_LowLevel_Boolean_With_Dbpos()
+    {
+        var dataType = Iec61850StaticControlStatusProjectionService.ResolveRuntimeFeedbackDataType(
+            "DPC",
+            "Boolean",
+            "BOOLEAN");
+
+        Assert.Equal("Dbpos", dataType);
+    }
+
+    [Fact]
+    public void StaticControlProjection_NonDpc_Retains_LowLevel_Type()
+    {
+        var dataType = Iec61850StaticControlStatusProjectionService.ResolveRuntimeFeedbackDataType(
+            "SPC",
+            "Boolean",
+            "BOOLEAN");
+
+        Assert.Equal("Boolean", dataType);
+    }
 }
