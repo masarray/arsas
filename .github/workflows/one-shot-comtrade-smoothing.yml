@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   patch:
-    runs-on: ubuntu-24.04-arm
+    runs-on: macos-15
     steps:
       - name: Checkout smoothing branch
         uses: actions/checkout@v4
