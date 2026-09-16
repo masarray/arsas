@@ -1,0 +1,7 @@
+<Project>
+  <Target Name="EnableSmartDiscoveryCaptureRoute"
+          BeforeTargets="CoreCompile"
+          Condition="'$(MSBuildProjectName)' == 'ArIED61850Tester'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\enable-smart-discovery-capture.ps1&quot;" />
+  </Target>
+</Project>
