@@ -7,6 +7,8 @@ public sealed class ComtradePresentationAnimationRegressionTests
     {
         var phasor = File.ReadAllText(FindRepoFile("Controls/ComtradePhasorView.cs"));
         var harmonic = File.ReadAllText(FindRepoFile("Controls/ComtradeHarmonicsWorkstationView.cs"));
+
+        // Cursor/native analysis remains exact; only the derived presentation plane is eased.
         Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", phasor, StringComparison.Ordinal);
         Assert.Contains("_smoothedVoltageVectors = CloneVectors(_targetVoltageVectors)", phasor, StringComparison.Ordinal);
         Assert.Contains("_smoothedCurrentVectors = CloneVectors(_targetCurrentVectors)", phasor, StringComparison.Ordinal);
@@ -30,9 +32,9 @@ public sealed class ComtradePresentationAnimationRegressionTests
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir != null)
         {
-  var candidate = Path.Combine(dir.FullName, relativePath);
-  if (File.Exists(candidate)) return candidate;
-  dir = dir.Parent;
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate)) return candidate;
+            dir = dir.Parent;
         }
         throw new FileNotFoundException(relativePath);
     }
