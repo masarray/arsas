@@ -26,6 +26,24 @@ public sealed class DeterministicStaticReportPathRegressionTests
     }
 
     [Fact]
+    public void TrustedSclStaticPath_RequestsOneShotGi_WhileSafeTrialRemainsReadOnly()
+    {
+        var trustedStatic = Read("Services/NativeIec61850Client.TrustedSclStaticReporting.cs");
+        var safeTrial = Read("Services/SclSafeTrialRunner.cs");
+
+        Assert.Contains("triggerGeneralInterrogation: true", trustedStatic, StringComparison.Ordinal);
+        Assert.Contains("one explicit GI=true", trustedStatic, StringComparison.Ordinal);
+        Assert.Contains("one-shot GI startup request", trustedStatic, StringComparison.Ordinal);
+        Assert.DoesNotContain("triggerGeneralInterrogation: false", trustedStatic, StringComparison.Ordinal);
+
+        Assert.Contains("readOnly = true", safeTrial, StringComparison.Ordinal);
+        Assert.Contains("writesAllowed = false", safeTrial, StringComparison.Ordinal);
+        Assert.Contains("reportEnableAllowed = false", safeTrial, StringComparison.Ordinal);
+        Assert.Contains("dynamicDataSetAllowed = false", safeTrial, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartTrustedSclStaticReportMonitorAsync", safeTrial, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StaticPath_RequiresConfiguredRcbFamilyAndOrderedLiveDataSetDirectory()
     {
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");

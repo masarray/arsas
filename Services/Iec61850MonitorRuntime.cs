@@ -31,13 +31,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public bool ReportChangeVerified { get; set; }
         public DateTime LastReportUtc { get; set; } = DateTime.MinValue;
         public bool ReportMissLogged { get; set; }
-        public string CommandFeedbackValue { get; set; } = string.Empty;
-        public DateTime LastCommandFeedbackUtc { get; set; } = DateTime.MinValue;
-        public DateTime CommandFeedbackGuardUntilUtc { get; set; } = DateTime.MinValue;
-        public DateTime CommandReportDeadlineUtc { get; set; } = DateTime.MinValue;
-        public bool AwaitingCommandReportEdge { get; set; }
-        public bool CommandReportMissLogged { get; set; }
-        public bool StaleReportSuppressedLogged { get; set; }
         public bool ReportValueRejectedLogged { get; set; }
         public string LastLoggedDegradedQuality { get; set; } = string.Empty;
         public int ConsecutiveErrors { get; set; }
@@ -258,12 +251,19 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(device);
         ValidateEndpoint(device);
-        if (!device.HasDiscoveryCache || device.Signals.Count == 0)
+
+        var connectionPath = Iec61850ConnectionPathPolicy.SelectForFastConnect(device);
+        if (connectionPath == Iec61850ConnectionPath.FullDiscovery)
+            throw new InvalidOperationException($"{device.Name} has no trusted SCL design or successful saved discovery model. Run a full discovery first.");
+        if (connectionPath == Iec61850ConnectionPath.CachedLiveModel &&
+            (!device.HasDiscoveryCache || device.Signals.Count == 0))
             throw new InvalidOperationException($"{device.Name} has no successful saved discovery model. Run a full discovery first.");
 
         progress?.Report(new IedDiscoveryProgress(
             IedDiscoveryStage.PreparingSession,
-            "Preparing saved IEC 61850 model…",
+            connectionPath == Iec61850ConnectionPath.SclAssisted
+                ? "Verifying trusted SCL/CID source…"
+                : "Preparing saved IEC 61850 model…",
             4d,
             1,
             4));
@@ -277,11 +277,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         _sessions[device.DeviceId] = session;
 
         device.IsConnected = false;
-        device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot("Preparing fast connection from saved model");
-        device.Status = "Fast connecting";
-        device.Detail = $"Opening {device.IpAddress}:{device.Port} with the saved discovery model.";
+        device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+            connectionPath == Iec61850ConnectionPath.SclAssisted
+                ? "Preparing verified SCL-assisted connection"
+                : "Preparing fast connection from saved model");
+        device.Status = connectionPath == Iec61850ConnectionPath.SclAssisted
+            ? "SCL connecting"
+            : "Fast connecting";
+        device.Detail = connectionPath == Iec61850ConnectionPath.SclAssisted
+            ? $"Opening {device.IpAddress}:{device.Port} with verified SCL association identity."
+            : $"Opening {device.IpAddress}:{device.Port} with the saved discovery model.";
         Log("INFO", device.Name,
-            $"Fast reconnect using saved model ({device.SignalCount:N0} signals); full live discovery is skipped.");
+            connectionPath == Iec61850ConnectionPath.SclAssisted
+                ? "Trusted SCL authority selected for Play; source SHA will be verified before any socket is opened and no discovery fallback is allowed."
+                : $"Fast reconnect using saved model ({device.SignalCount:N0} signals); full live discovery is skipped.");
 
         try
         {
@@ -292,7 +301,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 2,
                 4));
 
-            await ConnectCachedAssociationWithRetryAsync(session, cancellationToken).ConfigureAwait(false);
+            connectionPath = await ConnectUsingSelectedFastPathAsync(
+                session,
+                cancellationToken,
+                allowCachedRetry: true).ConfigureAwait(false);
             if (!session.Client.IsConnected)
             {
                 device.Status = "Connection failed";
@@ -304,32 +316,47 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.AssociatingMms,
-                "ACSE/MMS associated. Restoring saved signal workspace…",
+                connectionPath == Iec61850ConnectionPath.SclAssisted
+                    ? "SCL association validated. Restoring SCL signal workspace…"
+                    : "ACSE/MMS associated. Restoring saved signal workspace…",
                 74d,
                 3,
                 4));
 
             device.IsConnected = true;
-            device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot("Fast connection complete");
+            device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+                connectionPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Verified SCL-assisted connection complete"
+                    : "Fast connection complete");
             device.Status = "Ready";
-            device.Detail = $"Connected with saved model: {device.SignalCount:N0} signal(s), {device.SelectedSignalCount:N0} selected. Full discovery was skipped.";
-            device.AcquisitionMode = "Saved model • ready to monitor";
+            device.Detail = connectionPath == Iec61850ConnectionPath.SclAssisted
+                ? $"Connected from verified SCL: {device.SignalCount:N0} signal(s), {device.SelectedSignalCount:N0} selected. Domain/VMD validation and bounded FC-root reads completed; full discovery was skipped."
+                : $"Connected with saved model: {device.SignalCount:N0} signal(s), {device.SelectedSignalCount:N0} selected. Full discovery was skipped.";
+            device.AcquisitionMode = connectionPath == Iec61850ConnectionPath.SclAssisted
+                ? "Verified SCL • ready to monitor"
+                : "Saved model • ready to monitor";
             device.RefreshComputed();
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.Complete,
-                "Saved model restored — ready for live values.",
+                connectionPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Verified SCL online path ready for static reporting."
+                    : "Saved model restored — ready for live values.",
                 100d,
                 4,
                 4));
 
             Log("INFO", device.Name,
-                "Fast reconnect complete. Reporting setup will validate only the acquisition objects required by the selected points; the full signal scan remains cached.");
+                connectionPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Trusted SCL connection complete. Static reporting will reuse SCL RCB/DataSet authority; no network DataSet-directory browse, dynamic DataSet mutation, or implicit GI is permitted."
+                    : "Fast reconnect complete. Reporting setup will validate only the acquisition objects required by the selected points; the full signal scan remains cached.");
         }
         catch (Exception ex)
         {
             device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
-                "Fast TCP/ACSE/MMS connection failed",
+                connectionPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Verified SCL-assisted connection failed"
+                    : "Fast TCP/ACSE/MMS connection failed",
                 ex);
             if (!session.Client.IsConnected)
             {
@@ -347,6 +374,45 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             device.RefreshComputed();
         }
+    }
+
+    private async Task<Iec61850ConnectionPath> ConnectUsingSelectedFastPathAsync(
+        DeviceSession session,
+        CancellationToken cancellationToken,
+        bool allowCachedRetry)
+    {
+        var device = session.Device;
+        var path = Iec61850ConnectionPathPolicy.SelectForFastConnect(device);
+        if (path == Iec61850ConnectionPath.FullDiscovery)
+            throw new InvalidOperationException($"{device.Name} requires full discovery; fast-connect cannot invent a model authority.");
+
+        if (path == Iec61850ConnectionPath.SclAssisted)
+        {
+            var verified = await VerifiedSclSourceLoader.LoadAsync(
+                device.SclSourcePath,
+                device.SclSourceSha256,
+                cancellationToken).ConfigureAwait(false);
+            var result = await session.Client.ConnectUsingSclAsync(
+                verified.Xml,
+                device.SclIedName,
+                device.SclAccessPointName,
+                device.IpAddress,
+                device.Port,
+                cancellationToken).ConfigureAwait(false);
+            if (!result.IsSuccess || !session.Client.IsConnected)
+                throw new InvalidOperationException(result.Message);
+
+            device.LiveDiscoveryModel = session.Client.LastLiveModel ?? device.SclWorkspace?.DesignModel;
+            Log("INFO", device.Name,
+                $"Verified SCL authority active: SHA256={verified.Sha256}; IED={device.SclIedName}; AP={device.SclAccessPointName}; maxReadRefs={result.Preparation.InitialReadPlan?.MaximumVariableReferencesPerRead ?? 0}.");
+            return path;
+        }
+
+        if (allowCachedRetry)
+            await ConnectCachedAssociationWithRetryAsync(session, cancellationToken).ConfigureAwait(false);
+        else
+            await session.Client.ConnectAsync(device.IpAddress, device.Port, cancellationToken).ConfigureAwait(false);
+        return path;
     }
 
     public async Task<IReadOnlyList<Iec61850MonitorPoint>> StartMonitoringAsync(
@@ -536,8 +602,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (result.ServiceAccepted || result.FeedbackConfirmed || result.IsSuccess)
             RecordSuccessfulIo(session);
 
-        if (!request.TestMode && result.FeedbackConfirmed && !string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
-            ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue);
+        // IMPORTANT: a successful/confirmed IEC 61850 control service is command-path evidence,
+        // not process-image authority. Never synthesize or inject stVal from Operate/SBO feedback here.
+        // The monitored state changes only through the independent acquisition path (RCB/report or
+        // an explicit authoritative MMS read performed by the monitor), matching IED engineering tools.
 
         var wireState = result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
             ? "NOT SENT TO IED"
@@ -611,50 +679,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return result;
     }
 
-    private void ApplyControlFeedbackToMonitor(DeviceSession session, SignalDefinition signal, string feedbackValue)
-    {
-        var references = BuildControlFeedbackReferences(signal);
-        var point = FindPointForControlFeedback(session, references);
-        if (point == null || !session.States.TryGetValue(point.PointKey, out var state))
-        {
-            Log("WARN", session.Device.Name,
-                $"Control feedback {feedbackValue} was confirmed by the IED, but no monitored status point matched {string.Join(", ", references)}. Live Monitor was not updated directly.");
-            return;
-        }
-
-        var nowUtc = DateTime.UtcNow;
-        var display = Iec61850ValueFormatter.Format(feedbackValue, point.IecDataType, point.Unit);
-        state.CommandFeedbackValue = display;
-        state.LastCommandFeedbackUtc = nowUtc;
-        state.CommandFeedbackGuardUntilUtc = nowUtc.AddSeconds(2);
-        state.CommandReportDeadlineUtc = nowUtc.AddSeconds(2);
-        state.AwaitingCommandReportEdge = session.PointPlanIds.ContainsKey(point.PointKey);
-        state.CommandReportMissLogged = false;
-        state.StaleReportSuppressedLogged = false;
-        if (state.AwaitingCommandReportEdge)
-            state.ReportChangeVerified = false;
-
-        var sourceMode = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
-            ? "Control feedback"
-            : state.AcquisitionLabel;
-        ApplyValueUpdate(
-            session,
-            point,
-            display,
-            state.Quality,
-            state.DeviceTimestamp,
-            sourceMode,
-            "confirmed command feedback / awaiting matching dchg",
-            nowUtc,
-            state.AwaitingCommandReportEdge
-                ? "Live / command feedback immediate, awaiting report edge"
-                : "Live / control feedback confirmed",
-            trustReportEdge: false);
-
-        Log("INFO", session.Device.Name,
-            $"Live Monitor feedback injected immediately: {point.IecReference}={display}; reportCorrelation={(state.AwaitingCommandReportEdge ? "awaiting dchg" : "not report-assigned")}.");
-    }
-
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
@@ -711,9 +735,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var result = plan.IsEngineAuthoritative
-                    ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
-                    : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
+                var result = session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority
+                    ? await session.Client.StartTrustedSclStaticReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
+                    : plan.IsEngineAuthoritative
+                        ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
+                        : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
                 session.HybridValidation.RecordActivation(plan, result);
                 if (!result.IsSuccess)
                 {
@@ -943,6 +969,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<ReportControlPlan> legacyPlans,
         CancellationToken cancellationToken)
     {
+        if (session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority)
+        {
+            session.HybridValidation.Reset(null);
+            var trustedPlans = legacyPlans.Count > 0
+                ? legacyPlans
+                : Iec61850ReportPlanner.BuildPlans(
+                    session.Device,
+                    session.Points.Values,
+                    allowDynamicDataSetWrites: false);
+            Log("INFO", session.Device.Name,
+                $"Trusted SCL report planning retained {trustedPlans.Count} local static candidate(s). DataSet membership and RCB identity remain SCL-authoritative; online directory discovery and Hybrid availability probing are bypassed.");
+            return trustedPlans.Where(plan => !plan.AllowDynamicDataSetWrites).ToArray();
+        }
+
         if (session.Client.CanUseHybridReportPlanner(session.Device))
         {
             NativeHybridReportPlanningResult hybrid;
@@ -1142,45 +1182,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     state.ReportValueRejectedLogged = false;
 
                 var receivedUtc = update.UpdatedAt == default ? DateTime.UtcNow : update.UpdatedAt.UtcDateTime;
-                var hasSourceTimestamp = TryParseReportTimestampUtc(update.ReportTimestamp, out var reportSourceUtc);
-                var commandValueMatches = update.HasValue && state.AwaitingCommandReportEdge &&
-                                          AreSemanticallyEquivalent(point, state.CommandFeedbackValue, display);
-                var contradictsCommandFeedback = update.HasValue && state.AwaitingCommandReportEdge &&
-                                                 !commandValueMatches;
-                var provablyOlderThanCommand = contradictsCommandFeedback && hasSourceTimestamp &&
-                                               reportSourceUtc < state.LastCommandFeedbackUtc.AddMilliseconds(-5);
-                var unlabelledSnapshotInsideGuard = contradictsCommandFeedback && !hasSourceTimestamp &&
-                                                    receivedUtc <= state.CommandFeedbackGuardUntilUtc &&
-                                                    !IsChangeReportReason(update.Reason);
-                if (provablyOlderThanCommand || unlabelledSnapshotInsideGuard)
-                {
-                    state.ReportTrafficSeen = true;
-                    state.LastReportUtc = DateTime.UtcNow;
-                    if (!state.StaleReportSuppressedLogged)
-                    {
-                        state.StaleReportSuppressedLogged = true;
-                        Log("WARN", session.Device.Name,
-                            $"{point.SignalName}: stale report value {display} was suppressed after command-confirmed {state.CommandFeedbackValue}; reportTime={(hasSourceTimestamp ? reportSourceUtc.ToString("O", CultureInfo.InvariantCulture) : "not supplied")}.");
-                    }
-                    continue;
-                }
-
                 var hadValueBeforeReport = state.HasValue;
                 var valueChangedByReport = update.HasValue && hadValueBeforeReport && HasExactSemanticEdge(point, state.Value, display);
                 state.ReportTrafficSeen = true;
                 state.LastReportUtc = DateTime.UtcNow;
-                if (commandValueMatches &&
-                    (!hasSourceTimestamp || reportSourceUtc >= state.LastCommandFeedbackUtc.AddMilliseconds(-5)))
-                {
-                    state.AwaitingCommandReportEdge = false;
-                    state.CommandReportMissLogged = false;
-                    state.StaleReportSuppressedLogged = false;
-                    state.ReportChangeVerified = true;
-                    state.ReportMissLogged = false;
-                    Log("INFO", session.Device.Name,
-                        $"{point.SignalName}: event-driven report confirmed command feedback {display}; reason={update.Reason}; reportTime={(hasSourceTimestamp ? reportSourceUtc.ToString("O", CultureInfo.InvariantCulture) : "not supplied")}.");
-                }
-                else if (valueChangedByReport || IsChangeReportReason(update.Reason))
+                // IEC 61850 process truth comes from independent acquisition, never from
+                // a prior control result. A real IED report is therefore never suppressed,
+                // rewritten, or correlated against command-side feedback before publication.
+                if (valueChangedByReport || IsChangeReportReason(update.Reason))
                 {
                     state.ReportChangeVerified = true;
                     state.ReportMissLogged = false;
@@ -1451,15 +1460,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 var normalizedQuality = NormalizeQuality(quality);
                 var normalizedTimestamp = string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp;
-                if (reportAssigned && state.AwaitingCommandReportEdge &&
-                    nowUtc >= state.CommandReportDeadlineUtc && !state.CommandReportMissLogged)
-                {
-                    state.CommandReportMissLogged = true;
-                    state.ReportChangeVerified = false;
-                    Log("WARN", session.Device.Name,
-                        $"{point.SignalName}: command feedback reached {state.CommandFeedbackValue}, but no matching dchg report arrived within 2 seconds. MMS validation remains active until event delivery is proven.");
-                }
-
                 var pollDetectedChange = state.HasValue && !string.Equals(state.Value, display, StringComparison.Ordinal);
                 var sourceMode = "MMS polling";
                 var reason = "cyclic";
@@ -1727,10 +1727,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         connectTimeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
         try
         {
-            await replacement.ConnectAsync(
-                session.Device.IpAddress,
-                session.Device.Port,
-                connectTimeout.Token).ConfigureAwait(false);
+            var reconnectPath = await ConnectUsingSelectedFastPathAsync(
+                session,
+                connectTimeout.Token,
+                allowCachedRetry: false).ConfigureAwait(false);
+            Log("INFO", session.Device.Name,
+                reconnectPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Smart reconnect reused verified SCL authority; no cached-association or discovery fallback was attempted."
+                    : "Smart reconnect reused the saved live-model association path.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -1893,13 +1897,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             state.ReportChangeVerified = false;
             state.LastReportUtc = DateTime.MinValue;
             state.ReportMissLogged = false;
-            state.AwaitingCommandReportEdge = false;
-            state.CommandReportMissLogged = false;
-            state.StaleReportSuppressedLogged = false;
-            state.CommandFeedbackValue = string.Empty;
-            state.LastCommandFeedbackUtc = DateTime.MinValue;
-            state.CommandFeedbackGuardUntilUtc = DateTime.MinValue;
-            state.CommandReportDeadlineUtc = DateTime.MinValue;
             state.AcquisitionLabel = session.StaticDataSetReportOnly ? "Static DataSet report rearming" : "MMS polling";
             state.SourceMode = session.StaticDataSetReportOnly
                 ? "Static DataSet report rearming"
@@ -2433,71 +2430,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         foreach (var key in GetReferenceKeys(point.IecReference))
             session.ReportReferenceIndex.TryAdd(key, point);
-    }
-
-    private static IReadOnlyList<string> BuildControlFeedbackReferences(SignalDefinition signal)
-    {
-        var references = new List<string>(3);
-        void Add(string? reference)
-        {
-            if (string.IsNullOrWhiteSpace(reference))
-                return;
-            var trimmed = reference.Trim();
-            if (!references.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
-                references.Add(trimmed);
-        }
-
-        Add(signal.ControlStatusReference);
-        Add(signal.ObjectReference);
-        if (!string.IsNullOrWhiteSpace(signal.ObjectReference) &&
-            !NormalizeReference(signal.ObjectReference).EndsWith(".stval", StringComparison.OrdinalIgnoreCase))
-        {
-            Add(signal.ObjectReference.TrimEnd('.') + ".stVal");
-        }
-        return references;
-    }
-
-    private static Iec61850MonitorPoint? FindPointForControlFeedback(
-        DeviceSession session,
-        IReadOnlyList<string> references)
-    {
-        foreach (var reference in references)
-        {
-            var exact = FindPointForReportReference(session, reference);
-            if (exact != null)
-                return exact;
-        }
-
-        // Some IEDs expose control objects with the IED name prepended to the MMS
-        // domain (for example OLSF501CB1) while the live point uses CB1. Match the
-        // member path plus a unique domain suffix, never the member path alone when
-        // more than one monitored logical device could match.
-        foreach (var reference in references)
-        {
-            var source = CanonicalDataReference(reference);
-            var sourceSlash = source.IndexOf('/');
-            if (sourceSlash <= 0 || sourceSlash >= source.Length - 1)
-                continue;
-            var sourceDomain = source[..sourceSlash];
-            var sourceMember = source[(sourceSlash + 1)..];
-            var candidates = session.Points.Values.Where(candidate =>
-            {
-                var target = CanonicalDataReference(candidate.IecReference);
-                var targetSlash = target.IndexOf('/');
-                if (targetSlash <= 0 || targetSlash >= target.Length - 1)
-                    return false;
-                var targetDomain = target[..targetSlash];
-                var targetMember = target[(targetSlash + 1)..];
-                return sourceMember.Equals(targetMember, StringComparison.OrdinalIgnoreCase) &&
-                       (sourceDomain.EndsWith(targetDomain, StringComparison.OrdinalIgnoreCase) ||
-                        targetDomain.EndsWith(sourceDomain, StringComparison.OrdinalIgnoreCase));
-            }).Distinct().ToArray();
-
-            if (candidates.Length == 1)
-                return candidates[0];
-        }
-
-        return null;
     }
 
     private static Iec61850MonitorPoint? FindPointForReportReference(DeviceSession session, string reference)
