@@ -5,7 +5,7 @@ $sourcePath = [System.IO.Path]::GetFullPath($sourcePath)
 $text = [System.IO.File]::ReadAllText($sourcePath)
 $marker = 'DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress)'
 
-if ($text.Contains($marker, [System.StringComparison]::Ordinal)) {
+if ($text.IndexOf($marker, [System.StringComparison]::Ordinal) -ge 0) {
     Write-Host 'Smart discovery capture route already installed.'
     exit 0
 }
@@ -26,5 +26,5 @@ $injection = @'
 '@
 
 $patched = $text.Insert($match.Index + $match.Length, $injection)
-[System.IO.File]::WriteAllText($sourcePath, $patched, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($sourcePath, $patched, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host 'Installed PR #134 smart discovery capture route into NativeIec61850Client.DiscoverSignalsAsync.'
