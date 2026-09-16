@@ -145,14 +145,14 @@ internal void ShowPhasors(
     }
 
     private void StartPresentationAnimation()
-{
-    var now = Stopwatch.GetTimestamp();
-    _lastPresentationTimestamp = now;
-    _presentationAnimationStartedTimestamp = now;
-    if (_presentationRenderingHooked) return;
-    CompositionTarget.Rendering += PresentationCompositionFrame;
-    _presentationRenderingHooked = true;
-}
+    {
+        var now = Stopwatch.GetTimestamp();
+        _presentationAnimationStartedTimestamp = now;
+        if (_presentationRenderingHooked) return;
+        _lastPresentationTimestamp = now;
+        CompositionTarget.Rendering += PresentationCompositionFrame;
+        _presentationRenderingHooked = true;
+    }
 
 private void StopPresentationAnimation()
 {

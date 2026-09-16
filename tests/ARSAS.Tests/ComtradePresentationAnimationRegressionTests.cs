@@ -3,17 +3,22 @@ namespace ARSAS.Tests;
 public sealed class ComtradePresentationAnimationRegressionTests
 {
     [Fact]
-    public void PresentationViews_AnimateAtCompositionCadence_ThenSettleExactly()
+    public void PresentationViews_PreserveFrameClock_AndReuseHarmonicBuffers()
     {
         var phasor = File.ReadAllText(FindRepoFile("Controls/ComtradePhasorView.cs"));
         var harmonic = File.ReadAllText(FindRepoFile("Controls/ComtradeHarmonicsWorkstationView.cs"));
 
-        // Cursor/native analysis remains exact; only the derived presentation plane is eased.
         Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", phasor, StringComparison.Ordinal);
-        Assert.Contains("_smoothedVoltageVectors = CloneVectors(_targetVoltageVectors)", phasor, StringComparison.Ordinal);
-        Assert.Contains("_smoothedCurrentVectors = CloneVectors(_targetCurrentVectors)", phasor, StringComparison.Ordinal);
+        Assert.Contains("_presentationAnimationStartedTimestamp = now;", phasor, StringComparison.Ordinal);
+        Assert.Contains("if (_presentationRenderingHooked) return;", phasor, StringComparison.Ordinal);
+
         Assert.Contains("CompositionTarget.Rendering += PresentationCompositionFrame", harmonic, StringComparison.Ordinal);
-        Assert.Contains("_smoothedSpectra = CloneSpectra(_targetSpectra)", harmonic, StringComparison.Ordinal);
+        Assert.Contains("AdvancePreparedRows(_preparedRows, elapsedMilliseconds)", harmonic, StringComparison.Ordinal);
+        Assert.Contains("TargetMagnitudes", harmonic, StringComparison.Ordinal);
+        Assert.Contains("TargetMagnitudeLabels", harmonic, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshPreparedSpectra", harmonic, StringComparison.Ordinal);
+        Assert.DoesNotContain("SmoothSpectra", harmonic, StringComparison.Ordinal);
+        Assert.DoesNotContain("_smoothedSpectra", harmonic, StringComparison.Ordinal);
         Assert.DoesNotContain("DispatcherTimer", phasor, StringComparison.Ordinal);
         Assert.DoesNotContain("DispatcherTimer", harmonic, StringComparison.Ordinal);
     }
@@ -29,12 +34,12 @@ public sealed class ComtradePresentationAnimationRegressionTests
 
     private static string FindRepoFile(string relativePath)
     {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir != null)
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
         {
-            var candidate = Path.Combine(dir.FullName, relativePath);
+            var candidate = Path.Combine(directory.FullName, relativePath);
             if (File.Exists(candidate)) return candidate;
-            dir = dir.Parent;
+            directory = directory.Parent;
         }
         throw new FileNotFoundException(relativePath);
     }
