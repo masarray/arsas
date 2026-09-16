@@ -56,7 +56,7 @@ public sealed partial class NativeIec61850Client
                     "Reusing the authoritative smart discovery for this MMS association…",
                     82d, 7, 10));
 
-                var projectionWatch = Stopwatch.StartNew();
+                var cachedProjectionWatch = Stopwatch.StartNew();
                 var cachedSnapshot = ToNativeSnapshot(cachedDiscovery.Snapshot);
                 LastReportInventory = ToNativeInventory(cachedDiscovery.ReportInventory);
                 var cachedSignals = BuildSmartCaptureSignalProjection(
@@ -64,20 +64,20 @@ public sealed partial class NativeIec61850Client
                     cachedSnapshot,
                     LastReportInventory,
                     out var cachedProjectionStats);
-                projectionWatch.Stop();
+                cachedProjectionWatch.Stop();
 
-                var reportWatch = Stopwatch.StartNew();
+                var cachedReportWatch = Stopwatch.StartNew();
                 NativeReportDiscoveryMapper.ApplyReportHints(cachedSignals, LastReportInventory);
-                reportWatch.Stop();
+                cachedReportWatch.Stop();
 
                 progress?.Report(new IedDiscoveryProgress(
                     IedDiscoveryStage.ResolvingIdentity,
                     "Resolving IED identity from the cached canonical live model…",
                     94d, 8, 10));
 
-                var identityWatch = Stopwatch.StartNew();
+                var cachedIdentityWatch = Stopwatch.StartNew();
                 DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(cachedDiscovery, cachedModel, cachedSignals);
-                identityWatch.Stop();
+                cachedIdentityWatch.Stop();
                 totalWatch.Stop();
 
                 var cachedLogicalNodes = cachedSignals
@@ -93,8 +93,8 @@ public sealed partial class NativeIec61850Client
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
                     $"indexed LN hints={cachedProjectionStats.LogicalNodeHints}, indexed fallback signals={cachedProjectionStats.AddedFallbackSignals}. " +
-                    $"TimingMs directory=0.0, types=0.0, model=0.0, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
-                    $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
+                    $"TimingMs directory=0.0, types=0.0, model=0.0, projection={cachedProjectionWatch.Elapsed.TotalMilliseconds:F1}, " +
+                    $"reportHints={cachedReportWatch.Elapsed.TotalMilliseconds:F1}, identity={cachedIdentityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
                     "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
                 LastErrorMessage = LastDiscoverySummary;
                 return cachedSignals;
