@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
@@ -15,6 +16,24 @@ public sealed partial class NativeIec61850Client
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress)
     {
+        // Protect one physical MMS association from accidental concurrent discovery
+        // (double-click, overlapping runtime requests, or future background consumers).
+        // Waiting callers reuse the completed association-scoped authority below.
+        await _smartDiscoveryCaptureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await DiscoverSignalsSmartForCaptureCoreAsync(cancellationToken, progress).ConfigureAwait(false);
+        }
+        finally
+        {
+            _smartDiscoveryCaptureGate.Release();
+        }
+    }
+
+    private async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsSmartForCaptureCoreAsync(
+        CancellationToken cancellationToken,
+        IProgress<IedDiscoveryProgress>? progress)
+    {
         LastDiscoverySummary = string.Empty;
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -24,8 +43,63 @@ public sealed partial class NativeIec61850Client
             return Array.Empty<SignalDefinition>();
         }
 
+        var totalWatch = Stopwatch.StartNew();
         try
         {
+            // A second discovery request on the same association must be wire-free. The
+            // authority marker is reference-bound to _lastDiscovery/_liveModel, both of
+            // which are reset by the normal connection lifecycle before a new IED/session.
+            if (TryGetSmartDiscoveryAuthority(out var cachedDiscovery, out var cachedModel))
+            {
+                progress?.Report(new IedDiscoveryProgress(
+                    IedDiscoveryStage.MappingSignals,
+                    "Reusing the authoritative smart discovery for this MMS association…",
+                    82d, 7, 10));
+
+                var projectionWatch = Stopwatch.StartNew();
+                var cachedSnapshot = ToNativeSnapshot(cachedDiscovery.Snapshot);
+                LastReportInventory = ToNativeInventory(cachedDiscovery.ReportInventory);
+                var cachedSignals = BuildSmartCaptureSignalProjection(
+                    cachedModel,
+                    cachedSnapshot,
+                    LastReportInventory,
+                    out var cachedProjectionStats);
+                projectionWatch.Stop();
+
+                var reportWatch = Stopwatch.StartNew();
+                NativeReportDiscoveryMapper.ApplyReportHints(cachedSignals, LastReportInventory);
+                reportWatch.Stop();
+
+                progress?.Report(new IedDiscoveryProgress(
+                    IedDiscoveryStage.ResolvingIdentity,
+                    "Resolving IED identity from the cached canonical live model…",
+                    94d, 8, 10));
+
+                var identityWatch = Stopwatch.StartNew();
+                DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(cachedDiscovery, cachedModel, cachedSignals);
+                identityWatch.Stop();
+                totalWatch.Stop();
+
+                var cachedLogicalNodes = cachedSignals
+                    .Select(signal => signal.LogicalNode)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+                var cachedRawVariables = cachedSnapshot.DomainVariables.Values.Sum(values => values.Count);
+
+                LastDiscoverySummary =
+                    $"SMART-CAPTURE PR134 R2; association authority=reused; wire discovery=skipped; " +
+                    $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
+                    $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
+                    $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
+                    $"indexed LN hints={cachedProjectionStats.LogicalNodeHints}, indexed fallback signals={cachedProjectionStats.AddedFallbackSignals}. " +
+                    $"TimingMs directory=0.0, types=0.0, model=0.0, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
+                    $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
+                    "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
+                LastErrorMessage = LastDiscoverySummary;
+                return cachedSignals;
+            }
+
             var smartOptions = new ArMms.MmsSmartDiscoveryOptions
             {
                 MaxConcurrentChains = 8,
@@ -43,9 +117,11 @@ public sealed partial class NativeIec61850Client
                 "Smart MMS discovery: bounded parallel directory scan…",
                 28d, 4, 10));
 
+            var directoryWatch = Stopwatch.StartNew();
             var discovery = await _session
                 .DiscoverSmartAsync(smartOptions, cancellationToken)
                 .ConfigureAwait(false);
+            directoryWatch.Stop();
             _lastDiscovery = discovery;
 
             progress?.Report(new IedDiscoveryProgress(
@@ -53,15 +129,18 @@ public sealed partial class NativeIec61850Client
                 "Smart MMS type discovery: Logical Node hierarchy probes…",
                 52d, 5, 10));
 
+            var typeWatch = Stopwatch.StartNew();
             var variableTypes = await LiveIedVariableTypeProbeExecutor
                 .ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, cancellationToken)
                 .ConfigureAwait(false);
+            typeWatch.Stop();
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.BuildingLiveModel,
                 "Building canonical IEC 61850 model from smart discovery evidence…",
                 68d, 6, 10));
 
+            var modelWatch = Stopwatch.StartNew();
             _liveModel = LiveIedModelDiscoveryBuilder.Build(
                 discovery,
                 new LiveIedModelDiscoveryBuildOptions
@@ -71,34 +150,38 @@ public sealed partial class NativeIec61850Client
                     IncludeLowConfidenceTemplates = true
                 },
                 variableTypeAttributes: variableTypes);
+            modelWatch.Stop();
 
             var snapshot = ToNativeSnapshot(discovery.Snapshot);
             LastReportInventory = ToNativeInventory(discovery.ReportInventory);
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.MappingSignals,
-                "Mapping smart structural model to the ARSAS signal workspace…",
+                "Mapping canonical smart evidence with indexed fallbacks…",
                 82d, 7, 10));
 
-            var signals = BuildSignalsFromArIecModel(_liveModel, snapshot).ToList();
-            AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts(
-                signals,
-                discovery,
+            var projectionWatch = Stopwatch.StartNew();
+            var signals = BuildSmartCaptureSignalProjection(
+                _liveModel,
                 snapshot,
                 LastReportInventory,
-                DateTime.Now);
-            signals = FinalizeDiscoveredSignals(signals).ToList();
+                out var projectionStats);
+            projectionWatch.Stop();
 
             // Report hints derived from structural NamedVariable/NamedVariableList evidence
             // remain available. Attribute reads and DataSet-directory reads are deferred.
+            var reportWatch = Stopwatch.StartNew();
             NativeReportDiscoveryMapper.ApplyReportHints(signals, LastReportInventory);
+            reportWatch.Stop();
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.ResolvingIdentity,
                 "Resolving IED identity from the canonical live model…",
                 94d, 8, 10));
 
+            var identityWatch = Stopwatch.StartNew();
             DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(discovery, _liveModel, signals);
+            identityWatch.Stop();
 
             var logicalNodes = signals
                 .Select(signal => signal.LogicalNode)
@@ -108,17 +191,34 @@ public sealed partial class NativeIec61850Client
             var rawVariables = snapshot.DomainVariables.Values.Sum(values => values.Count);
             var successfulTypeRoots = variableTypes.Count(result => result.IsSuccess);
 
+            // Publish only after the complete projection succeeds. If mapping fails, a
+            // retry is allowed to repeat wire discovery rather than reusing partial state.
+            PublishSmartDiscoveryAuthority(
+                discovery,
+                _liveModel,
+                variableTypes.Count,
+                successfulTypeRoots);
+
+            totalWatch.Stop();
             LastDiscoverySummary =
-                $"SMART-CAPTURE PR134; IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
+                $"SMART-CAPTURE PR134 R2; association authority=new; " +
+                $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
                 $"{discovery.Summary} {_liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
-                $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}. " +
-                "Deferred in this capture build: supplemental GetNameList, eager report attributes, DataSet directories, adaptive sibling probes, primary-equipment proof probes, per-signal operational-reference probes, and engineering-unit reads.";
+                $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +
+                $"indexed LN hints={projectionStats.LogicalNodeHints}, indexed fallback signals={projectionStats.AddedFallbackSignals}. " +
+                $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
+                $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
+                $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
+                "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
             LastErrorMessage = LastDiscoverySummary;
             return signals;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LastErrorMessage = $"ARIEC61850 smart capture discovery failed: {ex.GetType().Name}: {ex.Message}. Last discovery: {_session.LastDiscoveryAttemptSummary}. Last request: {_session.LastDiscoveryRequestHex}";
+            totalWatch.Stop();
+            LastErrorMessage =
+                $"ARIEC61850 smart capture discovery failed after {totalWatch.Elapsed.TotalMilliseconds:F1} ms: " +
+                $"{ex.GetType().Name}: {ex.Message}. Last discovery: {_session.LastDiscoveryAttemptSummary}. Last request: {_session.LastDiscoveryRequestHex}";
             return Array.Empty<SignalDefinition>();
         }
     }
