@@ -101,6 +101,10 @@ public partial class ComtradeWorkspaceWindow
 
             if (_p1d5LocusActive)
             {
+                // PRI/SEC changes the engineering basis of R/X. Never interpolate between points
+                // expressed in different unit bases; discard transient presentation state first.
+                StopP1D5LocusPresentationPump();
+                ResetP1D5LocusPresentation();
                 await RefreshP1D5LocusStaticAsync(forceReopen: false).ConfigureAwait(true);
                 QueueP1D5LocusCursorRefresh();
             }
