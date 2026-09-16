@@ -12,6 +12,13 @@ public sealed class G1ControlCorrectnessRegressionTests
         var commandWindowSource = File.ReadAllText(Path.Combine(root, "ControlCommandWindow.xaml.cs"));
 
         Assert.DoesNotContain("ApplyControlFeedbackToMonitor(session, request.Signal, result.FeedbackValue)", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyControlFeedbackToMonitor(", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CommandFeedbackValue", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CommandFeedbackGuardUntilUtc", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("AwaitingCommandReportEdge", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildControlFeedbackReferences", runtimeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("FindPointForControlFeedback", runtimeSource, StringComparison.Ordinal);
+        Assert.Contains("A real IED report is therefore never suppressed", runtimeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentValue = result.FeedbackValue", commandWindowSource, StringComparison.Ordinal);
         Assert.Contains("Waiting for independent IED process feedback", commandWindowSource, StringComparison.Ordinal);
         Assert.Contains("not process-image authority", runtimeSource, StringComparison.Ordinal);

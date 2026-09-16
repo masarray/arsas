@@ -31,13 +31,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public bool ReportChangeVerified { get; set; }
         public DateTime LastReportUtc { get; set; } = DateTime.MinValue;
         public bool ReportMissLogged { get; set; }
-        public string CommandFeedbackValue { get; set; } = string.Empty;
-        public DateTime LastCommandFeedbackUtc { get; set; } = DateTime.MinValue;
-        public DateTime CommandFeedbackGuardUntilUtc { get; set; } = DateTime.MinValue;
-        public DateTime CommandReportDeadlineUtc { get; set; } = DateTime.MinValue;
-        public bool AwaitingCommandReportEdge { get; set; }
-        public bool CommandReportMissLogged { get; set; }
-        public bool StaleReportSuppressedLogged { get; set; }
         public bool ReportValueRejectedLogged { get; set; }
         public string LastLoggedDegradedQuality { get; set; } = string.Empty;
         public int ConsecutiveErrors { get; set; }
@@ -686,50 +679,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return result;
     }
 
-    private void ApplyControlFeedbackToMonitor(DeviceSession session, SignalDefinition signal, string feedbackValue)
-    {
-        var references = BuildControlFeedbackReferences(signal);
-        var point = FindPointForControlFeedback(session, references);
-        if (point == null || !session.States.TryGetValue(point.PointKey, out var state))
-        {
-            Log("WARN", session.Device.Name,
-                $"Control feedback {feedbackValue} was confirmed by the IED, but no monitored status point matched {string.Join(", ", references)}. Live Monitor was not updated directly.");
-            return;
-        }
-
-        var nowUtc = DateTime.UtcNow;
-        var display = Iec61850ValueFormatter.Format(feedbackValue, point.IecDataType, point.Unit);
-        state.CommandFeedbackValue = display;
-        state.LastCommandFeedbackUtc = nowUtc;
-        state.CommandFeedbackGuardUntilUtc = nowUtc.AddSeconds(2);
-        state.CommandReportDeadlineUtc = nowUtc.AddSeconds(2);
-        state.AwaitingCommandReportEdge = session.PointPlanIds.ContainsKey(point.PointKey);
-        state.CommandReportMissLogged = false;
-        state.StaleReportSuppressedLogged = false;
-        if (state.AwaitingCommandReportEdge)
-            state.ReportChangeVerified = false;
-
-        var sourceMode = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
-            ? "Control feedback"
-            : state.AcquisitionLabel;
-        ApplyValueUpdate(
-            session,
-            point,
-            display,
-            state.Quality,
-            state.DeviceTimestamp,
-            sourceMode,
-            "confirmed command feedback / awaiting matching dchg",
-            nowUtc,
-            state.AwaitingCommandReportEdge
-                ? "Live / command feedback immediate, awaiting report edge"
-                : "Live / control feedback confirmed",
-            trustReportEdge: false);
-
-        Log("INFO", session.Device.Name,
-            $"Live Monitor feedback injected immediately: {point.IecReference}={display}; reportCorrelation={(state.AwaitingCommandReportEdge ? "awaiting dchg" : "not report-assigned")}.");
-    }
-
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
@@ -1233,45 +1182,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     state.ReportValueRejectedLogged = false;
 
                 var receivedUtc = update.UpdatedAt == default ? DateTime.UtcNow : update.UpdatedAt.UtcDateTime;
-                var hasSourceTimestamp = TryParseReportTimestampUtc(update.ReportTimestamp, out var reportSourceUtc);
-                var commandValueMatches = update.HasValue && state.AwaitingCommandReportEdge &&
-                                          AreSemanticallyEquivalent(point, state.CommandFeedbackValue, display);
-                var contradictsCommandFeedback = update.HasValue && state.AwaitingCommandReportEdge &&
-                                                 !commandValueMatches;
-                var provablyOlderThanCommand = contradictsCommandFeedback && hasSourceTimestamp &&
-                                               reportSourceUtc < state.LastCommandFeedbackUtc.AddMilliseconds(-5);
-                var unlabelledSnapshotInsideGuard = contradictsCommandFeedback && !hasSourceTimestamp &&
-                                                    receivedUtc <= state.CommandFeedbackGuardUntilUtc &&
-                                                    !IsChangeReportReason(update.Reason);
-                if (provablyOlderThanCommand || unlabelledSnapshotInsideGuard)
-                {
-                    state.ReportTrafficSeen = true;
-                    state.LastReportUtc = DateTime.UtcNow;
-                    if (!state.StaleReportSuppressedLogged)
-                    {
-                        state.StaleReportSuppressedLogged = true;
-                        Log("WARN", session.Device.Name,
-                            $"{point.SignalName}: stale report value {display} was suppressed after command-confirmed {state.CommandFeedbackValue}; reportTime={(hasSourceTimestamp ? reportSourceUtc.ToString("O", CultureInfo.InvariantCulture) : "not supplied")}.");
-                    }
-                    continue;
-                }
-
                 var hadValueBeforeReport = state.HasValue;
                 var valueChangedByReport = update.HasValue && hadValueBeforeReport && HasExactSemanticEdge(point, state.Value, display);
                 state.ReportTrafficSeen = true;
                 state.LastReportUtc = DateTime.UtcNow;
-                if (commandValueMatches &&
-                    (!hasSourceTimestamp || reportSourceUtc >= state.LastCommandFeedbackUtc.AddMilliseconds(-5)))
-                {
-                    state.AwaitingCommandReportEdge = false;
-                    state.CommandReportMissLogged = false;
-                    state.StaleReportSuppressedLogged = false;
-                    state.ReportChangeVerified = true;
-                    state.ReportMissLogged = false;
-                    Log("INFO", session.Device.Name,
-                        $"{point.SignalName}: event-driven report confirmed command feedback {display}; reason={update.Reason}; reportTime={(hasSourceTimestamp ? reportSourceUtc.ToString("O", CultureInfo.InvariantCulture) : "not supplied")}.");
-                }
-                else if (valueChangedByReport || IsChangeReportReason(update.Reason))
+                // IEC 61850 process truth comes from independent acquisition, never from
+                // a prior control result. A real IED report is therefore never suppressed,
+                // rewritten, or correlated against command-side feedback before publication.
+                if (valueChangedByReport || IsChangeReportReason(update.Reason))
                 {
                     state.ReportChangeVerified = true;
                     state.ReportMissLogged = false;
@@ -1542,15 +1460,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 var normalizedQuality = NormalizeQuality(quality);
                 var normalizedTimestamp = string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp;
-                if (reportAssigned && state.AwaitingCommandReportEdge &&
-                    nowUtc >= state.CommandReportDeadlineUtc && !state.CommandReportMissLogged)
-                {
-                    state.CommandReportMissLogged = true;
-                    state.ReportChangeVerified = false;
-                    Log("WARN", session.Device.Name,
-                        $"{point.SignalName}: command feedback reached {state.CommandFeedbackValue}, but no matching dchg report arrived within 2 seconds. MMS validation remains active until event delivery is proven.");
-                }
-
                 var pollDetectedChange = state.HasValue && !string.Equals(state.Value, display, StringComparison.Ordinal);
                 var sourceMode = "MMS polling";
                 var reason = "cyclic";
@@ -1988,13 +1897,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             state.ReportChangeVerified = false;
             state.LastReportUtc = DateTime.MinValue;
             state.ReportMissLogged = false;
-            state.AwaitingCommandReportEdge = false;
-            state.CommandReportMissLogged = false;
-            state.StaleReportSuppressedLogged = false;
-            state.CommandFeedbackValue = string.Empty;
-            state.LastCommandFeedbackUtc = DateTime.MinValue;
-            state.CommandFeedbackGuardUntilUtc = DateTime.MinValue;
-            state.CommandReportDeadlineUtc = DateTime.MinValue;
             state.AcquisitionLabel = session.StaticDataSetReportOnly ? "Static DataSet report rearming" : "MMS polling";
             state.SourceMode = session.StaticDataSetReportOnly
                 ? "Static DataSet report rearming"
@@ -2528,71 +2430,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         foreach (var key in GetReferenceKeys(point.IecReference))
             session.ReportReferenceIndex.TryAdd(key, point);
-    }
-
-    private static IReadOnlyList<string> BuildControlFeedbackReferences(SignalDefinition signal)
-    {
-        var references = new List<string>(3);
-        void Add(string? reference)
-        {
-            if (string.IsNullOrWhiteSpace(reference))
-                return;
-            var trimmed = reference.Trim();
-            if (!references.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
-                references.Add(trimmed);
-        }
-
-        Add(signal.ControlStatusReference);
-        Add(signal.ObjectReference);
-        if (!string.IsNullOrWhiteSpace(signal.ObjectReference) &&
-            !NormalizeReference(signal.ObjectReference).EndsWith(".stval", StringComparison.OrdinalIgnoreCase))
-        {
-            Add(signal.ObjectReference.TrimEnd('.') + ".stVal");
-        }
-        return references;
-    }
-
-    private static Iec61850MonitorPoint? FindPointForControlFeedback(
-        DeviceSession session,
-        IReadOnlyList<string> references)
-    {
-        foreach (var reference in references)
-        {
-            var exact = FindPointForReportReference(session, reference);
-            if (exact != null)
-                return exact;
-        }
-
-        // Some IEDs expose control objects with the IED name prepended to the MMS
-        // domain (for example OLSF501CB1) while the live point uses CB1. Match the
-        // member path plus a unique domain suffix, never the member path alone when
-        // more than one monitored logical device could match.
-        foreach (var reference in references)
-        {
-            var source = CanonicalDataReference(reference);
-            var sourceSlash = source.IndexOf('/');
-            if (sourceSlash <= 0 || sourceSlash >= source.Length - 1)
-                continue;
-            var sourceDomain = source[..sourceSlash];
-            var sourceMember = source[(sourceSlash + 1)..];
-            var candidates = session.Points.Values.Where(candidate =>
-            {
-                var target = CanonicalDataReference(candidate.IecReference);
-                var targetSlash = target.IndexOf('/');
-                if (targetSlash <= 0 || targetSlash >= target.Length - 1)
-                    return false;
-                var targetDomain = target[..targetSlash];
-                var targetMember = target[(targetSlash + 1)..];
-                return sourceMember.Equals(targetMember, StringComparison.OrdinalIgnoreCase) &&
-                       (sourceDomain.EndsWith(targetDomain, StringComparison.OrdinalIgnoreCase) ||
-                        targetDomain.EndsWith(sourceDomain, StringComparison.OrdinalIgnoreCase));
-            }).Distinct().ToArray();
-
-            if (candidates.Length == 1)
-                return candidates[0];
-        }
-
-        return null;
     }
 
     private static Iec61850MonitorPoint? FindPointForReportReference(DeviceSession session, string reference)
