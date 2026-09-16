@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -65,7 +66,10 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     private static readonly Pen FooterDividerPen = FreezePen(Color.FromRgb(233, 237, 243), 1);
     private static readonly string[] OrderLabels = CreateOrderLabels();
 
+    private const double PresentationTimeConstantMs = 92.0;
     private IReadOnlyList<ComtradeHarmonicOverviewSpectrum> _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    private ComtradeHarmonicOverviewSpectrum[] _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+    private long _lastPresentationTimestamp;
     private PreparedSpectrumRow[] _preparedRows = Array.Empty<PreparedSpectrumRow>();
     private int _maximumDisplayedOrder = -1;
     private string _title = "Harmonics";
@@ -105,7 +109,14 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
     {
         _title = title ?? string.Empty;
         _subtitle = subtitle ?? string.Empty;
-        _spectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+        var targetSpectra = spectra ?? Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMilliseconds = _lastPresentationTimestamp == 0
+            ? double.PositiveInfinity
+            : Stopwatch.GetElapsedTime(_lastPresentationTimestamp, now).TotalMilliseconds;
+        _lastPresentationTimestamp = now;
+        _smoothedSpectra = SmoothSpectra(_smoothedSpectra, targetSpectra, elapsedMilliseconds);
+        _spectra = _smoothedSpectra;
         _maximumDisplayedOrder = ResolveMaximumDisplayedOrder(_spectra);
         _selectedOrder = Math.Clamp(_selectedOrder, 0, Math.Max(0, _maximumDisplayedOrder));
         _preparedRows = PrepareRows(_spectra, _maximumDisplayedOrder);
@@ -118,6 +129,8 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         _title = title ?? string.Empty;
         _subtitle = message ?? string.Empty;
         _spectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+        _smoothedSpectra = Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+        _lastPresentationTimestamp = 0;
         _preparedRows = Array.Empty<PreparedSpectrumRow>();
         _maximumDisplayedOrder = -1;
         _rowTargets.Clear();
@@ -294,6 +307,79 @@ public sealed class ComtradeHarmonicsWorkstationView : FrameworkElement
         if (_preparedRows.Length > 0 && _preparedRows[0].EstimatedSampleRateHz > 0)
             DrawRightAlignedText(dc, _preparedRows[0].SampleRateLabel, 8.0, BodyTypeface,
                 FooterRateBrush, new Point(bounds.Right - 16, y), dpi);
+    }
+
+    private static ComtradeHarmonicOverviewSpectrum[] SmoothSpectra(
+        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> previous,
+        IReadOnlyList<ComtradeHarmonicOverviewSpectrum> target,
+        double elapsedMilliseconds)
+    {
+        if (target.Count == 0)
+            return Array.Empty<ComtradeHarmonicOverviewSpectrum>();
+
+        var topologyMatches = previous.Count == target.Count && previous.Count > 0;
+        if (topologyMatches)
+        {
+            for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)
+            {
+                var before = previous[spectrumIndex];
+                var next = target[spectrumIndex];
+                if (!string.Equals(before.SignalName, next.SignalName, StringComparison.Ordinal) ||
+                    !string.Equals(before.Units, next.Units, StringComparison.Ordinal) ||
+                    before.Bins.Count != next.Bins.Count)
+                {
+                    topologyMatches = false;
+                    break;
+                }
+                for (var binIndex = 0; binIndex < next.Bins.Count; binIndex++)
+                {
+                    if (before.Bins[binIndex].Order != next.Bins[binIndex].Order)
+                    {
+                        topologyMatches = false;
+                        break;
+                    }
+                }
+                if (!topologyMatches) break;
+            }
+        }
+
+        var result = new ComtradeHarmonicOverviewSpectrum[target.Count];
+        for (var spectrumIndex = 0; spectrumIndex < target.Count; spectrumIndex++)
+        {
+            var next = target[spectrumIndex];
+            if (!topologyMatches)
+            {
+                result[spectrumIndex] = next with { Bins = next.Bins.ToArray() };
+                continue; // First sample/channel-set change snaps; never invent a ramp from zero.
+            }
+
+            var before = previous[spectrumIndex];
+            var bins = new ComtradeHarmonicDisplayBin[next.Bins.Count];
+            for (var binIndex = 0; binIndex < bins.Length; binIndex++)
+            {
+                var previousBin = before.Bins[binIndex];
+                var targetBin = next.Bins[binIndex];
+                bins[binIndex] = new ComtradeHarmonicDisplayBin(
+                    targetBin.Order,
+                    PresentationEasingMath.Smooth(previousBin.MagnitudeRms, targetBin.MagnitudeRms, elapsedMilliseconds, PresentationTimeConstantMs),
+                    PresentationEasingMath.Smooth(previousBin.PercentOfFundamental, targetBin.PercentOfFundamental, elapsedMilliseconds, PresentationTimeConstantMs),
+                    PresentationEasingMath.SmoothAngleDegrees(previousBin.AngleDegrees, targetBin.AngleDegrees, elapsedMilliseconds, PresentationTimeConstantMs));
+            }
+
+            result[spectrumIndex] = new ComtradeHarmonicOverviewSpectrum(
+                next.SignalName,
+                next.Units,
+                PresentationEasingMath.Smooth(before.DcComponent, next.DcComponent, elapsedMilliseconds, PresentationTimeConstantMs),
+                PresentationEasingMath.Smooth(before.FundamentalRms, next.FundamentalRms, elapsedMilliseconds, PresentationTimeConstantMs),
+                PresentationEasingMath.Smooth(before.ThdPercent, next.ThdPercent, elapsedMilliseconds, PresentationTimeConstantMs),
+                next.DominantOrder,
+                PresentationEasingMath.Smooth(before.DominantRms, next.DominantRms, elapsedMilliseconds, PresentationTimeConstantMs),
+                PresentationEasingMath.Smooth(before.DominantPercent, next.DominantPercent, elapsedMilliseconds, PresentationTimeConstantMs),
+                next.EstimatedSampleRateHz,
+                next.MaximumResolvableOrder,
+                bins);
+        }
+        return result;
     }
 
     private static PreparedSpectrumRow[] PrepareRows(
