@@ -33,7 +33,20 @@ The manifest records:
 - merge method `merge`;
 - merge order `engine -> arsas`.
 
-The tracked manifest intentionally does **not** store its own future ARSAS commit SHA. After adding the manifest, the only allowed post-authorization ARSAS change is that manifest file itself. At merge execution time the live PR head is resolved again and supplied to GitHub as `expected_head_sha`.
+The tracked manifest intentionally does **not** store its own future ARSAS commit SHA. After adding the manifest, the only allowed post-authorization ARSAS change is that manifest file itself.
+
+## Live merge preflight
+
+Immediately before any GitHub merge action, run `verify-smart-discovery-live-merge-preflight.ps1` against the live PR heads/base SHAs. It rejects:
+
+- ARSAS base drift after authorization;
+- engine base drift after authorization;
+- engine PR head drift;
+- an ARSAS live head that is not a descendant of the P0-5g validated head;
+- any ARSAS post-authorization path other than `evidence/smart-discovery-mainline-merge-manifest.json`;
+- absence of the tracked P0-5h manifest change.
+
+A PASS writes `P0-5h-live-preflight` evidence containing the live ARSAS head. That live SHA—not a self-referential value stored in the manifest—is supplied to GitHub as the ARSAS `expected_head_sha`.
 
 ## Exact execution sequence
 
@@ -41,13 +54,12 @@ The tracked manifest intentionally does **not** store its own future ARSAS commi
 2. Require each PR to still be open and mergeable.
 3. Require current base SHA to equal the SHA captured by the P0-5h manifest.
 4. Require no unresolved review threads on either PR.
-5. Require current engine PR head to equal the manifest engine `ExpectedHeadSha`.
-6. For ARSAS, compare the P0-5g validated head to the live PR head. The only changed path allowed is `evidence/smart-discovery-mainline-merge-manifest.json`.
-7. Merge engine PR #134 first using merge method `merge` and its exact `expected_head_sha`.
-8. Verify the engine merge succeeded and the validated engine head is now an ancestor of engine `main`.
-9. Re-fetch ARSAS PR #324. Abort if its head/base/mergeability/review state changed.
-10. Merge ARSAS PR #324 using merge method `merge` and the freshly resolved live ARSAS head as `expected_head_sha`.
-11. Never enable auto-merge in this phase.
+5. Run the live merge preflight and require `PASS`.
+6. Merge engine PR #134 first using merge method `merge` and its exact `expected_head_sha`.
+7. Verify the engine merge succeeded and the validated engine head is now an ancestor of engine `main`.
+8. Re-fetch ARSAS PR #324. Abort if its head/base/mergeability/review state changed after engine merge.
+9. Merge ARSAS PR #324 using merge method `merge` and the freshly resolved live ARSAS head as `expected_head_sha`.
+10. Never enable auto-merge in this phase.
 
 Any mismatch aborts execution. There is no force or fixture bypass.
 
