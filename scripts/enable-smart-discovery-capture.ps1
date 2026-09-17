@@ -57,6 +57,27 @@ else {
     Write-Host 'Smart discovery authority reset already installed.'
 }
 
+$controlAuthorityMarker = '_lastDiscovery.Snapshot.DomainVariables'
+if ($text.IndexOf($controlAuthorityMarker, [System.StringComparison]::Ordinal) -lt 0) {
+    $controlPattern = '\(\) => service\.OpenAsync\(_session, signal\.ObjectReference, cancellationToken\)'
+    $controlMatches = [regex]::Matches($text, $controlPattern)
+    if ($controlMatches.Count -ne 1) {
+        throw "Expected exactly one control OpenAsync discovery call, found $($controlMatches.Count); refusing ambiguous authority patch."
+    }
+
+    $controlReplacement = @'
+() => _lastDiscovery != null
+                    ? service.OpenAsync(_session, signal.ObjectReference, _lastDiscovery.Snapshot.DomainVariables, cancellationToken)
+                    : service.OpenAsync(_session, signal.ObjectReference, cancellationToken)
+'@
+    $text = [regex]::Replace($text, $controlPattern, $controlReplacement, 1)
+    $changed = $true
+    Write-Host 'Installed authoritative smart domain inventory reuse into control inspection.'
+}
+else {
+    Write-Host 'Control inspection already reuses authoritative smart domain inventory.'
+}
+
 if ($changed) {
     [System.IO.File]::WriteAllText($sourcePath, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
