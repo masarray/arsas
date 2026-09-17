@@ -1,5 +1,5 @@
 {
-  "SchemaVersion": 1,
+  "SchemaVersion": 2,
   "Phase": "P0-5g",
   "Status": "awaiting-physical-p0-5f-authority-and-green-mainline-gates",
   "ArsasPullRequest": 324,
@@ -35,6 +35,8 @@
     "AllowEngineHeadDescendantWhenCriticalDiscoveryPathsUnchanged": true,
     "RequireFieldRouteExplicitOptInBeforePromotion": true,
     "RequireProductionSwitchFalseUntilAuthority": true,
+    "RequireExactPromotionAuthoritySha256Binding": true,
+    "RequireExactValidatedEngineHeadBinding": true,
     "RequirePurposeDiscoveryCiSuccess": true,
     "RequireGenericBuildSuccessBeforeReadyForReview": true,
     "RequireNoUnresolvedReviewThreadsBeforeReadyForReview": true,
