@@ -16,7 +16,7 @@ The P0-5d verifier is additive test tooling. It does not send MMS traffic.
 
 Capture the complete interval from before TCP/ACSE/MMS association establishment until the first smart discovery has completed. For the clean discovery proof, do not start reporting, polling, control inspection, or command execution during the capture.
 
-Recommended Wireshark capture filter when the IED address is known:
+Recommended packet-capture filter when the IED address is known:
 
 ```text
 host <IED-IP> and tcp port 102
@@ -34,9 +34,9 @@ Save the result as `.pcapng` without trimming the beginning or end of the associ
 4. zero repeated GetVariableAccessAttributes semantic requests;
 5. no invoke-ID reuse while the previous request is still outstanding;
 6. no orphan response/error and no request left outstanding when capture ends;
-7. measured peak outstanding requests does not exceed the MMS `negociatedMaxServOutstandingCalling` value when Wireshark exposes it;
+7. measured peak outstanding requests does not exceed the MMS `negociatedMaxServOutstandingCalling` value when the decoder exposes it;
 8. optional explicit total-request and GVA budgets are respected;
-9. optional IEDScout reference comparison is emitted from the same verifier.
+9. optional same-IED reference-capture comparison is emitted from the same verifier.
 
 The semantic request fingerprint includes service, object class/scope, domain, item/object item identity and continuation markers. It deliberately excludes `mms.invokeID`, so the same logical request sent twice with different invoke IDs is still detected as duplicate traffic.
 
@@ -49,12 +49,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-smart-discovery-pcap.p
   -PcapPath .\ARSAS_P0-5d.pcapng
 ```
 
-To compare the same IED against an IEDScout capture:
+To compare the same IED against a trusted reference-tool capture:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify-smart-discovery-pcap.ps1 `
   -PcapPath .\ARSAS_P0-5d.pcapng `
-  -ReferencePcapPath .\IEDScout_DiscoveryIED.pcapng
+  -ReferencePcapPath .\REFERENCE_DiscoveryIED.pcapng
 ```
 
 Optional hard budgets can be imposed after the first clean same-IED run establishes the expected envelope:
@@ -86,6 +86,10 @@ The verifier writes `P0-5D-<capture-name>-proof.json` beside the ARSAS capture. 
 - final PASS/FAIL plus every failed acceptance gate.
 
 Keep the raw PCAP and generated proof JSON together. The JSON is derived evidence; the PCAP remains authoritative.
+
+## Regression mode
+
+CI may use `-DecodedRowsPath` with a synthetic tab-separated decoder fixture. This bypasses TShark only to execute the duplicate/outstanding proof algorithm deterministically. It is not accepted as physical relay evidence.
 
 ## Field acceptance for the golden relay
 
