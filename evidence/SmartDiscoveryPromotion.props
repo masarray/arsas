@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- P0-5g fail-closed production switch. Keep false until a reviewed physical
+         P0-5f authority and P0-5g promotion authority are committed. -->
+    <SmartDiscoveryProductionPromoted>false</SmartDiscoveryProductionPromoted>
+    <SmartDiscoveryEvidenceEngineCommit>4467124775d8d9d76f3db194f9fbfd97144767a8</SmartDiscoveryEvidenceEngineCommit>
+    <SmartDiscoveryPromotionPhase>P0-5g</SmartDiscoveryPromotionPhase>
+  </PropertyGroup>
+</Project>
