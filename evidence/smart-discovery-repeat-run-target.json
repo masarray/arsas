@@ -1,0 +1,40 @@
+{
+  "SchemaVersion": 1,
+  "Phase": "P0-5f",
+  "Status": "awaiting-physical-golden-lock-and-three-independent-runs",
+  "DeviceIdentity": "AA1E1F06R4",
+  "EngineCommit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+  "MinimumIndependentAssociations": 3,
+  "SemanticTarget": {
+    "LogicalDevices": 32,
+    "LogicalNodes": 119,
+    "SemanticLeaves": 4925,
+    "DataSets": 2,
+    "OrderedFcdaMembers": 58,
+    "LogicalReportControls": 32,
+    "RuntimeReportControlInstances": 34,
+    "IndexedBufferedFamilyMax": 2,
+    "IndexedUnbufferedFamilyMax": 2,
+    "SyntheticReportControlInstancesAllowed": 0
+  },
+  "RepeatRunContract": {
+    "RequireProductionGoldenLock": true,
+    "RequireFreshAssociationGenerationPerRun": true,
+    "RequireExactArsasCommit": true,
+    "RequireExactEngineCommit": true,
+    "RequireExactBuildManifestHash": true,
+    "RequireExactSemanticTargetHash": true,
+    "RequireWireAccountingComplete": true,
+    "RequireZeroDuplicateSemanticRequests": true,
+    "RequireZeroEngineDuplicateRequests": true,
+    "RequireExactConfirmedRequestCountAcrossRuns": true,
+    "RequireExactServiceMixAcrossRuns": true,
+    "RequireExactEngineKpiSignatureAcrossRuns": true,
+    "RequireExactDirectoryModelSignatureAcrossRuns": true,
+    "RequireExactProjectionSignatureAcrossRuns": true,
+    "RequireExactTypeProbeBudgetAcrossRuns": true,
+    "RequireExactModelCountsAcrossRuns": true,
+    "PeakOutstandingRule": "within-golden-lock-max-record-range"
+  },
+  "FinalizationAuthority": null
+}
