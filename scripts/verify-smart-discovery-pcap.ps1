@@ -52,6 +52,18 @@ function Test-Present($Row, [string]$Field) {
     return -not [string]::IsNullOrWhiteSpace((Get-RowValue $Row $Field))
 }
 
+function Sum-IntProperty($Items, [string]$PropertyName) {
+    $sum = 0
+    foreach ($item in @($Items)) {
+        if ($null -eq $item) { continue }
+        $property = $item.PSObject.Properties[$PropertyName]
+        if ($null -ne $property -and $null -ne $property.Value) {
+            $sum += [int]$property.Value
+        }
+    }
+    return $sum
+}
+
 function Get-ServiceName($Row) {
     if (Test-Present $Row "mms.getNameList_element") { return "GetNameList" }
     if (Test-Present $Row "mms.getVariableAccessAttributes_element") { return "GetVariableAccessAttributes" }
@@ -181,7 +193,7 @@ function Analyze-Rows($Rows, [string]$Label, [string]$RequestedClientIp, [string
             Fingerprint = $_.Name
         }
     })
-    $duplicateRequests = [int](($duplicateDetails | Measure-Object DuplicateAttempts -Sum).Sum)
+    $duplicateRequests = Sum-IntProperty $duplicateDetails "DuplicateAttempts"
 
     $serviceCounts = [ordered]@{}
     foreach ($group in ($requestRecords | Group-Object Service | Sort-Object Name)) { $serviceCounts[$group.Name] = $group.Count }
@@ -224,8 +236,8 @@ function Analyze-Rows($Rows, [string]$Label, [string]$RequestedClientIp, [string
         ConfirmedResponsesOrErrors = $responses.Count
         ServiceCounts = [pscustomobject]$serviceCounts
         DuplicateSemanticRequests = $duplicateRequests
-        DuplicateGetNameListRequests = [int](($gnlDuplicates | Measure-Object DuplicateAttempts -Sum).Sum)
-        DuplicateGvaRequests = [int](($gvaDuplicates | Measure-Object DuplicateAttempts -Sum).Sum)
+        DuplicateGetNameListRequests = Sum-IntProperty $gnlDuplicates "DuplicateAttempts"
+        DuplicateGvaRequests = Sum-IntProperty $gvaDuplicates "DuplicateAttempts"
         DuplicateDetails = $duplicateDetails
         SecondGetNameListSweepDetected = $gnlDuplicates.Count -gt 0
         PeakOutstandingRequests = $peakOutstanding
