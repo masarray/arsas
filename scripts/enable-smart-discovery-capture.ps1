@@ -30,8 +30,8 @@ else {
     Write-Host 'Smart discovery capture route already installed.'
 }
 
-$resetMarker = 'ResetSmartDiscoveryAuthority();'
-if ($text.IndexOf($resetMarker, [System.StringComparison]::Ordinal) -lt 0) {
+$resetMarker = '_liveModel = null;__P0_5C_CONNECT_RESET__'
+if ($text.IndexOf('__P0_5C_CONNECT_RESET__', [System.StringComparison]::Ordinal) -lt 0) {
     $resetAnchor = "        _lastDiscovery = null;`r`n        _liveModel = null;"
     $anchorIndex = $text.IndexOf($resetAnchor, [System.StringComparison]::Ordinal)
     if ($anchorIndex -lt 0) {
@@ -45,16 +45,34 @@ if ($text.IndexOf($resetMarker, [System.StringComparison]::Ordinal) -lt 0) {
         throw 'ConnectAsync discovery reset anchor is not unique; refusing ambiguous smart authority patch.'
     }
 
-    $resetInjection = $resetAnchor + "`r`n        ResetSmartDiscoveryAuthority();"
-    if ($resetAnchor.Contains("`n") -and -not $resetAnchor.Contains("`r`n")) {
-        $resetInjection = $resetAnchor + "`n        ResetSmartDiscoveryAuthority();"
-    }
+    $lineBreak = if ($resetAnchor.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $resetInjection = $resetAnchor + $lineBreak + '        ResetSmartDiscoveryAuthority(); // __P0_5C_CONNECT_RESET__'
     $text = $text.Remove($anchorIndex, $resetAnchor.Length).Insert($anchorIndex, $resetInjection)
     $changed = $true
-    Write-Host 'Installed explicit smart discovery authority reset into ConnectAsync.'
+    Write-Host 'Installed P0-5c association-generation reset into ConnectAsync.'
 }
 else {
-    Write-Host 'Smart discovery authority reset already installed.'
+    Write-Host 'P0-5c ConnectAsync association reset already installed.'
+}
+
+$disposeMarker = '__P0_5C_DISPOSE_RESET__'
+if ($text.IndexOf($disposeMarker, [System.StringComparison]::Ordinal) -lt 0) {
+    $disposePattern = '(public async ValueTask DisposeAsync\(\)\s*\{)'
+    $disposeMatch = [regex]::Match($text, $disposePattern)
+    if (-not $disposeMatch.Success -or [regex]::Matches($text, $disposePattern).Count -ne 1) {
+        throw 'Could not locate a unique NativeIec61850Client.DisposeAsync entrypoint for association invalidation.'
+    }
+
+    $disposeInjection = @'
+
+        ResetSmartDiscoveryAuthority(); // __P0_5C_DISPOSE_RESET__
+'@
+    $text = $text.Insert($disposeMatch.Index + $disposeMatch.Length, $disposeInjection)
+    $changed = $true
+    Write-Host 'Installed P0-5c association-generation reset into DisposeAsync.'
+}
+else {
+    Write-Host 'P0-5c DisposeAsync association reset already installed.'
 }
 
 $controlAuthorityMarker = '_lastDiscovery.Snapshot.DomainVariables'
