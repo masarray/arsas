@@ -25,6 +25,8 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.True(contract.GetProperty("AllowEngineHeadDescendantWhenCriticalDiscoveryPathsUnchanged").GetBoolean());
         Assert.True(contract.GetProperty("RequireProductionSwitchFalseUntilAuthority").GetBoolean());
         Assert.True(contract.GetProperty("RequireGenericBuildSuccessBeforeReadyForReview").GetBoolean());
+        Assert.True(contract.GetProperty("RequireNoUnresolvedReviewThreadsBeforeReadyForReview").GetBoolean());
+        Assert.True(contract.GetProperty("RequirePrRemainDraftUntilAllReadyGatesPass").GetBoolean());
     }
 
     [Fact]
@@ -43,7 +45,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
     }
 
     [Fact]
-    public void P05g_ReadinessBindsPhysicalAuthorityAndEvidenceCompatibleEngineHead()
+    public void P05g_ReadinessBindsPhysicalAuthorityEvidenceCompatibleEngineAndExactPromotionProps()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-production-readiness.ps1"));
 
@@ -55,6 +57,11 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("READY_TO_PROMOTE", source, StringComparison.Ordinal);
         Assert.Contains("READY_FOR_REVIEW", source, StringComparison.Ordinal);
         Assert.Contains("production-promoted", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
+        Assert.Contains("Production promotion props are bound to a different P0-5g promotion authority", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
+        Assert.Contains("Production promotion props are bound to a different validated engine head", source, StringComparison.Ordinal);
+        Assert.Contains("SchemaVersion = 2", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -66,6 +73,8 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("physical-finalized P0-5f authority", source, StringComparison.Ordinal);
         Assert.Contains("EngineHeadIsEvidenceCompatibleDescendant", source, StringComparison.Ordinal);
         Assert.Contains("SmartDiscoveryProductionPromoted>true", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
         Assert.Contains("P0-5g-authority", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowFixtureEvidence", source, StringComparison.Ordinal);
     }
