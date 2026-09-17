@@ -1,0 +1,157 @@
+name: Smart Discovery Golden Provenance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-provenance:
+    name: Verify P0-5e capture build and target provenance
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+
+      - name: Execute P0-5e provenance fixtures
+        shell: powershell
+        run: |
+          $writer = '.\ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1'
+          $verifier = '.\ArIED61850Tester\scripts\verify-smart-discovery-golden-lock.ps1'
+          $target = '.\ArIED61850Tester\evidence\smart-discovery-golden-target.json'
+          foreach ($required in @($writer, $verifier, $target)) {
+            if (-not (Test-Path $required -PathType Leaf)) { throw "Missing P0-5e provenance source: $required" }
+          }
+
+          foreach ($script in @($writer, $verifier)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) { throw "PowerShell parse failure in $script" }
+          }
+
+          $results = '.\ArIED61850Tester\TestResults'
+          New-Item -ItemType Directory -Force $results | Out-Null
+          $capture = Join-Path $results 'p0-5e-provenance-fixture.pcapng'
+          [IO.File]::WriteAllBytes($capture, [Text.Encoding]::UTF8.GetBytes('CI fixture only - never physical authority'))
+
+          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $engineCommit = '4467124775d8d9d76f3db194f9fbfd97144767a8'
+          $manifest = Join-Path $results 'SMART-CAPTURE-BUILD.txt'
+          @(
+            'ARSAS smart discovery field-capture build',
+            "ARSAS commit: $arsasCommit",
+            "ARIEC61850 commit: $engineCommit",
+            'Engine PR: 134'
+          ) | Set-Content $manifest -Encoding utf8
+
+          $proofPath = Join-Path $results 'P0-5D-provenance-source.json'
+          $proof = [ordered]@{
+            SchemaVersion = 1
+            Phase = 'P0-5d'
+            Verdict = 'PASS'
+            AcceptanceFailures = @()
+            ArsasCapture = [ordered]@{
+              Capture = 'fixture'
+              ClientIp = '192.0.2.10'
+              ServerIp = '192.0.2.20'
+              RequestTcpStreams = @('0')
+              ConfirmedRequests = 4
+              ConfirmedResponsesOrErrors = 4
+              ServiceCounts = [ordered]@{
+                GetNameList = 2
+                GetVariableAccessAttributes = 2
+              }
+              DuplicateSemanticRequests = 0
+              DuplicateGetNameListRequests = 0
+              DuplicateGvaRequests = 0
+              DuplicateDetails = @()
+              SecondGetNameListSweepDetected = $false
+              PeakOutstandingRequests = 3
+              NegotiatedMaxOutstandingCalling = 10
+              InvokeIdReuseWhileOutstanding = 0
+              OrphanResponses = 0
+              UnansweredRequestsAtCaptureEnd = 0
+            }
+          }
+          $proof | ConvertTo-Json -Depth 12 | Set-Content $proofPath -Encoding utf8
+
+          $lockPath = Join-Path $results 'P0-5E-provenance.lock.json'
+          & $writer `
+            -ProofJson $proofPath `
+            -CapturePath $capture `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -ArsasCommit $arsasCommit `
+            -EngineCommit $engineCommit `
+            -TargetPath $target `
+            -BuildManifestPath $manifest `
+            -OutputPath $lockPath `
+            -AllowFixtureEvidence
+
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+          if ($lock.SchemaVersion -ne 2 -or
+              $lock.GoldenSource.BuildManifestSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.SemanticTargetSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.RawCaptureReverified) {
+            throw 'Fixture lock did not carry expected P0-5e provenance metadata.'
+          }
+
+          $acceptPath = Join-Path $results 'P0-5E-provenance-pass.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $proofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
+            -OutputJson $acceptPath
+          $accept = Get-Content $acceptPath -Raw | ConvertFrom-Json
+          if ($accept.Verdict -ne 'PASS') { throw 'Exact build/target fixture should pass the golden provenance lock.' }
+
+          $wrongArsas = '1111111111111111111111111111111111111111'
+          $mismatchPath = Join-Path $results 'P0-5E-provenance-arsas-mismatch.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $proofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $wrongArsas `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
+            -OutputJson $mismatchPath `
+            -NoFailExit
+          $mismatch = Get-Content $mismatchPath -Raw | ConvertFrom-Json
+          if ($mismatch.Verdict -ne 'FAIL' -or
+              -not (@($mismatch.AcceptanceFailures) -match 'Candidate ARSAS commit differs')) {
+            throw 'P0-5e did not reject ARSAS build identity drift.'
+          }
+
+          $alteredTarget = Join-Path $results 'altered-target.json'
+          $changed = Get-Content $target -Raw | ConvertFrom-Json
+          $changed.SemanticTarget.LogicalNodes = 120
+          $changed | ConvertTo-Json -Depth 12 | Set-Content $alteredTarget -Encoding utf8
+          $targetMismatchPath = Join-Path $results 'P0-5E-provenance-target-mismatch.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $proofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $alteredTarget `
+            -OutputJson $targetMismatchPath `
+            -NoFailExit
+          $targetMismatch = Get-Content $targetMismatchPath -Raw | ConvertFrom-Json
+          if ($targetMismatch.Verdict -ne 'FAIL' -or
+              -not (@($targetMismatch.AcceptanceFailures) -match 'Semantic target hash differs')) {
+            throw 'P0-5e did not reject semantic-target authority drift.'
+          }
+
+      - name: Upload P0-5e provenance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-p0-5e-golden-provenance-fixtures
+          path: ArIED61850Tester\TestResults\P0-5E-*.json
+          if-no-files-found: warn
+          retention-days: 14
