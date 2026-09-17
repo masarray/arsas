@@ -7,9 +7,10 @@ namespace ArIED61850Tester.Services;
 
 public sealed partial class NativeIec61850Client
 {
-    // This path is intentionally isolated to the PR #134 Wireshark comparison build.
+    // This path is intentionally isolated to the PR #134 comparison build.
     // It keeps live MMS evidence authoritative while removing ARSAS's historical
-    // supplemental GetNameList/read/probe passes from the discovery critical path.
+    // supplemental naming/probe passes. Evidence-directed DataSet and report
+    // enrichment stays inside the same association-scoped single flight.
     private static bool SmartDiscoveryCaptureModeEnabled => true;
 
     private async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsSmartForCaptureAsync(
@@ -32,9 +33,10 @@ public sealed partial class NativeIec61850Client
         long associationGeneration,
         IProgress<IedDiscoveryProgress>? progress)
     {
-        // The complete directory -> GVA -> canonical model -> projection -> publish
-        // sequence owns the application MMS gate. Waiter cancellation is deliberately
-        // absent here: only association generation invalidation can make this owner stale.
+        // The complete directory -> semantic enrichment -> GVA -> canonical model ->
+        // projection -> publish sequence owns the application MMS gate. Waiter
+        // cancellation is deliberately absent here: only association generation
+        // invalidation can make this owner stale.
         await _mmsIoGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
@@ -130,7 +132,7 @@ public sealed partial class NativeIec61850Client
                     $"{cachedBudget} " +
                     $"TimingMs directory=0.0, types=0.0, model=0.0, projection={cachedProjectionWatch.Elapsed.TotalMilliseconds:F1}, " +
                     $"reportHints={cachedReportWatch.Elapsed.TotalMilliseconds:F1}, identity={cachedIdentityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
-                    "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
+                    "Deferred: supplemental GetNameList, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
 
                 if (!TryPublishSmartDiscoveryPresentation(
                         associationGeneration,
@@ -152,13 +154,15 @@ public sealed partial class NativeIec61850Client
                 MaxVariableNamesPerDomain = 20000,
                 MaxVariableListNamesPerDomain = 4096,
                 MaxNameListPages = 64,
-                ProbeReportAttributes = false,
-                ReadDataSetDirectories = false
+                ProbeReportAttributes = true,
+                MaxReportAttributeProbes = 64,
+                ReadDataSetDirectories = true,
+                MaxDataSetDirectoryReads = 64
             };
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.DiscoveringDirectory,
-                "Smart MMS discovery: association-generation single-flight bounded directory scan…",
+                "Smart MMS discovery: bounded directory scan with evidence-directed DataSet/report enrichment…",
                 28d, 4, 10));
 
             var directoryWatch = Stopwatch.StartNew();
@@ -221,8 +225,8 @@ public sealed partial class NativeIec61850Client
                 out var projectionStats);
             projectionWatch.Stop();
 
-            // Report hints derived from structural NamedVariable/NamedVariableList evidence
-            // remain available. Attribute reads and DataSet-directory reads are deferred.
+            // Structural hints, bounded report reads, and observed DataSet directories
+            // all belong to the authoritative single-flight evidence for this association.
             var reportWatch = Stopwatch.StartNew();
             NativeReportDiscoveryMapper.ApplyReportHints(signals, reportInventory);
             reportWatch.Stop();
@@ -259,7 +263,7 @@ public sealed partial class NativeIec61850Client
                 $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
                 $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
                 $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
-                "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
+                "Deferred: supplemental GetNameList, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
 
             // The generation check and state publication are atomic with Reset. A stale
             // owner can never write _lastDiscovery/_liveModel/identity into a new session.
