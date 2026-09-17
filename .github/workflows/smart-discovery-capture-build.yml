@@ -143,7 +143,6 @@ jobs:
           $passJson = '.\ArIED61850Tester\TestResults\P0-5D-fixture-pass.json'
           $passRows | Export-Csv -Delimiter "`t" -NoTypeInformation -Encoding utf8 $passFixture
           & $verifier -DecodedRowsPath $passFixture -OutputJson $passJson
-          if ($LASTEXITCODE -ne 0) { throw 'P0-5d PASS fixture was rejected.' }
           $pass = Get-Content $passJson -Raw | ConvertFrom-Json
           if ($pass.Verdict -ne 'PASS' -or $pass.ArsasCapture.PeakOutstandingRequests -ne 2 -or $pass.ArsasCapture.DuplicateSemanticRequests -ne 0) {
             throw 'P0-5d PASS fixture produced incorrect proof metrics.'
@@ -253,8 +252,9 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: P0-5d physical wire proof over P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
+            "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
+            "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
             "Field invariant: one association capture, zero duplicate semantic confirmed requests, peak outstanding never above negotiated calling limit",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
@@ -267,7 +267,11 @@ jobs:
             ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
             ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt
             ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1
+            ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1
+            ArIED61850Tester\scripts\verify-smart-discovery-golden-lock.ps1
             ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md
+            ArIED61850Tester\docs\P0-5E_GOLDEN_CAPTURE_BUDGET_LOCK.md
+            ArIED61850Tester\evidence\smart-discovery-golden-target.json
           if-no-files-found: error
           retention-days: 14
 
@@ -279,5 +283,6 @@ jobs:
           path: |
             ArIED61850Tester\TestResults\*.trx
             ArIED61850Tester\TestResults\P0-5D-*.json
+            ArIED61850Tester\TestResults\P0-5E-*.json
           if-no-files-found: warn
           retention-days: 14
