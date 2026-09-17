@@ -19,13 +19,14 @@ jobs:
         run: |
           $target = '.\evidence\smart-discovery-mainline-merge-target.json'
           $writer = '.\scripts\new-smart-discovery-mainline-merge-manifest.ps1'
+          $preflight = '.\scripts\verify-smart-discovery-live-merge-preflight.ps1'
           $postMerge = '.\scripts\verify-smart-discovery-post-merge-production.ps1'
           $test = '.\tests\ARSAS.Tests\SmartDiscoveryMainlineMergeExecutionRegressionTests.cs'
           $doc = '.\docs\P0-5H_MAINLINE_MERGE_POST_MERGE_VERIFICATION.md'
-          foreach ($path in @($target,$writer,$postMerge,$test,$doc)) {
+          foreach ($path in @($target,$writer,$preflight,$postMerge,$test,$doc)) {
             if (-not (Test-Path $path -PathType Leaf)) { throw "P0-5h source missing: $path" }
           }
-          foreach ($script in @($writer,$postMerge)) {
+          foreach ($script in @($writer,$preflight,$postMerge)) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($script,[ref]$tokens,[ref]$errors) | Out-Null
@@ -49,6 +50,9 @@ jobs:
             }
             if ((@($m.MergeOrder) -join ',') -ne 'engine,arsas') { throw 'Tracked merge manifest changed merge order.' }
             if ([string]$m.Arsas.LiveMergeHeadSha) { throw 'Tracked manifest must not self-bind its own future commit SHA.' }
+            if ((@($m.Arsas.AllowedPostAuthorizationPaths) -join ',') -ne 'evidence/smart-discovery-mainline-merge-manifest.json') {
+              throw 'Tracked manifest widened the post-authorization ARSAS mutation boundary.'
+            }
           }
 
       - name: Setup .NET 8
