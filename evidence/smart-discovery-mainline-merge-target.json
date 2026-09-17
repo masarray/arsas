@@ -6,6 +6,7 @@
   "ArsasPullRequest": 324,
   "EngineRepository": "masarray/ARIEC61850",
   "EnginePullRequest": 134,
+  "MergeMethod": "merge",
   "MergeOrder": [
     "engine",
     "arsas"
@@ -27,6 +28,7 @@
     "RequireExactExpectedHeadShaOnMerge": true,
     "RequireBaseShaUnchangedFromMergeManifest": true,
     "RequireEngineMergeBeforeArsasMerge": true,
+    "RequireMergeCommitMethod": true,
     "RequireNoUnresolvedReviewThreads": true,
     "RequireBothPullRequestsMergeable": true,
     "ForbidAutoMergeBeforeAllPreconditions": true,
