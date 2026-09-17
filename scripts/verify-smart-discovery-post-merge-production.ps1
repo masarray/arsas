@@ -15,28 +15,23 @@ function Resolve-File([string]$Path, [string]$Label) {
     if (-not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) { throw "$Label is not a file: $Path" }
     return $resolved.Path
 }
-
 function Resolve-Directory([string]$Path, [string]$Label) {
     $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
     if (-not (Test-Path -LiteralPath $resolved.Path -PathType Container)) { throw "$Label is not a directory: $Path" }
     return $resolved.Path
 }
-
 function Assert-Commit([string]$Value, [string]$Label) {
     if ($Value -notmatch '^[0-9a-fA-F]{40}$') { throw "$Label must be a full 40-character Git commit SHA." }
 }
-
 function Test-GitAncestor([string]$RepositoryPath, [string]$Ancestor, [string]$Descendant) {
     & git -C $RepositoryPath merge-base --is-ancestor $Ancestor $Descendant 2>$null | Out-Null
     return $LASTEXITCODE -eq 0
 }
-
 function Get-GitHead([string]$RepositoryPath) {
     $value = (& git -C $RepositoryPath rev-parse HEAD 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not $value) { throw "Could not resolve Git HEAD for '$RepositoryPath'." }
     return ([string]$value).Trim().ToLowerInvariant()
 }
-
 function Get-XmlChildText($Parent, [string]$Name) {
     $node = @($Parent.ChildNodes | Where-Object { $_.Name -eq $Name } | Select-Object -First 1)
     if ($node.Count -eq 0) { return '' }
@@ -48,39 +43,27 @@ $promotionFile = Resolve-File $PromotionAuthorityPath 'P0-5g promotion authority
 $propsFile = Resolve-File $PromotionPropsPath 'production promotion props'
 $arsasRepo = Resolve-Directory $ArsasRepositoryPath 'ARSAS main checkout'
 $engineRepo = Resolve-Directory $EngineRepositoryPath 'ARIEC61850 main checkout'
-
 $manifest = Get-Content -LiteralPath $manifestFile -Raw | ConvertFrom-Json
 $promotion = Get-Content -LiteralPath $promotionFile -Raw | ConvertFrom-Json
-if ($manifest.Phase -ne 'P0-5h-merge-manifest' -or $manifest.Status -ne 'authorized-for-ordered-merge') {
-    throw 'Post-merge verification requires an authorized P0-5h merge manifest.'
-}
-if ($promotion.Phase -ne 'P0-5g-authority' -or $promotion.Status -ne 'production-promoted') {
-    throw 'Post-merge verification requires production-promoted P0-5g authority.'
-}
-if ([string]$manifest.MergeMethod -and [string]$manifest.MergeMethod -ne 'merge') {
-    throw 'P0-5h requires merge-commit semantics.'
-}
 
-$expectedArsasHead = ([string]$manifest.Arsas.ExpectedHeadSha).ToLowerInvariant()
+if ($manifest.Phase -ne 'P0-5h-merge-manifest' -or $manifest.Status -ne 'authorized-for-ordered-merge') { throw 'Post-merge verification requires an authorized P0-5h merge manifest.' }
+if ($promotion.Phase -ne 'P0-5g-authority' -or $promotion.Status -ne 'production-promoted') { throw 'Post-merge verification requires production-promoted P0-5g authority.' }
+if ([string]$manifest.MergeMethod -ne 'merge' -or @($manifest.MergeOrder) -join ',' -ne 'engine,arsas') { throw 'P0-5h requires merge-commit semantics and engine-first order.' }
+
+$validatedArsasHead = ([string]$manifest.Arsas.ValidatedHeadSha).ToLowerInvariant()
 $expectedEngineHead = ([string]$manifest.Engine.ExpectedHeadSha).ToLowerInvariant()
-Assert-Commit $expectedArsasHead 'manifest ARSAS head'
+Assert-Commit $validatedArsasHead 'manifest validated ARSAS head'
 Assert-Commit $expectedEngineHead 'manifest engine head'
 $currentArsasMain = Get-GitHead $arsasRepo
 $currentEngineMain = Get-GitHead $engineRepo
-
 $failures = [System.Collections.Generic.List[string]]::new()
-if (-not (Test-GitAncestor $engineRepo $expectedEngineHead $currentEngineMain)) {
-    $failures.Add('Validated engine PR head is not an ancestor of engine main.')
-}
-if (-not (Test-GitAncestor $arsasRepo $expectedArsasHead $currentArsasMain)) {
-    $failures.Add('Validated ARSAS PR head is not an ancestor of ARSAS main.')
-}
-if (([string]$promotion.EngineHeadCommit).ToLowerInvariant() -ne $expectedEngineHead) {
-    $failures.Add('P0-5g promotion authority engine head differs from P0-5h merge manifest.')
-}
-if (([string]$promotion.ArsasValidatedHeadCommit).ToLowerInvariant() -ne $expectedArsasHead) {
-    $failures.Add('P0-5g promotion authority ARSAS head differs from P0-5h merge manifest.')
-}
+
+$engineAncestor = Test-GitAncestor $engineRepo $expectedEngineHead $currentEngineMain
+$arsasAncestor = Test-GitAncestor $arsasRepo $validatedArsasHead $currentArsasMain
+if (-not $engineAncestor) { $failures.Add('Validated engine PR head is not an ancestor of engine main.') }
+if (-not $arsasAncestor) { $failures.Add('Validated ARSAS PR head is not an ancestor of ARSAS main.') }
+if (([string]$promotion.EngineHeadCommit).ToLowerInvariant() -ne $expectedEngineHead) { $failures.Add('P0-5g promotion authority engine head differs from P0-5h merge manifest.') }
+if (([string]$promotion.ArsasValidatedHeadCommit).ToLowerInvariant() -ne $validatedArsasHead) { $failures.Add('P0-5g promotion authority ARSAS head differs from P0-5h merge manifest.') }
 
 $promotionHash = (Get-FileHash -LiteralPath $promotionFile -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifestHash = (Get-FileHash -LiteralPath $manifestFile -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -99,12 +82,12 @@ $result = [ordered]@{
     Verdict = if ($failures.Count -eq 0) { 'PASS' } else { 'FAIL' }
     MergeManifestSha256 = $manifestHash
     PromotionAuthoritySha256 = $promotionHash
-    ExpectedArsasHead = $expectedArsasHead
+    ValidatedArsasHead = $validatedArsasHead
     CurrentArsasMainHead = $currentArsasMain
     ExpectedEngineHead = $expectedEngineHead
     CurrentEngineMainHead = $currentEngineMain
-    EngineHeadIsAncestorOfMain = Test-GitAncestor $engineRepo $expectedEngineHead $currentEngineMain
-    ArsasHeadIsAncestorOfMain = Test-GitAncestor $arsasRepo $expectedArsasHead $currentArsasMain
+    EngineHeadIsAncestorOfMain = $engineAncestor
+    ArsasValidatedHeadIsAncestorOfMain = $arsasAncestor
     ProductionSwitchEnabled = $promoted -eq 'true'
     AcceptanceFailures = @($failures)
 }
