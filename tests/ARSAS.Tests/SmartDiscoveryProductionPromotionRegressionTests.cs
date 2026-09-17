@@ -30,6 +30,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.True(contract.GetProperty("RequireExactValidatedEngineHeadBinding").GetBoolean());
         Assert.True(contract.GetProperty("RequireGenericBuildSuccessBeforeReadyForReview").GetBoolean());
         Assert.True(contract.GetProperty("RequireNoUnresolvedReviewThreadsBeforeReadyForReview").GetBoolean());
+        Assert.True(contract.GetProperty("RequireDedicatedMainlineReadinessGateSuccess").GetBoolean());
         Assert.True(contract.GetProperty("RequirePrRemainDraftUntilAllReadyGatesPass").GetBoolean());
     }
 
@@ -60,6 +61,19 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
         Assert.DoesNotContain("$group.SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
         Assert.DoesNotContain("$group.SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P05g_DedicatedMainlineGateRequiresReadyForReviewAndRealAuthorities()
+    {
+        var workflow = File.ReadAllText(FindRepoFile(".github/workflows/smart-discovery-mainline-readiness.yml"));
+
+        Assert.Contains("Smart Discovery Mainline Readiness", workflow, StringComparison.Ordinal);
+        Assert.Contains("P0-5f physical-finalized authority is not tracked", workflow, StringComparison.Ordinal);
+        Assert.Contains("P0-5g production promotion authority is not tracked", workflow, StringComparison.Ordinal);
+        Assert.Contains("READY_FOR_REVIEW", workflow, StringComparison.Ordinal);
+        Assert.Contains("ProductionSwitchEnabled", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("NoFailExit\n", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
