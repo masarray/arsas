@@ -48,7 +48,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
     }
 
     [Fact]
-    public void P05g_ReadinessBindsPhysicalAuthorityEvidenceCompatibleEngineAndExactPromotionProps()
+    public void P05g_ReadinessBindsAllPromotionProvenance()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-production-readiness.ps1"));
 
@@ -64,7 +64,11 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("Production promotion props are bound to a different P0-5g promotion authority", source, StringComparison.Ordinal);
         Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
         Assert.Contains("Production promotion props are bound to a different validated engine head", source, StringComparison.Ordinal);
-        Assert.Contains("SchemaVersion = 2", source, StringComparison.Ordinal);
+        Assert.Contains("promotion authority is bound to a different promotion target", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("promotion authority is bound to a different engine lock", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PromotionTargetSha256", source, StringComparison.Ordinal);
+        Assert.Contains("EngineLockSha256", source, StringComparison.Ordinal);
+        Assert.Contains("SchemaVersion = 3", source, StringComparison.Ordinal);
     }
 
     [Fact]
