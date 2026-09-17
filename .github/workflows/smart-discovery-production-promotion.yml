@@ -115,6 +115,16 @@ jobs:
       - name: Build and test default fail-closed ARSAS path
         shell: powershell
         run: |
+          # The current engine PR head is validated above, but ordinary pre-promotion
+          # ARSAS remains pinned to the physical-evidence engine baseline. Build the
+          # fail-closed route against that exact lock rather than an arbitrary newer head.
+          $lock = Get-Content '.\ArIED61850Tester\engines\ARIEC61850.lock.json' -Raw | ConvertFrom-Json
+          git -C .\ARIEC61850 checkout --quiet --detach $lock.commit
+          $actualEngine = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actualEngine -ne ([string]$lock.commit).ToLowerInvariant()) {
+            throw "P0-5g fail-closed engine checkout mismatch: $actualEngine"
+          }
+
           $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
           $before = Get-Content $native -Raw
           if ($before -match 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
