@@ -69,11 +69,12 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         var workflow = File.ReadAllText(FindRepoFile(".github/workflows/smart-discovery-mainline-readiness.yml"));
 
         Assert.Contains("Smart Discovery Mainline Readiness", workflow, StringComparison.Ordinal);
-        Assert.Contains("P0-5f physical-finalized authority is not tracked", workflow, StringComparison.Ordinal);
-        Assert.Contains("P0-5g production promotion authority is not tracked", workflow, StringComparison.Ordinal);
+        Assert.Contains("smart-discovery-repeat-run.authority.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("smart-discovery-production-promotion-authority.json", workflow, StringComparison.Ordinal);
         Assert.Contains("READY_FOR_REVIEW", workflow, StringComparison.Ordinal);
         Assert.Contains("ProductionSwitchEnabled", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("NoFailExit\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("-NoFailExit", workflow, StringComparison.Ordinal);
+        Assert.Contains("if-no-files-found: error", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
