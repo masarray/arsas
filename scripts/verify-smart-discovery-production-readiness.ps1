@@ -50,11 +50,20 @@ function Get-GitChangedPaths([string]$RepositoryPath, [string]$BaseCommit, [stri
     return @($lines | ForEach-Object { ([string]$_).Trim().Replace('\\','/') } | Where-Object { $_ } | Sort-Object -Unique)
 }
 
-function Get-PromotionSwitch([string]$PropsFile) {
+function Get-PromotionProps([string]$PropsFile) {
     [xml]$xml = Get-Content -LiteralPath $PropsFile -Raw
-    $node = $xml.Project.PropertyGroup.SmartDiscoveryProductionPromoted
+    $group = $xml.Project.PropertyGroup
+    $node = $group.SmartDiscoveryProductionPromoted
     if ($null -eq $node) { throw 'Promotion props does not define SmartDiscoveryProductionPromoted.' }
-    return ([string]$node).Trim().ToLowerInvariant() -eq 'true'
+    $promotedText = ([string]$node).Trim().ToLowerInvariant()
+    if ($promotedText -notin @('true','false')) { throw 'SmartDiscoveryProductionPromoted is not a boolean.' }
+    return [pscustomobject]@{
+        Promoted = $promotedText -eq 'true'
+        EvidenceEngineCommit = ([string]$group.SmartDiscoveryEvidenceEngineCommit).Trim().ToLowerInvariant()
+        Phase = ([string]$group.SmartDiscoveryPromotionPhase).Trim()
+        AuthoritySha256 = ([string]$group.SmartDiscoveryPromotionAuthoritySha256).Trim().ToLowerInvariant()
+        ValidatedEngineHead = ([string]$group.SmartDiscoveryValidatedEngineHead).Trim().ToLowerInvariant()
+    }
 }
 
 $targetFile = Resolve-File $TargetPath 'P0-5g promotion target'
@@ -69,6 +78,7 @@ $engineHead = $EngineHeadCommit.ToLowerInvariant()
 
 $target = Get-Content -LiteralPath $targetFile -Raw | ConvertFrom-Json
 $engineLock = Get-Content -LiteralPath $engineLockFile -Raw | ConvertFrom-Json
+$promotionProps = Get-PromotionProps $propsFile
 $blockers = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
 
@@ -84,6 +94,12 @@ if (Get-GitHead $engineRepo -ne $engineHead) { $blockers.Add('Engine repository 
 if ([string]$engineLock.repository -ne [string]$target.EngineRepository) { $blockers.Add('ARSAS engine lock repository differs from the promotion target.') }
 if (([string]$engineLock.commit).ToLowerInvariant() -ne $baseline) {
     $blockers.Add('ARSAS engine lock no longer points at the physical-evidence engine baseline.')
+}
+if ($promotionProps.EvidenceEngineCommit -and $promotionProps.EvidenceEngineCommit -ne $baseline) {
+    $blockers.Add('Promotion props evidence engine commit differs from the P0-5g baseline.')
+}
+if ($promotionProps.Phase -and $promotionProps.Phase -ne 'P0-5g') {
+    $blockers.Add('Promotion props phase differs from P0-5g.')
 }
 
 $engineIsDescendant = Test-GitAncestor $engineRepo $baseline $engineHead
@@ -104,7 +120,7 @@ if ($EngineHeadCiConclusion.Trim().ToLowerInvariant() -ne 'success') {
     $blockers.Add("Engine PR head CI is not green: '$EngineHeadCiConclusion'.")
 }
 
-$productionSwitch = Get-PromotionSwitch $propsFile
+$productionSwitch = [bool]$promotionProps.Promoted
 $physicalAuthority = $null
 $physicalAuthorityFile = $null
 if ([string]::IsNullOrWhiteSpace($PhysicalAuthorityPath) -or -not (Test-Path -LiteralPath $PhysicalAuthorityPath -PathType Leaf)) {
@@ -153,7 +169,21 @@ if (-not [string]::IsNullOrWhiteSpace($PromotionAuthorityPath) -and (Test-Path -
     if (([string]$promotionAuthority.EngineHeadCommit).ToLowerInvariant() -ne $engineHead) {
         $blockers.Add('P0-5g promotion authority is bound to a different engine PR head.')
     }
-    if (-not $productionSwitch) { $blockers.Add('P0-5g authority exists but the tracked production switch is still false.') }
+    if (-not $productionSwitch) {
+        $blockers.Add('P0-5g authority exists but the tracked production switch is still false.')
+    } else {
+        $authorityHash = (Get-FileHash -LiteralPath $promotionAuthorityFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($promotionProps.AuthoritySha256 -notmatch '^[0-9a-f]{64}$') {
+            $blockers.Add('Production promotion props do not contain a valid promotion-authority SHA-256.')
+        } elseif ($promotionProps.AuthoritySha256 -ne $authorityHash) {
+            $blockers.Add('Production promotion props are bound to a different P0-5g promotion authority.')
+        }
+        if ($promotionProps.ValidatedEngineHead -notmatch '^[0-9a-f]{40}$') {
+            $blockers.Add('Production promotion props do not contain a valid validated engine head.')
+        } elseif ($promotionProps.ValidatedEngineHead -ne $engineHead) {
+            $blockers.Add('Production promotion props are bound to a different validated engine head.')
+        }
+    }
 } elseif ($productionSwitch) {
     $blockers.Add('Production switch is true without a tracked P0-5g promotion authority.')
 }
@@ -168,7 +198,7 @@ if ($status -eq 'READY_TO_PROMOTE' -and $productionSwitch) {
 }
 
 $result = [ordered]@{
-    SchemaVersion = 1
+    SchemaVersion = 2
     Phase = 'P0-5g'
     Verdict = $status
     ArsasHeadCommit = $arsasHead
@@ -178,6 +208,8 @@ $result = [ordered]@{
     EngineHeadIsEvidenceCompatibleDescendant = $engineIsDescendant -and $criticalChanges.Count -eq 0
     DiscoveryCriticalChanges = @($criticalChanges)
     ProductionSwitchEnabled = $productionSwitch
+    PromotionAuthoritySha256 = $promotionProps.AuthoritySha256
+    PromotionValidatedEngineHead = $promotionProps.ValidatedEngineHead
     PhysicalAuthorityPath = $physicalAuthorityFile
     PromotionAuthorityPath = $promotionAuthorityFile
     Blockers = @($blockers)
