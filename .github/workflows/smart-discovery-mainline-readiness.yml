@@ -45,15 +45,10 @@ jobs:
           $root = '.\ArIED61850Tester'
           $physical = "$root\evidence\smart-discovery-repeat-run.authority.json"
           $promotion = "$root\evidence\smart-discovery-production-promotion-authority.json"
+          $physicalArg = if (Test-Path $physical -PathType Leaf) { $physical } else { '' }
+          $promotionArg = if (Test-Path $promotion -PathType Leaf) { $promotion } else { '' }
           $output = "$root\TestResults\P0-5G-mainline-readiness.json"
           New-Item -ItemType Directory -Force "$root\TestResults" | Out-Null
-
-          if (-not (Test-Path $physical -PathType Leaf)) {
-            throw 'MAINLINE BLOCKED: P0-5f physical-finalized authority is not tracked.'
-          }
-          if (-not (Test-Path $promotion -PathType Leaf)) {
-            throw 'MAINLINE BLOCKED: P0-5g production promotion authority is not tracked.'
-          }
 
           & "$root\scripts\verify-smart-discovery-production-readiness.ps1" `
             -TargetPath "$root\evidence\smart-discovery-production-promotion-target.json" `
@@ -64,8 +59,8 @@ jobs:
             -ArsasHeadCommit $env:ARSAS_HEAD `
             -EngineHeadCommit $env:ENGINE_HEAD `
             -EngineHeadCiConclusion success `
-            -PhysicalAuthorityPath $physical `
-            -PromotionAuthorityPath $promotion `
+            -PhysicalAuthorityPath $physicalArg `
+            -PromotionAuthorityPath $promotionArg `
             -OutputJson $output `
             -NoFailExit
 
@@ -90,5 +85,5 @@ jobs:
         with:
           name: ARSAS-p0-5g-mainline-readiness
           path: ArIED61850Tester\TestResults\P0-5G-mainline-readiness.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
