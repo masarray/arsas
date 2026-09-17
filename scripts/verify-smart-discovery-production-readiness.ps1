@@ -50,19 +50,25 @@ function Get-GitChangedPaths([string]$RepositoryPath, [string]$BaseCommit, [stri
     return @($lines | ForEach-Object { ([string]$_).Trim().Replace('\\','/') } | Where-Object { $_ } | Sort-Object -Unique)
 }
 
+function Get-XmlChildText($Group, [string]$Name) {
+    if ($null -eq $Group) { return '' }
+    $node = @($Group.ChildNodes | Where-Object { $_.Name -eq $Name } | Select-Object -First 1)
+    if ($node.Count -eq 0 -or $null -eq $node[0]) { return '' }
+    return ([string]$node[0].InnerText).Trim()
+}
+
 function Get-PromotionProps([string]$PropsFile) {
     [xml]$xml = Get-Content -LiteralPath $PropsFile -Raw
     $group = $xml.Project.PropertyGroup
-    $node = $group.SmartDiscoveryProductionPromoted
-    if ($null -eq $node) { throw 'Promotion props does not define SmartDiscoveryProductionPromoted.' }
-    $promotedText = ([string]$node).Trim().ToLowerInvariant()
+    $promotedText = (Get-XmlChildText $group 'SmartDiscoveryProductionPromoted').ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($promotedText)) { throw 'Promotion props does not define SmartDiscoveryProductionPromoted.' }
     if ($promotedText -notin @('true','false')) { throw 'SmartDiscoveryProductionPromoted is not a boolean.' }
     return [pscustomobject]@{
         Promoted = $promotedText -eq 'true'
-        EvidenceEngineCommit = ([string]$group.SmartDiscoveryEvidenceEngineCommit).Trim().ToLowerInvariant()
-        Phase = ([string]$group.SmartDiscoveryPromotionPhase).Trim()
-        AuthoritySha256 = ([string]$group.SmartDiscoveryPromotionAuthoritySha256).Trim().ToLowerInvariant()
-        ValidatedEngineHead = ([string]$group.SmartDiscoveryValidatedEngineHead).Trim().ToLowerInvariant()
+        EvidenceEngineCommit = (Get-XmlChildText $group 'SmartDiscoveryEvidenceEngineCommit').ToLowerInvariant()
+        Phase = Get-XmlChildText $group 'SmartDiscoveryPromotionPhase'
+        AuthoritySha256 = (Get-XmlChildText $group 'SmartDiscoveryPromotionAuthoritySha256').ToLowerInvariant()
+        ValidatedEngineHead = (Get-XmlChildText $group 'SmartDiscoveryValidatedEngineHead').ToLowerInvariant()
     }
 }
 
