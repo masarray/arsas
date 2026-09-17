@@ -23,6 +23,13 @@ function Get-Int($Object, [string]$Name) {
     return [int]$property.Value
 }
 
+function Get-Long($Object, [string]$Name) {
+    if ($null -eq $Object) { return [long]0 }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) { return [long]0 }
+    return [long]$property.Value
+}
+
 function Get-CanonicalServiceMap($Object) {
     $map = [ordered]@{}
     if ($null -ne $Object) {
@@ -57,6 +64,7 @@ if ($minimumRuns -lt 3) { $failures.Add('P0-5f target must require at least thre
 if ($RunBundlePaths.Count -lt $minimumRuns) { $failures.Add("Insufficient independent repeat runs: $($RunBundlePaths.Count) < $minimumRuns.") }
 
 $goldenHash = (Get-FileHash -LiteralPath $goldenLockFile -Algorithm SHA256).Hash.ToLowerInvariant()
+$repeatTargetHash = (Get-FileHash -LiteralPath $repeatTargetFile -Algorithm SHA256).Hash.ToLowerInvariant()
 $targetHash = [string]$lock.GoldenSource.SemanticTargetSha256
 $manifestHash = [string]$lock.GoldenSource.BuildManifestSha256
 $expectedArsas = [string]$lock.GoldenSource.ArsasCommit
@@ -85,6 +93,12 @@ foreach ($path in $RunBundlePaths) {
     }
     if ((Get-Int $bundle.Runtime.SmartDiscoveryKpi 'DuplicateRequests') -ne 0 -or -not [bool]$bundle.Runtime.SmartDiscoveryKpi.WireAccountingComplete) {
         $failures.Add("Run bundle '$file' engine KPI duplicate/accounting invariant failed.")
+    }
+    if ((Get-Int $bundle.Wire 'ConfirmedRequests') -ne (Get-Int $bundle.Runtime.SmartDiscoveryKpi 'TotalRequests')) {
+        $failures.Add("Run bundle '$file' wire/engine request accounting mismatch.")
+    }
+    if ((Get-Long $bundle.Runtime 'AssociationGeneration') -le 0) {
+        $failures.Add("Run bundle '$file' has an invalid association generation.")
     }
     if ((Get-Int $bundle.Wire 'PeakOutstandingRequests') -gt $maxPeak) { $failures.Add("Run bundle '$file' exceeded golden peak outstanding max $maxPeak.") }
 }
@@ -116,7 +130,6 @@ if ($bundles.Count -gt 0) {
         if ((Get-CanonicalObject $bundle.Runtime.Model $modelFields) -ne $expectedModel) { $failures.Add("Discovered model-count drift in '$($entry.Path)'.") }
     }
 
-    # The repeat signature must also land on the reviewed same-IED semantic authority.
     $semantic = $target.SemanticTarget
     if ((Get-Int $first.Runtime.Model 'LogicalDevices') -ne [int]$semantic.LogicalDevices) { $failures.Add('Repeat model LogicalDevice count differs from same-IED semantic target.') }
     if ((Get-Int $first.Runtime.Model 'LogicalNodes') -ne [int]$semantic.LogicalNodes) { $failures.Add('Repeat model LogicalNode count differs from same-IED semantic target.') }
@@ -127,18 +140,22 @@ if ($bundles.Count -gt 0) {
 
 $distinctCaptureHashes = @($bundles | ForEach-Object { [string]$_.Evidence.Provenance.CaptureSha256 } | Sort-Object -Unique)
 $distinctRuntimeHashes = @($bundles | ForEach-Object { [string]$_.Evidence.Provenance.RuntimeEvidenceSha256 } | Sort-Object -Unique)
+$associationGenerations = @($bundles | ForEach-Object { Get-Long $_.Evidence.Runtime 'AssociationGeneration' })
+$distinctAssociationGenerations = @($associationGenerations | Sort-Object -Unique)
 if ($bundles.Count -gt 0 -and $distinctCaptureHashes.Count -ne $bundles.Count) { $failures.Add('Repeat set contains reused raw capture evidence; runs are not independent.') }
 if ($bundles.Count -gt 0 -and $distinctRuntimeHashes.Count -ne $bundles.Count) { $failures.Add('Repeat set contains reused runtime evidence; runs are not independent.') }
+if ($bundles.Count -gt 0 -and $distinctAssociationGenerations.Count -ne $bundles.Count) { $failures.Add('Repeat set reuses an association generation; every run must reconnect and use a fresh association generation.') }
 
 $peaks = @($bundles | ForEach-Object { Get-Int $_.Evidence.Wire 'PeakOutstandingRequests' })
 $result = [ordered]@{
-    SchemaVersion = 1
+    SchemaVersion = 2
     Phase = 'P0-5f'
     Verdict = if ($failures.Count -eq 0) { 'PASS' } else { 'FAIL' }
     DeviceIdentity = $lock.DeviceIdentity
     RequiredIndependentAssociations = $minimumRuns
     ObservedRunBundles = $bundles.Count
     GoldenLockSha256 = $goldenHash
+    RepeatTargetSha256 = $repeatTargetHash
     ArsasCommit = $expectedArsas
     EngineCommit = $expectedEngine
     BuildManifestSha256 = $manifestHash
@@ -152,6 +169,7 @@ $result = [ordered]@{
             ProjectionSignature = [string]$bundles[0].Evidence.Runtime.ProjectionSignature
             TypeProbeBudget = $bundles[0].Evidence.Runtime.TypeProbeBudget
             Model = $bundles[0].Evidence.Runtime.Model
+            AssociationGenerations = @($associationGenerations)
             PeakOutstandingMin = if ($peaks.Count -gt 0) { ($peaks | Measure-Object -Minimum).Minimum } else { $null }
             PeakOutstandingMax = if ($peaks.Count -gt 0) { ($peaks | Measure-Object -Maximum).Maximum } else { $null }
             GoldenPeakOutstandingMax = $maxPeak
@@ -181,6 +199,7 @@ if ($result.Consensus) {
     Write-Host "  KPI signature: $($result.Consensus.EngineKpiDeterministicSignature)"
     Write-Host "  directory signature: $($result.Consensus.DirectoryModelSignature)"
     Write-Host "  projection signature: $($result.Consensus.ProjectionSignature)"
+    Write-Host "  association generations: $($result.Consensus.AssociationGenerations -join ', ')"
     Write-Host "  peak outstanding range: $($result.Consensus.PeakOutstandingMin)-$($result.Consensus.PeakOutstandingMax) / max $maxPeak"
 }
 Write-Host "  finalization JSON: $OutputPath"
