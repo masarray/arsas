@@ -16,48 +16,65 @@ public sealed partial class NativeIec61850Client
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress)
     {
-        // Protect one physical MMS association from accidental concurrent discovery
-        // (double-click, overlapping runtime requests, or future background consumers).
-        // The MMS operation gate additionally prevents report/read workflows from
-        // entering a legacy discovery path before the smart authority is published.
-        await _smartDiscoveryCaptureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // P0-5c: one owner performs the complete enrichment chain for one association
+        // generation. Every concurrent caller receives the same in-flight task. Caller
+        // cancellation only stops that caller waiting; it never cancels the shared MMS
+        // owner and therefore cannot cause a second GVA ladder on the same association.
+        var flight = GetOrCreateSmartDiscoveryAssociationFlight(
+            generation => RunSmartDiscoveryAssociationFlightAsync(generation, progress));
+
+        return await flight.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<SignalDefinition>> RunSmartDiscoveryAssociationFlightAsync(
+        long associationGeneration,
+        IProgress<IedDiscoveryProgress>? progress)
+    {
+        // The complete directory -> GVA -> canonical model -> projection -> publish
+        // sequence owns the application MMS gate. Waiter cancellation is deliberately
+        // absent here: only association generation invalidation can make this owner stale.
+        await _mmsIoGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            await _mmsIoGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                return await DiscoverSignalsSmartForCaptureCoreAsync(cancellationToken, progress).ConfigureAwait(false);
-            }
-            finally
-            {
-                _mmsIoGate.Release();
-            }
+            if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                return Array.Empty<SignalDefinition>();
+
+            return await DiscoverSignalsSmartForCaptureCoreAsync(
+                    associationGeneration,
+                    progress)
+                .ConfigureAwait(false);
         }
         finally
         {
-            _smartDiscoveryCaptureGate.Release();
+            _mmsIoGate.Release();
         }
     }
 
     private async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsSmartForCaptureCoreAsync(
-        CancellationToken cancellationToken,
+        long associationGeneration,
         IProgress<IedDiscoveryProgress>? progress)
     {
-        LastDiscoverySummary = string.Empty;
-        cancellationToken.ThrowIfCancellationRequested();
+        if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+            return Array.Empty<SignalDefinition>();
 
+        LastDiscoverySummary = string.Empty;
         if (!_session.IsMmsInitiated)
         {
-            LastErrorMessage = $"ARIEC61850 smart discovery requires ACSE/MMS association. Current state: {_session.State}. {_session.LastAssociationAttemptSummary}";
+            if (IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+            {
+                LastErrorMessage = $"ARIEC61850 smart discovery requires ACSE/MMS association. Current state: {_session.State}. {_session.LastAssociationAttemptSummary}";
+            }
             return Array.Empty<SignalDefinition>();
         }
 
         var totalWatch = Stopwatch.StartNew();
         try
         {
-            // A second discovery request on the same association must be wire-free. The
-            // authority marker is reference-bound to _lastDiscovery/_liveModel and also
-            // explicitly bound to the current host/port association lifecycle.
+            // A completed discovery on this exact association generation is wire-free.
+            // Concurrent callers do not reach this branch independently because they
+            // already share the same association flight above.
             if (TryGetSmartDiscoveryAuthority(out var cachedDiscovery, out var cachedModel))
             {
                 progress?.Report(new IedDiscoveryProgress(
@@ -67,16 +84,16 @@ public sealed partial class NativeIec61850Client
 
                 var cachedProjectionWatch = Stopwatch.StartNew();
                 var cachedSnapshot = ToNativeSnapshot(cachedDiscovery.Snapshot);
-                LastReportInventory = ToNativeInventory(cachedDiscovery.ReportInventory);
+                var cachedInventory = ToNativeInventory(cachedDiscovery.ReportInventory);
                 var cachedSignals = BuildSmartCaptureSignalProjection(
                     cachedModel,
                     cachedSnapshot,
-                    LastReportInventory,
+                    cachedInventory,
                     out var cachedProjectionStats);
                 cachedProjectionWatch.Stop();
 
                 var cachedReportWatch = Stopwatch.StartNew();
-                NativeReportDiscoveryMapper.ApplyReportHints(cachedSignals, LastReportInventory);
+                NativeReportDiscoveryMapper.ApplyReportHints(cachedSignals, cachedInventory);
                 cachedReportWatch.Stop();
 
                 progress?.Report(new IedDiscoveryProgress(
@@ -85,9 +102,15 @@ public sealed partial class NativeIec61850Client
                     94d, 8, 10));
 
                 var cachedIdentityWatch = Stopwatch.StartNew();
-                DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(cachedDiscovery, cachedModel, cachedSignals);
+                var cachedIdentity = Iec61850DeviceIdentityResolver.Resolve(
+                    cachedDiscovery,
+                    cachedModel,
+                    cachedSignals);
                 cachedIdentityWatch.Stop();
                 totalWatch.Stop();
+
+                if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                    return Array.Empty<SignalDefinition>();
 
                 var cachedLogicalNodes = cachedSignals
                     .Select(signal => signal.LogicalNode)
@@ -95,17 +118,27 @@ public sealed partial class NativeIec61850Client
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Count();
                 var cachedRawVariables = cachedSnapshot.DomainVariables.Values.Sum(values => values.Count);
-
-                LastDiscoverySummary =
-                    $"SMART-CAPTURE PR134 R4; association authority=reused; engine single-flight=reused; control inventory=authoritative; wire discovery=skipped; " +
-                    $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
+                var cachedBudget = _session.LastSmartTypeProbeBudget?.Summary ?? "Smart type budget unavailable.";
+                var cachedSummary =
+                    $"SMART-CAPTURE PR134 P0-5c; association authority=reused; association flight=new-wire-free; control inventory=authoritative; wire discovery=skipped; " +
+                    $"IEDName={(string.IsNullOrWhiteSpace(cachedIdentity.IedName) ? "unresolved" : cachedIdentity.IedName)} ({cachedIdentity.Source}); " +
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
                     $"indexed LN hints={cachedProjectionStats.LogicalNodeHints}, indexed fallback signals={cachedProjectionStats.AddedFallbackSignals}. " +
+                    $"{cachedBudget} " +
                     $"TimingMs directory=0.0, types=0.0, model=0.0, projection={cachedProjectionWatch.Elapsed.TotalMilliseconds:F1}, " +
                     $"reportHints={cachedReportWatch.Elapsed.TotalMilliseconds:F1}, identity={cachedIdentityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
                     "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
-                LastErrorMessage = LastDiscoverySummary;
+
+                if (!TryPublishSmartDiscoveryPresentation(
+                        associationGeneration,
+                        cachedInventory,
+                        cachedIdentity,
+                        cachedSummary))
+                {
+                    return Array.Empty<SignalDefinition>();
+                }
+
                 return cachedSignals;
             }
 
@@ -123,31 +156,35 @@ public sealed partial class NativeIec61850Client
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.DiscoveringDirectory,
-                "Smart MMS discovery: association single-flight bounded directory scan…",
+                "Smart MMS discovery: association-generation single-flight bounded directory scan…",
                 28d, 4, 10));
 
             var directoryWatch = Stopwatch.StartNew();
-            // Once this caller owns the application MMS gate, keep that gate until the
-            // shared directory flight itself completes. A UI/waiter cancellation must
-            // not release the gate while the engine continues the association-scoped
-            // discovery in the background.
             var discovery = await _session
                 .DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)
                 .ConfigureAwait(false);
             directoryWatch.Stop();
-            _lastDiscovery = discovery;
 
-            cancellationToken.ThrowIfCancellationRequested();
+            // Reconnect/dispose may invalidate the generation while the current PDU is
+            // in flight. Stop at the boundary before issuing any GVA request.
+            if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                return Array.Empty<SignalDefinition>();
+
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.ProbingLogicalNodes,
-                "Smart MMS type discovery: Logical Node hierarchy probes…",
+                "Smart MMS type discovery: coverage-aware Logical Node hierarchy probes…",
                 52d, 5, 10));
 
             var typeWatch = Stopwatch.StartNew();
             var variableTypes = await LiveIedVariableTypeProbeExecutor
-                .ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, cancellationToken)
+                .ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)
                 .ConfigureAwait(false);
             typeWatch.Stop();
+
+            // A stale owner may finish an already-issued GVA batch, but it cannot build
+            // or publish state into the replacement association generation.
+            if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                return Array.Empty<SignalDefinition>();
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.BuildingLiveModel,
@@ -155,7 +192,7 @@ public sealed partial class NativeIec61850Client
                 68d, 6, 10));
 
             var modelWatch = Stopwatch.StartNew();
-            _liveModel = LiveIedModelDiscoveryBuilder.Build(
+            var liveModel = LiveIedModelDiscoveryBuilder.Build(
                 discovery,
                 new LiveIedModelDiscoveryBuildOptions
                 {
@@ -167,7 +204,7 @@ public sealed partial class NativeIec61850Client
             modelWatch.Stop();
 
             var snapshot = ToNativeSnapshot(discovery.Snapshot);
-            LastReportInventory = ToNativeInventory(discovery.ReportInventory);
+            var reportInventory = ToNativeInventory(discovery.ReportInventory);
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.MappingSignals,
@@ -176,16 +213,16 @@ public sealed partial class NativeIec61850Client
 
             var projectionWatch = Stopwatch.StartNew();
             var signals = BuildSmartCaptureSignalProjection(
-                _liveModel,
+                liveModel,
                 snapshot,
-                LastReportInventory,
+                reportInventory,
                 out var projectionStats);
             projectionWatch.Stop();
 
             // Report hints derived from structural NamedVariable/NamedVariableList evidence
             // remain available. Attribute reads and DataSet-directory reads are deferred.
             var reportWatch = Stopwatch.StartNew();
-            NativeReportDiscoveryMapper.ApplyReportHints(signals, LastReportInventory);
+            NativeReportDiscoveryMapper.ApplyReportHints(signals, reportInventory);
             reportWatch.Stop();
 
             progress?.Report(new IedDiscoveryProgress(
@@ -194,8 +231,11 @@ public sealed partial class NativeIec61850Client
                 94d, 8, 10));
 
             var identityWatch = Stopwatch.StartNew();
-            DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(discovery, _liveModel, signals);
+            var identity = Iec61850DeviceIdentityResolver.Resolve(discovery, liveModel, signals);
             identityWatch.Stop();
+
+            if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                return Array.Empty<SignalDefinition>();
 
             var logicalNodes = signals
                 .Select(signal => signal.LogicalNode)
@@ -204,35 +244,47 @@ public sealed partial class NativeIec61850Client
                 .Count();
             var rawVariables = snapshot.DomainVariables.Values.Sum(values => values.Count);
             var successfulTypeRoots = variableTypes.Count(result => result.IsSuccess);
-
-            // Publish only after the complete projection succeeds. If mapping fails, a
-            // retry is allowed to repeat wire discovery rather than reusing partial state.
-            PublishSmartDiscoveryAuthority(
-                discovery,
-                _liveModel,
-                variableTypes.Count,
-                successfulTypeRoots);
+            var typeBudget = _session.LastSmartTypeProbeBudget?.Summary ?? "Smart type budget unavailable.";
 
             totalWatch.Stop();
-            LastDiscoverySummary =
-                $"SMART-CAPTURE PR134 R4; association authority=new; engine single-flight=new; app MMS gate=exclusive; control inventory=authoritative; " +
-                $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
-                $"{discovery.Summary} {_liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
+            var summary =
+                $"SMART-CAPTURE PR134 P0-5c; association authority=new; association flight=single-owner; app MMS gate=exclusive; control inventory=authoritative; " +
+                $"IEDName={(string.IsNullOrWhiteSpace(identity.IedName) ? "unresolved" : identity.IedName)} ({identity.Source}); " +
+                $"{discovery.Summary} {liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
                 $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +
                 $"indexed LN hints={projectionStats.LogicalNodeHints}, indexed fallback signals={projectionStats.AddedFallbackSignals}. " +
+                $"{typeBudget} " +
                 $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
                 $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
                 $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
                 "Deferred: supplemental GetNameList, eager report attributes, DataSet directories, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
-            LastErrorMessage = LastDiscoverySummary;
+
+            // The generation check and state publication are atomic with Reset. A stale
+            // owner can never write _lastDiscovery/_liveModel/identity into a new session.
+            if (!TryPublishSmartDiscoveryAuthority(
+                    associationGeneration,
+                    discovery,
+                    liveModel,
+                    reportInventory,
+                    identity,
+                    variableTypes.Count,
+                    successfulTypeRoots,
+                    summary))
+            {
+                return Array.Empty<SignalDefinition>();
+            }
+
             return signals;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             totalWatch.Stop();
-            LastErrorMessage =
-                $"ARIEC61850 smart capture discovery failed after {totalWatch.Elapsed.TotalMilliseconds:F1} ms: " +
-                $"{ex.GetType().Name}: {ex.Message}. Last discovery: {_session.LastDiscoveryAttemptSummary}. Last request: {_session.LastDiscoveryRequestHex}";
+            if (IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+            {
+                LastErrorMessage =
+                    $"ARIEC61850 smart capture discovery failed after {totalWatch.Elapsed.TotalMilliseconds:F1} ms: " +
+                    $"{ex.GetType().Name}: {ex.Message}. Last discovery: {_session.LastDiscoveryAttemptSummary}. Last request: {_session.LastDiscoveryRequestHex}";
+            }
             return Array.Empty<SignalDefinition>();
         }
     }
