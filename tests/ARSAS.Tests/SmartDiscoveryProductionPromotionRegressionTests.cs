@@ -13,6 +13,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("evidence/smart-discovery-production-promotion-target.json")));
         var root = document.RootElement;
 
+        Assert.Equal(2, root.GetProperty("SchemaVersion").GetInt32());
         Assert.Equal("P0-5g", root.GetProperty("Phase").GetString());
         Assert.Equal(EvidenceEngineCommit, root.GetProperty("EvidenceEngineBaselineCommit").GetString());
         Assert.Equal(134, root.GetProperty("EnginePullRequest").GetInt32());
@@ -24,6 +25,8 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.True(contract.GetProperty("RequireEngineHeadCiSuccess").GetBoolean());
         Assert.True(contract.GetProperty("AllowEngineHeadDescendantWhenCriticalDiscoveryPathsUnchanged").GetBoolean());
         Assert.True(contract.GetProperty("RequireProductionSwitchFalseUntilAuthority").GetBoolean());
+        Assert.True(contract.GetProperty("RequireExactPromotionAuthoritySha256Binding").GetBoolean());
+        Assert.True(contract.GetProperty("RequireExactValidatedEngineHeadBinding").GetBoolean());
         Assert.True(contract.GetProperty("RequireGenericBuildSuccessBeforeReadyForReview").GetBoolean());
         Assert.True(contract.GetProperty("RequireNoUnresolvedReviewThreadsBeforeReadyForReview").GetBoolean());
         Assert.True(contract.GetProperty("RequirePrRemainDraftUntilAllReadyGatesPass").GetBoolean());
