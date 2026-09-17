@@ -16,6 +16,7 @@ public sealed class SmartDiscoveryRepeatRunStabilityRegressionTests
         Assert.Equal("AA1E1F06R4", root.GetProperty("DeviceIdentity").GetString());
         Assert.Equal(EngineCommit, root.GetProperty("EngineCommit").GetString());
         Assert.True(root.GetProperty("MinimumIndependentAssociations").GetInt32() >= 3);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("FinalizationAuthority").ValueKind);
 
         var contract = root.GetProperty("RepeatRunContract");
         Assert.True(contract.GetProperty("RequireFreshAssociationGenerationPerRun").GetBoolean());
@@ -75,6 +76,20 @@ public sealed class SmartDiscoveryRepeatRunStabilityRegressionTests
         Assert.Contains("GoldenLockSha256", source, StringComparison.Ordinal);
         Assert.Contains("RuntimeEvidenceSha256", source, StringComparison.Ordinal);
         Assert.Contains("FixtureEvidence", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P05f_PhysicalAuthorityCannotPromoteFixtures()
+    {
+        var source = File.ReadAllText(FindRepoFile("scripts/new-smart-discovery-repeat-run-authority.ps1"));
+
+        Assert.Contains("RawCaptureReverified", source, StringComparison.Ordinal);
+        Assert.Contains("Physical authority rejects fixture run bundle", source, StringComparison.Ordinal);
+        Assert.Contains("RunBundlePaths", source, StringComparison.Ordinal);
+        Assert.Contains("BundleSha256", source, StringComparison.Ordinal);
+        Assert.Contains("reused association generations", source, StringComparison.Ordinal);
+        Assert.Contains("physical-finalized", source, StringComparison.Ordinal);
+        Assert.Contains("FinalizationSha256", source, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
