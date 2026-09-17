@@ -73,6 +73,94 @@ jobs:
             throw 'P0-5c critical path regressed to caller-cancellable GVA, reflection fallback, or second full finalization.'
           }
 
+      - name: Execute P0-5d wire-proof regressions
+        shell: powershell
+        run: |
+          $verifier = ".\ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1"
+          $contract = ".\ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md"
+          $regression = ".\ArIED61850Tester\tests\ARSAS.Tests\SmartDiscoveryPhysicalCaptureProofRegressionTests.cs"
+          foreach ($required in @($verifier, $contract, $regression)) {
+            if (-not (Test-Path $required -PathType Leaf)) { throw "P0-5d source missing: $required" }
+          }
+
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($verifier, [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) {
+            throw "P0-5d verifier has PowerShell parse errors: $($parseErrors | ForEach-Object Message -join '; ')"
+          }
+
+          $source = Get-Content $verifier -Raw
+          foreach ($token in @(
+            'Get-RequestFingerprint',
+            'DuplicateSemanticRequests',
+            'DuplicateGetNameListRequests',
+            'DuplicateGvaRequests',
+            'SecondGetNameListSweepDetected',
+            'PeakOutstandingRequests',
+            'negociatedMaxServOutstandingCalling',
+            'ReferencePcapPath',
+            'DecodedRowsPath')) {
+            if ($source -notmatch [regex]::Escape($token)) { throw "P0-5d verifier contract missing: $token" }
+          }
+
+          New-Item -ItemType Directory -Force .\ArIED61850Tester\TestResults | Out-Null
+          function New-Row($frame, $src, $dst, $invoke, $request, $response, $gnl, $gva, $domain, $item, $negotiated) {
+            [pscustomobject][ordered]@{
+              'frame.number' = $frame
+              'frame.time_epoch' = "1.$frame"
+              'ip.src' = $src
+              'ip.dst' = $dst
+              'tcp.stream' = '0'
+              'mms.invokeID' = $invoke
+              'mms.confirmed_requestPDU' = $request
+              'mms.confirmed_responsePDU' = $response
+              'mms.confirmed_errorPDU' = ''
+              'mms.confirmedServiceRequest' = ''
+              'mms.getNameList_element' = $gnl
+              'mms.getVariableAccessAttributes_element' = $gva
+              'mms.getNamedVariableListAttributes_element' = ''
+              'mms.read_element' = ''
+              'mms.objectClass' = if ($gnl) { '9' } else { '' }
+              'mms.objectScope' = if ($gnl) { '1' } else { '' }
+              'mms.domainId' = $domain
+              'mms.objectName_domain_specific_itemId' = $item
+              'mms.getNameList-Request_continueAfter' = ''
+              'mms.negociatedMaxServOutstandingCalling' = $negotiated
+            }
+          }
+
+          $client = '192.0.2.10'
+          $server = '192.0.2.20'
+          $passRows = @(
+            (New-Row 1 $server $client '' '' '' '' '' '' '' '10'),
+            (New-Row 2 $client $server '1' '1' '' '1' '' 'LD0' '' ''),
+            (New-Row 3 $client $server '2' '1' '' '' '1' 'LD0' 'LLN0$ST$Mod' ''),
+            (New-Row 4 $server $client '2' '' '1' '' '' '' '' ''),
+            (New-Row 5 $server $client '1' '' '1' '' '' '' '' '')
+          )
+          $passFixture = '.\ArIED61850Tester\TestResults\p0-5d-pass.tsv'
+          $passJson = '.\ArIED61850Tester\TestResults\P0-5D-fixture-pass.json'
+          $passRows | Export-Csv -Delimiter "`t" -NoTypeInformation -Encoding utf8 $passFixture
+          & $verifier -DecodedRowsPath $passFixture -OutputJson $passJson
+          if ($LASTEXITCODE -ne 0) { throw 'P0-5d PASS fixture was rejected.' }
+          $pass = Get-Content $passJson -Raw | ConvertFrom-Json
+          if ($pass.Verdict -ne 'PASS' -or $pass.ArsasCapture.PeakOutstandingRequests -ne 2 -or $pass.ArsasCapture.DuplicateSemanticRequests -ne 0) {
+            throw 'P0-5d PASS fixture produced incorrect proof metrics.'
+          }
+
+          $failRows = @($passRows)
+          $failRows += (New-Row 6 $client $server '3' '1' '' '1' '' 'LD0' '' '')
+          $failRows += (New-Row 7 $server $client '3' '' '1' '' '' '' '' '')
+          $failFixture = '.\ArIED61850Tester\TestResults\p0-5d-duplicate.tsv'
+          $failJson = '.\ArIED61850Tester\TestResults\P0-5D-fixture-duplicate.json'
+          $failRows | Export-Csv -Delimiter "`t" -NoTypeInformation -Encoding utf8 $failFixture
+          & $verifier -DecodedRowsPath $failFixture -OutputJson $failJson -NoFailExit
+          $fail = Get-Content $failJson -Raw | ConvertFrom-Json
+          if ($fail.Verdict -ne 'FAIL' -or $fail.ArsasCapture.DuplicateGetNameListRequests -lt 1 -or -not $fail.ArsasCapture.SecondGetNameListSweepDetected) {
+            throw 'P0-5d duplicate fixture was not rejected by the semantic wire proof.'
+          }
+
       - name: Checkout immutable ARIEC61850 PR 134 engine
         shell: powershell
         run: |
@@ -165,9 +253,9 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: P0-5c ARSAS association-generation enrichment single-flight + P0-5b hierarchy GVA budget convergence",
-            "CI invariant: caller cancellation only releases its waiter; directory/GVA/model/projection/publish remain one owner flight per association generation",
-            "CI invariant: reconnect/dispose invalidates the generation; stale owners cannot publish authority into a replacement association",
+            "Mode: P0-5d physical wire proof over P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
+            "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
+            "Field invariant: one association capture, zero duplicate semantic confirmed requests, peak outstanding never above negotiated calling limit",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
@@ -178,6 +266,8 @@ jobs:
           path: |
             ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
             ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt
+            ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1
+            ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md
           if-no-files-found: error
           retention-days: 14
 
@@ -186,6 +276,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ARSAS-smart-discovery-pr134-test-evidence
-          path: ArIED61850Tester\TestResults\*.trx
+          path: |
+            ArIED61850Tester\TestResults\*.trx
+            ArIED61850Tester\TestResults\P0-5D-*.json
           if-no-files-found: warn
           retention-days: 14
