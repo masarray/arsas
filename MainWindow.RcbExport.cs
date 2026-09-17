@@ -539,7 +539,7 @@ public partial class MainWindow
             : (row.DataSetReference ?? string.Empty).Trim();
     }
 
-    private static LiveIedModelDataSet? FindExportDataSet(
+    private static LiveIedDataSetModel? FindExportDataSet(
         LiveIedModelDiscoveryDocument model,
         string? dataSetReference)
     {
