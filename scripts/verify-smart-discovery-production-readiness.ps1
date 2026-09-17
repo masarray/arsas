@@ -66,6 +66,56 @@ function Get-PromotionProps([string]$PropsFile) {
     }
 }
 
+function Get-SafeProperty($Object, [string]$Name) {
+    if ($null -eq $Object) { return $null }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Get-PhysicalAuthorityProvenanceErrors($Physical) {
+    $errors = [System.Collections.Generic.List[string]]::new()
+    $schema = Get-SafeProperty $Physical 'SchemaVersion'
+    $phase = [string](Get-SafeProperty $Physical 'Phase')
+    $status = [string](Get-SafeProperty $Physical 'Status')
+    if ($null -eq $schema -or [int]$schema -lt 1 -or $phase -ne 'P0-5f-authority' -or $status -ne 'physical-finalized') {
+        $errors.Add('P0-5f authority is not physical-finalized production evidence.')
+        return @($errors)
+    }
+
+    $arsasCommit = [string](Get-SafeProperty $Physical 'ArsasCommit')
+    $engineCommit = [string](Get-SafeProperty $Physical 'EngineCommit')
+    if ($arsasCommit -notmatch '^[0-9a-fA-F]{40}$') { $errors.Add('P0-5f authority ARSAS commit is invalid.') }
+    if ($engineCommit -notmatch '^[0-9a-fA-F]{40}$') { $errors.Add('P0-5f authority engine commit is invalid.') }
+
+    foreach ($name in @('GoldenLockSha256','RepeatTargetSha256','FinalizationSha256')) {
+        $value = [string](Get-SafeProperty $Physical $name)
+        if ($value -notmatch '^[0-9a-fA-F]{64}$') { $errors.Add("P0-5f authority $name is missing or invalid.") }
+    }
+
+    $countValue = Get-SafeProperty $Physical 'IndependentAssociations'
+    $count = if ($null -eq $countValue) { 0 } else { [int]$countValue }
+    if ($count -lt 3) { $errors.Add('P0-5f authority must contain at least three independent associations.') }
+
+    $sets = @(
+        @{ Label = 'association generations'; Values = @(Get-SafeProperty $Physical 'AssociationGenerations') },
+        @{ Label = 'run bundle hashes'; Values = @(Get-SafeProperty $Physical 'RunBundleSha256') },
+        @{ Label = 'capture hashes'; Values = @(Get-SafeProperty $Physical 'CaptureSha256') },
+        @{ Label = 'runtime evidence hashes'; Values = @(Get-SafeProperty $Physical 'RuntimeEvidenceSha256') })
+    foreach ($set in $sets) {
+        if ($set.Values.Count -ne $count) { $errors.Add("P0-5f authority $($set.Label) count differs from IndependentAssociations.") }
+        elseif (@($set.Values | Sort-Object -Unique).Count -ne $count) { $errors.Add("P0-5f authority contains reused $($set.Label).") }
+    }
+    foreach ($generation in @($sets[0].Values)) {
+        if ([long]$generation -le 0) { $errors.Add('P0-5f authority contains an invalid association generation.'); break }
+    }
+    foreach ($hash in @($sets[1].Values + $sets[2].Values + $sets[3].Values)) {
+        if ([string]$hash -notmatch '^[0-9a-fA-F]{64}$') { $errors.Add('P0-5f authority contains an invalid evidence SHA-256.'); break }
+    }
+    if ($null -eq (Get-SafeProperty $Physical 'Consensus')) { $errors.Add('P0-5f authority is missing consensus evidence.') }
+    return @($errors)
+}
+
 $targetFile = Resolve-File $TargetPath 'P0-5g promotion target'
 $engineLockFile = Resolve-File $EngineLockPath 'ARIEC61850 engine lock'
 $propsFile = Resolve-File $PromotionPropsPath 'P0-5g promotion props'
@@ -130,20 +180,19 @@ if ([string]::IsNullOrWhiteSpace($PhysicalAuthorityPath) -or -not (Test-Path -Li
 } else {
     $physicalAuthorityFile = Resolve-File $PhysicalAuthorityPath 'P0-5f physical authority'
     $physicalAuthority = Get-Content -LiteralPath $physicalAuthorityFile -Raw | ConvertFrom-Json
-    if ($physicalAuthority.Phase -ne 'P0-5f-authority' -or $physicalAuthority.Status -ne 'physical-finalized') {
-        $blockers.Add('P0-5f authority is not physical-finalized production evidence.')
-    }
-    if (([string]$physicalAuthority.EngineCommit).ToLowerInvariant() -ne $baseline) {
+    foreach ($error in @(Get-PhysicalAuthorityProvenanceErrors $physicalAuthority)) { $blockers.Add($error) }
+    $physicalEngine = [string](Get-SafeProperty $physicalAuthority 'EngineCommit')
+    if ($physicalEngine -and $physicalEngine.ToLowerInvariant() -ne $baseline) {
         $blockers.Add('P0-5f authority engine commit differs from the evidence baseline.')
     }
 
-    $authorityArsas = ([string]$physicalAuthority.ArsasCommit).ToLowerInvariant()
-    if ($authorityArsas -notmatch '^[0-9a-f]{40}$') {
+    $authorityArsas = [string](Get-SafeProperty $physicalAuthority 'ArsasCommit')
+    if ($authorityArsas -notmatch '^[0-9a-fA-F]{40}$') {
         $blockers.Add('P0-5f authority does not contain a valid ARSAS commit.')
-    } elseif (-not (Test-GitAncestor $arsasRepo $authorityArsas $arsasHead)) {
+    } elseif (-not (Test-GitAncestor $arsasRepo $authorityArsas.ToLowerInvariant() $arsasHead)) {
         $blockers.Add('Current ARSAS head is not a descendant of the physically validated ARSAS commit.')
     } else {
-        $allChanged = @(Get-GitChangedPaths $arsasRepo $authorityArsas $arsasHead @('.'))
+        $allChanged = @(Get-GitChangedPaths $arsasRepo $authorityArsas.ToLowerInvariant() $arsasHead @('.'))
         $allowed = @($target.AllowedPostPhysicalAuthorityPaths | ForEach-Object { ([string]$_).Replace('\\','/') })
         $notAllowed = @($allChanged | Where-Object { $allowed -notcontains $_ })
         if ($notAllowed.Count -gt 0) {
@@ -209,7 +258,7 @@ if ($status -eq 'READY_TO_PROMOTE' -and $productionSwitch) {
 }
 
 $result = [ordered]@{
-    SchemaVersion = 3
+    SchemaVersion = 4
     Phase = 'P0-5g'
     Verdict = $status
     ArsasHeadCommit = $arsasHead
