@@ -1,0 +1,199 @@
+name: Smart Discovery Repeat-Run Stability
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-repeat-run-stability:
+    name: Verify P0-5f repeat-run stability contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+
+      - name: Validate P0-5f sources
+        shell: powershell
+        run: |
+          $finalizer = '.\ArIED61850Tester\scripts\finalize-smart-discovery-repeat-run-stability.ps1'
+          $bundleWriter = '.\ArIED61850Tester\scripts\new-smart-discovery-repeat-run-bundle.ps1'
+          $target = '.\ArIED61850Tester\evidence\smart-discovery-repeat-run-target.json'
+          $runtime = '.\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryRepeatRunEvidence.cs'
+          $test = '.\ArIED61850Tester\tests\ARSAS.Tests\SmartDiscoveryRepeatRunStabilityRegressionTests.cs'
+          foreach ($required in @($finalizer, $bundleWriter, $target, $runtime, $test)) {
+            if (-not (Test-Path $required -PathType Leaf)) { throw "P0-5f source missing: $required" }
+          }
+          foreach ($script in @($finalizer, $bundleWriter)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) {
+              $messages = @($errors | ForEach-Object { $_.Message }) -join '; '
+              throw "PowerShell parse failure in $script: $messages"
+            }
+          }
+          $targetJson = Get-Content $target -Raw | ConvertFrom-Json
+          if ($targetJson.Phase -ne 'P0-5f' -or $targetJson.MinimumIndependentAssociations -lt 3) {
+            throw 'P0-5f target does not require at least three independent associations.'
+          }
+
+      - name: Execute P0-5f finalization fixtures
+        shell: powershell
+        run: |
+          $root = '.\ArIED61850Tester'
+          $results = Join-Path $root 'TestResults'
+          New-Item -ItemType Directory -Force $results | Out-Null
+          $finalizer = Join-Path $root 'scripts\finalize-smart-discovery-repeat-run-stability.ps1'
+          $repeatTarget = Join-Path $root 'evidence\smart-discovery-repeat-run-target.json'
+          $semanticTarget = Join-Path $root 'evidence\smart-discovery-golden-target.json'
+          $arsasCommit = (git -C $root rev-parse HEAD).Trim().ToLowerInvariant()
+          $engineCommit = '4467124775d8d9d76f3db194f9fbfd97144767a8'
+
+          $manifest = Join-Path $results 'SMART-CAPTURE-BUILD.txt'
+          @(
+            'ARSAS smart discovery field-capture build',
+            "ARSAS commit: $arsasCommit",
+            "ARIEC61850 commit: $engineCommit",
+            'Engine PR: 134'
+          ) | Set-Content $manifest -Encoding utf8
+          $manifestHash = (Get-FileHash $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
+          $semanticHash = (Get-FileHash $semanticTarget -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          $lockPath = Join-Path $results 'P0-5E-fixture.lock.json'
+          $lock = [ordered]@{
+            SchemaVersion = 2
+            Phase = 'P0-5e'
+            Status = 'locked'
+            DeviceIdentity = 'AA1E1F06R4'
+            GoldenSource = [ordered]@{
+              ArsasCommit = $arsasCommit
+              EngineCommit = $engineCommit
+              BuildManifestSha256 = $manifestHash
+              SemanticTargetSha256 = $semanticHash
+              RawCaptureReverified = $false
+            }
+            HardRequestBudget = [ordered]@{
+              MaxConfirmedRequests = 4
+              MaxPeakOutstandingRequests = 4
+            }
+          }
+          $lock | ConvertTo-Json -Depth 12 | Set-Content $lockPath -Encoding utf8
+          $goldenHash = (Get-FileHash $lockPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          function New-Bundle([int]$index, [long]$generation, [int]$requests = 4, [string]$kpi = 'kpi-a', [string]$directory = 'dir-a', [string]$projection = 'proj-a') {
+            $captureHash = ('{0:x64}' -f (1000 + $index))
+            $proofHash = ('{0:x64}' -f (2000 + $index))
+            $runtimeHash = ('{0:x64}' -f (3000 + $index))
+            [ordered]@{
+              SchemaVersion = 1
+              Phase = 'P0-5f-run-bundle'
+              Verdict = 'PASS'
+              DeviceIdentity = 'AA1E1F06R4'
+              ArsasCommit = $arsasCommit
+              EngineCommit = $engineCommit
+              GoldenLockSha256 = $goldenHash
+              BuildManifestSha256 = $manifestHash
+              SemanticTargetSha256 = $semanticHash
+              FixtureEvidence = $true
+              Provenance = [ordered]@{
+                CaptureSha256 = $captureHash
+                ProofSha256 = $proofHash
+                RuntimeEvidenceSha256 = $runtimeHash
+              }
+              Wire = [ordered]@{
+                ConfirmedRequests = $requests
+                ServiceCounts = [ordered]@{ GetNameList = 2; GetVariableAccessAttributes = 2 }
+                PeakOutstandingRequests = 3
+                DuplicateSemanticRequests = 0
+                DuplicateGetNameListRequests = 0
+                DuplicateGvaRequests = 0
+                SecondGetNameListSweepDetected = $false
+              }
+              Runtime = [ordered]@{
+                AssociationGeneration = $generation
+                DirectoryModelSignature = $directory
+                ProjectionSignature = $projection
+                SmartDiscoveryKpi = [ordered]@{
+                  TotalRequests = $requests
+                  DuplicateRequests = 0
+                  WireAccountingComplete = $true
+                  DeterministicSignature = $kpi
+                }
+                TypeProbeBudget = [ordered]@{
+                  DirectoryPoints = 4925
+                  SuppliedLogicalNodeCandidates = 119
+                  SuppressedNonLiveLogicalNodeCandidates = 0
+                  LogicalNodeRequests = 119
+                  PointsCoveredByLogicalNode = 4925
+                  DataObjectRequests = 0
+                  PointsCoveredByDataObject = 0
+                  ExactLeafRequests = 0
+                  SuppressedExactRepeatRequests = 0
+                  PointsCoveredByExactLeaf = 0
+                  RemainingUnresolvedPoints = 0
+                  TotalPlannedRequests = 119
+                }
+                Model = [ordered]@{
+                  LogicalDevices = 32
+                  LogicalNodes = 119
+                  SemanticPoints = 4925
+                  ProjectedSignals = 4925
+                  DataSets = 2
+                  ReportControls = 34
+                  BufferedReportControls = 2
+                  UnbufferedReportControls = 32
+                }
+              }
+            }
+          }
+
+          $bundlePaths = @()
+          foreach ($i in 1..3) {
+            $path = Join-Path $results "P0-5F-run-$i.json"
+            (New-Bundle $i (100 + $i)) | ConvertTo-Json -Depth 18 | Set-Content $path -Encoding utf8
+            $bundlePaths += $path
+          }
+
+          $passPath = Join-Path $results 'P0-5F-finalization-pass.json'
+          & $finalizer -GoldenLockPath $lockPath -RepeatTargetPath $repeatTarget -RunBundlePaths $bundlePaths -OutputPath $passPath -AllowFixtureEvidence
+          $pass = Get-Content $passPath -Raw | ConvertFrom-Json
+          if ($pass.Verdict -ne 'PASS' -or $pass.SchemaVersion -ne 2 -or $pass.ObservedRunBundles -ne 3) {
+            throw 'P0-5f stable three-run fixture did not PASS.'
+          }
+          if (@($pass.Consensus.AssociationGenerations | Sort-Object -Unique).Count -ne 3) {
+            throw 'P0-5f PASS did not preserve three unique association generations.'
+          }
+
+          $reused = New-Bundle 3 102
+          $reusedPath = Join-Path $results 'P0-5F-run-reused-generation.json'
+          $reused | ConvertTo-Json -Depth 18 | Set-Content $reusedPath -Encoding utf8
+          $reuseFailPath = Join-Path $results 'P0-5F-finalization-reused-generation-fail.json'
+          & $finalizer -GoldenLockPath $lockPath -RepeatTargetPath $repeatTarget -RunBundlePaths @($bundlePaths[0], $bundlePaths[1], $reusedPath) -OutputPath $reuseFailPath -AllowFixtureEvidence -NoFailExit
+          $reuseFail = Get-Content $reuseFailPath -Raw | ConvertFrom-Json
+          if ($reuseFail.Verdict -ne 'FAIL' -or -not (@($reuseFail.AcceptanceFailures) -match 'reuses an association generation')) {
+            throw 'P0-5f failed to reject reused association generation.'
+          }
+
+          $drift = New-Bundle 4 104 5 'kpi-b' 'dir-b' 'proj-b'
+          $driftPath = Join-Path $results 'P0-5F-run-drift.json'
+          $drift | ConvertTo-Json -Depth 18 | Set-Content $driftPath -Encoding utf8
+          $driftFailPath = Join-Path $results 'P0-5F-finalization-drift-fail.json'
+          & $finalizer -GoldenLockPath $lockPath -RepeatTargetPath $repeatTarget -RunBundlePaths @($bundlePaths[0], $bundlePaths[1], $driftPath) -OutputPath $driftFailPath -AllowFixtureEvidence -NoFailExit
+          $driftFail = Get-Content $driftFailPath -Raw | ConvertFrom-Json
+          if ($driftFail.Verdict -ne 'FAIL' -or
+              -not (@($driftFail.AcceptanceFailures) -match 'Confirmed-request drift') -or
+              -not (@($driftFail.AcceptanceFailures) -match 'deterministic-signature drift')) {
+            throw 'P0-5f failed to reject repeat-run request/signature drift.'
+          }
+
+      - name: Upload P0-5f regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-p0-5f-repeat-run-fixtures
+          path: ArIED61850Tester\TestResults\P0-5F-*.json
+          if-no-files-found: warn
+          retention-days: 14
