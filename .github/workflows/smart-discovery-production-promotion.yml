@@ -13,7 +13,7 @@ jobs:
         shell: powershell
         run: |
           $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
-          git clone --quiet --depth 0 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+          git clone --quiet --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
           $arsasHead = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
           "ARSAS_HEAD=$arsasHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "P0-5g ARSAS head: $arsasHead"
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout ARIEC61850 PR 134 head
         shell: powershell
         run: |
-          git clone --quiet --depth 0 --branch perf/smart-ied-discovery https://github.com/masarray/ARIEC61850.git ARIEC61850
+          git clone --quiet --branch perf/smart-ied-discovery https://github.com/masarray/ARIEC61850.git ARIEC61850
           $engineHead = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
           "ENGINE_HEAD=$engineHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "P0-5g engine PR head: $engineHead"
