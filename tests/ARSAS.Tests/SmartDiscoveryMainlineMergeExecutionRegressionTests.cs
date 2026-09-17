@@ -43,6 +43,20 @@ public sealed class SmartDiscoveryMainlineMergeExecutionRegressionTests
     }
 
     [Fact]
+    public void P05h_LivePreflightRejectsHeadBaseAndPostAuthorizationDrift()
+    {
+        var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-live-merge-preflight.ps1"));
+
+        Assert.Contains("ARSAS base SHA changed after merge authorization", source, StringComparison.Ordinal);
+        Assert.Contains("Engine base SHA changed after merge authorization", source, StringComparison.Ordinal);
+        Assert.Contains("Engine PR head changed after merge authorization", source, StringComparison.Ordinal);
+        Assert.Contains("Live ARSAS PR head is not a descendant", source, StringComparison.Ordinal);
+        Assert.Contains("outside merge-manifest allowlist", source, StringComparison.Ordinal);
+        Assert.Contains("P0-5h-live-preflight", source, StringComparison.Ordinal);
+        Assert.Contains("git -C $RepositoryPath diff --name-only", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void P05h_PostMergeVerifierRequiresValidatedHeadsOnMainAndAuthorityBinding()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-post-merge-production.ps1"));
