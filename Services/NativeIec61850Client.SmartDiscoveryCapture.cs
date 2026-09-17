@@ -97,7 +97,7 @@ public sealed partial class NativeIec61850Client
                 var cachedRawVariables = cachedSnapshot.DomainVariables.Values.Sum(values => values.Count);
 
                 LastDiscoverySummary =
-                    $"SMART-CAPTURE PR134 R3; association authority=reused; engine single-flight=reused; wire discovery=skipped; " +
+                    $"SMART-CAPTURE PR134 R4; association authority=reused; engine single-flight=reused; control inventory=authoritative; wire discovery=skipped; " +
                     $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
@@ -215,7 +215,7 @@ public sealed partial class NativeIec61850Client
 
             totalWatch.Stop();
             LastDiscoverySummary =
-                $"SMART-CAPTURE PR134 R3; association authority=new; engine single-flight=new; app MMS gate=exclusive; " +
+                $"SMART-CAPTURE PR134 R4; association authority=new; engine single-flight=new; app MMS gate=exclusive; control inventory=authoritative; " +
                 $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); " +
                 $"{discovery.Summary} {_liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
                 $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +
