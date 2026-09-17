@@ -90,8 +90,16 @@ jobs:
           }
           $proof | ConvertTo-Json -Depth 12 | Set-Content $proofPath -Encoding utf8
 
-          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
+          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
           $engineCommit = '4467124775d8d9d76f3db194f9fbfd97144767a8'
+          $manifest = Join-Path $results 'SMART-CAPTURE-BUILD.txt'
+          @(
+            'ARSAS smart discovery field-capture build',
+            "ARSAS commit: $arsasCommit",
+            "ARIEC61850 commit: $engineCommit",
+            'Engine PR: 134'
+          ) | Set-Content $manifest -Encoding utf8
+
           $lockPath = Join-Path $results 'P0-5E-fixture-golden.lock.json'
           & $writer `
             -ProofJson $proofPath `
@@ -100,15 +108,20 @@ jobs:
             -ArsasCommit $arsasCommit `
             -EngineCommit $engineCommit `
             -TargetPath $target `
-            -OutputPath $lockPath
+            -BuildManifestPath $manifest `
+            -OutputPath $lockPath `
+            -AllowFixtureEvidence
 
           $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
           if ($lock.Status -ne 'locked' -or
+              $lock.SchemaVersion -ne 2 -or
               $lock.HardRequestBudget.MaxConfirmedRequests -ne 4 -or
               $lock.HardRequestBudget.MaxServiceRequests.GetNameList -ne 2 -or
               $lock.HardRequestBudget.MaxServiceRequests.GetVariableAccessAttributes -ne 2 -or
               $lock.GoldenSource.CaptureSha256 -notmatch '^[0-9a-f]{64}$' -or
-              $lock.GoldenSource.ProofSha256 -notmatch '^[0-9a-f]{64}$') {
+              $lock.GoldenSource.ProofSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.BuildManifestSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.SemanticTargetSha256 -notmatch '^[0-9a-f]{64}$') {
             throw 'P0-5e lock writer did not derive the expected fixture budget/provenance.'
           }
 
@@ -117,7 +130,9 @@ jobs:
             -LockPath $lockPath `
             -ProofJson $proofPath `
             -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
             -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
             -OutputJson $acceptPath
           $accept = Get-Content $acceptPath -Raw | ConvertFrom-Json
           if ($accept.Verdict -ne 'PASS') { throw 'P0-5e golden fixture should pass its own lock.' }
@@ -132,7 +147,9 @@ jobs:
             -LockPath $lockPath `
             -ProofJson $growthProofPath `
             -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
             -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
             -OutputJson $growthAcceptPath `
             -NoFailExit
           $growthAcceptance = Get-Content $growthAcceptPath -Raw | ConvertFrom-Json
@@ -150,7 +167,9 @@ jobs:
             -LockPath $lockPath `
             -ProofJson $serviceProofPath `
             -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
             -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
             -OutputJson $serviceAcceptPath `
             -NoFailExit
           $serviceAcceptance = Get-Content $serviceAcceptPath -Raw | ConvertFrom-Json
