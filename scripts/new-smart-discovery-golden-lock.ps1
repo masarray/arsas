@@ -53,7 +53,7 @@ function Assert-EquivalentWireProof($Expected, $Observed) {
         'UnansweredRequestsAtCaptureEnd')) {
         $a = Get-IntProperty $Expected $name
         $b = Get-IntProperty $Observed $name
-        if ($a -ne $b) { throw "Proof/capture mismatch for $name: supplied=$a reverified=$b." }
+        if ($a -ne $b) { throw "Proof/capture mismatch for ${name}: supplied=$a reverified=$b." }
     }
 
     if ([bool]$Expected.SecondGetNameListSweepDetected -ne [bool]$Observed.SecondGetNameListSweepDetected) {
