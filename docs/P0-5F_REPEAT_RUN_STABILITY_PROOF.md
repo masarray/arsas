@@ -87,8 +87,25 @@ Every run must also preserve:
 
 The finalization output records the consensus request/service budget, all deterministic signatures, association generations, peak-outstanding range, bundle hashes, capture hashes, runtime-evidence hashes, golden-lock hash, and repeat-target hash.
 
+## Promote reviewed physical finalization into authority
+
+After the finalization JSON is reviewed and reports `Verdict=PASS`, create the immutable physical authority file:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\new-smart-discovery-repeat-run-authority.ps1 `
+  -GoldenLockPath .\smart-discovery-golden-budget.lock.json `
+  -RepeatTargetPath .\smart-discovery-repeat-run-target.json `
+  -FinalizationJson .\P0-5F-physical-finalization.json `
+  -RunBundlePaths .\P0-5F-run-01-bundle.json,.\P0-5F-run-02-bundle.json,.\P0-5F-run-03-bundle.json `
+  -OutputPath .\P0-5F-physical-authority.lock.json
+```
+
+The authority gate has no fixture override. It requires a P0-5e golden lock with `RawCaptureReverified=true`, a schema-v2 P0-5f PASS, and the exact run-bundle hashes referenced by the reviewed finalization. Every supplied run bundle must have `FixtureEvidence=false`; capture hashes, runtime-evidence hashes, and association generations must all be unique.
+
+The resulting authority file records the exact ARSAS/engine commits, golden-lock hash, repeat-target hash, finalization hash, consensus signatures/budgets, run-bundle hashes, raw-capture hashes, runtime-evidence hashes, and association generations.
+
 ## Evidence authority
 
-`-AllowFixtureEvidence` exists only for CI regression fixtures. Never use it for physical acceptance.
+`-AllowFixtureEvidence` exists only for CI regression fixtures in bundle/finalization testing. Never use it for physical acceptance. The final authority writer intentionally exposes no fixture bypass.
 
-P0-5f is physically complete only when the production finalization JSON reports `Verdict=PASS` from at least three fresh physical associations. Until then, `smart-discovery-repeat-run-target.json` remains in `awaiting-physical-golden-lock-and-three-independent-runs` state and `FinalizationAuthority` remains null.
+P0-5f is physically complete only when both the production finalization JSON reports `Verdict=PASS` from at least three fresh physical associations and `P0-5F-physical-authority.lock.json` is generated successfully. Until then, `smart-discovery-repeat-run-target.json` remains in `awaiting-physical-golden-lock-and-three-independent-runs` state and `FinalizationAuthority` remains null.
