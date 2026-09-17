@@ -26,7 +26,8 @@
     "evidence/smart-discovery-repeat-run.authority.json",
     "evidence/smart-discovery-production-promotion-authority.json",
     "evidence/SmartDiscoveryPromotion.props",
-    "evidence/smart-discovery-production-promotion-target.json"
+    "evidence/smart-discovery-production-promotion-target.json",
+    "evidence/smart-discovery-mainline-merge-manifest.json"
   ],
   "ProductionPromotionContract": {
     "RequireP05fPhysicalAuthority": true,
