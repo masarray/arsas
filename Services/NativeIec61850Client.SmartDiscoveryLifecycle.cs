@@ -39,47 +39,35 @@ public sealed partial class NativeIec61850Client
         }
     }
 
-    private long GetSmartDiscoveryAssociationGeneration()
-    {
-        lock (_smartDiscoveryFlightSync)
-            return _smartDiscoveryAssociationGeneration;
-    }
-
     private bool IsCurrentSmartDiscoveryAssociationGeneration(long generation)
     {
         lock (_smartDiscoveryFlightSync)
             return generation == _smartDiscoveryAssociationGeneration;
     }
 
-    private bool TryGetSmartDiscoveryFlight(
-        long generation,
-        out Task<IReadOnlyList<SignalDefinition>> flight)
+    private Task<IReadOnlyList<SignalDefinition>> GetOrCreateSmartDiscoveryAssociationFlight(
+        Func<long, Task<IReadOnlyList<SignalDefinition>>> ownerFactory)
     {
+        ArgumentNullException.ThrowIfNull(ownerFactory);
+
         lock (_smartDiscoveryFlightSync)
         {
+            var generation = _smartDiscoveryAssociationGeneration;
             if (_smartDiscoveryAssociationFlight is not null &&
                 _smartDiscoveryFlightGeneration == generation)
             {
-                flight = _smartDiscoveryAssociationFlight;
-                return true;
+                return _smartDiscoveryAssociationFlight;
             }
-        }
 
-        flight = null!;
-        return false;
-    }
-
-    private void PublishSmartDiscoveryFlight(
-        long generation,
-        Task<IReadOnlyList<SignalDefinition>> flight)
-    {
-        lock (_smartDiscoveryFlightSync)
-        {
-            if (generation != _smartDiscoveryAssociationGeneration)
-                return;
-
+            var flight = ownerFactory(generation);
             _smartDiscoveryAssociationFlight = flight;
             _smartDiscoveryFlightGeneration = generation;
+            _ = flight.ContinueWith(
+                completed => ClearSmartDiscoveryFlight(generation, completed),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return flight;
         }
     }
 
@@ -87,8 +75,7 @@ public sealed partial class NativeIec61850Client
         long generation,
         Task<IReadOnlyList<SignalDefinition>> flight)
     {
-        // Read the exception here as well so a detached owner whose only waiter was
-        // cancelled cannot leave an unobserved fault behind.
+        // Observe a detached owner's fault if every waiter cancelled independently.
         _ = flight.Exception;
 
         lock (_smartDiscoveryFlightSync)
