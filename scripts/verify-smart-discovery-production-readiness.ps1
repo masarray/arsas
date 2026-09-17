@@ -79,6 +79,8 @@ $engineHead = $EngineHeadCommit.ToLowerInvariant()
 $target = Get-Content -LiteralPath $targetFile -Raw | ConvertFrom-Json
 $engineLock = Get-Content -LiteralPath $engineLockFile -Raw | ConvertFrom-Json
 $promotionProps = Get-PromotionProps $propsFile
+$targetHash = (Get-FileHash -LiteralPath $targetFile -Algorithm SHA256).Hash.ToLowerInvariant()
+$engineLockHash = (Get-FileHash -LiteralPath $engineLockFile -Algorithm SHA256).Hash.ToLowerInvariant()
 $blockers = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
 
@@ -158,6 +160,15 @@ if (-not [string]::IsNullOrWhiteSpace($PromotionAuthorityPath) -and (Test-Path -
     if ($promotionAuthority.Phase -ne 'P0-5g-authority' -or $promotionAuthority.Status -ne 'production-promoted') {
         $blockers.Add('P0-5g promotion authority is not production-promoted.')
     }
+    if (([string]$promotionAuthority.EvidenceEngineBaselineCommit).ToLowerInvariant() -ne $baseline) {
+        $blockers.Add('P0-5g promotion authority evidence baseline differs from the current target.')
+    }
+    if (([string]$promotionAuthority.PromotionTargetSha256).ToLowerInvariant() -ne $targetHash) {
+        $blockers.Add('P0-5g promotion authority is bound to a different promotion target.')
+    }
+    if (([string]$promotionAuthority.EngineLockSha256).ToLowerInvariant() -ne $engineLockHash) {
+        $blockers.Add('P0-5g promotion authority is bound to a different engine lock.')
+    }
     if ($null -eq $physicalAuthorityFile) {
         $blockers.Add('P0-5g promotion authority exists without P0-5f physical authority.')
     } else {
@@ -198,7 +209,7 @@ if ($status -eq 'READY_TO_PROMOTE' -and $productionSwitch) {
 }
 
 $result = [ordered]@{
-    SchemaVersion = 2
+    SchemaVersion = 3
     Phase = 'P0-5g'
     Verdict = $status
     ArsasHeadCommit = $arsasHead
@@ -207,6 +218,8 @@ $result = [ordered]@{
     EngineHeadCiConclusion = $EngineHeadCiConclusion
     EngineHeadIsEvidenceCompatibleDescendant = $engineIsDescendant -and $criticalChanges.Count -eq 0
     DiscoveryCriticalChanges = @($criticalChanges)
+    PromotionTargetSha256 = $targetHash
+    EngineLockSha256 = $engineLockHash
     ProductionSwitchEnabled = $productionSwitch
     PromotionAuthoritySha256 = $promotionProps.AuthoritySha256
     PromotionValidatedEngineHead = $promotionProps.ValidatedEngineHead
