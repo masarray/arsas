@@ -11,8 +11,9 @@
     "DataSets": 2,
     "OrderedFcdaMembers": 58,
     "LogicalReportControls": 32,
-    "BufferedRuntimeRcbInstances": 2,
-    "UnbufferedRuntimeRcbInstances": 2,
+    "RuntimeReportControlInstances": 34,
+    "IndexedBufferedFamilyMax": 2,
+    "IndexedUnbufferedFamilyMax": 2,
     "SyntheticReportControlInstancesAllowed": 0
   },
   "BudgetAuthority": {
