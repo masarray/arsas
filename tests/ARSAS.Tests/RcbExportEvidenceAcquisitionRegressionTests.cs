@@ -70,6 +70,50 @@ public sealed class RcbExportEvidenceAcquisitionRegressionTests
             "The effective DataSet reference must be resolved from the merged live model, not stale UI evidence.");
     }
 
+    [Fact]
+    public void LiveExport_DoesNotResurrectStaleRowBinding_WhenLiveDatSetIsEmpty()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.RcbExport.cs"));
+
+        Assert.Contains(
+            "return selectedReportControl is not null",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "? (selectedReportControl.DataSetReference ?? string.Empty).Trim()",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "return !string.IsNullOrWhiteSpace(selectedReportControl?.DataSetReference)",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveExport_RefreshesResolvedDataSet_AfterFinalAuthoritativeRcbMerge()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.RcbExport.cs"));
+        const string finalMergeComment = "If the probe proved a dynamic RCB is currently unbound";
+
+        var finalMergeIndex = source.IndexOf(finalMergeComment, StringComparison.Ordinal);
+        var resolveIndex = source.IndexOf(
+            "effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);",
+            finalMergeIndex,
+            StringComparison.Ordinal);
+        var findIndex = source.IndexOf(
+            "selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);",
+            resolveIndex,
+            StringComparison.Ordinal);
+        var serializationIndex = source.IndexOf(
+            "AuthoritativeLiveIedSclExporter.WriteFiles",
+            StringComparison.Ordinal);
+
+        Assert.True(finalMergeIndex >= 0, "Final authoritative RCB merge guard must remain present.");
+        Assert.True(resolveIndex > finalMergeIndex, "DataSet reference must be recalculated after the final live merge.");
+        Assert.True(findIndex > resolveIndex, "DataSet membership must be recalculated from the final reference.");
+        Assert.True(serializationIndex > findIndex, "Final binding refresh must happen before serialization.");
+    }
+
     private static string FindRepoFile(string relativePath)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
