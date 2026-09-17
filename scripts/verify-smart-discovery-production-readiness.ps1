@@ -112,7 +112,7 @@ if (-not $engineIsDescendant) {
 $criticalPaths = @($target.DiscoveryCriticalEnginePaths | ForEach-Object { [string]$_ })
 $criticalChanges = @()
 if ($engineIsDescendant) {
-    $criticalChanges = Get-GitChangedPaths $engineRepo $baseline $engineHead $criticalPaths
+    $criticalChanges = @(Get-GitChangedPaths $engineRepo $baseline $engineHead $criticalPaths)
     if ($criticalChanges.Count -gt 0) {
         $blockers.Add("Engine head changed discovery-critical evidence paths after the physical baseline: $($criticalChanges -join ', ').")
     }
@@ -143,7 +143,7 @@ if ([string]::IsNullOrWhiteSpace($PhysicalAuthorityPath) -or -not (Test-Path -Li
     } elseif (-not (Test-GitAncestor $arsasRepo $authorityArsas $arsasHead)) {
         $blockers.Add('Current ARSAS head is not a descendant of the physically validated ARSAS commit.')
     } else {
-        $allChanged = Get-GitChangedPaths $arsasRepo $authorityArsas $arsasHead @('.')
+        $allChanged = @(Get-GitChangedPaths $arsasRepo $authorityArsas $arsasHead @('.'))
         $allowed = @($target.AllowedPostPhysicalAuthorityPaths | ForEach-Object { ([string]$_).Replace('\\','/') })
         $notAllowed = @($allChanged | Where-Object { $allowed -notcontains $_ })
         if ($notAllowed.Count -gt 0) {
