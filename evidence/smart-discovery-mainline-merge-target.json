@@ -13,7 +13,8 @@
   ],
   "PostMergeVerification": {
     "RequireEngineHeadAncestorOfEngineMain": true,
-    "RequireArsasHeadAncestorOfArsasMain": true,
+    "RequireArsasValidatedHeadAncestorOfArsasMain": true,
+    "RequireTrackedMergeManifestOnArsasMain": true,
     "RequireProductionPromotionAuthority": true,
     "RequireProductionSwitchEnabled": true,
     "RequireExactPromotionAuthorityHashBinding": true,
@@ -29,6 +30,7 @@
     "RequireBaseShaUnchangedFromMergeManifest": true,
     "RequireEngineMergeBeforeArsasMerge": true,
     "RequireMergeCommitMethod": true,
+    "RequireOnlyMergeManifestChangeAfterValidatedArsasHead": true,
     "RequireNoUnresolvedReviewThreads": true,
     "RequireBothPullRequestsMergeable": true,
     "ForbidAutoMergeBeforeAllPreconditions": true,
