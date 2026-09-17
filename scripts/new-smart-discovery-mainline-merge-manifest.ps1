@@ -72,6 +72,9 @@ if ($physical.Phase -ne 'P0-5f-authority' -or $physical.Status -ne 'physical-fin
 if ($target.Phase -ne 'P0-5h' -or [int]$target.ArsasPullRequest -ne 324 -or [int]$target.EnginePullRequest -ne 134) {
     throw 'P0-5h target repository/PR authority is invalid.'
 }
+if ([string]$target.MergeMethod -ne 'merge' -or @($target.MergeOrder) -join ',' -ne 'engine,arsas') {
+    throw 'P0-5h target must require merge-commit method and engine-first order.'
+}
 if (([string]$readiness.ArsasHeadCommit).ToLowerInvariant() -ne $arsasHead -or
     ([string]$promotion.ArsasValidatedHeadCommit).ToLowerInvariant() -ne $arsasHead) {
     throw 'P0-5h ARSAS head differs from the P0-5g validated head.'
@@ -107,6 +110,7 @@ $manifest = [ordered]@{
     SchemaVersion = 1
     Phase = 'P0-5h-merge-manifest'
     Status = 'authorized-for-ordered-merge'
+    MergeMethod = 'merge'
     MergeOrder = @('engine','arsas')
     Arsas = [ordered]@{
         Repository = 'masarray/arsas'
@@ -132,6 +136,7 @@ $manifest = [ordered]@{
         'no-unresolved-review-threads',
         'base-sha-unchanged',
         'expected-head-sha-match',
+        'merge-method=merge',
         'engine-merge-first',
         'engine-merge-success-before-arsas-merge',
         'post-merge-production-verification'
@@ -143,6 +148,7 @@ if ($outputDirectory) { New-Item -ItemType Directory -Force $outputDirectory | O
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $OutputPath -Encoding utf8
 $manifestHash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host 'P0-5h merge execution manifest: AUTHORIZED'
+Write-Host "  merge method: merge"
 Write-Host "  engine expected head: $engineHead"
 Write-Host "  ARSAS expected head: $arsasHead"
 Write-Host "  manifest SHA256: $manifestHash"
