@@ -1,0 +1,37 @@
+{
+  "SchemaVersion": 1,
+  "Phase": "P0-5h",
+  "Status": "blocked-until-p0-5g-ready-for-review",
+  "ArsasRepository": "masarray/arsas",
+  "ArsasPullRequest": 324,
+  "EngineRepository": "masarray/ARIEC61850",
+  "EnginePullRequest": 134,
+  "MergeOrder": [
+    "engine",
+    "arsas"
+  ],
+  "PostMergeVerification": {
+    "RequireEngineHeadAncestorOfEngineMain": true,
+    "RequireArsasHeadAncestorOfArsasMain": true,
+    "RequireProductionPromotionAuthority": true,
+    "RequireProductionSwitchEnabled": true,
+    "RequireExactPromotionAuthorityHashBinding": true,
+    "RequireExactValidatedEngineHeadBinding": true,
+    "RequireEngineSourceHygiene": true,
+    "RequireEngineBuildAndTests": true,
+    "RequireArsasBuildAndTests": true,
+    "RequirePostMergeAttestationArtifact": true
+  },
+  "ExecutionContract": {
+    "RequireP05gReadyForReview": true,
+    "RequireExactExpectedHeadShaOnMerge": true,
+    "RequireBaseShaUnchangedFromMergeManifest": true,
+    "RequireEngineMergeBeforeArsasMerge": true,
+    "RequireNoUnresolvedReviewThreads": true,
+    "RequireBothPullRequestsMergeable": true,
+    "ForbidAutoMergeBeforeAllPreconditions": true,
+    "ForbidFixtureOrForceBypass": true
+  },
+  "MergeManifest": null,
+  "PostMergeAuthority": null
+}
