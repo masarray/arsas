@@ -22,7 +22,7 @@ jobs:
           if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw 'Invalid ARIEC61850 field-capture pin.'
           }
-          if ($lock.commit -ne '57c8311c0dcf9e51da4d7dc31c757fc3f0912586') {
+          if ($lock.commit -ne '4467124775d8d9d76f3db194f9fbfd97144767a8') {
             throw "Unexpected engine commit: $($lock.commit)"
           }
           $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
@@ -36,7 +36,7 @@ jobs:
           "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "ARSAS field source: $arsasCommit"
 
-      - name: Verify smart capture sources
+      - name: Verify P0-5c smart capture sources
         shell: powershell
         run: |
           $helper = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
@@ -47,26 +47,30 @@ jobs:
           if ($helper -notmatch 'DiscoverSmartSingleFlightAsync' -or
               $helper -notmatch 'LiveIedVariableTypeProbeExecutor' -or
               $helper -notmatch 'variableTypeAttributes' -or
-              $helper -notmatch 'SMART-CAPTURE PR134 R4' -or
+              $helper -notmatch 'SMART-CAPTURE PR134 P0-5c' -or
               $helper -notmatch 'control inventory=authoritative' -or
-              $helper -notmatch '_mmsIoGate.WaitAsync' -or
+              $helper -notmatch 'GetOrCreateSmartDiscoveryAssociationFlight' -or
+              $helper -notmatch 'flight\.WaitAsync\(cancellationToken\)' -or
+              $helper -notmatch '_mmsIoGate\.WaitAsync\(CancellationToken\.None\)' -or
+              $helper -notmatch 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, CancellationToken\.None\)' -or
               $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
               $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
               $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or
               $optimization -notmatch 'IsSmartDiscoveryAuthorityBoundToCurrentAssociation' -or
-              $lifecycle -notmatch 'ResetSmartDiscoveryAuthority' -or
-              $lifecycle -notmatch '_smartDiscoveryAuthorityHost' -or
-              $lifecycle -notmatch '_smartDiscoveryAuthorityPort' -or
-              $helper -notmatch '_smartDiscoveryCaptureGate' -or
-              $patcher -notmatch 'DiscoverSignalsSmartForCaptureAsync' -or
-              $patcher -notmatch 'ResetSmartDiscoveryAuthority' -or
+              $lifecycle -notmatch '_smartDiscoveryAssociationGeneration' -or
+              $lifecycle -notmatch '_smartDiscoveryAssociationFlight' -or
+              $lifecycle -notmatch 'TryPublishSmartDiscoveryAuthority' -or
+              $lifecycle -notmatch 'generation != _smartDiscoveryAssociationGeneration' -or
+              $patcher -notmatch '__P0_5C_CONNECT_RESET__' -or
+              $patcher -notmatch '__P0_5C_DISPOSE_RESET__' -or
               $patcher -notmatch '_lastDiscovery\.Snapshot\.DomainVariables' -or
               $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
-            throw 'Smart discovery R4 capture routing, explicit Control inventory reuse, single-flight, optimization authority, or association lifecycle invalidation is incomplete.'
+            throw 'P0-5c association-scoped enrichment single-flight, authority publication, or lifecycle invalidation is incomplete.'
           }
-          if ($helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
+          if ($helper -match 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, cancellationToken\)' -or
+              $helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
               $helper -match 'FinalizeDiscoveredSignals') {
-            throw 'Smart discovery R4 critical path regressed to reflection fallback or second full finalization.'
+            throw 'P0-5c critical path regressed to caller-cancellable GVA, reflection fallback, or second full finalization.'
           }
 
       - name: Checkout immutable ARIEC61850 PR 134 engine
@@ -79,6 +83,7 @@ jobs:
           if ($actual -ne $env:ARIEC61850_COMMIT) { throw "Engine SHA mismatch: $actual" }
           $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
           $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
+          $smartTypes = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartVariableAccessAttributes.cs -Raw
           $controlTransport = Get-Content .\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlTransport.cs -Raw
           $controlService = Get-Content .\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlService.cs -Raw
           $controlTest = Get-Content .\ARIEC61850\tests\AR.Iec61850.Tests\Control\AuthoritativeControlInventoryTests.cs -Raw
@@ -88,13 +93,17 @@ jobs:
               $singleFlight -notmatch 'GetAuthoritativeDomainVariableNamesAsync' -or
               $singleFlight -notmatch 'WaitAsync\(cancellationToken\)' -or
               $singleFlight -notmatch 'incompleteChains=0' -or
+              $smartTypes -notmatch 'LastSmartTypeProbeBudget' -or
+              $smartTypes -notmatch 'SuppressedNonLiveLogicalNodeCandidates' -or
+              $smartTypes -notmatch 'SuppressedExactRepeatRequests' -or
+              $smartTypes -notmatch 'BuildUnprobedExactFallbacks' -or
               $controlTransport -notmatch 'GetAuthoritativeDomainVariableNamesAsync' -or
               $controlTransport -match '=> _session\.DiscoverDomainVariableNamesAsync\(cancellationToken\)' -or
               $controlService -notmatch 'authoritativeDomainVariables' -or
               $controlService -notmatch 'domainInventory=authoritative-reuse' -or
               $controlTest -notmatch 'DoesNotBrowseDomainVariablesAgain' -or
               $hierarchy -notmatch 'ProbeSmartAsync') {
-            throw 'Pinned engine does not expose the required R4 smart discovery/control inventory invariants.'
+            throw 'Pinned P0-5b engine does not expose the required smart discovery, hierarchy-budget, and authoritative-Control invariants.'
           }
 
       - name: Setup .NET 8
@@ -108,15 +117,18 @@ jobs:
       - name: Build Release
         run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
 
-      - name: Verify smart route and lifecycle reset were installed
+      - name: Verify smart route and association lifecycle resets were installed
         shell: powershell
         run: |
           $native = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.cs -Raw
           if ($native -notmatch 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
             throw 'Build-time smart discovery route was not installed.'
           }
-          if ($native -notmatch '_lastDiscovery = null;\s*_liveModel = null;\s*ResetSmartDiscoveryAuthority\(\);') {
-            throw 'Build-time smart discovery authority reset was not installed into ConnectAsync.'
+          if ($native -notmatch '_lastDiscovery = null;\s*_liveModel = null;\s*ResetSmartDiscoveryAuthority\(\);\s*// __P0_5C_CONNECT_RESET__') {
+            throw 'P0-5c ConnectAsync association-generation reset was not installed.'
+          }
+          if ($native -notmatch 'public async ValueTask DisposeAsync\(\)\s*\{\s*ResetSmartDiscoveryAuthority\(\);\s*// __P0_5C_DISPOSE_RESET__') {
+            throw 'P0-5c DisposeAsync association-generation reset was not installed.'
           }
           if ($native -notmatch 'service\.OpenAsync\(_session, signal\.ObjectReference, _lastDiscovery\.Snapshot\.DomainVariables, cancellationToken\)') {
             throw 'Build-time Control path does not consume the authoritative smart domain inventory.'
@@ -153,8 +165,9 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine PR: 134",
-            "Mode: PR134 R4 association single-flight + explicit authoritative Control inventory injection + hierarchy-first types + indexed CPU projection",
-            "CI invariant: Control cannot repeat legacy domain-variable discovery when a complete smart inventory exists; app MMS gate excludes legacy workflows during smart publication",
+            "Mode: P0-5c ARSAS association-generation enrichment single-flight + P0-5b hierarchy GVA budget convergence",
+            "CI invariant: caller cancellation only releases its waiter; directory/GVA/model/projection/publish remain one owner flight per association generation",
+            "CI invariant: reconnect/dispose invalidates the generation; stale owners cannot publish authority into a replacement association",
             "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
