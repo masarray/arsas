@@ -147,8 +147,8 @@ if ([string]$target.EngineRepository -ne 'masarray/ARIEC61850' -or [int]$target.
 $baseline = ([string]$target.EvidenceEngineBaselineCommit).ToLowerInvariant()
 Assert-Commit $baseline 'Evidence engine baseline commit'
 
-if (Get-GitHead $arsasRepo -ne $arsasHead) { $blockers.Add('ARSAS repository HEAD differs from the supplied readiness head.') }
-if (Get-GitHead $engineRepo -ne $engineHead) { $blockers.Add('Engine repository HEAD differs from the supplied PR head.') }
+if ((Get-GitHead $arsasRepo) -ne $arsasHead) { $blockers.Add('ARSAS repository HEAD differs from the supplied readiness head.') }
+if ((Get-GitHead $engineRepo) -ne $engineHead) { $blockers.Add('Engine repository HEAD differs from the supplied PR head.') }
 if ([string]$engineLock.repository -ne [string]$target.EngineRepository) { $blockers.Add('ARSAS engine lock repository differs from the promotion target.') }
 if (([string]$engineLock.commit).ToLowerInvariant() -ne $baseline) {
     $blockers.Add('ARSAS engine lock no longer points at the physical-evidence engine baseline.')
