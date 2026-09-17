@@ -40,6 +40,7 @@
     "RequirePurposeDiscoveryCiSuccess": true,
     "RequireGenericBuildSuccessBeforeReadyForReview": true,
     "RequireNoUnresolvedReviewThreadsBeforeReadyForReview": true,
+    "RequireDedicatedMainlineReadinessGateSuccess": true,
     "RequirePrRemainDraftUntilAllReadyGatesPass": true
   },
   "PromotionAuthority": null
