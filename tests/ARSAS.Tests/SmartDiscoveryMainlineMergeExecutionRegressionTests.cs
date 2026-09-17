@@ -20,6 +20,7 @@ public sealed class SmartDiscoveryMainlineMergeExecutionRegressionTests
         Assert.True(contract.GetProperty("RequireBaseShaUnchangedFromMergeManifest").GetBoolean());
         Assert.True(contract.GetProperty("RequireEngineMergeBeforeArsasMerge").GetBoolean());
         Assert.True(contract.GetProperty("RequireMergeCommitMethod").GetBoolean());
+        Assert.True(contract.GetProperty("RequireOnlyMergeManifestChangeAfterValidatedArsasHead").GetBoolean());
         Assert.True(contract.GetProperty("ForbidFixtureOrForceBypass").GetBoolean());
     }
 
@@ -31,12 +32,14 @@ public sealed class SmartDiscoveryMainlineMergeExecutionRegressionTests
         Assert.Contains("READY_FOR_REVIEW", source, StringComparison.Ordinal);
         Assert.Contains("physical-finalized", source, StringComparison.Ordinal);
         Assert.Contains("production-promoted", source, StringComparison.Ordinal);
-        Assert.Contains("ExpectedHeadSha", source, StringComparison.Ordinal);
-        Assert.Contains("ExpectedBaseSha", source, StringComparison.Ordinal);
+        Assert.Contains("ValidatedHeadSha", source, StringComparison.Ordinal);
+        Assert.Contains("BaseShaAtAuthorization", source, StringComparison.Ordinal);
+        Assert.Contains("LiveMergeHeadSha = $null", source, StringComparison.Ordinal);
+        Assert.Contains("AllowedPostAuthorizationPaths", source, StringComparison.Ordinal);
         Assert.Contains("MergeMethod = 'merge'", source, StringComparison.Ordinal);
+        Assert.Contains("arsas-live-head-resolved-at-execution", source, StringComparison.Ordinal);
         Assert.Contains("engine-merge-first", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowFixtureEvidence", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Force", source, StringComparison.Ordinal);
     }
 
     [Fact]
