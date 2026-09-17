@@ -494,6 +494,8 @@ public partial class MainWindow
                 exportModel,
                 row.Reference,
                 effectiveAvailability);
+            effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+            selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
         }
 
         var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
@@ -534,8 +536,8 @@ public partial class MainWindow
             NormalizeRcbReference(reportControl.Reference)
                 .Equals(NormalizeRcbReference(row.Reference), StringComparison.OrdinalIgnoreCase));
 
-        return !string.IsNullOrWhiteSpace(selectedReportControl?.DataSetReference)
-            ? selectedReportControl.DataSetReference.Trim()
+        return selectedReportControl is not null
+            ? (selectedReportControl.DataSetReference ?? string.Empty).Trim()
             : (row.DataSetReference ?? string.Empty).Trim();
     }
 
