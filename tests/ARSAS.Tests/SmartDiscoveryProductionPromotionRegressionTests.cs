@@ -39,6 +39,8 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         var props = XDocument.Load(FindRepoFile("evidence/SmartDiscoveryPromotion.props"));
         var promoted = props.Descendants("SmartDiscoveryProductionPromoted").Single().Value.Trim();
         Assert.Equal("false", promoted, ignoreCase: true);
+        Assert.Empty(props.Descendants("SmartDiscoveryPromotionAuthoritySha256"));
+        Assert.Empty(props.Descendants("SmartDiscoveryValidatedEngineHead"));
 
         var targets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
         Assert.Contains("GITHUB_WORKFLOW", targets, StringComparison.Ordinal);
@@ -46,6 +48,18 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("SmartDiscoveryProductionPromoted", targets, StringComparison.Ordinal);
         Assert.Contains("EnableSmartDiscoveryCaptureRoute", targets, StringComparison.Ordinal);
         Assert.Contains(">false</EnableSmartDiscoveryCaptureRoute>", targets, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P05g_ReadinessAllowsMissingPromotionBindingsWhileFailClosed()
+    {
+        var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-production-readiness.ps1"));
+
+        Assert.Contains("Get-XmlChildText", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
+        Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("$group.SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("$group.SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
     }
 
     [Fact]
