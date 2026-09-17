@@ -22,6 +22,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
 
         var contract = root.GetProperty("ProductionPromotionContract");
         Assert.True(contract.GetProperty("RequireP05fPhysicalAuthority").GetBoolean());
+        Assert.True(contract.GetProperty("RequirePhysicalAuthorityProductionEvidenceOnly").GetBoolean());
         Assert.True(contract.GetProperty("RequireEngineHeadCiSuccess").GetBoolean());
         Assert.True(contract.GetProperty("AllowEngineHeadDescendantWhenCriticalDiscoveryPathsUnchanged").GetBoolean());
         Assert.True(contract.GetProperty("RequireProductionSwitchFalseUntilAuthority").GetBoolean());
@@ -53,6 +54,9 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         var source = File.ReadAllText(FindRepoFile("scripts/verify-smart-discovery-production-readiness.ps1"));
 
         Assert.Contains("P0-5f physical-finalized authority is missing", source, StringComparison.Ordinal);
+        Assert.Contains("Get-PhysicalAuthorityProvenanceErrors", source, StringComparison.Ordinal);
+        Assert.Contains("at least three independent associations", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("contains reused", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("merge-base --is-ancestor", source, StringComparison.Ordinal);
         Assert.Contains("DiscoveryCriticalEnginePaths", source, StringComparison.Ordinal);
         Assert.Contains("Engine PR head CI is not green", source, StringComparison.Ordinal);
@@ -68,21 +72,25 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("promotion authority is bound to a different engine lock", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PromotionTargetSha256", source, StringComparison.Ordinal);
         Assert.Contains("EngineLockSha256", source, StringComparison.Ordinal);
-        Assert.Contains("SchemaVersion = 3", source, StringComparison.Ordinal);
+        Assert.Contains("SchemaVersion = 4", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void P05g_PromotionWriterHasNoFixtureBypassAndRequiresReadyProof()
+    public void P05g_PromotionWriterHasNoFixtureBypassAndRequiresProductionPhysicalProvenance()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/new-smart-discovery-production-promotion-authority.ps1"));
 
         Assert.Contains("READY_TO_PROMOTE", source, StringComparison.Ordinal);
-        Assert.Contains("physical-finalized P0-5f authority", source, StringComparison.Ordinal);
-        Assert.Contains("EngineHeadIsEvidenceCompatibleDescendant", source, StringComparison.Ordinal);
+        Assert.Contains("Assert-PhysicalAuthorityProvenance", source, StringComparison.Ordinal);
+        Assert.Contains("at least three independent associations", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("GoldenLockSha256", source, StringComparison.Ordinal);
+        Assert.Contains("RepeatTargetSha256", source, StringComparison.Ordinal);
+        Assert.Contains("FinalizationSha256", source, StringComparison.Ordinal);
         Assert.Contains("SmartDiscoveryProductionPromoted>true", source, StringComparison.Ordinal);
         Assert.Contains("SmartDiscoveryPromotionAuthoritySha256", source, StringComparison.Ordinal);
         Assert.Contains("SmartDiscoveryValidatedEngineHead", source, StringComparison.Ordinal);
         Assert.Contains("P0-5g-authority", source, StringComparison.Ordinal);
+        Assert.Contains("SchemaVersion = 2", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowFixtureEvidence", source, StringComparison.Ordinal);
     }
 
