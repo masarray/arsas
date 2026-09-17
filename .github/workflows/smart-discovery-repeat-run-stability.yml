@@ -20,13 +20,15 @@ jobs:
         run: |
           $finalizer = '.\ArIED61850Tester\scripts\finalize-smart-discovery-repeat-run-stability.ps1'
           $bundleWriter = '.\ArIED61850Tester\scripts\new-smart-discovery-repeat-run-bundle.ps1'
+          $authorityWriter = '.\ArIED61850Tester\scripts\new-smart-discovery-repeat-run-authority.ps1'
           $target = '.\ArIED61850Tester\evidence\smart-discovery-repeat-run-target.json'
           $runtime = '.\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryRepeatRunEvidence.cs'
           $test = '.\ArIED61850Tester\tests\ARSAS.Tests\SmartDiscoveryRepeatRunStabilityRegressionTests.cs'
-          foreach ($required in @($finalizer, $bundleWriter, $target, $runtime, $test)) {
+          $doc = '.\ArIED61850Tester\docs\P0-5F_REPEAT_RUN_STABILITY_PROOF.md'
+          foreach ($required in @($finalizer, $bundleWriter, $authorityWriter, $target, $runtime, $test, $doc)) {
             if (-not (Test-Path $required -PathType Leaf)) { throw "P0-5f source missing: $required" }
           }
-          foreach ($script in @($finalizer, $bundleWriter)) {
+          foreach ($script in @($finalizer, $bundleWriter, $authorityWriter)) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
@@ -39,6 +41,9 @@ jobs:
           if ($targetJson.Phase -ne 'P0-5f' -or $targetJson.MinimumIndependentAssociations -lt 3) {
             throw 'P0-5f target does not require at least three independent associations.'
           }
+          if ($null -ne $targetJson.FinalizationAuthority) {
+            throw 'CI source must not pre-populate physical FinalizationAuthority.'
+          }
 
       - name: Execute P0-5f finalization fixtures
         shell: powershell
@@ -47,6 +52,7 @@ jobs:
           $results = Join-Path $root 'TestResults'
           New-Item -ItemType Directory -Force $results | Out-Null
           $finalizer = Join-Path $root 'scripts\finalize-smart-discovery-repeat-run-stability.ps1'
+          $authorityWriter = Join-Path $root 'scripts\new-smart-discovery-repeat-run-authority.ps1'
           $repeatTarget = Join-Path $root 'evidence\smart-discovery-repeat-run-target.json'
           $semanticTarget = Join-Path $root 'evidence\smart-discovery-golden-target.json'
           $arsasCommit = (git -C $root rev-parse HEAD).Trim().ToLowerInvariant()
@@ -167,6 +173,22 @@ jobs:
             throw 'P0-5f PASS did not preserve three unique association generations.'
           }
 
+          $fixturePromotionRejected = $false
+          try {
+            & $authorityWriter `
+              -GoldenLockPath $lockPath `
+              -RepeatTargetPath $repeatTarget `
+              -FinalizationJson $passPath `
+              -RunBundlePaths $bundlePaths `
+              -OutputPath (Join-Path $results 'P0-5F-FORBIDDEN-fixture-authority.json')
+          }
+          catch {
+            $fixturePromotionRejected = $_.Exception.Message -match 'fixture/non-reverified P0-5e golden lock'
+          }
+          if (-not $fixturePromotionRejected) {
+            throw 'P0-5f fixture evidence was incorrectly promotable to physical authority.'
+          }
+
           $reused = New-Bundle 3 102
           $reusedPath = Join-Path $results 'P0-5F-run-reused-generation.json'
           $reused | ConvertTo-Json -Depth 18 | Set-Content $reusedPath -Encoding utf8
@@ -189,11 +211,17 @@ jobs:
             throw 'P0-5f failed to reject repeat-run request/signature drift.'
           }
 
-      - name: Upload P0-5f regression evidence
+      - name: Upload P0-5f regression evidence and field toolkit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ARSAS-p0-5f-repeat-run-fixtures
-          path: ArIED61850Tester\TestResults\P0-5F-*.json
+          name: ARSAS-p0-5f-repeat-run-toolkit
+          path: |
+            ArIED61850Tester\TestResults\P0-5F-*.json
+            ArIED61850Tester\scripts\new-smart-discovery-repeat-run-bundle.ps1
+            ArIED61850Tester\scripts\finalize-smart-discovery-repeat-run-stability.ps1
+            ArIED61850Tester\scripts\new-smart-discovery-repeat-run-authority.ps1
+            ArIED61850Tester\docs\P0-5F_REPEAT_RUN_STABILITY_PROOF.md
+            ArIED61850Tester\evidence\smart-discovery-repeat-run-target.json
           if-no-files-found: warn
           retention-days: 14
