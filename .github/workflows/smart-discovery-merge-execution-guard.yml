@@ -55,6 +55,25 @@ jobs:
             }
           }
 
+      - name: Checkout pinned ARIEC61850 dependency
+        shell: powershell
+        run: |
+          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 engine lock.'
+          }
+
+          $enginePath = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'ARIEC61850'
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$($lock.repository).git" $enginePath
+          git -C $enginePath fetch --quiet --depth 1 origin $lock.commit
+          git -C $enginePath checkout --quiet --detach $lock.commit
+
+          $actual = (git -C $enginePath rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne ([string]$lock.commit).ToLowerInvariant()) {
+            throw "Pinned engine checkout mismatch: expected $($lock.commit), got $actual"
+          }
+          Write-Host "P0-5h regression dependency engine: $actual"
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
