@@ -74,7 +74,9 @@ public sealed partial class NativeIec61850Client
         {
             // A completed discovery on this exact association generation is wire-free.
             // Concurrent callers do not reach this branch independently because they
-            // already share the same association flight above.
+            // already share the same association flight above. P0-5f deliberately does
+            // not emit a new repeat-run evidence file from this cached branch: a repeat
+            // physical run requires a new association generation and fresh wire traffic.
             if (TryGetSmartDiscoveryAuthority(out var cachedDiscovery, out var cachedModel))
             {
                 progress?.Report(new IedDiscoveryProgress(
@@ -272,6 +274,27 @@ public sealed partial class NativeIec61850Client
                     summary))
             {
                 return Array.Empty<SignalDefinition>();
+            }
+
+            // P0-5f: emit one local, zero-traffic evidence snapshot only after a fresh
+            // association owner has successfully published authority. Cached reuse above
+            // deliberately never reaches this call and therefore cannot masquerade as an
+            // independent physical repeat run.
+            if (IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+            {
+                var repeatEvidencePath = TryWriteSmartDiscoveryRepeatRunEvidence(
+                    associationGeneration,
+                    discovery,
+                    signals,
+                    identity);
+                var repeatKpi = _session.LastSmartDiscoveryKpi;
+                if (!string.IsNullOrWhiteSpace(repeatEvidencePath) &&
+                    IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                {
+                    LastDiscoverySummary +=
+                        $" P0-5f repeatEvidence={repeatEvidencePath}; " +
+                        $"kpiSignature={repeatKpi?.DeterministicSignature ?? "unavailable"}.";
+                }
             }
 
             return signals;
