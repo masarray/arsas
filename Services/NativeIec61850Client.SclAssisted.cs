@@ -574,6 +574,5 @@ public sealed partial class NativeIec61850Client
             "ST" or "MX" or "SP" or "SV" or "CF" or "DC" or "EX" or "BL" or "OR" or "SR";
 
     private static string NormalizeTrustedSclReference(string? reference)
-        => (reference ?? string.Empty).Trim().Replace('}
-, '.');
+        => (reference ?? string.Empty).Trim().Replace((char)36, '.');
 }
