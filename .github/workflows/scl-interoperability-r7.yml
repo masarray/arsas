@@ -15,6 +15,10 @@ on:
       - ".github/workflows/scl-interoperability-r7.yml"
   workflow_dispatch:
 
+concurrency:
+  group: scl-interoperability-r7-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-r7-scl-interoperability:
     name: Build canonical discovery to interoperable SCL test package
