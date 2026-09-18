@@ -17,7 +17,7 @@
       "repository": "masarray/ARIEC61850",
       "pullRequest": 135,
       "basePullRequest": 134,
-      "head": "95cdfd047257e9227fd356335f3eb59b914194ee"
+      "head": "bb6e5c1075eec7ebfb1f2bf9336e366bd7e41e3c"
     },
     "consumerIntegration": {
       "repository": "masarray/arsas",
