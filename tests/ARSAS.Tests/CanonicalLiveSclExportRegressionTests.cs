@@ -307,7 +307,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("name: IEDScout Convergence Guard", guard, StringComparison.Ordinal);
         Assert.Contains("name: iedscout-convergence-contract", guard, StringComparison.Ordinal);
         Assert.Contains("Active stack must remain ARIEC61850 #134 -> #135 -> ARSAS #324", guard, StringComparison.Ordinal);
-        Assert.Contains("Discovery regressed away from the IEDScout convergence path", guard, StringComparison.Ordinal);
+        Assert.Contains("P0 structural discovery freeze regressed away from the accepted IEDScout convergence path", guard, StringComparison.Ordinal);
         Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
 
