@@ -26,7 +26,18 @@ jobs:
         env:
           ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          if ($env:ARSAS_SOURCE_SHA -notmatch '^[0-9a-f]{40}
+          if ($env:ARSAS_SOURCE_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid ARSAS source SHA: $env:ARSAS_SOURCE_SHA"
+          }
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" ARSAS
+          git -C .\ARSAS fetch --quiet --depth 1 origin $env:ARSAS_SOURCE_SHA
+          git -C .\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA
+          $arsasCommit = (git -C .\ARSAS rev-parse HEAD).Trim()
+          if ($arsasCommit -ne $env:ARSAS_SOURCE_SHA) {
+            throw "ARSAS SHA mismatch. Expected $env:ARSAS_SOURCE_SHA, got $arsasCommit."
+          }
+          "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Resolve isolated R7 engine pin
         shell: pwsh
         run: |
