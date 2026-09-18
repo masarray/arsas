@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "92d5f363dc4ac8e7086aa5b0bc1e5ddac0d36831",
+  "commit": "15a4b995a0247d7932896b7f56ea2dcf12e7d412",
   "sourcePullRequest": 135,
-  "purpose": "R7 physical SCL repair pin on the complete PR #134 smart-discovery performance head. Accepted remote AP-title/AE/PSEL/SSEL remain decoded from the exact association request bytes accepted by the IED and TSEL remains bound to the accepted COTP destination selector. Physical AA1E1F06R4 evidence additionally proved that indexed RCB siblings may differ in writable/current BufTm, IntgPd, TrgOps and OptFlds while still representing one logical SCL ReportControl; engine head 92d5f363 preserves DataSet/ConfRev/domain/LN/buffered identity while allowing that runtime-mutable setting drift. ARSAS consumer-side reconnect must reproduce the proven native calling identity byte-for-byte and canonical save uses full-model SCL; safety is enforced by bounded FC-read policy rather than deleting discovered model leaves. Production promotion remains fail-closed and still requires fresh physical authority.",
+  "purpose": "R7 physical SCL repair pin on the complete PR #134 smart-discovery performance head. Accepted remote AP-title/AE/PSEL/SSEL remain decoded from the exact association request bytes accepted by the IED and TSEL remains bound to the accepted COTP destination selector. Physical AA1E1F06R4 evidence additionally proved that indexed RCB siblings may differ in writable/current BufTm, IntgPd, TrgOps and OptFlds while still representing one logical SCL ReportControl; engine head 15a4b995 preserves DataSet/ConfRev/domain/LN/buffered identity while allowing that runtime-mutable setting drift. ARSAS consumer-side reconnect must reproduce the proven native calling identity byte-for-byte and canonical save uses full-model SCL with prefixed-LN identity plus CDC-aware WYE/DEL/SEQ SDO and FC ownership; safety is enforced by bounded FC-read policy rather than deleting discovered model leaves. Production promotion remains fail-closed and still requires fresh physical authority.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
