@@ -6,7 +6,7 @@
         Width="940" Height="650" MinWidth="820" MinHeight="560"
         WindowStartupLocation="CenterOwner"
         Background="#F3F6FB"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Loaded="Window_Loaded"
         ContentRendered="Diagnostics_ContentRendered"
         Closed="Window_Closed">
@@ -339,7 +339,7 @@
                 <TextBox Grid.Row="2" Text="{Binding SelectedTransferDiagnostic, Mode=OneWay}"
                          Height="145" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                         FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="11"
+                         FontFamily="{StaticResource AppCodeFontFamily}" FontSize="11"
                          Padding="9" Background="#F8FAFD" BorderBrush="#CBD8E8"/>
             </Grid>
         </Expander>
