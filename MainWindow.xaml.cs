@@ -1632,6 +1632,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string outputPath)
     {
         LiveIedSclExportResult result;
+        AR.Iec61850.Discovery.LiveIedCanonicalModel? canonicalExportEvidence = null;
         if (device.SclWorkspace == null)
         {
             var canonical = device.LiveCanonicalModel
@@ -1649,6 +1650,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 outputPath,
                 schema.Profile,
                 profile: "safe-connection");
+            canonicalExportEvidence = canonical;
         }
         else
         {
@@ -1667,6 +1669,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             "INFO",
             "SCL Export",
             $"{device.Name}: saved {result.SclSchema} from {sourceDescription.ToLowerInvariant()}. LD={result.LogicalDeviceCount}, LN={result.LogicalNodeCount}, DataSet={result.DataSetCount}, RCB={result.ReportControlCount}, warnings={result.Warnings.Count}. SCL={result.SclPath}");
+
+        if (canonicalExportEvidence is not null)
+        {
+            var communication = canonicalExportEvidence.Communication;
+            var association = communication.Association;
+            AddLog(
+                "INFO",
+                "SCL Export",
+                $"{device.Name}: canonical round-trip verified • profile={communication.AssociationProfileName} • " +
+                $"AP-Title={association.ApTitle} • AE={association.AeQualifier?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<none>"} • " +
+                $"PSEL={association.PresentationSelector} • SSEL={association.SessionSelector} • TSEL={association.TransportSelector} • " +
+                $"instanceEvidence={canonicalExportEvidence.InstanceValues.Count} • runtimeRCB={canonicalExportEvidence.Discovery.ReportControls.Count} • " +
+                $"logicalExportRCB={result.ReportControlCount}.");
+        }
 
         foreach (var warning in result.Warnings.Take(12))
         {
