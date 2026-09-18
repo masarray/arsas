@@ -1651,7 +1651,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 outputPath,
                 schema.Profile,
                 profile: "safe-connection");
-            canonicalReloadWorkspace = ValidateCanonicalSclWorkspaceReload(canonical, result);
+            try
+            {
+                canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
+                    _sclWorkspaceService,
+                    canonical,
+                    result);
+            }
+            catch
+            {
+                try
+                {
+                    if (File.Exists(result.SclPath))
+                        File.Delete(result.SclPath);
+                }
+                catch
+                {
+                    // Preserve the original reload-validation failure.
+                }
+
+                throw;
+            }
             canonicalExportEvidence = canonical;
         }
         else
@@ -1700,81 +1720,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SetStatus($"{device.Name}: {result.SclSchema} saved to {result.SclPath}");
         ShowSclSaveSuccess(result.SclSchema, result.SclPath, result.ReportPath, result.SummaryPath);
-    }
-
-    private SclIedWorkspace ValidateCanonicalSclWorkspaceReload(
-        AR.Iec61850.Discovery.LiveIedCanonicalModel canonical,
-        LiveIedSclExportResult result)
-    {
-        try
-        {
-            var reloaded = _sclWorkspaceService.Open(
-                result.SclPath,
-                new SclWorkspaceOpenOptions
-                {
-                    IedName = canonical.IedName,
-                    AccessPointName = canonical.AccessPointName
-                });
-
-            var workspace = reloaded.Ieds.SingleOrDefault()
-                ?? throw new InvalidOperationException(
-                    $"Generated SCL could not be reopened as exactly one ARSAS workspace for '{canonical.IedName}/{canonical.AccessPointName}'.");
-
-            if (!string.Equals(workspace.IedName, canonical.IedName, StringComparison.Ordinal) ||
-                !string.Equals(workspace.AccessPointName, canonical.AccessPointName, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"Generated SCL reload identity drifted. Expected '{canonical.IedName}/{canonical.AccessPointName}', " +
-                    $"reloaded '{workspace.IedName}/{workspace.AccessPointName}'.");
-            }
-
-            var endpoint = workspace.PreferredEndpoint
-                ?? throw new InvalidOperationException(
-                    "Generated SCL reload did not resolve a usable MMS endpoint.");
-
-            if (!endpoint.HasUsableAddress ||
-                !string.Equals(endpoint.IpAddress, canonical.Communication.Host, StringComparison.OrdinalIgnoreCase) ||
-                endpoint.Port != 102)
-            {
-                throw new InvalidOperationException(
-                    $"Generated SCL reload endpoint drifted. Expected '{canonical.Communication.Host}:102', " +
-                    $"reloaded '{endpoint.EndpointText}'.");
-            }
-
-            var reloadCoverage = workspace.DesignModel.Coverage;
-            var mismatches = new List<string>();
-            if (reloadCoverage.LogicalDeviceCount != result.LogicalDeviceCount)
-                mismatches.Add($"LD {reloadCoverage.LogicalDeviceCount}!={result.LogicalDeviceCount}");
-            if (reloadCoverage.LogicalNodeCount != result.LogicalNodeCount)
-                mismatches.Add($"LN {reloadCoverage.LogicalNodeCount}!={result.LogicalNodeCount}");
-            if (workspace.DataSets.Count != result.DataSetCount)
-                mismatches.Add($"DataSet {workspace.DataSets.Count}!={result.DataSetCount}");
-            if (workspace.ReportControls.Count != result.ReportControlCount)
-                mismatches.Add($"RCB {workspace.ReportControls.Count}!={result.ReportControlCount}");
-
-            if (mismatches.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    "Generated SCL changed structural counts when reloaded by ARSAS: " +
-                    string.Join(", ", mismatches) + ".");
-            }
-
-            return workspace;
-        }
-        catch
-        {
-            try
-            {
-                if (File.Exists(result.SclPath))
-                    File.Delete(result.SclPath);
-            }
-            catch
-            {
-                // Preserve the original reload-validation failure.
-            }
-
-            throw;
-        }
     }
 
     private void ShowSclSaveSuccess(string schema, string sclPath, string reportPath, string summaryPath)
