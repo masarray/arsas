@@ -30,7 +30,7 @@ public sealed class CanonicalSclReloadValidatorTests
                 canonical,
                 path,
                 schema,
-                profile: "safe-connection");
+                profile: "full-model");
 
             var workspace = CanonicalSclReloadValidator.Validate(
                 new SclWorkspaceService(),
@@ -78,7 +78,7 @@ public sealed class CanonicalSclReloadValidatorTests
                 canonical,
                 path,
                 schema,
-                profile: "safe-connection");
+                profile: "full-model");
 
             var preparation = SclAssistedConnectionPreparationBuilder.Build(
                 File.ReadAllText(result.SclPath),
@@ -98,13 +98,23 @@ public sealed class CanonicalSclReloadValidatorTests
             Assert.Equal(canonical.Communication.Host, plan.Host);
             Assert.Equal(102, plan.Port);
 
+            Assert.Equal("ExistingRuntimeDefault", plan.LocalProfileName);
+            Assert.Equal("0001", Convert.ToHexString(plan.Cotp.SourceTsap));
             Assert.Equal("0001", Convert.ToHexString(plan.Cotp.DestinationTsap));
+            Assert.Equal("00000001", Convert.ToHexString(plan.Association.Calling.PresentationSelector));
+            Assert.Equal("0001", Convert.ToHexString(plan.Association.Calling.SessionSelector));
+            Assert.Equal(new uint[] { 1, 1, 1, 999 }, plan.Association.Calling.ApTitle);
+            Assert.Equal(12, plan.Association.Calling.AeQualifier);
             Assert.Equal("00000001", Convert.ToHexString(plan.Association.Called.PresentationSelector));
             Assert.Equal("0001", Convert.ToHexString(plan.Association.Called.SessionSelector));
             Assert.Equal(new uint[] { 1, 1, 1, 999, 1 }, plan.Association.Called.ApTitle);
             Assert.Equal(12, plan.Association.Called.AeQualifier);
-            Assert.NotEmpty(plan.CotpConnectRequest);
-            Assert.NotEmpty(plan.SessionPresentationAcseMmsRequest);
+            Assert.Equal(
+                AR.Iec61850.Osi.CotpConnectRequest.BuildDefault(),
+                plan.CotpConnectRequest);
+            Assert.Equal(
+                AR.Iec61850.Acse.AcseMmsInitiateRequest.BuildDefaultAssociationPayload(),
+                plan.SessionPresentationAcseMmsRequest);
         }
         finally
         {
@@ -137,7 +147,7 @@ public sealed class CanonicalSclReloadValidatorTests
                 canonical,
                 path,
                 SclSchemaProfile.Edition2V31,
-                profile: "safe-connection");
+                profile: "full-model");
 
             var document = XDocument.Load(result.SclPath);
             var ns = document.Root!.Name.Namespace;
@@ -192,7 +202,7 @@ public sealed class CanonicalSclReloadValidatorTests
                 canonical,
                 path,
                 schema,
-                profile: "safe-connection");
+                profile: "full-model");
             var workspace = CanonicalSclReloadValidator.Validate(
                 new SclWorkspaceService(),
                 canonical,
@@ -232,10 +242,28 @@ public sealed class CanonicalSclReloadValidatorTests
                 reportId: $"RID_{index}_X"))
             .Concat(
             [
-                RuntimeControl("Buffer01", buffered: true, reportId: "RID_Buffer01"),
-                RuntimeControl("Buffer02", buffered: true, reportId: "RID_Buffer02"),
-                RuntimeControl("Unbuffer01", buffered: false, reportId: "RID_Unbuffer01"),
-                RuntimeControl("Unbuffer02", buffered: false, reportId: "RID_Unbuffer02")
+                RuntimeControl(
+                    "Buffer01",
+                    buffered: true,
+                    reportId: "RID_Buffer01",
+                    integrityPeriodMs: "0",
+                    optionalFields: "seqnum,timestamp,reason,dataset,configref"),
+                RuntimeControl(
+                    "Buffer02",
+                    buffered: true,
+                    reportId: "RID_Buffer02",
+                    integrityPeriodMs: "5000",
+                    optionalFields: "seqnum,timestamp,reason,dataset,entryid,bufoverflow,configref"),
+                RuntimeControl(
+                    "Unbuffer01",
+                    buffered: false,
+                    reportId: "RID_Unbuffer01",
+                    integrityPeriodMs: "0"),
+                RuntimeControl(
+                    "Unbuffer02",
+                    buffered: false,
+                    reportId: "RID_Unbuffer02",
+                    integrityPeriodMs: "5000")
             ])
             .ToArray();
 
@@ -257,7 +285,9 @@ public sealed class CanonicalSclReloadValidatorTests
     private static LiveIedReportControlModel RuntimeControl(
         string name,
         bool buffered,
-        string reportId)
+        string reportId,
+        string integrityPeriodMs = "1000",
+        string optionalFields = "seqnum,timestamp,dataset,dataref")
         => new()
         {
             Reference = $"IEDLD0/LLN0${(buffered ? "BR" : "RP")}${name}",
@@ -269,9 +299,9 @@ public sealed class CanonicalSclReloadValidatorTests
             ReportId = reportId,
             ConfRev = "1",
             TriggerOptions = "dchg,qchg,gi",
-            OptionalFields = "seqnum,timestamp,dataset,dataref",
+            OptionalFields = optionalFields,
             BufferTimeMs = buffered ? "10" : "0",
-            IntegrityPeriodMs = "1000"
+            IntegrityPeriodMs = integrityPeriodMs
         };
 
 
