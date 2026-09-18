@@ -32,6 +32,7 @@ public sealed partial class NativeIec61850Client
             _smartDiscoveryFlightGeneration = -1;
             _smartDiscoveryAuthority = null;
             _smartDiscoveryModelAuthority = null;
+            ClearCanonicalModel();
             _smartDiscoveryTypeProbeCount = 0;
             _smartDiscoverySuccessfulTypeProbeCount = 0;
             _smartDiscoveryAuthorityHost = string.Empty;
@@ -107,6 +108,7 @@ public sealed partial class NativeIec61850Client
 
             _lastDiscovery = discovery;
             _liveModel = model;
+            PublishCanonicalModel(model);
             LastReportInventory = reportInventory;
             DetectedIdentity = identity;
             PublishSmartDiscoveryAuthority(
