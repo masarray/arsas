@@ -117,6 +117,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("preparation.IsSuccess", validator, StringComparison.Ordinal);
         Assert.Contains("preparation.AssociationPlan", validator, StringComparison.Ordinal);
         Assert.Contains("Generated SCL cannot rebuild the ARSAS SCL-assisted reconnect plan", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.ApTitle", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.AeQualifier", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.PresentationSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.SessionSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.TransportSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("Generated SCL reconnect association drifted from accepted canonical wire evidence", validator, StringComparison.Ordinal);
     }
 
     [Fact]
