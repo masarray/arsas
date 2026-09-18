@@ -15,6 +15,18 @@ public static class CanonicalSclReloadValidator
         ArgumentNullException.ThrowIfNull(canonical);
         ArgumentNullException.ThrowIfNull(result);
 
+        if (!string.Equals(result.Profile, "full-model", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Canonical live SCL must preserve the full discovered model; exporter profile was '{result.Profile}'.");
+        }
+
+        if (result.ExcludedAttributes.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Canonical full-model SCL unexpectedly excluded {result.ExcludedAttributes.Count} discovered attribute(s).");
+        }
+
         var reloaded = workspaceService.Open(
             result.SclPath,
             new SclWorkspaceOpenOptions
@@ -110,6 +122,30 @@ public static class CanonicalSclReloadValidator
                 $"PSEL={canonicalAssociation.PresentationSelector}, SSEL={canonicalAssociation.SessionSelector}, " +
                 $"TSEL={canonicalAssociation.TransportSelector}; rebuilt AP={rebuiltApTitle}, " +
                 $"AE={plan.Association.Called.AeQualifier}, PSEL={rebuiltPsel}, SSEL={rebuiltSsel}, TSEL={rebuiltTsel}.");
+        }
+
+        var local = AR.Iec61850.Scl.MmsLocalAssociationProfile.ExistingRuntimeDefault;
+        var callingApTitle = plan.Association.Calling.ApTitle;
+        if (!plan.Cotp.SourceTsap.SequenceEqual(local.TransportSelector) ||
+            !plan.Association.Calling.SessionSelector.SequenceEqual(local.SessionSelector) ||
+            !plan.Association.Calling.PresentationSelector.SequenceEqual(local.PresentationSelector) ||
+            !callingApTitle.SequenceEqual(local.ApTitle) ||
+            plan.Association.Calling.AeQualifier != local.AeQualifier)
+        {
+            throw new InvalidOperationException(
+                "Generated SCL reconnect plan changed the proven calling-side runtime identity.");
+        }
+
+        var acceptedProfileName = canonical.Communication.AssociationProfileName?.Trim() ?? string.Empty;
+        var acceptedProfile = AR.Iec61850.Acse.AcseMmsInitiateRequest
+            .BuildAssociationProfiles()
+            .SingleOrDefault(profile =>
+                string.Equals(profile.Name, acceptedProfileName, StringComparison.Ordinal));
+        if (acceptedProfile is not null &&
+            !plan.SessionPresentationAcseMmsRequest.SequenceEqual(acceptedProfile.Payload))
+        {
+            throw new InvalidOperationException(
+                $"Generated SCL reconnect AARQ does not reproduce accepted association profile '{acceptedProfileName}' byte-for-byte.");
         }
 
         return workspace;
