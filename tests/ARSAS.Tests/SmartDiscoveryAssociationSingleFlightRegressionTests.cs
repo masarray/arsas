@@ -43,15 +43,34 @@ public sealed class SmartDiscoveryAssociationSingleFlightRegressionTests
     }
 
     [Fact]
-    public void P05c_EnginePin_IsExactP05bBudgetConvergenceCommit()
+    public void P05c_PhysicalBaseline_RemainsExactP05bBudgetConvergenceCommit()
     {
-        var lockPath = FindRepoFile("engines/ARIEC61850.lock.json");
-        using var document = JsonDocument.Parse(File.ReadAllText(lockPath));
-        var commit = document.RootElement.GetProperty("commit").GetString();
-        var workflow = File.ReadAllText(FindRepoFile(".github/workflows/smart-discovery-capture-build.yml"));
+        using var lockDocument = JsonDocument.Parse(
+            File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json")));
+        using var targetDocument = JsonDocument.Parse(
+            File.ReadAllText(FindRepoFile("evidence/smart-discovery-golden-target.json")));
+        var workflow = File.ReadAllText(
+            FindRepoFile(".github/workflows/smart-discovery-capture-build.yml"));
 
-        Assert.Equal(P05bEngineCommit, commit);
-        Assert.Contains(P05bEngineCommit, workflow, StringComparison.OrdinalIgnoreCase);
+        var physicalTargetCommit = targetDocument.RootElement
+            .GetProperty("EngineCommit")
+            .GetString();
+        var previousTrialPin = lockDocument.RootElement
+            .GetProperty("previousTrialPin")
+            .GetProperty("commit")
+            .GetString();
+        var currentIntegrationCommit = lockDocument.RootElement
+            .GetProperty("commit")
+            .GetString();
+
+        Assert.Equal(P05bEngineCommit, physicalTargetCommit);
+        Assert.Equal(P05bEngineCommit, previousTrialPin);
+        Assert.NotEqual(P05bEngineCommit, currentIntegrationCommit);
+        Assert.Contains(
+            $"if ($lock.commit -ne '{P05bEngineCommit}')",
+            workflow,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unexpected engine commit", workflow, StringComparison.Ordinal);
         Assert.Contains("LastSmartTypeProbeBudget", workflow, StringComparison.Ordinal);
         Assert.Contains("SuppressedExactRepeatRequests", workflow, StringComparison.Ordinal);
     }
