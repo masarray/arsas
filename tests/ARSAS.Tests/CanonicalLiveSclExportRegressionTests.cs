@@ -194,6 +194,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
             "34 runtime -> 32 logical with ConfReportControl max=34",
             workflow,
             StringComparison.Ordinal);
+
+        var buildTargets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
+        Assert.Contains("SCL Interoperability R7 Build", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("EnableSmartDiscoveryCaptureRoute", buildTargets, StringComparison.Ordinal);
     }
 
 
@@ -203,7 +207,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"60af0822b4f83db9bf936e1d5f9585caffbaf302\"",
+            "\"commit\": \"2928afc9649ef5af22c43016ac06ceb301b7da11\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
@@ -213,6 +217,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("DataSet/ConfRev/domain/LN/buffered identity", lockFile, StringComparison.Ordinal);
         Assert.Contains("full-model SCL", lockFile, StringComparison.Ordinal);
         Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
+        Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
         Assert.Contains(
             "\"commit\": \"4467124775d8d9d76f3db194f9fbfd97144767a8\"",
