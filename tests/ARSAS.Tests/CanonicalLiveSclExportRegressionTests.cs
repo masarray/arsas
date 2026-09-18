@@ -225,6 +225,13 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"mergeAllowedBeforePhysicalRetest\": false", contract, StringComparison.Ordinal);
         Assert.Contains("Only this stack is active for this target", documentation, StringComparison.Ordinal);
         Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
+
+        var guard = File.ReadAllText(FindRepoFile(".github/workflows/iedscout-convergence-guard.yml"));
+        Assert.Contains("name: IEDScout Convergence Guard", guard, StringComparison.Ordinal);
+        Assert.Contains("name: iedscout-convergence-contract", guard, StringComparison.Ordinal);
+        Assert.Contains("Active stack must remain ARIEC61850 #134 -> #135 -> ARSAS #324", guard, StringComparison.Ordinal);
+        Assert.Contains("Discovery regressed away from the IEDScout convergence path", guard, StringComparison.Ordinal);
+        Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
 
 
