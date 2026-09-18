@@ -1,0 +1,131 @@
+name: IEDScout Convergence Guard
+
+on:
+  pull_request:
+    paths:
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/SclAssistedConnectionPreparation.cs"
+      - "Services/CanonicalSclReloadValidator.cs"
+      - "MainWindow.xaml.cs"
+      - "Directory.Build.targets"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "engines/ARIEC61850.lock.json"
+      - "evidence/iedscout-convergence-target.json"
+      - "docs/IEDSCOUT_CONVERGENCE.md"
+      - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
+      - ".github/workflows/iedscout-convergence-guard.yml"
+      - ".github/workflows/scl-interoperability-r7.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: iedscout-convergence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iedscout-convergence-contract:
+    name: iedscout-convergence-contract
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout exact ARSAS revision
+        shell: pwsh
+        env:
+          ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($env:ARSAS_SOURCE_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid ARSAS source SHA: $env:ARSAS_SOURCE_SHA"
+          }
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" ARSAS
+          git -C .\ARSAS fetch --quiet --depth 1 origin $env:ARSAS_SOURCE_SHA
+          git -C .\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA
+          $actual = (git -C .\ARSAS rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARSAS_SOURCE_SHA) {
+            throw "ARSAS SHA mismatch. Expected $env:ARSAS_SOURCE_SHA, got $actual."
+          }
+
+      - name: Verify single convergence authority
+        shell: pwsh
+        run: |
+          $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          $target = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+
+          if ($target.status -ne 'physical-retest-required') {
+            throw "Convergence status changed unexpectedly: $($target.status)"
+          }
+          if ([int]$target.activeStack.enginePerformance.pullRequest -ne 134 -or
+              [int]$target.activeStack.engineModelAndScl.pullRequest -ne 135 -or
+              [int]$target.activeStack.engineModelAndScl.basePullRequest -ne 134 -or
+              [int]$target.activeStack.consumerIntegration.pullRequest -ne 324) {
+            throw 'Active stack must remain ARIEC61850 #134 -> #135 -> ARSAS #324.'
+          }
+          if ($lock.commit -ne $target.activeStack.engineModelAndScl.head -or
+              [int]$lock.sourcePullRequest -ne 135) {
+            throw 'Engine lock drifted from the convergence single source of truth.'
+          }
+          if ([bool]$target.promotion.productionPromoted -or
+              [bool]$target.promotion.mergeAllowedBeforePhysicalRetest -or
+              -not [bool]$target.promotion.physicalRetestRequired) {
+            throw 'Physical retest gate was weakened.'
+          }
+          if ([int]$target.physicalReference.iedScoutCapture.associations -ne 1 -or
+              [int]$target.physicalReference.iedScoutCapture.getVariableAccessAttributes -ne 119 -or
+              [int]$target.physicalReference.rejectedLegacyArsasCapture.associations -ne 2 -or
+              [int]$target.physicalReference.rejectedLegacyArsasCapture.getVariableAccessAttributes -lt 20000) {
+            throw 'Physical IEDScout/legacy regression reference changed unexpectedly.'
+          }
+
+          "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact convergence engine
+        shell: pwsh
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ENGINE_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ENGINE_COMMIT) {
+            throw "Engine SHA mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+          }
+
+      - name: Verify discovery and SCL anti-regression contracts
+        shell: pwsh
+        run: |
+          $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $targets = Get-Content .\ARSAS\Directory.Build.targets -Raw
+          $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
+          $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
+          $smartGva = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartVariableAccessAttributes.cs -Raw
+          $lnParts = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850ReferenceParts.cs -Raw
+          $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs -Raw
+          $registry = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850StandardModelRegistry.cs -Raw
+          $cdc = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\CdcInferenceEngine.cs -Raw
+
+          if ($targets -notmatch 'SCL Interoperability R7 Build' -or
+              $targets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
+              $capture -match 'TryBuildSupplementalGetNameListSnapshotAsync' -or
+              $capture -match 'DiscoverDomainVariableTypeTreeNamesAsync' -or
+              $capture -match 'AddAdaptiveLogicalNodeSiblingProbeSignalsAsync' -or
+              $capture -match 'EnrichEngineeringUnitsAsync' -or
+              $smart -notmatch 'DiscoverSmartAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $smartGva -notmatch 'GetVariableAccessAttributesSmartAsync') {
+            throw 'Discovery regressed away from the IEDScout convergence path.'
+          }
+
+          if ($lnParts -notmatch 'instanceStart' -or
+              $lnParts -notmatch 'IsFourLetterLnClass' -or
+              $exporter -notmatch 'TryResolveStandardSubDataObjectCdc' -or
+              $exporter -notmatch 'DataObjectReferencePaths' -or
+              $exporter -notmatch 'IsEdition2ServiceTrackingCdc' -or
+              $registry -notmatch 'Key\("TCTR", "ARtg"\)' -or
+              $registry -notmatch 'Key\("TVTR", "VRtg"\)' -or
+              $registry -notmatch 'Key\("LTIM", "TmChgDT"\)' -or
+              $registry -notmatch 'Key\("LTRK", "BrcbTrk"\)' -or
+              $registry -notmatch 'Key\("XCBR", "EEName"\)' -or
+              $registry -notmatch 'Key\("LLN0", "MltLev"\)' -or
+              $cdc -notmatch '"CST".*"BTS".*"UTS".*"STS".*"CTS"') {
+            throw 'Canonical IEC model / SCL semantic authority regressed.'
+          }
+
+          Write-Host 'IEDScout convergence contract PASS.'
