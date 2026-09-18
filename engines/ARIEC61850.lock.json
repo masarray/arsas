@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "5b7857f0524f787a325df277908f3943c9336c8c",
+  "commit": "60af0822b4f83db9bf936e1d5f9585caffbaf302",
   "sourcePullRequest": 135,
-  "purpose": "R7 interoperability trial pin. Uses isolated engine PR #135 on top of the green 3ce8 canonical-export lineage: accepted remote AP-title/AE/PSEL/SSEL are decoded from the exact association request bytes accepted by the IED, TSEL is bound to the exact accepted COTP destination selector retained by the live session, exact bounded FC-root instance-value evidence remains part of the canonical live model, safe-connection SCL must preserve IP/AP-title/AE/PSEL/SSEL/TSEL exactly across serialize -> parse before an association plan is accepted, non-102 MMS sessions fail closed because the current SCL plan represents port 102 only, physical ReportControl service capacity remains distinct from logical RCB projection, and the later RCB discovery-read optimization remains excluded so this exporter trial does not broaden the field-qualified discovery request path. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
+  "purpose": "R7 physical SCL repair pin. Accepted remote AP-title/AE/PSEL/SSEL remain decoded from the exact association request bytes accepted by the IED and TSEL remains bound to the accepted COTP destination selector. Physical AA1E1F06R4 evidence additionally proved that indexed RCB siblings may differ in writable/current BufTm, IntgPd, TrgOps and OptFlds while still representing one logical SCL ReportControl; engine head 60af0822 preserves DataSet/ConfRev/domain/LN/buffered identity while allowing that runtime drift. ARSAS consumer-side reconnect must reproduce the proven native calling identity byte-for-byte and canonical save uses full-model SCL; safety is enforced by bounded FC-read policy rather than deleting discovered model leaves. Production promotion remains fail-closed and still requires fresh physical authority.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
