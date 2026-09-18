@@ -1,0 +1,56 @@
+name: Vendor Inter typography assets
+
+on:
+  push:
+    branches:
+      - feat/inter-typography-rendering
+    paths:
+      - .github/workflows/vendor-inter-fonts.yml
+
+permissions:
+  contents: write
+
+jobs:
+  vendor-inter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout typography branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/inter-typography-rendering
+
+      - name: Download verified Inter 4.1 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/Inter-4.1.zip"
+          curl --fail --location --retry 3             --output "$archive"             "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
+          echo "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e  $archive" | sha256sum --check -
+
+      - name: Extract static WPF faces and OFL license
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/Inter-4.1.zip"
+          mkdir -p Assets/Fonts
+          unzip -jo "$archive"             "extras/ttf/Inter-Regular.ttf"             "extras/ttf/Inter-Medium.ttf"             "extras/ttf/Inter-SemiBold.ttf"             "extras/ttf/Inter-Bold.ttf"             -d Assets/Fonts
+          unzip -p "$archive" "LICENSE.txt" > Assets/Fonts/Inter-LICENSE.txt
+          test -s Assets/Fonts/Inter-Regular.ttf
+          test -s Assets/Fonts/Inter-Medium.ttf
+          test -s Assets/Fonts/Inter-SemiBold.ttf
+          test -s Assets/Fonts/Inter-Bold.ttf
+          test -s Assets/Fonts/Inter-LICENSE.txt
+
+      - name: Commit vendored typography assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add Assets/Fonts/Inter-Regular.ttf                   Assets/Fonts/Inter-Medium.ttf                   Assets/Fonts/Inter-SemiBold.ttf                   Assets/Fonts/Inter-Bold.ttf                   Assets/Fonts/Inter-LICENSE.txt
+          if git diff --cached --quiet; then
+            echo "Inter assets already vendored."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "assets: vendor verified Inter 4.1 static fonts"
+          git push origin HEAD:feat/inter-typography-rendering
