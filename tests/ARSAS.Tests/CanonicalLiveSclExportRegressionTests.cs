@@ -116,6 +116,56 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void R7Workflow_BindsArtifactToExactSourceHeadAndReloadContracts()
+    {
+        var workflow = File.ReadAllText(
+            FindRepoFile(".github/workflows/scl-interoperability-r7.yml"));
+
+        Assert.Contains(
+            "ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "git -C .\\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if ($arsasCommit -ne $env:ARSAS_SOURCE_SHA)",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "git clone --quiet --depth 1 --branch $ref",
+            workflow,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "Services/CanonicalSclReloadValidator.cs",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "tests/ARSAS.Tests/CanonicalSclReloadValidatorTests.cs",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CanonicalSclReloadValidator\\.Validate",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ExportedCanonicalScl_ReopensThroughArsasWorkspaceWithoutStructuralDrift",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "34 runtime -> 32 logical with ConfReportControl max=34",
+            workflow,
+            StringComparison.Ordinal);
+    }
+
+
+    [Fact]
     public void EnginePin_MatchesWireEvidenceCanonicalInteroperabilityHead()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
