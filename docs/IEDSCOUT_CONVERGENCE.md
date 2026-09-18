@@ -10,7 +10,7 @@ ARSAS has one active IEC 61850 convergence target:
 
 The machine-readable authority is `evidence/iedscout-convergence-target.json`.
 
-Current R8 model-repair engine authority: `1be4bfc9200b1c21e86fec6ddb0e0ccdeb6d21f0`.
+Current R8 model-repair engine authority: `5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33`.
 
 ## Active stacked PRs
 
@@ -52,3 +52,26 @@ Production promotion remains blocked until AA1E1F06R4 is retested with the exact
 - same-relay comparison against IEDScout.
 
 The field result, not test count alone, decides whether the convergence target has been reached.
+
+
+## R9 physical reuse lock — AA1E1F06R4
+
+The R9 artifact (ARSAS `a89d6ef...`, engine `3e12fb9...`) established a split acceptance result that must not be flattened into a single pass/fail label.
+
+**Locked as working and non-regressible**
+
+- Smart Discovery remains one association and structure-first: 323 confirmed MMS requests, 138 GetNameList, 119 LN-root GVA, 2 GetNamedVariableListAttributes and 64 Reads.
+- Edition 2 structural export reached 32 LD / 119 LN / 860 top-level DO / 906 DO+SDO / 4925 scalar leaves / 2 DataSets / 58 FCDA / 32 logical ReportControls / 1 SettingControl.
+- Reopened Ed2 IID and Ed1 ICD both rebuilt the accepted association and matched 32/32 MMS domains.
+- All trusted-SCL initial FC-root Reads completed on both editions (Ed2 563/563; Ed1 562/562).
+- Both editions preserved 2 static DataSets and the two configured reporting plans (Digital BRCB + Analog URCB), resolved 58/58 runtime points with 0 unavailable points, disabled cyclic process polling, and received actual InformationReport traffic.
+
+**Still open and must not be marked converged**
+
+- Both editions still report exactly 46 initial FC projection errors. This is a semantic SCL/MMS shape problem, not a transport/association problem; target is zero.
+- Ed2 projected 4250 leaves but cached only 4239. The exact 11-leaf loss matches the previously isolated LTRK case-distinct `t` / `T` collapse. The source fix is present but remains pending physical retest.
+- R9 emitted 30 ADD preallocated URCB slots without a DataSet and with concrete runtime `...01` names. Never invent a DataSet. rptID-backed singleton slots must export as indexed logical ReportControl with `RptEnabled max=1`; unassigned indexed slots are warnings, not fatal missing-DataSet errors.
+- R9 exported zero instance `<Val>` elements. Save-time bounded enrichment is a separate explicit phase and must not reintroduce eager FC-root Reads into Smart Discovery.
+- Template deduplication remains secondary and must not trade away semantic correctness.
+
+Future SCL-assisted diagnostics must include representative projection-error details (root + mismatch) so the remaining 46 errors can be fixed from direct evidence rather than inferred from a summary count.

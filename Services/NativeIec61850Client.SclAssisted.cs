@@ -294,8 +294,16 @@ public sealed partial class NativeIec61850Client
             LastReportInventory = ToNativeInventory(reportInventory);
             _trustedSclOnlineAuthorityActive = true;
 
-            var projectionErrors = initialRead.Batches
-                .Sum(batch => batch.Projections.Sum(projection => projection.Errors.Count));
+            var projectionErrorDetails = initialRead.Batches
+                .SelectMany(batch => batch.Projections)
+                .SelectMany(projection => projection.Errors.Select(error =>
+                    $"{projection.Target.MmsReference}: {error}"))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var projectionErrors = projectionErrorDetails.Length;
+            var projectionErrorSamples = projectionErrorDetails
+                .Take(8)
+                .ToArray();
             var extraDomains = online.Domains?.ExtraObservedDomains.Count ?? 0;
             var partial = initialRead.Status == ArMms.InitialFcReadExecutionStatus.Partial;
             LastDiscoverySummary =
@@ -303,7 +311,10 @@ public sealed partial class NativeIec61850Client
                 $"FC-roots={initialRead.Plan.Targets.Count}, successfulReads={initialRead.SuccessfulTargetCount}, " +
                 $"failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
                 $"initialValueCache={_trustedSclInitialValues.Count}, projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
-                $"staticDataSets={dataSetDirectories.Count}, staticRCB={reportInventory.ReportControls.Count}, fullDiscovery=skipped.";
+                $"staticDataSets={dataSetDirectories.Count}, staticRCB={reportInventory.ReportControls.Count}, fullDiscovery=skipped." +
+                (projectionErrorSamples.Length == 0
+                    ? string.Empty
+                    : $" projectionErrorSamples=[{string.Join(" || ", projectionErrorSamples)}]");
             LastConnectionFailureKind = string.Empty;
             LastConnectionTechnicalSummary = online.Domains?.Summary ?? online.Message;
             LastErrorMessage = partial
@@ -315,6 +326,7 @@ public sealed partial class NativeIec61850Client
                     ? new[] { $"IED exposes {extraDomains} extra online MMS domain(s); they remain evidence only and do not mutate the SCL model." }
                     : Array.Empty<string>())
                 .Concat(partial ? new[] { LastErrorMessage } : Array.Empty<string>())
+                .Concat(projectionErrorSamples.Select(error => $"SCL initial projection: {error}"))
                 .Where(message => !string.IsNullOrWhiteSpace(message))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();

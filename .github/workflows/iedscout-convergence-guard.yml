@@ -74,6 +74,42 @@ jobs:
             throw 'Physical IEDScout/legacy regression reference changed unexpectedly.'
           }
 
+
+          $r9 = $target.physicalEvidence.arsasR9
+          if ([int]$r9.discovery.associations -ne 1 -or
+              [int]$r9.discovery.confirmedMmsRequests -ne 323 -or
+              [int]$r9.discovery.getVariableAccessAttributes -ne 119 -or
+              [int]$r9.discovery.topLevelDataObjects -ne 860 -or
+              [int]$r9.discovery.dataObjectsIncludingSdo -ne 906 -or
+              [int]$r9.discovery.scalarLeaves -ne 4925) {
+            throw 'R9 physical discovery/model acceptance evidence drifted.'
+          }
+
+          if ([int]$r9.reuseEdition2.expectedDomains -ne 32 -or
+              [int]$r9.reuseEdition2.matchedDomains -ne 32 -or
+              [int]$r9.reuseEdition2.successfulReads -ne [int]$r9.reuseEdition2.fcRoots -or
+              [int]$r9.reuseEdition2.failedReads -ne 0 -or
+              [int]$r9.reuseEdition2.reportBackedRuntimePoints -ne 58 -or
+              [int]$r9.reuseEdition2.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r9.reuseEdition2.actualInformationReportObserved -or
+              [int]$r9.reuseEdition1.expectedDomains -ne 32 -or
+              [int]$r9.reuseEdition1.matchedDomains -ne 32 -or
+              [int]$r9.reuseEdition1.successfulReads -ne [int]$r9.reuseEdition1.fcRoots -or
+              [int]$r9.reuseEdition1.failedReads -ne 0 -or
+              [int]$r9.reuseEdition1.reportBackedRuntimePoints -ne 58 -or
+              [int]$r9.reuseEdition1.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r9.reuseEdition1.actualInformationReportObserved) {
+            throw 'R9 trusted-SCL reconnect/reporting acceptance evidence regressed.'
+          }
+
+          if ([int]$target.openGaps.trustedSclProjectionParity.targetProjectionErrors -ne 0 -or
+              [int]$target.openGaps.trustedSclProjectionParity.observedEdition2 -ne [int]$r9.reuseEdition2.projectionErrors -or
+              [int]$target.openGaps.trustedSclProjectionParity.observedEdition1 -ne [int]$r9.reuseEdition1.projectionErrors -or
+              [int]$target.openGaps.edition2CaseDistinctInitialValueCache.observedProjectedMinusCached -ne 11 -or
+              [int]$target.openGaps.preallocatedAddReportControls.observedWithoutDataSet -ne 30) {
+            throw 'Known R9 semantic gaps were silently weakened or detached from physical evidence.'
+          }
+
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 

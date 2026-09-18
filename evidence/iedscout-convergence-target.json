@@ -17,7 +17,7 @@
       "repository": "masarray/ARIEC61850",
       "pullRequest": 135,
       "basePullRequest": 134,
-      "head": "1be4bfc9200b1c21e86fec6ddb0e0ccdeb6d21f0"
+      "head": "5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33"
     },
     "consumerIntegration": {
       "repository": "masarray/arsas",
@@ -105,7 +105,9 @@
     "initialTrustedSclReads": "safe bounded FC-root reads after trusted-SCL reconnect",
     "rcbProjection": "34 runtime RCB -> 32 logical ReportControl; ConfReportControl max=34",
     "zeroSilentModelDeletion": true,
-    "physicalReconnectRequired": true
+    "physicalReconnectRequired": true,
+    "reuseTransportAndReportingLock": "Both Edition 2 and Edition 1 must match 32/32 MMS domains, complete all planned safe FC-root Reads without transport failures, preserve both static DataSets, arm exactly the configured Analog/Digital report plans, resolve all 58 runtime points, and observe actual InformationReport traffic.",
+    "semanticProjectionTarget": "projectionErrors=0 and projected leaf cache has no case-collapse loss."
   },
   "promotion": {
     "productionPromoted": false,
@@ -116,6 +118,8 @@
       "new generated Ed2 IID",
       "new generated Ed1 ICD",
       "diagnostic report",
+      "Ed2 SCL-assisted reuse diagnostic with projectionErrorSamples",
+      "Ed1 SCL-assisted reuse diagnostic with projectionErrorSamples",
       "same-relay comparison against IEDScout"
     ]
   },
@@ -129,5 +133,89 @@
       "ARIEC61850 #135",
       "ARSAS #324"
     ]
+  },
+  "physicalEvidence": {
+    "arsasR9": {
+      "relay": "AA1E1F06R4",
+      "testedArtifact": {
+        "appHead": "a89d6ef230951fde98f2b35e38dbc2dc84b6382f",
+        "engineHead": "3e12fb9d84ae27ddbebb2389ed2eb58d0fde6d90"
+      },
+      "discovery": {
+        "associations": 1,
+        "confirmedMmsRequests": 323,
+        "getNameList": 138,
+        "getVariableAccessAttributes": 119,
+        "getNamedVariableListAttributes": 2,
+        "reads": 64,
+        "topLevelDataObjects": 860,
+        "dataObjectsIncludingSdo": 906,
+        "scalarLeaves": 4925,
+        "dataSets": 2,
+        "fcda": 58,
+        "logicalReportControls": 32,
+        "settingControls": 1
+      },
+      "reuseEdition2": {
+        "expectedDomains": 32,
+        "matchedDomains": 32,
+        "fcRoots": 563,
+        "successfulReads": 563,
+        "failedReads": 0,
+        "projectedLeaves": 4250,
+        "initialValueCache": 4239,
+        "projectionErrors": 46,
+        "staticDataSets": 2,
+        "staticReportControls": 32,
+        "reportBackedRuntimePoints": 58,
+        "unresolvedRuntimePoints": 0,
+        "actualInformationReportObserved": true
+      },
+      "reuseEdition1": {
+        "expectedDomains": 32,
+        "matchedDomains": 32,
+        "fcRoots": 562,
+        "successfulReads": 562,
+        "failedReads": 0,
+        "projectedLeaves": 4055,
+        "initialValueCache": 4055,
+        "projectionErrors": 46,
+        "staticDataSets": 2,
+        "staticReportControls": 32,
+        "reportBackedRuntimePoints": 58,
+        "unresolvedRuntimePoints": 0,
+        "actualInformationReportObserved": true
+      }
+    }
+  },
+  "openGaps": {
+    "trustedSclProjectionParity": {
+      "targetProjectionErrors": 0,
+      "observedEdition2": 46,
+      "observedEdition1": 46,
+      "status": "unresolved",
+      "rule": "Do not classify SCL reuse as semantically converged until projectionErrors reaches zero on both editions. Successful MMS Reads alone are insufficient."
+    },
+    "edition2CaseDistinctInitialValueCache": {
+      "targetLoss": 0,
+      "observedProjectedMinusCached": 11,
+      "status": "source-fix-pending-physical-retest",
+      "rule": "LTRK t and T must remain distinct through initial FC projection and cache materialization."
+    },
+    "preallocatedAddReportControls": {
+      "observedWithoutDataSet": 30,
+      "status": "source-fix-pending-physical-retest",
+      "rule": "Do not invent datSet. rptID-backed singleton runtime names ending 01 must project to indexed logical ReportControl max=1; an unassigned indexed slot is a warning, not a fatal missing-DataSet error."
+    },
+    "saveTimeInstanceValues": {
+      "observedR9ExportValCount": 0,
+      "referenceIedScoutValCount": 1529,
+      "status": "source-fix-pending-physical-retest",
+      "rule": "Keep structural discovery read-free; acquire bounded safe FC-root values only during explicit Save SCL and verify resulting instance evidence physically."
+    },
+    "templateReuse": {
+      "status": "secondary-after-semantic-parity",
+      "rule": "Reduce duplicate LNodeType/DOType/DAType templates only after wire and semantic reuse parity is stable."
+    }
   }
 }

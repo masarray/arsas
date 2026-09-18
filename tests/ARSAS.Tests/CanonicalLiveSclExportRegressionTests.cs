@@ -148,6 +148,38 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void R9PhysicalReuse_LocksWorkingPathAndKeepsSemanticProjectionGapOpen()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+
+        Assert.Contains("\"confirmedMmsRequests\": 323", contract, StringComparison.Ordinal);
+        Assert.Contains("\"getVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"topLevelDataObjects\": 860", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataObjectsIncludingSdo\": 906", contract, StringComparison.Ordinal);
+        Assert.Contains("\"scalarLeaves\": 4925", contract, StringComparison.Ordinal);
+
+        Assert.Contains("\"fcRoots\": 563", contract, StringComparison.Ordinal);
+        Assert.Contains("\"successfulReads\": 563", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRoots\": 562", contract, StringComparison.Ordinal);
+        Assert.Contains("\"successfulReads\": 562", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reportBackedRuntimePoints\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unresolvedRuntimePoints\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"actualInformationReportObserved\": true", contract, StringComparison.Ordinal);
+
+        Assert.Contains("\"targetProjectionErrors\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedEdition2\": 46", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedEdition1\": 46", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedProjectedMinusCached\": 11", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedWithoutDataSet\": 30", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedR9ExportValCount\": 0", contract, StringComparison.Ordinal);
+
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+        Assert.Contains("projectionErrorSamples", client, StringComparison.Ordinal);
+        Assert.Contains("SCL initial projection:", client, StringComparison.Ordinal);
+        Assert.Contains("fullDiscovery=skipped", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void R7Workflow_BindsArtifactToExactSourceHeadAndReloadContracts()
     {
         var workflow = File.ReadAllText(
@@ -215,7 +247,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("1be4bfc9200b1c21e86fec6ddb0e0ccdeb6d21f0", contract, StringComparison.Ordinal);
+        Assert.Contains("5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -253,7 +285,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"1be4bfc9200b1c21e86fec6ddb0e0ccdeb6d21f0\"",
+            "\"commit\": \"5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
