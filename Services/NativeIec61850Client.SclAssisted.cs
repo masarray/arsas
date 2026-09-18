@@ -569,6 +569,11 @@ public sealed partial class NativeIec61850Client
             : reference;
     }
 
+    private static bool IsSafeTrustedSclInitialReadFc(string? functionalConstraint)
+        => (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant() is
+            "ST" or "MX" or "SP" or "SV" or "CF" or "DC" or "EX" or "BL" or "OR" or "SR";
+
     private static string NormalizeTrustedSclReference(string? reference)
-        => (reference ?? string.Empty).Trim().Replace('$', '.');
+        => (reference ?? string.Empty).Trim().Replace('}
+, '.');
 }
