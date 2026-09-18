@@ -4,7 +4,7 @@
         Title="{Binding DialogTitle}" Width="760" MinWidth="760" MaxWidth="760"
         SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False" Background="{StaticResource Bg}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico">
     <!-- Default Open SCL heading: Workspace opened offline. The same window is reused
          from an IED card, where ContextHeading is scoped to that exact IED instead. -->
