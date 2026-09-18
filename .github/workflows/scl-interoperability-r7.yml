@@ -6,6 +6,8 @@ on:
       - "Services/NativeIec61850Client.CanonicalModel.cs"
       - "Services/NativeIec61850Client.SmartDiscoveryCapture.cs"
       - "Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"
+      - "Services/NativeIec61850Client.SclAssisted.cs"
+      - "Services/SclAssistedConnectionPreparation.cs"
       - "Models/MonitorModels.cs"
       - "MainWindow.xaml.cs"
       - "Services/CanonicalSclReloadValidator.cs"
@@ -81,9 +83,12 @@ jobs:
           $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\CanonicalLiveIedSclExporter.cs -Raw
           $association = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.AssociationEvidence.cs -Raw
           $cotpClient = Get-Content .\ARIEC61850\src\AR.Iec61850\Osi\CotpClient.cs -Raw
+          $rcbProjector = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveRcbLogicalGroupProjector.cs -Raw
           $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.CanonicalModel.cs -Raw
           $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
           $lifecycle = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
+          $sclClient = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
+          $sclPreparation = Get-Content .\ARSAS\Services\SclAssistedConnectionPreparation.cs -Raw
           $save = Get-Content .\ARSAS\MainWindow.xaml.cs -Raw
           $reloadValidator = Get-Content .\ARSAS\Services\CanonicalSclReloadValidator.cs -Raw
           $regression = Get-Content .\ARSAS\tests\ARSAS.Tests\CanonicalLiveSclExportRegressionTests.cs -Raw
@@ -125,18 +130,26 @@ jobs:
           }
 
           if ($consumer -notmatch 'LiveIedCanonicalModelBuilder\.Build\(model, communication, initialRead\)' -or
-              $capture -notmatch 'InitialFcReadPlanner\.FromSclModel' -or
-              $capture -notmatch 'ExecuteInitialFcReadPlanSmartAsync' -or
+              $capture -match 'InitialFcReadPlanner\.FromSclModel' -or
+              $capture -match 'ExecuteInitialFcReadPlanSmartAsync' -or
+              $capture -notmatch 'initialFcRoots=deferred' -or
               $lifecycle -notmatch 'PublishCanonicalModel\(model, initialRead\)' -or
               $save -notmatch 'CanonicalLiveIedSclExporter\.WriteFiles' -or
+              $save -notmatch 'profile:\s*"full-model"' -or
               $save -notmatch 'CanonicalSclReloadValidator\.Validate' -or
+              $sclPreparation -notmatch 'MmsLocalAssociationProfile\.ExistingRuntimeDefault' -or
+              $sclClient -notmatch 'IsSafeTrustedSclInitialReadFc' -or
+              $sclClient -notmatch 'ExecuteInitialFcReadPlanSmartAsync' -or
               $reloadValidator -notmatch 'workspaceService\.Open' -or
-              $reloadValidator -notmatch 'workspace\.ReportControls\.Count != result\.ReportControlCount' -or
-              $regression -notmatch 'SmartDiscovery_CapturesInitialFcEvidenceIntoSameCanonicalSnapshot' -or
-              $reloadTests -notmatch 'ExportedCanonicalScl_ReopensThroughArsasWorkspaceWithoutStructuralDrift' -or
+              $reloadValidator -notmatch 'result\.Profile.*full-model' -or
+              $reloadValidator -notmatch 'changed the proven calling-side runtime identity' -or
+              $reloadValidator -notmatch 'reproduce accepted association profile' -or
+              $regression -notmatch 'SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan' -or
+              $reloadTests -notmatch 'BuildDefaultAssociationPayload' -or
               $reloadTests -notmatch 'GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity' -or
-              $reloadTests -notmatch 'ConfReportControl') {
-            throw 'ARSAS canonical discovery -> instance evidence -> SCL export -> workspace reload contract is incomplete.'
+              $rcbProjector -match 'SameNumericText\(left\.IntegrityPeriodMs, right\.IntegrityPeriodMs\)' -or
+              $rcbProjector -match 'Same\(left\.OptionalFields, right\.OptionalFields\)') {
+            throw 'ARSAS canonical discovery -> full-model SCL -> exact native reconnect -> safe initial value-read contract is incomplete.'
           }
 
       - name: Setup .NET 8
@@ -197,8 +210,8 @@ jobs:
             "Engine source PR: $env:ARIEC61850_SOURCE_PR",
             '',
             'Acceptance target:',
-            'IED -> Smart Discovery -> Canonical IED Model -> Save SCL Ed1/Ed2 -> ARSAS Workspace Reload -> exact association plan -> MMS association.',
-            'CI reload invariant: identity, endpoint, LD/LN, DataSet and logical RCB counts survive ARSAS workspace reload; golden RCB shape is 34 runtime -> 32 logical with ConfReportControl max=34.',
+            'IED -> fast structural Smart Discovery -> full-model SCL Ed1/Ed2 -> ARSAS Workspace Reload -> exact native calling/called association -> bounded safe FC-root snapshot.',
+            'CI invariant: full-model export excludes no discovered attributes; SCL rebuilds the accepted native handshake; golden RCB shape is 34 runtime -> 32 logical with ConfReportControl max=34.',
             '',
             'This artifact is NOT production-promotion authority and does NOT replace P0-5e/P0-5f physical discovery-budget evidence.'
           ) | Set-Content .\ARSAS\dist\R7-SCL-INTEROP-BUILD.txt -Encoding utf8
