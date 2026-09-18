@@ -207,7 +207,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"6b37ea440c468f986aa1516008d203208e71578c\"",
+            "\"commit\": \"4900427cb1710b433fb74d3ad99099b28ab27ef7\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
@@ -219,6 +219,8 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("CDC-aware WYE/DEL/SEQ SDO", lockFile, StringComparison.Ordinal);
         Assert.Contains("FC ownership", lockFile, StringComparison.Ordinal);
         Assert.Contains("TCTR/TVTR/LTIM/EEName/MltLev", lockFile, StringComparison.Ordinal);
+        Assert.Contains("LTRK service-tracking", lockFile, StringComparison.Ordinal);
+        Assert.Contains("Edition-1 schema downgrade protection", lockFile, StringComparison.Ordinal);
         Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
         Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
