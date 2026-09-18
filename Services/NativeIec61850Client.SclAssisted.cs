@@ -183,10 +183,39 @@ public sealed partial class NativeIec61850Client
                 };
             }
 
+            var safeInitialTargets = preparation.InitialReadPlan.Targets
+                .Where(target => IsSafeTrustedSclInitialReadFc(target.FunctionalConstraint))
+                .ToArray();
+            var safeInitialPlan = ArMms.InitialFcReadPlanner.Build(
+                safeInitialTargets,
+                preparation.InitialReadPlan.MaximumVariableReferencesPerRead);
+            if (!safeInitialPlan.IsValid)
+            {
+                LastConnectionFailureKind = "SCL_INITIAL_FC_PLAN_INVALID";
+                LastErrorMessage = string.Join(" | ", safeInitialPlan.Errors);
+                LastConnectionTechnicalSummary = LastErrorMessage;
+                await _session.DisposeAsync().ConfigureAwait(false);
+                totalWatch.Stop();
+                return new SclAssistedClientConnectResult
+                {
+                    Preparation = preparation,
+                    Online = online,
+                    Warnings = preparation.Warnings,
+                    AssociationValidationDuration = associationDuration,
+                    TotalDuration = totalWatch.Elapsed,
+                    Message = LastErrorMessage
+                };
+            }
+
             var readWatch = Stopwatch.StartNew();
-            var initialRead = await _session.ExecuteInitialFcReadPlanAsync(
-                preparation.InitialReadPlan,
-                TimeSpan.FromSeconds(5),
+            var initialRead = await _session.ExecuteInitialFcReadPlanSmartAsync(
+                safeInitialPlan,
+                new ArMms.MmsSmartInitialFcReadOptions
+                {
+                    MaxOutstandingBatches = 8,
+                    UnknownPeerMaxOutstandingBatches = 4,
+                    PerBatchTimeout = TimeSpan.FromSeconds(5)
+                },
                 cancellationToken).ConfigureAwait(false);
             readWatch.Stop();
             initialReadDuration = readWatch.Elapsed;
