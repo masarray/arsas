@@ -25,6 +25,8 @@ public sealed partial class NativeIec61850Client
         if (!IsSmartDiscoveryAuthorityBoundToCurrentAssociation() ||
             _smartDiscoveryAuthority is null ||
             _smartDiscoveryModelAuthority is null ||
+            LastCanonicalModel is null ||
+            !ReferenceEquals(LastCanonicalModel.Discovery, _smartDiscoveryModelAuthority) ||
             !ReferenceEquals(_lastDiscovery, _smartDiscoveryAuthority) ||
             !ReferenceEquals(_liveModel, _smartDiscoveryModelAuthority))
         {
