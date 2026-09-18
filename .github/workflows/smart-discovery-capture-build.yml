@@ -256,7 +256,7 @@ jobs:
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
             "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
             "Field invariant: one association capture, zero duplicate semantic confirmed requests, peak outstanding never above negotiated calling limit",
-            "Deferred during discovery: supplemental naming, eager report/dataset enrichment, custom sibling/equipment/reference/unit probes"
+            "Deferred during discovery: supplemental naming, reflection fallback, and adaptive sibling/equipment/reference/unit probes; bounded report/DataSet semantic enrichment remains enabled"
           ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
 
       - name: Upload smart field-capture build
