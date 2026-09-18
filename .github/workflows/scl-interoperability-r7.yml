@@ -273,15 +273,23 @@ jobs:
             throw "Portable EXE smoke test failed: $($process.ExitCode)"
           }
 
+          $convergencePath = ".\ARSAS\evidence\iedscout-convergence-target.json"
+          $convergenceHash = (Get-FileHash $convergencePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $convergence = Get-Content $convergencePath -Raw | ConvertFrom-Json
+
           @(
             'ARSAS R7 SCL interoperability field-test build',
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "Engine source PR: $env:ARIEC61850_SOURCE_PR",
+            "Convergence contract SHA256: $convergenceHash",
+            "Convergence status: $($convergence.status)",
+            'Active stack: ARIEC61850 #134 -> #135 -> ARSAS #324',
             '',
             'Acceptance target:',
             'IED -> fast structural Smart Discovery -> full-model SCL Ed1/Ed2 -> ARSAS Workspace Reload -> exact native calling/called association -> bounded safe FC-root snapshot.',
             'CI invariant: full-model export excludes no discovered attributes; SCL rebuilds the accepted native handshake; golden RCB shape is 34 runtime -> 32 logical with ConfReportControl max=34.',
+            'Physical gate: one MMS association; no supplemental legacy browse; no recursive per-leaf GVA storm; same-relay PCAP + Ed2 IID + Ed1 ICD + diagnostic required before promotion.',
             '',
             'This artifact is NOT production-promotion authority and does NOT replace P0-5e/P0-5f physical discovery-budget evidence.'
           ) | Set-Content .\ARSAS\dist\R7-SCL-INTEROP-BUILD.txt -Encoding utf8
@@ -293,6 +301,8 @@ jobs:
           path: |
             ARSAS\dist\ARSAS-*-win-x64-portable.exe
             ARSAS\dist\R7-SCL-INTEROP-BUILD.txt
+            ARSAS\evidence\iedscout-convergence-target.json
+            ARSAS\docs\IEDSCOUT_CONVERGENCE.md
             ARSAS\TestResults\*.trx
           if-no-files-found: error
           retention-days: 14
