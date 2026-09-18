@@ -60,6 +60,63 @@ public sealed class CanonicalSclReloadValidatorTests
     [Theory]
     [InlineData(SclSchemaProfile.Edition2V31)]
     [InlineData(SclSchemaProfile.Edition1V16)]
+    public void ExportedCanonicalScl_PreparesExactSclAssistedAssociationPlan(
+        SclSchemaProfile schema)
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "arsas-canonical-association-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(
+            root,
+            schema == SclSchemaProfile.Edition2V31 ? "relay-association.iid" : "relay-association.icd");
+
+        try
+        {
+            var canonical = CreateCanonical();
+            var result = CanonicalLiveIedSclExporter.WriteFiles(
+                canonical,
+                path,
+                schema,
+                profile: "safe-connection");
+
+            var preparation = SclAssistedConnectionPreparationBuilder.Build(
+                File.ReadAllText(result.SclPath),
+                canonical.IedName,
+                canonical.AccessPointName,
+                canonical.Communication.Host,
+                canonical.Communication.Port);
+
+            Assert.True(
+                preparation.IsSuccess,
+                string.Join(" | ", preparation.Errors));
+            var plan = Assert.IsType<AR.Iec61850.Scl.SclAssistedMmsAssociationPlan>(
+                preparation.AssociationPlan);
+
+            Assert.Equal(canonical.IedName, plan.IedName);
+            Assert.Equal(canonical.AccessPointName, plan.AccessPointName);
+            Assert.Equal(canonical.Communication.Host, plan.Host);
+            Assert.Equal(102, plan.Port);
+
+            Assert.Equal("0001", Convert.ToHexString(plan.Cotp.DestinationTsap));
+            Assert.Equal("00000001", Convert.ToHexString(plan.Association.Called.PresentationSelector));
+            Assert.Equal("0001", Convert.ToHexString(plan.Association.Called.SessionSelector));
+            Assert.Equal(new uint[] { 1, 1, 1, 999, 1 }, plan.Association.Called.ApTitle);
+            Assert.Equal(12, plan.Association.Called.AeQualifier);
+            Assert.NotEmpty(plan.CotpConnectRequest);
+            Assert.NotEmpty(plan.SessionPresentationAcseMmsRequest);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+
+    [Theory]
+    [InlineData(SclSchemaProfile.Edition2V31)]
+    [InlineData(SclSchemaProfile.Edition1V16)]
     public void GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity(
         SclSchemaProfile schema)
     {
