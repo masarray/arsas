@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "30c8820cf922028d3d13b6f5a355df1ff60ea455",
+  "commit": "3ce8d4bce5bb9395b0300a83f289396ef1b95d10",
   "sourcePullRequest": 134,
-  "purpose": "R7 interoperability trial pin. Uses the exact green PR #134 engine head that retains accepted-association communication evidence in the canonical live model, exports safe-connection SCL from that evidence, round-trips the generated ConnectedAP through the engine association planner, preserves physical ReportControl service capacity while projecting compatible numbered runtime RCB families to logical SCL controls, and keeps the existing bounded smart discovery/DataSet/type-enrichment behavior. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
+  "purpose": "R7 interoperability trial pin. Uses the isolated PR #134 canonical-export lineage that retains accepted-association communication evidence plus exact bounded FC-root instance-value evidence in the canonical live model, exports safe-connection SCL solely from that snapshot, materializes only type-proven instance values, round-trips the generated ConnectedAP through the engine association planner, preserves physical ReportControl service capacity while projecting compatible numbered runtime RCB families to logical SCL controls, and deliberately excludes the later RCB discovery-read optimization so the existing physical smart-discovery critical path is not broadened by this exporter trial. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
