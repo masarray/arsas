@@ -62,6 +62,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         LastConnectionTechnicalSummary = string.Empty;
         _lastDiscovery = null;
         _liveModel = null;
+        ClearCanonicalModel();
         _reportMonitorSessions.Clear();
         _reportMonitorCoverage.Clear();
         ResetSemanticReportProjectionContext();
@@ -161,6 +162,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 Port = _port,
                 IncludeLowConfidenceTemplates = true
             });
+            PublishCanonicalModel(_liveModel);
 
             var primarySnapshot = ToNativeSnapshot(discovery.Snapshot);
             progress?.Report(new IedDiscoveryProgress(
@@ -672,6 +674,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 Port = _port,
                 IncludeLowConfidenceTemplates = true
             });
+            PublishCanonicalModel(_liveModel);
             LastReportInventory = ToNativeInventory(discovery.ReportInventory);
             DetectedIdentity = Iec61850DeviceIdentityResolver.Resolve(discovery, _liveModel, Array.Empty<SignalDefinition>());
             LastDiscoverySummary = $"IEDName={(string.IsNullOrWhiteSpace(DetectedIedName) ? "unresolved" : DetectedIedName)} ({DetectedIdentity.Source}); {discovery.Summary} {_liveModel.Summary} Engine=ARIEC61850 live-model/schema/reporting.";
