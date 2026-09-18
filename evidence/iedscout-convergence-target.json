@@ -17,7 +17,7 @@
       "repository": "masarray/ARIEC61850",
       "pullRequest": 135,
       "basePullRequest": 134,
-      "head": "45eab0fbc765a6aa3a1c7a3b72a0293b97eb3fb0"
+      "head": "fd807a4eb6d19235edae08a3eb3c4d2a826ff79b"
     },
     "consumerIntegration": {
       "repository": "masarray/arsas",
@@ -102,7 +102,7 @@
     "reopenInArsasRequired": true,
     "exactAssociationRebuildRequired": true,
     "nativeCallingIdentityRequired": true,
-    "initialTrustedSclReads": "safe bounded FC-root reads after trusted-SCL reconnect",
+    "initialTrustedSclReads": "safe bounded SCL-guided reads after trusted-SCL reconnect; multi-DO CF groups use DO-scoped structured Reads because SCL LNodeType order is not authoritative for MMS FC-root DO order.",
     "rcbProjection": "34 runtime RCB -> 32 logical ReportControl; ConfReportControl max=34",
     "zeroSilentModelDeletion": true,
     "physicalReconnectRequired": true,
@@ -193,8 +193,10 @@
       "targetProjectionErrors": 0,
       "observedEdition2": 46,
       "observedEdition1": 46,
-      "status": "unresolved",
-      "rule": "Do not classify SCL reuse as semantically converged until projectionErrors reaches zero on both editions. Successful MMS Reads alone are insufficient."
+      "status": "source-fix-pending-physical-retest",
+      "rule": "Do not classify SCL reuse as semantically converged until projectionErrors reaches zero on both editions. Successful MMS Reads alone are insufficient.",
+      "rootCause": "R9 PCAP + Ed2 IID reproduction matched all 46 physical errors: every mismatch is in CF, across 18 FC roots / 191 affected SCL leaves, caused by cross-DO positional ordering differences between SCL LNodeType order and the MMS CF structure. No SCL count= arrays are present.",
+      "sourceRepair": "For multi-DO CF groups, InitialFcReadPlanner now emits exact LN$CF$DO targets. InitialFcValueProjector projects each DO value directly, eliminating cross-DO positional mapping while retaining batching."
     },
     "edition2CaseDistinctInitialValueCache": {
       "targetLoss": 0,
@@ -266,5 +268,24 @@
       "settingControls": 1
     },
     "rule": "Do not optimize or enrich structural discovery further while SCL semantic convergence is still open. Any required instance-value acquisition belongs to explicit Save SCL or trusted-SCL reconnect phases."
+  },
+  "p1ProjectionOrderRepair": {
+    "contractId": "P1-CF-DO-SCOPED",
+    "status": "implemented-source-pending-physical-retest",
+    "preservesP0StructuralDiscovery": true,
+    "physicalR9Reproduction": {
+      "projectionErrors": 46,
+      "affectedFcRoots": 18,
+      "affectedSclLeaves": 191,
+      "functionalConstraint": "CF",
+      "sclArrayCountAttributes": 0
+    },
+    "rule": "Never use SCL LNodeType cross-DO order as authority for an MMS multi-DO CF structure. Read each CF DataObject by exact MMS object name and batch those references with the existing bounded Read executor.",
+    "expectedPhysicalOutcome": {
+      "projectionErrors": 0,
+      "noSilentCrossDoValueSwap": true,
+      "sameAssociation": true,
+      "noAdditionalDiscoveryGva": true
+    }
   }
 }

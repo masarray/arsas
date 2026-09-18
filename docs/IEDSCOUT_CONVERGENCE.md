@@ -10,7 +10,7 @@ ARSAS has one active IEC 61850 convergence target:
 
 The machine-readable authority is `evidence/iedscout-convergence-target.json`.
 
-Current R8 model-repair engine authority: `45eab0fbc765a6aa3a1c7a3b72a0293b97eb3fb0`.
+Current R8 model-repair engine authority: `fd807a4eb6d19235edae08a3eb3c4d2a826ff79b`.
 
 ## Active stacked PRs
 
@@ -49,6 +49,26 @@ The physical R9 AA1E1F06R4 reference remains 1 association, 323 confirmed MMS re
 Those counts are physical acceptance evidence for AA1E1F06R4, not constants that ARSAS forces onto unrelated IEDs. The source contract instead freezes the discovery algorithm and bounded policy. Future instance-value work must stay in explicit Save SCL or trusted-SCL reconnect phases.
 
 P1+ semantic/SCL work may change canonical interpretation and export, but it must not add discovery-critical-path MMS traffic or weaken this contract.
+
+
+## P1 — trusted-SCL CF projection-order repair
+
+P1 is implemented in source and remains pending physical retest.
+
+The R9 PCAP and the exact R9 Edition 2 IID reproduce the field symptom deterministically: the old positional projector produces exactly **46 errors affecting 191 SCL leaves**, all under **CF**, across **18 FC roots**. The IID contains no `count=` array declarations, so arrays are not the root cause.
+
+The root cause is representational: SCL `LNodeType` contains one global DataObject order, while MMS exposes a separate DataObject declaration order inside each Functional Constraint structure. For several TCTR, TVTR, MMXU, MSQI, MMTR, RSYN and MHAI nodes, the CF order on wire differs from the SCL DO order. Positional FC-root projection can therefore either fail on leaf-count differences or, worse, silently attach a same-shaped value to the wrong DataObject.
+
+P1 removes that ambiguity without changing P0 discovery:
+
+- multi-DO CF groups are planned as exact structured `LN$CF$DO` Read targets;
+- each DO response is projected only into that named SCL DataObject;
+- the existing Read batching limit remains in force, so this does not become per-leaf traffic;
+- non-CF FC-root hydration remains unchanged;
+- no extra GetVariableAccessAttributes request is added;
+- no second association, discovery pass or supplemental browse is added.
+
+Physical acceptance for P1 is `projectionErrors=0`, no cross-DO value swap, the same accepted association, and no change to the frozen P0 structural-discovery PCAP signature.
 
 ## Regression signatures that are forbidden
 
