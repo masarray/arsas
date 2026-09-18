@@ -288,7 +288,7 @@ public sealed partial class NativeIec61850Client
                 IedDirectory = new ArMms.MmsIedModelDirectory(Array.Empty<ArMms.MmsFcResolvedPoint>()),
                 DataSetDirectories = dataSetDirectories,
                 Summary =
-                    "Trusted SCL authority: Domain/VMD validation and bounded FC-root snapshot completed; " +
+                    "Trusted SCL authority: Domain/VMD validation and bounded SCL-guided structured snapshot completed; " +
                     "static DataSet/RCB authority retained locally; full live discovery intentionally skipped."
             };
             LastReportInventory = ToNativeInventory(reportInventory);
@@ -305,11 +305,13 @@ public sealed partial class NativeIec61850Client
                 .Take(8)
                 .ToArray();
             var extraDomains = online.Domains?.ExtraObservedDomains.Count ?? 0;
+            var dataObjectScopedTargets = initialRead.Plan.Targets.Count(target => target.IsDataObjectScoped);
+            var fcRootTargets = initialRead.Plan.Targets.Count - dataObjectScopedTargets;
             var partial = initialRead.Status == ArMms.InitialFcReadExecutionStatus.Partial;
             LastDiscoverySummary =
                 $"SCL-assisted MMS: domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
-                $"FC-roots={initialRead.Plan.Targets.Count}, successfulReads={initialRead.SuccessfulTargetCount}, " +
-                $"failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
+                $"initialTargets={initialRead.Plan.Targets.Count}, fcRootTargets={fcRootTargets}, doScopedTargets={dataObjectScopedTargets}, " +
+                $"successfulReads={initialRead.SuccessfulTargetCount}, failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
                 $"initialValueCache={_trustedSclInitialValues.Count}, projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
                 $"staticDataSets={dataSetDirectories.Count}, staticRCB={reportInventory.ReportControls.Count}, fullDiscovery=skipped." +
                 (projectionErrorSamples.Length == 0
