@@ -1514,7 +1514,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ConnectAndConfigureDeviceAsync(device, openWizard: false);
     }
 
-    private void IedSaveScl_Click(object sender, RoutedEventArgs e)
+    private async void IedSaveScl_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy)
             return;
@@ -1557,6 +1557,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            if (device.SclWorkspace == null && device.IsConnected)
+            {
+                SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
+                var instanceEvidence = await _runtime
+                    .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
+                AddLog(
+                    "INFO",
+                    "SCL Export",
+                    $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+            }
+
             if (device.SclWorkspace != null &&
                 schema.IsEdition2 &&
                 !string.IsNullOrWhiteSpace(device.SclSourcePath) &&
