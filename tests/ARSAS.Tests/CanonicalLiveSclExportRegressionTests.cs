@@ -66,16 +66,19 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void EnginePin_MatchesCanonicalInstanceValueInteroperabilityHead()
+    public void EnginePin_MatchesWireEvidenceCanonicalInteroperabilityHead()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"3ce8d4bce5bb9395b0300a83f289396ef1b95d10\"",
+            "\"commit\": \"7915b9aa32859d3a76cacc1494835196f64ef89d\"",
             lockFile,
             StringComparison.Ordinal);
-        Assert.Contains("exact bounded FC-root instance-value evidence", lockFile, StringComparison.Ordinal);
-        Assert.Contains("deliberately excludes the later RCB discovery-read optimization", lockFile, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
+        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
+        Assert.Contains("serialize -> parse", lockFile, StringComparison.Ordinal);
+        Assert.Contains("non-102 MMS sessions fail closed", lockFile, StringComparison.Ordinal);
+        Assert.Contains("later RCB discovery-read optimization remains excluded", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
     }
 
