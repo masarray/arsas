@@ -88,11 +88,22 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var exportIndex = saveMethod.IndexOf("CanonicalLiveIedSclExporter.WriteFiles", StringComparison.Ordinal);
         var reloadIndex = saveMethod.IndexOf("CanonicalSclReloadValidator.Validate", StringComparison.Ordinal);
         Assert.True(exportIndex >= 0 && reloadIndex > exportIndex);
-        Assert.Contains("File.Delete(result.SclPath)", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("DeleteFailedCanonicalExportArtifacts(result)", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadLD=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadLN=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadDataSet=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadRCB=", saveMethod, StringComparison.Ordinal);
+
+        var cleanupStart = source.IndexOf(
+            "private static void DeleteFailedCanonicalExportArtifacts(",
+            StringComparison.Ordinal);
+        Assert.True(cleanupStart >= 0);
+        var cleanup = source[cleanupStart..successStart];
+        Assert.Contains("result.SclPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.ReportPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.SummaryPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.ExcludedAttributesPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("File.Delete(path)", cleanup, StringComparison.Ordinal);
 
         Assert.Contains("workspaceService.Open(", validator, StringComparison.Ordinal);
         Assert.Contains("IedName = canonical.IedName", validator, StringComparison.Ordinal);
