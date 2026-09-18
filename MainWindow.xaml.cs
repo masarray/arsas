@@ -1660,16 +1660,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             catch
             {
-                try
-                {
-                    if (File.Exists(result.SclPath))
-                        File.Delete(result.SclPath);
-                }
-                catch
-                {
-                    // Preserve the original reload-validation failure.
-                }
-
+                DeleteFailedCanonicalExportArtifacts(result);
                 throw;
             }
             canonicalExportEvidence = canonical;
@@ -1720,6 +1711,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SetStatus($"{device.Name}: {result.SclSchema} saved to {result.SclPath}");
         ShowSclSaveSuccess(result.SclSchema, result.SclPath, result.ReportPath, result.SummaryPath);
+    }
+
+    private static void DeleteFailedCanonicalExportArtifacts(LiveIedSclExportResult result)
+    {
+        foreach (var path in new[]
+                 {
+                     result.SclPath,
+                     result.ReportPath,
+                     result.SummaryPath,
+                     result.ExcludedAttributesPath
+                 })
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // Preserve the original reload-validation failure.
+            }
+        }
     }
 
     private void ShowSclSaveSuccess(string schema, string sclPath, string reportPath, string summaryPath)
