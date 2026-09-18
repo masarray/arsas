@@ -66,6 +66,33 @@ public static class CanonicalSclReloadValidator
                 string.Join(", ", mismatches) + ".");
         }
 
+        var preparation = SclAssistedConnectionPreparationBuilder.Build(
+            File.ReadAllText(result.SclPath),
+            canonical.IedName,
+            canonical.AccessPointName,
+            canonical.Communication.Host,
+            canonical.Communication.Port);
+        if (!preparation.IsSuccess || preparation.AssociationPlan is null)
+        {
+            var detail = preparation.Errors.Count == 0
+                ? "unknown SCL-assisted preparation failure"
+                : string.Join(" | ", preparation.Errors);
+            throw new InvalidOperationException(
+                "Generated SCL cannot rebuild the ARSAS SCL-assisted reconnect plan: " + detail);
+        }
+
+        var plan = preparation.AssociationPlan;
+        if (!string.Equals(plan.IedName, canonical.IedName, StringComparison.Ordinal) ||
+            !string.Equals(plan.AccessPointName, canonical.AccessPointName, StringComparison.Ordinal) ||
+            !string.Equals(plan.Host, canonical.Communication.Host, StringComparison.OrdinalIgnoreCase) ||
+            plan.Port != canonical.Communication.Port)
+        {
+            throw new InvalidOperationException(
+                $"Generated SCL reconnect plan identity drifted. Expected '{canonical.IedName}/{canonical.AccessPointName}' " +
+                $"at {canonical.Communication.Host}:{canonical.Communication.Port}, rebuilt " +
+                $"'{plan.IedName}/{plan.AccessPointName}' at {plan.Host}:{plan.Port}.");
+        }
+
         return workspace;
     }
 }
