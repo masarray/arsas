@@ -16,14 +16,15 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void SmartDiscovery_CapturesInitialFcEvidenceIntoSameCanonicalSnapshot()
+    public void SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan()
     {
         var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
         var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
 
-        Assert.Contains("InitialFcReadPlanner.FromSclModel", capture, StringComparison.Ordinal);
-        Assert.Contains("ExecuteInitialFcReadPlanSmartAsync", capture, StringComparison.Ordinal);
-        Assert.Contains("initialFcRoots={initialPlan.Targets.Count}/{initialPlanSource.Targets.Count}", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("InitialFcReadPlanner.FromSclModel", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteInitialFcReadPlanSmartAsync", capture, StringComparison.Ordinal);
+        Assert.Contains("initialFcRoots=deferred", capture, StringComparison.Ordinal);
+        Assert.Contains("ArMms.InitialFcReadExecutionResult? initialRead = null", capture, StringComparison.Ordinal);
         Assert.Contains("TryPublishSmartDiscoveryAuthority(", capture, StringComparison.Ordinal);
         Assert.Contains("ArMms.InitialFcReadExecutionResult? initialRead", lifecycle, StringComparison.Ordinal);
         Assert.Contains("PublishCanonicalModel(model, initialRead);", lifecycle, StringComparison.Ordinal);
@@ -63,6 +64,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(staleGuardIndex >= 0);
         Assert.True(canonicalIndex > staleGuardIndex);
         Assert.Contains("if (device.SclWorkspace == null)", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("profile: \"full-model\"", saveMethod, StringComparison.Ordinal);
         Assert.Contains("canonical round-trip verified", saveMethod, StringComparison.Ordinal);
         Assert.Contains("instanceEvidence={canonicalExportEvidence.InstanceValues.Count}", saveMethod, StringComparison.Ordinal);
         Assert.Contains("runtimeRCB={canonicalExportEvidence.Discovery.ReportControls.Count}", saveMethod, StringComparison.Ordinal);
