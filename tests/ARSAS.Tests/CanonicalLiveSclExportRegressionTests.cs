@@ -113,6 +113,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("reloadCoverage.LogicalNodeCount != result.LogicalNodeCount", validator, StringComparison.Ordinal);
         Assert.Contains("workspace.DataSets.Count != result.DataSetCount", validator, StringComparison.Ordinal);
         Assert.Contains("workspace.ReportControls.Count != result.ReportControlCount", validator, StringComparison.Ordinal);
+        Assert.Contains("SclAssistedConnectionPreparationBuilder.Build(", validator, StringComparison.Ordinal);
+        Assert.Contains("preparation.IsSuccess", validator, StringComparison.Ordinal);
+        Assert.Contains("preparation.AssociationPlan", validator, StringComparison.Ordinal);
+        Assert.Contains("Generated SCL cannot rebuild the ARSAS SCL-assisted reconnect plan", validator, StringComparison.Ordinal);
     }
 
     [Fact]
