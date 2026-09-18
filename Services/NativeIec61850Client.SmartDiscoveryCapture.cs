@@ -84,7 +84,7 @@ public sealed partial class NativeIec61850Client
                 progress?.Report(new IedDiscoveryProgress(
                     IedDiscoveryStage.MappingSignals,
                     "Reusing the authoritative smart discovery for this MMS association…",
-                    82d, 7, 10));
+                    84d, 8, 11));
 
                 var cachedProjectionWatch = Stopwatch.StartNew();
                 var cachedSnapshot = ToNativeSnapshot(cachedDiscovery.Snapshot);
@@ -103,7 +103,7 @@ public sealed partial class NativeIec61850Client
                 progress?.Report(new IedDiscoveryProgress(
                     IedDiscoveryStage.ResolvingIdentity,
                     "Resolving IED identity from the cached canonical live model…",
-                    94d, 8, 10));
+                    95d, 9, 11));
 
                 var cachedIdentityWatch = Stopwatch.StartNew();
                 var cachedIdentity = Iec61850DeviceIdentityResolver.Resolve(
@@ -128,6 +128,7 @@ public sealed partial class NativeIec61850Client
                     $"IEDName={(string.IsNullOrWhiteSpace(cachedIdentity.IedName) ? "unresolved" : cachedIdentity.IedName)} ({cachedIdentity.Source}); " +
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
+                    $"instance leaves={LastCanonicalModel?.InstanceValues.Count ?? 0}, " +
                     $"indexed LN hints={cachedProjectionStats.LogicalNodeHints}, indexed fallback signals={cachedProjectionStats.AddedFallbackSignals}. " +
                     $"{cachedBudget} " +
                     $"TimingMs directory=0.0, types=0.0, model=0.0, projection={cachedProjectionWatch.Elapsed.TotalMilliseconds:F1}, " +
@@ -209,6 +210,48 @@ public sealed partial class NativeIec61850Client
                 variableTypeAttributes: variableTypes);
             modelWatch.Stop();
 
+            // The reference capture proves that interoperable SCL requires instance
+            // evidence in addition to hierarchy/type discovery. Read FC roots in bounded
+            // batches so one structured response can populate many deterministic leaves.
+            // BR/RP are excluded because report enrichment already reads those controls.
+            const int maxInitialFcRootTargets = 1200;
+            var initialPlanSource = ArMms.InitialFcReadPlanner.FromSclModel(
+                liveModel,
+                maximumVariableReferencesPerRead: ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead);
+            var initialCandidates = initialPlanSource.Targets
+                .Where(target =>
+                    !string.Equals(target.FunctionalConstraint, "BR", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(target.FunctionalConstraint, "RP", StringComparison.OrdinalIgnoreCase))
+                .Take(maxInitialFcRootTargets)
+                .ToArray();
+            var initialPlan = ArMms.InitialFcReadPlanner.Build(
+                initialCandidates,
+                ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead);
+            ArMms.InitialFcReadExecutionResult? initialRead = null;
+
+            var initialReadWatch = Stopwatch.StartNew();
+            if (initialPlan.IsValid && IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+            {
+                progress?.Report(new IedDiscoveryProgress(
+                    IedDiscoveryStage.BuildingLiveModel,
+                    $"Reading bounded FC-root instance evidence ({initialPlan.Targets.Count} roots, {initialPlan.Batches.Count} batch(es))…",
+                    74d, 7, 11));
+
+                initialRead = await _session.ExecuteInitialFcReadPlanSmartAsync(
+                        initialPlan,
+                        new ArMms.MmsSmartInitialFcReadOptions
+                        {
+                            MaxOutstandingBatches = 8,
+                            UnknownPeerMaxOutstandingBatches = 4
+                        },
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            initialReadWatch.Stop();
+
+            if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
+                return Array.Empty<SignalDefinition>();
+
             var snapshot = ToNativeSnapshot(discovery.Snapshot);
             var reportInventory = ToNativeInventory(discovery.ReportInventory);
 
@@ -261,7 +304,8 @@ public sealed partial class NativeIec61850Client
                 $"indexed LN hints={projectionStats.LogicalNodeHints}, indexed fallback signals={projectionStats.AddedFallbackSignals}. " +
                 $"{typeBudget} " +
                 $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
-                $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
+                $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, initialRead={initialReadWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
+                $"initialFcRoots={initialPlan.Targets.Count}/{initialPlanSource.Targets.Count}, initialReadBatches={initialRead?.Batches.Count ?? 0}, instanceLeaves={initialRead?.ProjectedLeafCount ?? 0}, " +
                 $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
                 "Deferred: supplemental GetNameList, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
 
@@ -271,6 +315,7 @@ public sealed partial class NativeIec61850Client
                     associationGeneration,
                     discovery,
                     liveModel,
+                    initialRead,
                     reportInventory,
                     identity,
                     variableTypes.Count,
