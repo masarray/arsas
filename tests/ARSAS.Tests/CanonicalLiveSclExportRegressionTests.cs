@@ -70,44 +70,39 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void LiveSave_ReopensGeneratedSclThroughWorkspaceParserBeforeSuccess()
+    public void LiveSave_UsesPureWorkspaceReloadValidatorBeforeSuccess()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
-        var helperStart = source.IndexOf(
-            "private SclIedWorkspace ValidateCanonicalSclWorkspaceReload(",
-            StringComparison.Ordinal);
-        var successStart = source.IndexOf(
-            "private void ShowSclSaveSuccess(",
-            StringComparison.Ordinal);
-
-        Assert.True(helperStart >= 0);
-        Assert.True(successStart > helperStart);
-
-        var helper = source[helperStart..successStart];
-        Assert.Contains("_sclWorkspaceService.Open(", helper, StringComparison.Ordinal);
-        Assert.Contains("IedName = canonical.IedName", helper, StringComparison.Ordinal);
-        Assert.Contains("AccessPointName = canonical.AccessPointName", helper, StringComparison.Ordinal);
-        Assert.Contains("endpoint.Port != 102", helper, StringComparison.Ordinal);
-        Assert.Contains("reloadCoverage.LogicalDeviceCount != result.LogicalDeviceCount", helper, StringComparison.Ordinal);
-        Assert.Contains("reloadCoverage.LogicalNodeCount != result.LogicalNodeCount", helper, StringComparison.Ordinal);
-        Assert.Contains("workspace.DataSets.Count != result.DataSetCount", helper, StringComparison.Ordinal);
-        Assert.Contains("workspace.ReportControls.Count != result.ReportControlCount", helper, StringComparison.Ordinal);
-        Assert.Contains("File.Delete(result.SclPath)", helper, StringComparison.Ordinal);
-
+        var validator = File.ReadAllText(FindRepoFile("Services/CanonicalSclReloadValidator.cs"));
         var saveMethodStart = source.IndexOf(
             "private void SaveTypedModelAsScl(",
             StringComparison.Ordinal);
-        Assert.True(saveMethodStart >= 0);
-        var saveMethod = source[saveMethodStart..helperStart];
+        var successStart = source.IndexOf(
+            "private void ShowSclSaveSuccess(",
+            saveMethodStart,
+            StringComparison.Ordinal);
+
+        Assert.True(saveMethodStart >= 0 && successStart > saveMethodStart);
+        var saveMethod = source[saveMethodStart..successStart];
+
         var exportIndex = saveMethod.IndexOf("CanonicalLiveIedSclExporter.WriteFiles", StringComparison.Ordinal);
-        var reloadIndex = saveMethod.IndexOf("ValidateCanonicalSclWorkspaceReload(canonical, result)", StringComparison.Ordinal);
+        var reloadIndex = saveMethod.IndexOf("CanonicalSclReloadValidator.Validate", StringComparison.Ordinal);
         Assert.True(exportIndex >= 0 && reloadIndex > exportIndex);
+        Assert.Contains("File.Delete(result.SclPath)", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadLD=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadLN=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadDataSet=", saveMethod, StringComparison.Ordinal);
         Assert.Contains("reloadRCB=", saveMethod, StringComparison.Ordinal);
-    }
 
+        Assert.Contains("workspaceService.Open(", validator, StringComparison.Ordinal);
+        Assert.Contains("IedName = canonical.IedName", validator, StringComparison.Ordinal);
+        Assert.Contains("AccessPointName = canonical.AccessPointName", validator, StringComparison.Ordinal);
+        Assert.Contains("endpoint.Port != 102", validator, StringComparison.Ordinal);
+        Assert.Contains("reloadCoverage.LogicalDeviceCount != result.LogicalDeviceCount", validator, StringComparison.Ordinal);
+        Assert.Contains("reloadCoverage.LogicalNodeCount != result.LogicalNodeCount", validator, StringComparison.Ordinal);
+        Assert.Contains("workspace.DataSets.Count != result.DataSetCount", validator, StringComparison.Ordinal);
+        Assert.Contains("workspace.ReportControls.Count != result.ReportControlCount", validator, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void EnginePin_MatchesWireEvidenceCanonicalInteroperabilityHead()
