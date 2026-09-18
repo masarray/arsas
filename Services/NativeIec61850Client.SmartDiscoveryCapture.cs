@@ -210,43 +210,12 @@ public sealed partial class NativeIec61850Client
                 variableTypeAttributes: variableTypes);
             modelWatch.Stop();
 
-            // The reference capture proves that interoperable SCL requires instance
-            // evidence in addition to hierarchy/type discovery. Read FC roots in bounded
-            // batches so one structured response can populate many deterministic leaves.
-            // BR/RP are excluded because report enrichment already reads those controls.
-            const int maxInitialFcRootTargets = 1200;
-            var initialPlanSource = ArMms.InitialFcReadPlanner.FromSclModel(
-                liveModel,
-                maximumVariableReferencesPerRead: ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead);
-            var initialCandidates = initialPlanSource.Targets
-                .Where(target =>
-                    !string.Equals(target.FunctionalConstraint, "BR", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(target.FunctionalConstraint, "RP", StringComparison.OrdinalIgnoreCase))
-                .Take(maxInitialFcRootTargets)
-                .ToArray();
-            var initialPlan = ArMms.InitialFcReadPlanner.Build(
-                initialCandidates,
-                ArMms.MmsReadBatchCodec.MaximumVariableReferencesPerRead);
+            // Physical R7 testing showed that eager FC-root instance Reads dominate
+            // discovery latency while generated connection SCL does not require Val
+            // elements to reconnect. Keep Smart Discovery structural/type-only and defer
+            // value acquisition to the normal monitoring or trusted-SCL online path.
             ArMms.InitialFcReadExecutionResult? initialRead = null;
-
             var initialReadWatch = Stopwatch.StartNew();
-            if (initialPlan.IsValid && IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
-            {
-                progress?.Report(new IedDiscoveryProgress(
-                    IedDiscoveryStage.BuildingLiveModel,
-                    $"Reading bounded FC-root instance evidence ({initialPlan.Targets.Count} roots, {initialPlan.Batches.Count} batch(es))…",
-                    74d, 7, 11));
-
-                initialRead = await _session.ExecuteInitialFcReadPlanSmartAsync(
-                        initialPlan,
-                        new ArMms.MmsSmartInitialFcReadOptions
-                        {
-                            MaxOutstandingBatches = 8,
-                            UnknownPeerMaxOutstandingBatches = 4
-                        },
-                        CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
             initialReadWatch.Stop();
 
             if (!IsCurrentSmartDiscoveryAssociationGeneration(associationGeneration))
@@ -305,7 +274,7 @@ public sealed partial class NativeIec61850Client
                 $"{typeBudget} " +
                 $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
                 $"model={modelWatch.Elapsed.TotalMilliseconds:F1}, initialRead={initialReadWatch.Elapsed.TotalMilliseconds:F1}, projection={projectionWatch.Elapsed.TotalMilliseconds:F1}, " +
-                $"initialFcRoots={initialPlan.Targets.Count}/{initialPlanSource.Targets.Count}, initialReadBatches={initialRead?.Batches.Count ?? 0}, instanceLeaves={initialRead?.ProjectedLeafCount ?? 0}, " +
+                $"initialFcRoots=deferred, initialReadBatches=0, instanceLeaves=0, " +
                 $"reportHints={reportWatch.Elapsed.TotalMilliseconds:F1}, identity={identityWatch.Elapsed.TotalMilliseconds:F1}, total={totalWatch.Elapsed.TotalMilliseconds:F1}. " +
                 "Deferred: supplemental GetNameList, reflection fallback, adaptive sibling/equipment/reference/unit probes.";
 
