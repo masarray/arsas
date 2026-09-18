@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+  "commit": "30c8820cf922028d3d13b6f5a355df1ff60ea455",
   "sourcePullRequest": 134,
-  "purpose": "P0-5c ARSAS smart-discovery capture pin. Compiles against the exact P0-5b hierarchy-coverage/GVA-budget convergence engine commit, including live-LN suppression, LN -> unresolved DO -> distinct exact-leaf fallback, exact-repeat suppression, LastSmartTypeProbeBudget diagnostics, association-scoped engine directory single-flight, authoritative domain-variable reuse, and Control inventory injection. ARSAS P0-5c adds one application-level association-generation flight around directory discovery, GVA enrichment, canonical model build, projection, and publication so caller cancellation cannot restart GVA work on the same association and stale reconnect/dispose flights cannot publish into a replacement association. This trial pin changes discovery orchestration only; it preserves the complete field-proven reporting/control ancestry recorded in fieldProvenBaseline below.",
+  "purpose": "R7 interoperability trial pin. Uses the exact green PR #134 engine head that retains accepted-association communication evidence in the canonical live model, exports safe-connection SCL from that evidence, round-trips the generated ConnectedAP through the engine association planner, preserves physical ReportControl service capacity while projecting compatible numbered runtime RCB families to logical SCL controls, and keeps the existing bounded smart discovery/DataSet/type-enrichment behavior. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
   "previousTrialPin": {
-    "commit": "57c8311c0dcf9e51da4d7dc31c757fc3f0912586",
+    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
-    "purpose": "Previous PR #134 R4 smart-discovery capture pin before P0-5b hierarchy request-budget convergence and P0-5c ARSAS association-generation flight integration."
+    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
