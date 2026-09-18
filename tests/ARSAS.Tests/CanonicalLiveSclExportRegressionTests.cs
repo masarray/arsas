@@ -198,6 +198,33 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var buildTargets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
         Assert.Contains("SCL Interoperability R7 Build", buildTargets, StringComparison.Ordinal);
         Assert.Contains("EnableSmartDiscoveryCaptureRoute", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("evidence/iedscout-convergence-target.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("IEDScout convergence source contract regressed", workflow, StringComparison.Ordinal);
+        Assert.Contains("TryResolveStandardSubDataObjectCdc", workflow, StringComparison.Ordinal);
+        Assert.Contains("IsEdition2ServiceTrackingCdc", workflow, StringComparison.Ordinal);
+        Assert.Contains("TryBuildSupplementalGetNameListSnapshotAsync", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IedScoutConvergenceContract_IsSingleActiveAuthorityAndRequiresPhysicalRetest()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var documentation = File.ReadAllText(FindRepoFile("docs/IEDSCOUT_CONVERGENCE.md"));
+
+        Assert.Contains("\"status\": \"physical-retest-required\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
+        Assert.Contains("4900427cb1710b433fb74d3ad99099b28ab27ef7", contract, StringComparison.Ordinal);
+        Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reopenInArsasRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalReconnectRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"productionPromoted\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("\"mergeAllowedBeforePhysicalRetest\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("Only this stack is active for this target", documentation, StringComparison.Ordinal);
+        Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
     }
 
 
