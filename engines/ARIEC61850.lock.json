@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "7915b9aa32859d3a76cacc1494835196f64ef89d",
+  "commit": "c6fdee7f2cdd21dd051e39ffeee14998299ce901",
   "sourcePullRequest": 135,
-  "purpose": "R7 interoperability trial pin. Uses isolated engine PR #135 on top of the green 3ce8 canonical-export lineage: accepted remote AP-title/AE/PSEL/SSEL are decoded from the exact association request bytes accepted by the IED, TSEL is bound to the exact current COTP destination selector, exact bounded FC-root instance-value evidence remains part of the canonical live model, safe-connection SCL must preserve IP/AP-title/AE/PSEL/SSEL/TSEL exactly across serialize -> parse before an association plan is accepted, non-102 MMS sessions fail closed because the current SCL plan represents port 102 only, physical ReportControl service capacity remains distinct from logical RCB projection, and the later RCB discovery-read optimization remains excluded so this exporter trial does not broaden the field-qualified discovery request path. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
+  "purpose": "R7 interoperability trial pin. Uses isolated engine PR #135 on top of the green 3ce8 canonical-export lineage: accepted remote AP-title/AE/PSEL/SSEL are decoded from the exact association request bytes accepted by the IED, TSEL is bound to the exact accepted COTP destination selector retained by the live session, exact bounded FC-root instance-value evidence remains part of the canonical live model, safe-connection SCL must preserve IP/AP-title/AE/PSEL/SSEL/TSEL exactly across serialize -> parse before an association plan is accepted, non-102 MMS sessions fail closed because the current SCL plan represents port 102 only, physical ReportControl service capacity remains distinct from logical RCB projection, and the later RCB discovery-read optimization remains excluded so this exporter trial does not broaden the field-qualified discovery request path. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
