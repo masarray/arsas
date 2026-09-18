@@ -5,7 +5,7 @@
         Height="730" Width="1220" MinHeight="600" MinWidth="980"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Bg}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico"
         Closing="Window_Closing"
         PreviewKeyDown="Window_PreviewKeyDown">

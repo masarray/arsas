@@ -64,7 +64,7 @@
 
                     <TextBox Grid.Column="6" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
                              MinHeight="34" Height="34" Padding="10,4"
-                             FontFamily="Cascadia Mono, Consolas" FontSize="10.2"
+                             FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.2"
                              IsEnabled="{Binding CanRefreshGooseConfiguration}"
                              ToolTip="Advanced BPF filter for GOOSE Ethernet frames"/>
                     <Button Grid.Column="8" Style="{StaticResource IedIconButton}"

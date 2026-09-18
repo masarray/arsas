@@ -43,6 +43,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WPF requires packaged fonts as Resource items (not EmbeddedResource).
+         Static Inter faces keep weight selection deterministic on WPF. -->
+    <None Remove="Assets\Fonts\Inter-*.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Regular.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Medium.ttf" />
+    <Resource Include="Assets\Fonts\Inter-SemiBold.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Bold.ttf" />
     <Resource Include="Assets\app-icon.png" />
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\app-icon-256.png" />
@@ -55,6 +62,9 @@
     <None Update="TRADEMARK.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="COPYRIGHT.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="THIRD_PARTY_NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Assets\Fonts\Inter-LICENSE.txt"
+          CopyToPublishDirectory="PreserveNewest"
+          TargetPath="THIRD_PARTY\Inter-LICENSE.txt" />
     <None Update="NOTICE" CopyToPublishDirectory="PreserveNewest" />
     <None Update="docs\LICENSING.md" CopyToPublishDirectory="PreserveNewest" TargetPath="LICENSING.md" />
     <None Update="engines\ARIEC61850.lock.json"

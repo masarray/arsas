@@ -4,7 +4,11 @@
         Title="ARSAS - Smart IEC 61850 Communication Tester"
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
         WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
         Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Window.Resources>
         <!-- Process state is intentionally separate from health/severity. Active is
@@ -340,10 +344,10 @@
 
 <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="4,0,12,0">
                                                     <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Display" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Ideal" TextTrimming="CharacterEllipsis"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <TextBlock Text="{Binding EndpointText}" FontSize="11.1"
-                                                               Foreground="{StaticResource Muted}" TextOptions.TextFormattingMode="Display" Margin="0,2,0,0"
+                                                               Foreground="{StaticResource Muted}" TextOptions.TextFormattingMode="Ideal" Margin="0,2,0,0"
                                                                TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
@@ -1480,7 +1484,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="BPF filter" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                                     <TextBox Grid.Column="1" Text="{Binding GooseCaptureFilter, UpdateSourceTrigger=PropertyChanged}"
-                                             MinHeight="32" Height="32" Padding="9,4" FontFamily="Cascadia Mono, Consolas" FontSize="10.2"
+                                             MinHeight="32" Height="32" Padding="9,4" FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.2"
                                              IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
                                     <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
                                             IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh SCL/live model bindings">
