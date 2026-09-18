@@ -247,7 +247,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33", contract, StringComparison.Ordinal);
+        Assert.Contains("45eab0fbc765a6aa3a1c7a3b72a0293b97eb3fb0", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -285,7 +285,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"5f15fecec2d6e97d985b1b41c9762e1b8c0a9c33\"",
+            "\"commit\": \"45eab0fbc765a6aa3a1c7a3b72a0293b97eb3fb0\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
