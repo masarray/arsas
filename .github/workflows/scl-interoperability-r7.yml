@@ -5,6 +5,8 @@ on:
     paths:
       - "Services/NativeIec61850Client.CanonicalModel.cs"
       - "Services/NativeIec61850Client.SmartDiscoveryCapture.cs"
+      - "Directory.Build.targets"
+      - "scripts/enable-smart-discovery-capture.ps1"
       - "Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"
       - "Services/NativeIec61850Client.SclAssisted.cs"
       - "Services/SclAssistedConnectionPreparation.cs"
@@ -166,6 +168,18 @@ jobs:
 
       - name: Build ARSAS Release
         run: dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
+
+      - name: Verify R7 smart discovery route was compiled
+        shell: pwsh
+        run: |
+          $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.cs -Raw
+          if ($consumer -notmatch 'DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'R7 build compiled without the smart discovery route; refusing legacy-path artifact.'
+          }
+          if ($consumer -notmatch 'if \(SmartDiscoveryCaptureModeEnabled\)') {
+            throw 'R7 build did not install the smart discovery gate at DiscoverSignalsAsync.'
+          }
+          Write-Host 'R7 smart discovery route is installed in the compiled source.'
 
       - name: Run ARSAS canonical-export regressions
         run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-r7-scl-tests.trx" --results-directory .\ARSAS\TestResults
