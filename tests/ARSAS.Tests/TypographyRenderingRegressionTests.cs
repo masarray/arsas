@@ -14,16 +14,24 @@ public sealed class TypographyRenderingRegressionTests
         Assert.Contains("Assets\\Fonts\\Inter-LICENSE.txt", project, StringComparison.Ordinal);
         Assert.Contains("THIRD_PARTY\\Inter-LICENSE.txt", project, StringComparison.Ordinal);
 
-        foreach (var relativePath in new[]
-                 {
-                     "Assets/Fonts/Inter-Regular.ttf",
-                     "Assets/Fonts/Inter-Medium.ttf",
-                     "Assets/Fonts/Inter-SemiBold.ttf",
-                     "Assets/Fonts/Inter-Bold.ttf"
-                 })
+        var expectedHashes = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            var font = new FileInfo(FindRepoFile(relativePath));
+            ["Assets/Fonts/Inter-Regular.ttf"] = "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+            ["Assets/Fonts/Inter-Medium.ttf"] = "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+            ["Assets/Fonts/Inter-SemiBold.ttf"] = "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+            ["Assets/Fonts/Inter-Bold.ttf"] = "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f"
+        };
+
+        foreach (var (relativePath, expectedHash) in expectedHashes)
+        {
+            var fontPath = FindRepoFile(relativePath);
+            var font = new FileInfo(fontPath);
             Assert.True(font.Length > 100_000, $"{relativePath} is missing or implausibly small.");
+
+            var actualHash = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(fontPath)))
+                .ToLowerInvariant();
+            Assert.Equal(expectedHash, actualHash);
         }
 
         var license = File.ReadAllText(FindRepoFile("Assets/Fonts/Inter-LICENSE.txt"));
@@ -55,6 +63,41 @@ public sealed class TypographyRenderingRegressionTests
         Assert.Contains("TextOptions.TextHintingMode=\"Fixed\"", mainWindow, StringComparison.Ordinal);
         Assert.DoesNotContain("Aptos", mainWindow, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TextOptions.TextFormattingMode=\"Display\"", mainWindow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WorkstationWindows_DoNotReintroduceSystemFontFallbacksOrDisplayMetrics()
+    {
+        var presentationFiles = new[]
+        {
+            "ComtradeWorkspaceWindow.xaml",
+            "ControlCommandWindow.xaml",
+            "DynamicReportQualificationResultWindow.xaml",
+            "FaultRecordWindow.xaml",
+            "IoListTestingWindow.xaml",
+            "IpConnectWizardWindow.xaml",
+            "MainWindow.xaml",
+            "RcbExportFilterWindow.xaml",
+            "SaveSclWindow.xaml",
+            "SclSignalSelectionModeWindow.xaml",
+            "SignalSelectionWizardWindow.xaml",
+            "SmvViewerWindow.xaml",
+            "UpdatePromptWindow.xaml",
+            "Resources/P2BlueSteelGreige.xaml"
+        };
+
+        foreach (var relativePath in presentationFiles)
+        {
+            var xaml = File.ReadAllText(FindRepoFile(relativePath));
+            Assert.DoesNotContain("Aptos", xaml, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("FontFamily=\"Inter,", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("TextFormattingMode\" Value=\"Display\"", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("TextFormattingMode=\"Display\"", xaml, StringComparison.Ordinal);
+        }
+
+        var fat = File.ReadAllText(FindRepoFile("IoListTestingWindow.xaml"));
+        Assert.Contains("FontFamily=\"{StaticResource AppFontFamily}\"", fat, StringComparison.Ordinal);
+        Assert.Contains("TextOptions.TextRenderingMode=\"ClearType\"", fat, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)
