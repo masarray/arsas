@@ -198,7 +198,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
 
     [Fact]
-    public void EnginePin_MatchesWireEvidenceCanonicalInteroperabilityHead()
+    public void EnginePin_MatchesPhysicalSclRepairHead()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
@@ -208,12 +208,18 @@ public sealed class CanonicalLiveSclExportRegressionTests
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
         Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
-        Assert.Contains("exact accepted COTP destination selector retained by the live session", lockFile, StringComparison.Ordinal);
-        Assert.Contains("serialize -> parse", lockFile, StringComparison.Ordinal);
-        Assert.Contains("non-102 MMS sessions fail closed", lockFile, StringComparison.Ordinal);
-        Assert.Contains("later RCB discovery-read optimization remains excluded", lockFile, StringComparison.Ordinal);
+        Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
+        Assert.Contains("runtime-mutable", lockFile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DataSet/ConfRev/domain/LN/buffered identity", lockFile, StringComparison.Ordinal);
+        Assert.Contains("full-model SCL", lockFile, StringComparison.Ordinal);
+        Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"commit\": \"4467124775d8d9d76f3db194f9fbfd97144767a8\"",
+            lockFile,
+            StringComparison.Ordinal);
     }
+
 
     private static string FindRepoFile(string relativePath)
     {
