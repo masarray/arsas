@@ -93,6 +93,25 @@ public static class CanonicalSclReloadValidator
                 $"'{plan.IedName}/{plan.AccessPointName}' at {plan.Host}:{plan.Port}.");
         }
 
+        var canonicalAssociation = canonical.Communication.Association;
+        var rebuiltApTitle = string.Join(",", plan.Association.Called.ApTitle);
+        var rebuiltPsel = Convert.ToHexString(plan.Association.Called.PresentationSelector);
+        var rebuiltSsel = Convert.ToHexString(plan.Association.Called.SessionSelector);
+        var rebuiltTsel = Convert.ToHexString(plan.Cotp.DestinationTsap);
+        if (!string.Equals(rebuiltApTitle, canonicalAssociation.ApTitle, StringComparison.Ordinal) ||
+            plan.Association.Called.AeQualifier != canonicalAssociation.AeQualifier ||
+            !string.Equals(rebuiltPsel, canonicalAssociation.PresentationSelector, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(rebuiltSsel, canonicalAssociation.SessionSelector, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(rebuiltTsel, canonicalAssociation.TransportSelector, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Generated SCL reconnect association drifted from accepted canonical wire evidence. " +
+                $"Expected AP={canonicalAssociation.ApTitle}, AE={canonicalAssociation.AeQualifier}, " +
+                $"PSEL={canonicalAssociation.PresentationSelector}, SSEL={canonicalAssociation.SessionSelector}, " +
+                $"TSEL={canonicalAssociation.TransportSelector}; rebuilt AP={rebuiltApTitle}, " +
+                $"AE={plan.Association.Called.AeQualifier}, PSEL={rebuiltPsel}, SSEL={rebuiltSsel}, TSEL={rebuiltTsel}.");
+        }
+
         return workspace;
     }
 }
