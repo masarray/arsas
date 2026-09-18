@@ -31,7 +31,9 @@ public sealed partial class NativeIec61850Client
     private readonly Dictionary<string, ArMms.MmsDataSetDirectoryResult> _trustedSclDataSetDirectories =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TrustedSclInitialValue> _trustedSclInitialValues =
-        new(StringComparer.OrdinalIgnoreCase);
+        // IEC 61850 object/member identity is case-sensitive. Edition 2 tracking
+        // can legally expose distinct paths such as "...t" and "...T".
+        new(StringComparer.Ordinal);
     private bool _trustedSclOnlineAuthorityActive;
 
     internal bool HasTrustedSclOnlineAuthority => _trustedSclOnlineAuthorityActive;
@@ -261,6 +263,7 @@ public sealed partial class NativeIec61850Client
                     NormalizeTrustedSclReference(directory.DataSetReference)] = directory;
             }
 
+            var projectedInitialValueKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var leaf in initialRead.Batches
                          .SelectMany(batch => batch.Projections)
                          .SelectMany(projection => projection.Leaves))
@@ -268,7 +271,12 @@ public sealed partial class NativeIec61850Client
                 if (string.IsNullOrWhiteSpace(leaf.Reference))
                     continue;
 
-                _trustedSclInitialValues[NormalizeTrustedSclReference(leaf.Reference)] = new TrustedSclInitialValue
+                var normalizedReference = NormalizeTrustedSclReference(leaf.Reference);
+                if (string.IsNullOrWhiteSpace(normalizedReference))
+                    continue;
+
+                projectedInitialValueKeys.Add(normalizedReference);
+                _trustedSclInitialValues[normalizedReference] = new TrustedSclInitialValue
                 {
                     Reference = leaf.Reference,
                     FunctionalConstraint = leaf.FunctionalConstraint,
@@ -276,6 +284,11 @@ public sealed partial class NativeIec61850Client
                     Value = ConvertTrustedSclInitialValue(leaf.Value)
                 };
             }
+
+            var projectedUniqueValues = projectedInitialValueKeys.Count;
+            var initialValueCacheLoss = Math.Max(
+                0,
+                projectedUniqueValues - _trustedSclInitialValues.Count);
 
             _lastDiscovery = new ArMms.MmsDiscoveryResult
             {
@@ -307,21 +320,25 @@ public sealed partial class NativeIec61850Client
             var extraDomains = online.Domains?.ExtraObservedDomains.Count ?? 0;
             var dataObjectScopedTargets = initialRead.Plan.Targets.Count(target => target.IsDataObjectScoped);
             var fcRootTargets = initialRead.Plan.Targets.Count - dataObjectScopedTargets;
-            var partial = initialRead.Status == ArMms.InitialFcReadExecutionStatus.Partial;
+            var partial = initialRead.Status == ArMms.InitialFcReadExecutionStatus.Partial ||
+                          initialValueCacheLoss > 0;
             LastDiscoverySummary =
                 $"SCL-assisted MMS: domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
                 $"initialTargets={initialRead.Plan.Targets.Count}, fcRootTargets={fcRootTargets}, doScopedTargets={dataObjectScopedTargets}, " +
                 $"successfulReads={initialRead.SuccessfulTargetCount}, failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
-                $"initialValueCache={_trustedSclInitialValues.Count}, projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
+                $"projectedUniqueValues={projectedUniqueValues}, initialValueCache={_trustedSclInitialValues.Count}, cacheLoss={initialValueCacheLoss}, " +
+                $"projectionErrors={projectionErrors}, maxVariablesPerRead={initialRead.Plan.MaximumVariableReferencesPerRead}, " +
                 $"staticDataSets={dataSetDirectories.Count}, staticRCB={reportInventory.ReportControls.Count}, fullDiscovery=skipped." +
                 (projectionErrorSamples.Length == 0
                     ? string.Empty
                     : $" projectionErrorSamples=[{string.Join(" || ", projectionErrorSamples)}]");
             LastConnectionFailureKind = string.Empty;
             LastConnectionTechnicalSummary = online.Domains?.Summary ?? online.Message;
-            LastErrorMessage = partial
-                ? "SCL-assisted association is healthy, but one or more initial FC-root values could not be read or projected. The trusted SCL model was preserved."
-                : string.Empty;
+            LastErrorMessage = initialValueCacheLoss > 0
+                ? $"SCL-assisted association is healthy, but exact case-sensitive value caching lost {initialValueCacheLoss} projected value(s). The trusted SCL model was preserved and semantic convergence remains incomplete."
+                : partial
+                    ? "SCL-assisted association is healthy, but one or more initial SCL-guided values could not be read or projected. The trusted SCL model was preserved."
+                    : string.Empty;
 
             var warnings = preparation.Warnings
                 .Concat(extraDomains > 0

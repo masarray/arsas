@@ -125,6 +125,23 @@ jobs:
             throw 'P0 AA1E1F06R4 discovery acceptance contract drifted.'
           }
 
+          $p2 = $target.p2CaseSensitiveValuePipeline
+          if ($p2.contractId -ne 'P2-CASE-EXACT-VALUES' -or
+              $p2.status -ne 'implemented-source-pending-physical-retest' -or
+              -not [bool]$p2.preservesP0StructuralDiscovery -or
+              -not [bool]$p2.preservesP1CfScopedHydration -or
+              [int]$p2.physicalR9Evidence.observedCacheLoss -ne 11 -or
+              [int]$p2.expectedPhysicalOutcome.edition2CacheLoss -ne 0 -or
+              [int]$p2.expectedPhysicalOutcome.edition1CacheLoss -ne 0 -or
+              -not [bool]$p2.expectedPhysicalOutcome.ltrkLowercaseTAndUppercaseTRemainDistinct -or
+              -not [bool]$p2.expectedPhysicalOutcome.noAdditionalDiscoveryGva -or
+              -not [bool]$p2.expectedPhysicalOutcome.sameAssociation -or
+              $p2.sourceInvariants.trustedSclValueCacheComparer -ne 'StringComparer.Ordinal' -or
+              $p2.sourceInvariants.typeSpecificationMemberComparison -ne 'StringComparison.Ordinal' -or
+              $p2.sourceInvariants.sclDataObjectInstanceTargetComparison -ne 'StringComparison.Ordinal') {
+            throw 'P2 exact-case value pipeline contract was weakened.'
+          }
+
           $r9 = $target.physicalEvidence.arsasR9
           if ([int]$r9.discovery.associations -ne 1 -or
               [int]$r9.discovery.confirmedMmsRequests -ne 323 -or
@@ -178,6 +195,10 @@ jobs:
         shell: pwsh
         run: |
           $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $sclAssisted = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
+          $canonicalModel = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedCanonicalModel.cs -Raw
+          $typeHierarchy = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedVariableTypeHierarchy.cs -Raw
+          $canonicalExporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\CanonicalLiveIedSclExporter.cs -Raw
           $targets = Get-Content .\ARSAS\Directory.Build.targets -Raw
           $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
           $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
@@ -186,6 +207,23 @@ jobs:
           $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs -Raw
           $registry = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850StandardModelRegistry.cs -Raw
           $cdc = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\CdcInferenceEngine.cs -Raw
+
+          $valueCacheIndex = $sclAssisted.IndexOf('_trustedSclInitialValues =', [System.StringComparison]::Ordinal)
+          if ($valueCacheIndex -lt 0) {
+            throw 'P2 trusted-SCL value cache declaration is missing.'
+          }
+          $valueCacheLength = [Math]::Min(260, $sclAssisted.Length - $valueCacheIndex)
+          $valueCacheSegment = $sclAssisted.Substring($valueCacheIndex, $valueCacheLength)
+          if ($valueCacheSegment -notmatch 'StringComparer\.Ordinal' -or
+              $valueCacheSegment -match 'StringComparer\.OrdinalIgnoreCase' -or
+              $sclAssisted -notmatch 'projectedUniqueValues' -or
+              $sclAssisted -notmatch 'initialValueCacheLoss' -or
+              $sclAssisted -notmatch 'cacheLoss=\{initialValueCacheLoss\}' -or
+              $canonicalModel -notmatch 'new HashSet<string>\(StringComparer\.Ordinal\)' -or
+              $typeHierarchy -notmatch 'current\.Children\[index\]\.Name, part, StringComparison\.Ordinal\)' -or
+              $canonicalExporter -notmatch 'dataObjectName\.Trim\(\),\s*[\s\S]*?StringComparison\.Ordinal\)') {
+            throw 'P2 case-sensitive value path implementation regressed.'
+          }
 
           if ($targets -notmatch 'SCL Interoperability R7 Build' -or
               $targets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or

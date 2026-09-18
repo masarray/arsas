@@ -211,6 +211,32 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void P2CaseSensitiveValuePipeline_LocksLosslessExactPathIdentity()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+
+        Assert.Contains("\"contractId\": \"P2-CASE-EXACT-VALUES\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedCacheLoss\": 11", contract, StringComparison.Ordinal);
+        Assert.Contains("\"edition2CacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"edition1CacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"ltrkLowercaseTAndUppercaseTRemainDistinct\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"noAdditionalDiscoveryGva\": true", contract, StringComparison.Ordinal);
+
+        var cacheDeclaration = client.IndexOf("_trustedSclInitialValues =", StringComparison.Ordinal);
+        Assert.True(cacheDeclaration >= 0);
+        var cacheSegment = client.Substring(cacheDeclaration, Math.Min(260, client.Length - cacheDeclaration));
+        Assert.Contains("StringComparer.Ordinal", cacheSegment, StringComparison.Ordinal);
+        Assert.DoesNotContain("StringComparer.OrdinalIgnoreCase", cacheSegment, StringComparison.Ordinal);
+
+        Assert.Contains("projectedInitialValueKeys", client, StringComparison.Ordinal);
+        Assert.Contains("projectedUniqueValues", client, StringComparison.Ordinal);
+        Assert.Contains("initialValueCacheLoss", client, StringComparison.Ordinal);
+        Assert.Contains("cacheLoss={initialValueCacheLoss}", client, StringComparison.Ordinal);
+        Assert.Contains("NormalizeTrustedSclReference", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void R9PhysicalReuse_LocksWorkingPathAndKeepsSemanticProjectionGapOpen()
     {
         var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
@@ -310,7 +336,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("fd807a4eb6d19235edae08a3eb3c4d2a826ff79b", contract, StringComparison.Ordinal);
+        Assert.Contains("9935d6902d786cc69b299260fe36b835944d5e81", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -348,7 +374,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"fd807a4eb6d19235edae08a3eb3c4d2a826ff79b\"",
+            "\"commit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);

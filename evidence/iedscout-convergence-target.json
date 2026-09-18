@@ -17,7 +17,7 @@
       "repository": "masarray/ARIEC61850",
       "pullRequest": 135,
       "basePullRequest": 134,
-      "head": "fd807a4eb6d19235edae08a3eb3c4d2a826ff79b"
+      "head": "9935d6902d786cc69b299260fe36b835944d5e81"
     },
     "consumerIntegration": {
       "repository": "masarray/arsas",
@@ -202,7 +202,8 @@
       "targetLoss": 0,
       "observedProjectedMinusCached": 11,
       "status": "source-fix-pending-physical-retest",
-      "rule": "LTRK t and T must remain distinct through initial FC projection and cache materialization."
+      "rule": "LTRK t and T and any other case-distinct IEC 61850 paths must remain separate through TypeSpecification mapping, initial projection, ARSAS cache, canonical instance evidence, DAI/Val export and reopen. cacheLoss must be zero.",
+      "sourceRepair": "ARSAS trusted-SCL initial-value cache now uses StringComparer.Ordinal. Engine canonical value dedup, TypeSpecification member resolution, and canonical SCL instance-value targeting are exact-case. Diagnostics expose projectedUniqueValues and cacheLoss."
     },
     "preallocatedAddReportControls": {
       "observedWithoutDataSet": 30,
@@ -286,6 +287,40 @@
       "noSilentCrossDoValueSwap": true,
       "sameAssociation": true,
       "noAdditionalDiscoveryGva": true
+    }
+  },
+  "p2CaseSensitiveValuePipeline": {
+    "contractId": "P2-CASE-EXACT-VALUES",
+    "status": "implemented-source-pending-physical-retest",
+    "preservesP0StructuralDiscovery": true,
+    "preservesP1CfScopedHydration": true,
+    "physicalR9Evidence": {
+      "edition2ProjectedLeaves": 4250,
+      "edition2InitialValueCache": 4239,
+      "observedCacheLoss": 11,
+      "edition1ProjectedLeaves": 4055,
+      "edition1InitialValueCache": 4055,
+      "edition1ObservedCacheLoss": 0
+    },
+    "sourceInvariants": {
+      "trustedSclValueCacheComparer": "StringComparer.Ordinal",
+      "canonicalInstanceValueDedupComparer": "StringComparer.Ordinal",
+      "typeSpecificationMemberComparison": "StringComparison.Ordinal",
+      "sclDataObjectInstanceTargetComparison": "StringComparison.Ordinal",
+      "sclDaBdaSdoComponentComparison": "StringComparison.Ordinal",
+      "normalizationMayNotFoldCase": true
+    },
+    "diagnosticContract": [
+      "projectedUniqueValues",
+      "initialValueCache",
+      "cacheLoss"
+    ],
+    "expectedPhysicalOutcome": {
+      "edition2CacheLoss": 0,
+      "edition1CacheLoss": 0,
+      "ltrkLowercaseTAndUppercaseTRemainDistinct": true,
+      "noAdditionalDiscoveryGva": true,
+      "sameAssociation": true
     }
   }
 }
