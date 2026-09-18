@@ -17,7 +17,7 @@
       "repository": "masarray/ARIEC61850",
       "pullRequest": 135,
       "basePullRequest": 134,
-      "head": "4900427cb1710b433fb74d3ad99099b28ab27ef7"
+      "head": "d9964a4f8fa3ed7a645ff8f9ad1c8003185e52b9"
     },
     "consumerIntegration": {
       "repository": "masarray/arsas",
@@ -92,7 +92,10 @@
       "STS",
       "CTS"
     ],
-    "edition1TrackingDowngrade": "omit with explicit warning; never emit invalid Edition 1 SCL"
+    "edition1TrackingDowngrade": "omit with explicit warning; never emit invalid Edition 1 SCL",
+    "mmsTypeDeclarationOrder": "LN-root TypeSpecification declaration order is authoritative through model, SCL and FC-root projection.",
+    "settingFunctionalConstraints": "SG/SE are setting data; only actual SGCB produces SettingControl.",
+    "mhaiThdProjection": "MHAI ThdA/ThdPhV are WYE with CMV phase SDOs."
   },
   "sclAcceptance": {
     "profile": "full-model",
