@@ -203,7 +203,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"5b7857f0524f787a325df277908f3943c9336c8c\"",
+            "\"commit\": \"60af0822b4f83db9bf936e1d5f9585caffbaf302\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
