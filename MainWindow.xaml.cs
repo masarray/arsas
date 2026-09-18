@@ -1631,15 +1631,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SclSchemaProfileDescriptor schema,
         string outputPath)
     {
-        var result = LiveIedSclExporter.WriteFiles(
-            model,
-            outputPath,
-            new LiveIedSclExportOptions
+        LiveIedSclExportResult result;
+        if (device.SclWorkspace == null)
+        {
+            var canonical = device.LiveCanonicalModel
+                ?? throw new InvalidOperationException(
+                    "The live discovery model is not bound to accepted MMS association evidence. Re-scan the IED before saving SCL.");
+
+            if (!ReferenceEquals(canonical.Discovery, model))
             {
-                Profile = "safe-connection",
-                SchemaProfile = schema.Profile,
-                IpAddress = device.IpAddress
-            });
+                throw new InvalidOperationException(
+                    "The canonical association snapshot does not belong to the current live discovery model. Re-scan the IED before saving SCL.");
+            }
+
+            result = CanonicalLiveIedSclExporter.WriteFiles(
+                canonical,
+                outputPath,
+                schema.Profile,
+                profile: "safe-connection");
+        }
+        else
+        {
+            result = LiveIedSclExporter.WriteFiles(
+                model,
+                outputPath,
+                new LiveIedSclExportOptions
+                {
+                    Profile = "safe-connection",
+                    SchemaProfile = schema.Profile,
+                    IpAddress = device.IpAddress
+                });
+        }
 
         AddLog(
             "INFO",
