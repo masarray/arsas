@@ -4,7 +4,7 @@
         Title="Add IEC 61850 IED" Height="470" Width="700"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource Bg}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico">
     <Grid Margin="22">
         <Grid.RowDefinitions>
