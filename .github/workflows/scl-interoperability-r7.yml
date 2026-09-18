@@ -65,6 +65,7 @@ jobs:
           $canonical = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedCanonicalModel.cs -Raw
           $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\CanonicalLiveIedSclExporter.cs -Raw
           $association = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.AssociationEvidence.cs -Raw
+          $cotpClient = Get-Content .\ARIEC61850\src\AR.Iec61850\Osi\CotpClient.cs -Raw
           $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.CanonicalModel.cs -Raw
           $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
           $lifecycle = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
@@ -98,8 +99,11 @@ jobs:
             $wireReader = '.\ARIEC61850\src\AR.Iec61850\Acse\AcseAssociationRequestIdentityReader.cs'
             if (!(Test-Path $wireReader) -or
                 $association -notmatch 'AcseAssociationRequestIdentityReader\.Read' -or
+                $association -notmatch '_cotp\.LastConnectParameters\?\.DestinationTsap' -or
+                $cotpClient -notmatch 'public CotpConnectParameters\? LastConnectParameters' -or
+                $cotpClient -notmatch 'LastConnectParameters = acceptedParameters' -or
                 $association -match 'ApTitle\s*=\s*"1,1,1,999,1"') {
-              throw 'PR #135 must derive canonical communication evidence from exact accepted association bytes, not duplicated profile constants.'
+              throw 'PR #135 must derive canonical AP/AE/selectors from exact accepted ACSE and COTP session evidence, not duplicated profile constants.'
             }
           }
 
