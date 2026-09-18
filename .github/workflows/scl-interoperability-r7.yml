@@ -86,6 +86,7 @@ jobs:
           $rcbProjector = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveRcbLogicalGroupProjector.cs -Raw
           $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.CanonicalModel.cs -Raw
           $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $buildTargets = Get-Content .\ARSAS\Directory.Build.targets -Raw
           $lifecycle = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
           $sclClient = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
           $sclPreparation = Get-Content .\ARSAS\Services\SclAssistedConnectionPreparation.cs -Raw
@@ -133,6 +134,8 @@ jobs:
               $capture -match 'InitialFcReadPlanner\.FromSclModel' -or
               $capture -match 'ExecuteInitialFcReadPlanSmartAsync' -or
               $capture -notmatch 'initialFcRoots=deferred' -or
+              $buildTargets -notmatch 'SCL Interoperability R7 Build' -or
+              $buildTargets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
               $lifecycle -notmatch 'PublishCanonicalModel\(model, initialRead\)' -or
               $save -notmatch 'CanonicalLiveIedSclExporter\.WriteFiles' -or
               $save -notmatch 'profile:\s*"full-model"' -or
