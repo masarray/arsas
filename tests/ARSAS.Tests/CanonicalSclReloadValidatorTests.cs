@@ -115,6 +115,61 @@ public sealed class CanonicalSclReloadValidatorTests
 
 
     [Theory]
+    [InlineData("OSI-AP-Title", "1,1,1,999,2")]
+    [InlineData("OSI-AE-Qualifier", "13")]
+    [InlineData("OSI-PSEL", "00000002")]
+    [InlineData("OSI-SSEL", "0002")]
+    [InlineData("OSI-TSEL", "0002")]
+    public void WorkspaceReload_RejectsValidButDifferentAssociationIdentity(
+        string parameterType,
+        string replacementValue)
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "arsas-canonical-association-drift-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "relay-association-drift.iid");
+
+        try
+        {
+            var canonical = CreateCanonical();
+            var result = CanonicalLiveIedSclExporter.WriteFiles(
+                canonical,
+                path,
+                SclSchemaProfile.Edition2V31,
+                profile: "safe-connection");
+
+            var document = XDocument.Load(result.SclPath);
+            var ns = document.Root!.Name.Namespace;
+            var parameter = document.Descendants(ns + "P")
+                .Single(element =>
+                    string.Equals(
+                        (string?)element.Attribute("type"),
+                        parameterType,
+                        StringComparison.Ordinal));
+            parameter.Value = replacementValue;
+            document.Save(result.SclPath);
+
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                CanonicalSclReloadValidator.Validate(
+                    new SclWorkspaceService(),
+                    canonical,
+                    result));
+
+            Assert.Contains(
+                "Generated SCL reconnect association drifted from accepted canonical wire evidence",
+                error.Message,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+
+    [Theory]
     [InlineData(SclSchemaProfile.Edition2V31)]
     [InlineData(SclSchemaProfile.Edition1V16)]
     public void GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity(
