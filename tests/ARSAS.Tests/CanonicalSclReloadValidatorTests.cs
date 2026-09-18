@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Scl;
 using AR.Iec61850.Scl.Export;
@@ -55,6 +56,112 @@ public sealed class CanonicalSclReloadValidatorTests
                 Directory.Delete(root, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData(SclSchemaProfile.Edition2V31)]
+    [InlineData(SclSchemaProfile.Edition1V16)]
+    public void GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity(
+        SclSchemaProfile schema)
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "arsas-canonical-rcb-reload-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(
+            root,
+            schema == SclSchemaProfile.Edition2V31 ? "relay-rcb.iid" : "relay-rcb.icd");
+
+        try
+        {
+            var canonical = CreateGoldenRcbCanonical();
+            Assert.Equal(34, canonical.Discovery.ReportControls.Count);
+
+            var result = CanonicalLiveIedSclExporter.WriteFiles(
+                canonical,
+                path,
+                schema,
+                profile: "safe-connection");
+            var workspace = CanonicalSclReloadValidator.Validate(
+                new SclWorkspaceService(),
+                canonical,
+                result);
+
+            Assert.Equal(32, result.ReportControlCount);
+            Assert.Equal(32, workspace.ReportControls.Count);
+
+            var document = XDocument.Load(result.SclPath);
+            var ns = document.Root!.Name.Namespace;
+            var conf = document.Descendants(ns + "ConfReportControl").Single();
+            Assert.Equal("34", (string?)conf.Attribute("max"));
+
+            var buffer = document.Descendants(ns + "ReportControl")
+                .Single(element => (string?)element.Attribute("name") == "Buffer");
+            var unbuffer = document.Descendants(ns + "ReportControl")
+                .Single(element => (string?)element.Attribute("name") == "Unbuffer");
+            Assert.Equal("true", (string?)buffer.Attribute("indexed"));
+            Assert.Equal("2", (string?)buffer.Element(ns + "RptEnabled")?.Attribute("max"));
+            Assert.Equal("true", (string?)unbuffer.Attribute("indexed"));
+            Assert.Equal("2", (string?)unbuffer.Element(ns + "RptEnabled")?.Attribute("max"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static LiveIedCanonicalModel CreateGoldenRcbCanonical()
+    {
+        var baseline = CreateCanonical();
+        var controls = Enumerable.Range(1, 30)
+            .Select(index => RuntimeControl(
+                $"Standalone_{index}_X",
+                buffered: false,
+                reportId: $"RID_{index}_X"))
+            .Concat(
+            [
+                RuntimeControl("Buffer01", buffered: true, reportId: "RID_Buffer01"),
+                RuntimeControl("Buffer02", buffered: true, reportId: "RID_Buffer02"),
+                RuntimeControl("Unbuffer01", buffered: false, reportId: "RID_Unbuffer01"),
+                RuntimeControl("Unbuffer02", buffered: false, reportId: "RID_Unbuffer02")
+            ])
+            .ToArray();
+
+        return new LiveIedCanonicalModel
+        {
+            Discovery = new LiveIedModelDiscoveryDocument
+            {
+                Host = baseline.Discovery.Host,
+                Port = baseline.Discovery.Port,
+                IedName = baseline.Discovery.IedName,
+                AccessPointName = baseline.Discovery.AccessPointName,
+                LogicalDevices = baseline.Discovery.LogicalDevices,
+                ReportControls = controls
+            },
+            Communication = baseline.Communication
+        };
+    }
+
+    private static LiveIedReportControlModel RuntimeControl(
+        string name,
+        bool buffered,
+        string reportId)
+        => new()
+        {
+            Reference = $"IEDLD0/LLN0${(buffered ? "BR" : "RP")}${name}",
+            Domain = "IEDLD0",
+            LogicalNode = "LLN0",
+            Name = name,
+            Buffered = buffered,
+            DataSetReference = string.Empty,
+            ReportId = reportId,
+            ConfRev = "1",
+            TriggerOptions = "dchg,qchg,gi",
+            OptionalFields = "seqnum,timestamp,dataset,dataref",
+            BufferTimeMs = buffered ? "10" : "0",
+            IntegrityPeriodMs = "1000"
+        };
+
 
     private static LiveIedCanonicalModel CreateCanonical()
         => new()
