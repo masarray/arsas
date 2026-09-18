@@ -33,6 +33,7 @@ A build is rejected if it restores any of these patterns:
 - descendant CF attributes inherit MX from a measurement parent;
 - standard TCTR/TVTR/LTIM/EEName/MltLev objects are discarded because heuristic CDC inference is incomplete;
 - Edition 2 LTRK tracking CDCs are emitted into Edition 1 SCL;
+- case-distinct MMS/SCL member names such as LTRK `t` and `T` are collapsed by case-insensitive indexing or export trees;
 - runtime RCB siblings are exported as separate logical ReportControl objects solely because mutable RCB settings differ;
 - canonical save silently succeeds without reopen + association-plan validation.
 
