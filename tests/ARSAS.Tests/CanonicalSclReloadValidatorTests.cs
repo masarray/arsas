@@ -32,6 +32,9 @@ public sealed class CanonicalSclReloadValidatorTests
                 schema,
                 profile: "full-model");
 
+            Assert.Equal("full-model", result.Profile);
+            Assert.Empty(result.ExcludedAttributes);
+
             var workspace = CanonicalSclReloadValidator.Validate(
                 new SclWorkspaceService(),
                 canonical,
