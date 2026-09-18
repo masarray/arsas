@@ -34,6 +34,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private int _unreadEventCount;
     private SclIedWorkspace? _sclWorkspace;
     private LiveIedModelDiscoveryDocument? _liveDiscoveryModel;
+    private LiveIedCanonicalModel? _liveCanonicalModel;
     private SclLiveModelComparisonResult? _sclComparison;
     private string _sclSourcePath = string.Empty;
     private string _sclSourceSha256 = string.Empty;
@@ -66,6 +67,17 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             if (ReferenceEquals(_liveDiscoveryModel, value)) return;
             _liveDiscoveryModel = value;
             RefreshAuthoritativeSclComparison();
+            RefreshComputed();
+        }
+    }
+
+    public LiveIedCanonicalModel? LiveCanonicalModel
+    {
+        get => _liveCanonicalModel;
+        set
+        {
+            if (ReferenceEquals(_liveCanonicalModel, value)) return;
+            _liveCanonicalModel = value;
             RefreshComputed();
         }
     }
