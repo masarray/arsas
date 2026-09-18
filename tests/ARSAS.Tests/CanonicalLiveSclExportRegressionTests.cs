@@ -52,12 +52,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void EnginePin_MatchesValidatedCanonicalInteroperabilityHead()
+    public void EnginePin_MatchesCanonicalInstanceValueInteroperabilityHead()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"30c8820cf922028d3d13b6f5a355df1ff60ea455\"",
+            "\"commit\": \"3ce8d4bce5bb9395b0300a83f289396ef1b95d10\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("round-trip association validation", lockFile, StringComparison.Ordinal);
