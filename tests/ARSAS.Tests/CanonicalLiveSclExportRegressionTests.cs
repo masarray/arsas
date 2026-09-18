@@ -79,7 +79,8 @@ public sealed class CanonicalLiveSclExportRegressionTests
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
-        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);\n        Assert.Contains("exact accepted COTP destination selector retained by the live session", lockFile, StringComparison.Ordinal);
+        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
+        Assert.Contains("exact accepted COTP destination selector retained by the live session", lockFile, StringComparison.Ordinal);
         Assert.Contains("serialize -> parse", lockFile, StringComparison.Ordinal);
         Assert.Contains("non-102 MMS sessions fail closed", lockFile, StringComparison.Ordinal);
         Assert.Contains("later RCB discovery-read optimization remains excluded", lockFile, StringComparison.Ordinal);
