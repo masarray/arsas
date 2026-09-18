@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "name": "IEDScout discovery and SCL convergence",
+  "status": "physical-retest-required",
+  "target": {
+    "discovery": "Reach IEDScout-like MMS discovery efficiency without sacrificing exact IEC 61850 model evidence.",
+    "model": "Build the canonical IEC 61850 model from structure-first MMS evidence with correct LN identity, DO/SDO hierarchy, FC ownership, DataSet/RCB semantics, and schema-aware CDC handling.",
+    "scl": "Save Edition 2 IID / Edition 1 ICD that reopens in ARSAS, reconnects to the relay, and is usable as trusted SCL."
+  },
+  "activeStack": {
+    "enginePerformance": {
+      "repository": "masarray/ARIEC61850",
+      "pullRequest": 134,
+      "head": "a31e396f0bbc9507215a8c9d125e910555ed6f0a"
+    },
+    "engineModelAndScl": {
+      "repository": "masarray/ARIEC61850",
+      "pullRequest": 135,
+      "basePullRequest": 134,
+      "head": "4900427cb1710b433fb74d3ad99099b28ab27ef7"
+    },
+    "consumerIntegration": {
+      "repository": "masarray/arsas",
+      "pullRequest": 324,
+      "branch": "test/smart-ied-discovery-pr134"
+    }
+  },
+  "physicalReference": {
+    "relay": "AA1E1F06R4",
+    "logicalDevices": 32,
+    "logicalNodes": 119,
+    "dataSets": 2,
+    "runtimeReportControls": 34,
+    "logicalSclReportControls": 32,
+    "iedScoutCapture": {
+      "associations": 1,
+      "confirmedMmsRequests": 417,
+      "getVariableAccessAttributes": 119,
+      "reads": 156,
+      "note": "Reference capture supplied by the physical comparison; values are acceptance reference, not CI-simulated proof."
+    },
+    "rejectedLegacyArsasCapture": {
+      "associations": 2,
+      "confirmedMmsRequests": 30552,
+      "getVariableAccessAttributes": 23724,
+      "reads": 6548,
+      "note": "Regression signature. A future field build showing this pattern is rejected."
+    },
+    "iedScoutSclReference": {
+      "lDevices": 32,
+      "logicalNodes": 119,
+      "dataSets": 2,
+      "fcda": 58,
+      "logicalReportControls": 32,
+      "expandedTopLevelDataObjects": 860,
+      "expandedDataObjectsIncludingSdo": 906,
+      "expandedScalarLeaves": 4925
+    }
+  },
+  "discoveryAcceptance": {
+    "exactlyOneAssociation": true,
+    "supplementalLegacyAssociationForbidden": true,
+    "recursivePerLeafGvaStormForbidden": true,
+    "secondFullGetNameListSweepForbidden": true,
+    "eagerInitialFcValueReadDuringStructuralDiscovery": false,
+    "typeStrategy": "LN/root structure first, bounded leaf fallback only when exact structure evidence is unavailable.",
+    "physicalPerformanceGate": "Compare request count, GVA count, Read count, peak outstanding calls, TTFI and total discovery time against IEDScout on the same relay."
+  },
+  "modelAcceptance": {
+    "prefixedLogicalNodeIdentityExamples": [
+      "RPRE_MMXU1 => prefix=RPRE_, lnClass=MMXU, lnInst=1",
+      "FPRE_MMXN1 => prefix=FPRE_, lnClass=MMXN, lnInst=1",
+      "I01ATCTR1 => prefix=I01A, lnClass=TCTR, lnInst=1"
+    ],
+    "standardSdoProjection": [
+      "WYE",
+      "DEL",
+      "SEQ"
+    ],
+    "descendantFunctionalConstraintOwnership": true,
+    "standardRegistryAuthority": [
+      "TCTR",
+      "TVTR",
+      "LTIM",
+      "EEName",
+      "MltLev"
+    ],
+    "edition2ServiceTrackingCdc": [
+      "CST",
+      "BTS",
+      "UTS",
+      "STS",
+      "CTS"
+    ],
+    "edition1TrackingDowngrade": "omit with explicit warning; never emit invalid Edition 1 SCL"
+  },
+  "sclAcceptance": {
+    "profile": "full-model",
+    "reopenInArsasRequired": true,
+    "exactAssociationRebuildRequired": true,
+    "nativeCallingIdentityRequired": true,
+    "initialTrustedSclReads": "safe bounded FC-root reads after trusted-SCL reconnect",
+    "rcbProjection": "34 runtime RCB -> 32 logical ReportControl; ConfReportControl max=34",
+    "zeroSilentModelDeletion": true,
+    "physicalReconnectRequired": true
+  },
+  "promotion": {
+    "productionPromoted": false,
+    "mergeAllowedBeforePhysicalRetest": false,
+    "physicalRetestRequired": true,
+    "requiredEvidence": [
+      "new ARSAS PCAP",
+      "new generated Ed2 IID",
+      "new generated Ed1 ICD",
+      "diagnostic report",
+      "same-relay comparison against IEDScout"
+    ]
+  },
+  "legacyPolicy": {
+    "rule": "Historical PRs may remain as provenance only; they must not be used as new branch bases after an active convergence authority supersedes them.",
+    "knownInvalidAuthority": [
+      "PR #125 calling identity profile"
+    ],
+    "activeAuthorityOnly": [
+      "ARIEC61850 #134",
+      "ARIEC61850 #135",
+      "ARSAS #324"
+    ]
+  }
+}
