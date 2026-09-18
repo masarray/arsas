@@ -1650,7 +1650,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 canonical,
                 outputPath,
                 schema.Profile,
-                profile: "safe-connection");
+                profile: "full-model");
             try
             {
                 canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
