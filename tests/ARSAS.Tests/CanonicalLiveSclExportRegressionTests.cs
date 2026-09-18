@@ -63,6 +63,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(staleGuardIndex >= 0);
         Assert.True(canonicalIndex > staleGuardIndex);
         Assert.Contains("if (device.SclWorkspace == null)", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("canonical round-trip verified", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("instanceEvidence={canonicalExportEvidence.InstanceValues.Count}", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("runtimeRCB={canonicalExportEvidence.Discovery.ReportControls.Count}", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("logicalExportRCB={result.ReportControlCount}", saveMethod, StringComparison.Ordinal);
     }
 
     [Fact]
