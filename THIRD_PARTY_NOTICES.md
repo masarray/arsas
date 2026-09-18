@@ -6,6 +6,15 @@ ArIED 61850 is distributed under `GPL-3.0-or-later`. Its licensing does not chan
 
 ArIED references the separately maintained ARIEC61850 source project at build time. Distributed combined builds must comply with the license and notices of the exact ARIEC61850 revision that is packaged. The application repository does not replace, relicense, or conceal the engine.
 
+
+## Inter typeface
+
+ARSAS bundles the unmodified static **Inter 4.1** TrueType faces used by the WPF user interface: Regular, Medium, SemiBold, and Bold. The source is the official Inter 4.1 release published by the Inter project at `rsms/inter`.
+
+Inter is licensed under the **SIL Open Font License 1.1 (OFL-1.1)**. The complete license is retained at `Assets/Fonts/Inter-LICENSE.txt` and is copied into published builds as `THIRD_PARTY/Inter-LICENSE.txt`.
+
+The bundled font files are redistributed unmodified. ARSAS does not rename the Inter reserved font name or represent the font as project-owned software. The font is used only as a presentation resource; it does not alter IEC 61850 data, protocol behavior, engineering calculations, or report evidence.
+
 ## External intellectual-property boundary
 
 No source code, binary, header, generated binding, wrapper, example, test, API layer, executable, manual, brochure, help file, screenshot, icon, logo, product photo, report template, UI resource, database, capture, or extracted asset from an unrelated external implementation or proprietary engineering product is included or directly required by this application repository.

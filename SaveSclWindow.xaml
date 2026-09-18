@@ -5,7 +5,7 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource Bg}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded">
     <Window.Resources>
         <LinearGradientBrush x:Key="EditionToggleSelected" StartPoint="0,0" EndPoint="1,1">

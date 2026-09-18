@@ -141,23 +141,23 @@
         <Setter Property="FontSize" Value="15"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
     </Style>
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12.2"/>
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
     </Style>
     <Style x:Key="Caption" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource Muted}"/>
         <Setter Property="FontSize" Value="11.8"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
     </Style>
     <Style x:Key="MicroLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#5D6A73"/>
         <Setter Property="FontSize" Value="10.6"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
     </Style>
 
     <!-- Panels -->

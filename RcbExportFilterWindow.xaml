@@ -5,7 +5,7 @@
         Height="610" Width="1000" MinHeight="560" MinWidth="880"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
         Background="{StaticResource AppBackgroundGradient}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded">
     <Window.Resources>
         <SolidColorBrush x:Key="RcbInk" Color="#20304A"/>

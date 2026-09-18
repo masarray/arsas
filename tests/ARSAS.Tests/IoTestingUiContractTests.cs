@@ -196,7 +196,7 @@ public sealed class IoTestingUiContractTests
             document.Descendants(presentation + "Setter"),
             setter => (string?)setter.Attribute("Property") == "MinHeight" &&
                       (string?)setter.Attribute("Value") == "40");
-        Assert.StartsWith("Inter", (string?)document.Root?.Attribute("FontFamily"), StringComparison.Ordinal);
+        Assert.Equal("{StaticResource AppFontFamily}", (string?)document.Root?.Attribute("FontFamily"));
         Assert.Contains("RelayIcon", text, StringComparison.Ordinal);
         Assert.Contains("CardStateText", text, StringComparison.Ordinal);
         Assert.Contains("✔ PASS", text, StringComparison.Ordinal);

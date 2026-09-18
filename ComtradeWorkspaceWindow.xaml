@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterOwner"
         Loaded="P1D5Workspace_Loaded"
         Background="#F3F6FA"
-        FontFamily="Segoe UI">
+        FontFamily="{StaticResource AppFontFamily}">
     <Window.Resources>
         <!-- Keep the compact engineering density of this workstation while inheriting the same
              rounded ARSAS button chrome, hover/press behavior and palette used by the main app. -->
