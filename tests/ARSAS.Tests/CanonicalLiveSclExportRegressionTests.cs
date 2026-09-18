@@ -10,9 +10,23 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
         Assert.Contains("public LiveIedCanonicalModel? LastCanonicalModel", canonical, StringComparison.Ordinal);
         Assert.Contains("_session.GetAcceptedCommunicationEvidence", canonical, StringComparison.Ordinal);
-        Assert.Contains("LiveIedCanonicalModelBuilder.Build", canonical, StringComparison.Ordinal);
-        Assert.Contains("PublishCanonicalModel(model);", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("LiveIedCanonicalModelBuilder.Build(model, communication, initialRead)", canonical, StringComparison.Ordinal);
+        Assert.Contains("PublishCanonicalModel(model, initialRead);", lifecycle, StringComparison.Ordinal);
         Assert.Contains("ClearCanonicalModel();", lifecycle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmartDiscovery_CapturesInitialFcEvidenceIntoSameCanonicalSnapshot()
+    {
+        var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
+        var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
+
+        Assert.Contains("InitialFcReadPlanner.FromSclModel", capture, StringComparison.Ordinal);
+        Assert.Contains("ExecuteInitialFcReadPlanSmartAsync", capture, StringComparison.Ordinal);
+        Assert.Contains("initialFcRoots={initialPlan.Targets.Count}/{initialPlanSource.Targets.Count}", capture, StringComparison.Ordinal);
+        Assert.Contains("TryPublishSmartDiscoveryAuthority(", capture, StringComparison.Ordinal);
+        Assert.Contains("ArMms.InitialFcReadExecutionResult? initialRead", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("PublishCanonicalModel(model, initialRead);", lifecycle, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -60,7 +74,8 @@ public sealed class CanonicalLiveSclExportRegressionTests
             "\"commit\": \"3ce8d4bce5bb9395b0300a83f289396ef1b95d10\"",
             lockFile,
             StringComparison.Ordinal);
-        Assert.Contains("round-trip association validation", lockFile, StringComparison.Ordinal);
+        Assert.Contains("exact bounded FC-root instance-value evidence", lockFile, StringComparison.Ordinal);
+        Assert.Contains("deliberately excludes the later RCB discovery-read optimization", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
     }
 
