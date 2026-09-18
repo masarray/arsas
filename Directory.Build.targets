@@ -4,8 +4,8 @@
 
   <PropertyGroup>
     <!-- The field-capture workflow is an explicit evidence lane and may continue to
-         exercise the smart route before production promotion is authorized. -->
-    <EnableSmartDiscoveryCaptureRoute Condition="'$(EnableSmartDiscoveryCaptureRoute)' == '' and '$(GITHUB_WORKFLOW)' == 'Smart Discovery Field Capture Build'">true</EnableSmartDiscoveryCaptureRoute>
+         exercise the smart route before production promotion is authorized; this includes the R7 interoperability field-test lane. -->
+    <EnableSmartDiscoveryCaptureRoute Condition="'$(EnableSmartDiscoveryCaptureRoute)' == '' and ('$(GITHUB_WORKFLOW)' == 'Smart Discovery Field Capture Build' or '$(GITHUB_WORKFLOW)' == 'SCL Interoperability R7 Build')">true</EnableSmartDiscoveryCaptureRoute>
 
     <!-- Production defaults to the reviewed tracked promotion switch. Until P0-5g
          authority flips SmartDiscoveryProductionPromoted, normal builds stay legacy. -->
