@@ -145,6 +145,7 @@ jobs:
               $reloadValidator -notmatch 'changed the proven calling-side runtime identity' -or
               $reloadValidator -notmatch 'reproduce accepted association profile' -or
               $regression -notmatch 'SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan' -or
+              $reloadTests -notmatch 'ExportedCanonicalScl_ReopensThroughArsasWorkspaceWithoutStructuralDrift' -or
               $reloadTests -notmatch 'BuildDefaultAssociationPayload' -or
               $reloadTests -notmatch 'GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity' -or
               $rcbProjector -match 'SameNumericText\(left\.IntegrityPeriodMs, right\.IntegrityPeriodMs\)' -or
