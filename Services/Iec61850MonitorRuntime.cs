@@ -137,6 +137,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             var discovered = await session.Client.DiscoverSignalsAsync(cancellationToken, progress).ConfigureAwait(false);
             if (session.Client.LastLiveModel != null)
                 device.LiveDiscoveryModel = session.Client.LastLiveModel;
+            device.LiveCanonicalModel = session.Client.LastCanonicalModel;
 
             var signals = discovered
                 .Where(signal => signal.CanPublishAsSignal || signal.IsControlSignal)
@@ -403,6 +404,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 throw new InvalidOperationException(result.Message);
 
             device.LiveDiscoveryModel = session.Client.LastLiveModel ?? device.SclWorkspace?.DesignModel;
+            device.LiveCanonicalModel = session.Client.LastCanonicalModel;
             Log("INFO", device.Name,
                 $"Verified SCL authority active: SHA256={verified.Sha256}; IED={device.SclIedName}; AP={device.SclAccessPointName}; maxReadRefs={result.Preparation.InitialReadPlan?.MaximumVariableReferencesPerRead ?? 0}.");
             return path;
