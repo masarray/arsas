@@ -6,7 +6,7 @@
         Width="980" Height="720" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         Background="#F4F7FB"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri">
+        FontFamily="{StaticResource AppFontFamily}">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -39,7 +39,7 @@
                      TextWrapping="NoWrap"
                      HorizontalScrollBarVisibility="Auto"
                      VerticalScrollBarVisibility="Auto"
-                     FontFamily="Cascadia Mono, Consolas"
+                     FontFamily="{StaticResource AppCodeFontFamily}"
                      FontSize="11.2"
                      Background="#FBFCFE" Foreground="#263445"
                      BorderThickness="0" Padding="10"/>
