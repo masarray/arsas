@@ -95,6 +95,7 @@ public sealed partial class NativeIec61850Client
         long generation,
         ArMms.MmsDiscoveryResult discovery,
         LiveIedModelDiscoveryDocument model,
+        ArMms.InitialFcReadExecutionResult? initialRead,
         NativeReportInventory reportInventory,
         Iec61850DeviceIdentity identity,
         int typeProbeCount,
@@ -108,7 +109,7 @@ public sealed partial class NativeIec61850Client
 
             _lastDiscovery = discovery;
             _liveModel = model;
-            PublishCanonicalModel(model);
+            PublishCanonicalModel(model, initialRead);
             LastReportInventory = reportInventory;
             DetectedIdentity = identity;
             PublishSmartDiscoveryAuthority(
