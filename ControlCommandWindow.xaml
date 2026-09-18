@@ -5,7 +5,7 @@
         Width="680" Height="690" MinWidth="620" MinHeight="620"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Bg}"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Icon="Assets/app-icon.ico"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
@@ -142,7 +142,7 @@
 
                     <Expander Header="Technical control evidence" Margin="0,13,0,0" Foreground="#475467">
                         <Border Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="11" Margin="0,7,0,0">
-                            <TextBlock Text="{Binding ControlEvidenceText}" FontFamily="Consolas" FontSize="10.8" Foreground="#344054" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding ControlEvidenceText}" FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.8" Foreground="#344054" TextWrapping="Wrap"/>
                         </Border>
                     </Expander>
 
