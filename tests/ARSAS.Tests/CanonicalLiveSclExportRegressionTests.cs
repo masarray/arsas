@@ -125,6 +125,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("canonicalAssociation.SessionSelector", validator, StringComparison.Ordinal);
         Assert.Contains("canonicalAssociation.TransportSelector", validator, StringComparison.Ordinal);
         Assert.Contains("Generated SCL reconnect association drifted from accepted canonical wire evidence", validator, StringComparison.Ordinal);
+        Assert.Contains("result.Profile", validator, StringComparison.Ordinal);
+        Assert.Contains("full-model", validator, StringComparison.Ordinal);
+        Assert.Contains("MmsLocalAssociationProfile.ExistingRuntimeDefault", validator, StringComparison.Ordinal);
+        Assert.Contains("changed the proven calling-side runtime identity", validator, StringComparison.Ordinal);
+        Assert.Contains("BuildAssociationProfiles()", validator, StringComparison.Ordinal);
+        Assert.Contains("reproduce accepted association profile", validator, StringComparison.Ordinal);
     }
 
     [Fact]
