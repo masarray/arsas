@@ -7,7 +7,11 @@
         Height="900" Width="1500" MinHeight="760" MinWidth="1180"
         WindowStartupLocation="CenterOwner" WindowState="Maximized"
         Background="{StaticResource AppBackgroundGradient}"
-        FontFamily="Inter, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
         Icon="Assets/app-icon.ico"
         Closing="Window_Closing"
         ContentRendered="IoListTestingWindow_ContentRendered">
@@ -33,8 +37,12 @@
             <Setter Property="Padding" Value="7,0"/>
             <Setter Property="Background" Value="#F4F7FB"/>
             <Setter Property="Foreground" Value="#617087"/>
+            <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
             <Setter Property="FontSize" Value="10.2"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#DCE4EF"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -379,7 +387,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding ObjectReference}" Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.8"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.8"
                                                    Foreground="#52627A" ToolTip="{Binding ObjectReference}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -430,7 +438,7 @@
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.OnRelayTimestampText}"
                                                    Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.1"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.1"
                                                    ToolTip="{Binding Runtime.OnEvidenceToolTip}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -441,7 +449,7 @@
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.OffRelayTimestampText}"
                                                    Style="{StaticResource FatGridText}"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="10.1"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.1"
                                                    ToolTip="{Binding Runtime.OffEvidenceToolTip}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
