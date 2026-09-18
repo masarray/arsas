@@ -22,15 +22,21 @@ jobs:
           if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw 'Invalid ARIEC61850 field-capture pin.'
           }
-          if ($lock.commit -ne '4467124775d8d9d76f3db194f9fbfd97144767a8') {
-            throw "Unexpected engine commit: $($lock.commit)"
+          $baselineEngineCommit = $lock.previousTrialPin.commit
+          if ($baselineEngineCommit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid physical baseline engine pin.'
           }
+          if ($baselineEngineCommit -ne '4467124775d8d9d76f3db194f9fbfd97144767a8') {
+            throw "Unexpected engine commit (physical baseline): $baselineEngineCommit"
+          }
+          $integrationEngineCommit = $lock.commit
           $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
           if ($arsasCommit -notmatch '^[0-9a-f]{40}$') {
             throw "Invalid cloned ARSAS commit: $arsasCommit"
           }
           "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$integrationEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_BASELINE_COMMIT=$baselineEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           $version = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
           "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
@@ -251,6 +257,7 @@ jobs:
             "ARSAS smart discovery field-capture build",
             "ARSAS commit: $env:ARSAS_COMMIT",
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
+            "ARIEC61850 physical baseline commit: $env:ARIEC61850_BASELINE_COMMIT",
             "Engine PR: 134",
             "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",

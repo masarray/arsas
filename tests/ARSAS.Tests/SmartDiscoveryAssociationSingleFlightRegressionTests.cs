@@ -67,9 +67,15 @@ public sealed class SmartDiscoveryAssociationSingleFlightRegressionTests
         Assert.Equal(P05bEngineCommit, previousTrialPin);
         Assert.NotEqual(P05bEngineCommit, currentIntegrationCommit);
         Assert.Contains(
-            $"if ($lock.commit -ne '{P05bEngineCommit}')",
+            "$baselineEngineCommit = $lock.previousTrialPin.commit",
             workflow,
             StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            $"if ($baselineEngineCommit -ne '{P05bEngineCommit}')",
+            workflow,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ARIEC61850_COMMIT=$integrationEngineCommit", workflow, StringComparison.Ordinal);
+        Assert.Contains("ARIEC61850_BASELINE_COMMIT=$baselineEngineCommit", workflow, StringComparison.Ordinal);
         Assert.Contains("Unexpected engine commit", workflow, StringComparison.Ordinal);
         Assert.Contains("LastSmartTypeProbeBudget", workflow, StringComparison.Ordinal);
         Assert.Contains("SuppressedExactRepeatRequests", workflow, StringComparison.Ordinal);

@@ -215,7 +215,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("d9964a4f8fa3ed7a645ff8f9ad1c8003185e52b9", contract, StringComparison.Ordinal);
+        Assert.Contains("5f454fdf1e29323fd6585f5efe3852ecdc30ddf7", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -234,6 +234,18 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SourceClean_GuardsApprovedFirstPartyConvergenceAuthorities()
+    {
+        var source = File.ReadAllText(FindRepoFile("scripts/verify-source-clean.ps1"));
+
+        Assert.Contains("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
+        Assert.Contains("docs/IEDSCOUT_CONVERGENCE.md", source, StringComparison.Ordinal);
+        Assert.Contains("evidence/iedscout-convergence-target.json", source, StringComparison.Ordinal);
+        Assert.Contains("CanonicalLiveSclExportRegressionTests.cs", source, StringComparison.Ordinal);
+        Assert.Contains("identifierScanExempt", source, StringComparison.Ordinal);
+    }
+
 
     [Fact]
     public void EnginePin_MatchesPhysicalSclRepairHead()
@@ -241,7 +253,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"d9964a4f8fa3ed7a645ff8f9ad1c8003185e52b9\"",
+            "\"commit\": \"5f454fdf1e29323fd6585f5efe3852ecdc30ddf7\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);

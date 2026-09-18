@@ -56,6 +56,17 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
+# These are first-party convergence authorities. They intentionally contain the
+# external interoperability label so the acceptance contract remains discoverable.
+$ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(
+    ".github/workflows/iedscout-convergence-guard.yml",
+    ".github/workflows/scl-interoperability-r7.yml",
+    "docs/IEDSCOUT_CONVERGENCE.md",
+    "evidence/iedscout-convergence-target.json",
+    "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
+) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
+
 $Problems = New-Object System.Collections.Generic.List[string]
 
 function Normalize-RelativePath {
@@ -125,7 +136,8 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    if (Test-ContainsForbiddenIdentifier $relative) {
+    $identifierScanExempt = $ApprovedConvergenceIdentifierPaths.Contains($relative)
+    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $relative)) {
         $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
@@ -133,7 +145,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-    if (Test-ContainsForbiddenIdentifier $content) {
+    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $content)) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 
