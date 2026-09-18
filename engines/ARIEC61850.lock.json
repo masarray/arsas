@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "3ce8d4bce5bb9395b0300a83f289396ef1b95d10",
-  "sourcePullRequest": 134,
-  "purpose": "R7 interoperability trial pin. Uses the isolated PR #134 canonical-export lineage that retains accepted-association communication evidence plus exact bounded FC-root instance-value evidence in the canonical live model, exports safe-connection SCL solely from that snapshot, materializes only type-proven instance values, round-trips the generated ConnectedAP through the engine association planner, preserves physical ReportControl service capacity while projecting compatible numbered runtime RCB families to logical SCL controls, and deliberately excludes the later RCB discovery-read optimization so the existing physical smart-discovery critical path is not broadened by this exporter trial. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
+  "commit": "7915b9aa32859d3a76cacc1494835196f64ef89d",
+  "sourcePullRequest": 135,
+  "purpose": "R7 interoperability trial pin. Uses isolated engine PR #135 on top of the green 3ce8 canonical-export lineage: accepted remote AP-title/AE/PSEL/SSEL are decoded from the exact association request bytes accepted by the IED, TSEL is bound to the exact current COTP destination selector, exact bounded FC-root instance-value evidence remains part of the canonical live model, safe-connection SCL must preserve IP/AP-title/AE/PSEL/SSEL/TSEL exactly across serialize -> parse before an association plan is accepted, non-102 MMS sessions fail closed because the current SCL plan represents port 102 only, physical ReportControl service capacity remains distinct from logical RCB projection, and the later RCB discovery-read optimization remains excluded so this exporter trial does not broaden the field-qualified discovery request path. Production promotion remains fail-closed and requires fresh physical evidence on this exact engine lineage.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
