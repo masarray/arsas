@@ -52,8 +52,8 @@ jobs:
               $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw 'Invalid ARIEC61850 R7 lock.'
           }
-          if ($lock.purpose -notmatch 'R7 interoperability trial pin') {
-            throw 'Engine lock is not explicitly scoped as the R7 interoperability trial.'
+          if ($lock.purpose -notmatch 'R7 physical SCL repair pin') {
+            throw 'Engine lock is not explicitly scoped as the R7 physical SCL repair.'
           }
           if ([int]$lock.sourcePullRequest -notin @(134, 135)) {
             throw "Unexpected R7 engine source PR: $($lock.sourcePullRequest)"
