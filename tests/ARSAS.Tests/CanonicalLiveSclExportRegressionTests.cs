@@ -21,6 +21,24 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
         var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
 
+        Assert.Contains("SmartDiscoveryStructuralFreezeContract = \"P0-R9-STRUCTURAL\"", capture, StringComparison.Ordinal);
+        Assert.Contains("CreateP0FrozenSmartDiscoveryOptions()", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxConcurrentChains = 8", capture, StringComparison.Ordinal);
+        Assert.Contains("UnknownPeerMaxConcurrentChains = 4", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxNameListPages = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeReportAttributes = true", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxReportAttributeProbes = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("ReadDataSetDirectories = true", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxDataSetDirectoryReads = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("GetOrCreateSmartDiscoveryAssociationFlight(", capture, StringComparison.Ordinal);
+        Assert.Contains("DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("_session.DiscoverAsync(", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiscoverDomainVariableNamesAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryBuildSupplementalGetNameListSnapshotAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiscoverDomainVariableTypeTreeNamesAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddAdaptiveLogicalNodeSiblingProbeSignalsAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnrichEngineeringUnitsAsync", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("InitialFcReadPlanner.FromSclModel", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteInitialFcReadPlanSmartAsync", capture, StringComparison.Ordinal);
         Assert.Contains("initialFcRoots=deferred", capture, StringComparison.Ordinal);
@@ -145,6 +163,33 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("ExecuteInitialFcReadPlanSmartAsync", client, StringComparison.Ordinal);
         Assert.Contains("\"ST\" or \"MX\" or \"SP\" or \"SV\" or \"CF\" or \"DC\" or \"EX\" or \"BL\" or \"OR\" or \"SR\"", client, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteInitialFcReadPlanAsync(", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0StructuralDiscoveryFreeze_LocksR9WireAndModelBudget()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+
+        Assert.Contains("\"contractId\": \"P0-R9-STRUCTURAL\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"implemented-and-r9-physically-proven\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"associationScopedSingleFlightRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"eagerInitialFcReadsForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"supplementalLegacyBrowseForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maxConcurrentChains\": 8", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unknownPeerMaxConcurrentChains\": 4", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceConfirmedMmsRequests\": 323", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumConfirmedMmsRequests\": 417", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceGetVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumGetVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceReads\": 64", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumReads\": 156", contract, StringComparison.Ordinal);
+        Assert.Contains("\"topLevelDataObjects\": 860", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataObjectsIncludingSdo\": 906", contract, StringComparison.Ordinal);
+        Assert.Contains("\"scalarLeaves\": 4925", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataSets\": 2", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcda\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"logicalReportControls\": 32", contract, StringComparison.Ordinal);
+        Assert.Contains("\"settingControls\": 1", contract, StringComparison.Ordinal);
     }
 
     [Fact]

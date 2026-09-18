@@ -11,7 +11,27 @@ public sealed partial class NativeIec61850Client
     // It keeps live MMS evidence authoritative while removing ARSAS's historical
     // supplemental naming/probe passes. Evidence-directed DataSet and report
     // enrichment stays inside the same association-scoped single flight.
+    private const string SmartDiscoveryStructuralFreezeContract = "P0-R9-STRUCTURAL";
     private static bool SmartDiscoveryCaptureModeEnabled => true;
+
+    // P0 structural-discovery freeze.
+    // These values are the exact ARSAS policy that produced the accepted R9 wire shape.
+    // They are intentionally centralized so later SCL/value work cannot silently move
+    // additional MMS traffic back into the discovery critical path.
+    private static ArMms.MmsSmartDiscoveryOptions CreateP0FrozenSmartDiscoveryOptions()
+        => new()
+        {
+            MaxConcurrentChains = 8,
+            UnknownPeerMaxConcurrentChains = 4,
+            MaxDomains = 256,
+            MaxVariableNamesPerDomain = 20000,
+            MaxVariableListNamesPerDomain = 4096,
+            MaxNameListPages = 64,
+            ProbeReportAttributes = true,
+            MaxReportAttributeProbes = 64,
+            ReadDataSetDirectories = true,
+            MaxDataSetDirectoryReads = 64
+        };
 
     private async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsSmartForCaptureAsync(
         CancellationToken cancellationToken,
@@ -124,7 +144,7 @@ public sealed partial class NativeIec61850Client
                 var cachedRawVariables = cachedSnapshot.DomainVariables.Values.Sum(values => values.Count);
                 var cachedBudget = _session.LastSmartTypeProbeBudget?.Summary ?? "Smart type budget unavailable.";
                 var cachedSummary =
-                    $"SMART-CAPTURE PR134 P0-5c; association authority=reused; association flight=new-wire-free; control inventory=authoritative; wire discovery=skipped; " +
+                    $"SMART-CAPTURE PR134 P0-5c; freeze={SmartDiscoveryStructuralFreezeContract}; association authority=reused; association flight=new-wire-free; control inventory=authoritative; wire discovery=skipped; discoveryValues=deferred; " +
                     $"IEDName={(string.IsNullOrWhiteSpace(cachedIdentity.IedName) ? "unresolved" : cachedIdentity.IedName)} ({cachedIdentity.Source}); " +
                     $"{cachedDiscovery.Summary} {cachedModel.Summary} LN={cachedLogicalNodes}, SCADA candidates={cachedSignals.Count}, " +
                     $"MMS names={cachedRawVariables}, smart type probes={_smartDiscoveryTypeProbeCount}, successful type probes={_smartDiscoverySuccessfulTypeProbeCount}, " +
@@ -147,19 +167,7 @@ public sealed partial class NativeIec61850Client
                 return cachedSignals;
             }
 
-            var smartOptions = new ArMms.MmsSmartDiscoveryOptions
-            {
-                MaxConcurrentChains = 8,
-                UnknownPeerMaxConcurrentChains = 4,
-                MaxDomains = 256,
-                MaxVariableNamesPerDomain = 20000,
-                MaxVariableListNamesPerDomain = 4096,
-                MaxNameListPages = 64,
-                ProbeReportAttributes = true,
-                MaxReportAttributeProbes = 64,
-                ReadDataSetDirectories = true,
-                MaxDataSetDirectoryReads = 64
-            };
+            var smartOptions = CreateP0FrozenSmartDiscoveryOptions();
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.DiscoveringDirectory,
@@ -266,7 +274,7 @@ public sealed partial class NativeIec61850Client
 
             totalWatch.Stop();
             var summary =
-                $"SMART-CAPTURE PR134 P0-5c; association authority=new; association flight=single-owner; app MMS gate=exclusive; control inventory=authoritative; " +
+                $"SMART-CAPTURE PR134 P0-5c; freeze={SmartDiscoveryStructuralFreezeContract}; association authority=new; association flight=single-owner; app MMS gate=exclusive; control inventory=authoritative; discoveryValues=deferred; " +
                 $"IEDName={(string.IsNullOrWhiteSpace(identity.IedName) ? "unresolved" : identity.IedName)} ({identity.Source}); " +
                 $"{discovery.Summary} {liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
                 $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +

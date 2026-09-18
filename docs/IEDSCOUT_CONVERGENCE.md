@@ -22,6 +22,34 @@ Only this stack is active for this target:
 
 No new discovery/SCL work should branch from older trial PRs. Old PRs remain provenance only unless explicitly revalidated and restacked onto the active authority.
 
+
+## P0 — structural discovery freeze
+
+P0 is complete at source/CI level and is anchored to the physical R9 AA1E1F06R4 result.
+
+Runtime contract ID: `P0-R9-STRUCTURAL`.
+
+The frozen ARSAS discovery path is:
+
+- one accepted MMS association;
+- one association-scoped single-flight owner;
+- exclusive application MMS gate while the discovery owner is active;
+- bounded directory discovery through `DiscoverSmartSingleFlightAsync`;
+- coverage-aware LN/root type probing through `ProbeSmartAsync`;
+- maximum discovery chains 8, or 4 when the peer's negotiated calling window is unknown;
+- bounded report metadata and DataSet-directory enrichment only;
+- no eager initial FC-root value snapshot;
+- no supplemental legacy directory browse;
+- no second full GetNameList sweep;
+- no recursive per-leaf GVA expansion;
+- no speculative engineering-unit/sibling/reflection scan on the critical path.
+
+The physical R9 AA1E1F06R4 reference remains 1 association, 323 confirmed MMS requests, 138 GetNameList, 119 GetVariableAccessAttributes, 2 GetNamedVariableListAttributes and 64 Reads, while yielding the accepted 32 LD / 119 LN / 860 top-level DO / 906 DO+SDO / 4925 scalar-leaf model. IEDScout's same-relay reference remains the upper comparison envelope at 417 confirmed requests, 119 GVA and 156 Reads.
+
+Those counts are physical acceptance evidence for AA1E1F06R4, not constants that ARSAS forces onto unrelated IEDs. The source contract instead freezes the discovery algorithm and bounded policy. Future instance-value work must stay in explicit Save SCL or trusted-SCL reconnect phases.
+
+P1+ semantic/SCL work may change canonical interpretation and export, but it must not add discovery-critical-path MMS traffic or weaken this contract.
+
 ## Regression signatures that are forbidden
 
 A build is rejected if it restores any of these patterns:

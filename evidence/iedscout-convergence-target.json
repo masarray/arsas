@@ -217,5 +217,54 @@
       "status": "secondary-after-semantic-parity",
       "rule": "Reduce duplicate LNodeType/DOType/DAType templates only after wire and semantic reuse parity is stable."
     }
+  },
+  "p0StructuralDiscoveryFreeze": {
+    "contractId": "P0-R9-STRUCTURAL",
+    "status": "implemented-and-r9-physically-proven",
+    "scope": "AA1E1F06R4 physical acceptance plus source/CI freeze. Counts are evidence and gates for this relay, not generic hardcoded runtime behavior for other IEDs.",
+    "sourcePolicy": {
+      "smartRouteRequired": true,
+      "associationScopedSingleFlightRequired": true,
+      "applicationMmsGateExclusive": true,
+      "logicalNodeRootTypeStrategyRequired": true,
+      "eagerInitialFcReadsForbidden": true,
+      "supplementalLegacyBrowseForbidden": true,
+      "secondFullGetNameListSweepForbidden": true,
+      "recursivePerLeafGvaStormForbidden": true,
+      "saveTimeAndTrustedSclValueReadsRemainSeparate": true
+    },
+    "frozenOptions": {
+      "maxConcurrentChains": 8,
+      "unknownPeerMaxConcurrentChains": 4,
+      "maxDomains": 256,
+      "maxVariableNamesPerDomain": 20000,
+      "maxVariableListNamesPerDomain": 4096,
+      "maxNameListPages": 64,
+      "probeReportAttributes": true,
+      "maxReportAttributeProbes": 64,
+      "readDataSetDirectories": true,
+      "maxDataSetDirectoryReads": 64
+    },
+    "aa1e1f06r4Acceptance": {
+      "associations": 1,
+      "referenceConfirmedMmsRequests": 323,
+      "maximumConfirmedMmsRequests": 417,
+      "referenceGetNameList": 138,
+      "referenceGetVariableAccessAttributes": 119,
+      "maximumGetVariableAccessAttributes": 119,
+      "referenceGetNamedVariableListAttributes": 2,
+      "referenceReads": 64,
+      "maximumReads": 156,
+      "logicalDevices": 32,
+      "logicalNodes": 119,
+      "topLevelDataObjects": 860,
+      "dataObjectsIncludingSdo": 906,
+      "scalarLeaves": 4925,
+      "dataSets": 2,
+      "fcda": 58,
+      "logicalReportControls": 32,
+      "settingControls": 1
+    },
+    "rule": "Do not optimize or enrich structural discovery further while SCL semantic convergence is still open. Any required instance-value acquisition belongs to explicit Save SCL or trusted-SCL reconnect phases."
   }
 }
