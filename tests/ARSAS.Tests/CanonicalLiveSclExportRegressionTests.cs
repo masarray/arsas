@@ -215,7 +215,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("4900427cb1710b433fb74d3ad99099b28ab27ef7", contract, StringComparison.Ordinal);
+        Assert.Contains("d9964a4f8fa3ed7a645ff8f9ad1c8003185e52b9", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -241,7 +241,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"4900427cb1710b433fb74d3ad99099b28ab27ef7\"",
+            "\"commit\": \"d9964a4f8fa3ed7a645ff8f9ad1c8003185e52b9\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
@@ -255,6 +255,9 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("TCTR/TVTR/LTIM/EEName/MltLev", lockFile, StringComparison.Ordinal);
         Assert.Contains("LTRK service-tracking", lockFile, StringComparison.Ordinal);
         Assert.Contains("Edition-1 schema downgrade protection", lockFile, StringComparison.Ordinal);
+        Assert.Contains("TypeSpecification declaration order", lockFile, StringComparison.Ordinal);
+        Assert.Contains("SG/SE as setting data", lockFile, StringComparison.Ordinal);
+        Assert.Contains("MHAI THD phase groups as WYE/CMV", lockFile, StringComparison.Ordinal);
         Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
         Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
