@@ -10,7 +10,7 @@ ARSAS has one active IEC 61850 convergence target:
 
 The machine-readable authority is `evidence/iedscout-convergence-target.json`.
 
-Current R8 model-repair engine authority: `bb6e5c1075eec7ebfb1f2bf9336e366bd7e41e3c`.
+Current R8 model-repair engine authority: `e2cfcebf25b7b54bb6d6b6e28b9d060b6b1f7f2c`.
 
 ## Active stacked PRs
 
