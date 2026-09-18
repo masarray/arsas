@@ -5,7 +5,7 @@
         Width="520" Height="390" MinWidth="520" MinHeight="390"
         ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False" Background="#F4F7FB"
-        FontFamily="Aptos, Segoe UI Variable Text, Segoe UI, Calibri"
+        FontFamily="{StaticResource AppFontFamily}"
         Closing="Window_Closing">
     <Window.Resources>
         <Style x:Key="UpdateButton" TargetType="Button">
