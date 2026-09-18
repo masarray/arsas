@@ -134,6 +134,20 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void SclAssistedReconnect_UsesNativeCallingIdentityAndSafeParallelValueReads()
+    {
+        var preparation = File.ReadAllText(FindRepoFile("Services/SclAssistedConnectionPreparation.cs"));
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+
+        Assert.Contains("MmsLocalAssociationProfile.ExistingRuntimeDefault", preparation, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsLocalAssociationProfile.SclInteroperabilityDefault", preparation, StringComparison.Ordinal);
+        Assert.Contains("IsSafeTrustedSclInitialReadFc", client, StringComparison.Ordinal);
+        Assert.Contains("ExecuteInitialFcReadPlanSmartAsync", client, StringComparison.Ordinal);
+        Assert.Contains("\"ST\" or \"MX\" or \"SP\" or \"SV\" or \"CF\" or \"DC\" or \"EX\" or \"BL\" or \"OR\" or \"SR\"", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteInitialFcReadPlanAsync(", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void R7Workflow_BindsArtifactToExactSourceHeadAndReloadContracts()
     {
         var workflow = File.ReadAllText(
