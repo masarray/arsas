@@ -47,7 +47,7 @@ public sealed class CanonicalSclReloadValidatorTests
             Assert.Equal(result.DataSetCount, workspace.DataSets.Count);
             Assert.Equal(result.ReportControlCount, workspace.ReportControls.Count);
             Assert.Equal(1, result.LogicalDeviceCount);
-            Assert.Equal(1, result.LogicalNodeCount);
+            Assert.Equal(2, result.LogicalNodeCount);
             Assert.Equal(1, result.ReportControlCount);
         }
         finally
@@ -298,6 +298,42 @@ public sealed class CanonicalSclReloadValidatorTests
                                 LnClass = "LLN0",
                                 LnInst = string.Empty,
                                 ProposedLnTypeId = "LN_LLN0_1"
+                            },
+                            new LiveIedLogicalNodeModel
+                            {
+                                Name = "GGIO1",
+                                LnClass = "GGIO",
+                                LnInst = "1",
+                                ProposedLnTypeId = "LN_GGIO_1",
+                                DataObjects =
+                                [
+                                    new LiveIedDataObjectModel
+                                    {
+                                        Reference = "IEDLD0/GGIO1.Ind1",
+                                        Name = "Ind1",
+                                        ProposedDoTypeId = "DO_SPS_Ind1",
+                                        InferredCdc = "SPS",
+                                        CdcConfidence = 0.99,
+                                        ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.High,
+                                        Attributes =
+                                        [
+                                            new LiveIedDataAttributeModel
+                                            {
+                                                ObjectReference = "IEDLD0/GGIO1.Ind1.stVal",
+                                                AttributePath = "stVal",
+                                                FunctionalConstraint = "ST",
+                                                MmsReference = "IEDLD0/GGIO1$ST$Ind1$stVal",
+                                                MmsItemName = "GGIO1$ST$Ind1$stVal",
+                                                Source = "GetNameList",
+                                                SclBType = "BOOLEAN",
+                                                MmsType = "Boolean",
+                                                TypeDiscoveryStatus = "Exact",
+                                                TypeSource = "GetVariableAccessAttributes",
+                                                TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+                                            }
+                                        ]
+                                    }
+                                ]
                             }
                         ]
                     }
