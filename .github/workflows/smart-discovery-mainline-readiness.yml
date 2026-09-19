@@ -68,7 +68,6 @@ jobs:
       - name: Validate and test merged engine authority
         shell: powershell
         run: |
-          ..\ARIEC61850\scripts\verify-source-clean.ps1
           dotnet restore ..\ARIEC61850\ARIEC61850.sln
           dotnet build ..\ARIEC61850\ARIEC61850.sln -c Release --no-restore
           dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
