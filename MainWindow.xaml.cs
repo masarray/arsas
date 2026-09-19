@@ -766,9 +766,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (openWizard && device.SignalCount > 0)
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
-                    await OpenSignalSelectionWizardAsync(device, restoredCount);
+                {
+                    // Discovery and Open SCL converge here. Once a canonical model exists,
+                    // both sources present the same task-first IED Actions workflow so Static
+                    // DataSet acquisition is source-neutral.
+                    await OpenIedWorkspaceActionsAsync(device);
+                }
                 else
+                {
                     SetStatus($"{device.Name}: discovery complete. Use the edit icon on its IED card to review {restoredCount} restored selection(s).");
+                }
             }
             return true;
         }
