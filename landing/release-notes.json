@@ -4,31 +4,31 @@
   "version": "1.6.38",
   "title": "ARSAS 1.6.38 stable release",
   "titleId": "Stable release ARSAS 1.6.38",
-  "summary": "ARSAS 1.6.38 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "summary": "ARSAS 1.6.38 is the recovered stable Windows release using the exact field-verified golden runtime for both Portable and Installer delivery.",
+  "summaryId": "ARSAS 1.6.38 adalah stable release Windows hasil recovery yang memakai runtime golden terverifikasi di lapangan untuk Portable dan Installer.",
   "highlights": [
     "Polish WPF typography with embedded Inter and smooth rendering",
     "convergence(discovery/scl): reference-parity discovery and usable SCL",
     "fix(ci): restore R10 post-merge release gates",
-    "The exact field-verified Windows x64 portable runtime is published as the stable ARSAS 1.6.38 package."
+    "Portable and Installer now use the same exact field-verified golden runtime; installer packaging does not rebuild application code."
   ],
   "highlightsId": [
     "Perubahan rilis: Polish WPF typography with embedded Inter and smooth rendering",
     "Perubahan rilis: convergence(discovery/scl): reference-parity discovery and usable SCL",
     "Perubahan rilis: fix(ci): restore R10 post-merge release gates",
-    "Runtime portable Windows x64 yang terverifikasi di lapangan dipublikasikan sebagai paket stabil ARSAS 1.6.38."
+    "Portable dan Installer sekarang memakai runtime golden terverifikasi yang sama persis; packaging installer tidak membangun ulang kode aplikasi."
   ],
   "improvements": [
-    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
-    "The portable download URL uses GitHub's releases/latest/download endpoint so the public download resolves to the active stable asset.",
-    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
-    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+    "Stable release identity, package size and SHA-256 are sourced from verified release evidence.",
+    "The installer packages the exact tested portable runtime and verifies the installed ARSAS.exe SHA-256 before publication.",
+    "Installer and portable download URLs use the latest stable GitHub Release authority.",
+    "Release publication remains fail-closed if any tested artifact, installed runtime or public download hash diverges."
   ],
   "improvementsId": [
-    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
-    "URL portable memakai endpoint releases/latest/download GitHub sehingga download publik selalu menuju asset stabil aktif.",
-    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
-    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+    "Identitas stable release, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi.",
+    "Installer memaketkan runtime portable yang sudah diuji persis dan memverifikasi SHA-256 ARSAS.exe hasil instalasi sebelum publikasi.",
+    "URL installer dan portable memakai authority GitHub Release stabil terbaru.",
+    "Publikasi release bersifat fail-closed jika artifact teruji, runtime hasil instalasi, atau hash download publik berbeda."
   ],
   "knownLimitations": [
     "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
@@ -46,8 +46,8 @@
     "status": "unsigned",
     "label": "Not Authenticode-signed",
     "labelId": "Belum ditandatangani dengan Authenticode",
-    "detail": "The current public Windows portable binary does not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users.",
-    "detailId": "Portable EXE Windows publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
+    "detail": "The current public Windows installer and portable binary do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible.",
+    "detailId": "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Peringatan SmartScreen masih mungkin muncul."
   },
   "screenshot": {
     "src": "assets/screenshots/arsas-live-values.webp",
@@ -55,8 +55,8 @@
     "height": 893,
     "alt": "ARSAS 1.6.38 Engineering and FAT live IEC 61850 workspace",
     "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.38",
-    "caption": "ARSAS 1.6.38 stable Windows release with the recovered field-verified portable runtime and release evidence.",
-    "captionId": "Stable release Windows ARSAS 1.6.38 dengan runtime portable hasil recovery yang terverifikasi di lapangan dan release evidence."
+    "caption": "ARSAS 1.6.38 stable Windows release with the recovered field-verified golden runtime in both Installer and Portable delivery.",
+    "captionId": "Stable release Windows ARSAS 1.6.38 dengan runtime golden hasil recovery yang terverifikasi di lapangan pada Installer dan Portable."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
   "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.38"
