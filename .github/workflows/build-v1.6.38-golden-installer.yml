@@ -74,9 +74,14 @@ jobs:
           $zip = Join-Path $root "golden-artifact.zip"
           New-Item -ItemType Directory -Path $root -Force | Out-Null
 
-          $command = "gh api \"repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:ARTIFACT_ID/zip\" > \"$zip\""
-          $process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/s", "/c", $command) -Wait -PassThru -NoNewWindow
-          if ($process.ExitCode -ne 0 -or -not (Test-Path $zip -PathType Leaf)) {
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $artifactUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:ARTIFACT_ID/zip"
+          Invoke-WebRequest -Uri $artifactUrl -Headers $headers -OutFile $zip -MaximumRedirection 5
+          if (-not (Test-Path $zip -PathType Leaf)) {
             throw "Failed to download exact retained golden artifact."
           }
 
