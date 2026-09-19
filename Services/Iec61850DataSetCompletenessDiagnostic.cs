@@ -24,6 +24,8 @@ public sealed record Iec61850DataSetCompletenessSnapshot(
     public bool IsComplete => StaticMemberCount == RepresentedCount && MissingCount == 0;
     public IReadOnlyList<Iec61850DataSetCompletenessDataSetSnapshot> DataSets { get; init; }
         = Array.Empty<Iec61850DataSetCompletenessDataSetSnapshot>();
+    public IReadOnlyList<string> PrimaryUnresolvedReferences { get; init; }
+        = Array.Empty<string>();
 
     public string Summary =>
         $"DataSets={DataSetCount:N0}; static members={StaticMemberCount:N0}; semantic descriptors={MandatoryInventoryCount:N0}; " +
@@ -89,15 +91,28 @@ public static class Iec61850DataSetCompletenessDiagnostic
                 dataSetMissing));
         }
 
+        var unresolvedPrimaryReferences = mandatory
+            .Where(descriptor => descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved)
+            .SelectMany(descriptor => descriptor.DataSetMemberships.Count > 0
+                ? descriptor.DataSetMemberships.Select(membership =>
+                    $"{membership.DataSetReference}[{membership.MemberIndex}] -> " +
+                    $"{FirstNonEmpty(membership.CanonicalMemberReference, membership.OriginalMemberReference, descriptor.DesignReference)}")
+                : new[] { FirstNonEmpty(descriptor.DesignReference, descriptor.ObservedReference, "<unknown>") })
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(reference => reference, StringComparer.Ordinal)
+            .ToArray();
+
         return new Iec61850DataSetCompletenessSnapshot(
             model.DataSets.Count,
             staticMemberCount,
             mandatory.Count,
             represented,
-            mandatory.Count(descriptor => descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved),
+            unresolvedPrimaryReferences.Length,
             missing)
         {
-            DataSets = dataSetSnapshots
+            DataSets = dataSetSnapshots,
+            PrimaryUnresolvedReferences = unresolvedPrimaryReferences
         };
     }
 
@@ -116,6 +131,11 @@ public static class Iec61850DataSetCompletenessDiagnostic
         {
             yield return $"  {dataSet.Reference}: {dataSet.RepresentedCount:N0}/{dataSet.StaticMemberCount:N0} represented • {dataSet.MissingCount:N0} missing";
         }
+
+        foreach (var reference in snapshot.PrimaryUnresolvedReferences.Take(16))
+            yield return $"  UNRESOLVED PRIMARY : {reference}";
+        if (snapshot.PrimaryUnresolvedReferences.Count > 16)
+            yield return $"  ... unresolved     : {snapshot.PrimaryUnresolvedReferences.Count - 16:N0} more member(s)";
 
         if (snapshot.MissingCount == 0 || maxMissing <= 0)
             yield break;
@@ -145,6 +165,9 @@ public static class Iec61850DataSetCompletenessDiagnostic
         if (snapshot.MissingCount > emitted)
             yield return $"  ...                : {snapshot.MissingCount - emitted:N0} more missing member(s)";
     }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private static string Literal(string? reference)
         => (reference ?? string.Empty).Trim();
