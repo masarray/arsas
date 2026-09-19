@@ -766,7 +766,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (openWizard && device.SignalCount > 0)
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
-                    await OpenSignalSelectionWizardAsync(device, restoredCount);
+                    await OpenIedWorkspaceActionsAsync(device);
                 else
                     SetStatus($"{device.Name}: discovery complete. Use the edit icon on its IED card to review {restoredCount} restored selection(s).");
             }
