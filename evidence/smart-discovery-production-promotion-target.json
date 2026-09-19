@@ -1,0 +1,48 @@
+{
+  "SchemaVersion": 2,
+  "Phase": "P0-5g",
+  "Status": "awaiting-physical-p0-5f-authority-and-green-mainline-gates",
+  "ArsasPullRequest": 324,
+  "EngineRepository": "masarray/ARIEC61850",
+  "EnginePullRequest": 134,
+  "EvidenceEngineBaselineCommit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+  "DiscoveryCriticalEnginePaths": [
+    "src/AR.Iec61850/Control/Iec61850ControlService.cs",
+    "src/AR.Iec61850/Control/Iec61850ControlTransport.cs",
+    "src/AR.Iec61850/Discovery/LiveIedVariableTypeHierarchy.cs",
+    "src/AR.Iec61850/Mms/MmsClientSession.SmartDataSetDirectories.cs",
+    "src/AR.Iec61850/Mms/MmsClientSession.SmartDiscovery.cs",
+    "src/AR.Iec61850/Mms/MmsClientSession.SmartDiscoverySingleFlight.cs",
+    "src/AR.Iec61850/Mms/MmsClientSession.SmartInitialFcRead.cs",
+    "src/AR.Iec61850/Mms/MmsClientSession.SmartVariableAccessAttributes.cs",
+    "src/AR.Iec61850/Mms/MmsDataSetDirectory.cs",
+    "src/AR.Iec61850/Mms/MmsIedModelDirectory.cs",
+    "src/AR.Iec61850/Mms/MmsSmartDataSetPipelinePolicy.cs",
+    "src/AR.Iec61850/Mms/MmsSmartDiscoveryKpi.cs",
+    "src/AR.Iec61850/Mms/MmsSmartDiscoveryPolicy.cs",
+    "src/AR.Iec61850/Osi/TpktClient.cs"
+  ],
+  "AllowedPostPhysicalAuthorityPaths": [
+    "evidence/smart-discovery-repeat-run.authority.json",
+    "evidence/smart-discovery-production-promotion-authority.json",
+    "evidence/SmartDiscoveryPromotion.props",
+    "evidence/smart-discovery-production-promotion-target.json",
+    "evidence/smart-discovery-mainline-merge-manifest.json"
+  ],
+  "ProductionPromotionContract": {
+    "RequireP05fPhysicalAuthority": true,
+    "RequirePhysicalAuthorityProductionEvidenceOnly": true,
+    "RequireEngineHeadCiSuccess": true,
+    "AllowEngineHeadDescendantWhenCriticalDiscoveryPathsUnchanged": true,
+    "RequireFieldRouteExplicitOptInBeforePromotion": true,
+    "RequireProductionSwitchFalseUntilAuthority": true,
+    "RequireExactPromotionAuthoritySha256Binding": true,
+    "RequireExactValidatedEngineHeadBinding": true,
+    "RequirePurposeDiscoveryCiSuccess": true,
+    "RequireGenericBuildSuccessBeforeReadyForReview": true,
+    "RequireNoUnresolvedReviewThreadsBeforeReadyForReview": true,
+    "RequireDedicatedMainlineReadinessGateSuccess": true,
+    "RequirePrRemainDraftUntilAllReadyGatesPass": true
+  },
+  "PromotionAuthority": null
+}

@@ -1514,7 +1514,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ConnectAndConfigureDeviceAsync(device, openWizard: false);
     }
 
-    private void IedSaveScl_Click(object sender, RoutedEventArgs e)
+    private async void IedSaveScl_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy)
             return;
@@ -1557,6 +1557,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            if (device.SclWorkspace == null && device.IsConnected)
+            {
+                SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
+                var instanceEvidence = await _runtime
+                    .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
+                AddLog(
+                    "INFO",
+                    "SCL Export",
+                    $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+            }
+
             if (device.SclWorkspace != null &&
                 schema.IsEdition2 &&
                 !string.IsNullOrWhiteSpace(device.SclSourcePath) &&
@@ -1631,20 +1642,73 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SclSchemaProfileDescriptor schema,
         string outputPath)
     {
-        var result = LiveIedSclExporter.WriteFiles(
-            model,
-            outputPath,
-            new LiveIedSclExportOptions
+        LiveIedSclExportResult result;
+        AR.Iec61850.Discovery.LiveIedCanonicalModel? canonicalExportEvidence = null;
+        SclIedWorkspace? canonicalReloadWorkspace = null;
+        if (device.SclWorkspace == null)
+        {
+            var canonical = device.LiveCanonicalModel
+                ?? throw new InvalidOperationException(
+                    "The live discovery model is not bound to accepted MMS association evidence. Re-scan the IED before saving SCL.");
+
+            if (!ReferenceEquals(canonical.Discovery, model))
             {
-                Profile = "safe-connection",
-                SchemaProfile = schema.Profile,
-                IpAddress = device.IpAddress
-            });
+                throw new InvalidOperationException(
+                    "The canonical association snapshot does not belong to the current live discovery model. Re-scan the IED before saving SCL.");
+            }
+
+            result = CanonicalLiveIedSclExporter.WriteFiles(
+                canonical,
+                outputPath,
+                schema.Profile,
+                profile: "full-model");
+            try
+            {
+                canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
+                    _sclWorkspaceService,
+                    canonical,
+                    result);
+            }
+            catch
+            {
+                DeleteFailedCanonicalExportArtifacts(result);
+                throw;
+            }
+            canonicalExportEvidence = canonical;
+        }
+        else
+        {
+            result = LiveIedSclExporter.WriteFiles(
+                model,
+                outputPath,
+                new LiveIedSclExportOptions
+                {
+                    Profile = "safe-connection",
+                    SchemaProfile = schema.Profile,
+                    IpAddress = device.IpAddress
+                });
+        }
 
         AddLog(
             "INFO",
             "SCL Export",
             $"{device.Name}: saved {result.SclSchema} from {sourceDescription.ToLowerInvariant()}. LD={result.LogicalDeviceCount}, LN={result.LogicalNodeCount}, DataSet={result.DataSetCount}, RCB={result.ReportControlCount}, warnings={result.Warnings.Count}. SCL={result.SclPath}");
+
+        if (canonicalExportEvidence is not null)
+        {
+            var communication = canonicalExportEvidence.Communication;
+            var association = communication.Association;
+            AddLog(
+                "INFO",
+                "SCL Export",
+                $"{device.Name}: canonical round-trip verified • profile={communication.AssociationProfileName} • " +
+                $"AP-Title={association.ApTitle} • AE={association.AeQualifier?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<none>"} • " +
+                $"PSEL={association.PresentationSelector} • SSEL={association.SessionSelector} • TSEL={association.TransportSelector} • " +
+                $"instanceEvidence={canonicalExportEvidence.InstanceValues.Count} • runtimeRCB={canonicalExportEvidence.Discovery.ReportControls.Count} • " +
+                $"logicalExportRCB={result.ReportControlCount} • reloadLD={canonicalReloadWorkspace?.DesignModel.Coverage.LogicalDeviceCount ?? 0} • " +
+                $"reloadLN={canonicalReloadWorkspace?.DesignModel.Coverage.LogicalNodeCount ?? 0} • reloadDataSet={canonicalReloadWorkspace?.DataSets.Count ?? 0} • " +
+                $"reloadRCB={canonicalReloadWorkspace?.ReportControls.Count ?? 0}.");
+        }
 
         foreach (var warning in result.Warnings.Take(12))
         {
@@ -1658,6 +1722,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SetStatus($"{device.Name}: {result.SclSchema} saved to {result.SclPath}");
         ShowSclSaveSuccess(result.SclSchema, result.SclPath, result.ReportPath, result.SummaryPath);
+    }
+
+    private static void DeleteFailedCanonicalExportArtifacts(LiveIedSclExportResult result)
+    {
+        foreach (var path in new[]
+                 {
+                     result.SclPath,
+                     result.ReportPath,
+                     result.SummaryPath,
+                     result.ExcludedAttributesPath
+                 })
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // Preserve the original reload-validation failure.
+            }
+        }
     }
 
     private void ShowSclSaveSuccess(string schema, string sclPath, string reportPath, string summaryPath)

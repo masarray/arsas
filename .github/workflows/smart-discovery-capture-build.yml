@@ -1,0 +1,295 @@
+name: Smart Discovery Field Capture Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-smart-capture:
+    name: Build smart-discovery portable field capture
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS test branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+
+      - name: Resolve and validate engine pin
+        shell: powershell
+        run: |
+          $lock = Get-Content .\ArIED61850Tester\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 field-capture pin.'
+          }
+          $baselineEngineCommit = $lock.previousTrialPin.commit
+          if ($baselineEngineCommit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid physical baseline engine pin.'
+          }
+          if ($baselineEngineCommit -ne '4467124775d8d9d76f3db194f9fbfd97144767a8') {
+            throw "Unexpected engine commit (physical baseline): $baselineEngineCommit"
+          }
+          $integrationEngineCommit = $lock.commit
+          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
+          if ($arsasCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid cloned ARSAS commit: $arsasCommit"
+          }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$integrationEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_BASELINE_COMMIT=$baselineEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
+          "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "ARSAS field source: $arsasCommit"
+
+      - name: Verify P0-5c smart capture sources
+        shell: powershell
+        run: |
+          $helper = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $optimization = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryOptimization.cs -Raw
+          $lifecycle = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
+          $patcher = Get-Content .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -Raw
+          $targets = Get-Content .\ArIED61850Tester\Directory.Build.targets -Raw
+          if ($helper -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $helper -notmatch 'LiveIedVariableTypeProbeExecutor' -or
+              $helper -notmatch 'variableTypeAttributes' -or
+              $helper -notmatch 'SMART-CAPTURE PR134 P0-5c' -or
+              $helper -notmatch 'control inventory=authoritative' -or
+              $helper -notmatch 'GetOrCreateSmartDiscoveryAssociationFlight' -or
+              $helper -notmatch 'flight\.WaitAsync\(cancellationToken\)' -or
+              $helper -notmatch '_mmsIoGate\.WaitAsync\(CancellationToken\.None\)' -or
+              $helper -notmatch 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, CancellationToken\.None\)' -or
+              $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
+              $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
+              $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or
+              $optimization -notmatch 'IsSmartDiscoveryAuthorityBoundToCurrentAssociation' -or
+              $lifecycle -notmatch '_smartDiscoveryAssociationGeneration' -or
+              $lifecycle -notmatch '_smartDiscoveryAssociationFlight' -or
+              $lifecycle -notmatch 'TryPublishSmartDiscoveryAuthority' -or
+              $lifecycle -notmatch 'generation != _smartDiscoveryAssociationGeneration' -or
+              $patcher -notmatch '__P0_5C_CONNECT_RESET__' -or
+              $patcher -notmatch '__P0_5C_DISPOSE_RESET__' -or
+              $patcher -notmatch '_lastDiscovery\.Snapshot\.DomainVariables' -or
+              $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
+            throw 'P0-5c association-scoped enrichment single-flight, authority publication, or lifecycle invalidation is incomplete.'
+          }
+          if ($helper -match 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, cancellationToken\)' -or
+              $helper -match 'AddGenericLogicalNodeFallbacksFromDiscoveryArtifacts' -or
+              $helper -match 'FinalizeDiscoveredSignals') {
+            throw 'P0-5c critical path regressed to caller-cancellable GVA, reflection fallback, or second full finalization.'
+          }
+
+      - name: Execute P0-5d wire-proof regressions
+        shell: powershell
+        run: |
+          $verifier = ".\ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1"
+          $contract = ".\ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md"
+          $regression = ".\ArIED61850Tester\tests\ARSAS.Tests\SmartDiscoveryPhysicalCaptureProofRegressionTests.cs"
+          foreach ($required in @($verifier, $contract, $regression)) {
+            if (-not (Test-Path $required -PathType Leaf)) { throw "P0-5d source missing: $required" }
+          }
+
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($verifier, [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) {
+            throw "P0-5d verifier has PowerShell parse errors: $($parseErrors | ForEach-Object Message -join '; ')"
+          }
+
+          $source = Get-Content $verifier -Raw
+          foreach ($token in @(
+            'Get-RequestFingerprint',
+            'DuplicateSemanticRequests',
+            'DuplicateGetNameListRequests',
+            'DuplicateGvaRequests',
+            'SecondGetNameListSweepDetected',
+            'PeakOutstandingRequests',
+            'negociatedMaxServOutstandingCalling',
+            'ReferencePcapPath',
+            'DecodedRowsPath')) {
+            if ($source -notmatch [regex]::Escape($token)) { throw "P0-5d verifier contract missing: $token" }
+          }
+
+          New-Item -ItemType Directory -Force .\ArIED61850Tester\TestResults | Out-Null
+          function New-Row($frame, $src, $dst, $invoke, $request, $response, $gnl, $gva, $domain, $item, $negotiated) {
+            [pscustomobject][ordered]@{
+              'frame.number' = $frame
+              'frame.time_epoch' = "1.$frame"
+              'ip.src' = $src
+              'ip.dst' = $dst
+              'tcp.stream' = '0'
+              'mms.invokeID' = $invoke
+              'mms.confirmed_requestPDU' = $request
+              'mms.confirmed_responsePDU' = $response
+              'mms.confirmed_errorPDU' = ''
+              'mms.confirmedServiceRequest' = ''
+              'mms.getNameList_element' = $gnl
+              'mms.getVariableAccessAttributes_element' = $gva
+              'mms.getNamedVariableListAttributes_element' = ''
+              'mms.read_element' = ''
+              'mms.objectClass' = if ($gnl) { '9' } else { '' }
+              'mms.objectScope' = if ($gnl) { '1' } else { '' }
+              'mms.domainId' = $domain
+              'mms.objectName_domain_specific_itemId' = $item
+              'mms.getNameList-Request_continueAfter' = ''
+              'mms.negociatedMaxServOutstandingCalling' = $negotiated
+            }
+          }
+
+          $client = '192.0.2.10'
+          $server = '192.0.2.20'
+          $passRows = @(
+            (New-Row 1 $server $client '' '' '' '' '' '' '' '10'),
+            (New-Row 2 $client $server '1' '1' '' '1' '' 'LD0' '' ''),
+            (New-Row 3 $client $server '2' '1' '' '' '1' 'LD0' 'LLN0$ST$Mod' ''),
+            (New-Row 4 $server $client '2' '' '1' '' '' '' '' ''),
+            (New-Row 5 $server $client '1' '' '1' '' '' '' '' '')
+          )
+          $passFixture = '.\ArIED61850Tester\TestResults\p0-5d-pass.tsv'
+          $passJson = '.\ArIED61850Tester\TestResults\P0-5D-fixture-pass.json'
+          $passRows | Export-Csv -Delimiter "`t" -NoTypeInformation -Encoding utf8 $passFixture
+          & $verifier -DecodedRowsPath $passFixture -OutputJson $passJson
+          $pass = Get-Content $passJson -Raw | ConvertFrom-Json
+          if ($pass.Verdict -ne 'PASS' -or $pass.ArsasCapture.PeakOutstandingRequests -ne 2 -or $pass.ArsasCapture.DuplicateSemanticRequests -ne 0) {
+            throw 'P0-5d PASS fixture produced incorrect proof metrics.'
+          }
+
+          $failRows = @($passRows)
+          $failRows += (New-Row 6 $client $server '3' '1' '' '1' '' 'LD0' '' '')
+          $failRows += (New-Row 7 $server $client '3' '' '1' '' '' '' '' '')
+          $failFixture = '.\ArIED61850Tester\TestResults\p0-5d-duplicate.tsv'
+          $failJson = '.\ArIED61850Tester\TestResults\P0-5D-fixture-duplicate.json'
+          $failRows | Export-Csv -Delimiter "`t" -NoTypeInformation -Encoding utf8 $failFixture
+          & $verifier -DecodedRowsPath $failFixture -OutputJson $failJson -NoFailExit
+          $fail = Get-Content $failJson -Raw | ConvertFrom-Json
+          if ($fail.Verdict -ne 'FAIL' -or $fail.ArsasCapture.DuplicateGetNameListRequests -lt 1 -or -not $fail.ArsasCapture.SecondGetNameListSweepDetected) {
+            throw 'P0-5d duplicate fixture was not rejected by the semantic wire proof.'
+          }
+
+      - name: Checkout immutable ARIEC61850 PR 134 engine
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) { throw "Engine SHA mismatch: $actual" }
+          $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
+          $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
+          $smartTypes = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartVariableAccessAttributes.cs -Raw
+          $controlTransport = Get-Content .\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlTransport.cs -Raw
+          $controlService = Get-Content .\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlService.cs -Raw
+          $controlTest = Get-Content .\ARIEC61850\tests\AR.Iec61850.Tests\Control\AuthoritativeControlInventoryTests.cs -Raw
+          $hierarchy = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedVariableTypeHierarchy.cs -Raw
+          if ($smart -notmatch 'DiscoverSmartAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $singleFlight -notmatch 'GetAuthoritativeDomainVariableNamesAsync' -or
+              $singleFlight -notmatch 'WaitAsync\(cancellationToken\)' -or
+              $singleFlight -notmatch 'incompleteChains=0' -or
+              $smartTypes -notmatch 'LastSmartTypeProbeBudget' -or
+              $smartTypes -notmatch 'SuppressedNonLiveLogicalNodeCandidates' -or
+              $smartTypes -notmatch 'SuppressedExactRepeatRequests' -or
+              $smartTypes -notmatch 'BuildUnprobedExactFallbacks' -or
+              $controlTransport -notmatch 'GetAuthoritativeDomainVariableNamesAsync' -or
+              $controlTransport -match '=> _session\.DiscoverDomainVariableNamesAsync\(cancellationToken\)' -or
+              $controlService -notmatch 'authoritativeDomainVariables' -or
+              $controlService -notmatch 'domainInventory=authoritative-reuse' -or
+              $controlTest -notmatch 'DoesNotBrowseDomainVariablesAgain' -or
+              $hierarchy -notmatch 'ProbeSmartAsync') {
+            throw 'Pinned P0-5b engine does not expose the required smart discovery, hierarchy-budget, and authoritative-Control invariants.'
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+
+      - name: Build Release
+        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+
+      - name: Verify smart route and association lifecycle resets were installed
+        shell: powershell
+        run: |
+          $native = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.cs -Raw
+          if ($native -notmatch 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'Build-time smart discovery route was not installed.'
+          }
+          if ($native -notmatch '_lastDiscovery = null;\s*_liveModel = null;\s*ResetSmartDiscoveryAuthority\(\);\s*// __P0_5C_CONNECT_RESET__') {
+            throw 'P0-5c ConnectAsync association-generation reset was not installed.'
+          }
+          if ($native -notmatch 'public async ValueTask DisposeAsync\(\)\s*\{\s*ResetSmartDiscoveryAuthority\(\);\s*// __P0_5C_DISPOSE_RESET__') {
+            throw 'P0-5c DisposeAsync association-generation reset was not installed.'
+          }
+          if ($native -notmatch 'service\.OpenAsync\(_session, signal\.ObjectReference, _lastDiscovery\.Snapshot\.DomainVariables, cancellationToken\)') {
+            throw 'Build-time Control path does not consume the authoritative smart domain inventory.'
+          }
+
+      - name: Run ARSAS regression tests
+        run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-smart-capture-tests.trx" --results-directory .\ArIED61850Tester\TestResults
+
+      - name: Publish portable single EXE x64
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke test portable executable
+        shell: powershell
+        run: |
+          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable EXE missing: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP 'ARSAS-smart-capture-bundle-cache'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--portable-smoke-test') -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Portable EXE smoke test timed out.'
+          }
+          if ($process.ExitCode -ne 0) { throw "Portable EXE smoke test failed: $($process.ExitCode)" }
+          @(
+            "ARSAS smart discovery field-capture build",
+            "ARSAS commit: $env:ARSAS_COMMIT",
+            "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
+            "ARIEC61850 physical baseline commit: $env:ARIEC61850_BASELINE_COMMIT",
+            "Engine PR: 134",
+            "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
+            "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
+            "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
+            "Field invariant: one association capture, zero duplicate semantic confirmed requests, peak outstanding never above negotiated calling limit",
+            "Deferred during discovery: supplemental naming, reflection fallback, and adaptive sibling/equipment/reference/unit probes; bounded report/DataSet semantic enrichment remains enabled"
+          ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
+
+      - name: Upload smart field-capture build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-smart-discovery-pr134-win-x64
+          path: |
+            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+            ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt
+            ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1
+            ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1
+            ArIED61850Tester\scripts\verify-smart-discovery-golden-lock.ps1
+            ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md
+            ArIED61850Tester\docs\P0-5E_GOLDEN_CAPTURE_BUDGET_LOCK.md
+            ArIED61850Tester\evidence\smart-discovery-golden-target.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-smart-discovery-pr134-test-evidence
+          path: |
+            ArIED61850Tester\TestResults\*.trx
+            ArIED61850Tester\TestResults\P0-5D-*.json
+            ArIED61850Tester\TestResults\P0-5E-*.json
+          if-no-files-found: warn
+          retention-days: 14

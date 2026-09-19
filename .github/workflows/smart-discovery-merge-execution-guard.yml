@@ -1,0 +1,87 @@
+name: Smart Discovery Merge Execution Guard
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-merge-execution-contract:
+    name: Verify P0-5h ordered merge contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate P0-5h source contract
+        shell: powershell
+        run: |
+          $target = '.\evidence\smart-discovery-mainline-merge-target.json'
+          $writer = '.\scripts\new-smart-discovery-mainline-merge-manifest.ps1'
+          $preflight = '.\scripts\verify-smart-discovery-live-merge-preflight.ps1'
+          $postMerge = '.\scripts\verify-smart-discovery-post-merge-production.ps1'
+          $test = '.\tests\ARSAS.Tests\SmartDiscoveryMainlineMergeExecutionRegressionTests.cs'
+          $doc = '.\docs\P0-5H_MAINLINE_MERGE_POST_MERGE_VERIFICATION.md'
+          foreach ($path in @($target,$writer,$preflight,$postMerge,$test,$doc)) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "P0-5h source missing: $path" }
+          }
+          foreach ($script in @($writer,$preflight,$postMerge)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script,[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) {
+              $messages = @($errors | ForEach-Object { $_.Message }) -join '; '
+              throw "PowerShell parse failure in ${script}: $messages"
+            }
+          }
+          $json = Get-Content $target -Raw | ConvertFrom-Json
+          if ($json.Phase -ne 'P0-5h' -or $json.MergeMethod -ne 'merge') { throw 'P0-5h target does not lock merge-commit execution.' }
+          if ((@($json.MergeOrder) -join ',') -ne 'engine,arsas') { throw 'P0-5h target does not require engine-first order.' }
+          if (-not [bool]$json.ExecutionContract.RequireOnlyMergeManifestChangeAfterValidatedArsasHead) {
+            throw 'P0-5h target does not close the tracked-manifest self-reference boundary.'
+          }
+
+          $manifest = '.\evidence\smart-discovery-mainline-merge-manifest.json'
+          if (Test-Path $manifest -PathType Leaf) {
+            $m = Get-Content $manifest -Raw | ConvertFrom-Json
+            if ($m.Phase -ne 'P0-5h-merge-manifest' -or $m.Status -ne 'authorized-for-ordered-merge' -or $m.MergeMethod -ne 'merge') {
+              throw 'Tracked P0-5h merge manifest is invalid.'
+            }
+            if ((@($m.MergeOrder) -join ',') -ne 'engine,arsas') { throw 'Tracked merge manifest changed merge order.' }
+            if ([string]$m.Arsas.LiveMergeHeadSha) { throw 'Tracked manifest must not self-bind its own future commit SHA.' }
+            if ((@($m.Arsas.AllowedPostAuthorizationPaths) -join ',') -ne 'evidence/smart-discovery-mainline-merge-manifest.json') {
+              throw 'Tracked manifest widened the post-authorization ARSAS mutation boundary.'
+            }
+          }
+
+      - name: Checkout pinned ARIEC61850 dependency
+        shell: powershell
+        run: |
+          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 engine lock.'
+          }
+
+          $enginePath = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'ARIEC61850'
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$($lock.repository).git" $enginePath
+          git -C $enginePath fetch --quiet --depth 1 origin $lock.commit
+          git -C $enginePath checkout --quiet --detach $lock.commit
+
+          $actual = (git -C $enginePath rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne ([string]$lock.commit).ToLowerInvariant()) {
+            throw "Pinned engine checkout mismatch: expected $($lock.commit), got $actual"
+          }
+          Write-Host "P0-5h regression dependency engine: $actual"
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run ARSAS regression tests
+        shell: powershell
+        run: |
+          dotnet restore .\ArIED61850Tester.sln
+          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
+          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore

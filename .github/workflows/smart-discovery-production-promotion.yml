@@ -1,0 +1,166 @@
+name: Smart Discovery Production Promotion Guard
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-production-promotion:
+    name: Verify P0-5g production promotion and merge-readiness contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+          $arsasHead = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          "ARSAS_HEAD=$arsasHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "P0-5g ARSAS head: $arsasHead"
+
+      - name: Checkout ARIEC61850 PR 134 head
+        shell: powershell
+        run: |
+          git clone --quiet --branch perf/smart-ied-discovery https://github.com/masarray/ARIEC61850.git ARIEC61850
+          $engineHead = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          "ENGINE_HEAD=$engineHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "P0-5g engine PR head: $engineHead"
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate P0-5g source contract
+        shell: powershell
+        run: |
+          $root = '.\ArIED61850Tester'
+          $required = @(
+            "$root\evidence\SmartDiscoveryPromotion.props",
+            "$root\evidence\smart-discovery-production-promotion-target.json",
+            "$root\scripts\verify-smart-discovery-production-readiness.ps1",
+            "$root\scripts\new-smart-discovery-production-promotion-authority.ps1",
+            "$root\docs\P0-5G_PRODUCTION_PROMOTION_MAINLINE_READINESS.md",
+            "$root\tests\ARSAS.Tests\SmartDiscoveryProductionPromotionRegressionTests.cs"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "P0-5g source missing: $path" }
+          }
+          foreach ($script in @(
+            "$root\scripts\verify-smart-discovery-production-readiness.ps1",
+            "$root\scripts\new-smart-discovery-production-promotion-authority.ps1")) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) {
+              $messages = @($errors | ForEach-Object { $_.Message }) -join '; '
+              throw "PowerShell parse failure in ${script}: $messages"
+            }
+          }
+          [xml]$props = Get-Content "$root\evidence\SmartDiscoveryPromotion.props" -Raw
+          $promoted = ([string]$props.Project.PropertyGroup.SmartDiscoveryProductionPromoted).Trim().ToLowerInvariant()
+          if ($promoted -notin @('true','false')) { throw 'P0-5g production switch is not a boolean.' }
+
+      - name: Build and test exact engine PR head
+        shell: powershell
+        run: |
+          .\ARIEC61850\scripts\verify-source-clean.ps1
+          dotnet restore .\ARIEC61850\ARIEC61850.sln
+          dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
+          dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Verify P0-5g readiness state
+        shell: powershell
+        run: |
+          $root = '.\ArIED61850Tester'
+          $verifier = "$root\scripts\verify-smart-discovery-production-readiness.ps1"
+          $physical = "$root\evidence\smart-discovery-repeat-run.authority.json"
+          $promotion = "$root\evidence\smart-discovery-production-promotion-authority.json"
+          $physicalArg = if (Test-Path $physical -PathType Leaf) { $physical } else { '' }
+          $promotionArg = if (Test-Path $promotion -PathType Leaf) { $promotion } else { '' }
+          $output = "$root\TestResults\P0-5G-production-readiness.json"
+          New-Item -ItemType Directory -Force "$root\TestResults" | Out-Null
+
+          & $verifier `
+            -TargetPath "$root\evidence\smart-discovery-production-promotion-target.json" `
+            -EngineLockPath "$root\engines\ARIEC61850.lock.json" `
+            -PromotionPropsPath "$root\evidence\SmartDiscoveryPromotion.props" `
+            -ArsasRepositoryPath $root `
+            -EngineRepositoryPath '.\ARIEC61850' `
+            -ArsasHeadCommit $env:ARSAS_HEAD `
+            -EngineHeadCommit $env:ENGINE_HEAD `
+            -EngineHeadCiConclusion success `
+            -PhysicalAuthorityPath $physicalArg `
+            -PromotionAuthorityPath $promotionArg `
+            -OutputJson $output `
+            -NoFailExit
+
+          $result = Get-Content $output -Raw | ConvertFrom-Json
+          if (-not (Test-Path $physical -PathType Leaf)) {
+            if ($result.Verdict -ne 'BLOCKED' -or
+                -not (@($result.Blockers) -match 'P0-5f physical-finalized authority is missing')) {
+              throw 'P0-5g must remain fail-closed until physical P0-5f authority is present.'
+            }
+            if ([bool]$result.ProductionSwitchEnabled) {
+              throw 'P0-5g production switch became enabled without physical authority.'
+            }
+          } elseif (-not (Test-Path $promotion -PathType Leaf)) {
+            if ($result.Verdict -ne 'READY_TO_PROMOTE') {
+              throw "Physical authority exists but P0-5g is not READY_TO_PROMOTE: $(@($result.Blockers) -join '; ')"
+            }
+          } elseif ($result.Verdict -ne 'READY_FOR_REVIEW') {
+            throw "Promotion authority exists but P0-5g is not READY_FOR_REVIEW: $(@($result.Blockers) -join '; ')"
+          }
+
+      - name: Build and test default fail-closed ARSAS path
+        shell: powershell
+        run: |
+          # The current engine PR head is validated above, but ordinary pre-promotion
+          # ARSAS remains pinned to the physical-evidence engine baseline. Build the
+          # fail-closed route against that exact lock rather than an arbitrary newer head.
+          $lock = Get-Content '.\ArIED61850Tester\engines\ARIEC61850.lock.json' -Raw | ConvertFrom-Json
+          git -C .\ARIEC61850 checkout --quiet --detach $lock.commit
+          $actualEngine = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actualEngine -ne ([string]$lock.commit).ToLowerInvariant()) {
+            throw "P0-5g fail-closed engine checkout mismatch: $actualEngine"
+          }
+
+          $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
+          $before = Get-Content $native -Raw
+          if ($before -match 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'Tracked NativeIec61850Client.cs already contains the field-route patch before default build.'
+          }
+          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          $after = Get-Content $native -Raw
+          [xml]$props = Get-Content '.\ArIED61850Tester\evidence\SmartDiscoveryPromotion.props' -Raw
+          $promoted = ([string]$props.Project.PropertyGroup.SmartDiscoveryProductionPromoted).Trim().ToLowerInvariant() -eq 'true'
+          if (-not $promoted -and $after -match 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'Default pre-promotion build unexpectedly installed the smart discovery route.'
+          }
+
+      - name: Build and test explicit smart-route candidate
+        shell: powershell
+        run: |
+          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore -p:EnableSmartDiscoveryCaptureRoute=true
+          $native = Get-Content '.\ArIED61850Tester\Services\NativeIec61850Client.cs' -Raw
+          if ($native -notmatch 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'Explicit P0-5g smart-route build did not install the discovery route.'
+          }
+          if ($native -notmatch '__P0_5C_CONNECT_RESET__' -or $native -notmatch '__P0_5C_DISPOSE_RESET__') {
+            throw 'Explicit P0-5g smart-route build did not install association lifecycle resets.'
+          }
+          if ($native -notmatch '_lastDiscovery\.Snapshot\.DomainVariables') {
+            throw 'Explicit P0-5g smart-route build did not install authoritative Control inventory reuse.'
+          }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Upload P0-5g readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-p0-5g-production-readiness
+          path: ArIED61850Tester\TestResults\P0-5G-*.json
+          if-no-files-found: warn
+          retention-days: 14

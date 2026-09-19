@@ -1,0 +1,77 @@
+name: Smart Discovery Post-Merge Production Verification
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  post-merge-production:
+    name: Verify P0-5h production state on main
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS main with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require tracked P0-5h production authorities
+        shell: powershell
+        run: |
+          foreach ($path in @(
+            '.\evidence\smart-discovery-mainline-merge-manifest.json',
+            '.\evidence\smart-discovery-production-promotion-authority.json',
+            '.\evidence\SmartDiscoveryPromotion.props',
+            '.\scripts\verify-smart-discovery-post-merge-production.ps1')) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "P0-5h post-merge authority missing on main: $path" }
+          }
+
+      - name: Checkout ARIEC61850 main with history
+        shell: powershell
+        run: |
+          git clone --quiet https://github.com/masarray/ARIEC61850.git ARIEC61850
+          $engineMain = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          "ENGINE_MAIN=$engineMain" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "P0-5h engine main: $engineMain"
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate and test engine main
+        shell: powershell
+        run: |
+          .\ARIEC61850\scripts\verify-source-clean.ps1
+          dotnet restore .\ARIEC61850\ARIEC61850.sln
+          dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
+          dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Validate post-merge ancestry and promotion binding
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force .\TestResults | Out-Null
+          .\scripts\verify-smart-discovery-post-merge-production.ps1 `
+            -MergeManifestPath .\evidence\smart-discovery-mainline-merge-manifest.json `
+            -PromotionAuthorityPath .\evidence\smart-discovery-production-promotion-authority.json `
+            -PromotionPropsPath .\evidence\SmartDiscoveryPromotion.props `
+            -ArsasRepositoryPath . `
+            -EngineRepositoryPath .\ARIEC61850 `
+            -OutputJson .\TestResults\P0-5H-post-merge-production.json
+
+      - name: Build and test promoted ARSAS main
+        shell: powershell
+        run: |
+          dotnet restore .\ArIED61850Tester.sln
+          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
+          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Upload P0-5h post-merge attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-p0-5h-post-merge-production
+          path: .\TestResults\P0-5H-post-merge-production.json
+          if-no-files-found: error
+          retention-days: 30

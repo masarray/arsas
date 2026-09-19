@@ -396,36 +396,106 @@ public partial class MainWindow
 
         var liveModel = device.LiveDiscoveryModel
             ?? throw new InvalidOperationException("A source SCL file or complete live discovery model is required for legacy SAS export.");
-        var selectedDataSet = string.IsNullOrWhiteSpace(row.DataSetReference)
-            ? null
-            : liveModel.DataSets.FirstOrDefault(dataSet =>
-                NormalizeRcbReference(dataSet.Reference)
-                    .Equals(NormalizeRcbReference(row.DataSetReference), StringComparison.OrdinalIgnoreCase));
+        var effectiveAvailability = availability;
         var exportModel = liveModel;
 
-        // An RCB with no DataSet is still a real RCB and must remain exportable.
-        // Only request FCDA evidence when the RCB actually declares a DataSet.
-        if (!string.IsNullOrWhiteSpace(row.DataSetReference) &&
-            (selectedDataSet is null || selectedDataSet.Members.Count == 0))
-        {
-            if (availability is null)
-            {
-                throw new InvalidOperationException(
-                    "The selected RCB declares a DataSet, but live discovery has no FCDA directory evidence yet. Click Check Availability, wait for the read-only audit to finish, then export again.");
-            }
-
-            exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
-                liveModel,
-                row.Reference,
-                availability);
-        }
-
-        if (availability != null)
+        // Reuse any availability evidence that the operator already acquired. Merge the live
+        // DatSet binding before resolving the DataSet so a runtime binding can override stale
+        // discovery evidence without forcing an unnecessary second MMS association.
+        if (effectiveAvailability != null)
         {
             exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
                 exportModel,
                 row.Reference,
-                availability);
+                effectiveAvailability);
+        }
+
+        var effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+        var selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+
+        // An RCB with no DataSet is still a real RCB and remains exportable. When an RCB does
+        // declare a DataSet, however, Save/Export owns the evidence acquisition: first reuse
+        // an existing availability directory, then perform one bounded read-only audit only
+        // when FCDA evidence is still missing. This keeps R4 discovery fast and makes Save SCL
+        // self-contained instead of requiring a manual Check Availability + retry cycle.
+        if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+            (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+        {
+            if (effectiveAvailability != null)
+            {
+                exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
+                    exportModel,
+                    row.Reference,
+                    effectiveAvailability);
+                effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+                selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+            }
+
+            if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+                (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+            {
+                if (!device.IsConnected)
+                {
+                    throw new InvalidOperationException(
+                        $"The selected RCB declares DataSet '{effectiveDataSetReference}', but no FCDA directory evidence is available and the IED is disconnected.");
+                }
+
+                AddLog("INFO", "RCB Export",
+                    $"{device.Name}: FCDA evidence missing for {row.Reference}; acquiring one read-only MMS availability snapshot before export.");
+
+                using var evidenceTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                evidenceTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+                try
+                {
+                    effectiveAvailability = await _rcbAvailabilityProbe
+                        .CheckAsync(device, evidenceTimeout.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"Timed out while acquiring FCDA directory evidence for RCB '{row.Reference}'. The CID was not written.");
+                }
+
+                exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
+                    exportModel,
+                    row.Reference,
+                    effectiveAvailability);
+                effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+
+                if (!string.IsNullOrWhiteSpace(effectiveDataSetReference))
+                {
+                    exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
+                        exportModel,
+                        row.Reference,
+                        effectiveAvailability);
+                    effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+                    selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+                }
+                else
+                {
+                    selectedDataSet = null;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+                (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+            {
+                throw new InvalidOperationException(
+                    $"RCB '{row.Reference}' resolves to DataSet '{effectiveDataSetReference}', but the authoritative read-only MMS audit did not return any FCDA members. The CID was not written.");
+            }
+        }
+
+        // If the probe proved a dynamic RCB is currently unbound, keep that authoritative
+        // result and do not resurrect the stale discovery binding during serialization.
+        if (effectiveAvailability != null)
+        {
+            exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
+                exportModel,
+                row.Reference,
+                effectiveAvailability);
+            effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+            selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
         }
 
         var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
@@ -444,7 +514,7 @@ public partial class MainWindow
 
         var removedCount = Math.Max(0, liveModel.ReportControls.Count - 1);
         AddLog("INFO", "RCB Export",
-            $"{device.Name}: live-model legacy SAS CID saved; schema={liveResult.SclSchema}; RCB={row.Reference}; DataSet={row.DataSetName}; members={row.MemberCount}; removed RCB={removedCount}; output={liveResult.SclPath}");
+            $"{device.Name}: live-model legacy SAS CID saved; schema={liveResult.SclSchema}; RCB={row.Reference}; DataSet={effectiveDataSetReference}; members={selectedDataSet?.Members.Count ?? 0}; removed RCB={removedCount}; output={liveResult.SclPath}");
         SetStatus($"{device.Name}: legacy SAS CID exported with one RCB — {row.Name}.");
         return new RcbExportCompletion
         {
@@ -453,11 +523,35 @@ public partial class MainWindow
             SummaryPath = liveResult.SummaryPath,
             SchemaDisplayName = liveResult.SclSchema,
             RetainedReportControl = row.Reference,
-            DataSetName = row.DataSetName,
-            DataSetMemberCount = row.MemberCount,
+            DataSetName = string.IsNullOrWhiteSpace(effectiveDataSetReference) ? row.DataSetName : LastReferenceSegment(effectiveDataSetReference),
+            DataSetMemberCount = selectedDataSet?.Members.Count ?? 0,
             RemovedReportControlCount = removedCount,
             Message = $"Export complete: {row.Reference} is the only RCB in the generated CID."
         };
+    }
+
+    private static string ResolveExportDataSetReference(LiveIedModelDiscoveryDocument model, RcbExportRow row)
+    {
+        var selectedReportControl = model.ReportControls.FirstOrDefault(reportControl =>
+            NormalizeRcbReference(reportControl.Reference)
+                .Equals(NormalizeRcbReference(row.Reference), StringComparison.OrdinalIgnoreCase));
+
+        return selectedReportControl is not null
+            ? (selectedReportControl.DataSetReference ?? string.Empty).Trim()
+            : (row.DataSetReference ?? string.Empty).Trim();
+    }
+
+    private static LiveIedDataSetModel? FindExportDataSet(
+        LiveIedModelDiscoveryDocument model,
+        string? dataSetReference)
+    {
+        if (string.IsNullOrWhiteSpace(dataSetReference))
+            return null;
+
+        var normalizedReference = NormalizeRcbReference(dataSetReference);
+        return model.DataSets.FirstOrDefault(dataSet =>
+            NormalizeRcbReference(dataSet.Reference)
+                .Equals(normalizedReference, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string EffectiveSclIedName(Iec61850MonitorDevice device)

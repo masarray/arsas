@@ -1,0 +1,325 @@
+name: IEDScout Convergence Guard
+
+on:
+  pull_request:
+    paths:
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/SclAssistedConnectionPreparation.cs"
+      - "Services/CanonicalSclReloadValidator.cs"
+      - "MainWindow.xaml.cs"
+      - "Directory.Build.targets"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "engines/ARIEC61850.lock.json"
+      - "evidence/iedscout-convergence-target.json"
+      - "docs/IEDSCOUT_CONVERGENCE.md"
+      - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
+      - ".github/workflows/iedscout-convergence-guard.yml"
+      - ".github/workflows/scl-interoperability-r7.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: iedscout-convergence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iedscout-convergence-contract:
+    name: iedscout-convergence-contract
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout exact ARSAS revision
+        shell: pwsh
+        env:
+          ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($env:ARSAS_SOURCE_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid ARSAS source SHA: $env:ARSAS_SOURCE_SHA"
+          }
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" ARSAS
+          git -C .\ARSAS fetch --quiet --depth 1 origin $env:ARSAS_SOURCE_SHA
+          git -C .\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA
+          $actual = (git -C .\ARSAS rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARSAS_SOURCE_SHA) {
+            throw "ARSAS SHA mismatch. Expected $env:ARSAS_SOURCE_SHA, got $actual."
+          }
+
+      - name: Verify single convergence authority
+        shell: pwsh
+        run: |
+          $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          $target = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+
+          if ($target.status -ne 'physical-retest-passed-merge-ready') {
+            throw "Convergence status changed unexpectedly: $($target.status)"
+          }
+          if ([int]$target.activeStack.enginePerformance.pullRequest -ne 134 -or
+              [int]$target.activeStack.engineModelAndScl.pullRequest -ne 135 -or
+              [int]$target.activeStack.engineModelAndScl.basePullRequest -ne 134 -or
+              [int]$target.activeStack.consumerIntegration.pullRequest -ne 324) {
+            throw 'Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance.'
+          }
+          if ($lock.commit -ne $target.activeStack.engineModelAndScl.head -or
+              [int]$lock.sourcePullRequest -ne 135) {
+            throw 'Engine lock drifted from the convergence single source of truth.'
+          }
+          if ([bool]$target.promotion.productionPromoted -or
+              [bool]$target.promotion.mergeAllowedBeforePhysicalRetest -or
+              [bool]$target.promotion.physicalRetestRequired -or
+              -not [bool]$target.promotion.mergeAllowedAfterPhysicalRetest -or
+              -not [bool]$target.promotion.physicalRetestPassed) {
+            throw 'R10 physical-retest/merge gate drifted.'
+          }
+          if ([int]$target.physicalReference.iedScoutCapture.associations -ne 1 -or
+              [int]$target.physicalReference.iedScoutCapture.getVariableAccessAttributes -ne 119 -or
+              [int]$target.physicalReference.rejectedLegacyArsasCapture.associations -ne 2 -or
+              [int]$target.physicalReference.rejectedLegacyArsasCapture.getVariableAccessAttributes -lt 20000) {
+            throw 'Physical IEDScout/legacy regression reference changed unexpectedly.'
+          }
+
+
+          $p0 = $target.p0StructuralDiscoveryFreeze
+          if ($p0.contractId -ne 'P0-R9-STRUCTURAL' -or
+              $p0.status -ne 'implemented-and-r9-physically-proven' -or
+              -not [bool]$p0.sourcePolicy.smartRouteRequired -or
+              -not [bool]$p0.sourcePolicy.associationScopedSingleFlightRequired -or
+              -not [bool]$p0.sourcePolicy.applicationMmsGateExclusive -or
+              -not [bool]$p0.sourcePolicy.logicalNodeRootTypeStrategyRequired -or
+              -not [bool]$p0.sourcePolicy.eagerInitialFcReadsForbidden -or
+              -not [bool]$p0.sourcePolicy.supplementalLegacyBrowseForbidden -or
+              -not [bool]$p0.sourcePolicy.secondFullGetNameListSweepForbidden -or
+              -not [bool]$p0.sourcePolicy.recursivePerLeafGvaStormForbidden -or
+              -not [bool]$p0.sourcePolicy.saveTimeAndTrustedSclValueReadsRemainSeparate) {
+            throw 'P0 structural-discovery freeze policy was weakened.'
+          }
+
+          if ([int]$p0.frozenOptions.maxConcurrentChains -ne 8 -or
+              [int]$p0.frozenOptions.unknownPeerMaxConcurrentChains -ne 4 -or
+              [int]$p0.frozenOptions.maxDomains -ne 256 -or
+              [int]$p0.frozenOptions.maxVariableNamesPerDomain -ne 20000 -or
+              [int]$p0.frozenOptions.maxVariableListNamesPerDomain -ne 4096 -or
+              [int]$p0.frozenOptions.maxNameListPages -ne 64 -or
+              -not [bool]$p0.frozenOptions.probeReportAttributes -or
+              [int]$p0.frozenOptions.maxReportAttributeProbes -ne 64 -or
+              -not [bool]$p0.frozenOptions.readDataSetDirectories -or
+              [int]$p0.frozenOptions.maxDataSetDirectoryReads -ne 64) {
+            throw 'P0 frozen smart-discovery options drifted.'
+          }
+
+          $p0Relay = $p0.aa1e1f06r4Acceptance
+          if ([int]$p0Relay.associations -ne 1 -or
+              [int]$p0Relay.referenceConfirmedMmsRequests -ne 323 -or
+              [int]$p0Relay.maximumConfirmedMmsRequests -ne 417 -or
+              [int]$p0Relay.referenceGetNameList -ne 138 -or
+              [int]$p0Relay.referenceGetVariableAccessAttributes -ne 119 -or
+              [int]$p0Relay.maximumGetVariableAccessAttributes -ne 119 -or
+              [int]$p0Relay.referenceGetNamedVariableListAttributes -ne 2 -or
+              [int]$p0Relay.referenceReads -ne 64 -or
+              [int]$p0Relay.maximumReads -ne 156 -or
+              [int]$p0Relay.logicalDevices -ne 32 -or
+              [int]$p0Relay.logicalNodes -ne 119 -or
+              [int]$p0Relay.topLevelDataObjects -ne 860 -or
+              [int]$p0Relay.dataObjectsIncludingSdo -ne 906 -or
+              [int]$p0Relay.scalarLeaves -ne 4925 -or
+              [int]$p0Relay.dataSets -ne 2 -or
+              [int]$p0Relay.fcda -ne 58 -or
+              [int]$p0Relay.logicalReportControls -ne 32 -or
+              [int]$p0Relay.settingControls -ne 1) {
+            throw 'P0 AA1E1F06R4 discovery acceptance contract drifted.'
+          }
+
+          $p1 = $target.p1ProjectionOrderRepair
+          if ($p1.contractId -ne 'P1-CF-DO-SCOPED' -or
+              $p1.status -ne 'physically-proven-r10' -or
+              [int]$p1.physicalR10Outcome.edition2.projectionErrors -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition1.projectionErrors -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition2.failedReads -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition1.failedReads -ne 0 -or
+              [int]$p1.physicalR10Outcome.reportBackedRuntimePoints -ne 58 -or
+              [int]$p1.physicalR10Outcome.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$p1.physicalR10Outcome.actualInformationReportObserved) {
+            throw 'P1 physical projection-order proof regressed.'
+          }
+
+          $p2 = $target.p2CaseSensitiveValuePipeline
+          if ($p2.contractId -ne 'P2-CASE-EXACT-VALUES' -or
+              $p2.status -ne 'physically-proven-r10' -or
+              -not [bool]$p2.preservesP0StructuralDiscovery -or
+              -not [bool]$p2.preservesP1CfScopedHydration -or
+              [int]$p2.physicalR9Evidence.observedCacheLoss -ne 11 -or
+              [int]$p2.expectedPhysicalOutcome.edition2CacheLoss -ne 0 -or
+              [int]$p2.expectedPhysicalOutcome.edition1CacheLoss -ne 0 -or
+              -not [bool]$p2.expectedPhysicalOutcome.ltrkLowercaseTAndUppercaseTRemainDistinct -or
+              -not [bool]$p2.expectedPhysicalOutcome.noAdditionalDiscoveryGva -or
+              -not [bool]$p2.expectedPhysicalOutcome.sameAssociation -or
+              [int]$p2.physicalR10Outcome.edition2.cacheLoss -ne 0 -or
+              [int]$p2.physicalR10Outcome.edition1.cacheLoss -ne 0 -or
+              [int]$p2.physicalR10Outcome.edition2.projectedUniqueValues -ne [int]$p2.physicalR10Outcome.edition2.initialValueCache -or
+              [int]$p2.physicalR10Outcome.edition1.projectedUniqueValues -ne [int]$p2.physicalR10Outcome.edition1.initialValueCache -or
+              $p2.sourceInvariants.trustedSclValueCacheComparer -ne 'StringComparer.Ordinal' -or
+              $p2.sourceInvariants.typeSpecificationMemberComparison -ne 'StringComparison.Ordinal' -or
+              $p2.sourceInvariants.sclDataObjectInstanceTargetComparison -ne 'StringComparison.Ordinal') {
+            throw 'P2 exact-case value pipeline contract was weakened.'
+          }
+
+          $r10 = $target.physicalEvidence.arsasR10
+          if ($r10.testedArtifact.appHead -ne 'eb8eb13d491f9aa265205852b8a4bab07af440ff' -or
+              $r10.testedArtifact.engineTestedHead -ne '9935d6902d786cc69b299260fe36b835944d5e81' -or
+              $r10.testedArtifact.engineMergedMain -ne '648124097621046f5f127ceb1cf853fea54db730' -or
+              [int]$r10.discovery.associations -ne 1 -or
+              [int]$r10.discovery.confirmedMmsRequests -ne 323 -or
+              [int]$r10.discovery.getVariableAccessAttributes -ne 119 -or
+              [int]$r10.reuseEdition2.matchedDomains -ne 32 -or
+              [int]$r10.reuseEdition2.initialTargets -ne 709 -or
+              [int]$r10.reuseEdition2.successfulReads -ne 709 -or
+              [int]$r10.reuseEdition2.failedReads -ne 0 -or
+              [int]$r10.reuseEdition2.projectionErrors -ne 0 -or
+              [int]$r10.reuseEdition2.cacheLoss -ne 0 -or
+              [int]$r10.reuseEdition2.reportBackedRuntimePoints -ne 58 -or
+              [int]$r10.reuseEdition2.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r10.reuseEdition2.actualInformationReportObserved -or
+              [int]$r10.reuseEdition1.matchedDomains -ne 32 -or
+              [int]$r10.reuseEdition1.initialTargets -ne 708 -or
+              [int]$r10.reuseEdition1.successfulReads -ne 708 -or
+              [int]$r10.reuseEdition1.failedReads -ne 0 -or
+              [int]$r10.reuseEdition1.projectionErrors -ne 0 -or
+              [int]$r10.reuseEdition1.cacheLoss -ne 0 -or
+              [int]$r10.reuseEdition1.reportBackedRuntimePoints -ne 58 -or
+              [int]$r10.reuseEdition1.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r10.reuseEdition1.actualInformationReportObserved) {
+            throw 'R10 physical SCL reuse acceptance evidence regressed.'
+          }
+
+          $r9 = $target.physicalEvidence.arsasR9
+          if ([int]$r9.discovery.associations -ne 1 -or
+              [int]$r9.discovery.confirmedMmsRequests -ne 323 -or
+              [int]$r9.discovery.getVariableAccessAttributes -ne 119 -or
+              [int]$r9.discovery.topLevelDataObjects -ne 860 -or
+              [int]$r9.discovery.dataObjectsIncludingSdo -ne 906 -or
+              [int]$r9.discovery.scalarLeaves -ne 4925) {
+            throw 'R9 physical discovery/model acceptance evidence drifted.'
+          }
+
+          if ([int]$r9.reuseEdition2.expectedDomains -ne 32 -or
+              [int]$r9.reuseEdition2.matchedDomains -ne 32 -or
+              [int]$r9.reuseEdition2.successfulReads -ne [int]$r9.reuseEdition2.fcRoots -or
+              [int]$r9.reuseEdition2.failedReads -ne 0 -or
+              [int]$r9.reuseEdition2.reportBackedRuntimePoints -ne 58 -or
+              [int]$r9.reuseEdition2.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r9.reuseEdition2.actualInformationReportObserved -or
+              [int]$r9.reuseEdition1.expectedDomains -ne 32 -or
+              [int]$r9.reuseEdition1.matchedDomains -ne 32 -or
+              [int]$r9.reuseEdition1.successfulReads -ne [int]$r9.reuseEdition1.fcRoots -or
+              [int]$r9.reuseEdition1.failedReads -ne 0 -or
+              [int]$r9.reuseEdition1.reportBackedRuntimePoints -ne 58 -or
+              [int]$r9.reuseEdition1.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r9.reuseEdition1.actualInformationReportObserved) {
+            throw 'R9 trusted-SCL reconnect/reporting acceptance evidence regressed.'
+          }
+
+          if ([int]$target.openGaps.trustedSclProjectionParity.targetProjectionErrors -ne 0 -or
+              [int]$target.openGaps.trustedSclProjectionParity.observedEdition2 -ne [int]$r9.reuseEdition2.projectionErrors -or
+              [int]$target.openGaps.trustedSclProjectionParity.observedEdition1 -ne [int]$r9.reuseEdition1.projectionErrors -or
+              [int]$target.openGaps.trustedSclProjectionParity.r10ObservedEdition2 -ne 0 -or
+              [int]$target.openGaps.trustedSclProjectionParity.r10ObservedEdition1 -ne 0 -or
+              [int]$target.openGaps.edition2CaseDistinctInitialValueCache.observedProjectedMinusCached -ne 11 -or
+              [int]$target.openGaps.edition2CaseDistinctInitialValueCache.r10ObservedProjectedMinusCached -ne 0 -or
+              [int]$target.openGaps.preallocatedAddReportControls.observedWithoutDataSet -ne 30 -or
+              [int]$target.openGaps.preallocatedAddReportControls.r10FatalMissingDatasetErrors -ne 0) {
+            throw 'R9 history or R10 resolved semantic evidence drifted.'
+          }
+
+          "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact convergence engine
+        shell: pwsh
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ENGINE_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ENGINE_COMMIT) {
+            throw "Engine SHA mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+          }
+
+      - name: Verify discovery and SCL anti-regression contracts
+        shell: pwsh
+        run: |
+          $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $sclAssisted = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
+          $canonicalModel = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedCanonicalModel.cs -Raw
+          $typeHierarchy = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedVariableTypeHierarchy.cs -Raw
+          $canonicalExporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\CanonicalLiveIedSclExporter.cs -Raw
+          $targets = Get-Content .\ARSAS\Directory.Build.targets -Raw
+          $smart = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
+          $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
+          $smartGva = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartVariableAccessAttributes.cs -Raw
+          $lnParts = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850ReferenceParts.cs -Raw
+          $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs -Raw
+          $registry = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850StandardModelRegistry.cs -Raw
+          $cdc = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\CdcInferenceEngine.cs -Raw
+
+          $valueCacheIndex = $sclAssisted.IndexOf('_trustedSclInitialValues =', [System.StringComparison]::Ordinal)
+          if ($valueCacheIndex -lt 0) {
+            throw 'P2 trusted-SCL value cache declaration is missing.'
+          }
+          $valueCacheLength = [Math]::Min(260, $sclAssisted.Length - $valueCacheIndex)
+          $valueCacheSegment = $sclAssisted.Substring($valueCacheIndex, $valueCacheLength)
+          if ($valueCacheSegment -notmatch 'StringComparer\.Ordinal' -or
+              $valueCacheSegment -match 'StringComparer\.OrdinalIgnoreCase' -or
+              $sclAssisted -notmatch 'projectedUniqueValues' -or
+              $sclAssisted -notmatch 'initialValueCacheLoss' -or
+              $sclAssisted -notmatch 'cacheLoss=\{initialValueCacheLoss\}' -or
+              $canonicalModel -notmatch 'new HashSet<string>\(StringComparer\.Ordinal\)' -or
+              $typeHierarchy -notmatch 'current\.Children\[index\]\.Name, part, StringComparison\.Ordinal\)' -or
+              $canonicalExporter -notmatch 'dataObjectName\.Trim\(\),\s*[\s\S]*?StringComparison\.Ordinal\)') {
+            throw 'P2 case-sensitive value path implementation regressed.'
+          }
+
+          if ($targets -notmatch 'SCL Interoperability R7 Build' -or
+              $targets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
+              $capture -notmatch 'SmartDiscoveryStructuralFreezeContract = "P0-R9-STRUCTURAL"' -or
+              $capture -notmatch 'CreateP0FrozenSmartDiscoveryOptions' -or
+              $capture -notmatch 'MaxConcurrentChains = 8' -or
+              $capture -notmatch 'UnknownPeerMaxConcurrentChains = 4' -or
+              $capture -notmatch 'MaxNameListPages = 64' -or
+              $capture -notmatch 'ProbeReportAttributes = true' -or
+              $capture -notmatch 'MaxReportAttributeProbes = 64' -or
+              $capture -notmatch 'ReadDataSetDirectories = true' -or
+              $capture -notmatch 'MaxDataSetDirectoryReads = 64' -or
+              $capture -notmatch 'GetOrCreateSmartDiscoveryAssociationFlight' -or
+              $capture -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $capture -notmatch 'ProbeSmartAsync' -or
+              $capture -notmatch 'initialFcRoots=deferred' -or
+              $capture -notmatch 'InitialFcReadExecutionResult\? initialRead = null' -or
+              $capture -match '_session\.DiscoverAsync\(' -or
+              $capture -match 'DiscoverDomainVariableNamesAsync' -or
+              $capture -match 'TryBuildSupplementalGetNameListSnapshotAsync' -or
+              $capture -match 'DiscoverDomainVariableTypeTreeNamesAsync' -or
+              $capture -match 'AddAdaptiveLogicalNodeSiblingProbeSignalsAsync' -or
+              $capture -match 'EnrichEngineeringUnitsAsync' -or
+              $capture -match 'InitialFcReadPlanner\.FromSclModel' -or
+              $capture -match 'ExecuteInitialFcReadPlanSmartAsync' -or
+              $smart -notmatch 'DiscoverSmartAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartAsync\(options, CancellationToken\.None\)' -or
+              $smartGva -notmatch 'GetVariableAccessAttributesSmartAsync') {
+            throw 'P0 structural discovery freeze regressed away from the accepted IEDScout convergence path.'
+          }
+
+          if ($lnParts -notmatch 'instanceStart' -or
+              $lnParts -notmatch 'IsFourLetterLnClass' -or
+              $exporter -notmatch 'TryResolveStandardSubDataObjectCdc' -or
+              $exporter -notmatch 'DataObjectReferencePaths' -or
+              $exporter -notmatch 'IsEdition2ServiceTrackingCdc' -or
+              $registry -notmatch 'Key\("TCTR", "ARtg"\)' -or
+              $registry -notmatch 'Key\("TVTR", "VRtg"\)' -or
+              $registry -notmatch 'Key\("LTIM", "TmChgDT"\)' -or
+              $registry -notmatch 'Key\("LTRK", "BrcbTrk"\)' -or
+              $registry -notmatch 'Key\("XCBR", "EEName"\)' -or
+              $registry -notmatch 'Key\("LLN0", "MltLev"\)' -or
+              $cdc -notmatch '"CST".*"BTS".*"UTS".*"STS".*"CTS"') {
+            throw 'Canonical IEC model / SCL semantic authority regressed.'
+          }
+
+          Write-Host 'IEDScout convergence contract PASS.'

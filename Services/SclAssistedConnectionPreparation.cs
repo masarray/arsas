@@ -122,9 +122,13 @@ public static class SclAssistedConnectionPreparationBuilder
             Parameters = sclRemote.Parameters
         };
 
+        // Reuse the same calling-side identity as the proven native runtime
+        // association. The previous SclInteroperabilityDefault changed source TSEL
+        // to 0000 and calling AE qualifier to 23, so a generated SCL could round-trip
+        // its remote/called identity while still emitting a different wire handshake.
         var association = ArScl.SclAssistedMmsAssociationPlanBuilder.BuildExact(
             effectiveRemote,
-            ArScl.MmsLocalAssociationProfile.SclInteroperabilityDefault);
+            ArScl.MmsLocalAssociationProfile.ExistingRuntimeDefault);
         warnings.AddRange(association.Warnings);
         if (!association.IsSuccess || association.Plan is null)
         {

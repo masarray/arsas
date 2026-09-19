@@ -90,6 +90,25 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _sessions.Values.Count(session => session.Client.IsConnected);
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
 
+    public async Task<int> EnrichCanonicalForSclSaveAsync(
+        Iec61850MonitorDevice device,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (device.IsMonitoring)
+            throw new InvalidOperationException($"{device.Name}: stop monitoring before Save-SCL value enrichment.");
+        if (!_sessions.TryGetValue(device.DeviceId, out var session) || !session.Client.IsConnected)
+            throw new InvalidOperationException($"{device.Name}: Save-SCL value enrichment requires the active MMS connection.");
+
+        var canonical = await session.Client
+            .EnrichCanonicalForSclSaveAsync(cancellationToken)
+            .ConfigureAwait(false);
+        device.LiveCanonicalModel = canonical;
+        device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+            $"Save SCL enrichment complete; instanceEvidence={canonical.InstanceValues.Count}");
+        return canonical.InstanceValues.Count;
+    }
+
     public async Task<IReadOnlyList<SignalDefinition>> ConnectAndDiscoverAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken,
@@ -137,6 +156,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             var discovered = await session.Client.DiscoverSignalsAsync(cancellationToken, progress).ConfigureAwait(false);
             if (session.Client.LastLiveModel != null)
                 device.LiveDiscoveryModel = session.Client.LastLiveModel;
+            device.LiveCanonicalModel = session.Client.LastCanonicalModel;
 
             var signals = discovered
                 .Where(signal => signal.CanPublishAsSignal || signal.IsControlSignal)
@@ -403,6 +423,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 throw new InvalidOperationException(result.Message);
 
             device.LiveDiscoveryModel = session.Client.LastLiveModel ?? device.SclWorkspace?.DesignModel;
+            device.LiveCanonicalModel = session.Client.LastCanonicalModel;
             Log("INFO", device.Name,
                 $"Verified SCL authority active: SHA256={verified.Sha256}; IED={device.SclIedName}; AP={device.SclAccessPointName}; maxReadRefs={result.Preparation.InitialReadPlan?.MaximumVariableReferencesPerRead ?? 0}.");
             return path;

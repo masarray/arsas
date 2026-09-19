@@ -1,0 +1,311 @@
+name: SCL Interoperability R7 Build
+
+on:
+  pull_request:
+    paths:
+      - "Services/NativeIec61850Client.CanonicalModel.cs"
+      - "Services/NativeIec61850Client.SmartDiscoveryCapture.cs"
+      - "Directory.Build.targets"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"
+      - "Services/NativeIec61850Client.SclAssisted.cs"
+      - "Services/SclAssistedConnectionPreparation.cs"
+      - "Models/MonitorModels.cs"
+      - "MainWindow.xaml.cs"
+      - "Services/CanonicalSclReloadValidator.cs"
+      - "engines/ARIEC61850.lock.json"
+      - "evidence/iedscout-convergence-target.json"
+      - "docs/IEDSCOUT_CONVERGENCE.md"
+      - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
+      - "tests/ARSAS.Tests/CanonicalSclReloadValidatorTests.cs"
+      - ".github/workflows/scl-interoperability-r7.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: scl-interoperability-r7-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-r7-scl-interoperability:
+    name: Build canonical discovery to interoperable SCL test package
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout exact ARSAS source revision
+        shell: pwsh
+        env:
+          ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($env:ARSAS_SOURCE_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid ARSAS source SHA: $env:ARSAS_SOURCE_SHA"
+          }
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" ARSAS
+          git -C .\ARSAS fetch --quiet --depth 1 origin $env:ARSAS_SOURCE_SHA
+          git -C .\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA
+          $arsasCommit = (git -C .\ARSAS rev-parse HEAD).Trim()
+          if ($arsasCommit -ne $env:ARSAS_SOURCE_SHA) {
+            throw "ARSAS SHA mismatch. Expected $env:ARSAS_SOURCE_SHA, got $arsasCommit."
+          }
+          "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Resolve isolated R7 engine pin
+        shell: pwsh
+        run: |
+          $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          $convergence = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          if ($lock.repository -ne 'masarray/ARIEC61850' -or
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 R7 lock.'
+          }
+          if ($lock.purpose -notmatch 'R7 physical SCL repair pin') {
+            throw 'Engine lock is not explicitly scoped as the R7 physical SCL repair.'
+          }
+
+          if ($convergence.status -ne 'physical-retest-passed-merge-ready' -or
+              [int]$convergence.activeStack.enginePerformance.pullRequest -ne 134 -or
+              [int]$convergence.activeStack.engineModelAndScl.pullRequest -ne 135 -or
+              [int]$convergence.activeStack.consumerIntegration.pullRequest -ne 324 -or
+              $convergence.activeStack.engineModelAndScl.head -ne $lock.commit -or
+              [bool]$convergence.promotion.productionPromoted -or
+              [bool]$convergence.promotion.mergeAllowedBeforePhysicalRetest -or
+              [bool]$convergence.promotion.physicalRetestRequired -or
+              -not [bool]$convergence.promotion.mergeAllowedAfterPhysicalRetest -or
+              -not [bool]$convergence.promotion.physicalRetestPassed) {
+            throw 'IEDScout convergence single-source-of-truth does not match the physically proven merged-engine + ARSAS #324 authority.'
+          }
+          if ([int]$lock.sourcePullRequest -notin @(134, 135)) {
+            throw "Unexpected R7 engine source PR: $($lock.sourcePullRequest)"
+          }
+
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_SOURCE_PR=$($lock.sourcePullRequest)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = (Get-Content .\ARSAS\VERSION -Raw).Trim()
+          "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact ARIEC61850 engine revision
+        shell: pwsh
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "Engine SHA mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Verify canonical SCL interoperability contracts
+        shell: pwsh
+        run: |
+          $canonical = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\LiveIedCanonicalModel.cs -Raw
+          $exporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\CanonicalLiveIedSclExporter.cs -Raw
+          $association = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.AssociationEvidence.cs -Raw
+          $cotpClient = Get-Content .\ARIEC61850\src\AR.Iec61850\Osi\CotpClient.cs -Raw
+          $rcbProjector = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveRcbLogicalGroupProjector.cs -Raw
+          $smartDiscovery = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscovery.cs -Raw
+          $singleFlight = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartDiscoverySingleFlight.cs -Raw
+          $smartGva = Get-Content .\ARIEC61850\src\AR.Iec61850\Mms\MmsClientSession.SmartVariableAccessAttributes.cs -Raw
+          $referenceParts = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850ReferenceParts.cs -Raw
+          $liveExporter = Get-Content .\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs -Raw
+          $standardRegistry = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\Iec61850StandardModelRegistry.cs -Raw
+          $cdcInference = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\CdcInferenceEngine.cs -Raw
+          $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.CanonicalModel.cs -Raw
+          $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
+          $convergence = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $buildTargets = Get-Content .\ARSAS\Directory.Build.targets -Raw
+          $lifecycle = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
+          $sclClient = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
+          $sclPreparation = Get-Content .\ARSAS\Services\SclAssistedConnectionPreparation.cs -Raw
+          $save = Get-Content .\ARSAS\MainWindow.xaml.cs -Raw
+          $reloadValidator = Get-Content .\ARSAS\Services\CanonicalSclReloadValidator.cs -Raw
+          $regression = Get-Content .\ARSAS\tests\ARSAS.Tests\CanonicalLiveSclExportRegressionTests.cs -Raw
+          $reloadTests = Get-Content .\ARSAS\tests\ARSAS.Tests\CanonicalSclReloadValidatorTests.cs -Raw
+
+          foreach ($required in @(
+            'class LiveIedCanonicalModel',
+            'InstanceValues',
+            'LiveIedCommunicationEvidence')) {
+            if ($canonical -notmatch [regex]::Escape($required)) {
+              throw "Canonical engine contract missing: $required"
+            }
+          }
+
+          foreach ($required in @(
+            'ValidateCanonicalCommunication',
+            'PreserveRuntimeServiceCapacity',
+            'ApplyCanonicalInstanceValues',
+            'ValidateRoundTripAssociation')) {
+            if ($exporter -notmatch [regex]::Escape($required)) {
+              throw "Canonical SCL exporter contract missing: $required"
+            }
+          }
+
+          if ($association -notmatch 'GetAcceptedCommunicationEvidence') {
+            throw 'Accepted association evidence API is missing.'
+          }
+
+          if ($env:ARIEC61850_SOURCE_PR -eq '135') {
+            $wireReader = '.\ARIEC61850\src\AR.Iec61850\Acse\AcseAssociationRequestIdentityReader.cs'
+            if (!(Test-Path $wireReader) -or
+                $association -notmatch 'AcseAssociationRequestIdentityReader\.Read' -or
+                $association -notmatch '_cotp\.LastConnectParameters\?\.DestinationTsap' -or
+                $cotpClient -notmatch 'public CotpConnectParameters\? LastConnectParameters' -or
+                $cotpClient -notmatch 'LastConnectParameters = acceptedParameters' -or
+                $association -match 'ApTitle\s*=\s*"1,1,1,999,1"') {
+              throw 'PR #135 must derive canonical AP/AE/selectors from exact accepted ACSE and COTP session evidence, not duplicated profile constants.'
+            }
+          }
+
+          if ($smartDiscovery -notmatch 'DiscoverSmartAsync' -or
+              $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
+              $smartGva -notmatch 'GetVariableAccessAttributesSmartAsync' -or
+              $referenceParts -notmatch 'instanceStart' -or
+              $referenceParts -notmatch 'IsFourLetterLnClass' -or
+              $liveExporter -notmatch 'TryResolveStandardSubDataObjectCdc' -or
+              $liveExporter -notmatch 'DataObjectReferencePaths' -or
+              $liveExporter -notmatch 'IsEdition2ServiceTrackingCdc' -or
+              $standardRegistry -notmatch 'Key\("TCTR", "ARtg"\)' -or
+              $standardRegistry -notmatch 'Key\("TVTR", "VRtg"\)' -or
+              $standardRegistry -notmatch 'Key\("LTIM", "TmChgDT"\)' -or
+              $standardRegistry -notmatch 'Key\("LTRK", "BrcbTrk"\)' -or
+              $standardRegistry -notmatch 'Key\("XCBR", "EEName"\)' -or
+              $standardRegistry -notmatch 'Key\("LLN0", "MltLev"\)' -or
+              $cdcInference -notmatch '"CST".*"BTS".*"UTS".*"STS".*"CTS"' -or
+              $capture -match 'TryBuildSupplementalGetNameListSnapshotAsync' -or
+              $capture -match 'DiscoverDomainVariableTypeTreeNamesAsync' -or
+              $capture -match 'AddAdaptiveLogicalNodeSiblingProbeSignalsAsync' -or
+              $capture -match 'EnrichEngineeringUnitsAsync') {
+            throw 'IEDScout convergence source contract regressed: smart structure-first discovery or semantic SCL authority is missing, or a forbidden legacy browse path returned.'
+          }
+
+          if ([int]$convergence.physicalReference.iedScoutCapture.associations -ne 1 -or
+              [int]$convergence.physicalReference.rejectedLegacyArsasCapture.associations -ne 2 -or
+              -not [bool]$convergence.discoveryAcceptance.exactlyOneAssociation -or
+              -not [bool]$convergence.discoveryAcceptance.supplementalLegacyAssociationForbidden -or
+              -not [bool]$convergence.sclAcceptance.reopenInArsasRequired -or
+              -not [bool]$convergence.sclAcceptance.physicalReconnectRequired) {
+            throw 'IEDScout physical acceptance target was weakened.'
+          }
+
+          if ($consumer -notmatch 'LiveIedCanonicalModelBuilder\.Build\(model, communication, initialRead\)' -or
+              $capture -match 'InitialFcReadPlanner\.FromSclModel' -or
+              $capture -match 'ExecuteInitialFcReadPlanSmartAsync' -or
+              $capture -notmatch 'initialFcRoots=deferred' -or
+              $buildTargets -notmatch 'SCL Interoperability R7 Build' -or
+              $buildTargets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
+              $lifecycle -notmatch 'PublishCanonicalModel\(model, initialRead\)' -or
+              $save -notmatch 'CanonicalLiveIedSclExporter\.WriteFiles' -or
+              $save -notmatch 'profile:\s*"full-model"' -or
+              $save -notmatch 'CanonicalSclReloadValidator\.Validate' -or
+              $sclPreparation -notmatch 'MmsLocalAssociationProfile\.ExistingRuntimeDefault' -or
+              $sclClient -notmatch 'IsSafeTrustedSclInitialReadFc' -or
+              $sclClient -notmatch 'ExecuteInitialFcReadPlanSmartAsync' -or
+              $reloadValidator -notmatch 'workspaceService\.Open' -or
+              $reloadValidator -notmatch 'result\.Profile.*full-model' -or
+              $reloadValidator -notmatch 'changed the proven calling-side runtime identity' -or
+              $reloadValidator -notmatch 'reproduce accepted association profile' -or
+              $regression -notmatch 'SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan' -or
+              $reloadTests -notmatch 'ExportedCanonicalScl_ReopensThroughArsasWorkspaceWithoutStructuralDrift' -or
+              $reloadTests -notmatch 'BuildDefaultAssociationPayload' -or
+              $reloadTests -notmatch 'GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity' -or
+              $rcbProjector -match 'SameNumericText\(left\.IntegrityPeriodMs, right\.IntegrityPeriodMs\)' -or
+              $rcbProjector -match 'Same\(left\.OptionalFields, right\.OptionalFields\)') {
+            throw 'ARSAS canonical discovery -> full-model SCL -> exact native reconnect -> safe initial value-read contract is incomplete.'
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore ARSAS solution
+        run: dotnet restore .\ARSAS\ArIED61850Tester.sln
+
+      - name: Build ARSAS Release
+        run: dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
+
+      - name: Verify R7 smart discovery route was compiled
+        shell: pwsh
+        run: |
+          $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.cs -Raw
+          if ($consumer -notmatch 'DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
+            throw 'R7 build compiled without the smart discovery route; refusing legacy-path artifact.'
+          }
+          if ($consumer -notmatch 'if \(SmartDiscoveryCaptureModeEnabled\)') {
+            throw 'R7 build did not install the smart discovery gate at DiscoverSignalsAsync.'
+          }
+          Write-Host 'R7 smart discovery route is installed in the compiled source.'
+
+      - name: Run ARSAS canonical-export regressions
+        run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-r7-scl-tests.trx" --results-directory .\ARSAS\TestResults
+
+      - name: Build engine and run engine tests
+        shell: pwsh
+        run: |
+          dotnet restore .\ARIEC61850\ARIEC61850.sln
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test .\ARIEC61850\ARIEC61850.sln -c Release --no-build --no-restore --logger "trx;LogFileName=ariec61850-r7-scl-tests.trx" --results-directory .\ARSAS\TestResults
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish R7 portable single EXE
+        shell: pwsh
+        run: |
+          .\ARSAS\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke test R7 portable executable
+        shell: pwsh
+        run: |
+          $exe = ".\ARSAS\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (!(Test-Path $exe -PathType Leaf)) { throw "Portable EXE missing: $exe" }
+
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP 'ARSAS-r7-scl-bundle-cache'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--portable-smoke-test') -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Portable EXE smoke test timed out.'
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Portable EXE smoke test failed: $($process.ExitCode)"
+          }
+
+          $convergencePath = ".\ARSAS\evidence\iedscout-convergence-target.json"
+          $convergenceHash = (Get-FileHash $convergencePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $convergence = Get-Content $convergencePath -Raw | ConvertFrom-Json
+
+          @(
+            'ARSAS R7 SCL interoperability field-test build',
+            "ARSAS commit: $env:ARSAS_COMMIT",
+            "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
+            "Engine source PR: $env:ARIEC61850_SOURCE_PR",
+            "Convergence contract SHA256: $convergenceHash",
+            "Convergence status: $($convergence.status)",
+            'Active stack: ARIEC61850 #134 -> #135 -> ARSAS #324',
+            '',
+            'Acceptance target:',
+            'IED -> fast structural Smart Discovery -> full-model SCL Ed1/Ed2 -> ARSAS Workspace Reload -> exact native calling/called association -> bounded safe FC-root snapshot.',
+            'CI invariant: full-model export excludes no discovered attributes; SCL rebuilds the accepted native handshake; golden RCB shape is 34 runtime -> 32 logical with ConfReportControl max=34.',
+            'Physical gate: one MMS association; no supplemental legacy browse; no recursive per-leaf GVA storm; same-relay PCAP + Ed2 IID + Ed1 ICD + diagnostic required before promotion.',
+            '',
+            'This artifact is NOT production-promotion authority and does NOT replace P0-5e/P0-5f physical discovery-budget evidence.'
+          ) | Set-Content .\ARSAS\dist\R7-SCL-INTEROP-BUILD.txt -Encoding utf8
+
+      - name: Upload R7 SCL interoperability build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-r7-scl-interoperability-win-x64
+          path: |
+            ARSAS\dist\ARSAS-*-win-x64-portable.exe
+            ARSAS\dist\R7-SCL-INTEROP-BUILD.txt
+            ARSAS\evidence\iedscout-convergence-target.json
+            ARSAS\docs\IEDSCOUT_CONVERGENCE.md
+            ARSAS\TestResults\*.trx
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,188 @@
+name: Smart Discovery Golden Budget Lock
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-golden-lock:
+    name: Verify P0-5e evidence-derived hard budget
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS branch
+        shell: powershell
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+
+      - name: Validate P0-5e production target remains evidence-gated
+        shell: powershell
+        run: |
+          $targetPath = '.\ArIED61850Tester\evidence\smart-discovery-golden-target.json'
+          $target = Get-Content $targetPath -Raw | ConvertFrom-Json
+          if ($target.Phase -ne 'P0-5e' -or $target.Status -ne 'awaiting-fresh-physical-budget-lock') {
+            throw 'P0-5e target state is invalid.'
+          }
+          if ($null -ne $target.BudgetAuthority.BudgetValues) {
+            throw 'Production hard budget must not be populated by CI fixture values.'
+          }
+          if ($target.DeviceIdentity -ne 'AA1E1F06R4' -or
+              $target.SemanticTarget.LogicalDevices -ne 32 -or
+              $target.SemanticTarget.LogicalNodes -ne 119 -or
+              $target.SemanticTarget.SemanticLeaves -ne 4925 -or
+              $target.SemanticTarget.DataSets -ne 2 -or
+              $target.SemanticTarget.OrderedFcdaMembers -ne 58 -or
+              $target.SemanticTarget.LogicalReportControls -ne 32 -or
+              $target.SemanticTarget.RuntimeReportControlInstances -ne 34) {
+            throw 'P0-5e same-IED semantic target changed unexpectedly.'
+          }
+
+      - name: Execute P0-5e golden budget fixtures
+        shell: powershell
+        run: |
+          $writer = '.\ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1'
+          $verifier = '.\ArIED61850Tester\scripts\verify-smart-discovery-golden-lock.ps1'
+          $target = '.\ArIED61850Tester\evidence\smart-discovery-golden-target.json'
+          foreach ($required in @($writer, $verifier, $target)) {
+            if (-not (Test-Path $required -PathType Leaf)) { throw "P0-5e source missing: $required" }
+          }
+
+          foreach ($script in @($writer, $verifier)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) { throw "PowerShell parse failure in $script" }
+          }
+
+          $results = '.\ArIED61850Tester\TestResults'
+          New-Item -ItemType Directory -Force $results | Out-Null
+          $capture = Join-Path $results 'p0-5e-fixture.pcapng'
+          [IO.File]::WriteAllBytes($capture, [Text.Encoding]::UTF8.GetBytes('CI fixture only - not physical evidence'))
+
+          $proofPath = Join-Path $results 'P0-5D-fixture-golden-source.json'
+          $proof = [ordered]@{
+            SchemaVersion = 1
+            Phase = 'P0-5d'
+            Verdict = 'PASS'
+            AcceptanceFailures = @()
+            ArsasCapture = [ordered]@{
+              Capture = 'fixture'
+              ClientIp = '192.0.2.10'
+              ServerIp = '192.0.2.20'
+              RequestTcpStreams = @('0')
+              ConfirmedRequests = 4
+              ConfirmedResponsesOrErrors = 4
+              ServiceCounts = [ordered]@{
+                GetNameList = 2
+                GetVariableAccessAttributes = 2
+              }
+              DuplicateSemanticRequests = 0
+              DuplicateGetNameListRequests = 0
+              DuplicateGvaRequests = 0
+              DuplicateDetails = @()
+              SecondGetNameListSweepDetected = $false
+              PeakOutstandingRequests = 3
+              NegotiatedMaxOutstandingCalling = 10
+              InvokeIdReuseWhileOutstanding = 0
+              OrphanResponses = 0
+              UnansweredRequestsAtCaptureEnd = 0
+            }
+          }
+          $proof | ConvertTo-Json -Depth 12 | Set-Content $proofPath -Encoding utf8
+
+          $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $engineCommit = '4467124775d8d9d76f3db194f9fbfd97144767a8'
+          $manifest = Join-Path $results 'SMART-CAPTURE-BUILD.txt'
+          @(
+            'ARSAS smart discovery field-capture build',
+            "ARSAS commit: $arsasCommit",
+            "ARIEC61850 commit: $engineCommit",
+            'Engine PR: 134'
+          ) | Set-Content $manifest -Encoding utf8
+
+          $lockPath = Join-Path $results 'P0-5E-fixture-golden.lock.json'
+          & $writer `
+            -ProofJson $proofPath `
+            -CapturePath $capture `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -ArsasCommit $arsasCommit `
+            -EngineCommit $engineCommit `
+            -TargetPath $target `
+            -BuildManifestPath $manifest `
+            -OutputPath $lockPath `
+            -AllowFixtureEvidence
+
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+          if ($lock.Status -ne 'locked' -or
+              $lock.SchemaVersion -ne 2 -or
+              $lock.HardRequestBudget.MaxConfirmedRequests -ne 4 -or
+              $lock.HardRequestBudget.MaxServiceRequests.GetNameList -ne 2 -or
+              $lock.HardRequestBudget.MaxServiceRequests.GetVariableAccessAttributes -ne 2 -or
+              $lock.GoldenSource.CaptureSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.ProofSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.BuildManifestSha256 -notmatch '^[0-9a-f]{64}$' -or
+              $lock.GoldenSource.SemanticTargetSha256 -notmatch '^[0-9a-f]{64}$') {
+            throw 'P0-5e lock writer did not derive the expected fixture budget/provenance.'
+          }
+
+          $acceptPath = Join-Path $results 'P0-5E-fixture-accept-pass.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $proofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
+            -OutputJson $acceptPath
+          $accept = Get-Content $acceptPath -Raw | ConvertFrom-Json
+          if ($accept.Verdict -ne 'PASS') { throw 'P0-5e golden fixture should pass its own lock.' }
+
+          $growthProofPath = Join-Path $results 'P0-5D-fixture-growth.json'
+          $growth = Get-Content $proofPath -Raw | ConvertFrom-Json
+          $growth.ArsasCapture.ConfirmedRequests = 5
+          $growth.ArsasCapture.ServiceCounts.GetVariableAccessAttributes = 3
+          $growth | ConvertTo-Json -Depth 12 | Set-Content $growthProofPath -Encoding utf8
+          $growthAcceptPath = Join-Path $results 'P0-5E-fixture-growth-rejected.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $growthProofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
+            -OutputJson $growthAcceptPath `
+            -NoFailExit
+          $growthAcceptance = Get-Content $growthAcceptPath -Raw | ConvertFrom-Json
+          if ($growthAcceptance.Verdict -ne 'FAIL' -or
+              -not (@($growthAcceptance.AcceptanceFailures) -match 'Confirmed request budget exceeded')) {
+            throw 'P0-5e failed to reject confirmed-request growth.'
+          }
+
+          $serviceProofPath = Join-Path $results 'P0-5D-fixture-unexpected-service.json'
+          $serviceGrowth = Get-Content $proofPath -Raw | ConvertFrom-Json
+          $serviceGrowth.ArsasCapture.ServiceCounts | Add-Member -NotePropertyName Read -NotePropertyValue 1
+          $serviceGrowth | ConvertTo-Json -Depth 12 | Set-Content $serviceProofPath -Encoding utf8
+          $serviceAcceptPath = Join-Path $results 'P0-5E-fixture-unexpected-service-rejected.json'
+          & $verifier `
+            -LockPath $lockPath `
+            -ProofJson $serviceProofPath `
+            -DeviceIdentity 'AA1E1F06R4' `
+            -CandidateArsasCommit $arsasCommit `
+            -CandidateEngineCommit $engineCommit `
+            -TargetPath $target `
+            -OutputJson $serviceAcceptPath `
+            -NoFailExit
+          $serviceAcceptance = Get-Content $serviceAcceptPath -Raw | ConvertFrom-Json
+          if ($serviceAcceptance.Verdict -ne 'FAIL' -or
+              -not (@($serviceAcceptance.AcceptanceFailures) -match "Unexpected MMS service 'Read'")) {
+            throw 'P0-5e failed to reject an unexpected MMS service.'
+          }
+
+      - name: Upload P0-5e regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-p0-5e-golden-budget-fixtures
+          path: ArIED61850Tester\TestResults\P0-5E-*.json
+          if-no-files-found: warn
+          retention-days: 14
