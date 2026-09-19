@@ -32,6 +32,7 @@ public sealed class SmartDiscoveryAssociationSingleFlightRegressionTests
         var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
         var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
         var patcher = File.ReadAllText(FindRepoFile("scripts/enable-smart-discovery-capture.ps1"));
+        var native = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.cs"));
 
         Assert.Contains("_smartDiscoveryAssociationGeneration++", lifecycle, StringComparison.Ordinal);
         Assert.Contains("generation != _smartDiscoveryAssociationGeneration", lifecycle, StringComparison.Ordinal);
@@ -40,6 +41,10 @@ public sealed class SmartDiscoveryAssociationSingleFlightRegressionTests
         Assert.Contains("__P0_5C_CONNECT_RESET__", patcher, StringComparison.Ordinal);
         Assert.Contains("__P0_5C_DISPOSE_RESET__", patcher, StringComparison.Ordinal);
         Assert.Contains("ResetSmartDiscoveryAuthority(); // __P0_5C_DISPOSE_RESET__", patcher, StringComparison.Ordinal);
+        Assert.Contains("return await DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress)", native, StringComparison.Ordinal);
+        Assert.Contains("ResetSmartDiscoveryAuthority(); // __P0_5C_CONNECT_RESET__", native, StringComparison.Ordinal);
+        Assert.Contains("ResetSmartDiscoveryAuthority(); // __P0_5C_DISPOSE_RESET__", native, StringComparison.Ordinal);
+        Assert.Contains("_lastDiscovery.Snapshot.DomainVariables", native, StringComparison.Ordinal);
     }
 
     [Fact]

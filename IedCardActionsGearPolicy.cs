@@ -11,13 +11,13 @@ namespace ArIED61850Tester;
 /// <summary>
 /// Adds a dedicated Lucide-style gear button to every IED card. The existing pencil
 /// remains the direct Edit Signals shortcut; the gear is the explicit entry point for
-/// the reusable IED Actions chooser (Static DataSet, Select Signals, RCB Engineering,
+/// the reusable IED Actions chooser (DataSet Signals, Signal Catalog, RCB Engineering,
 /// COMTRADE and Browse Offline).
 /// </summary>
 internal static class IedCardActionsGearPolicy
 {
     private const string GearUid = "ARSAS.IedActionsGear";
-    private const string GearToolTip = "IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline";
+    private const string GearToolTip = "IED Actions — DataSet Signals, Signal Catalog, RCB Engineering, COMTRADE, Browse Offline";
     private const double GearOpticalSize = 16d;
 
     // Exact Lucide Settings outline supplied by the product owner, translated from the
