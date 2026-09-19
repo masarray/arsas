@@ -7,7 +7,7 @@
 
 **Discover · Monitor · Test IO Lists · Diagnose · Generate SCL · Export Evidence**
 
-ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, commissioning, troubleshooting, and multi-vendor integration. Start from an approved IED endpoint, an SCL file, or an IO List workbook; inspect what the device actually exposes; and preserve the result as attributable engineering evidence.
+ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, commissioning, troubleshooting, and multi-device integration. Start from an approved IED endpoint, an SCL file, or an IO List workbook; inspect what the device actually exposes; and preserve the result as attributable engineering evidence.
 
 [![Build](https://github.com/masarray/arsas/actions/workflows/build.yml/badge.svg)](https://github.com/masarray/arsas/actions/workflows/build.yml)
 [![Pages](https://github.com/masarray/arsas/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/arsas/)
@@ -33,9 +33,18 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
 </div>
 
-> **Current ARSAS application version: v1.6.37.** The current source line aligns live RCB instance presentation with concrete runtime slots exposed by the connected IED while preserving canonical source-backed ReportControl identity, and makes in-process COMTRADE Phasor, Harmonics, and distance Locus interaction smoother without changing authoritative native engineering values.
+> **Current ARSAS application version: v1.6.38.** This stable line carries the physically verified R10 discovery/SCL convergence baseline: generated Edition 2 and Edition 1 SCL reopen and reconnect with 32/32 domains, all planned initial Reads successful, `projectionErrors=0`, `cacheLoss=0`, 58/58 report-backed runtime points, actual InformationReport traffic, and zero cyclic MMS process polling on the accepted path.
 >
 > **Published-package boundary:** download version, file size, SHA-256, SBOM, provenance, and attestation claims remain tied to the latest actually published stable GitHub Release. `main` moving to a newer application version does not by itself advance public binary evidence.
+
+## What changed in v1.6.38
+
+- **Physically verified R10 convergence** — generated Edition 2 IID and Edition 1 ICD reopen in ARSAS, reconnect through trusted SCL, reconcile 32/32 MMS domains, and complete every planned initial Read.
+- **Lossless trusted-SCL value pipeline** — both editions reach `projectionErrors=0` and `cacheLoss=0`; exact-case IEC 61850 paths remain distinct through projection, caching, canonical evidence, and SCL value targeting.
+- **Report-backed runtime acquisition** — all 58 static DataSet members resolve to 58/58 runtime points, final unresolved points are zero, actual InformationReport traffic is observed, and cyclic MMS process polling remains zero on the accepted path.
+- **Immutable engine authority** — the physical-tested engine head and merged engine commit resolve to the same source tree, preserving the tested behavior after merge.
+- **Verified Windows publication** — portable and installer smoke tests pass; the stable release includes SHA-256 checksums, SPDX SBOM, provenance metadata, and artifact attestations.
+- **Release scope discipline** — later save-enrichment snapshot reuse remains outside this stable release.
 
 ## What changed in v1.6.37
 
@@ -69,7 +78,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 
 | Engineering problem | ARSAS response |
 |---|---|
-| Vendor CID or ICD is missing, outdated, or rejected. | Perform complete live MMS discovery and generate a schema-aware **Edition 2 IID** or **Edition 1 ICD** with companion evidence. |
+| Device CID or ICD is missing, outdated, or rejected. | Perform complete live MMS discovery and generate a schema-aware **Edition 2 IID** or **Edition 1 ICD** with companion evidence. |
 | Reporting setup consumes the test window before values appear. | Read an immediate MMS image, prefer verified BRCB/URCB coverage, recover bounded gaps where permitted, and keep fallback acquisition visible. |
 | A multi-IED test loses device ownership and diagnostics. | Maintain an independent association, model, monitoring state, events, files, control context, and diagnostics for every IED. |
 | A FAT team must rebuild IO List evidence manually. | Import the approved workbook, bind exact IEC 61850 references, record ordered **OFF → ON → OFF** evidence, and export Excel, native PDF, or a resumable `.arsas` project. |
