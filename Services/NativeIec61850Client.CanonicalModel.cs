@@ -7,6 +7,11 @@ public sealed partial class NativeIec61850Client
 {
     private LiveIedCanonicalModel? _liveCanonicalModel;
     private ArMms.InitialFcReadExecutionResult? _liveInitialFcRead;
+    private LiveIedModelDiscoveryDocument? _saveSclEnrichmentModel;
+    private DateTimeOffset _saveSclEnrichmentCapturedAtUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan SaveSclEnrichmentReuseWindow = TimeSpan.FromSeconds(15);
+
+    public bool LastSaveSclEnrichmentReused { get; private set; }
 
     /// <summary>
     /// Canonical live snapshot bound to the accepted MMS association that produced
@@ -56,6 +61,19 @@ public sealed partial class NativeIec61850Client
         if (_liveModel is null)
             throw new InvalidOperationException("Save-SCL enrichment requires a successful live discovery model.");
 
+        var now = DateTimeOffset.UtcNow;
+        if (_liveCanonicalModel is not null &&
+            _liveInitialFcRead is not null &&
+            ReferenceEquals(_saveSclEnrichmentModel, _liveModel) &&
+            _saveSclEnrichmentCapturedAtUtc != DateTimeOffset.MinValue &&
+            now - _saveSclEnrichmentCapturedAtUtc <= SaveSclEnrichmentReuseWindow)
+        {
+            LastSaveSclEnrichmentReused = true;
+            return _liveCanonicalModel;
+        }
+
+        LastSaveSclEnrichmentReused = false;
+
         var sourcePlan = ArMms.InitialFcReadPlanner.FromSclModel(_liveModel);
         var safeTargets = sourcePlan.Targets
             .Where(target => SaveSclEnrichmentFunctionalConstraints.Contains(
@@ -92,6 +110,8 @@ public sealed partial class NativeIec61850Client
         }
 
         PublishCanonicalModel(_liveModel, initialRead);
+        _saveSclEnrichmentModel = _liveModel;
+        _saveSclEnrichmentCapturedAtUtc = DateTimeOffset.UtcNow;
         return _liveCanonicalModel
             ?? throw new InvalidOperationException("Save-SCL enrichment did not publish a canonical model.");
     }
@@ -100,5 +120,8 @@ public sealed partial class NativeIec61850Client
     {
         _liveInitialFcRead = null;
         _liveCanonicalModel = null;
+        _saveSclEnrichmentModel = null;
+        _saveSclEnrichmentCapturedAtUtc = DateTimeOffset.MinValue;
+        LastSaveSclEnrichmentReused = false;
     }
 }
