@@ -198,7 +198,7 @@ public partial class MainWindow
             {
                 // The imported ARIEC SCL workspace already owns the complete static
                 // DataSet identity. Connected reconciliation can perform a large exact-read
-                // pass and used to hold this SIPROTEC FAT preparation for about one minute.
+                // pass and used to hold this GENERIC_IED FAT preparation for about one minute.
                 // Explicit Re-scan remains the design-versus-live comparison action.
                 IoTestReconciliationCache.Invalidate(device);
                 ReportProgress(reuseSharedSclAcquisition

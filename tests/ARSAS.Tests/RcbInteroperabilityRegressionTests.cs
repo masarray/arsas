@@ -1,6 +1,6 @@
 namespace ARSAS.Tests;
 
-public sealed class RcbIedScoutParityRegressionTests
+public sealed class RcbInteroperabilityRegressionTests
 {
     [Fact]
     public void SourceBackedRuntimeInstances_Suppress_Logical_Scl_Duplicate()

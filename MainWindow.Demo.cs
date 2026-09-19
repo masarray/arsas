@@ -198,7 +198,7 @@ public partial class MainWindow
             {
                 DeviceId = $"demo-{deviceIndex + 1:00}-{spec.Name.ToLowerInvariant()}",
                 Name = spec.Name,
-                IdentitySource = $"Live MMS discovery • SIPROTEC-class {spec.Description}",
+                IdentitySource = $"Live MMS discovery • protection-IED class {spec.Description}",
                 LogicalDeviceSummary = spec.ModelSummary,
                 IpAddress = spec.IpAddress,
                 Port = 102,

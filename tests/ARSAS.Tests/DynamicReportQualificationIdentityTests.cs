@@ -74,7 +74,7 @@ public sealed class DynamicReportQualificationIdentityTests
             Name = "Q0",
             IpAddress = "192.168.81.17",
             Port = 102,
-            SclIedName = "SIPROTEC-Q0",
+            SclIedName = "GENERIC_IED-Q0",
             SclSourceSha256 = "aaaaaaaa"
         };
 

@@ -21,7 +21,7 @@ public sealed class SasOperationalUiDataSetAuthorityRegressionTests
         };
 
         // The normal operator policy intentionally requires an exact runtime value leaf,
-        // so an object-level Siemens FCDA is not independently promoted by that policy.
+        // so an object-level generic FCDA is not independently promoted by that policy.
         Assert.False(SasOperationalSignalPolicy.IsVisible(signal));
 
         // Static DataSet membership is a stronger protocol-authority contract and must

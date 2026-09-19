@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "name": "IEDScout discovery and SCL convergence",
+  "name": "IEC 61850 discovery and SCL interoperability convergence",
   "status": "physical-retest-passed-merge-ready",
   "target": {
-    "discovery": "Reach IEDScout-like MMS discovery efficiency without sacrificing exact IEC 61850 model evidence.",
+    "discovery": "Maintain bounded MMS discovery efficiency while preserving exact IEC 61850 model evidence.",
     "model": "Build the canonical IEC 61850 model from structure-first MMS evidence with correct LN identity, DO/SDO hierarchy, FC ownership, DataSet/RCB semantics, and schema-aware CDC handling.",
     "scl": "Save Edition 2 IID / Edition 1 ICD that reopens in ARSAS, reconnects to the relay, and is usable as trusted SCL."
   },
@@ -39,12 +39,12 @@
     "dataSets": 2,
     "runtimeReportControls": 34,
     "logicalSclReportControls": 32,
-    "iedScoutCapture": {
+    "acceptedDiscoveryBudget": {
       "associations": 1,
-      "confirmedMmsRequests": 417,
-      "getVariableAccessAttributes": 119,
-      "reads": 156,
-      "note": "Reference capture supplied by the physical comparison; values are acceptance reference, not CI-simulated proof."
+      "maximumConfirmedMmsRequests": 417,
+      "maximumGetVariableAccessAttributes": 119,
+      "maximumReads": 156,
+      "note": "Internal physical acceptance ceiling retained as a regression budget."
     },
     "rejectedLegacyArsasCapture": {
       "associations": 2,
@@ -53,7 +53,7 @@
       "reads": 6548,
       "note": "Regression signature. A future field build showing this pattern is rejected."
     },
-    "iedScoutSclReference": {
+    "acceptedSclShape": {
       "lDevices": 32,
       "logicalNodes": 119,
       "dataSets": 2,
@@ -71,7 +71,7 @@
     "secondFullGetNameListSweepForbidden": true,
     "eagerInitialFcValueReadDuringStructuralDiscovery": false,
     "typeStrategy": "LN/root structure first, bounded leaf fallback only when exact structure evidence is unavailable.",
-    "physicalPerformanceGate": "Compare request count, GVA count, Read count, peak outstanding calls, TTFI and total discovery time against IEDScout on the same relay."
+    "physicalPerformanceGate": "Keep one association and remain within the locked request, GVA and Read ceilings while preserving or improving TTFI and total discovery time on the physical acceptance device."
   },
   "modelAcceptance": {
     "prefixedLogicalNodeIdentityExamples": [
@@ -126,8 +126,7 @@
       "new generated Ed1 ICD",
       "diagnostic report",
       "Ed2 SCL-assisted reuse diagnostic with projectionErrorSamples",
-      "Ed1 SCL-assisted reuse diagnostic with projectionErrorSamples",
-      "same-relay comparison against IEDScout"
+      "Ed1 SCL-assisted reuse diagnostic with projectionErrorSamples"
     ],
     "mergeAllowedAfterPhysicalRetest": true,
     "physicalRetestPassed": true,
@@ -332,28 +331,21 @@
     },
     "saveTimeInstanceValues": {
       "observedR9ExportValCount": 0,
-      "referenceIedScoutValCount": 1529,
       "status": "mechanism-physically-proven-semantic-diff-open",
       "rule": "Keep structural discovery read-free; acquire bounded safe FC-root values only during explicit Save SCL and verify resulting instance evidence physically.",
       "r10InstanceEvidence": 3854,
       "r10Edition2ValCount": 3202,
       "r10Edition1ValCount": 3106,
-      "note": "Save-time value enrichment is physically proven. More Val elements than IEDScout is not treated as automatically better; exact semantic path/value comparison remains open."
+      "note": "Save-time value enrichment is physically proven. Exact semantic path/value validation remains the acceptance criterion; raw Val count alone is not treated as a quality metric."
     },
     "templateReuse": {
       "status": "next-improvement",
-      "rule": "Reduce duplicate LNodeType/DOType/DAType templates only after wire and semantic reuse parity is stable.",
+      "rule": "Reduce duplicate LNodeType/DOType/DAType templates only after wire behavior and semantic SCL reuse are stable.",
       "r10Edition2": {
         "lNodeType": 119,
         "doType": 906,
         "daType": 752,
         "fileBytes": 731266
-      },
-      "iedScoutReference": {
-        "lNodeType": 38,
-        "doType": 60,
-        "daType": 17,
-        "fileBytesApprox": 247000
       },
       "acceptance": "Intern only structurally and semantically identical templates. Expanded 32/119/860/906/4925 model, FC ownership, values and round-trip behavior must remain unchanged."
     },

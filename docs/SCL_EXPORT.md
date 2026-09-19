@@ -14,13 +14,13 @@ Each ARSAS IED card exposes a **Save SCL** action after the application has a co
 
 The chosen profile controls root schema metadata, supported ReportControl fields, Services declarations, and default file extension.
 
-## ReportControl identity in ARSAS 1.6.37
+## ReportControl identity in ARSAS 1.6.38
 
 ARSAS separates the declarative engineering model from concrete runtime RCB instances.
 
 A source SCL file may describe one logical `ReportControl` together with `RptEnabled@max`. A connected IED can expose concrete client/runtime instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, or `Unbuffer02`. Those online instances are valid live evidence, but they are not authority to duplicate or rename the logical source `ReportControl` in a source-backed IID/SCL export.
 
-The v1.6.37 contract is therefore:
+The v1.6.38 contract is therefore:
 
 - live RCB selection presents the concrete runtime instances actually exposed by the connected IED;
 - duplicate logical placeholder rows are not added beside those live instances;

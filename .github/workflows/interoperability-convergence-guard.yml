@@ -1,4 +1,4 @@
-name: IEDScout Convergence Guard
+name: Interoperability Convergence Guard
 
 on:
   pull_request:
@@ -10,20 +10,20 @@ on:
       - "Directory.Build.targets"
       - "scripts/enable-smart-discovery-capture.ps1"
       - "engines/ARIEC61850.lock.json"
-      - "evidence/iedscout-convergence-target.json"
-      - "docs/IEDSCOUT_CONVERGENCE.md"
+      - "evidence/interoperability-convergence-target.json"
+      - "docs/INTEROPERABILITY_CONVERGENCE.md"
       - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
-      - ".github/workflows/iedscout-convergence-guard.yml"
+      - ".github/workflows/interoperability-convergence-guard.yml"
       - ".github/workflows/scl-interoperability-r7.yml"
   workflow_dispatch:
 
 concurrency:
-  group: iedscout-convergence-${{ github.event.pull_request.number || github.ref }}
+  group: interoperability-convergence-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  iedscout-convergence-contract:
-    name: iedscout-convergence-contract
+  interoperability-convergence-contract:
+    name: interoperability-convergence-contract
     runs-on: windows-latest
 
     steps:
@@ -47,7 +47,7 @@ jobs:
         shell: pwsh
         run: |
           $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
-          $target = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $target = Get-Content .\ARSAS\evidence\interoperability-convergence-target.json -Raw | ConvertFrom-Json
 
           if ($target.status -ne 'physical-retest-passed-merge-ready') {
             throw "Convergence status changed unexpectedly: $($target.status)"
@@ -69,11 +69,13 @@ jobs:
               -not [bool]$target.promotion.physicalRetestPassed) {
             throw 'R10 physical-retest/merge gate drifted.'
           }
-          if ([int]$target.physicalReference.iedScoutCapture.associations -ne 1 -or
-              [int]$target.physicalReference.iedScoutCapture.getVariableAccessAttributes -ne 119 -or
+          if ([int]$target.physicalReference.acceptedDiscoveryBudget.associations -ne 1 -or
+              [int]$target.physicalReference.acceptedDiscoveryBudget.maximumConfirmedMmsRequests -ne 417 -or
+              [int]$target.physicalReference.acceptedDiscoveryBudget.maximumGetVariableAccessAttributes -ne 119 -or
+              [int]$target.physicalReference.acceptedDiscoveryBudget.maximumReads -ne 156 -or
               [int]$target.physicalReference.rejectedLegacyArsasCapture.associations -ne 2 -or
               [int]$target.physicalReference.rejectedLegacyArsasCapture.getVariableAccessAttributes -lt 20000) {
-            throw 'Physical IEDScout/legacy regression reference changed unexpectedly.'
+            throw 'Physical interoperability regression budget changed unexpectedly.'
           }
 
 
@@ -304,7 +306,7 @@ jobs:
               $singleFlight -notmatch 'DiscoverSmartSingleFlightAsync' -or
               $singleFlight -notmatch 'DiscoverSmartAsync\(options, CancellationToken\.None\)' -or
               $smartGva -notmatch 'GetVariableAccessAttributesSmartAsync') {
-            throw 'P0 structural discovery freeze regressed away from the accepted IEDScout convergence path.'
+            throw 'P0 structural discovery freeze regressed away from the accepted interoperability convergence path.'
           }
 
           if ($lnParts -notmatch 'instanceStart' -or
@@ -322,4 +324,4 @@ jobs:
             throw 'Canonical IEC model / SCL semantic authority regressed.'
           }
 
-          Write-Host 'IEDScout convergence contract PASS.'
+          Write-Host 'Interoperability convergence contract PASS.'

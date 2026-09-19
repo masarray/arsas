@@ -46,7 +46,7 @@ public sealed class SignalCatalogCompletenessContractTests
     }
 
     [Fact]
-    public void OpenScl_SiemensLike_Fcd_Inventory_Is_Conserved_58_Of_58()
+    public void OpenScl_CrossDevice_Fcd_Inventory_Is_Conserved_58_Of_58()
     {
         var digital = Enumerable.Range(1, 36)
             .Select(index => Member(index - 1, $"IEDLD0/GGIO1.Dig{index:00}", "ST"))
@@ -71,7 +71,7 @@ public sealed class SignalCatalogCompletenessContractTests
     }
 
     [Fact]
-    public void IpDiscovery_SiemensLike_Fcd_Inventory_Is_Conserved_58_Of_58()
+    public void IpDiscovery_CrossDevice_Fcd_Inventory_Is_Conserved_58_Of_58()
     {
         var digital = Enumerable.Range(1, 36)
             .Select(index => Member(index - 1, $"IEDLD0/GGIO1.Dig{index:00}", "ST"))

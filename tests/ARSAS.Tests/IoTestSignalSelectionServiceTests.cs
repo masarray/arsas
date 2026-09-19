@@ -98,7 +98,7 @@ public sealed class IoTestSignalSelectionServiceTests
     }
 
     [Fact]
-    public void SiemensOperationalValuesFolderMatchesConcatenatedMmsLnPrefix()
+    public void GenericOperationalValuesFolderMatchesConcatenatedMmsLnPrefix()
     {
         var ied = new IoTestIedPlan
         {

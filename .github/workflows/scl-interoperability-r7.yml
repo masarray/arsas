@@ -14,8 +14,8 @@ on:
       - "MainWindow.xaml.cs"
       - "Services/CanonicalSclReloadValidator.cs"
       - "engines/ARIEC61850.lock.json"
-      - "evidence/iedscout-convergence-target.json"
-      - "docs/IEDSCOUT_CONVERGENCE.md"
+      - "evidence/interoperability-convergence-target.json"
+      - "docs/INTEROPERABILITY_CONVERGENCE.md"
       - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
       - "tests/ARSAS.Tests/CanonicalSclReloadValidatorTests.cs"
       - ".github/workflows/scl-interoperability-r7.yml"
@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
         run: |
           $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
-          $convergence = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $convergence = Get-Content .\ARSAS\evidence\interoperability-convergence-target.json -Raw | ConvertFrom-Json
           if ($lock.repository -ne 'masarray/ARIEC61850' -or
               $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw 'Invalid ARIEC61850 R7 lock.'
@@ -71,7 +71,7 @@ jobs:
               [bool]$convergence.promotion.physicalRetestRequired -or
               -not [bool]$convergence.promotion.mergeAllowedAfterPhysicalRetest -or
               -not [bool]$convergence.promotion.physicalRetestPassed) {
-            throw 'IEDScout convergence single-source-of-truth does not match the physically proven merged-engine + ARSAS #324 authority.'
+            throw 'Interoperability convergence authority does not match the physically proven merged-engine + ARSAS #324 authority.'
           }
           if ([int]$lock.sourcePullRequest -notin @(134, 135)) {
             throw "Unexpected R7 engine source PR: $($lock.sourcePullRequest)"
@@ -111,7 +111,7 @@ jobs:
           $cdcInference = Get-Content .\ARIEC61850\src\AR.Iec61850\Discovery\CdcInferenceEngine.cs -Raw
           $consumer = Get-Content .\ARSAS\Services\NativeIec61850Client.CanonicalModel.cs -Raw
           $capture = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
-          $convergence = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $convergence = Get-Content .\ARSAS\evidence\interoperability-convergence-target.json -Raw | ConvertFrom-Json
           $buildTargets = Get-Content .\ARSAS\Directory.Build.targets -Raw
           $lifecycle = Get-Content .\ARSAS\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
           $sclClient = Get-Content .\ARSAS\Services\NativeIec61850Client.SclAssisted.cs -Raw
@@ -175,16 +175,16 @@ jobs:
               $capture -match 'DiscoverDomainVariableTypeTreeNamesAsync' -or
               $capture -match 'AddAdaptiveLogicalNodeSiblingProbeSignalsAsync' -or
               $capture -match 'EnrichEngineeringUnitsAsync') {
-            throw 'IEDScout convergence source contract regressed: smart structure-first discovery or semantic SCL authority is missing, or a forbidden legacy browse path returned.'
+            throw 'Interoperability convergence source contract regressed: smart structure-first discovery or semantic SCL authority is missing, or a forbidden legacy browse path returned.'
           }
 
-          if ([int]$convergence.physicalReference.iedScoutCapture.associations -ne 1 -or
+          if ([int]$convergence.physicalReference.acceptedDiscoveryBudget.associations -ne 1 -or
               [int]$convergence.physicalReference.rejectedLegacyArsasCapture.associations -ne 2 -or
               -not [bool]$convergence.discoveryAcceptance.exactlyOneAssociation -or
               -not [bool]$convergence.discoveryAcceptance.supplementalLegacyAssociationForbidden -or
               -not [bool]$convergence.sclAcceptance.reopenInArsasRequired -or
               -not [bool]$convergence.sclAcceptance.physicalReconnectRequired) {
-            throw 'IEDScout physical acceptance target was weakened.'
+            throw 'Interoperability physical acceptance target was weakened.'
           }
 
           if ($consumer -notmatch 'LiveIedCanonicalModelBuilder\.Build\(model, communication, initialRead\)' -or
@@ -276,7 +276,7 @@ jobs:
             throw "Portable EXE smoke test failed: $($process.ExitCode)"
           }
 
-          $convergencePath = ".\ARSAS\evidence\iedscout-convergence-target.json"
+          $convergencePath = ".\ARSAS\evidence\interoperability-convergence-target.json"
           $convergenceHash = (Get-FileHash $convergencePath -Algorithm SHA256).Hash.ToLowerInvariant()
           $convergence = Get-Content $convergencePath -Raw | ConvertFrom-Json
 
@@ -304,8 +304,8 @@ jobs:
           path: |
             ARSAS\dist\ARSAS-*-win-x64-portable.exe
             ARSAS\dist\R7-SCL-INTEROP-BUILD.txt
-            ARSAS\evidence\iedscout-convergence-target.json
-            ARSAS\docs\IEDSCOUT_CONVERGENCE.md
+            ARSAS\evidence\interoperability-convergence-target.json
+            ARSAS\docs\INTEROPERABILITY_CONVERGENCE.md
             ARSAS\TestResults\*.trx
           if-no-files-found: error
           retention-days: 14

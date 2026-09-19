@@ -36,7 +36,9 @@ $ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([
     "bbfd365f0891c3e0205503f5d2a1678a0a6ea60d68f3dcc174ed4f60dd87e708",
     "d6a2feb71892b018d0ffec8d3cd438dabe599369d5a1921c7044137146107230",
     "048832a53880fe4fc5feeee9fa0ae445b143c99a956356bee231d3faadbb7af0",
-    "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8"
+    "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8",
+    "30e363d3e8c59f2c1319f8d73d48e3ad26db5e087951a4d7ab809c6f5401aea8",
+    "43d7a9de7c6a018c3dfb8a0de38ae060237b942c300db67147e1b56a953b122c"
 ) | ForEach-Object { [void]$ForbiddenIdentifierHashes.Add($_) }
 
 $CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
@@ -56,19 +58,6 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
-# These are first-party convergence authorities. They intentionally contain the
-# external interoperability label so the acceptance contract remains discoverable.
-$ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-@(
-    ".github/workflows/iedscout-convergence-guard.yml",
-    ".github/workflows/smart-discovery-post-merge-production.yml",
-    ".github/workflows/smart-discovery-mainline-readiness.yml",
-    ".github/workflows/scl-interoperability-r7.yml",
-    "docs/IEDSCOUT_CONVERGENCE.md",
-    "evidence/iedscout-convergence-target.json",
-    "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
-) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
-
 $Problems = New-Object System.Collections.Generic.List[string]
 
 function Normalize-RelativePath {
@@ -76,17 +65,13 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
+$Sha256Algorithm = [System.Security.Cryptography.SHA256]::Create()
+
 function Get-Sha256Hex {
     param([Parameter(Mandatory=$true)][string]$Value)
 
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
-    }
-    finally {
-        $algorithm.Dispose()
-    }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    return ([System.BitConverter]::ToString($Sha256Algorithm.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
 }
 
 function Test-ContainsForbiddenIdentifier {
@@ -138,8 +123,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    $identifierScanExempt = $ApprovedConvergenceIdentifierPaths.Contains($relative)
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $relative)) {
+    if (Test-ContainsForbiddenIdentifier $relative) {
         $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
@@ -147,7 +131,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $content)) {
+    if (Test-ContainsForbiddenIdentifier $content) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 

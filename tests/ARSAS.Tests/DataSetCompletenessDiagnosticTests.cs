@@ -8,11 +8,11 @@ namespace ARSAS.Tests;
 public sealed class DataSetCompletenessDiagnosticTests
 {
     [Fact]
-    public void SiemensLike_CrossLd_Fcda_Is_Canonical_Visible_And_Diagnostically_Complete()
+    public void CrossDevice_CrossLd_Fcda_Is_Canonical_Visible_And_Diagnostically_Complete()
     {
         var model = SclLiveModelProjectionBuilder.Build(
             XDocument.Parse(CrossLogicalDeviceFixture()),
-            "Siprotec_cross_ld.cid");
+            "GenericIed_cross_ld.cid");
         var signals = new List<SignalDefinition>();
 
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(signals, model);
@@ -43,7 +43,7 @@ public sealed class DataSetCompletenessDiagnosticTests
     {
         var model = SclLiveModelProjectionBuilder.Build(
             XDocument.Parse(CrossLogicalDeviceFixture()),
-            "Siprotec_cross_ld.cid");
+            "GenericIed_cross_ld.cid");
 
         var snapshot = Iec61850DataSetCompletenessDiagnostic.Evaluate(
             model,
@@ -60,7 +60,7 @@ public sealed class DataSetCompletenessDiagnosticTests
 
     private static string CrossLogicalDeviceFixture() => """
     <SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
-      <Header id="SIEMENS_CROSS_LD" version="1" revision="0" />
+      <Header id="GENERIC_CROSS_LD" version="1" revision="0" />
       <IED name="AA1C1F13R4">
         <AccessPoint name="E">
           <Server>

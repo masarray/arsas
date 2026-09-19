@@ -228,8 +228,8 @@ public sealed class SntpClockService : IAsyncDisposable
             SetState(
                 SntpClockServiceState.Serving,
                 binding.DirectedBroadcast == null
-                    ? $"SNTP UDP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}. No usable directed broadcast is available."
-                    : $"SNTP UDP server active on {binding.LocalAddress}:123 with SIPROTEC compatibility stratum {_profile.Stratum}; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
+                    ? $"SNTP UDP server active on {binding.LocalAddress}:123 with protection-IED compatibility stratum {_profile.Stratum}. No usable directed broadcast is available."
+                    : $"SNTP UDP server active on {binding.LocalAddress}:123 with protection-IED compatibility stratum {_profile.Stratum}; Mode 5 broadcast targets {binding.DirectedBroadcast}:123.");
 
             _receiveTask = ReceiveLoopAsync(udp, serviceCancellation.Token);
             _broadcastTask = BroadcastLoopAsync(binding, serviceCancellation.Token);

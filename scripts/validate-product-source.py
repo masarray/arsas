@@ -34,7 +34,7 @@ PAIRS = {
     "file-transfer.html": "transfer-file-comtrade-iec61850.html", "scl-workspace.html": "workspace-scl-iec61850.html",
     "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
     "fat-testing.html": "pengujian-fat-iec61850.html", "sat-testing.html": "pengujian-sat-iec61850.html",
-    "commissioning.html": "commissioning-iec61850.html", "multi-vendor-integration.html": "integrasi-multi-vendor-iec61850.html",
+    "commissioning.html": "commissioning-iec61850.html", "multi-device-integration.html": "integrasi-multi-perangkat-iec61850.html",
 }
 KNOWN_TOKENS = {
     "ARSAS_VERSION", "PRODUCT_NAME", "CANONICAL_ROOT", "REPOSITORY_URL", "ENGINE_REPOSITORY_URL",

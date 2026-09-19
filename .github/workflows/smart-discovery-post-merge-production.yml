@@ -19,7 +19,7 @@ jobs:
       - name: Verify R10 physical convergence authority
         shell: powershell
         run: |
-          $target = Get-Content .\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $target = Get-Content .\evidence\interoperability-convergence-target.json -Raw | ConvertFrom-Json
           $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
 
           if ($target.status -ne 'physical-retest-passed-merge-ready' -or
@@ -86,7 +86,7 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force .\TestResults | Out-Null
-          $target = Get-Content .\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $target = Get-Content .\evidence\interoperability-convergence-target.json -Raw | ConvertFrom-Json
           [ordered]@{
             schemaVersion = 1
             sourceCommit = $env:GITHUB_SHA

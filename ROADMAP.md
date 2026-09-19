@@ -52,12 +52,12 @@ ARSAS is the application and workflow layer. Protocol implementation belongs in 
 - Recursive and bounded directory browsing.
 - Capability discovery and transparent negative responses.
 - Download progress, cancellation, timeout, and retry boundaries.
-- COMTRADE set recognition (`.cfg`, `.dat`, `.hdr`, `.inf`, vendor companions).
+- COMTRADE set recognition (`.cfg`, `.dat`, `.hdr`, `.inf`, device companion files).
 - Safe local naming and duplicate handling.
 - Transfer evidence export and sanitized diagnostics.
 - Automated engine tests for directory, open, read, close, and failure paths.
 
-**Definition of done:** fault records can be retrieved from representative multi-vendor test devices without vendor-specific logic in the ARSAS UI layer.
+**Definition of done:** fault records can be retrieved from representative representative test devices without device-specific logic in the ARSAS UI layer.
 
 ## Milestone 2 — Production-grade Sampled Values
 

@@ -10,9 +10,9 @@ namespace ARSAS.Tests;
 public sealed class StaticDataSetUiLifecycleRegressionTests
 {
     [Fact]
-    public void SiemensLikeStaticMembers_SurviveOperatorPresentationDecision()
+    public void CrossDeviceStaticMembers_SurviveOperatorPresentationDecision()
     {
-        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "Siprotec_ui_lifecycle.cid");
+        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "GenericIed_ui_lifecycle.cid");
         var workspace = new SclIedWorkspace
         {
             IedName = "AA1C1F13R4",
@@ -45,7 +45,7 @@ public sealed class StaticDataSetUiLifecycleRegressionTests
             new XElement(ns + "SCL",
                 new XAttribute("version", "2007"),
                 new XAttribute("revision", "B"),
-                new XElement(ns + "Header", new XAttribute("id", "SIEMENS_UI_LIFECYCLE")),
+                new XElement(ns + "Header", new XAttribute("id", "GENERIC_UI_LIFECYCLE")),
                 new XElement(ns + "IED",
                     new XAttribute("name", "AA1C1F13R4"),
                     new XElement(ns + "AccessPoint",

@@ -5,7 +5,7 @@ namespace ArIED61850Tester.Services.IoTesting;
 /// <summary>
 /// Conservative IEC 61850 reference matcher used by FAT binding. It understands
 /// equivalent MMS/SCL spellings (IED-prefixed domains, the DIGSI Application display
-/// wrapper, functional-constraint tokens inside MMS references, verified Siemens
+/// wrapper, functional-constraint tokens inside MMS references, verified generic
 /// functional-group/LN display folders, and exact unique object-leaf recovery for
 /// incomplete imported references) but never uses fuzzy text similarity.
 /// </summary>

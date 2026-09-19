@@ -2,7 +2,7 @@
 
 ## Field findings
 
-The latest OLSF/Siemens-style live test showed that the control behavior is now usable, but dense commissioning workflows still contain avoidable visual and navigation friction:
+The latest OLSF/generic-style live test showed that the control behavior is now usable, but dense commissioning workflows still contain avoidable visual and navigation friction:
 
 - Selection Wizard column filters keep showing `Filter…` while the field has keyboard focus.
 - The IEC Command Panel still exposes Details/Technical details affordances that are no longer part of the fast control workflow.

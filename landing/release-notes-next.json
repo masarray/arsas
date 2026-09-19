@@ -1,45 +1,47 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.37",
-  "title": "Runtime-aligned RCB export and smoother COMTRADE interaction",
-  "titleId": "Export RCB selaras runtime dan interaksi COMTRADE lebih halus",
-  "summary": "ARSAS 1.6.37 is a focused reliability and UX update for Legacy SAS RCB export and the in-process COMTRADE workstation. Live RCB instances are presented as concrete runtime slots exposed by the connected IED while source-backed IID/SCL export keeps the canonical logical ReportControl identity, and COMTRADE Phasor, Harmonics and distance Locus presentation now follows native analysis targets smoothly without changing authoritative engineering values.",
-  "summaryId": "ARSAS 1.6.37 adalah pembaruan reliability dan UX yang terfokus untuk export RCB Legacy SAS dan workstation COMTRADE in-process. Instance RCB live ditampilkan sebagai slot runtime konkret yang benar-benar diekspos oleh IED terhubung sementara export IID/SCL source-backed tetap mempertahankan identity logical ReportControl yang canonical, dan presentation COMTRADE Phasor, Harmonics, serta distance Locus kini mengikuti target native analysis secara lebih halus tanpa mengubah nilai engineering yang authoritative.",
+  "version": "1.6.38",
+  "title": "ARSAS 1.6.38 stable release",
+  "titleId": "Stable release ARSAS 1.6.38",
+  "summary": "ARSAS 1.6.38 is the latest verified stable Windows release, carrying the physically verified R10 discovery/SCL convergence baseline and synchronized package evidence.",
+  "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru, membawa baseline convergence discovery/SCL R10 yang sudah tervalidasi fisik beserta evidence paket yang tersinkron.",
   "highlights": [
-    "Legacy SAS RCB selection now presents concrete live instances such as Buffer01/Buffer02 and Unbuffer01/Unbuffer02 when those instances are actually exposed by the connected IED, without showing a duplicate logical Buffer/Unbuffer row.",
-    "Source-backed RCB export preserves the canonical SCL ReportControl identity and RptEnabled indexing metadata, keeping online runtime instances separate from the saved engineering model.",
-    "RCB occupancy is shown with a calm square-only indicator: yellow when a client is using the RCB and green otherwise, while detailed engineering evidence remains available without alarming status captions.",
-    "COMTRADE Phasor and Harmonics views ease toward the latest exact native result at display cadence, with bounded settle time and exact convergence to the authoritative analysis target.",
-    "Distance Locus cursor presentation now uses the same latest-target principle and resets transient presentation state across PRI/SEC engineering-basis changes so unrelated unit bases are never interpolated together."
+    "Physically verified R10 discovery and trusted-SCL round trip for Edition 2 IID and Edition 1 ICD.",
+    "32/32 MMS domains reconcile on both editions, with every planned initial Read successful.",
+    "Both editions reach projectionErrors=0 and cacheLoss=0 while preserving exact-case IEC 61850 value identity.",
+    "All 58 static DataSet members resolve to 58/58 report-backed runtime points with zero final unresolved points.",
+    "Actual InformationReport traffic is observed and cyclic MMS process polling remains zero on the accepted path.",
+    "The verified Windows installer and portable package are published with SHA-256 checksums, SPDX SBOM, provenance, and attestations."
   ],
   "highlightsId": [
-    "Pemilihan RCB Legacy SAS kini menampilkan instance live konkret seperti Buffer01/Buffer02 dan Unbuffer01/Unbuffer02 ketika instance tersebut benar-benar diekspos oleh IED yang terhubung, tanpa menampilkan row logical Buffer/Unbuffer duplikat.",
-    "Export RCB source-backed mempertahankan identity SCL ReportControl canonical dan metadata indexing RptEnabled, dengan pemisahan yang jelas antara instance runtime online dan engineering model tersimpan.",
-    "Occupancy RCB ditampilkan dengan indikator kotak yang tenang: kuning ketika RCB sedang digunakan client dan hijau untuk kondisi lainnya, sementara evidence engineering detail tetap tersedia tanpa caption status yang mengkhawatirkan.",
-    "View COMTRADE Phasor dan Harmonics melakukan easing menuju hasil native exact terbaru pada display cadence, dengan settle time terbatas dan konvergensi exact ke target analysis authoritative.",
-    "Presentation cursor Distance Locus kini memakai prinsip latest-target yang sama dan mereset transient presentation state saat basis engineering PRI/SEC berubah sehingga unit basis yang berbeda tidak pernah diinterpolasikan bersama."
+    "Round trip discovery dan trusted-SCL R10 untuk Edition 2 IID dan Edition 1 ICD sudah tervalidasi fisik.",
+    "Kedua edisi merekonsiliasi 32/32 domain MMS dan seluruh planned initial Read berhasil.",
+    "Kedua edisi mencapai projectionErrors=0 dan cacheLoss=0 sambil mempertahankan exact-case identity untuk value IEC 61850.",
+    "Seluruh 58 static DataSet member terpetakan menjadi 58/58 runtime point berbasis report dengan final unresolved point=0.",
+    "Traffic InformationReport aktual terobservasi dan cyclic MMS process polling tetap 0 pada jalur acceptance.",
+    "Installer Windows dan portable package terverifikasi dipublikasikan bersama SHA-256, SPDX SBOM, provenance, dan attestation."
   ],
   "improvements": [
-    "The RCB source/export boundary is regression-guarded so declarative RptEnabled@max metadata never becomes authority to invent runtime RCB names.",
-    "Live-model-only RCB export remains concrete and unchanged; canonical source identity preservation is opt-in only for source-backed SCL export.",
-    "COMTRADE presentation smoothing does not add an analysis queue or periodic work after settling: cursor/native analysis remains latest-wins and authoritative.",
-    "The stable Windows release pipeline runs full application regressions, RCB and COMTRADE integration guards, portable and installer smoke tests, SHA-256 checksums, SPDX SBOM, provenance and GitHub attestations before publication."
+    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
+    "The physical-tested engine head and merged engine authority resolve to the identical source tree.",
+    "Mainline and post-merge CI enforce the R10 physical acceptance contract before publication.",
+    "Public release metadata and website download targets are synchronized from the tagged stable GitHub Release."
   ],
   "improvementsId": [
-    "Boundary source/export RCB dikunci regression test sehingga metadata deklaratif RptEnabled@max tidak pernah menjadi authority untuk menciptakan nama RCB runtime.",
-    "Export RCB live-model-only tetap concrete dan tidak berubah; preservation identity source canonical hanya diaktifkan untuk export SCL source-backed.",
-    "Smoothing presentation COMTRADE tidak menambah analysis queue maupun kerja periodik setelah settle: cursor/native analysis tetap latest-wins dan authoritative.",
-    "Pipeline stable release Windows menjalankan regression test aplikasi lengkap, guard integrasi RCB dan COMTRADE, smoke test portable dan installer, checksum SHA-256, SPDX SBOM, provenance, serta GitHub attestation sebelum publikasi."
+    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
+    "Physical-tested engine head dan merged engine authority mengarah ke source tree yang identik.",
+    "CI mainline dan post-merge menegakkan physical acceptance contract R10 sebelum publikasi.",
+    "Metadata release publik dan target download website disinkronkan dari stable GitHub Release bertag."
   ],
   "knownLimitations": [
-    "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
+    "Physical device validation remains necessary for implementation-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
+    "Validasi perangkat fisik tetap diperlukan untuk value yang implementation-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
@@ -55,11 +57,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.37 Engineering, RCB export and in-process COMTRADE workstation",
-    "altId": "Workstation Engineering, export RCB, dan COMTRADE in-process ARSAS 1.6.37",
-    "caption": "ARSAS 1.6.37 aligns live RCB selection and source-backed export semantics while keeping COMTRADE interaction smooth and native analysis authoritative.",
-    "captionId": "ARSAS 1.6.37 menyelaraskan pemilihan RCB live dan semantics export source-backed sambil menjaga interaksi COMTRADE tetap halus dan native analysis tetap authoritative."
+    "alt": "ARSAS 1.6.38 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.38",
+    "caption": "ARSAS 1.6.38 stable Windows release with verified installer, portable package and release evidence.",
+    "captionId": "Stable release Windows ARSAS 1.6.38 dengan installer, portable package, dan release evidence yang terverifikasi."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.37"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.38"
 }

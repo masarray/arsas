@@ -6,12 +6,12 @@ using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
-public sealed class SiemensStaticDataSetSelectionRegressionTests
+public sealed class StaticDataSetSelectionRegressionTests
 {
     [Fact]
-    public void SiemensLike_58Member_CrossLd_StaticDataSets_AreRepresented58Of58()
+    public void CrossLd_58Member_CrossLd_StaticDataSets_AreRepresented58Of58()
     {
-        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "Siprotec_58_member.cid");
+        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "cross_ld_58_member.cid");
         var signals = new List<SignalDefinition>();
 
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(signals, model);
@@ -37,9 +37,9 @@ public sealed class SiemensStaticDataSetSelectionRegressionTests
     }
 
     [Fact]
-    public void SiemensLike_58Member_CrossLd_StaticDataSets_Survive_Real_SclMapper_Path()
+    public void CrossLd_58Member_CrossLd_StaticDataSets_Survive_Real_SclMapper_Path()
     {
-        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "Siprotec_58_member.cid");
+        var model = SclLiveModelProjectionBuilder.Build(BuildFixture(), "cross_ld_58_member.cid");
         var workspace = new SclIedWorkspace
         {
             IedName = "AA1C1F13R4",
@@ -109,7 +109,7 @@ public sealed class SiemensStaticDataSetSelectionRegressionTests
             new XElement(ns + "SCL",
                 new XAttribute("version", "2007"),
                 new XAttribute("revision", "B"),
-                new XElement(ns + "Header", new XAttribute("id", "SIEMENS_58")),
+                new XElement(ns + "Header", new XAttribute("id", "GENERIC_58")),
                 new XElement(ns + "IED",
                     new XAttribute("name", "AA1C1F13R4"),
                     new XElement(ns + "AccessPoint",

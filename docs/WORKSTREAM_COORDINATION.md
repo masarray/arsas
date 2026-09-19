@@ -12,6 +12,25 @@ The ArdIrec native bridge dependency used by that workstation was integrated fir
 
 The production `AGENTS.md` already present on `main` remains authoritative.
 
+## IEC 61850 qualified runtime baseline
+
+The accepted IEC 61850 runtime line was qualified on ARSAS PR #324. Its final
+source head is `b0f25569a398c7bbdc3a3a34409dbd74ebf49444`, its merged commit is
+`2b8e8adfd019bd087dc338dcc32bffefec53370f`, and both commits resolve to the
+same Git tree `cccb50607161f8637e597b43d71038ffd4becfdc`.
+
+The corresponding portable artifact was produced by workflow run
+`35412542175` with SHA-256
+`6805b878f91f3d526cc50f3e81e3eb9a1f72500217dacc8921e50bdc349c5fcc`.
+`.release/qualified-source.json` is the machine-readable authority for this
+lineage. The Windows release workflow must verify its release-sensitive
+fingerprint before packaging or publication.
+
+Public wording and identifier neutralization may be layered on this baseline
+only when the exact combined head passes regression and packaging gates. A
+version bump, documentation update, or merged/closed PR status does not by
+itself establish a new qualified runtime authority.
+
 ## Parallel FAT workstream
 
 The FAT workstream remains independent and is currently represented by the stacked FAT branches/PRs, including PR #290, PR #296, and PR #303. Their existing field gate remains authoritative; this coordination note does not waive or replace it.
