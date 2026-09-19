@@ -110,6 +110,7 @@ jobs:
 
       - name: Stage recovered public assets
         env:
+          GH_TOKEN: ${{ github.token }}
           EXE_PATH: ${{ steps.request.outputs.exe_path }}
           EXE_SHA: ${{ steps.request.outputs.exe_sha }}
           APP_COMMIT: ${{ steps.request.outputs.app_commit }}
