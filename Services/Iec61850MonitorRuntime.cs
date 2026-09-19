@@ -1136,7 +1136,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 var effectiveUpdates = session.StaticDataSetReportOnly
                     ? session.StaticReportProjection.Project(
-                        session.Device.LiveDiscoveryModel ?? session.Device.SclWorkspace?.DesignModel,
+                        session.Device.SclWorkspace?.DesignModel ?? session.Device.LiveDiscoveryModel,
                         session.Points.Values.ToArray(),
                         sourceUpdate)
                     : new[] { sourceUpdate };

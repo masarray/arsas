@@ -1,5 +1,6 @@
 using System.Windows;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -23,6 +24,30 @@ public partial class SclSignalSelectionModeWindow : Window
             : iedCount == 1
                 ? "1 IED WORKSPACE"
                 : $"{iedCount} IED WORKSPACES";
+
+        // Preserve the proven Open SCL prompt when it is opened before a concrete device
+        // card is selected. For a discovered/card-scoped IED, capability comes from the same
+        // canonical model used by Static DataSet selection.
+        if (targetDevice is null)
+        {
+            CanUseStaticDataSet = true;
+            StaticDataSetAvailabilityText = "Select + monitor";
+        }
+        else
+        {
+            var model = targetDevice.SclWorkspace?.DesignModel ?? targetDevice.LiveDiscoveryModel;
+            var dataSetCount = model?.DataSets.Count ?? 0;
+            var reportBackedCount =
+                Iec61850StaticDataSetAuthoritySelection.BuildReportBackedDataSetReferences(targetDevice).Count;
+
+            CanUseStaticDataSet = dataSetCount > 0;
+            StaticDataSetAvailabilityText = dataSetCount == 0
+                ? "No static DataSet"
+                : reportBackedCount > 0
+                    ? $"{dataSetCount} DataSet(s) • report ready"
+                    : $"{dataSetCount} DataSet(s) • no configured RCB";
+        }
+
         DataContext = this;
     }
 
@@ -30,6 +55,8 @@ public partial class SclSignalSelectionModeWindow : Window
     public string ContextHeading { get; }
     public string ContextSubtitle { get; }
     public string ImportScopeText { get; }
+    public bool CanUseStaticDataSet { get; }
+    public string StaticDataSetAvailabilityText { get; }
 
     public bool UseStaticDataSet => _useStaticDataSet;
 

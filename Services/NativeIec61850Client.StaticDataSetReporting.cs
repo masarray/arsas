@@ -60,6 +60,13 @@ public sealed partial class NativeIec61850Client
             ? "opened SCL design model"
             : "live discovery model (online-only)";
 
+        // The model that created the operator-visible DataSet inventory is also the
+        // positional authority for report projection. Open SCL and Smart Discovery now
+        // converge on this exact ordered representation.
+        var modelDataSetDirectories = BuildModelDataSetDirectories(
+            projectionModel,
+            device.SclWorkspace?.DesignModel is not null ? "SclDesignModel" : "LiveDiscoveryModel");
+
         // Fresh report discovery is verification, not permission policy. In particular we
         // deliberately do NOT require the adaptive Hybrid availability gate to classify a
         // configured BRCB as Available. Some perfectly usable servers omit enough reservation
@@ -235,20 +242,31 @@ public sealed partial class NativeIec61850Client
             if (string.IsNullOrWhiteSpace(liveRcb.DataSetReference))
                 liveRcb.DataSetReference = dataSetReference;
 
-            var directories = await RunMmsOperationAsync(
-                () => _session.GetDataSetDirectoriesAsync(
-                    new[] { dataSetReference },
-                    discovery.IedDirectory,
-                    cancellationToken),
-                cancellationToken).ConfigureAwait(false);
-            var directory = directories.SingleOrDefault(result =>
+            var modelDirectory = modelDataSetDirectories.SingleOrDefault(result =>
                 result.IsSuccess && SameStaticReference(result.DataSetReference, dataSetReference));
-
-            if (directory is null || directory.Members.Count == 0)
+            if (modelDirectory is null || modelDirectory.Members.Count == 0)
             {
-                var detail = directories.FirstOrDefault()?.Message ?? "no directory response";
                 warnings.Add(
-                    $"{dataSetReference}: live DataSet directory could not prove an ordered non-empty member list ({detail}). RCB was not armed because report-index mapping would be unsafe; MMS process polling remains disabled.");
+                    $"{dataSetReference}: canonical model has no ordered DataSet member list. RCB was not armed because report-index mapping would be unsafe; MMS process polling remains disabled.");
+                continue;
+            }
+
+            // Golden Smart Discovery already captured the live DataSet directory in the
+            // authoritative single-flight. Reuse that evidence instead of performing a
+            // second directory request after the model is built.
+            var liveDirectory = discovery.DataSetDirectories.SingleOrDefault(result =>
+                result.IsSuccess && SameStaticReference(result.DataSetReference, dataSetReference));
+            if (liveDirectory is null || liveDirectory.Members.Count == 0)
+            {
+                warnings.Add(
+                    $"{dataSetReference}: discovery authority has no ordered live DataSet directory. RCB was not armed; re-scan is required and MMS process polling remains disabled.");
+                continue;
+            }
+
+            if (!TryVerifyStaticDataSetMemberOrder(modelDirectory, liveDirectory, out var directoryMismatch))
+            {
+                warnings.Add(
+                    $"{dataSetReference}: canonical/live DataSet member order mismatch ({directoryMismatch}). RCB was not armed; unsafe positional projection and MMS process polling were both refused.");
                 continue;
             }
 
@@ -307,12 +325,12 @@ public sealed partial class NativeIec61850Client
                 Status = ArMms.MmsReportSubscriptionPlanStatus.ReadyRequiresWrite,
                 ReportControl = liveRcb,
                 DataSetReference = dataSetReference,
-                Members = directory.Members,
+                Members = modelDirectory.Members,
                 DynamicPoints = Array.Empty<ArMms.MmsFcResolvedPoint>(),
                 Steps = new[]
                 {
                     $"Verify authoritative configured RCB {configured.Reference} as live object {concreteReportReference}.",
-                    $"Use exact ordered live DataSet directory {dataSetReference} ({directory.Members.Count} members).",
+                    $"Use canonical ordered DataSet members {dataSetReference} ({modelDirectory.Members.Count} members), verified against the authoritative discovery evidence.",
                     "Install InformationReport receiver before enabling the RCB.",
                     "Use client-compatible BRCB reservation when ResvTms is exposed, enable RptEna, then request GI after receiver registration.",
                     "Map report values by ordered DataSet member index; never substitute cyclic MMS process reads."
@@ -507,6 +525,43 @@ public sealed partial class NativeIec61850Client
             PollingFallbackSignalCount = 0,
             UncoveredSignalCount = points.Count
         };
+
+    private static bool TryVerifyStaticDataSetMemberOrder(
+        ArMms.MmsDataSetDirectoryResult modelDirectory,
+        ArMms.MmsDataSetDirectoryResult liveDirectory,
+        out string mismatch)
+    {
+        mismatch = string.Empty;
+        if (modelDirectory.Members.Count != liveDirectory.Members.Count)
+        {
+            mismatch = $"count model={modelDirectory.Members.Count}, live={liveDirectory.Members.Count}";
+            return false;
+        }
+
+        for (var index = 0; index < modelDirectory.Members.Count; index++)
+        {
+            var modelMember = modelDirectory.Members[index];
+            var liveMember = liveDirectory.Members[index];
+            var mmsMatches =
+                !string.IsNullOrWhiteSpace(modelMember.MmsReference) &&
+                !string.IsNullOrWhiteSpace(liveMember.MmsReference) &&
+                SameStaticReference(modelMember.MmsReference, liveMember.MmsReference);
+            var userMatches =
+                !string.IsNullOrWhiteSpace(modelMember.UserReference) &&
+                !string.IsNullOrWhiteSpace(liveMember.UserReference) &&
+                SameStaticReference(modelMember.UserReference, liveMember.UserReference);
+
+            if (mmsMatches || userMatches)
+                continue;
+
+            mismatch =
+                $"member[{index}] model={modelMember.UserReference} ({modelMember.MmsReference}), " +
+                $"live={liveMember.UserReference} ({liveMember.MmsReference})";
+            return false;
+        }
+
+        return true;
+    }
 
     private static int StaticRcbAvailabilityRank(ArMms.MmsRcbOperationalAvailability availability)
         => availability switch
