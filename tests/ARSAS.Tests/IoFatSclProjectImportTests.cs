@@ -7,13 +7,13 @@ namespace ARSAS.Tests;
 public sealed class IoFatSclProjectImportTests
 {
     [Fact]
-    public async Task ProductionLoader_Siemens58_NoCommunication_ProjectsEveryStaticMember()
+    public async Task ProductionLoader_CrossDevice58_NoCommunication_ProjectsEveryStaticMember()
     {
         var root = TempDirectory();
-        var path = Path.Combine(root, "Siprotec_58_member.cid");
-        BuildSiemens58Fixture().Save(path);
+        var path = Path.Combine(root, "GenericIed_58_member.cid");
+        BuildCrossDevice58Fixture().Save(path);
 
-        var imported = await new IoFatSclProjectImportService().ImportAsync(new[] { path }, "Siemens FAT");
+        var imported = await new IoFatSclProjectImportService().ImportAsync(new[] { path }, "generic FAT");
 
         Assert.Single(imported.Sources);
         Assert.Equal(IoFatSourceKinds.Scl, imported.Sources[0].Kind);
@@ -29,7 +29,7 @@ public sealed class IoFatSclProjectImportTests
             Assert.True(point.ImportReady);
             Assert.Equal("SCL_DATASET_AUTHORITY", point.BindingStatus);
             Assert.Equal(imported.Sources[0].SourceId, point.SignalAddress);
-            Assert.Equal("Siprotec_58_member.cid", point.SourceSheet);
+            Assert.Equal("GenericIed_58_member.cid", point.SourceSheet);
         });
 
         Assert.Equal(36, imported.VerificationProject.Signals.Count(signal => signal.SignalKind == FatSignalKind.Discrete));
@@ -183,7 +183,7 @@ public sealed class IoFatSclProjectImportTests
         Assert.Contains(imported.Findings, finding => finding.Code == "SCL_NO_STATIC_DATASET_MEMBERS");
     }
 
-    private static XDocument BuildSiemens58Fixture()
+    private static XDocument BuildCrossDevice58Fixture()
     {
         XNamespace ns = "http://www.iec.ch/61850/2003/SCL";
         var digitalDataSet = new XElement(ns + "DataSet", new XAttribute("name", "Digital"));
@@ -206,7 +206,7 @@ public sealed class IoFatSclProjectImportTests
 
         return new XDocument(new XElement(ns + "SCL",
             new XAttribute("version", "2007"), new XAttribute("revision", "B"),
-            new XElement(ns + "Header", new XAttribute("id", "SIEMENS_58_P4")),
+            new XElement(ns + "Header", new XAttribute("id", "GENERIC_58_P4")),
             new XElement(ns + "IED", new XAttribute("name", "AA1C1F13R4"),
                 new XElement(ns + "AccessPoint", new XAttribute("name", "E"),
                     new XElement(ns + "Server",
