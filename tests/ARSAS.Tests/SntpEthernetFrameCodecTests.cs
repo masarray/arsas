@@ -46,7 +46,7 @@ public sealed class SntpEthernetFrameCodecTests
 
         var payload = reply.AsSpan(udpOffset + 8, SntpPacket.MinimumLength);
         Assert.Equal(4, payload[0] & 0x07);
-        Assert.Equal(SntpServerProfile.SiprotecCompatibilityStratum, payload[1]);
+        Assert.Equal(SntpServerProfile.GenericIedCompatibilityStratum, payload[1]);
         Assert.Equal(requestPayload.AsSpan(40, 8).ToArray(), payload.Slice(24, 8).ToArray());
     }
 
