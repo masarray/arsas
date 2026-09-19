@@ -61,14 +61,17 @@ jobs:
             throw 'Engine lock is not explicitly scoped as the R7 physical SCL repair.'
           }
 
-          if ($convergence.status -ne 'physical-retest-required' -or
+          if ($convergence.status -ne 'physical-retest-passed-merge-ready' -or
               [int]$convergence.activeStack.enginePerformance.pullRequest -ne 134 -or
               [int]$convergence.activeStack.engineModelAndScl.pullRequest -ne 135 -or
               [int]$convergence.activeStack.consumerIntegration.pullRequest -ne 324 -or
               $convergence.activeStack.engineModelAndScl.head -ne $lock.commit -or
               [bool]$convergence.promotion.productionPromoted -or
-              [bool]$convergence.promotion.mergeAllowedBeforePhysicalRetest) {
-            throw 'IEDScout convergence single-source-of-truth does not match the active #134 -> #135 -> #324 stack.'
+              [bool]$convergence.promotion.mergeAllowedBeforePhysicalRetest -or
+              [bool]$convergence.promotion.physicalRetestRequired -or
+              -not [bool]$convergence.promotion.mergeAllowedAfterPhysicalRetest -or
+              -not [bool]$convergence.promotion.physicalRetestPassed) {
+            throw 'IEDScout convergence single-source-of-truth does not match the physically proven merged-engine + ARSAS #324 authority.'
           }
           if ([int]$lock.sourcePullRequest -notin @(134, 135)) {
             throw "Unexpected R7 engine source PR: $($lock.sourcePullRequest)"
