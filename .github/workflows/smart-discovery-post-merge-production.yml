@@ -52,7 +52,7 @@ jobs:
       - name: Checkout exact merged ARIEC61850 authority
         shell: powershell
         run: |
-          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ...\ARIEC61850
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ..\ARIEC61850
           git -C ..\ARIEC61850 fetch --quiet --depth 1 origin $env:ENGINE_COMMIT
           git -C ..\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
           $actual = (git -C ..\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
