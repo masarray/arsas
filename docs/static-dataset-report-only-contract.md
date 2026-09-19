@@ -11,7 +11,7 @@ This document is the acceptance boundary for ARSAS Static DataSet monitoring.
 - Dynamic DataSet writes are disabled in this mode.
 - ARIEC planner fallback candidates are diagnostic evidence only and must never become silent MMS polling.
 
-Manual / Select Signals mode keeps the normal Hybrid acquisition behavior and is intentionally outside this contract.
+Manual / Signal Catalog mode keeps the normal Hybrid acquisition behavior and is intentionally outside this contract.
 
 ## Deterministic configured-RCB path
 

@@ -32,8 +32,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("new SclSignalSelectionModeWindow", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBox.Show", workflow, StringComparison.Ordinal);
         Assert.Contains("Workspace opened offline", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("Static DataSet", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("Select Signals", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("DataSet Signals", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("Signal Catalog", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("RCB Engineering", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Download COMTRADE", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Browse Offline", selectionWindow, StringComparison.Ordinal);

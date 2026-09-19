@@ -8,7 +8,7 @@ public sealed class IedCardActionsGearRegressionTests
         var source = File.ReadAllText(FindRepoFile("IedCardActionsGearPolicy.cs"));
 
         Assert.Contains("GearUid = \"ARSAS.IedActionsGear\"", source, StringComparison.Ordinal);
-        Assert.Contains("IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline", source, StringComparison.Ordinal);
+        Assert.Contains("IED Actions — DataSet Signals, Signal Catalog, RCB Engineering, COMTRADE, Browse Offline", source, StringComparison.Ordinal);
         Assert.Contains("OpenIedWorkspaceActionsAsync(device)", source, StringComparison.Ordinal);
         Assert.Contains("actionBar.Children.Add(CreateGearButton(device))", source, StringComparison.Ordinal);
     }

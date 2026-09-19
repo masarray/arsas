@@ -14,7 +14,7 @@ namespace ArIED61850Tester;
 internal static class IedWorkspaceActionsCardBehavior
 {
     private const string LegacyToolTip = "Configure Signals";
-    private const string ActionsToolTip = "IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline";
+    private const string ActionsToolTip = "IED Actions — DataSet Signals, Signal Catalog, RCB Engineering, COMTRADE, Browse Offline";
 
     [ModuleInitializer]
     internal static void Initialize()

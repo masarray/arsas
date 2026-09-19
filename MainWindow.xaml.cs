@@ -766,7 +766,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (openWizard && device.SignalCount > 0)
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
-                    await OpenSignalSelectionWizardAsync(device, restoredCount);
+                    // Live discovery and Open SCL are only different model-ingestion
+                    // sources. Once the typed IED model exists, both must enter the same
+                    // operator decision: exact DataSet Signals in deterministic static
+                    // report-only mode, or the broader manual Signal Catalog in Hybrid
+                    // mode. Opening the manual wizard directly here silently skipped the
+                    // Static DataSet authority and left newly discovered IEDs on mixed
+                    // static/dynamic reporting plus MMS polling fallback.
+                    await OpenIedWorkspaceActionsAsync(device);
                 else
                     SetStatus($"{device.Name}: discovery complete. Use the edit icon on its IED card to review {restoredCount} restored selection(s).");
             }
