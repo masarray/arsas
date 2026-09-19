@@ -64,16 +64,22 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
     }
 
     [Fact]
-    public void P05g_DedicatedMainlineGateRequiresReadyForReviewAndRealAuthorities()
+    public void R10_DedicatedMainlineGateRequiresPhysicalAuthorityAndExactMergedEngine()
     {
         var workflow = File.ReadAllText(FindRepoFile(".github/workflows/smart-discovery-mainline-readiness.yml"));
 
         Assert.Contains("Smart Discovery Mainline Readiness", workflow, StringComparison.Ordinal);
-        Assert.Contains("smart-discovery-repeat-run.authority.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("smart-discovery-production-promotion-authority.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("READY_FOR_REVIEW", workflow, StringComparison.Ordinal);
-        Assert.Contains("ProductionSwitchEnabled", workflow, StringComparison.Ordinal);
-        Assert.Contains("-NoFailExit", workflow, StringComparison.Ordinal);
+        Assert.Contains("Verify R10 physical convergence authority", workflow, StringComparison.Ordinal);
+        Assert.Contains("physical-retest-passed-merge-ready", workflow, StringComparison.Ordinal);
+        Assert.Contains("projectionErrors", workflow, StringComparison.Ordinal);
+        Assert.Contains("cacheLoss", workflow, StringComparison.Ordinal);
+        Assert.Contains("reportBackedRuntimePoints", workflow, StringComparison.Ordinal);
+        Assert.Contains("actualInformationReportObserved", workflow, StringComparison.Ordinal);
+        Assert.Contains("engineMergedMain", workflow, StringComparison.Ordinal);
+        Assert.Contains("Validate exact merged engine authority", workflow, StringComparison.Ordinal);
+        Assert.Contains("Build and test R10 ARSAS path", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("smart-discovery-repeat-run.authority.json", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("READY_FOR_REVIEW", workflow, StringComparison.Ordinal);
         Assert.Contains("if-no-files-found: error", workflow, StringComparison.Ordinal);
     }
 
