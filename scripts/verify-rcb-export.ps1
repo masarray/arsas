@@ -114,7 +114,8 @@ if (![string]::IsNullOrWhiteSpace($EngineRoot)) {
   $exportPath = Join-Path $engine "src/AR.Iec61850/Scl/Export/LegacySasSclExporter.cs"
   $identityPath = Join-Path $engine "src/AR.Iec61850/Scl/Export/AuthoritativeLiveIedSclExporter.cs"
   $liveNamePath = Join-Path $engine "src/AR.Iec61850/Scl/Export/LiveRcbSclInstanceNormalizer.cs"
-  foreach ($path in @($availabilityPath, $filterPath, $exportPath, $identityPath, $liveNamePath)) {
+  $logicalProjectorPath = Join-Path $engine "src/AR.Iec61850/Scl/Export/LiveRcbLogicalGroupProjector.cs"
+  foreach ($path in @($availabilityPath, $filterPath, $exportPath, $identityPath, $liveNamePath, $logicalProjectorPath)) {
     if (!(Test-Path $path)) { throw "Required ARIEC61850 RCB API is missing: $path" }
   }
 
@@ -123,6 +124,7 @@ if (![string]::IsNullOrWhiteSpace($EngineRoot)) {
   $export = Get-Content $exportPath -Raw
   $identity = Get-Content $identityPath -Raw
   $liveName = Get-Content $liveNamePath -Raw
+  $logicalProjector = Get-Content $logicalProjectorPath -Raw
   Require-Text $availability 'does not expose enough reservation evidence to prove availability' "Edition 1 BRCB uncertainty guard is missing."
   Require-Text $filter 'var document = new XDocument(source);' "SCL filter must clone rather than mutate the source document."
   Require-Text $filter 'Legacy SAS export requires exactly one selected ReportControl.' "Exactly-one-RCB guard is missing."
@@ -131,15 +133,20 @@ if (![string]::IsNullOrWhiteSpace($EngineRoot)) {
   Require-Text $export 'ApplyExactRuntimeReportControlIdentity' "Exact runtime RCB normalization is missing."
   Require-Text $export 'A_BRCB_120101' "The source-backed exact-name double-index regression evidence is missing."
   Require-Text $export 'must not contain RptEnabled because that can append a second instance suffix' "Source-backed exact runtime RCB export no longer rejects duplicate instance indexing."
-  Require-Text $identity 'element.SetAttributeValue("indexed", "false")' "Live MMS RCBs must be exported explicitly as non-indexed concrete instances."
-  Require-Text $identity 'rptEnabled.SetAttributeValue("max", "1")' "Live MMS RCB export must retain exactly one concrete instance."
-  Require-Text $identity 'A_BRCB_120101' "The live-model duplicate-index field case is no longer documented in the authoritative export boundary."
+  # R10 authority: source-backed one-RCB CID export still preserves an exact concrete
+  # runtime name through LiveRcbSclInstanceNormalizer, while full-model canonical export
+  # is allowed to collapse proven indexed runtime siblings into one logical ReportControl.
+  Require-Text $identity 'LiveRcbLogicalGroupProjector.Project(runtimeControls)' "Authoritative full-model export no longer projects runtime RCBs through logical-group semantics."
+  Require-Text $identity 'element.SetAttributeValue("indexed", projection.Indexed ? "true" : "false")' "Logical RCB indexed/non-indexed projection is missing."
+  Require-Text $identity 'rptEnabled.SetAttributeValue("max", projection.MaxInstances.ToString' "Logical RCB physical instance capacity is no longer retained."
   Require-Text $identity 'ValidateReportControlIdentity' "Live RCB identity validation is missing."
+  Require-Text $logicalProjector 'TryResolveLogicalReportId' "rptID-backed logical RCB grouping evidence is missing."
+  Require-Text $logicalProjector 'indexed = true' "Indexed logical RCB projection is missing."
   Require-Text $liveName 'A_BRCB_120101' "The standalone live RCB exact-name regression boundary is missing."
-  Require-Text $liveName 'indexed=false' "The standalone live RCB normalizer no longer preserves concrete MMS names."
+  Require-Text $liveName 'indexed=false' "The standalone concrete-RCB normalizer no longer preserves exact MMS names."
   Require-Text $identity '"ldName",' "Engine identity boundary must write explicit MMS Logical Device names through LDevice.ldName."
   Require-Text $identity 'ValidateIdentity' "Engine must validate the normalized IED and MMS-domain identity mapping."
   Require-Text $identity 'missingDomains' "Engine must reject loss of discovered MMS Logical Device domains."
 }
 
-Write-Host "Legacy SAS RCB export, exact live MMS RCB naming, authoritative IED identity, automatic read-only availability, transient success overlay, stable IED card layout, Edition 1 CID default, and engine boundaries passed."
+Write-Host "Legacy SAS selected-RCB export, exact concrete MMS naming, R10 logical indexed RCB projection, authoritative IED identity, automatic read-only availability, stable IED card layout, Edition 1 CID default, and engine boundaries passed."
