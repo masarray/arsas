@@ -763,7 +763,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.IsBusy = false;
             device.RefreshComputed();
 
-            if (openWizard && device.SignalCount > 0)
+            var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;
+            if (openWizard && (device.SignalCount > 0 || discoveredDataSetCount > 0))
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
                 {
