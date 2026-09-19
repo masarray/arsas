@@ -812,7 +812,7 @@ public class SignalDefinition : ObservableObject
         if ((cls is "CSWI" or "XCBR" or "XSWI") && r.EndsWith(".pos.stval"))
             return true;
 
-        // Normal measurement groups use cVal. Siemens OperationalValues groups expose
+        // Normal measurement groups use cVal. generic OperationalValues groups expose
         // the directly readable instantaneous leaf as instCVal, while cVal can reject
         // direct MMS reads even though the parent DO is visible in an engineering tool.
         if (cls is "MMXU" or "MMXN")
