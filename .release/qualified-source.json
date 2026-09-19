@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "authority": "qualified-runtime-lineage",
+  "qualificationManifest": ".release/qualified-source.json",
+  "fieldQualifiedSource": {
+    "sourcePullRequest": 324,
+    "sourceHeadCommit": "b0f25569a398c7bbdc3a3a34409dbd74ebf49444",
+    "sourceMergeCommit": "2b8e8adfd019bd087dc338dcc32bffefec53370f",
+    "sourceTree": "cccb50607161f8637e597b43d71038ffd4becfdc",
+    "workflowRunId": 35412542175,
+    "artifactId": 10575075419,
+    "portableFileName": "ARSAS-1.6.37-win-x64-portable.exe",
+    "portableSha256": "6805b878f91f3d526cc50f3e81e3eb9a1f72500217dacc8921e50bdc349c5fcc",
+    "portableSizeBytes": 78383289
+  },
+  "currentReleaseCandidate": {
+    "derivation": "Field-qualified runtime with implementation-neutral identifiers and release-governance changes only.",
+    "fingerprintAlgorithm": "sha256-path-null-content-null-v1",
+    "releaseSensitiveFileCount": 506,
+    "releaseSensitiveFingerprint": "b86663f358499f656bcddd52e38dbe08df31b1192fae4136889677572dabada5"
+  }
+}

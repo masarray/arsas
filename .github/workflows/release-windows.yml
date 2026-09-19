@@ -46,6 +46,12 @@ jobs:
         id: release
         shell: powershell
         run: |
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and
+              "${{ inputs.publish_release }}" -eq "true" -and
+              $env:GITHUB_REF -ne "refs/heads/main") {
+            throw "Manual publication is allowed only from the main branch."
+          }
+
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
             $rawVersion = "${{ inputs.version }}"
           }
@@ -159,6 +165,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Verify qualified release source authority
+        shell: powershell
+        run: python .\ArIED61850Tester\scripts\verify-qualified-release-source.py
 
       - name: Verify source and licensing boundaries
         shell: powershell
@@ -426,7 +436,11 @@ jobs:
             ArIED61850Tester/dist/ARSAS-Windows-x64-PROVENANCE.json
 
       - name: Create or update GitHub Release
-        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
+        if: >-
+          github.ref_type == 'tag' ||
+          (github.event_name == 'workflow_dispatch' &&
+           inputs.publish_release == true &&
+           github.ref == 'refs/heads/main')
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -467,7 +481,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Failed to create GitHub Release." }
 
       - name: Record verified release publication
-        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
+        if: >-
+          github.ref_type == 'tag' ||
+          (github.event_name == 'workflow_dispatch' &&
+           inputs.publish_release == true &&
+           github.ref == 'refs/heads/main')
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}

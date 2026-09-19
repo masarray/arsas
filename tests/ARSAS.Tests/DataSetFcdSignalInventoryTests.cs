@@ -8,7 +8,7 @@ namespace ARSAS.Tests;
 public sealed class DataSetFcdSignalInventoryTests
 {
     [Fact]
-    public void FcdOnly_SiemensLike_DataSets_Appear_58Of58_In_Signal_Selector_Inventory()
+    public void FcdOnly_CrossDevice_DataSets_Appear_58Of58_In_Signal_Selector_Inventory()
     {
         var digitalMembers = Enumerable.Range(1, 36)
             .Select(index => Member(index - 1, $"IEDLD0/GGIO1.Dig{index:00}", "ST"))
