@@ -24,6 +24,19 @@ $ForbiddenFilePatterns = @(
     "*.nupkg", "*.snupkg", "*.pcap", "*.pcapng", "*.etl", "*.binlog",
     "*.log", "*.tmp", "*.cache", "*.suo", "*.user", "*.rsuser",
     "*.pdf", "*.chm", "*.hlp"
+)
+
+$ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(
+    "dee5292b6aa3319833a7fb015d79494b0f1b69c3dc90258b39c042db388ccd71",
+    "1343b354d479ded45dde0d7f4ea01daddf1d411a669724f9f3e3de78db038ffc",
+    "439003d0d54d022f61a705da700bff916414fdf8308f0cae6a5b9e5903e86fdf",
+    "bec65696741e77e0dd0de446b99fe3c069edb3a8f5c81a9939f9813b33e595ea",
+    "4ed56753cb552f928aca8147069753f0f3741e28598c56533d8cddcd79fa574e",
+    "bbfd365f0891c3e0205503f5d2a1678a0a6ea60d68f3dcc174ed4f60dd87e708",
+    "d6a2feb71892b018d0ffec8d3cd438dabe599369d5a1921c7044137146107230",
+    "048832a53880fe4fc5feeee9fa0ae445b143c99a956356bee231d3faadbb7af0",
+    "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8",
     "30e363d3e8c59f2c1319f8d73d48e3ad26db5e087951a4d7ab809c6f5401aea8",
     "43d7a9de7c6a018c3dfb8a0de38ae060237b942c300db67147e1b56a953b122c",
     "630ba09448af522154f38ef7685ef1f44b0f3e9430f80829a03ce24f400f3754",
@@ -48,21 +61,7 @@ $ForbiddenFilePatterns = @(
     "ceaec657ec812681d45ba17bb58814b410d4212afa9ba97cefc67179656db96b",
     "1de2ae12bdc9a7e1e269321868f7f655bd166f9c4183a47b88f6b637fa23e673",
     "36e26473a4e8b5ce603a8cb3458b59c39d05fdb87fff30b18b65bad35ed9640e",
-    "95bad119f2292fb436837f2bfe73245627cd692a5e16e6f2e73b7e16b5ce7f6d",
-
-)
-
-$ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-@(
-    "dee5292b6aa3319833a7fb015d79494b0f1b69c3dc90258b39c042db388ccd71",
-    "1343b354d479ded45dde0d7f4ea01daddf1d411a669724f9f3e3de78db038ffc",
-    "439003d0d54d022f61a705da700bff916414fdf8308f0cae6a5b9e5903e86fdf",
-    "bec65696741e77e0dd0de446b99fe3c069edb3a8f5c81a9939f9813b33e595ea",
-    "4ed56753cb552f928aca8147069753f0f3741e28598c56533d8cddcd79fa574e",
-    "bbfd365f0891c3e0205503f5d2a1678a0a6ea60d68f3dcc174ed4f60dd87e708",
-    "d6a2feb71892b018d0ffec8d3cd438dabe599369d5a1921c7044137146107230",
-    "048832a53880fe4fc5feeee9fa0ae445b143c99a956356bee231d3faadbb7af0",
-    "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8"
+    "95bad119f2292fb436837f2bfe73245627cd692a5e16e6f2e73b7e16b5ce7f6d"
 ) | ForEach-Object { [void]$ForbiddenIdentifierHashes.Add($_) }
 
 $CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
