@@ -29,7 +29,7 @@
       "repository": "masarray/arsas",
       "pullRequest": 324,
       "branch": "test/smart-ied-discovery-pr134",
-      "status": "physical-proven-merge-ready"
+      "status": "physical-proven-effective-field-build; source-route-promotion-candidate"
     }
   },
   "physicalReference": {
@@ -132,7 +132,7 @@
     "mergeAllowedAfterPhysicalRetest": true,
     "physicalRetestPassed": true,
     "physicalRetestDate": "2026-09-19",
-    "note": "R10 physical discovery/save/reopen evidence passed for the exact ARSAS/engine source tree. Merge is allowed; production promotion remains a separate release decision."
+    "note": "R10 physically proved the effective smart-discovery field build plus the pinned engine tree. The field-build workflow injected the smart discovery entry route at build time; the unmodified ARSAS source tree did not contain that route. Production/mainline authority therefore requires promoting the proven route into source and repeating physical acceptance on the resulting normal build."
   },
   "legacyPolicy": {
     "rule": "Historical PRs may remain as provenance only; they must not be used as new branch bases after an active convergence authority supersedes them.",
@@ -204,7 +204,11 @@
         "appHead": "eb8eb13d491f9aa265205852b8a4bab07af440ff",
         "engineTestedHead": "9935d6902d786cc69b299260fe36b835944d5e81",
         "engineMergedMain": "648124097621046f5f127ceb1cf853fea54db730",
-        "engineTree": "1cf7e08f333f24994625e8fe8416dbd0a16195b1"
+        "engineTree": "1cf7e08f333f24994625e8fe8416dbd0a16195b1",
+        "buildTransformScript": "scripts/enable-smart-discovery-capture.ps1",
+        "effectiveDiscoveryEntrypoint": "DiscoverSignalsAsync -> DiscoverSignalsSmartForCaptureAsync",
+        "unmodifiedSourceContainedSmartRoute": false,
+        "provenanceCorrection": "The app commit identifies the repository revision, but the physically tested field artifact also included the workflow build transform above. Commit/tree equality alone is not sufficient to identify equivalent discovery behavior."
       },
       "discovery": {
         "associations": 1,
