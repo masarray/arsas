@@ -88,17 +88,13 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
+$Sha256Algorithm = [System.Security.Cryptography.SHA256]::Create()
+
 function Get-Sha256Hex {
     param([Parameter(Mandatory=$true)][string]$Value)
 
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
-    }
-    finally {
-        $algorithm.Dispose()
-    }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    return ([System.BitConverter]::ToString($Sha256Algorithm.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
 }
 
 function Test-ContainsForbiddenIdentifier {
