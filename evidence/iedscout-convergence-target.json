@@ -119,7 +119,7 @@
   "promotion": {
     "productionPromoted": false,
     "mergeAllowedBeforePhysicalRetest": false,
-    "physicalRetestRequired": false,
+    "physicalRetestRequired": true,
     "requiredEvidence": [
       "new ARSAS PCAP",
       "new generated Ed2 IID",
@@ -129,10 +129,11 @@
       "Ed1 SCL-assisted reuse diagnostic with projectionErrorSamples",
       "same-relay comparison against IEDScout"
     ],
-    "mergeAllowedAfterPhysicalRetest": true,
-    "physicalRetestPassed": true,
+    "mergeAllowedAfterPhysicalRetest": false,
+    "physicalRetestPassed": false,
     "physicalRetestDate": "2026-09-19",
-    "note": "R10 physically proved the effective smart-discovery field build plus the pinned engine tree. The field-build workflow injected the smart discovery entry route at build time; the unmodified ARSAS source tree did not contain that route. Production/mainline authority therefore requires promoting the proven route into source and repeating physical acceptance on the resulting normal build."
+    "note": "Historical R10 physical evidence remains valid for the effective field artifact that included the build-time smart-route transform. This candidate promotes that transform into normal source and also changes live static-report orchestration, so fresh physical acceptance is mandatory before merge or publication.",
+    "candidateRetestStatus": "required-after-smart-route-source-promotion-and-live-static-parity-repair"
   },
   "legacyPolicy": {
     "rule": "Historical PRs may remain as provenance only; they must not be used as new branch bases after an active convergence authority supersedes them.",
