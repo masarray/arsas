@@ -68,11 +68,8 @@ jobs:
       - name: Validate and test merged engine authority
         shell: powershell
         run: |
-          # Keep the exact R10 physical-tested engine commit. Its historical source
-          # comments include reference-tool provenance that the engine's generic
-          # public-source naming policy rejects, but this does not alter compiled
-          # behavior. Post-merge acceptance therefore validates the immutable commit
-          # identity plus full restore/build/test instead of repinning a cosmetic tree.
+          # Keep the exact R10 physical-tested engine commit. Post-merge acceptance
+          # validates the immutable commit identity plus full restore/build/test.
           dotnet restore .\ARIEC61850\ARIEC61850.sln
           dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
           dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
