@@ -39,10 +39,10 @@ public sealed class IoFatImmediateEvidenceRegressionTests
         => new()
         {
             TestPointId = "TRUE-EVIDENCE-REGRESSION",
-            IedName = "SIPROTEC",
+            IedName = "GENERIC_IED",
             IpAddress = "192.168.1.10",
             SignalName = "Protection pickup",
-            ObjectReference = "SIPROTEC/PROT.Op.general",
+            ObjectReference = "GENERIC_IED/PROT.Op.general",
             FunctionalConstraint = "ST",
             ExpectedOnText = "true",
             ExpectedOffText = "false",
