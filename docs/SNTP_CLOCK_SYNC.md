@@ -14,7 +14,7 @@ ARSAS includes a small clean-room SNTPv4 commissioning service for station-bus w
 - Sends an immediate SNTPv4 Mode 5 directed broadcast, then repeats every 64 seconds by default when a usable directed-broadcast address exists.
 - Sends another immediate broadcast when a newly connected IED is observed.
 - Separately records `broadcast sent`, `client request seen`, and `Mode 4 reply sent` evidence.
-- Advertises synchronized commissioning packets with SIPROTEC compatibility `stratum 2` and reference ID `LOCL`.
+- Advertises synchronized commissioning packets with protection-IED compatibility `stratum 2` and reference ID `LOCL`.
 - Performs a wall-clock sanity/step check. A large time step suppresses broadcast and makes that instant's unicast reply RFC-style unsynchronized (`LI=3`, `stratum=0`, `INIT`, server timestamps zero).
 - Never fails an IEC 61850 association when SNTP cannot start.
 
@@ -29,11 +29,11 @@ FAT Clock Sync telemetry intentionally distinguishes packet activity from actual
 
 A broadcast without a client request may still be valid when the relay is explicitly configured for broadcast NTP, but ARSAS does not treat it as an acknowledgement. For unicast SNTP, the strongest wire-level evidence is a Mode 3 request followed by a Mode 4 reply. Device-side time-quality or clock evidence is still required before declaring the relay synchronized.
 
-## SIPROTEC compatibility stratum
+## protection-IED compatibility stratum
 
-Field commissioning has shown that a conservative high-stratum local source can be rejected or remain marked unsynchronized on some SIPROTEC installations. ARSAS therefore uses `stratum 2` for both Mode 4 replies and Mode 5 broadcasts.
+Field commissioning has shown that a conservative high-stratum local source can be rejected or remain marked unsynchronized on some GENERIC_IED installations. ARSAS therefore uses `stratum 2` for both Mode 4 replies and Mode 5 broadcasts.
 
-The value is named in code as `SntpServerProfile.SiprotecCompatibilityStratum` and is protected by regression tests. It does not claim that the Windows laptop is physically traceable to a stratum-1 GNSS/PTP/atomic source. `LOCL` remains the reference ID and ARSAS diagnostics describe the laptop as a local commissioning source.
+The value is named in code as `SntpServerProfile.GenericIedCompatibilityStratum` and is protected by regression tests. It does not claim that the Windows laptop is physically traceable to a stratum-1 GNSS/PTP/atomic source. `LOCL` remains the reference ID and ARSAS diagnostics describe the laptop as a local commissioning source.
 
 If the Windows clock fails the ARSAS clock-health guard, synchronized stratum is not advertised: the affected unicast response becomes unsynchronized (`LI=3`, `stratum=0`, `INIT`) and broadcast is suppressed.
 
@@ -75,7 +75,7 @@ If another connected IED routes through a different local IPv4 interface, ARSAS 
 - version/poll field copy behavior;
 - Mode 4 reply semantics;
 - originate timestamp echo;
-- SIPROTEC compatibility stratum 2 on unicast and broadcast packets;
+- protection-IED compatibility stratum 2 on unicast and broadcast packets;
 - Mode 5 broadcast semantics;
 - RFC-style unsynchronized response fields;
 - directed-broadcast calculation;
