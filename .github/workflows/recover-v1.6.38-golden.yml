@@ -151,7 +151,7 @@ jobs:
                   "name": "ARSAS-Windows-x64-Portable.exe",
                   "sha256": "$EXE_SHA"
               },
-              "releaseTagReferenceObservedAtRecovery": tag_target,
+              "releaseTagReferenceObservedAtRecovery": "$tag_target",
               "note": "Recovered from the exact retained field-verified runtime artifact. The tag history was not rewritten. Installer and stale supply-chain assets were intentionally removed because they did not represent this exact runtime."
           }, indent=2))
           PY
