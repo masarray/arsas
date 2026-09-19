@@ -2,7 +2,7 @@
 
 This directory contains the engineering, validation, licensing, provenance, release, and operating-boundary documents for the ARSAS Windows IEC 61850 engineering workstation.
 
-The current application version on `main` is **ARSAS 1.6.37**. Public binary identity remains tied to the latest actually published stable GitHub Release and its verified package evidence.
+The current application version on `main` is **ARSAS 1.6.38**. Public binary identity remains tied to the latest actually published stable GitHub Release and its verified package evidence.
 
 ## Start here
 
@@ -11,7 +11,8 @@ The current application version on `main` is **ARSAS 1.6.37**. Public binary ide
 | [Project README](../README.md) | Product overview, current-version summary, feature scope, quick start, build instructions, and public claim boundary. |
 | [IO List FAT Evidence Testing](IO_LIST_FAT_EVIDENCE.md) | Imported SDI test plans, OFF → ON → OFF evidence, Excel/PDF export, portable `.arsas` projects, integrity checks, and cross-laptop continuation. |
 | [Architecture](ARCHITECTURE.md) | Multi-IED ownership, model identity, report-first acquisition, runtime scaling, and timestamp semantics. |
-| [SCL export](SCL_EXPORT.md) | Live-discovery and source-backed SCL export, including the 1.6.37 logical ReportControl versus runtime RCB-instance boundary. |
+| [Interoperability convergence](INTEROPERABILITY_CONVERGENCE.md) | R10 physical discovery, trusted-SCL reuse, report-backed acquisition, exact-case value identity, and 1.6.38 release verification. |
+| [SCL export](SCL_EXPORT.md) | Live-discovery and source-backed SCL export, including the 1.6.38 logical ReportControl versus runtime RCB-instance boundary. |
 | [COMTRADE viewer integration](COMTRADE_VIEWER_INTEGRATION.md) | Native ArdIrec bridge, in-process cursor/Phasor/Harmonics/Locus analysis, packaging, and presentation-only easing contract. |
 | [Windows releases](WINDOWS_RELEASES.md) | Installer and portable single-EXE packaging, exact release gates, checksums, SBOM, provenance, attestations, and publication boundary. |
 | [GOOSE Subscriber](GOOSE_SUBSCRIBER.md) | Read-only Npcap capture, ARIEC61850 GOOSE decoding, SCL/live-discovery DataSet binding, ordered `allData` leaf semantics, diagnostics, and field validation. |
