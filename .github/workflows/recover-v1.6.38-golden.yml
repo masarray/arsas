@@ -1,0 +1,245 @@
+name: Recover ARSAS v1.6.38 golden runtime
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".release/recover-v1.6.38-golden.json"
+      - ".github/workflows/recover-v1.6.38-golden.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: recover-v1.6.38-golden-runtime
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Verify exact golden artifact and recover stable release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout recovery request
+        uses: actions/checkout@v4
+
+      - name: Read fail-closed recovery request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          p = Path(".release/recover-v1.6.38-golden.json")
+          value = json.loads(p.read_text())
+          expected = {
+              "schemaVersion": 1,
+              "tag": "v1.6.38",
+              "actionsArtifactId": 10549589733,
+              "artifactName": "ARSAS-r7-scl-interoperability-win-x64",
+              "goldenZipSha256": "d68b9e89487cfd71bf92ac181e5abed35106ea65776a6005eaa863eb6cdc0068",
+              "goldenExeSha256": "555c3d91dbda85cb1b3de453266b33dd26a95cd06fe6805ccb973ed62d19487a",
+              "goldenExePath": "dist/ARSAS-1.6.37-win-x64-portable.exe",
+              "applicationCommit": "eb8eb13d491f9aa265205852b8a4bab07af440ff",
+              "engineCommit": "9935d6902d786cc69b299260fe36b835944d5e81",
+          }
+          for key, expected_value in expected.items():
+              actual = value.get(key)
+              if actual != expected_value:
+                  raise SystemExit(f"Recovery request mismatch for {key}: {actual!r} != {expected_value!r}")
+          print(f"tag={value['tag']}")
+          print(f"artifact_id={value['actionsArtifactId']}")
+          print(f"artifact_name={value['artifactName']}")
+          print(f"zip_sha={value['goldenZipSha256']}")
+          print(f"exe_sha={value['goldenExeSha256']}")
+          print(f"exe_path={value['goldenExePath']}")
+          print(f"app_commit={value['applicationCommit']}")
+          print(f"engine_commit={value['engineCommit']}")
+          PY
+
+      - name: Snapshot current public release before mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/backup
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,isLatest,body,assets             > recovery/backup/release-before.json
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY"             --dir recovery/backup/assets || true
+
+      - name: Download exact retained Actions artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.request.outputs.artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/golden
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip"             > recovery/golden/artifact.zip
+
+      - name: Verify golden ZIP, binary and provenance fingerprints
+        env:
+          ZIP_SHA: ${{ steps.request.outputs.zip_sha }}
+          EXE_SHA: ${{ steps.request.outputs.exe_sha }}
+          EXE_PATH: ${{ steps.request.outputs.exe_path }}
+          APP_COMMIT: ${{ steps.request.outputs.app_commit }}
+          ENGINE_COMMIT: ${{ steps.request.outputs.engine_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_zip="$(sha256sum recovery/golden/artifact.zip | awk '{print $1}')"
+          test "$actual_zip" = "$ZIP_SHA"
+
+          mkdir -p recovery/golden/extracted
+          unzip -q recovery/golden/artifact.zip -d recovery/golden/extracted
+          source_exe="recovery/golden/extracted/$EXE_PATH"
+          test -s "$source_exe"
+
+          actual_exe="$(sha256sum "$source_exe" | awk '{print $1}')"
+          test "$actual_exe" = "$EXE_SHA"
+
+          manifest="recovery/golden/extracted/dist/R7-SCL-INTEROP-BUILD.txt"
+          test -s "$manifest"
+          grep -Fq "ARSAS commit: $APP_COMMIT" "$manifest"
+          grep -Fq "ARIEC61850 commit: $ENGINE_COMMIT" "$manifest"
+          grep -Fq "ARSAS R7 SCL interoperability field-test build" "$manifest"
+
+      - name: Stage recovered public assets
+        env:
+          EXE_PATH: ${{ steps.request.outputs.exe_path }}
+          EXE_SHA: ${{ steps.request.outputs.exe_sha }}
+          APP_COMMIT: ${{ steps.request.outputs.app_commit }}
+          ENGINE_COMMIT: ${{ steps.request.outputs.engine_commit }}
+          ARTIFACT_ID: ${{ steps.request.outputs.artifact_id }}
+          ARTIFACT_NAME: ${{ steps.request.outputs.artifact_name }}
+          ZIP_SHA: ${{ steps.request.outputs.zip_sha }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/publish
+          cp "recovery/golden/extracted/$EXE_PATH"             recovery/publish/ARSAS-Windows-x64-Portable.exe
+
+          printf '%s  %s\n' "$EXE_SHA" "ARSAS-Windows-x64-Portable.exe"             > recovery/publish/ARSAS-Windows-x64-SHA256SUMS.txt
+
+          tag_target="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)"
+          if [ -z "$tag_target" ]; then
+            tag_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .target_commitish)"
+          fi
+
+          python - <<PY > recovery/publish/ARSAS-Windows-x64-PROVENANCE.json
+          import json
+          print(json.dumps({
+              "schemaVersion": 3,
+              "product": "ARSAS",
+              "releaseTag": "$TAG",
+              "releaseRecovery": True,
+              "runtimeApplicationCommit": "$APP_COMMIT",
+              "runtimeEngineCommit": "$ENGINE_COMMIT",
+              "sourceArtifact": {
+                  "kind": "github-actions-artifact",
+                  "id": int("$ARTIFACT_ID"),
+                  "name": "$ARTIFACT_NAME",
+                  "zipSha256": "$ZIP_SHA"
+              },
+              "portable": {
+                  "name": "ARSAS-Windows-x64-Portable.exe",
+                  "sha256": "$EXE_SHA"
+              },
+              "releaseTagReferenceObservedAtRecovery": tag_target,
+              "note": "Recovered from the exact retained field-verified runtime artifact. The tag history was not rewritten. Installer and stale supply-chain assets were intentionally removed because they did not represent this exact runtime."
+          }, indent=2))
+          PY
+
+          cat > recovery/publish/release-notes.md <<'EOF'
+          # ARSAS 1.6.38
+
+          This stable download was recovered to the exact field-verified runtime artifact after a release-build routing regression was identified.
+
+          ## Recovery status
+
+          - Portable Windows x64 is the exact retained golden runtime artifact.
+          - The published binary is verified by SHA-256 before and after release upload.
+          - The previous installer was removed because it was built through a different runtime path.
+          - Previous SBOM/provenance assets were removed because they described the replaced binaries.
+          - Git tag history was not rewritten.
+          - Source-line recovery remains a separate change and must pass fresh physical verification before replacing this binary authority.
+
+          ## Included assets
+
+          - ARSAS-Windows-x64-Portable.exe
+          - ARSAS-Windows-x64-SHA256SUMS.txt
+          - ARSAS-Windows-x64-PROVENANCE.json
+          EOF
+
+      - name: Replace stale v1.6.38 assets with exact golden runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for asset in             ARSAS-Windows-x64-Portable.exe             ARSAS-Windows-x64-Setup.exe             ARSAS-Windows-x64-SHA256SUMS.txt             ARSAS-Windows-x64-SBOM.spdx.json             ARSAS-Windows-x64-PROVENANCE.json; do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY"                  --json assets --jq ".assets[].name" | grep -Fxq "$asset"; then
+              gh release delete-asset "$TAG" "$asset"                 --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done
+
+          gh release upload "$TAG"             recovery/publish/ARSAS-Windows-x64-Portable.exe             recovery/publish/ARSAS-Windows-x64-SHA256SUMS.txt             recovery/publish/ARSAS-Windows-x64-PROVENANCE.json             --repo "$GITHUB_REPOSITORY"
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY"             --title "ARSAS 1.6.38"             --notes-file recovery/publish/release-notes.md             --draft=false --prerelease=false --latest
+
+      - name: Verify published bytes and release inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.request.outputs.tag }}
+          EXE_SHA: ${{ steps.request.outputs.exe_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/verify
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY"             --pattern ARSAS-Windows-x64-Portable.exe             --dir recovery/verify
+          actual="$(sha256sum recovery/verify/ARSAS-Windows-x64-Portable.exe | awk '{print $1}')"
+          test "$actual" = "$EXE_SHA"
+
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,isLatest,body,assets             > recovery/release-after.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path("recovery/release-after.json").read_text())
+          names = {x["name"] for x in value.get("assets", [])}
+          expected = {
+              "ARSAS-Windows-x64-Portable.exe",
+              "ARSAS-Windows-x64-SHA256SUMS.txt",
+              "ARSAS-Windows-x64-PROVENANCE.json",
+          }
+          if names != expected:
+              raise SystemExit(f"Unexpected release inventory: {sorted(names)}")
+          if value.get("isDraft") or value.get("isPrerelease"):
+              raise SystemExit("Recovered release is unexpectedly draft or prerelease")
+          PY
+
+          latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          test "$latest_tag" = "$TAG"
+
+      - name: Preserve recovery audit bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-v1.6.38-golden-release-recovery-evidence
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            recovery/backup/release-before.json
+            recovery/backup/assets
+            recovery/golden/extracted/dist/R7-SCL-INTEROP-BUILD.txt
+            recovery/publish/ARSAS-Windows-x64-SHA256SUMS.txt
+            recovery/publish/ARSAS-Windows-x64-PROVENANCE.json
+            recovery/publish/release-notes.md
+            recovery/release-after.json
