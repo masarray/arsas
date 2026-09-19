@@ -371,14 +371,14 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"mergeAllowedAfterPhysicalRetest\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"physicalRetestRequired\": false", contract, StringComparison.Ordinal);
         Assert.Contains("\"physicalRetestPassed\": true", contract, StringComparison.Ordinal);
-        Assert.Contains("Merged proven baseline", documentation, StringComparison.Ordinal);
-        Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
+        Assert.Contains("Current stable baseline", documentation, StringComparison.Ordinal);
+        Assert.Contains("The physical result, not test count alone", documentation, StringComparison.Ordinal);
 
         var guard = File.ReadAllText(FindRepoFile(".github/workflows/interoperability-convergence-guard.yml"));
         Assert.Contains("name: Interoperability Convergence Guard", guard, StringComparison.Ordinal);
         Assert.Contains("name: interoperability-convergence-contract", guard, StringComparison.Ordinal);
         Assert.Contains("Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance", guard, StringComparison.Ordinal);
-        Assert.Contains("P0 structural discovery freeze regressed away from the accepted Interoperability convergence path", guard, StringComparison.Ordinal);
+        Assert.Contains("P0 structural discovery freeze regressed away from the accepted interoperability convergence path", guard, StringComparison.Ordinal);
         Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
 
