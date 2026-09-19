@@ -8,13 +8,13 @@
   "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
   "highlights": [
     "Polish WPF typography with embedded Inter and smooth rendering",
-    "convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
+    "convergence(discovery/scl): reference-parity discovery and usable SCL",
     "fix(ci): restore R10 post-merge release gates",
     "The verified Windows installer is published as the stable ARSAS 1.6.38 package."
   ],
   "highlightsId": [
     "Perubahan rilis: Polish WPF typography with embedded Inter and smooth rendering",
-    "Perubahan rilis: convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
+    "Perubahan rilis: convergence(discovery/scl): reference-parity discovery and usable SCL",
     "Perubahan rilis: fix(ci): restore R10 post-merge release gates",
     "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.38."
   ],
