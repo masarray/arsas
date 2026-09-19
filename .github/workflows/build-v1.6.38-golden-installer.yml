@@ -1,0 +1,254 @@
+name: Build ARSAS v1.6.38 golden installer candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build-v1.6.38-golden-installer.yml"
+      - ".release/recover-v1.6.38-golden.json"
+      - "installer/ArIED61850.iss"
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/build-v1.6.38-golden-installer.yml"
+      - ".release/recover-v1.6.38-golden.json"
+      - "installer/ArIED61850.iss"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: build-v1.6.38-golden-installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Package exact golden runtime and verify installed payload
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read exact golden runtime authority
+        shell: pwsh
+        run: |
+          $request = Get-Content ".\.release\recover-v1.6.38-golden.json" -Raw | ConvertFrom-Json
+          $expected = [ordered]@{
+            tag = "v1.6.38"
+            actionsArtifactId = 10549589733
+            artifactName = "ARSAS-r7-scl-interoperability-win-x64"
+            goldenZipSha256 = "d68b9e89487cfd71bf92ac181e5abed35106ea65776a6005eaa863eb6cdc0068"
+            goldenExeSha256 = "555c3d91dbda85cb1b3de453266b33dd26a95cd06fe6805ccb973ed62d19487a"
+            goldenExePath = "dist/ARSAS-1.6.37-win-x64-portable.exe"
+            applicationCommit = "eb8eb13d491f9aa265205852b8a4bab07af440ff"
+            engineCommit = "9935d6902d786cc69b299260fe36b835944d5e81"
+          }
+
+          foreach ($key in $expected.Keys) {
+            $actual = [string]$request.$key
+            $wanted = [string]$expected[$key]
+            if ($actual -ne $wanted) {
+              throw "Golden installer authority mismatch for $key. Expected '$wanted', got '$actual'."
+            }
+          }
+
+          "RELEASE_TAG=$($request.tag)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_VERSION=1.6.38" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARTIFACT_ID=$($request.actionsArtifactId)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARTIFACT_NAME=$($request.artifactName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_ZIP_SHA=$($request.goldenZipSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_EXE_SHA=$($request.goldenExeSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_EXE_PATH=$($request.goldenExePath)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RUNTIME_APP_COMMIT=$($request.applicationCommit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RUNTIME_ENGINE_COMMIT=$($request.engineCommit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download exact retained golden artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "arsas-golden-installer"
+          $zip = Join-Path $root "golden-artifact.zip"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $artifactUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:ARTIFACT_ID/zip"
+          Invoke-WebRequest -Uri $artifactUrl -Headers $headers -OutFile $zip -MaximumRedirection 5
+          if (-not (Test-Path $zip -PathType Leaf)) {
+            throw "Failed to download exact retained golden artifact."
+          }
+
+          $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($zipSha -ne $env:GOLDEN_ZIP_SHA) {
+            throw "Golden artifact ZIP hash mismatch. Expected $env:GOLDEN_ZIP_SHA got $zipSha."
+          }
+
+          $extract = Join-Path $root "extracted"
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $sourceExe = Join-Path $extract ($env:GOLDEN_EXE_PATH -replace "/", "\")
+          if (-not (Test-Path $sourceExe -PathType Leaf)) {
+            throw "Golden runtime executable missing: $sourceExe"
+          }
+
+          $exeSha = (Get-FileHash $sourceExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($exeSha -ne $env:GOLDEN_EXE_SHA) {
+            throw "Golden runtime hash mismatch. Expected $env:GOLDEN_EXE_SHA got $exeSha."
+          }
+
+          $manifest = Join-Path $extract "dist\R7-SCL-INTEROP-BUILD.txt"
+          if (-not (Test-Path $manifest -PathType Leaf)) { throw "Golden manifest missing." }
+          $manifestText = Get-Content $manifest -Raw
+          if ($manifestText -notmatch [regex]::Escape("ARSAS commit: $env:RUNTIME_APP_COMMIT") -or
+              $manifestText -notmatch [regex]::Escape("ARIEC61850 commit: $env:RUNTIME_ENGINE_COMMIT")) {
+            throw "Golden manifest commit authority mismatch."
+          }
+
+          "GOLDEN_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_SOURCE_EXE=$sourceExe" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Stage installer source from exact golden EXE only
+        shell: pwsh
+        run: |
+          $sourceDir = Join-Path $env:RUNNER_TEMP "arsas-golden-installer-source"
+          if (Test-Path $sourceDir) { Remove-Item $sourceDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $sourceDir -Force | Out-Null
+
+          $stagedExe = Join-Path $sourceDir "ARSAS.exe"
+          Copy-Item $env:GOLDEN_SOURCE_EXE $stagedExe -Force
+          $stagedSha = (Get-FileHash $stagedExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($stagedSha -ne $env:GOLDEN_EXE_SHA) {
+            throw "Staged installer payload changed bytes. Expected $env:GOLDEN_EXE_SHA got $stagedSha."
+          }
+
+          $files = @(Get-ChildItem $sourceDir -File -Recurse)
+          if ($files.Count -ne 1 -or $files[0].Name -ne "ARSAS.exe") {
+            throw "Installer staging must contain exactly one runtime payload: ARSAS.exe."
+          }
+
+          "INSTALLER_SOURCE_DIR=$sourceDir" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+
+      - name: Compile installer around exact golden runtime
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if ([string]::IsNullOrWhiteSpace($iscc)) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc -PathType Leaf)) {
+            throw "Inno Setup compiler not found."
+          }
+
+          $output = Join-Path $env:GITHUB_WORKSPACE "dist"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $definition = Join-Path $env:GITHUB_WORKSPACE "installer\ArIED61850.iss"
+          $arguments = @(
+            "/DAppVersion=$env:RELEASE_VERSION",
+            "/DAppVersionNumeric=1.6.38.0",
+            "/DSourceDir=$env:INSTALLER_SOURCE_DIR",
+            "/DOutputDir=$output",
+            "/DOutputBaseFilename=ARSAS-Windows-x64-Setup",
+            $definition
+          )
+          & $iscc @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
+          }
+
+          $setup = Join-Path $output "ARSAS-Windows-x64-Setup.exe"
+          if (-not (Test-Path $setup -PathType Leaf)) { throw "Installer was not produced." }
+          $setupSha = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "SETUP_PATH=$setup" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SETUP_SHA=$setupSha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Installer SHA256: $setupSha"
+
+      - name: Silent install and prove installed runtime is byte-identical
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "arsas-v1.6.38-installed"
+          if (Test-Path $installRoot) { Remove-Item $installRoot -Recurse -Force }
+
+          $install = Start-Process -FilePath $env:SETUP_PATH -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/CURRENTUSER",
+            "/DIR=$installRoot"
+          ) -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)." }
+
+          $installedExe = Join-Path $installRoot "ARSAS.exe"
+          if (-not (Test-Path $installedExe -PathType Leaf)) {
+            throw "Installed golden runtime was not found: $installedExe"
+          }
+          $installedSha = (Get-FileHash $installedExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($installedSha -ne $env:GOLDEN_EXE_SHA) {
+            throw "Installed runtime is not byte-identical to golden EXE. Expected $env:GOLDEN_EXE_SHA got $installedSha."
+          }
+
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "arsas-v1.6.38-installed-bundle-cache"
+          $smoke = Start-Process -FilePath $installedExe -ArgumentList @("--portable-smoke-test") -Wait -PassThru
+          if ($smoke.ExitCode -ne 0) {
+            throw "Installed golden runtime smoke test failed with exit code $($smoke.ExitCode)."
+          }
+
+          $uninstaller = Join-Path $installRoot "unins000.exe"
+          if (-not (Test-Path $uninstaller -PathType Leaf)) { throw "Uninstaller was not created." }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART"
+          ) -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
+
+      - name: Write installer candidate evidence
+        shell: pwsh
+        run: |
+          $evidencePath = Join-Path $env:GITHUB_WORKSPACE "dist\ARSAS-v1.6.38-golden-installer-evidence.json"
+          $evidence = [ordered]@{
+            schemaVersion = 1
+            product = "ARSAS"
+            releaseTag = $env:RELEASE_TAG
+            installerVersion = $env:RELEASE_VERSION
+            runtimeRebuilt = $false
+            sourceArtifact = [ordered]@{
+              id = [int64]$env:ARTIFACT_ID
+              name = $env:ARTIFACT_NAME
+              zipSha256 = $env:GOLDEN_ZIP_SHA
+            }
+            runtime = [ordered]@{
+              applicationCommit = $env:RUNTIME_APP_COMMIT
+              engineCommit = $env:RUNTIME_ENGINE_COMMIT
+              portableSha256 = $env:GOLDEN_EXE_SHA
+              installedFileName = "ARSAS.exe"
+              installedSha256 = $env:GOLDEN_EXE_SHA
+            }
+            installer = [ordered]@{
+              name = "ARSAS-Windows-x64-Setup.exe"
+              sha256 = $env:SETUP_SHA
+              packaging = "Inno Setup container over exact golden single-file runtime"
+            }
+          }
+          $evidence | ConvertTo-Json -Depth 6 | Set-Content $evidencePath -Encoding utf8
+          Get-Content $evidencePath | Write-Host
+
+      - name: Upload tested installer candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-v1.6.38-golden-installer-candidate
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            dist/ARSAS-Windows-x64-Setup.exe
+            dist/ARSAS-v1.6.38-golden-installer-evidence.json
