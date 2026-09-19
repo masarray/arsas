@@ -14,7 +14,7 @@
     {
       "id": "field-profile-a-file-service",
       "publicLabel": "Anonymized field profile A — MMS file-service transport",
-      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "identityDisclosure": "Device model, installation and firmware identifiers are not published.",
       "evidenceDate": "2026-07",
       "services": {
         "mmsAssociation": "observed",
@@ -44,7 +44,7 @@
     {
       "id": "field-profile-b-rcb-export",
       "publicLabel": "Anonymized field profile B — RCB and SCL export evidence",
-      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "identityDisclosure": "Device model, installation and firmware identifiers are not published.",
       "evidenceDate": "2026-07",
       "services": {
         "mmsAssociation": "observed",
@@ -59,7 +59,7 @@
       "conditions": [
         "Live RCB names, TriggerOptions, OptionalFields, BufTm and IntgPd were preserved as read-only evidence.",
         "Selected-RCB export retained the exact live MMS RCB identity and avoided duplicate instance suffixes.",
-        "Exported SCL remains an engineering baseline and requires independent schema, project and vendor validation.",
+        "Exported SCL remains an engineering baseline and requires independent schema, project and implementation validation.",
         "No runtime RCB reservation or write is implied by this evidence profile."
       ],
       "evidenceLinks": [
