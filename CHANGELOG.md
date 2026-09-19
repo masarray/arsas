@@ -4,6 +4,24 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.38 — 2026-09-19
+
+### Added
+
+- Public stable Windows release for the physically verified R10 discovery/SCL convergence baseline.
+- Release evidence now includes verified installer and portable artifacts, SHA-256 checksums, SPDX 2.3 SBOM, provenance metadata, and artifact attestations.
+
+### Changed
+
+- Trusted-SCL reuse for generated Edition 2 IID and Edition 1 ICD now preserves exact-case value identity with `cacheLoss=0` on both editions.
+- Multi-DO CF hydration uses exact DO-scoped structured Reads instead of cross-DO positional assumptions.
+- Post-merge and mainline CI gates validate the accepted R10 physical authority and immutable engine source tree.
+
+### Fixed
+
+- Both generated editions reopen and reconnect with 32/32 MMS domains, all planned initial Reads successful, `projectionErrors=0`, 58/58 report-backed runtime points, zero final unresolved runtime points, actual InformationReport traffic, and zero cyclic MMS process polling on the accepted path.
+- Release automation now publishes the verified stable package from the exact mainline release commit.
+
 ## 1.6.37 — 2026-09-16
 
 ### Added
