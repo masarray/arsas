@@ -441,6 +441,30 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Failed to publish synchronized installer release evidence." }
           }
 
+      - name: Stage installer promotion audit bundle
+        if: always()
+        shell: pwsh
+        run: |
+          $audit = Join-Path $env:GITHUB_WORKSPACE "_promotion-audit"
+          New-Item -ItemType Directory -Path $audit -Force | Out-Null
+          Copy-Item ".\.release\recover-v1.6.38-golden-installer.json" (Join-Path $audit "recover-v1.6.38-golden-installer.json") -Force
+
+          if (-not [string]::IsNullOrWhiteSpace($env:PROMOTION_ROOT)) {
+            $candidateEvidence = Join-Path $env:PROMOTION_ROOT "extracted\ARSAS-v1.6.38-golden-installer-evidence.json"
+            if (Test-Path $candidateEvidence -PathType Leaf) {
+              Copy-Item $candidateEvidence (Join-Path $audit "ARSAS-v1.6.38-golden-installer-evidence.json") -Force
+            }
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:PUBLISH_DIR)) {
+            foreach ($name in @("ARSAS-Windows-x64-SHA256SUMS.txt", "ARSAS-Windows-x64-PROVENANCE.json", "release-notes.md")) {
+              $source = Join-Path $env:PUBLISH_DIR $name
+              if (Test-Path $source -PathType Leaf) {
+                Copy-Item $source (Join-Path $audit $name) -Force
+              }
+            }
+          }
+
       - name: Upload installer promotion audit bundle
         if: always()
         uses: actions/upload-artifact@v4
@@ -448,9 +472,4 @@ jobs:
           name: ARSAS-v1.6.38-golden-installer-promotion-evidence
           retention-days: 90
           if-no-files-found: warn
-          path: |
-            .release/recover-v1.6.38-golden-installer.json
-            ${{ env.PROMOTION_ROOT }}/extracted/ARSAS-v1.6.38-golden-installer-evidence.json
-            ${{ env.PUBLISH_DIR }}/ARSAS-Windows-x64-SHA256SUMS.txt
-            ${{ env.PUBLISH_DIR }}/ARSAS-Windows-x64-PROVENANCE.json
-            ${{ env.PUBLISH_DIR }}/release-notes.md
+          path: _promotion-audit
