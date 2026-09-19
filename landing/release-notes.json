@@ -1,24 +1,22 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.37",
-  "title": "ARSAS 1.6.37 stable release",
-  "titleId": "Stable release ARSAS 1.6.37",
-  "summary": "ARSAS 1.6.37 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.37 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "version": "1.6.38",
+  "title": "ARSAS 1.6.38 stable release",
+  "titleId": "Stable release ARSAS 1.6.38",
+  "summary": "ARSAS 1.6.38 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
+  "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
   "highlights": [
-    "fix(v1.6.36): smooth COMTRADE scrub presentation at display cadence",
-    "fix(v1.6.36): converge RCB instances and source export identity with the trusted reference workflow",
-    "COMTRADE: smooth scrubbing across analysis workspaces",
-    "Release convergence: promote field-tested v1.6.36 trial fixes to main",
-    "docs: synchronize documentation and landing with ARSAS 1.6.37"
+    "Polish WPF typography with embedded Inter and smooth rendering",
+    "convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
+    "fix(ci): restore R10 post-merge release gates",
+    "The verified Windows installer is published as the stable ARSAS 1.6.38 package."
   ],
   "highlightsId": [
-    "Perubahan rilis: fix(v1.6.36): smooth COMTRADE scrub presentation at display cadence",
-    "Perubahan rilis: fix(v1.6.36): samakan instance RCB dan identitas source export dengan workflow referensi tepercaya",
-    "Perubahan rilis: COMTRADE: smooth scrubbing across analysis workspaces",
-    "Perubahan rilis: Release convergence: promote field-tested v1.6.36 trial fixes to main",
-    "Dokumentasi: synchronize documentation and landing with ARSAS 1.6.37"
+    "Perubahan rilis: Polish WPF typography with embedded Inter and smooth rendering",
+    "Perubahan rilis: convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
+    "Perubahan rilis: fix(ci): restore R10 post-merge release gates",
+    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.38."
   ],
   "improvements": [
     "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
@@ -55,11 +53,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.37 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.37",
-    "caption": "ARSAS 1.6.37 stable Windows release with verified installer, portable package and release evidence.",
-    "captionId": "Stable release Windows ARSAS 1.6.37 dengan installer, portable package, dan release evidence yang terverifikasi."
+    "alt": "ARSAS 1.6.38 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.38",
+    "caption": "ARSAS 1.6.38 stable Windows release with verified installer, portable package and release evidence.",
+    "captionId": "Stable release Windows ARSAS 1.6.38 dengan installer, portable package, dan release evidence yang terverifikasi."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.37"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.38"
 }
