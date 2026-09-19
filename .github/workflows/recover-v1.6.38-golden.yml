@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p recovery/backup
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,isLatest,body,assets             > recovery/backup/release-before.json
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,body,assets             > recovery/backup/release-before.json
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY"             --dir recovery/backup/assets || true
 
       - name: Download exact retained Actions artifact
@@ -207,7 +207,7 @@ jobs:
           actual="$(sha256sum recovery/verify/ARSAS-Windows-x64-Portable.exe | awk '{print $1}')"
           test "$actual" = "$EXE_SHA"
 
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,isLatest,body,assets             > recovery/release-after.json
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"             --json tagName,name,isDraft,isPrerelease,body,assets             > recovery/release-after.json
 
           python - <<'PY'
           import json
