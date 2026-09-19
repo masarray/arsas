@@ -1,0 +1,456 @@
+name: Publish ARSAS v1.6.38 golden installer
+
+on:
+  pull_request:
+    paths:
+      - ".release/recover-v1.6.38-golden-installer.json"
+      - ".github/workflows/publish-v1.6.38-golden-installer.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - ".release/recover-v1.6.38-golden-installer.json"
+      - ".github/workflows/publish-v1.6.38-golden-installer.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-v1.6.38-golden-installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-publish:
+    name: Verify tested installer artifact and publish exact stable setup
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read pinned tested installer authority
+        shell: pwsh
+        run: |
+          $pin = Get-Content ".\.release\recover-v1.6.38-golden-installer.json" -Raw | ConvertFrom-Json
+          $expected = [ordered]@{
+            tag = "v1.6.38"
+            installerVersion = "1.6.38"
+            testedInstallerArtifactId = "10586413305"
+            testedInstallerArtifactName = "ARSAS-v1.6.38-golden-installer-candidate"
+            testedInstallerArtifactZipSha256 = "ec3dc83b74d421aa779d9c94fc5a1f4c219e135ad3d9893f9e87f5ad2bc15660"
+            installerName = "ARSAS-Windows-x64-Setup.exe"
+            installerSha256 = "198dfea5b6d7b58c4c1006fd15c6fbfef1f0885d84924b17c04e0f6cb4cfff30"
+            installerSizeBytes = "73461055"
+            installerEvidenceName = "ARSAS-v1.6.38-golden-installer-evidence.json"
+            installerEvidenceSha256 = "e1ad23a6ee128efe5b07eaf20266978dda89c43ee45b2ec3e41e679b2cda2e80"
+            goldenRuntimeSha256 = "555c3d91dbda85cb1b3de453266b33dd26a95cd06fe6805ccb973ed62d19487a"
+            goldenRuntimeSizeBytes = "78383243"
+            runtimeApplicationCommit = "eb8eb13d491f9aa265205852b8a4bab07af440ff"
+            runtimeEngineCommit = "9935d6902d786cc69b299260fe36b835944d5e81"
+            sourceGoldenArtifactId = "10549589733"
+            sourceGoldenArtifactZipSha256 = "d68b9e89487cfd71bf92ac181e5abed35106ea65776a6005eaa863eb6cdc0068"
+            runtimeRebuilt = "False"
+          }
+          foreach ($key in $expected.Keys) {
+            $actual = [string]$pin.$key
+            if ($actual -ne [string]$expected[$key]) {
+              throw "Pinned installer authority mismatch for $key. Expected '$($expected[$key])', got '$actual'."
+            }
+          }
+
+          "RELEASE_TAG=$($pin.tag)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_VERSION=$($pin.installerVersion)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_ARTIFACT_ID=$($pin.testedInstallerArtifactId)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_ARTIFACT_NAME=$($pin.testedInstallerArtifactName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_ARTIFACT_ZIP_SHA=$($pin.testedInstallerArtifactZipSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_NAME=$($pin.installerName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_SHA=$($pin.installerSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_SIZE=$($pin.installerSizeBytes)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_EVIDENCE_NAME=$($pin.installerEvidenceName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_EVIDENCE_SHA=$($pin.installerEvidenceSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_EXE_SHA=$($pin.goldenRuntimeSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "GOLDEN_EXE_SIZE=$($pin.goldenRuntimeSizeBytes)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RUNTIME_APP_COMMIT=$($pin.runtimeApplicationCommit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RUNTIME_ENGINE_COMMIT=$($pin.runtimeEngineCommit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOURCE_GOLDEN_ARTIFACT_ID=$($pin.sourceGoldenArtifactId)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOURCE_GOLDEN_ZIP_SHA=$($pin.sourceGoldenArtifactZipSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download exact tested installer artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "arsas-tested-installer-promotion"
+          $zip = Join-Path $root "tested-installer-artifact.zip"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $artifactUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:INSTALLER_ARTIFACT_ID/zip"
+          Invoke-WebRequest -Uri $artifactUrl -Headers $headers -OutFile $zip -MaximumRedirection 5
+
+          $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($zipSha -ne $env:INSTALLER_ARTIFACT_ZIP_SHA) {
+            throw "Tested installer artifact ZIP hash mismatch."
+          }
+
+          $extract = Join-Path $root "extracted"
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $files = @(Get-ChildItem $extract -File -Recurse)
+          $names = @($files | ForEach-Object Name | Sort-Object)
+          $expectedNames = @($env:INSTALLER_EVIDENCE_NAME, $env:INSTALLER_NAME) | Sort-Object
+          if (($names -join "|") -ne ($expectedNames -join "|")) {
+            throw "Tested installer artifact inventory mismatch: $($names -join ', ')."
+          }
+
+          $setup = Join-Path $extract $env:INSTALLER_NAME
+          $evidencePath = Join-Path $extract $env:INSTALLER_EVIDENCE_NAME
+          $setupSha = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          $setupSize = (Get-Item $setup).Length
+          $evidenceSha = (Get-FileHash $evidencePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($setupSha -ne $env:INSTALLER_SHA -or [string]$setupSize -ne [string]$env:INSTALLER_SIZE) {
+            throw "Tested installer binary mismatch."
+          }
+          if ($evidenceSha -ne $env:INSTALLER_EVIDENCE_SHA) {
+            throw "Tested installer evidence hash mismatch."
+          }
+
+          $evidence = Get-Content $evidencePath -Raw | ConvertFrom-Json
+          if ($evidence.schemaVersion -ne 1 -or
+              $evidence.product -ne "ARSAS" -or
+              $evidence.releaseTag -ne $env:RELEASE_TAG -or
+              $evidence.installerVersion -ne $env:RELEASE_VERSION -or
+              [bool]$evidence.runtimeRebuilt -or
+              [string]$evidence.sourceArtifact.id -ne $env:SOURCE_GOLDEN_ARTIFACT_ID -or
+              $evidence.sourceArtifact.zipSha256 -ne $env:SOURCE_GOLDEN_ZIP_SHA -or
+              $evidence.runtime.applicationCommit -ne $env:RUNTIME_APP_COMMIT -or
+              $evidence.runtime.engineCommit -ne $env:RUNTIME_ENGINE_COMMIT -or
+              $evidence.runtime.portableSha256 -ne $env:GOLDEN_EXE_SHA -or
+              $evidence.runtime.installedSha256 -ne $env:GOLDEN_EXE_SHA -or
+              $evidence.installer.sha256 -ne $env:INSTALLER_SHA) {
+            throw "Tested installer evidence does not match pinned golden authority."
+          }
+
+          "PROMOTION_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "TESTED_SETUP_PATH=$setup" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Confirm current public portable remains golden
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:PROMOTION_ROOT "public-before"
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir $dir --pattern "ARSAS-Windows-x64-Portable.exe" --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download current public portable." }
+
+          $portable = Join-Path $dir "ARSAS-Windows-x64-Portable.exe"
+          $sha = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item $portable).Length
+          if ($sha -ne $env:GOLDEN_EXE_SHA -or [string]$size -ne [string]$env:GOLDEN_EXE_SIZE) {
+            throw "Current public portable is no longer the golden runtime."
+          }
+          "PUBLIC_PORTABLE_PATH=$portable" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Reinstall tested candidate and prove golden payload again
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "arsas-tested-installer-installed"
+          if (Test-Path $installRoot) { Remove-Item $installRoot -Recurse -Force }
+
+          $install = Start-Process -FilePath $env:TESTED_SETUP_PATH -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/CURRENTUSER",
+            "/DIR=$installRoot"
+          ) -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Tested installer failed." }
+
+          $installed = Join-Path $installRoot "ARSAS.exe"
+          if (-not (Test-Path $installed -PathType Leaf)) { throw "Installed runtime missing." }
+          $installedSha = (Get-FileHash $installed -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($installedSha -ne $env:GOLDEN_EXE_SHA) {
+            throw "Installed runtime differs from golden runtime."
+          }
+
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "arsas-tested-installer-bundle-cache"
+          $smoke = Start-Process -FilePath $installed -ArgumentList @("--portable-smoke-test") -Wait -PassThru
+          if ($smoke.ExitCode -ne 0) { throw "Installed golden runtime smoke test failed." }
+
+          $uninstaller = Join-Path $installRoot "unins000.exe"
+          if (-not (Test-Path $uninstaller -PathType Leaf)) { throw "Uninstaller missing." }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed." }
+
+      - name: Stage exact release metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $publish = Join-Path $env:PROMOTION_ROOT "publish"
+          New-Item -ItemType Directory -Path $publish -Force | Out-Null
+          Copy-Item $env:TESTED_SETUP_PATH (Join-Path $publish $env:INSTALLER_NAME) -Force
+
+          $checksums = Join-Path $publish "ARSAS-Windows-x64-SHA256SUMS.txt"
+          @(
+            "$env:INSTALLER_SHA  $env:INSTALLER_NAME",
+            "$env:GOLDEN_EXE_SHA  ARSAS-Windows-x64-Portable.exe"
+          ) | Set-Content $checksums -Encoding ascii
+
+          $release = (gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.draft -or $release.prerelease) {
+            throw "Stable release metadata could not be resolved."
+          }
+
+          $provenancePath = Join-Path $publish "ARSAS-Windows-x64-PROVENANCE.json"
+          $provenance = [ordered]@{
+            schemaVersion = 4
+            product = "ARSAS"
+            releaseTag = $env:RELEASE_TAG
+            releaseRecovery = $true
+            runtimeRebuilt = $false
+            runtimeAuthority = [ordered]@{
+              applicationCommit = $env:RUNTIME_APP_COMMIT
+              engineCommit = $env:RUNTIME_ENGINE_COMMIT
+              portableSha256 = $env:GOLDEN_EXE_SHA
+              portableSizeBytes = [int64]$env:GOLDEN_EXE_SIZE
+              sourceArtifactId = [int64]$env:SOURCE_GOLDEN_ARTIFACT_ID
+              sourceArtifactZipSha256 = $env:SOURCE_GOLDEN_ZIP_SHA
+            }
+            installer = [ordered]@{
+              name = $env:INSTALLER_NAME
+              sha256 = $env:INSTALLER_SHA
+              sizeBytes = [int64]$env:INSTALLER_SIZE
+              testedArtifactId = [int64]$env:INSTALLER_ARTIFACT_ID
+              testedArtifactName = $env:INSTALLER_ARTIFACT_NAME
+              testedArtifactZipSha256 = $env:INSTALLER_ARTIFACT_ZIP_SHA
+              installedRuntimeSha256 = $env:GOLDEN_EXE_SHA
+              runtimeRebuilt = $false
+            }
+            releaseTagReferenceObservedAtPublication = [string]$release.target_commitish
+            note = "The installer packages the exact field-verified golden single-file runtime without rebuilding it. Git tag history was not rewritten."
+          }
+          $provenance | ConvertTo-Json -Depth 8 | Set-Content $provenancePath -Encoding utf8
+
+          $notesPath = Join-Path $publish "release-notes.md"
+          @(
+            "# ARSAS 1.6.38",
+            "",
+            "This stable release uses the exact field-verified golden runtime for both Portable and Installer delivery.",
+            "",
+            "## Runtime authority",
+            "",
+            "- Portable Windows x64 is the exact retained golden runtime.",
+            "- The Windows installer packages that same runtime without rebuilding application code.",
+            "- Silent-install verification proves installed ARSAS.exe is byte-identical to the golden portable runtime.",
+            "- The installer and portable hashes are published together in SHA-256 checksums.",
+            "- Git tag history was not rewritten.",
+            "",
+            "## Included assets",
+            "",
+            "- ARSAS-Windows-x64-Setup.exe",
+            "- ARSAS-Windows-x64-Portable.exe",
+            "- ARSAS-Windows-x64-SHA256SUMS.txt",
+            "- ARSAS-Windows-x64-PROVENANCE.json"
+          ) | Set-Content $notesPath -Encoding utf8
+
+          "PUBLISH_DIR=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CHECKSUM_PATH=$checksums" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "PROVENANCE_PATH=$provenancePath" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_NOTES_PATH=$notesPath" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish exact tested installer to v1.6.38
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(
+            (Join-Path $env:PUBLISH_DIR $env:INSTALLER_NAME),
+            $env:CHECKSUM_PATH,
+            $env:PROVENANCE_PATH
+          )
+          gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Failed to publish exact tested installer assets." }
+
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --title "ARSAS 1.6.38" --notes-file $env:RELEASE_NOTES_PATH --draft=false --prerelease=false --latest
+          if ($LASTEXITCODE -ne 0) { throw "Failed to update recovered stable release metadata." }
+
+      - name: Verify public installer and portable bytes after publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $verify = Join-Path $env:PROMOTION_ROOT "public-after"
+          New-Item -ItemType Directory -Path $verify -Force | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir $verify --pattern "ARSAS-Windows-x64-Setup.exe" --pattern "ARSAS-Windows-x64-Portable.exe" --pattern "ARSAS-Windows-x64-SHA256SUMS.txt" --pattern "ARSAS-Windows-x64-PROVENANCE.json" --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download published release assets." }
+
+          $setup = Join-Path $verify "ARSAS-Windows-x64-Setup.exe"
+          $portable = Join-Path $verify "ARSAS-Windows-x64-Portable.exe"
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:INSTALLER_SHA) {
+            throw "Published installer SHA-256 mismatch."
+          }
+          if ((Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:GOLDEN_EXE_SHA) {
+            throw "Published portable SHA-256 mismatch."
+          }
+
+          $release = (gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG") | ConvertFrom-Json
+          $names = @($release.assets | ForEach-Object name | Sort-Object)
+          $expected = @("ARSAS-Windows-x64-Portable.exe", "ARSAS-Windows-x64-PROVENANCE.json", "ARSAS-Windows-x64-SHA256SUMS.txt", "ARSAS-Windows-x64-Setup.exe") | Sort-Object
+          if (($names -join "|") -ne ($expected -join "|")) {
+            throw "Published release inventory mismatch: $($names -join ', ')."
+          }
+          $latest = (gh api "repos/$env:GITHUB_REPOSITORY/releases/latest" --jq ".tag_name").Trim()
+          if ($latest -ne $env:RELEASE_TAG) { throw "v1.6.38 is no longer latest stable release." }
+
+          "VERIFIED_PUBLIC_CHECKSUMS=$(Join-Path $verify 'ARSAS-Windows-x64-SHA256SUMS.txt')" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "VERIFIED_PUBLIC_PROVENANCE=$(Join-Path $verify 'ARSAS-Windows-x64-PROVENANCE.json')" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Synchronize repository release evidence after successful publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = (gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG") | ConvertFrom-Json
+          $checksumsSize = (Get-Item $env:VERIFIED_PUBLIC_CHECKSUMS).Length
+          $provenanceSize = (Get-Item $env:VERIFIED_PUBLIC_PROVENANCE).Length
+          $provenanceSha = (Get-FileHash $env:VERIFIED_PUBLIC_PROVENANCE -Algorithm SHA256).Hash.ToLowerInvariant()
+          $stableRoot = "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download"
+
+          $record = [ordered]@{
+            version = $env:RELEASE_VERSION
+            tag = $env:RELEASE_TAG
+            channel = "stable"
+            publishedAtUtc = [string]$release.published_at
+            sourceCommit = [string]$release.target_commitish
+            releaseRecovery = $true
+            runtimeAuthority = [ordered]@{
+              applicationCommit = $env:RUNTIME_APP_COMMIT
+              engineCommit = $env:RUNTIME_ENGINE_COMMIT
+              runtimeRebuilt = $false
+            }
+            engine = [ordered]@{
+              repository = "masarray/ARIEC61850"
+              commit = $env:RUNTIME_ENGINE_COMMIT
+            }
+            installer = [ordered]@{
+              name = "ARSAS-Windows-x64-Setup.exe"
+              url = "$stableRoot/ARSAS-Windows-x64-Setup.exe"
+              sha256 = $env:INSTALLER_SHA
+              sizeBytes = [int64]$env:INSTALLER_SIZE
+            }
+            portable = [ordered]@{
+              name = "ARSAS-Windows-x64-Portable.exe"
+              url = "$stableRoot/ARSAS-Windows-x64-Portable.exe"
+              sha256 = $env:GOLDEN_EXE_SHA
+              sizeBytes = [int64]$env:GOLDEN_EXE_SIZE
+            }
+            checksums = [ordered]@{
+              name = "ARSAS-Windows-x64-SHA256SUMS.txt"
+              url = "$stableRoot/ARSAS-Windows-x64-SHA256SUMS.txt"
+              sizeBytes = $checksumsSize
+            }
+            provenance = [ordered]@{
+              name = "ARSAS-Windows-x64-PROVENANCE.json"
+              url = "$stableRoot/ARSAS-Windows-x64-PROVENANCE.json"
+              sha256 = $provenanceSha
+              sizeBytes = $provenanceSize
+            }
+            codeSigning = [ordered]@{
+              status = "unsigned"
+              platform = "Authenticode"
+              detail = "The current public Windows installer and portable binary do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible."
+            }
+          }
+          $record | ConvertTo-Json -Depth 10 | Set-Content ".\.release\published.json" -Encoding utf8
+
+          $landing = [ordered]@{
+            schemaVersion = 1
+            product = "ARSAS"
+            version = $env:RELEASE_VERSION
+            tag = $env:RELEASE_TAG
+            channel = "stable"
+            publishedAtUtc = [string]$release.published_at
+            sourceCommit = [string]$release.target_commitish
+            releaseUrl = [string]$release.html_url
+            releaseRecovery = $true
+            runtimeAuthority = $record.runtimeAuthority
+            installer = $record.installer
+            portable = $record.portable
+            checksums = $record.checksums
+            codeSigning = $record.codeSigning
+          }
+          $landing | ConvertTo-Json -Depth 10 | Set-Content ".\landing\latest.json" -Encoding utf8
+
+          $notes = Get-Content ".\landing\release-notes.json" -Raw | ConvertFrom-Json
+          $notes.summary = "ARSAS 1.6.38 is the recovered stable Windows release using the exact field-verified golden runtime for both Portable and Installer delivery."
+          $notes.summaryId = "ARSAS 1.6.38 adalah stable release Windows hasil recovery yang memakai runtime golden terverifikasi di lapangan untuk Portable dan Installer."
+          $notes.highlights = @(
+            "Polish WPF typography with embedded Inter and smooth rendering",
+            "convergence(discovery/scl): reference-parity discovery and usable SCL",
+            "fix(ci): restore R10 post-merge release gates",
+            "Portable and Installer now use the same exact field-verified golden runtime; installer packaging does not rebuild application code."
+          )
+          $notes.highlightsId = @(
+            "Perubahan rilis: Polish WPF typography with embedded Inter and smooth rendering",
+            "Perubahan rilis: convergence(discovery/scl): reference-parity discovery and usable SCL",
+            "Perubahan rilis: fix(ci): restore R10 post-merge release gates",
+            "Portable dan Installer sekarang memakai runtime golden terverifikasi yang sama persis; packaging installer tidak membangun ulang kode aplikasi."
+          )
+          $notes.improvements = @(
+            "Stable release identity, package size and SHA-256 are sourced from verified release evidence.",
+            "The installer packages the exact tested portable runtime and verifies the installed ARSAS.exe SHA-256 before publication.",
+            "Installer and portable download URLs use the latest stable GitHub Release authority.",
+            "Release publication remains fail-closed if any tested artifact, installed runtime or public download hash diverges."
+          )
+          $notes.improvementsId = @(
+            "Identitas stable release, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi.",
+            "Installer memaketkan runtime portable yang sudah diuji persis dan memverifikasi SHA-256 ARSAS.exe hasil instalasi sebelum publikasi.",
+            "URL installer dan portable memakai authority GitHub Release stabil terbaru.",
+            "Publikasi release bersifat fail-closed jika artifact teruji, runtime hasil instalasi, atau hash download publik berbeda."
+          )
+          $notes.codeSigning.status = "unsigned"
+          $notes.codeSigning.label = "Not Authenticode-signed"
+          $notes.codeSigning.labelId = "Belum ditandatangani dengan Authenticode"
+          $notes.codeSigning.detail = "The current public Windows installer and portable binary do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible."
+          $notes.codeSigning.detailId = "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Peringatan SmartScreen masih mungkin muncul."
+          $notes.screenshot.caption = "ARSAS 1.6.38 stable Windows release with the recovered field-verified golden runtime in both Installer and Portable delivery."
+          $notes.screenshot.captionId = "Stable release Windows ARSAS 1.6.38 dengan runtime golden hasil recovery yang terverifikasi di lapangan pada Installer dan Portable."
+          $notes | ConvertTo-Json -Depth 10 | Set-Content ".\landing\release-notes.json" -Encoding utf8
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .release/published.json landing/latest.json landing/release-notes.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "docs: synchronize recovered ARSAS 1.6.38 installer evidence"
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) { throw "Failed to publish synchronized installer release evidence." }
+          }
+
+      - name: Upload installer promotion audit bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-v1.6.38-golden-installer-promotion-evidence
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            .release/recover-v1.6.38-golden-installer.json
+            ${{ env.PROMOTION_ROOT }}/extracted/ARSAS-v1.6.38-golden-installer-evidence.json
+            ${{ env.PUBLISH_DIR }}/ARSAS-Windows-x64-SHA256SUMS.txt
+            ${{ env.PUBLISH_DIR }}/ARSAS-Windows-x64-PROVENANCE.json
+            ${{ env.PUBLISH_DIR }}/release-notes.md
