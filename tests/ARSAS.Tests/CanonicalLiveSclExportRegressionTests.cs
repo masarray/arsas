@@ -168,7 +168,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
     [Fact]
     public void P0StructuralDiscoveryFreeze_LocksR9WireAndModelBudget()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
 
         Assert.Contains("\"contractId\": \"P0-R9-STRUCTURAL\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"status\": \"implemented-and-r9-physically-proven\"", contract, StringComparison.Ordinal);
@@ -195,7 +195,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
     [Fact]
     public void P1ProjectionOrderRepair_LocksPhysicalRootCauseAndExactStrategy()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
 
         Assert.Contains("\"contractId\": \"P1-CF-DO-SCOPED\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"status\": \"physically-proven-r10\"", contract, StringComparison.Ordinal);
@@ -213,7 +213,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
     [Fact]
     public void P2CaseSensitiveValuePipeline_LocksLosslessExactPathIdentity()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
         var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
 
         Assert.Contains("\"contractId\": \"P2-CASE-EXACT-VALUES\"", contract, StringComparison.Ordinal);
@@ -239,7 +239,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
     [Fact]
     public void R9PhysicalReuse_LocksWorkingPathAndKeepsSemanticProjectionGapOpen()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
 
         Assert.Contains("\"confirmedMmsRequests\": 323", contract, StringComparison.Ordinal);
         Assert.Contains("\"getVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
@@ -271,7 +271,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
     [Fact]
     public void R10PhysicalReuse_ClosesP1P2AndLocksReportBackedRoundTrip()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
 
         Assert.Contains("\"arsasR10\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"initialTargets\": 709", contract, StringComparison.Ordinal);
@@ -343,18 +343,18 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var buildTargets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
         Assert.Contains("SCL Interoperability R7 Build", buildTargets, StringComparison.Ordinal);
         Assert.Contains("EnableSmartDiscoveryCaptureRoute", buildTargets, StringComparison.Ordinal);
-        Assert.Contains("evidence/iedscout-convergence-target.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("IEDScout convergence source contract regressed", workflow, StringComparison.Ordinal);
+        Assert.Contains("evidence/interoperability-convergence-target.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("Interoperability convergence source contract regressed", workflow, StringComparison.Ordinal);
         Assert.Contains("TryResolveStandardSubDataObjectCdc", workflow, StringComparison.Ordinal);
         Assert.Contains("IsEdition2ServiceTrackingCdc", workflow, StringComparison.Ordinal);
         Assert.Contains("TryBuildSupplementalGetNameListSnapshotAsync", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void IedScoutConvergenceContract_PhysicalRetestPassedAndMergeReady()
+    public void InteroperabilityConvergenceContract_PhysicalRetestPassedAndMergeReady()
     {
-        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
-        var documentation = File.ReadAllText(FindRepoFile("docs/IEDSCOUT_CONVERGENCE.md"));
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-convergence-target.json"));
+        var documentation = File.ReadAllText(FindRepoFile("docs/INTEROPERABILITY_CONVERGENCE.md"));
 
         Assert.Contains("\"status\": \"physical-retest-passed-merge-ready\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
@@ -374,24 +374,23 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("Merged proven baseline", documentation, StringComparison.Ordinal);
         Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
 
-        var guard = File.ReadAllText(FindRepoFile(".github/workflows/iedscout-convergence-guard.yml"));
-        Assert.Contains("name: IEDScout Convergence Guard", guard, StringComparison.Ordinal);
-        Assert.Contains("name: iedscout-convergence-contract", guard, StringComparison.Ordinal);
+        var guard = File.ReadAllText(FindRepoFile(".github/workflows/interoperability-convergence-guard.yml"));
+        Assert.Contains("name: Interoperability Convergence Guard", guard, StringComparison.Ordinal);
+        Assert.Contains("name: interoperability-convergence-contract", guard, StringComparison.Ordinal);
         Assert.Contains("Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance", guard, StringComparison.Ordinal);
-        Assert.Contains("P0 structural discovery freeze regressed away from the accepted IEDScout convergence path", guard, StringComparison.Ordinal);
+        Assert.Contains("P0 structural discovery freeze regressed away from the accepted Interoperability convergence path", guard, StringComparison.Ordinal);
         Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SourceClean_GuardsApprovedFirstPartyConvergenceAuthorities()
+    public void SourceClean_ScansConvergenceAuthoritiesWithoutIdentifierExemptions()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-source-clean.ps1"));
 
-        Assert.Contains("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
-        Assert.Contains("docs/IEDSCOUT_CONVERGENCE.md", source, StringComparison.Ordinal);
-        Assert.Contains("evidence/iedscout-convergence-target.json", source, StringComparison.Ordinal);
-        Assert.Contains("CanonicalLiveSclExportRegressionTests.cs", source, StringComparison.Ordinal);
-        Assert.Contains("identifierScanExempt", source, StringComparison.Ordinal);
+        Assert.Contains("$ForbiddenIdentifierHashes", source, StringComparison.Ordinal);
+        Assert.Contains("Test-ContainsForbiddenIdentifier", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("identifierScanExempt", source, StringComparison.Ordinal);
     }
 
 
