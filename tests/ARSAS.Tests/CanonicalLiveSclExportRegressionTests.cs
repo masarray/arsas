@@ -198,7 +198,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
 
         Assert.Contains("\"contractId\": \"P1-CF-DO-SCOPED\"", contract, StringComparison.Ordinal);
-        Assert.Contains("\"status\": \"implemented-source-pending-physical-retest\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"physically-proven-r10\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"projectionErrors\": 46", contract, StringComparison.Ordinal);
         Assert.Contains("\"affectedFcRoots\": 18", contract, StringComparison.Ordinal);
         Assert.Contains("\"affectedSclLeaves\": 191", contract, StringComparison.Ordinal);
@@ -269,6 +269,30 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void R10PhysicalReuse_ClosesP1P2AndLocksReportBackedRoundTrip()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
+
+        Assert.Contains("\"arsasR10\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialTargets\": 709", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRootTargets\": 525", contract, StringComparison.Ordinal);
+        Assert.Contains("\"doScopedTargets\": 184", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectedUniqueValues\": 4441", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialValueCache\": 4441", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialTargets\": 708", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRootTargets\": 524", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectedUniqueValues\": 4246", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialValueCache\": 4246", contract, StringComparison.Ordinal);
+        Assert.Contains("\"cacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectionErrors\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reportBackedRuntimePoints\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unresolvedRuntimePoints\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"actualInformationReportObserved\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"cyclicMmsProcessPolling\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"resolved-r10-physical\"", contract, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void R7Workflow_BindsArtifactToExactSourceHeadAndReloadContracts()
     {
         var workflow = File.ReadAllText(
@@ -327,16 +351,16 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void IedScoutConvergenceContract_IsSingleActiveAuthorityAndRequiresPhysicalRetest()
+    public void IedScoutConvergenceContract_PhysicalRetestPassedAndMergeReady()
     {
         var contract = File.ReadAllText(FindRepoFile("evidence/iedscout-convergence-target.json"));
         var documentation = File.ReadAllText(FindRepoFile("docs/IEDSCOUT_CONVERGENCE.md"));
 
-        Assert.Contains("\"status\": \"physical-retest-required\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"physical-retest-passed-merge-ready\"", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
         Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
-        Assert.Contains("9935d6902d786cc69b299260fe36b835944d5e81", contract, StringComparison.Ordinal);
+        Assert.Contains("648124097621046f5f127ceb1cf853fea54db730", contract, StringComparison.Ordinal);
         Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
@@ -344,13 +368,16 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("\"physicalReconnectRequired\": true", contract, StringComparison.Ordinal);
         Assert.Contains("\"productionPromoted\": false", contract, StringComparison.Ordinal);
         Assert.Contains("\"mergeAllowedBeforePhysicalRetest\": false", contract, StringComparison.Ordinal);
-        Assert.Contains("Only this stack is active for this target", documentation, StringComparison.Ordinal);
+        Assert.Contains("\"mergeAllowedAfterPhysicalRetest\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalRetestRequired\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalRetestPassed\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("Merged proven baseline", documentation, StringComparison.Ordinal);
         Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
 
         var guard = File.ReadAllText(FindRepoFile(".github/workflows/iedscout-convergence-guard.yml"));
         Assert.Contains("name: IEDScout Convergence Guard", guard, StringComparison.Ordinal);
         Assert.Contains("name: iedscout-convergence-contract", guard, StringComparison.Ordinal);
-        Assert.Contains("Active stack must remain ARIEC61850 #134 -> #135 -> ARSAS #324", guard, StringComparison.Ordinal);
+        Assert.Contains("Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance", guard, StringComparison.Ordinal);
         Assert.Contains("P0 structural discovery freeze regressed away from the accepted IEDScout convergence path", guard, StringComparison.Ordinal);
         Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
     }
@@ -374,7 +401,11 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
+            "\"commit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            lockFile,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);

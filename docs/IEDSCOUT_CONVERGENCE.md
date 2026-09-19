@@ -2,216 +2,159 @@
 
 ## Product target
 
-ARSAS has one active IEC 61850 convergence target:
+ARSAS targets IEDScout-equivalent IEC 61850 engineering semantics with lower wire cost where possible:
 
-1. **Discovery parity:** one accepted MMS association, structure-first bounded discovery, no supplemental legacy browse, no recursive per-leaf GVA storm, and physical performance comparable to IEDScout on the same relay.
-2. **Canonical model correctness:** exact Logical Node identity, correct DO/SDO hierarchy, Functional Constraint ownership from evidence, complete standard semantic authority where proven, and no model deletion used as a safety mechanism.
-3. **Saved SCL usability:** full-model IID/ICD must reopen in ARSAS, rebuild the exact accepted association plan, reconnect to the physical relay, and remain usable for bounded initial reads and static reporting.
-
-The machine-readable authority is `evidence/iedscout-convergence-target.json`.
-
-Current R8 model-repair engine authority: `9935d6902d786cc69b299260fe36b835944d5e81`.
-
-## Active stacked PRs
-
-Only this stack is active for this target:
-
-- ARIEC61850 PR #134 — discovery/performance authority.
-- ARIEC61850 PR #135 — canonical model, association evidence, semantic SCL and schema authority, stacked on #134.
-- ARSAS PR #324 — exact consumer integration and physical-evidence build.
-
-No new discovery/SCL work should branch from older trial PRs. Old PRs remain provenance only unless explicitly revalidated and restacked onto the active authority.
-
-
-## P0 — structural discovery freeze
-
-P0 is complete at source/CI level and is anchored to the physical R9 AA1E1F06R4 result.
-
-Runtime contract ID: `P0-R9-STRUCTURAL`.
-
-The frozen ARSAS discovery path is:
-
-- one accepted MMS association;
-- one association-scoped single-flight owner;
-- exclusive application MMS gate while the discovery owner is active;
-- bounded directory discovery through `DiscoverSmartSingleFlightAsync`;
-- coverage-aware LN/root type probing through `ProbeSmartAsync`;
-- maximum discovery chains 8, or 4 when the peer's negotiated calling window is unknown;
-- bounded report metadata and DataSet-directory enrichment only;
-- no eager initial FC-root value snapshot;
-- no supplemental legacy directory browse;
-- no second full GetNameList sweep;
-- no recursive per-leaf GVA expansion;
-- no speculative engineering-unit/sibling/reflection scan on the critical path.
-
-The physical R9 AA1E1F06R4 reference remains 1 association, 323 confirmed MMS requests, 138 GetNameList, 119 GetVariableAccessAttributes, 2 GetNamedVariableListAttributes and 64 Reads, while yielding the accepted 32 LD / 119 LN / 860 top-level DO / 906 DO+SDO / 4925 scalar-leaf model. IEDScout's same-relay reference remains the upper comparison envelope at 417 confirmed requests, 119 GVA and 156 Reads.
-
-Those counts are physical acceptance evidence for AA1E1F06R4, not constants that ARSAS forces onto unrelated IEDs. The source contract instead freezes the discovery algorithm and bounded policy. Future instance-value work must stay in explicit Save SCL or trusted-SCL reconnect phases.
-
-P1+ semantic/SCL work may change canonical interpretation and export, but it must not add discovery-critical-path MMS traffic or weaken this contract.
-
-
-## P1 — trusted-SCL CF projection-order repair
-
-P1 is implemented in source and remains pending physical retest.
-
-The R9 PCAP and the exact R9 Edition 2 IID reproduce the field symptom deterministically: the old positional projector produces exactly **46 errors affecting 191 SCL leaves**, all under **CF**, across **18 FC roots**. The IID contains no `count=` array declarations, so arrays are not the root cause.
-
-The root cause is representational: SCL `LNodeType` contains one global DataObject order, while MMS exposes a separate DataObject declaration order inside each Functional Constraint structure. For several TCTR, TVTR, MMXU, MSQI, MMTR, RSYN and MHAI nodes, the CF order on wire differs from the SCL DO order. Positional FC-root projection can therefore either fail on leaf-count differences or, worse, silently attach a same-shaped value to the wrong DataObject.
-
-P1 removes that ambiguity without changing P0 discovery:
-
-- multi-DO CF groups are planned as exact structured `LN$CF$DO` Read targets;
-- each DO response is projected only into that named SCL DataObject;
-- the existing Read batching limit remains in force, so this does not become per-leaf traffic;
-- non-CF FC-root hydration remains unchanged;
-- no extra GetVariableAccessAttributes request is added;
-- no second association, discovery pass or supplemental browse is added.
-
-Physical acceptance for P1 is `projectionErrors=0`, no cross-DO value swap, the same accepted association, and no change to the frozen P0 structural-discovery PCAP signature.
-
-
-## P2 — lossless case-sensitive value pipeline
-
-P2 is implemented in source and remains pending physical retest.
-
-R9 Edition 2 projected 4250 scalar values but retained only 4239 in the ARSAS trusted-SCL cache: an exact loss of 11. Edition 1 projected and retained 4055/4055. The remaining consumer-side cause was explicit: `_trustedSclInitialValues` used `StringComparer.OrdinalIgnoreCase`, so legal IEC 61850 paths that differ only by case could overwrite one another.
-
-P2 makes instance-value identity exact-case across the full path:
-
-- LN-root TypeSpecification member resolution compares component names with `StringComparison.Ordinal`;
-- canonical initial-value dedup uses `StringComparer.Ordinal`;
-- ARSAS trusted-SCL initial-value cache uses `StringComparer.Ordinal`;
-- canonical SCL DataObject targeting is case-sensitive;
-- DA/BDA/SDO path targeting remains case-sensitive;
-- reference normalization may change MMS separators (`# IEDScout Convergence Contract
-
-## Product target
-
-ARSAS has one active IEC 61850 convergence target:
-
-1. **Discovery parity:** one accepted MMS association, structure-first bounded discovery, no supplemental legacy browse, no recursive per-leaf GVA storm, and physical performance comparable to IEDScout on the same relay.
-2. **Canonical model correctness:** exact Logical Node identity, correct DO/SDO hierarchy, Functional Constraint ownership from evidence, complete standard semantic authority where proven, and no model deletion used as a safety mechanism.
-3. **Saved SCL usability:** full-model IID/ICD must reopen in ARSAS, rebuild the exact accepted association plan, reconnect to the physical relay, and remain usable for bounded initial reads and static reporting.
+1. one accepted MMS association and bounded structure-first discovery;
+2. a complete canonical model with exact LN/DO/SDO/DA/FC identity;
+3. Edition 2 IID / Edition 1 ICD that can be reopened by ARSAS, reconnect to the same relay, hydrate values without full discovery, and run configured static reporting.
 
 The machine-readable authority is `evidence/iedscout-convergence-target.json`.
 
-Current R8 model-repair engine authority: `9935d6902d786cc69b299260fe36b835944d5e81`.
+## Merged proven baseline
 
-## Active stacked PRs
+The physical R10 baseline was tested with:
 
-Only this stack is active for this target:
+- ARSAS `eb8eb13d491f9aa265205852b8a4bab07af440ff`;
+- ARIEC61850 tested head `9935d6902d786cc69b299260fe36b835944d5e81`;
+- ARIEC61850 merged-main commit `648124097621046f5f127ceb1cf853fea54db730`.
 
-- ARIEC61850 PR #134 — discovery/performance authority.
-- ARIEC61850 PR #135 — canonical model, association evidence, semantic SCL and schema authority, stacked on #134.
-- ARSAS PR #324 — exact consumer integration and physical-evidence build.
+The tested engine head and merged-main commit have the identical tree SHA
+`1cf7e08f333f24994625e8fe8416dbd0a16195b1`.
 
-No new discovery/SCL work should branch from older trial PRs. Old PRs remain provenance only unless explicitly revalidated and restacked onto the active authority.
+Merged engine provenance:
 
+- PR #134 → main merge `e6779ff74e5716af4fcfc3dc926dae0567b3cdb0`: Smart Discovery performance authority.
+- PR #135 → main merge `648124097621046f5f127ceb1cf853fea54db730`: canonical model, SCL interoperability, P1/P2 value pipeline.
+- ARSAS PR #324: consumer integration and physical R10 proof.
 
 ## P0 — structural discovery freeze
 
-P0 is complete at source/CI level and is anchored to the physical R9 AA1E1F06R4 result.
+Contract: `P0-R9-STRUCTURAL`.
 
-Runtime contract ID: `P0-R9-STRUCTURAL`.
+AA1E1F06R4 physical reference is locked at one association, 323 confirmed MMS
+requests, 138 GetNameList, 119 GetVariableAccessAttributes, 2
+GetNamedVariableListAttributes and 64 Reads, while preserving 32 LD / 119 LN /
+860 top-level DO / 906 DO+SDO / 4925 scalar leaves / 2 DataSets / 58 FCDA / 32
+logical ReportControls / 1 SettingControl.
 
-The frozen ARSAS discovery path is:
+The same-relay IEDScout comparison remains about 417 confirmed requests, 119 GVA
+and 156 Reads. ARSAS must not add traffic merely to imitate IEDScout.
 
-- one accepted MMS association;
-- one association-scoped single-flight owner;
-- exclusive application MMS gate while the discovery owner is active;
-- bounded directory discovery through `DiscoverSmartSingleFlightAsync`;
-- coverage-aware LN/root type probing through `ProbeSmartAsync`;
-- maximum discovery chains 8, or 4 when the peer's negotiated calling window is unknown;
-- bounded report metadata and DataSet-directory enrichment only;
-- no eager initial FC-root value snapshot;
-- no supplemental legacy directory browse;
-- no second full GetNameList sweep;
-- no recursive per-leaf GVA expansion;
-- no speculative engineering-unit/sibling/reflection scan on the critical path.
+Forbidden regressions include a second discovery association, legacy supplemental
+browse, a second full GetNameList sweep, recursive per-leaf GVA, and eager FC-root
+value hydration on the discovery critical path.
 
-The physical R9 AA1E1F06R4 reference remains 1 association, 323 confirmed MMS requests, 138 GetNameList, 119 GetVariableAccessAttributes, 2 GetNamedVariableListAttributes and 64 Reads, while yielding the accepted 32 LD / 119 LN / 860 top-level DO / 906 DO+SDO / 4925 scalar-leaf model. IEDScout's same-relay reference remains the upper comparison envelope at 417 confirmed requests, 119 GVA and 156 Reads.
+## P1 — CF projection-order repair: physically proven
 
-Those counts are physical acceptance evidence for AA1E1F06R4, not constants that ARSAS forces onto unrelated IEDs. The source contract instead freezes the discovery algorithm and bounded policy. Future instance-value work must stay in explicit Save SCL or trusted-SCL reconnect phases.
+Contract: `P1-CF-DO-SCOPED`.
 
-P1+ semantic/SCL work may change canonical interpretation and export, but it must not add discovery-critical-path MMS traffic or weaken this contract.
+R9 exposed 46 projection errors because SCL LNodeType DO order was incorrectly used
+as MMS CF-root child order. P1 reads multi-DO CF data through exact `LN$CF$DO`
+references and batches those structured reads.
 
+R10 physical reuse closes P1:
 
-## P1 — trusted-SCL CF projection-order repair
+- Ed2: 709 initial targets, 525 FC-root targets, 184 DO-scoped targets,
+  709/709 successful, 0 failed, `projectionErrors=0`.
+- Ed1: 708 initial targets, 524 FC-root targets, 184 DO-scoped targets,
+  708/708 successful, 0 failed, `projectionErrors=0`.
 
-P1 is implemented in source and remains pending physical retest.
+No extra discovery GVA or second association was introduced.
 
-The R9 PCAP and the exact R9 Edition 2 IID reproduce the field symptom deterministically: the old positional projector produces exactly **46 errors affecting 191 SCL leaves**, all under **CF**, across **18 FC roots**. The IID contains no `count=` array declarations, so arrays are not the root cause.
+## P2 — exact-case value pipeline: physically proven
 
-The root cause is representational: SCL `LNodeType` contains one global DataObject order, while MMS exposes a separate DataObject declaration order inside each Functional Constraint structure. For several TCTR, TVTR, MMXU, MSQI, MMTR, RSYN and MHAI nodes, the CF order on wire differs from the SCL DO order. Positional FC-root projection can therefore either fail on leaf-count differences or, worse, silently attach a same-shaped value to the wrong DataObject.
+Contract: `P2-CASE-EXACT-VALUES`.
 
-P1 removes that ambiguity without changing P0 discovery:
+R9 Ed2 lost 11 projected values because a consumer cache used case-insensitive
+identity. P2 uses exact-case identity through TypeSpecification mapping, initial
+projection, trusted-SCL caching, canonical evidence and SCL instance-value targeting.
 
-- multi-DO CF groups are planned as exact structured `LN$CF$DO` Read targets;
-- each DO response is projected only into that named SCL DataObject;
-- the existing Read batching limit remains in force, so this does not become per-leaf traffic;
-- non-CF FC-root hydration remains unchanged;
-- no extra GetVariableAccessAttributes request is added;
-- no second association, discovery pass or supplemental browse is added.
+R10 physical reuse closes P2:
 
-Physical acceptance for P1 is `projectionErrors=0`, no cross-DO value swap, the same accepted association, and no change to the frozen P0 structural-discovery PCAP signature.
+- Ed2: `projectedUniqueValues=4441`, `initialValueCache=4441`, `cacheLoss=0`.
+- Ed1: `projectedUniqueValues=4246`, `initialValueCache=4246`, `cacheLoss=0`.
 
- -> `.`) but never folds case.
+## R10 round-trip/reporting acceptance
 
-The trusted-SCL diagnostic now reports `projectedUniqueValues`, `initialValueCache`, and `cacheLoss`. Any nonzero cache loss makes the reuse result semantically partial instead of silently successful.
+Both generated editions reopen as trusted SCL and reconnect without full discovery:
 
-Physical P2 acceptance is `cacheLoss=0` for both Edition 2 and Edition 1, with LTRK `t` and `T` demonstrably present as separate values. P2 must not add any discovery GVA, association, or P0 wire traffic.
+- expected/observed/matched MMS domains: 32/32/32;
+- DataSets: 2, members: 58, missing members: 0;
+- configured report plans: Digital BRCB 36 members + Analog URCB 22 members;
+- report-covered runtime points: 58;
+- final unresolved runtime points: 0;
+- cyclic MMS process polling: 0;
+- actual InformationReport traffic observed on both editions.
+
+The early UI field `Primary unresolved=2` is not an operational loss: the exact
+static DataSet schema resolves all 58 runtime points before reporting starts.
+
+## Save-time instance values
+
+R10 physically proves bounded Save SCL enrichment while fast discovery stays
+unchanged:
+
+- canonical instance evidence: 3854 leaves;
+- Ed2 exported `Val`: 3202;
+- Ed1 exported `Val`: 3106.
+
+IEDScout's golden file has about 1529 `Val` elements. A larger count is not
+automatically better; the remaining task is semantic path/value comparison, not
+count chasing.
+
+## RCB lock
+
+The accepted representation remains:
+
+- 34 runtime RCB objects → 32 logical SCL ReportControls;
+- `Services/ConfReportControl max=34`;
+- Buffer/Digital and Unbuffer/Analog remain the two configured report authorities;
+- preallocated ADD slots without DataSet never receive an invented `datSet`.
+
+## Next improvements — do not disturb the proven wire/reuse path
+
+### 1. Template interning
+
+R10 Ed2 is semantically correct but verbose:
+
+- ARSAS: 119 LNodeType / 906 DOType / 752 DAType / about 731 KB;
+- IEDScout reference: about 38 / 60 / 17 / about 247 KB.
+
+Next work may intern only templates with identical ordered semantic fingerprints.
+Expanded model counts, FC ownership, values, DataSets/RCBs and round-trip behavior
+must remain unchanged.
+
+### 2. Reuse one save-enrichment snapshot across Ed2 and Ed1
+
+When Ed2 and Ed1 are saved in the same unchanged live association/model generation,
+both currently derive the same 3854 instance-evidence leaves. A later optimization
+may reuse that bounded snapshot across serializers, but never across reconnect,
+model-generation change or explicit refresh.
+
+### 3. Semantic Val diff
+
+Compare ARSAS vs IEDScout by exact
+`LD/LN/DO/SDO/DA/BDA/FC/bType/value` path, not raw XML position and not total
+`Val` count.
 
 ## Regression signatures that are forbidden
 
 A build is rejected if it restores any of these patterns:
 
-- public discovery routes to legacy `DiscoverAsync` instead of the smart field-test route;
-- a second supplemental MMS association is opened for discovery;
-- recursive per-leaf GetVariableAccessAttributes expansion replaces structure-first probing;
-- thousands of speculative sibling/engineering-unit Reads return to the discovery critical path;
-- prefixed LN names are split from the first uppercase run rather than the numeric instance boundary;
-- WYE/DEL/SEQ nested Data Objects are flattened into Data Attributes;
-- descendant CF attributes inherit MX from a measurement parent;
-- standard TCTR/TVTR/LTIM/EEName/MltLev objects are discarded because heuristic CDC inference is incomplete;
-- Edition 2 LTRK tracking CDCs are emitted into Edition 1 SCL;
-- case-distinct MMS/SCL member names such as LTRK `t` and `T` are collapsed by case-insensitive indexing or export trees;
-- runtime RCB siblings are exported as separate logical ReportControl objects solely because mutable RCB settings differ;
-- canonical save silently succeeds without reopen + association-plan validation.
+- legacy `DiscoverAsync` as the public discovery route;
+- a second supplemental discovery association;
+- recursive per-leaf GVA expansion;
+- speculative thousands of Reads on the discovery path;
+- cross-DO positional CF projection;
+- case-insensitive IEC 61850 member/value identity;
+- WYE/DEL/SEQ SDO flattening;
+- Edition 2 tracking CDCs in Edition 1;
+- invented DataSet bindings for unassigned RCB slots;
+- silent canonical-save success without reopen/association validation.
 
-## Physical acceptance
+## Promotion state
 
-CI can prove source contracts, deterministic semantics, round-trip parsing, build integrity and portable smoke. It cannot prove IEDScout parity.
+The R10 physical retest has passed and merge is allowed. Production promotion is
+still a separate release decision.
 
-Production promotion remains blocked until AA1E1F06R4 is retested with the exact candidate artifact and produces:
-
-- new PCAP;
-- new Edition 2 IID;
-- new Edition 1 ICD;
-- diagnostic report;
-- same-relay comparison against IEDScout.
-
-The field result, not test count alone, decides whether the convergence target has been reached.
-
-
-## R9 physical reuse lock — AA1E1F06R4
-
-The R9 artifact (ARSAS `a89d6ef...`, engine `3e12fb9...`) established a split acceptance result that must not be flattened into a single pass/fail label.
-
-**Locked as working and non-regressible**
-
-- Smart Discovery remains one association and structure-first: 323 confirmed MMS requests, 138 GetNameList, 119 LN-root GVA, 2 GetNamedVariableListAttributes and 64 Reads.
-- Edition 2 structural export reached 32 LD / 119 LN / 860 top-level DO / 906 DO+SDO / 4925 scalar leaves / 2 DataSets / 58 FCDA / 32 logical ReportControls / 1 SettingControl.
-- Reopened Ed2 IID and Ed1 ICD both rebuilt the accepted association and matched 32/32 MMS domains.
-- All trusted-SCL initial FC-root Reads completed on both editions (Ed2 563/563; Ed1 562/562).
-- Both editions preserved 2 static DataSets and the two configured reporting plans (Digital BRCB + Analog URCB), resolved 58/58 runtime points with 0 unavailable points, disabled cyclic process polling, and received actual InformationReport traffic.
-
-**Still open and must not be marked converged**
-
-- Both editions still report exactly 46 initial FC projection errors. This is a semantic SCL/MMS shape problem, not a transport/association problem; target is zero.
-- Ed2 projected 4250 leaves but cached only 4239. The exact 11-leaf loss matches the previously isolated LTRK case-distinct `t` / `T` collapse. The source fix is present but remains pending physical retest.
-- R9 emitted 30 ADD preallocated URCB slots without a DataSet and with concrete runtime `...01` names. Never invent a DataSet. rptID-backed singleton slots must export as indexed logical ReportControl with `RptEnabled max=1`; unassigned indexed slots are warnings, not fatal missing-DataSet errors.
-- R9 exported zero instance `<Val>` elements. Save-time bounded enrichment is a separate explicit phase and must not reintroduce eager FC-root Reads into Smart Discovery.
-- Template deduplication remains secondary and must not trade away semantic correctness.
-
-Future SCL-assisted diagnostics must include representative projection-error details (root + mismatch) so the remaining 46 errors can be fixed from direct evidence rather than inferred from a summary count.
+The field result, not test count alone, decides interoperability acceptance.

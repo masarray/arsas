@@ -49,14 +49,14 @@ jobs:
           $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
           $target = Get-Content .\ARSAS\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
 
-          if ($target.status -ne 'physical-retest-required') {
+          if ($target.status -ne 'physical-retest-passed-merge-ready') {
             throw "Convergence status changed unexpectedly: $($target.status)"
           }
           if ([int]$target.activeStack.enginePerformance.pullRequest -ne 134 -or
               [int]$target.activeStack.engineModelAndScl.pullRequest -ne 135 -or
               [int]$target.activeStack.engineModelAndScl.basePullRequest -ne 134 -or
               [int]$target.activeStack.consumerIntegration.pullRequest -ne 324) {
-            throw 'Active stack must remain ARIEC61850 #134 -> #135 -> ARSAS #324.'
+            throw 'Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance.'
           }
           if ($lock.commit -ne $target.activeStack.engineModelAndScl.head -or
               [int]$lock.sourcePullRequest -ne 135) {
@@ -64,8 +64,10 @@ jobs:
           }
           if ([bool]$target.promotion.productionPromoted -or
               [bool]$target.promotion.mergeAllowedBeforePhysicalRetest -or
-              -not [bool]$target.promotion.physicalRetestRequired) {
-            throw 'Physical retest gate was weakened.'
+              [bool]$target.promotion.physicalRetestRequired -or
+              -not [bool]$target.promotion.mergeAllowedAfterPhysicalRetest -or
+              -not [bool]$target.promotion.physicalRetestPassed) {
+            throw 'R10 physical-retest/merge gate drifted.'
           }
           if ([int]$target.physicalReference.iedScoutCapture.associations -ne 1 -or
               [int]$target.physicalReference.iedScoutCapture.getVariableAccessAttributes -ne 119 -or
@@ -125,9 +127,22 @@ jobs:
             throw 'P0 AA1E1F06R4 discovery acceptance contract drifted.'
           }
 
+          $p1 = $target.p1ProjectionOrderRepair
+          if ($p1.contractId -ne 'P1-CF-DO-SCOPED' -or
+              $p1.status -ne 'physically-proven-r10' -or
+              [int]$p1.physicalR10Outcome.edition2.projectionErrors -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition1.projectionErrors -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition2.failedReads -ne 0 -or
+              [int]$p1.physicalR10Outcome.edition1.failedReads -ne 0 -or
+              [int]$p1.physicalR10Outcome.reportBackedRuntimePoints -ne 58 -or
+              [int]$p1.physicalR10Outcome.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$p1.physicalR10Outcome.actualInformationReportObserved) {
+            throw 'P1 physical projection-order proof regressed.'
+          }
+
           $p2 = $target.p2CaseSensitiveValuePipeline
           if ($p2.contractId -ne 'P2-CASE-EXACT-VALUES' -or
-              $p2.status -ne 'implemented-source-pending-physical-retest' -or
+              $p2.status -ne 'physically-proven-r10' -or
               -not [bool]$p2.preservesP0StructuralDiscovery -or
               -not [bool]$p2.preservesP1CfScopedHydration -or
               [int]$p2.physicalR9Evidence.observedCacheLoss -ne 11 -or
@@ -136,10 +151,42 @@ jobs:
               -not [bool]$p2.expectedPhysicalOutcome.ltrkLowercaseTAndUppercaseTRemainDistinct -or
               -not [bool]$p2.expectedPhysicalOutcome.noAdditionalDiscoveryGva -or
               -not [bool]$p2.expectedPhysicalOutcome.sameAssociation -or
+              [int]$p2.physicalR10Outcome.edition2.cacheLoss -ne 0 -or
+              [int]$p2.physicalR10Outcome.edition1.cacheLoss -ne 0 -or
+              [int]$p2.physicalR10Outcome.edition2.projectedUniqueValues -ne [int]$p2.physicalR10Outcome.edition2.initialValueCache -or
+              [int]$p2.physicalR10Outcome.edition1.projectedUniqueValues -ne [int]$p2.physicalR10Outcome.edition1.initialValueCache -or
               $p2.sourceInvariants.trustedSclValueCacheComparer -ne 'StringComparer.Ordinal' -or
               $p2.sourceInvariants.typeSpecificationMemberComparison -ne 'StringComparison.Ordinal' -or
               $p2.sourceInvariants.sclDataObjectInstanceTargetComparison -ne 'StringComparison.Ordinal') {
             throw 'P2 exact-case value pipeline contract was weakened.'
+          }
+
+          $r10 = $target.physicalEvidence.arsasR10
+          if ($r10.testedArtifact.appHead -ne 'eb8eb13d491f9aa265205852b8a4bab07af440ff' -or
+              $r10.testedArtifact.engineTestedHead -ne '9935d6902d786cc69b299260fe36b835944d5e81' -or
+              $r10.testedArtifact.engineMergedMain -ne '648124097621046f5f127ceb1cf853fea54db730' -or
+              [int]$r10.discovery.associations -ne 1 -or
+              [int]$r10.discovery.confirmedMmsRequests -ne 323 -or
+              [int]$r10.discovery.getVariableAccessAttributes -ne 119 -or
+              [int]$r10.reuseEdition2.matchedDomains -ne 32 -or
+              [int]$r10.reuseEdition2.initialTargets -ne 709 -or
+              [int]$r10.reuseEdition2.successfulReads -ne 709 -or
+              [int]$r10.reuseEdition2.failedReads -ne 0 -or
+              [int]$r10.reuseEdition2.projectionErrors -ne 0 -or
+              [int]$r10.reuseEdition2.cacheLoss -ne 0 -or
+              [int]$r10.reuseEdition2.reportBackedRuntimePoints -ne 58 -or
+              [int]$r10.reuseEdition2.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r10.reuseEdition2.actualInformationReportObserved -or
+              [int]$r10.reuseEdition1.matchedDomains -ne 32 -or
+              [int]$r10.reuseEdition1.initialTargets -ne 708 -or
+              [int]$r10.reuseEdition1.successfulReads -ne 708 -or
+              [int]$r10.reuseEdition1.failedReads -ne 0 -or
+              [int]$r10.reuseEdition1.projectionErrors -ne 0 -or
+              [int]$r10.reuseEdition1.cacheLoss -ne 0 -or
+              [int]$r10.reuseEdition1.reportBackedRuntimePoints -ne 58 -or
+              [int]$r10.reuseEdition1.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$r10.reuseEdition1.actualInformationReportObserved) {
+            throw 'R10 physical SCL reuse acceptance evidence regressed.'
           }
 
           $r9 = $target.physicalEvidence.arsasR9
@@ -172,9 +219,13 @@ jobs:
           if ([int]$target.openGaps.trustedSclProjectionParity.targetProjectionErrors -ne 0 -or
               [int]$target.openGaps.trustedSclProjectionParity.observedEdition2 -ne [int]$r9.reuseEdition2.projectionErrors -or
               [int]$target.openGaps.trustedSclProjectionParity.observedEdition1 -ne [int]$r9.reuseEdition1.projectionErrors -or
+              [int]$target.openGaps.trustedSclProjectionParity.r10ObservedEdition2 -ne 0 -or
+              [int]$target.openGaps.trustedSclProjectionParity.r10ObservedEdition1 -ne 0 -or
               [int]$target.openGaps.edition2CaseDistinctInitialValueCache.observedProjectedMinusCached -ne 11 -or
-              [int]$target.openGaps.preallocatedAddReportControls.observedWithoutDataSet -ne 30) {
-            throw 'Known R9 semantic gaps were silently weakened or detached from physical evidence.'
+              [int]$target.openGaps.edition2CaseDistinctInitialValueCache.r10ObservedProjectedMinusCached -ne 0 -or
+              [int]$target.openGaps.preallocatedAddReportControls.observedWithoutDataSet -ne 30 -or
+              [int]$target.openGaps.preallocatedAddReportControls.r10FatalMissingDatasetErrors -ne 0) {
+            throw 'R9 history or R10 resolved semantic evidence drifted.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
