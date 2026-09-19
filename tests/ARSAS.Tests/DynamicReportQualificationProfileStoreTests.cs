@@ -154,7 +154,7 @@ public sealed class DynamicReportQualificationProfileStoreTests : IDisposable
         {
             StableIdentityKey = "ied:station-a:q0",
             ModelFingerprint = "sha256:model-001",
-            Model = "SIPROTEC-Q0",
+            Model = "GENERIC_IED-Q0",
             FirmwareRevision = "1.2.3",
             ProfileRevision = "cfg-42"
         };
