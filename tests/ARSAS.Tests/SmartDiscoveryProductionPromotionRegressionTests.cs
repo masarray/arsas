@@ -64,17 +64,23 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
     }
 
     [Fact]
-    public void P05g_DedicatedMainlineGateRequiresReadyForReviewAndRealAuthorities()
+    public void R10_DedicatedMainlineGateRequiresPhysicalAuthorityAndExactMergedEngine()
     {
         var workflow = File.ReadAllText(FindRepoFile(".github/workflows/smart-discovery-mainline-readiness.yml"));
 
         Assert.Contains("Smart Discovery Mainline Readiness", workflow, StringComparison.Ordinal);
-        Assert.Contains("smart-discovery-repeat-run.authority.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("smart-discovery-production-promotion-authority.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("READY_FOR_REVIEW", workflow, StringComparison.Ordinal);
-        Assert.Contains("ProductionSwitchEnabled", workflow, StringComparison.Ordinal);
-        Assert.Contains("-NoFailExit", workflow, StringComparison.Ordinal);
-        Assert.Contains("if-no-files-found: error", workflow, StringComparison.Ordinal);
+        Assert.Contains("physical-retest-passed-merge-ready", workflow, StringComparison.Ordinal);
+        Assert.Contains("physicalRetestPassed", workflow, StringComparison.Ordinal);
+        Assert.Contains("projectionErrors", workflow, StringComparison.Ordinal);
+        Assert.Contains("cacheLoss", workflow, StringComparison.Ordinal);
+        Assert.Contains("actualInformationReportObserved", workflow, StringComparison.Ordinal);
+        Assert.Contains("engineModelAndScl.mainMerge", workflow, StringComparison.Ordinal);
+        Assert.Contains("physicalTestedCommit", workflow, StringComparison.Ordinal);
+        Assert.Contains("mergedMainTree", workflow, StringComparison.Ordinal);
+        Assert.Contains("Checkout exact merged ARIEC61850 authority", workflow, StringComparison.Ordinal);
+        Assert.Contains("Build and test ARSAS candidate", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("perf/smart-ied-discovery", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("EvidenceEngineBaselineCommit", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
