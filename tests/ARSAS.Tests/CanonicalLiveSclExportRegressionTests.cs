@@ -16,6 +16,25 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
+    public void SaveSclEnrichment_ReusesOnlyShortLivedSameModelSnapshot()
+    {
+        var canonical = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.CanonicalModel.cs"));
+        var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.cs"));
+
+        Assert.Contains("SaveSclEnrichmentReuseWindow = TimeSpan.FromSeconds(15)", canonical, StringComparison.Ordinal);
+        Assert.Contains("ReferenceEquals(_saveSclEnrichmentModel, _liveModel)", canonical, StringComparison.Ordinal);
+        Assert.Contains("now - _saveSclEnrichmentCapturedAtUtc <= SaveSclEnrichmentReuseWindow", canonical, StringComparison.Ordinal);
+        Assert.Contains("LastSaveSclEnrichmentReused = true", canonical, StringComparison.Ordinal);
+        Assert.Contains("_saveSclEnrichmentModel = _liveModel", canonical, StringComparison.Ordinal);
+        Assert.Contains("_saveSclEnrichmentCapturedAtUtc = DateTimeOffset.UtcNow", canonical, StringComparison.Ordinal);
+        Assert.Contains("_saveSclEnrichmentModel = null", canonical, StringComparison.Ordinal);
+        Assert.Contains("_saveSclEnrichmentCapturedAtUtc = DateTimeOffset.MinValue", canonical, StringComparison.Ordinal);
+        Assert.Contains("ClearCanonicalModel();", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("ClearCanonicalModel();", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan()
     {
         var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
