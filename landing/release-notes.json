@@ -4,40 +4,44 @@
   "version": "1.6.38",
   "title": "ARSAS 1.6.38 stable release",
   "titleId": "Stable release ARSAS 1.6.38",
-  "summary": "ARSAS 1.6.38 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "summary": "ARSAS 1.6.38 is the latest verified stable Windows release, carrying the physically verified R10 discovery/SCL convergence baseline and synchronized package evidence.",
+  "summaryId": "ARSAS 1.6.38 adalah stable release Windows terverifikasi terbaru, membawa baseline convergence discovery/SCL R10 yang sudah tervalidasi fisik beserta evidence paket yang tersinkron.",
   "highlights": [
-    "Polish WPF typography with embedded Inter and smooth rendering",
-    "convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
-    "fix(ci): restore R10 post-merge release gates",
-    "The verified Windows installer is published as the stable ARSAS 1.6.38 package."
+    "Physically verified R10 discovery and trusted-SCL round trip for Edition 2 IID and Edition 1 ICD.",
+    "32/32 MMS domains reconcile on both editions, with every planned initial Read successful.",
+    "Both editions reach projectionErrors=0 and cacheLoss=0 while preserving exact-case IEC 61850 value identity.",
+    "All 58 static DataSet members resolve to 58/58 report-backed runtime points with zero final unresolved points.",
+    "Actual InformationReport traffic is observed and cyclic MMS process polling remains zero on the accepted path.",
+    "The verified Windows installer and portable package are published with SHA-256 checksums, SPDX SBOM, provenance, and attestations."
   ],
   "highlightsId": [
-    "Perubahan rilis: Polish WPF typography with embedded Inter and smooth rendering",
-    "Perubahan rilis: convergence(discovery/scl): IEDScout-parity discovery and usable SCL",
-    "Perubahan rilis: fix(ci): restore R10 post-merge release gates",
-    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.38."
+    "Round trip discovery dan trusted-SCL R10 untuk Edition 2 IID dan Edition 1 ICD sudah tervalidasi fisik.",
+    "Kedua edisi merekonsiliasi 32/32 domain MMS dan seluruh planned initial Read berhasil.",
+    "Kedua edisi mencapai projectionErrors=0 dan cacheLoss=0 sambil mempertahankan exact-case identity untuk value IEC 61850.",
+    "Seluruh 58 static DataSet member terpetakan menjadi 58/58 runtime point berbasis report dengan final unresolved point=0.",
+    "Traffic InformationReport aktual terobservasi dan cyclic MMS process polling tetap 0 pada jalur acceptance.",
+    "Installer Windows dan portable package terverifikasi dipublikasikan bersama SHA-256, SPDX SBOM, provenance, dan attestation."
   ],
   "improvements": [
     "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
-    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
-    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
-    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+    "The physical-tested engine head and merged engine authority resolve to the identical source tree.",
+    "Mainline and post-merge CI enforce the R10 physical acceptance contract before publication.",
+    "Public release metadata and website download targets are synchronized from the tagged stable GitHub Release."
   ],
   "improvementsId": [
     "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
-    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
-    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
-    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+    "Physical-tested engine head dan merged engine authority mengarah ke source tree yang identik.",
+    "CI mainline dan post-merge menegakkan physical acceptance contract R10 sebelum publikasi.",
+    "Metadata release publik dan target download website disinkronkan dari stable GitHub Release bertag."
   ],
   "knownLimitations": [
-    "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
+    "Physical device validation remains necessary for implementation-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
     "Windows x64 is the only packaged desktop platform in this stable release.",
     "The public binaries are not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
     "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
   ],
   "knownLimitationsId": [
-    "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
+    "Validasi perangkat fisik tetap diperlukan untuk value yang implementation-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
     "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
     "Binary publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
     "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
