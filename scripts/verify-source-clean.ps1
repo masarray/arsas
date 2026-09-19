@@ -63,6 +63,7 @@ $ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string
     ".github/workflows/iedscout-convergence-guard.yml",
     ".github/workflows/scl-interoperability-r7.yml",
     ".github/workflows/smart-discovery-post-merge-production.yml",
+    ".github/workflows/smart-discovery-mainline-readiness.yml",
     "docs/IEDSCOUT_CONVERGENCE.md",
     "evidence/iedscout-convergence-target.json",
     "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
