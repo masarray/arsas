@@ -6,84 +6,75 @@ on:
 
 jobs:
   mainline-readiness:
-    name: Require physical promotion before mainline review
+    name: Require R10 physical authority before mainline review
     runs-on: windows-latest
     steps:
-      - name: Checkout ARSAS full history
-        shell: powershell
-        run: |
-          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
-          git clone --quiet --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
-          $arsasHead = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
-          "ARSAS_HEAD=$arsasHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "P0-5g mainline ARSAS head: $arsasHead"
+      - name: Checkout ARSAS candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Checkout ARIEC61850 PR 134 head
+      - name: Verify R10 physical convergence authority
         shell: powershell
         run: |
-          git clone --quiet --branch perf/smart-ied-discovery https://github.com/masarray/ARIEC61850.git ARIEC61850
-          $engineHead = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
-          "ENGINE_HEAD=$engineHead" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "P0-5g mainline engine head: $engineHead"
+          $target = Get-Content .\evidence\iedscout-convergence-target.json -Raw | ConvertFrom-Json
+          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+
+          if ($target.status -ne 'physical-retest-passed-merge-ready' -or
+              -not [bool]$target.promotion.physicalRetestPassed -or
+              [bool]$target.promotion.physicalRetestRequired -or
+              -not [bool]$target.promotion.mergeAllowedAfterPhysicalRetest) {
+            throw 'R10 physical convergence authority is not in the accepted state.'
+          }
+
+          $r10 = $target.physicalEvidence.arsasR10
+          foreach ($edition in @($r10.reuseEdition2, $r10.reuseEdition1)) {
+            if ([int]$edition.failedReads -ne 0 -or
+                [int]$edition.projectionErrors -ne 0 -or
+                [int]$edition.cacheLoss -ne 0 -or
+                [int]$edition.reportBackedRuntimePoints -ne 58 -or
+                [int]$edition.unresolvedRuntimePoints -ne 0 -or
+                -not [bool]$edition.actualInformationReportObserved) {
+              throw 'R10 trusted-SCL reuse proof regressed.'
+            }
+          }
+
+          if ($lock.commit -ne $target.activeStack.engineModelAndScl.mainMerge -or
+              $lock.commit -ne $r10.testedArtifact.engineMergedMain -or
+              $lock.physicalTestedCommit -ne $r10.testedArtifact.engineTestedHead -or
+              $lock.mergedMainTree -ne $r10.testedArtifact.engineTree) {
+            throw 'ARSAS engine lock no longer matches the R10 physical authority.'
+          }
+
+          "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact merged ARIEC61850 authority
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ..\ARIEC61850
+          git -C ..\ARIEC61850 fetch --quiet --depth 1 origin $env:ENGINE_COMMIT
+          git -C ..\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
+          $actual = (git -C ..\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:ENGINE_COMMIT) {
+            throw "R10 engine authority mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+          }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Validate exact engine head
+      - name: Validate and test merged engine authority
         shell: powershell
         run: |
-          .\ARIEC61850\scripts\verify-source-clean.ps1
-          dotnet restore .\ARIEC61850\ARIEC61850.sln
-          dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
-          dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
+          dotnet restore ..\ARIEC61850\ARIEC61850.sln
+          dotnet build ..\ARIEC61850\ARIEC61850.sln -c Release --no-restore
+          dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
 
-      - name: Require READY_FOR_REVIEW promotion state
+      - name: Build and test ARSAS candidate
         shell: powershell
         run: |
-          $root = '.\ArIED61850Tester'
-          $physical = "$root\evidence\smart-discovery-repeat-run.authority.json"
-          $promotion = "$root\evidence\smart-discovery-production-promotion-authority.json"
-          $physicalArg = if (Test-Path $physical -PathType Leaf) { $physical } else { '' }
-          $promotionArg = if (Test-Path $promotion -PathType Leaf) { $promotion } else { '' }
-          $output = "$root\TestResults\P0-5G-mainline-readiness.json"
-          New-Item -ItemType Directory -Force "$root\TestResults" | Out-Null
-
-          & "$root\scripts\verify-smart-discovery-production-readiness.ps1" `
-            -TargetPath "$root\evidence\smart-discovery-production-promotion-target.json" `
-            -EngineLockPath "$root\engines\ARIEC61850.lock.json" `
-            -PromotionPropsPath "$root\evidence\SmartDiscoveryPromotion.props" `
-            -ArsasRepositoryPath $root `
-            -EngineRepositoryPath '.\ARIEC61850' `
-            -ArsasHeadCommit $env:ARSAS_HEAD `
-            -EngineHeadCommit $env:ENGINE_HEAD `
-            -EngineHeadCiConclusion success `
-            -PhysicalAuthorityPath $physicalArg `
-            -PromotionAuthorityPath $promotionArg `
-            -OutputJson $output `
-            -NoFailExit
-
-          $result = Get-Content $output -Raw | ConvertFrom-Json
-          if ($result.Verdict -ne 'READY_FOR_REVIEW') {
-            throw "MAINLINE BLOCKED: readiness verdict is '$($result.Verdict)': $(@($result.Blockers) -join '; ')"
-          }
-          if (-not [bool]$result.ProductionSwitchEnabled) {
-            throw 'MAINLINE BLOCKED: production smart-discovery switch is not enabled.'
-          }
-
-      - name: Build and test promoted ARSAS path
-        shell: powershell
-        run: |
-          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
-          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
-          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
-
-      - name: Upload P0-5g mainline evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ARSAS-p0-5g-mainline-readiness
-          path: ArIED61850Tester\TestResults\P0-5G-mainline-readiness.json
-          if-no-files-found: error
-          retention-days: 14
+          dotnet restore .\ArIED61850Tester.sln
+          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
+          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
