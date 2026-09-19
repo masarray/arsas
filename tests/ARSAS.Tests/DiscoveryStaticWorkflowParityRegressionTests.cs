@@ -62,6 +62,24 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
     }
 
     [Fact]
+    public void StaticReporting_ReusesCompletedDiscoveryAuthority_WithoutRediscovery()
+    {
+        var source = Read("Services/NativeIec61850Client.cs");
+        var start = source.IndexOf(
+            "private async Task<ArMms.MmsDiscoveryResult?> EnsureDiscoveryForReportingAsync",
+            StringComparison.Ordinal);
+        var end = source.IndexOf(
+            "private async Task<IReadOnlyList<ArMms.MmsDataSetDirectoryResult>> ReadPlannedDataSetDirectoriesAsync",
+            start,
+            StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var reportingDiscovery = source[start..end];
+        Assert.Contains("if (_lastDiscovery != null)", reportingDiscovery, StringComparison.Ordinal);
+        Assert.Contains("return _lastDiscovery;", reportingDiscovery, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StaticReporting_UsesCanonicalMemberOrder_WithoutSecondDirectoryRead()
     {
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
