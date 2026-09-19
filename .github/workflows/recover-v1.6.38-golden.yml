@@ -221,9 +221,12 @@ jobs:
           }
           if names != expected:
               raise SystemExit(f"Unexpected release inventory: {sorted(names)}")
-          if value.get("isDraft") or value.get("isPrerelease") or not value.get("isLatest"):
-              raise SystemExit("Recovered release is not the active stable latest release")
+          if value.get("isDraft") or value.get("isPrerelease"):
+              raise SystemExit("Recovered release is unexpectedly draft or prerelease")
           PY
+
+          latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          test "$latest_tag" = "$TAG"
 
       - name: Preserve recovery audit bundle
         if: always()
