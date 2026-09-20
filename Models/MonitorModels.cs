@@ -645,6 +645,7 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         }
     }
     public string DisplayValue => Value;
+    public string ValueTypeToken => Iec61850ValueStatePresentation.TypeToken(IecDataType);
     public string ValueTone => Iec61850ValueStatePresentation.Classify(Value, IecDataType);
     public string ValueVisualKind => Iec61850ValueStatePresentation.ClassifyVisualKind(
         Value,
@@ -805,6 +806,7 @@ public sealed class Iec61850EventEntry
     public string ChangeText => $"{EdgeType} · {OldValue} → {NewValue}";
     public string EventValue => string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
     public string DisplayValue => EventValue;
+    public string ValueTypeToken => Iec61850ValueStatePresentation.TypeToken(IecDataType);
     public string ValueTone => Iec61850ValueStatePresentation.Classify(EventValue, IecDataType);
     public string ValueVisualKind => Iec61850ValueStatePresentation.ClassifyVisualKind(
         EventValue,
