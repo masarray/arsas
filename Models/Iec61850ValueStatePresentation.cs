@@ -106,25 +106,21 @@ public static class Iec61850ValueStatePresentation
                 return PositionClose;
         }
 
-        if (IsBooleanType(dataType) || LooksLikeBooleanPresentation(normalized))
+        // Explicit True/False presentation is already semantic evidence from the report
+        // formatter and remains safe even when discovery metadata is less specific.
+        if (normalized.StartsWith("true", StringComparison.Ordinal))
+            return BooleanTrue;
+        if (normalized.StartsWith("false", StringComparison.Ordinal))
+            return BooleanFalse;
+
+        // ON/OFF and bare 0/1 are ambiguous outside a proven Boolean/SPS type. Do not
+        // reclassify a generic Enum merely because its text happens to use those words.
+        if (IsBooleanType(dataType))
         {
-            if (normalized.StartsWith("true", StringComparison.Ordinal) ||
-                normalized is "on" or "active" or "asserted" or "energized" ||
-                normalized.Contains("[1]", StringComparison.Ordinal))
-            {
+            if (normalized is "on" or "active" or "asserted" or "energized" or "1" or "1.0")
                 return BooleanTrue;
-            }
 
-            if (normalized.StartsWith("false", StringComparison.Ordinal) ||
-                normalized is "off" or "inactive" or "deasserted" or "deenergized" ||
-                normalized.Contains("[0]", StringComparison.Ordinal))
-            {
-                return BooleanFalse;
-            }
-
-            if (normalized is "1" or "1.0")
-                return BooleanTrue;
-            if (normalized is "0" or "0.0")
+            if (normalized is "off" or "inactive" or "deasserted" or "deenergized" or "0" or "0.0")
                 return BooleanFalse;
         }
 
@@ -155,12 +151,6 @@ public static class Iec61850ValueStatePresentation
         return normalizedReference.Contains(".pos.stval", StringComparison.Ordinal) ||
                normalizedReference.EndsWith(".pos", StringComparison.Ordinal);
     }
-
-    private static bool LooksLikeBooleanPresentation(string normalized)
-        => normalized.StartsWith("true", StringComparison.Ordinal) ||
-           normalized.StartsWith("false", StringComparison.Ordinal) ||
-           normalized is "on" or "off" or "active" or "inactive" or
-               "asserted" or "deasserted" or "energized" or "deenergized";
 
     private static bool IsAnalogSemantic(string text, string? dataType, string? category)
     {
