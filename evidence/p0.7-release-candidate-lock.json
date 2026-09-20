@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "contractId": "P0.7-RELEASE-CANDIDATE-LOCK",
+  "status": "locked-good-baseline-scl-semantic-parity-open",
+  "acceptedDate": "2026-09-20",
+  "physicalReference": {
+    "relay": "AA1E1F06R4",
+    "consumerAcceptedHead": "0d0b9204d6637e3d62e2eee94000386ae43cd0e9",
+    "engineBaseline": "648124097621046f5f127ceb1cf853fea54db730",
+    "engineBaselineRole": "physical-proven R7/R10 acquisition and SCL-reuse baseline"
+  },
+  "acceptedRuntime": {
+    "staticMembers": 58,
+    "selectedLiveRows": 58,
+    "analogRows": 22,
+    "digitalRows": 36,
+    "reportBackedRows": 58,
+    "cyclicMmsProcessPolling": 0,
+    "actualInformationReportObserved": true,
+    "saveSclWhileMonitoring": true,
+    "savedSclReusable": true,
+    "reopenedSclLiveRows": 58
+  },
+  "acceptedPresentation": {
+    "structuredAnalogPhaseContext": true,
+    "metadataOnlyTypeBadges": true,
+    "dpcRuntimeType": "Dbpos",
+    "dpcBadge": "DP",
+    "spcRuntimeType": "Boolean",
+    "spcBadge": "B",
+    "booleanTrue": "True [1]",
+    "booleanFalse": "False [0]",
+    "positionOpen": "Open [01]",
+    "positionClose": "Close [10]",
+    "fatPreviewUsesLiveOperatorVocabulary": true,
+    "fatRawEvidenceRemainsImmutable": true
+  },
+  "acceptedStructuredAnalogMembers": [
+    "A.phsA",
+    "A.phsB",
+    "A.phsC",
+    "PPV.phsAB",
+    "PPV.phsBC",
+    "PPV.phsCA",
+    "ThdA.phsA",
+    "ThdA.phsB",
+    "ThdA.phsC",
+    "ThdPPV.phsAB",
+    "ThdPPV.phsBC",
+    "ThdPPV.phsCA"
+  ],
+  "nonRegressionRules": {
+    "doNotChangeSmartDiscoveryRequestShapeWithoutNewPhysicalProof": true,
+    "doNotReintroduceCyclicMmsProcessPollingForStaticDataSetRows": true,
+    "doNotReplaceConfiguredStaticRcbAuthorityWithDynamicDataSetWrites": true,
+    "doNotReduce58MemberRuntimeCoverage": true,
+    "doNotLoseStructuredAnalogPhaseContext": true,
+    "doNotInferTypeBadgesFromSignalNamesOrRenderedNumericShape": true,
+    "doNotStopOrReconnectMonitoringForSaveScl": true,
+    "doNotMutatePersistedFatEvidenceToAchievePresentationFormatting": true,
+    "sclSemanticFixesMustPreserveAllAcceptedRuntimeAndPresentationInvariants": true
+  },
+  "artifacts": {
+    "r7Candidate": {
+      "artifactId": 10599133416,
+      "archiveSha256": "a54aaf4e97764f2e796f095dec732428ac9117ab824e905ce5b26b8ec410da7c"
+    },
+    "fieldCandidate": {
+      "artifactId": 10599297927,
+      "archiveSha256": "1fa7886bd442c1da3fe0bb8ff875a0c3b5566ae06f674aa29a3f2e57f093b751"
+    },
+    "testEvidence": {
+      "artifactId": 10599263264,
+      "archiveSha256": "087a6772f0b5443eb035b9b4364918d0aff6547b924ce0851ea73f5da72901c8"
+    }
+  },
+  "sclSemanticParity": {
+    "status": "open-before-release",
+    "target": "Generated SCL must preserve the actual IED semantic model and converge with the trusted IEDScout SCL for semantically authoritative CDC/type information without changing the accepted acquisition baseline.",
+    "knownExample": {
+      "object": "CBClsCounter",
+      "currentProblem": "export/reload may classify the integer counter status as SPS/Boolean",
+      "expectedCdc": "INS",
+      "expectedTypeFamily": "integer",
+      "engineCandidatePullRequest": 139,
+      "engineCandidateHead": "9123c8aa1cc51a1e13c6750c0e1f8bee2a2de3b7",
+      "integrationRule": "Any integration of this engine semantic correction must rerun and preserve every P0.7 accepted runtime and presentation invariant."
+    }
+  },
+  "releaseRule": "Do not call the application release-ready while SCL semantic parity remains open. Continue SCL/CDC/type corrections from this locked baseline and reject any candidate that regresses the accepted runtime, report-only, Save-SCL, reuse, or presentation behavior."
+}
