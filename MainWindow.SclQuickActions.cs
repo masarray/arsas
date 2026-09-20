@@ -124,6 +124,18 @@ public partial class MainWindow
                     return;
             }
 
+            // Live discovery intentionally defers unit probes to keep the scan bounded.
+            // Resolve only the selected Static DataSet measurement owners now, before any
+            // RCB is armed, so engineering-unit reads cannot disturb active reporting.
+            if (device.SclWorkspace == null)
+            {
+                SetStatus($"{device.Name}: verifying engineering units for selected Static DataSet measurements…");
+                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                    device,
+                    _applicationCancellation.Token);
+                device.RefreshComputed();
+            }
+
             if (!device.IsMonitoring)
                 await StartDeviceMonitorAsync(device);
             return;
