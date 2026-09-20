@@ -1,24 +1,22 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.39",
-  "title": "ARSAS 1.6.39 stable release",
-  "titleId": "Stable release ARSAS 1.6.39",
-  "summary": "ARSAS 1.6.39 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.39 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "version": "1.6.40",
+  "title": "ARSAS 1.6.40 stable release",
+  "titleId": "Stable release ARSAS 1.6.40",
+  "summary": "ARSAS 1.6.40 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
+  "summaryId": "ARSAS 1.6.40 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
   "highlights": [
-    "recovery: restore exact v1.6.38 golden runtime artifact",
-    "recovery: hotfix release snapshot JSON field",
-    "recovery: provide token for tag provenance lookup",
-    "recovery: serialize observed release tag reference",
-    "recovery: build v1.6.38 installer from exact golden runtime"
+    "hotfix: make physical-proven Smart Discovery the only production build route",
+    "The verified Windows installer is published as the stable ARSAS 1.6.40 package.",
+    "The portable single EXE is published from the same verified stable release.",
+    "SHA-256 checksums, SPDX SBOM and release provenance are published alongside the Windows binaries."
   ],
   "highlightsId": [
-    "Perubahan rilis: recovery: restore exact v1.6.38 golden runtime artifact",
-    "Perubahan rilis: recovery: hotfix release snapshot JSON field",
-    "Perubahan rilis: recovery: provide token for tag provenance lookup",
-    "Perubahan rilis: recovery: serialize observed release tag reference",
-    "Perubahan rilis: recovery: build v1.6.38 installer from exact golden runtime"
+    "Perubahan rilis: hotfix: make physical-proven Smart Discovery the only production build route",
+    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.40.",
+    "Portable single EXE dipublikasikan dari stable release terverifikasi yang sama.",
+    "Checksum SHA-256, SPDX SBOM, dan provenance release dipublikasikan bersama binary Windows."
   ],
   "improvements": [
     "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
@@ -55,11 +53,11 @@
     "src": "assets/screenshots/arsas-live-values.webp",
     "width": 1507,
     "height": 893,
-    "alt": "ARSAS 1.6.39 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.39",
-    "caption": "ARSAS 1.6.39 stable Windows release with verified installer, portable package and release evidence.",
-    "captionId": "Stable release Windows ARSAS 1.6.39 dengan installer, portable package, dan release evidence yang terverifikasi."
+    "alt": "ARSAS 1.6.40 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.40",
+    "caption": "ARSAS 1.6.40 stable Windows release with verified installer, portable package and release evidence.",
+    "captionId": "Stable release Windows ARSAS 1.6.40 dengan installer, portable package, dan release evidence yang terverifikasi."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.39"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.40"
 }
