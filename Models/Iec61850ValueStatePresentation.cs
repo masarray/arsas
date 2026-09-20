@@ -37,9 +37,11 @@ public static class Iec61850ValueStatePresentation
         if (normalized.Contains("open", StringComparison.Ordinal) || HasStateCode(normalized, "01"))
             return Inactive;
 
-        if (normalized is "true" or "on" or "active" or "asserted" or "energized")
+        if (normalized.StartsWith("true", StringComparison.Ordinal) ||
+            normalized is "on" or "active" or "asserted" or "energized")
             return Active;
-        if (normalized is "false" or "off" or "inactive" or "deasserted" or "deenergized")
+        if (normalized.StartsWith("false", StringComparison.Ordinal) ||
+            normalized is "off" or "inactive" or "deasserted" or "deenergized")
             return Inactive;
 
         // Bare 0/1 can be an analog value, counter, set point, or enum. Only treat it
