@@ -34,10 +34,56 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal("Open [01]", snapshot.Rows[0].LiveValue);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
         Assert.NotEqual("—", snapshot.Rows[0].Value1TimestampText);
-        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.Equal("Close [10]", snapshot.Rows[0].Value2);
         Assert.NotEqual("—", snapshot.Rows[0].Value2TimestampText);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
         Assert.Equal("Evidence complete: 1 / 2 signals", snapshot.ProgressText);
+    }
+
+    [Fact]
+    public void Capture_RendersHistoricalBooleanEvidenceWithLiveOperatorVocabulary_WithoutMutatingRawEvidence()
+    {
+        var device = Device("dev-aa1e1f06r4", "AA1E1F06R4", "192.168.81.103");
+        var point = Point(
+            device.DeviceId,
+            device.Name,
+            "Remote",
+            "AA1E1F06R4ADD/GGIO1.SwRem.stVal",
+            "false");
+        point.IecDataType = "SPS";
+        point.Category = "Status";
+        device.Points.Add(point);
+
+        var cache = new NativeFatIedSessionCacheState();
+        NativeFatCanonicalEvidenceOverlay.Write(
+            cache,
+            point,
+            NativeFatEvidenceField.Value1,
+            "false");
+        NativeFatCanonicalEvidenceOverlay.Write(
+            cache,
+            point,
+            NativeFatEvidenceField.Value2,
+            "true");
+
+        var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
+
+        Assert.Equal("False [0]", snapshot.Rows[0].LiveValue);
+        Assert.Equal("False [0]", snapshot.Rows[0].Value1);
+        Assert.Equal("True [1]", snapshot.Rows[0].Value2);
+
+        Assert.Equal(
+            "false",
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(
+                cache,
+                point,
+                NativeFatEvidenceField.Value1));
+        Assert.Equal(
+            "true",
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(
+                cache,
+                point,
+                NativeFatEvidenceField.Value2));
     }
 
     [Fact]
@@ -74,7 +120,7 @@ public sealed class NativeFatP3PrintPreviewTests
         Assert.Equal(capturedValue2, snapshot.Rows[0].Value2);
         Assert.Equal(capturedValue2Timestamp, snapshot.Rows[0].Value2TimestampText);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
-        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.Equal("Close [10]", snapshot.Rows[0].Value2);
         Assert.Equal("PASS", snapshot.Rows[0].Result);
     }
 

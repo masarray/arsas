@@ -67,8 +67,12 @@ public static class Iec61850ValueFormatter
             return FormatOperatorDbpos(dbpos);
         }
 
-        if (TryNormalizeBoolean(normalizedValue, out var boolean))
+        if (TryNormalizeBoolean(normalizedValue, out var boolean) ||
+            (IsBooleanDataType(dataType) &&
+             TryNormalizeBooleanCode(normalizedValue, out boolean)))
+        {
             return boolean ? "True [1]" : "False [0]";
+        }
 
         return Format(normalizedValue, dataType, unit);
     }
@@ -99,6 +103,55 @@ public static class Iec61850ValueFormatter
                 return true;
             case string text when bool.TryParse(text.Trim(), out var parsed):
                 boolean = parsed;
+                return true;
+            default:
+                boolean = false;
+                return false;
+        }
+    }
+
+    private static bool IsBooleanDataType(string? dataType)
+    {
+        var normalized = (dataType ?? string.Empty)
+            .Trim()
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        return normalized is "BOOL" or "BOOLEAN" or "SPS" or "SPC" or "SINGLEPOINTSTATUS";
+    }
+
+    private static bool TryNormalizeBooleanCode(object? value, out bool boolean)
+    {
+        switch (value)
+        {
+            case byte b when b <= 1:
+                boolean = b == 1;
+                return true;
+            case sbyte b when b is 0 or 1:
+                boolean = b == 1;
+                return true;
+            case short s when s is 0 or 1:
+                boolean = s == 1;
+                return true;
+            case ushort s when s <= 1:
+                boolean = s == 1;
+                return true;
+            case int i when i is 0 or 1:
+                boolean = i == 1;
+                return true;
+            case uint i when i <= 1:
+                boolean = i == 1;
+                return true;
+            case long l when l is 0 or 1:
+                boolean = l == 1;
+                return true;
+            case ulong l when l <= 1:
+                boolean = l == 1;
+                return true;
+            case string text when text.Trim() is "0" or "1":
+                boolean = text.Trim() == "1";
                 return true;
             default:
                 boolean = false;

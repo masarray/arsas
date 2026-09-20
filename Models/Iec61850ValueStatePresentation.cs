@@ -82,10 +82,10 @@ public static class Iec61850ValueStatePresentation
             .Replace(" ", string.Empty, StringComparison.Ordinal)
             .ToUpperInvariant();
 
-        if (normalized is "DBPOS" or "DPC" or "DOUBLEPOINTSTATUS")
+        if (normalized is "DBPOS" or "DPC" or "DPS" or "DOUBLEPOINTSTATUS")
             return "DP";
 
-        if (normalized is "BOOL" or "BOOLEAN")
+        if (normalized is "BOOL" or "BOOLEAN" or "SPS" or "SPC" or "SINGLEPOINTSTATUS")
             return "B";
 
         if (normalized.StartsWith("FLOAT", StringComparison.Ordinal) ||

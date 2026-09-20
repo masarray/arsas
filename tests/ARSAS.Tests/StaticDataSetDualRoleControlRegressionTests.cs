@@ -1,4 +1,5 @@
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
@@ -135,6 +136,41 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
         Assert.True(runtimeCandidates > controlSelection);
         Assert.True(noRuntimeCandidate > controlSelection);
         Assert.Contains("selected.Add(control)", authority, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("DPC", "bit-string", "", "Dbpos")]
+    [InlineData("DPC", "Enum", "", "Dbpos")]
+    [InlineData("SPC", "bit-string", "", "Boolean")]
+    [InlineData("SPC", "Boolean", "", "Boolean")]
+    [InlineData("ENC", "integer", "", "Enum")]
+    [InlineData("INC", "integer", "", "integer")]
+    [InlineData("ISC", "", "", "Int32")]
+    public void StaticControlFeedback_UsesDeclaredCdcAsSemanticRuntimeType(
+        string cdc,
+        string mmsType,
+        string sclBType,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            Iec61850StaticControlStatusProjectionService.ResolveDeclaredFeedbackDataType(
+                cdc,
+                mmsType,
+                sclBType));
+    }
+
+    [Fact]
+    public void ExistingStaticFeedback_IsUpgradedToDeclaredCdcSemantics()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "Services/Iec61850StaticControlStatusProjectionService.cs"));
+
+        Assert.Contains("ApplyDeclaredFeedbackSemantics(", source, StringComparison.Ordinal);
+        Assert.Contains("existingFeedback", source, StringComparison.Ordinal);
+        Assert.Contains("\"DPC\" => \"Dbpos\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"SPC\" => \"Boolean\"", source, StringComparison.Ordinal);
+        Assert.Contains("CDC is declared IEC 61850 semantic metadata", source, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -135,7 +135,14 @@ public static class Iec61850StaticControlStatusProjectionService
                     LiteralEquals(signal.DisplayReference, memberReference) &&
                     LiteralEquals(signal.ObjectReference, exactFeedbackReference));
                 if (existingFeedback is not null)
+                {
+                    ApplyDeclaredFeedbackSemantics(
+                        existingFeedback,
+                        descriptor,
+                        membership,
+                        cdc);
                     continue;
+                }
 
                 var feedback = CreateRuntimeFeedback(
                     descriptor,
@@ -299,7 +306,7 @@ public static class Iec61850StaticControlStatusProjectionService
             ObjectReference = exactFeedbackReference,
             DisplayReference = memberReference,
             FunctionalConstraint = fc,
-            DataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown"),
+            DataType = ResolveDeclaredFeedbackDataType(cdc, descriptor.MmsType, descriptor.SclBType),
             Category = category,
             Confidence = "High",
             DataSetReference = membership.DataSetReference,
@@ -321,6 +328,56 @@ public static class Iec61850StaticControlStatusProjectionService
             DeviceTimestamp = "-"
         };
     }
+
+    private static void ApplyDeclaredFeedbackSemantics(
+        SignalDefinition signal,
+        Iec61850SignalDescriptor descriptor,
+        Iec61850SignalDataSetMembership membership,
+        string cdc)
+    {
+        var resolvedType = ResolveDeclaredFeedbackDataType(
+            cdc,
+            descriptor.MmsType,
+            descriptor.SclBType);
+        if (!resolvedType.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+            signal.DataType = resolvedType;
+
+        var fc = FirstNonEmpty(
+            descriptor.FunctionalConstraint,
+            membership.FunctionalConstraint).ToUpperInvariant();
+        signal.Category = ResolveFeedbackCategory(cdc, fc);
+    }
+
+    internal static string ResolveDeclaredFeedbackDataType(
+        string? cdc,
+        string? mmsType,
+        string? sclBType)
+    {
+        var declaredPrimitive = FirstNonEmpty(mmsType, sclBType);
+        var declaredCdc = (cdc ?? string.Empty).Trim().ToUpperInvariant();
+
+        // CDC is declared IEC 61850 semantic metadata, not a name/value heuristic.
+        // For control feedback it is stronger than a generic primitive wire label:
+        // DPC stVal is DBPOS and SPC stVal is Boolean regardless of whether MMS/SCL
+        // describes the enclosing payload as bit-string/enum/structure.
+        return declaredCdc switch
+        {
+            "DPC" => "Dbpos",
+            "SPC" => "Boolean",
+            "ENC" => "Enum",
+            "INC" or "ISC" when string.IsNullOrWhiteSpace(declaredPrimitive) ||
+                                declaredPrimitive.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+                => "Int32",
+            _ => FirstNonEmpty(declaredPrimitive, "Unknown")
+        };
+    }
+
+    private static string ResolveFeedbackCategory(string cdc, string functionalConstraint)
+        => cdc.Equals("DPC", StringComparison.OrdinalIgnoreCase)
+            ? "Position"
+            : functionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)
+                ? "Measurement"
+                : "Status";
 
     private static Iec61850StaticControlStatusProjectionResult EmptyResult()
         => new(Array.Empty<SignalDefinition>(), 0);

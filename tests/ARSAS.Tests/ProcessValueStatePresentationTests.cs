@@ -68,9 +68,13 @@ public sealed class ProcessValueStatePresentationTests
     [InlineData("INT32U", "U")]
     [InlineData("UINT16", "U")]
     [InlineData("BOOLEAN", "B")]
+    [InlineData("SPS", "B")]
+    [InlineData("SPC", "B")]
+    [InlineData("SinglePointStatus", "B")]
     [InlineData("Enum", "E")]
     [InlineData("Dbpos", "DP")]
     [InlineData("DPC", "DP")]
+    [InlineData("DPS", "DP")]
     [InlineData("Counter", "")]
     [InlineData("Unknown", "")]
     public void TypeToken_UsesDeclaredMetadataOnly(string dataType, string expected)

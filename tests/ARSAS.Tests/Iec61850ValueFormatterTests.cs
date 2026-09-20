@@ -22,6 +22,25 @@ public sealed class Iec61850ValueFormatterTests
     }
 
     [Theory]
+    [InlineData("0", "False [0]")]
+    [InlineData("1", "True [1]")]
+    [InlineData(0, "False [0]")]
+    [InlineData(1, "True [1]")]
+    public void FormatReportProcessValue_UsesDeclaredBooleanTypeForNumericState(
+        object value,
+        string expected)
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            value,
+            "SPS",
+            string.Empty,
+            "Status",
+            "IEDLD/GGIO1.Ind1.stVal");
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Theory]
     [InlineData("off", "Open [01]")]
     [InlineData("on", "Close [10]")]
     [InlineData("intermediate-state", "Intermediate [00]")]
