@@ -90,6 +90,7 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         Assert.Contains("allowInferredFallback: false", client, StringComparison.Ordinal);
         Assert.Contains(".units.SIUnit", client, StringComparison.Ordinal);
         Assert.Contains(".units.multiplier", client, StringComparison.Ordinal);
+        Assert.Contains("floating-point", client, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
