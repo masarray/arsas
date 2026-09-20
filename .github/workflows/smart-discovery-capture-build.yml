@@ -70,7 +70,10 @@ jobs:
               $patcher -notmatch '__P0_5C_CONNECT_RESET__' -or
               $patcher -notmatch '__P0_5C_DISPOSE_RESET__' -or
               $patcher -notmatch '_lastDiscovery\.Snapshot\.DomainVariables' -or
-              $targets -notmatch 'EnableSmartDiscoveryCaptureRoute') {
+              $targets -notmatch 'VerifyPhysicalProvenSmartDiscoveryRoute' -or
+              $targets -notmatch '\-VerifyOnly' -or
+              $targets -match 'GITHUB_WORKFLOW' -or
+              $targets -match 'SmartDiscoveryProductionPromoted') {
             throw 'P0-5c association-scoped enrichment single-flight, authority publication, or lifecycle invalidation is incomplete.'
           }
           if ($helper -match 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, cancellationToken\)' -or

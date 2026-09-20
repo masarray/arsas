@@ -191,8 +191,10 @@ jobs:
               $capture -match 'InitialFcReadPlanner\.FromSclModel' -or
               $capture -match 'ExecuteInitialFcReadPlanSmartAsync' -or
               $capture -notmatch 'initialFcRoots=deferred' -or
-              $buildTargets -notmatch 'SCL Interoperability R7 Build' -or
-              $buildTargets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
+              $buildTargets -notmatch 'VerifyPhysicalProvenSmartDiscoveryRoute' -or
+              $buildTargets -notmatch '\-VerifyOnly' -or
+              $buildTargets -match 'GITHUB_WORKFLOW' -or
+              $buildTargets -match 'SmartDiscoveryProductionPromoted' -or
               $lifecycle -notmatch 'PublishCanonicalModel\(model, initialRead\)' -or
               $save -notmatch 'CanonicalLiveIedSclExporter\.WriteFiles' -or
               $save -notmatch 'profile:\s*"full-model"' -or

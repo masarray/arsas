@@ -35,20 +35,24 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
     }
 
     [Fact]
-    public void P05g_DefaultBuildDoesNotPromoteFieldRoute()
+    public void ProductionBuildTracksPhysicalProvenSmartRouteForEveryPackagingLane()
     {
-        var props = XDocument.Load(FindRepoFile("evidence/SmartDiscoveryPromotion.props"));
-        var promoted = props.Descendants("SmartDiscoveryProductionPromoted").Single().Value.Trim();
-        Assert.Equal("false", promoted, ignoreCase: true);
-        Assert.Empty(props.Descendants("SmartDiscoveryPromotionAuthoritySha256"));
-        Assert.Empty(props.Descendants("SmartDiscoveryValidatedEngineHead"));
+        var native = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.cs"));
+        Assert.Contains("if (SmartDiscoveryCaptureModeEnabled)", native, StringComparison.Ordinal);
+        Assert.Contains("return await DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress).ConfigureAwait(false);", native, StringComparison.Ordinal);
+        Assert.Contains("__P0_5C_CONNECT_RESET__", native, StringComparison.Ordinal);
+        Assert.Contains("__P0_5C_DISPOSE_RESET__", native, StringComparison.Ordinal);
+        Assert.Contains("_lastDiscovery.Snapshot.DomainVariables", native, StringComparison.Ordinal);
 
         var targets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
-        Assert.Contains("GITHUB_WORKFLOW", targets, StringComparison.Ordinal);
-        Assert.Contains("Smart Discovery Field Capture Build", targets, StringComparison.Ordinal);
-        Assert.Contains("SmartDiscoveryProductionPromoted", targets, StringComparison.Ordinal);
-        Assert.Contains("EnableSmartDiscoveryCaptureRoute", targets, StringComparison.Ordinal);
-        Assert.Contains(">false</EnableSmartDiscoveryCaptureRoute>", targets, StringComparison.Ordinal);
+        Assert.DoesNotContain("GITHUB_WORKFLOW", targets, StringComparison.Ordinal);
+        Assert.DoesNotContain("SmartDiscoveryProductionPromoted", targets, StringComparison.Ordinal);
+        Assert.Contains("VerifyPhysicalProvenSmartDiscoveryRoute", targets, StringComparison.Ordinal);
+        Assert.Contains("-VerifyOnly", targets, StringComparison.Ordinal);
+
+        var verifier = File.ReadAllText(FindRepoFile("scripts/enable-smart-discovery-capture.ps1"));
+        Assert.Contains("Production smart discovery route verification passed", verifier, StringComparison.Ordinal);
+        Assert.Contains("no longer permitted to be inserted only at build time", verifier, StringComparison.Ordinal);
     }
 
     [Fact]

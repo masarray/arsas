@@ -164,6 +164,27 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
+      - name: Verify physical-proven Smart Discovery route before release build
+        shell: powershell
+        run: |
+          $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
+          $before = (Get-FileHash $native -Algorithm SHA256).Hash
+          & .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -VerifyOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Release refuses a legacy/incomplete Smart Discovery route.' }
+          $after = (Get-FileHash $native -Algorithm SHA256).Hash
+          if ($before -ne $after) { throw 'Release verification mutated discovery source; refusing non-reproducible build.' }
+
+          $source = Get-Content $native -Raw
+          foreach ($required in @(
+            'return await DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress).ConfigureAwait(false);',
+            '__P0_5C_CONNECT_RESET__',
+            '__P0_5C_DISPOSE_RESET__',
+            '_lastDiscovery.Snapshot.DomainVariables')) {
+            if ($source -notmatch [regex]::Escape($required)) {
+              throw "Release Smart Discovery contract missing: $required"
+            }
+          }
+
       - name: Restore, build and test exact release source
         shell: powershell
         run: |

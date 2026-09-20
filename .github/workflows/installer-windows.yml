@@ -19,6 +19,12 @@ on:
       - "tests/ARSAS.Tests/Comtrade*Tests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "Services/NativeIec61850Client.cs"
+      - "Services/NativeIec61850Client.SmartDiscoveryCapture.cs"
+      - "Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "tests/ARSAS.Tests/SmartDiscoveryProductionPromotionRegressionTests.cs"
       - "VERSION"
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
@@ -39,6 +45,12 @@ on:
       - "tests/ARSAS.Tests/Comtrade*Tests.cs"
       - "ArIED61850Tester.csproj"
       - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "Services/NativeIec61850Client.cs"
+      - "Services/NativeIec61850Client.SmartDiscoveryCapture.cs"
+      - "Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "tests/ARSAS.Tests/SmartDiscoveryProductionPromotionRegressionTests.cs"
       - "VERSION"
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
@@ -116,6 +128,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Verify physical-proven Smart Discovery route
+        shell: powershell
+        run: |
+          $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
+          $before = (Get-FileHash $native -Algorithm SHA256).Hash
+          & .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -VerifyOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Installer refuses a legacy/incomplete Smart Discovery route.' }
+          $after = (Get-FileHash $native -Algorithm SHA256).Hash
+          if ($before -ne $after) { throw 'Installer verification mutated discovery source.' }
 
       - name: Restore build and test application solution
         shell: powershell

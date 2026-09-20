@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "release": "v1.6.39",
+  "status": "physically-rejected",
+  "testedAtLocal": "2026-09-20T16:45:33+07:00",
+  "relay": "AA1E1F06R4",
+  "applicationCommit": "638d5b1fbaf757041019bcfb6172a8b6766355a8",
+  "engineCommit": "648124097621046f5f127ceb1cf853fea54db730",
+  "observedPackaging": "installed multi-file package under C:\\Program Files\\ARSAS",
+  "rejection": {
+    "associationReadyLocal": "2026-09-20T16:44:53.912+07:00",
+    "smartScanCompleteLocal": "2026-09-20T16:45:25.534+07:00",
+    "discoveryElapsedSeconds": 31.622,
+    "staticMembers": 58,
+    "selectedStaticMembers": 58,
+    "analogMembers": 22,
+    "digitalMembers": 36,
+    "cyclicMmsProcessPolling": 0,
+    "reportBackedRuntimePoints": 23,
+    "expectedReportBackedRuntimePoints": 58,
+    "signature": [
+      "REPORT_VALUE_REJECTED on Digital status points",
+      "runtime classified multiple report BIT STRING values as Boolean",
+      "legacy DiscoverSignalsAsync supplemental/probe path was compiled in production release instead of the physical-proven R7 Smart Discovery route"
+    ]
+  },
+  "rootCause": {
+    "class": "build-route divergence",
+    "detail": "Directory.Build.targets enabled the physical-proven Smart Discovery route only for named R7/Field Capture workflows or a production-promotion switch that remained false. Release Windows therefore compiled the legacy discovery entrypoint even though the repository and engine SHAs matched the R7 candidate.",
+    "sourceShaEqualityWasInsufficient": true
+  },
+  "correctivePolicy": {
+    "releaseBlockedUntilPhysicalRetest": true,
+    "nextStableVersion": "1.6.40",
+    "requireTrackedSmartRoute": true,
+    "forbidWorkflowNameDependentDiscoveryCompilation": true,
+    "requirePortableAndInstallerCandidatePhysicalRetest": true,
+    "acceptance": [
+      "58/58 static members represented",
+      "22/22 Analog",
+      "36/36 Digital",
+      "58 report-backed runtime points",
+      "0 cyclic MMS process polling",
+      "no REPORT_VALUE_REJECTED BIT STRING-as-Boolean burst",
+      "physical-proven Smart Discovery timing/request shape restored"
+    ]
+  }
+}
