@@ -276,8 +276,10 @@ jobs:
             throw 'P2 case-sensitive value path implementation regressed.'
           }
 
-          if ($targets -notmatch 'SCL Interoperability R7 Build' -or
-              $targets -notmatch 'EnableSmartDiscoveryCaptureRoute' -or
+          if ($targets -notmatch 'VerifyPhysicalProvenSmartDiscoveryRoute' -or
+              $targets -notmatch '\-VerifyOnly' -or
+              $targets -match 'GITHUB_WORKFLOW' -or
+              $targets -match 'SmartDiscoveryProductionPromoted' -or
               $capture -notmatch 'SmartDiscoveryStructuralFreezeContract = "P0-R9-STRUCTURAL"' -or
               $capture -notmatch 'CreateP0FrozenSmartDiscoveryOptions' -or
               $capture -notmatch 'MaxConcurrentChains = 8' -or
