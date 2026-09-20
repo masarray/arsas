@@ -72,19 +72,32 @@ public sealed class P07ReleaseCandidateLockRegressionTests
     }
 
     [Fact]
-    public void CurrentEngineLock_RemainsOnThePhysicalBaselineUntilSemanticCandidateIsExplicitlyIntegrated()
+    public void ExportOnlyCandidate_PreservesPhysicalEngineAuthorityAndPinsOnlyTheIsolatedExporterRevision()
     {
         using var baseline = JsonDocument.Parse(
             File.ReadAllText(FindRepoFile("evidence/p0.7-release-candidate-lock.json")));
+        using var candidate = JsonDocument.Parse(
+            File.ReadAllText(FindRepoFile("evidence/scl-export-only-semantic-candidate.json")));
         using var engine = JsonDocument.Parse(
             File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json")));
 
-        var expected = baseline.RootElement
+        var physical = baseline.RootElement
             .GetProperty("physicalReference")
             .GetProperty("engineBaseline")
             .GetString();
+        var replacement = candidate.RootElement.GetProperty("replacementCandidate");
 
-        Assert.Equal(expected, engine.RootElement.GetProperty("commit").GetString());
+        Assert.Equal("648124097621046f5f127ceb1cf853fea54db730", physical);
+        Assert.Equal(140, replacement.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(
+            "e58b42479e46fbbb42a1b17b03a074d8a6fb3b44",
+            replacement.GetProperty("engineCommit").GetString());
+        Assert.Equal(
+            replacement.GetProperty("engineCommit").GetString(),
+            engine.RootElement.GetProperty("commit").GetString());
+        Assert.True(replacement.GetProperty("discoveryRuntimeSourceMustMatchPhysicalBaseline").GetBoolean());
+        Assert.False(replacement.GetProperty("liveDiscoveryModelMutationAllowed").GetBoolean());
+        Assert.False(replacement.GetProperty("acquisitionBehaviorChangeAllowed").GetBoolean());
     }
 
     [Theory]
