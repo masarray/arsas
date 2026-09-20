@@ -341,8 +341,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
             StringComparison.Ordinal);
 
         var buildTargets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
-        Assert.Contains("SCL Interoperability R7 Build", buildTargets, StringComparison.Ordinal);
-        Assert.Contains("EnableSmartDiscoveryCaptureRoute", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("VerifyPhysicalProvenSmartDiscoveryRoute", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("-VerifyOnly", buildTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("GITHUB_WORKFLOW", buildTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("SmartDiscoveryProductionPromoted", buildTargets, StringComparison.Ordinal);
         Assert.Contains("evidence/iedscout-convergence-target.json", workflow, StringComparison.Ordinal);
         Assert.Contains("IEDScout convergence source contract regressed", workflow, StringComparison.Ordinal);
         Assert.Contains("TryResolveStandardSubDataObjectCdc", workflow, StringComparison.Ordinal);
