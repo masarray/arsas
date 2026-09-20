@@ -36,8 +36,9 @@ public partial class SclSignalSelectionModeWindow : Window
         else
         {
             var model = targetDevice.SclWorkspace?.DesignModel ?? targetDevice.LiveDiscoveryModel;
-            var dataSetCount = model?.DataSets.Count ?? 0;
-            var reportBackedCount =
+            var prepared = targetDevice.DataSetCapabilityIndex;
+            var dataSetCount = prepared?.DataSetCount ?? model?.DataSets.Count ?? 0;
+            var reportBackedCount = prepared?.ReportReadyDataSetCount ??
                 Iec61850StaticDataSetAuthoritySelection.BuildReportBackedDataSetReferences(targetDevice).Count;
 
             CanUseStaticDataSet = dataSetCount > 0;
