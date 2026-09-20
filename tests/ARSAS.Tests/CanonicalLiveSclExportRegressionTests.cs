@@ -396,19 +396,37 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
 
     [Fact]
-    public void EnginePin_MatchesPhysicalSclRepairHead()
+    public void EnginePin_PreservesPhysicalSclRepairAuthorityWhileUsingExplicitSemanticCandidate()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+        var semanticEvidence = File.ReadAllText(
+            FindRepoFile("evidence/p0.7-release-candidate-lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            "\"commit\": \"090d81944791be5b690d24342f9262495eda1a09\"",
             lockFile,
             StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 139", lockFile, StringComparison.Ordinal);
+
+        // The physical R7/R10 authority remains immutable provenance and is not
+        // relabeled as physically accepted merely because a semantic candidate is pinned.
         Assert.Contains(
             "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             lockFile,
             StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"mergedMainCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            lockFile,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"engineBaseline\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            semanticEvidence,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"physicalAcceptancePending\": true",
+            semanticEvidence,
+            StringComparison.Ordinal);
+
         Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
         Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
         Assert.Contains("runtime-mutable", lockFile, StringComparison.OrdinalIgnoreCase);
@@ -425,6 +443,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
         Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
         Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
+        Assert.Contains("P0.7 semantic-integration candidate PR #139", lockFile, StringComparison.Ordinal);
         Assert.Contains(
             "\"commit\": \"4467124775d8d9d76f3db194f9fbfd97144767a8\"",
             lockFile,
