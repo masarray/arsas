@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "contractId": "SCL-EXPORT-ONLY-SEMANTIC-P0",
+  "status": "ci-candidate-physical-retest-pending",
+  "physicalBaseline": {
+    "arsasHead": "0d0b9204d6637e3d62e2eee94000386ae43cd0e9",
+    "arsasLockHead": "6d6c5f6f022b66d93141ace361ed88d4a47ecbb9",
+    "engineCommit": "648124097621046f5f127ceb1cf853fea54db730",
+    "relay": "AA1E1F06R4",
+    "acceptedRuntime": {
+      "staticMembers": 58,
+      "liveRows": 58,
+      "analogRows": 22,
+      "digitalRows": 36,
+      "reportBackedRows": 58,
+      "cyclicMmsProcessPolling": 0
+    }
+  },
+  "rejectedCandidate": {
+    "enginePullRequest": 139,
+    "engineCommit": "090d81944791be5b690d24342f9262495eda1a09",
+    "arsasPullRequest": 342,
+    "arsasCommit": "32dc8542914d069e8fa49fe6ea6574fdaf950564",
+    "physicalObserved": {
+      "discoveryRegression": true,
+      "reportBackedRowsObserved": 23,
+      "repeatedBooleanBitStringRejections": true
+    },
+    "disposition": "physically-rejected-closed"
+  },
+  "replacementCandidate": {
+    "enginePullRequest": 140,
+    "engineCommit": "e58b42479e46fbbb42a1b17b03a074d8a6fb3b44",
+    "engineBase": "648124097621046f5f127ceb1cf853fea54db730",
+    "allowedEngineDiff": [
+      "src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs",
+      "tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs"
+    ],
+    "discoveryRuntimeSourceMustMatchPhysicalBaseline": true,
+    "liveDiscoveryModelMutationAllowed": false,
+    "acquisitionBehaviorChangeAllowed": false
+  },
+  "semanticTarget": {
+    "object": "CBClsCounter",
+    "liveRuntimeCdcRemains": "SPS",
+    "exportedSclCdc": "INS",
+    "exportedStValBType": "INT32",
+    "reopenedSclCdc": "INS",
+    "reopenedStValBType": "INT32"
+  },
+  "physicalAcceptance": {
+    "discoveryMustMatchAcceptedBaseline": true,
+    "staticMembers": 58,
+    "liveRows": 58,
+    "analogRows": 22,
+    "digitalRows": 36,
+    "reportBackedRows": 58,
+    "actualInformationReportRequired": true,
+    "cyclicMmsProcessPolling": 0,
+    "saveSclWhileMonitoringMustRemainNonDisruptive": true,
+    "reopenedSclLiveRows": 58,
+    "noBooleanBitStringRejectionRegression": true
+  }
+}
