@@ -40,6 +40,8 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _sclSourceSha256 = string.Empty;
     private string _sclIedName = string.Empty;
     private string _sclAccessPointName = string.Empty;
+    private long _modelGeneration;
+    private Iec61850DataSetCapabilityIndex? _dataSetCapabilityIndex;
 
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
@@ -54,6 +56,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_sclWorkspace, value)) return;
             _sclWorkspace = value;
+            InvalidateDataSetCapabilityIndex();
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
@@ -66,6 +69,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_liveDiscoveryModel, value)) return;
             _liveDiscoveryModel = value;
+            InvalidateDataSetCapabilityIndex();
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
@@ -104,6 +108,45 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         var comparison = BuildAuthoritativeSclComparison();
         if (comparison != null)
             _sclComparison = comparison;
+    }
+
+    public long ModelGeneration => System.Threading.Interlocked.Read(ref _modelGeneration);
+
+    public Iec61850DataSetCapabilityIndex? DataSetCapabilityIndex
+    {
+        get => _dataSetCapabilityIndex;
+        private set
+        {
+            if (ReferenceEquals(_dataSetCapabilityIndex, value))
+                return;
+
+            _dataSetCapabilityIndex = value;
+            Raise(nameof(DataSetCapabilityIndex));
+            Raise(nameof(HasPreparedDataSetCapabilities));
+            Raise(nameof(PreparedDataSetCount));
+            Raise(nameof(PreparedReportReadyDataSetCount));
+        }
+    }
+
+    public bool HasPreparedDataSetCapabilities => DataSetCapabilityIndex is not null;
+    public int PreparedDataSetCount => DataSetCapabilityIndex?.DataSetCount ?? 0;
+    public int PreparedReportReadyDataSetCount => DataSetCapabilityIndex?.ReportReadyDataSetCount ?? 0;
+
+    public bool TryApplyDataSetCapabilityIndex(Iec61850DataSetCapabilityIndex index)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        if (index.Generation != ModelGeneration)
+            return false;
+
+        DataSetCapabilityIndex = index;
+        return true;
+    }
+
+    private void InvalidateDataSetCapabilityIndex()
+    {
+        System.Threading.Interlocked.Increment(ref _modelGeneration);
+        DataSetCapabilityIndex = null;
+        Raise(nameof(ModelGeneration));
     }
 
     public string SclSourcePath
