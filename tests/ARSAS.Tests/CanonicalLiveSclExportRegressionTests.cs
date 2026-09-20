@@ -403,7 +403,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
             FindRepoFile("evidence/scl-export-only-semantic-candidate.json"));
 
         Assert.Contains(
-            "\"commit\": \"e58b42479e46fbbb42a1b17b03a074d8a6fb3b44\"",
+            "\"commit\": \"32fae3a56b1e21874895c7e781923f324cd1e54e\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 140", lockFile, StringComparison.Ordinal);
