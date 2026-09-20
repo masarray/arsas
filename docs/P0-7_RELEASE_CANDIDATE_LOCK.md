@@ -44,7 +44,7 @@ Any future SCL or engine semantic patch must be evaluated **on top of this basel
 
 ## Remaining SCL semantic parity work
 
-Generated SCL must continue converging toward the actual IED model and the trusted IEDScout SCL.
+Generated SCL must continue converging toward the actual IED model and the trusted independent interoperability reference SCL.
 
 A known concrete gap is `CBClsCounter`: the current physical baseline may export/reload it as SPS/Boolean, while exact live TypeSpecification evidence says the status value is integer and therefore belongs to the INS/integer semantic family.
 

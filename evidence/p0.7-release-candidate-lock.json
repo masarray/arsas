@@ -76,7 +76,7 @@
   },
   "sclSemanticParity": {
     "status": "open-before-release",
-    "target": "Generated SCL must preserve the actual IED semantic model and converge with the trusted IEDScout SCL for semantically authoritative CDC/type information without changing the accepted acquisition baseline.",
+    "target": "Generated SCL must preserve the actual IED semantic model and converge with the trusted independent interoperability reference SCL for semantically authoritative CDC/type information without changing the accepted acquisition baseline.",
     "knownExample": {
       "object": "CBClsCounter",
       "currentProblem": "export/reload may classify the integer counter status as SPS/Boolean",
