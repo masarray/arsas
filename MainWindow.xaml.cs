@@ -276,7 +276,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         var connected = firstImported.IsConnected ||
                                         await ConnectUsingSavedModelAsync(firstImported);
                         if (connected && !firstImported.IsMonitoring)
+                        {
+                            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                                firstImported,
+                                _applicationCancellation.Token);
+                            firstImported.RefreshComputed();
                             await StartDeviceMonitorAsync(firstImported);
+                        }
                     }
                 }
                 else
