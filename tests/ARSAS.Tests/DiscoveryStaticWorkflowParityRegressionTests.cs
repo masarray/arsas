@@ -3,27 +3,25 @@ namespace ARSAS.Tests;
 public sealed class DiscoveryStaticWorkflowParityRegressionTests
 {
     [Fact]
-    public void ProductionDiscovery_UsesFieldVerifiedSmartSingleFlightRoute()
+    public void CandidateDiscovery_UsesEvidenceGatedFieldVerifiedSmartRoute()
     {
         var source = Read("Services/NativeIec61850Client.cs");
-
-        var entry = source.IndexOf(
-            "public async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsAsync",
-            StringComparison.Ordinal);
-        var legacy = source.IndexOf(
-            "LastDiscoverySummary = string.Empty;",
-            entry,
-            StringComparison.Ordinal);
-        var smart = source.IndexOf(
-            "DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress)",
-            entry,
-            StringComparison.Ordinal);
-
-        Assert.True(entry >= 0 && smart > entry && legacy > smart);
-        Assert.Contains("ResetSmartDiscoveryAuthority(); // __P0_5C_CONNECT_RESET__", source, StringComparison.Ordinal);
-        Assert.Contains("ResetSmartDiscoveryAuthority(); // __P0_5C_DISPOSE_RESET__", source, StringComparison.Ordinal);
-
+        var patcher = Read("scripts/enable-smart-discovery-capture.ps1");
         var smartSource = Read("Services/NativeIec61850Client.SmartDiscoveryCapture.cs");
+
+        // P0 remains a field-test candidate. Do not silently promote the capture route into
+        // ordinary tracked source before fresh physical acceptance.
+        Assert.DoesNotContain(
+            "return await DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress)",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress)",
+            patcher,
+            StringComparison.Ordinal);
+        Assert.Contains("__P0_5C_CONNECT_RESET__", patcher, StringComparison.Ordinal);
+        Assert.Contains("__P0_5C_DISPOSE_RESET__", patcher, StringComparison.Ordinal);
+
         Assert.Contains("P0-R9-STRUCTURAL", smartSource, StringComparison.Ordinal);
         Assert.Contains("DiscoverSmartSingleFlightAsync", smartSource, StringComparison.Ordinal);
         Assert.Contains("discoveryValues=deferred", smartSource, StringComparison.Ordinal);
