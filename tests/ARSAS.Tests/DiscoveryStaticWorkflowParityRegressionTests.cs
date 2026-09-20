@@ -83,7 +83,7 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
 
         Assert.True(unitCall >= 0, "Discovery Static DataSet path must perform bounded unit enrichment.");
         Assert.True(monitorCall > unitCall, "Engineering-unit reads must finish before RCB monitoring is armed.");
-        Assert.Contains("device.SclWorkspace == null", quickActions, StringComparison.Ordinal);
+        Assert.DoesNotContain("device.SclWorkspace == null", quickActions, StringComparison.Ordinal);
 
         var client = Read("Services/NativeIec61850Client.cs");
         Assert.Contains("EnrichAuthoritativeEngineeringUnitsAsync", client, StringComparison.Ordinal);
