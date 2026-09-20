@@ -1567,13 +1567,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             if (device.SclWorkspace == null && device.IsConnected)
             {
-                SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
-                var instanceEvidence = await _runtime
-                    .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
-                AddLog(
-                    "INFO",
-                    "SCL Export",
-                    $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+                if (device.IsMonitoring)
+                {
+                    // Save is a snapshot/export operation, not an acquisition-mode change.
+                    // Never tear down an armed report session merely to collect optional
+                    // instance <Val> evidence. The canonical discovery/model already bound
+                    // to this accepted MMS association is sufficient for interoperable SCL.
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: monitoring remains active; Save SCL uses the current canonical model and skips optional save-time value enrichment.");
+                }
+                else
+                {
+                    SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
+                    var instanceEvidence = await _runtime
+                        .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+                }
             }
 
             if (device.SclWorkspace != null &&
