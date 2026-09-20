@@ -30,15 +30,17 @@
   },
   "replacementCandidate": {
     "enginePullRequest": 140,
-    "engineCommit": "e58b42479e46fbbb42a1b17b03a074d8a6fb3b44",
+    "engineCommit": "32fae3a56b1e21874895c7e781923f324cd1e54e",
     "engineBase": "648124097621046f5f127ceb1cf853fea54db730",
     "allowedEngineDiff": [
       "src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs",
-      "tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs"
+      "tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs",
+      "src/AR.Iec61850/Discovery/Iec61850StandardModelRegistry.cs"
     ],
     "discoveryRuntimeSourceMustMatchPhysicalBaseline": true,
     "liveDiscoveryModelMutationAllowed": false,
-    "acquisitionBehaviorChangeAllowed": false
+    "acquisitionBehaviorChangeAllowed": false,
+    "commentOnlyDiscoveryDelta": "Iec61850StandardModelRegistry.cs has only two comment wording replacements required by source-clean; executable registry logic is unchanged."
   },
   "semanticTarget": {
     "object": "CBClsCounter",
