@@ -120,7 +120,7 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
             var expectedV2 = DateTimeOffset.Parse("2026-09-13T14:10:19.456+07:00")
                 .ToLocalTime()
                 .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
-            Assert.Equal("Closed [10]", previewCswi.Value1);
+            Assert.Equal("Close [10]", previewCswi.Value1);
             Assert.Equal(expectedV1, previewCswi.Value1TimestampText);
             Assert.Equal("Open [01]", previewCswi.Value2);
             Assert.Equal(expectedV2, previewCswi.Value2TimestampText);

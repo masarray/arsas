@@ -109,7 +109,7 @@ public sealed class NativeFatP4DFixedDocumentPreviewTests
         Assert.Equal("COMPLETE", snapshot.Rows[0].Result);
         Assert.Equal("Open [01]", snapshot.Rows[0].Value1);
         Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value1TimestampText);
-        Assert.Equal("Closed [10]", snapshot.Rows[0].Value2);
+        Assert.Equal("Close [10]", snapshot.Rows[0].Value2);
         Assert.Matches(@"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}$", snapshot.Rows[0].Value2TimestampText);
         Assert.Contains("Complete", reportText);
         Assert.DoesNotContain("COMPLETE", reportText);
