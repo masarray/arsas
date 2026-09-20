@@ -60,7 +60,7 @@ public sealed class P07ReleaseCandidateLockRegressionTests
         Assert.Contains("ThdPPV.phsBC", structured);
 
         var scl = root.GetProperty("sclSemanticParity");
-        Assert.Equal("open-before-release", scl.GetProperty("status").GetString());
+        Assert.Equal("integration-candidate-ci-passed-physical-retest-pending", scl.GetProperty("status").GetString());
         var known = scl.GetProperty("knownExample");
         Assert.Equal("CBClsCounter", known.GetProperty("object").GetString());
         Assert.Equal("INS", known.GetProperty("expectedCdc").GetString());
