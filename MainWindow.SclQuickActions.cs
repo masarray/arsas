@@ -86,6 +86,7 @@ public partial class MainWindow
         }
 
         SelectedDevice = device;
+        QueueDataSetCapabilityRefresh(device);
         var dialog = new SclSignalSelectionModeWindow(1, device)
         {
             Owner = this,
