@@ -393,6 +393,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.RecountSelectedSignals();
         device.RefreshComputed();
         ScheduleGooseBindingRefreshFromWorkspace();
+        QueueDataSetCapabilityRefresh(device);
     }
 
     private static string BuildSclWorkspaceSummary(SclIedWorkspace workspace)
@@ -753,6 +754,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var restoredCount = RestoreSignalSelection(device);
             device.RefreshComputed();
             RaiseWorkspaceCounts();
+            QueueDataSetCapabilityRefresh(device);
             SetStatus($"{device.Name}: discovery complete, {device.SignalCount} readable signal(s), {restoredCount} saved selection(s) restored.");
 
             // Let the card-local bar visibly settle at 100%, then release the card
