@@ -396,39 +396,54 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
 
     [Fact]
-    public void EnginePin_MatchesPhysicalSclRepairHead()
+    public void EnginePin_UsesExportOnlyCandidateWhileRetainingPhysicalBaselineProvenance()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+        var candidate = File.ReadAllText(
+            FindRepoFile("evidence/scl-export-only-semantic-candidate.json"));
 
         Assert.Contains(
-            "\"commit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            "\"commit\": \"e58b42479e46fbbb42a1b17b03a074d8a6fb3b44\"",
             lockFile,
             StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 140", lockFile, StringComparison.Ordinal);
+
+        Assert.Contains(
+            "\"engineCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            candidate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"engineBase\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            candidate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"discoveryRuntimeSourceMustMatchPhysicalBaseline\": true",
+            candidate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"liveDiscoveryModelMutationAllowed\": false",
+            candidate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"acquisitionBehaviorChangeAllowed\": false",
+            candidate,
+            StringComparison.Ordinal);
+
         Assert.Contains(
             "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             lockFile,
             StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
-        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
-        Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
-        Assert.Contains("runtime-mutable", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("DataSet/ConfRev/domain/LN/buffered identity", lockFile, StringComparison.Ordinal);
-        Assert.Contains("full-model SCL", lockFile, StringComparison.Ordinal);
-        Assert.Contains("CDC-aware WYE/DEL/SEQ SDO", lockFile, StringComparison.Ordinal);
-        Assert.Contains("FC ownership", lockFile, StringComparison.Ordinal);
-        Assert.Contains("TCTR/TVTR/LTIM/EEName/MltLev", lockFile, StringComparison.Ordinal);
-        Assert.Contains("LTRK service-tracking", lockFile, StringComparison.Ordinal);
-        Assert.Contains("Edition-1 schema downgrade protection", lockFile, StringComparison.Ordinal);
-        Assert.Contains("TypeSpecification declaration order", lockFile, StringComparison.Ordinal);
-        Assert.Contains("SG/SE as setting data", lockFile, StringComparison.Ordinal);
-        Assert.Contains("MHAI THD phase groups as WYE/CMV", lockFile, StringComparison.Ordinal);
-        Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
-        Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
-        Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
         Assert.Contains(
-            "\"commit\": \"4467124775d8d9d76f3db194f9fbfd97144767a8\"",
+            "\"mergedMainCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
             lockFile,
             StringComparison.Ordinal);
+        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
+        Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
+        Assert.Contains("full-model SCL", lockFile, StringComparison.Ordinal);
+        Assert.Contains("TypeSpecification declaration order", lockFile, StringComparison.Ordinal);
+        Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
+        Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
+        Assert.Contains("SCL export-only semantic candidate PR #140", lockFile, StringComparison.Ordinal);
     }
 
 
