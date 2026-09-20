@@ -2388,6 +2388,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return type.Equals("FLOAT32", StringComparison.OrdinalIgnoreCase) ||
                type.Equals("FLOAT64", StringComparison.OrdinalIgnoreCase) ||
                type.Equals("Float", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("FloatingPoint", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("floating-point", StringComparison.OrdinalIgnoreCase) ||
                type.Equals("Double", StringComparison.OrdinalIgnoreCase) ||
                type.Equals("REAL", StringComparison.OrdinalIgnoreCase) ||
                type.Equals("Real32", StringComparison.OrdinalIgnoreCase) ||
