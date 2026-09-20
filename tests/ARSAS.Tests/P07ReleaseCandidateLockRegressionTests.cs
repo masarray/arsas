@@ -67,24 +67,41 @@ public sealed class P07ReleaseCandidateLockRegressionTests
         Assert.Equal("integer", known.GetProperty("expectedTypeFamily").GetString());
         Assert.Equal(139, known.GetProperty("engineCandidatePullRequest").GetInt32());
         Assert.Equal(
-            "9123c8aa1cc51a1e13c6750c0e1f8bee2a2de3b7",
+            "090d81944791be5b690d24342f9262495eda1a09",
             known.GetProperty("engineCandidateHead").GetString());
+        var integration = scl.GetProperty("integrationCandidate");
+        Assert.Equal(139, integration.GetProperty("pullRequest").GetInt32());
+        Assert.Equal(
+            "090d81944791be5b690d24342f9262495eda1a09",
+            integration.GetProperty("engineCommit").GetString());
+        Assert.Equal("success", integration.GetProperty("ciStatus").GetString());
+        Assert.False(integration.GetProperty("acquisitionChanges").GetBoolean());
+        Assert.True(integration.GetProperty("physicalAcceptancePending").GetBoolean());
     }
 
     [Fact]
-    public void CurrentEngineLock_RemainsOnThePhysicalBaselineUntilSemanticCandidateIsExplicitlyIntegrated()
+    public void SemanticIntegrationBranch_PinsOnlyTheExplicitRecordedCandidate_WhileBaselineRemainsFrozen()
     {
         using var baseline = JsonDocument.Parse(
             File.ReadAllText(FindRepoFile("evidence/p0.7-release-candidate-lock.json")));
         using var engine = JsonDocument.Parse(
             File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json")));
 
-        var expected = baseline.RootElement
+        var physicalBaseline = baseline.RootElement
             .GetProperty("physicalReference")
             .GetProperty("engineBaseline")
             .GetString();
+        var candidate = baseline.RootElement
+            .GetProperty("sclSemanticParity")
+            .GetProperty("integrationCandidate")
+            .GetProperty("engineCommit")
+            .GetString();
 
-        Assert.Equal(expected, engine.RootElement.GetProperty("commit").GetString());
+        Assert.Equal(
+            "648124097621046f5f127ceb1cf853fea54db730",
+            physicalBaseline);
+        Assert.Equal(candidate, engine.RootElement.GetProperty("commit").GetString());
+        Assert.NotEqual(physicalBaseline, candidate);
     }
 
     [Theory]

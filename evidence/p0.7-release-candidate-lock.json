@@ -75,7 +75,7 @@
     }
   },
   "sclSemanticParity": {
-    "status": "open-before-release",
+    "status": "integration-candidate-ci-passed-physical-retest-pending",
     "target": "Generated SCL must preserve the actual IED semantic model and converge with the trusted independent interoperability reference SCL for semantically authoritative CDC/type information without changing the accepted acquisition baseline.",
     "knownExample": {
       "object": "CBClsCounter",
@@ -83,9 +83,19 @@
       "expectedCdc": "INS",
       "expectedTypeFamily": "integer",
       "engineCandidatePullRequest": 139,
-      "engineCandidateHead": "9123c8aa1cc51a1e13c6750c0e1f8bee2a2de3b7",
+      "engineCandidateHead": "090d81944791be5b690d24342f9262495eda1a09",
       "integrationRule": "Any integration of this engine semantic correction must rerun and preserve every P0.7 accepted runtime and presentation invariant."
+    },
+    "integrationCandidate": {
+      "repository": "masarray/ARIEC61850",
+      "pullRequest": 139,
+      "engineCommit": "090d81944791be5b690d24342f9262495eda1a09",
+      "ciRun": 691,
+      "ciStatus": "success",
+      "scope": "Exact live stVal TypeSpecification is status CDC authority through discovery, SCL export and SCL reopen. Exporter corrects stale conservative live CDC only when exact live typed evidence proves a stronger semantic result.",
+      "acquisitionChanges": false,
+      "physicalAcceptancePending": true
     }
   },
-  "releaseRule": "Do not call the application release-ready while SCL semantic parity remains open. Continue SCL/CDC/type corrections from this locked baseline and reject any candidate that regresses the accepted runtime, report-only, Save-SCL, reuse, or presentation behavior."
+  "releaseRule": "Do not call the application release-ready until the SCL semantic integration candidate passes physical retest while preserving every locked P0.7 runtime, report-only, Save-SCL, reuse and presentation invariant."
 }
