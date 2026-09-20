@@ -90,6 +90,31 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _sessions.Values.Count(session => session.Client.IsConnected);
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
 
+    public async Task<int> EnrichSelectedStaticDataSetUnitsAsync(
+        Iec61850MonitorDevice device,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (device.IsMonitoring)
+            return 0;
+        if (!_sessions.TryGetValue(device.DeviceId, out var session) || !session.Client.IsConnected)
+            return 0;
+
+        var resolved = await session.Client
+            .EnrichAuthoritativeEngineeringUnitsAsync(device.Signals.ToArray(), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (resolved > 0)
+        {
+            Log(
+                "INFO",
+                device.Name,
+                $"Static DataSet engineering-unit enrichment verified {resolved} measurement owner(s) from live CF metadata before RCB monitoring.");
+        }
+
+        return resolved;
+    }
+
     public async Task<int> EnrichCanonicalForSclSaveAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
