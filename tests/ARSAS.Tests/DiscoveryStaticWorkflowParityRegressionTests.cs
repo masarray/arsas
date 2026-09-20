@@ -70,6 +70,78 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
     }
 
     [Fact]
+    public void StaticDataSetSelection_VerifiesAuthoritativeUnitsBeforeArmingReports()
+    {
+        var quickActions = Read("MainWindow.SclQuickActions.cs");
+        var unitCall = quickActions.IndexOf(
+            "EnrichSelectedStaticDataSetUnitsAsync",
+            StringComparison.Ordinal);
+        var monitorCall = quickActions.IndexOf(
+            "StartDeviceMonitorAsync(device)",
+            unitCall,
+            StringComparison.Ordinal);
+
+        Assert.True(unitCall >= 0, "Discovery Static DataSet path must perform bounded unit enrichment.");
+        Assert.True(monitorCall > unitCall, "Engineering-unit reads must finish before RCB monitoring is armed.");
+        Assert.Contains("device.SclWorkspace == null", quickActions, StringComparison.Ordinal);
+
+        var client = Read("Services/NativeIec61850Client.cs");
+        Assert.Contains("EnrichAuthoritativeEngineeringUnitsAsync", client, StringComparison.Ordinal);
+        Assert.Contains("allowInferredFallback: false", client, StringComparison.Ordinal);
+        Assert.Contains(".units.SIUnit", client, StringComparison.Ordinal);
+        Assert.Contains(".units.multiplier", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SaveScl_WhileMonitoring_UsesCanonicalSnapshotWithoutStoppingReports()
+    {
+        var source = Read("MainWindow.xaml.cs");
+        var handlerStart = source.IndexOf(
+            "private async void IedSaveScl_Click",
+            StringComparison.Ordinal);
+        var handlerEnd = source.IndexOf(
+            "private void SaveOpenedSclAsGenericEdition2",
+            handlerStart,
+            StringComparison.Ordinal);
+
+        Assert.True(handlerStart >= 0 && handlerEnd > handlerStart);
+        var handler = source[handlerStart..handlerEnd];
+
+        Assert.Contains("if (device.IsMonitoring)", handler, StringComparison.Ordinal);
+        Assert.Contains(
+            "Save SCL uses the current canonical model and skips optional save-time value enrichment",
+            handler,
+            StringComparison.Ordinal);
+        Assert.Contains("EnrichCanonicalForSclSaveAsync", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("StopDeviceMonitorAsync", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("StopDeviceConnectionAsync", handler, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiscoveryStructuredDataSetMembers_UseExactSchemaLeavesWithoutRelaxingRuntimeSafety()
+    {
+        var inventory = Read("Services/Iec61850DataSetSignalInventoryService.cs");
+        var projection = Read("Services/SchemaSafeAggregateProjectionService.cs");
+        var runtime = Read("Services/Iec61850MonitorRuntime.cs");
+
+        Assert.Contains("TryResolveStaticDataSetPrimaryLeaf", inventory, StringComparison.Ordinal);
+        Assert.Contains("ResolvedFromExactSchema", inventory, StringComparison.Ordinal);
+        Assert.Contains(".cval.mag.f", projection, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".instcval.mag.f", projection, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "The authoritative schema contains none of the approved exact magnitude references",
+            projection,
+            StringComparison.Ordinal);
+
+        // The fix must make previously unresolved rows publishable by giving them an exact
+        // runtime leaf; it must not bypass the existing process-value safety boundary.
+        Assert.Contains(
+            ".Where(signal => signal.IsSelected && signal.CanPublishToRuntime)",
+            runtime,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StaticReporting_ReusesCompletedDiscoveryAuthority_WithoutRediscovery()
     {
         var source = Read("Services/NativeIec61850Client.cs");
