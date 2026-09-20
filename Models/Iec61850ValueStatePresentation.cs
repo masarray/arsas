@@ -65,6 +65,56 @@ public static class Iec61850ValueStatePresentation
                type.Contains("boolean", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Compact operator badge derived only from the declared IEC/MMS data type.
+    /// Unlike ValueVisualKind this never infers a type from the rendered value, signal
+    /// name, category, or numeric shape. Unknown metadata intentionally yields no badge.
+    /// </summary>
+    public static string TypeToken(string? dataType)
+    {
+        var type = (dataType ?? string.Empty).Trim();
+        if (type.Length == 0)
+            return string.Empty;
+
+        var normalized = type
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        if (normalized is "DBPOS" or "DPC" or "DOUBLEPOINTSTATUS")
+            return "DP";
+
+        if (normalized is "BOOL" or "BOOLEAN")
+            return "B";
+
+        if (normalized.StartsWith("FLOAT", StringComparison.Ordinal) ||
+            normalized is "REAL" or "REAL32" or "REAL64" or "DOUBLE")
+        {
+            return "F";
+        }
+
+        if (normalized.StartsWith("UINT", StringComparison.Ordinal) ||
+            normalized is "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U")
+        {
+            return "U";
+        }
+
+        if (normalized.StartsWith("INT", StringComparison.Ordinal) ||
+            normalized is "INTEGER" or "SIGNED")
+        {
+            return "I";
+        }
+
+        if (normalized.StartsWith("ENUM", StringComparison.Ordinal) ||
+            normalized is "ENUMERATED")
+        {
+            return "E";
+        }
+
+        return string.Empty;
+    }
+
     public const string Analog = "Analog";
     public const string BooleanTrue = "BooleanTrue";
     public const string BooleanFalse = "BooleanFalse";
