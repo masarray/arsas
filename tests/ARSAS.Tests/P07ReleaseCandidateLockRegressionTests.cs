@@ -90,7 +90,7 @@ public sealed class P07ReleaseCandidateLockRegressionTests
         Assert.Equal("648124097621046f5f127ceb1cf853fea54db730", physical);
         Assert.Equal(140, replacement.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(
-            "e58b42479e46fbbb42a1b17b03a074d8a6fb3b44",
+            "32fae3a56b1e21874895c7e781923f324cd1e54e",
             replacement.GetProperty("engineCommit").GetString());
         Assert.Equal(
             replacement.GetProperty("engineCommit").GetString(),
