@@ -359,113 +359,13 @@ public static class Iec61850DataSetSignalInventoryService
         if (string.IsNullOrWhiteSpace(reference))
             return string.Empty;
 
-        var normalized = LiteralReference(reference).Replace('
-    {
-        var membership = FirstMembership(descriptor);
-        return FirstNonEmpty(
-            membership?.CanonicalMemberReference,
-            membership?.OriginalMemberReference,
-            descriptor.DesignReference,
-            descriptor.ObservedReference,
-            descriptor.PrimaryValueReference);
-    }
-
-    private static Iec61850SignalDataSetMembership? FirstMembership(Iec61850SignalDescriptor descriptor)
-        => descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .FirstOrDefault();
-
-    private static string BuildCoverageReason(Iec61850SignalDescriptor descriptor)
-    {
-        var memberships = descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .Select(membership => $"{membership.DataSetReference}[{membership.MemberIndex}]")
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var membershipText = memberships.Length == 0
-            ? "static DataSet membership"
-            : string.Join(", ", memberships);
-        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
-        var authorityText = unresolved
-            ? "mandatory static DataSet member"
-            : "mandatory primary DataSet signal";
-        var resolutionText = unresolved
-            ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
-            : " The static FCDA identity stays visible even when a readable primary DataAttribute is resolved for runtime acquisition.";
-
-        return $"ARIEC61850 {authorityText}: {membershipText}." +
-               resolutionText +
-               " Inventory presence is engine-authoritative; user selection remains independent.";
-    }
-
-    private static bool ReferenceEquals(string? left, string? right)
-        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
-
-    private static string LiteralReference(string? reference)
-        => (reference ?? string.Empty).Trim();
-
-    private static string FirstNonEmpty(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
-}
-, '.');
+        var normalized = LiteralReference(reference).Replace('$', '.');
         var matches = model.LogicalDevices
             .SelectMany(device => device.LogicalNodes)
             .SelectMany(node => node.DataObjects)
             .SelectMany(dataObject => dataObject.Attributes)
             .Where(attribute => ReferenceEquals(
-                (attribute.ObjectReference ?? string.Empty).Replace('
-    {
-        var membership = FirstMembership(descriptor);
-        return FirstNonEmpty(
-            membership?.CanonicalMemberReference,
-            membership?.OriginalMemberReference,
-            descriptor.DesignReference,
-            descriptor.ObservedReference,
-            descriptor.PrimaryValueReference);
-    }
-
-    private static Iec61850SignalDataSetMembership? FirstMembership(Iec61850SignalDescriptor descriptor)
-        => descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .FirstOrDefault();
-
-    private static string BuildCoverageReason(Iec61850SignalDescriptor descriptor)
-    {
-        var memberships = descriptor.DataSetMemberships
-            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(membership => membership.MemberIndex)
-            .Select(membership => $"{membership.DataSetReference}[{membership.MemberIndex}]")
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var membershipText = memberships.Length == 0
-            ? "static DataSet membership"
-            : string.Join(", ", memberships);
-        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
-        var authorityText = unresolved
-            ? "mandatory static DataSet member"
-            : "mandatory primary DataSet signal";
-        var resolutionText = unresolved
-            ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
-            : " The static FCDA identity stays visible even when a readable primary DataAttribute is resolved for runtime acquisition.";
-
-        return $"ARIEC61850 {authorityText}: {membershipText}." +
-               resolutionText +
-               " Inventory presence is engine-authoritative; user selection remains independent.";
-    }
-
-    private static bool ReferenceEquals(string? left, string? right)
-        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
-
-    private static string LiteralReference(string? reference)
-        => (reference ?? string.Empty).Trim();
-
-    private static string FirstNonEmpty(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
-}
-, '.'),
+                (attribute.ObjectReference ?? string.Empty).Replace('$', '.'),
                 normalized))
             .ToArray();
 
