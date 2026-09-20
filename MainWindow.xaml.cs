@@ -868,6 +868,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 progress);
 
             device.RecountSelectedSignals();
+            QueueDataSetCapabilityRefresh(device);
             await WaitForDiscoveryProgressAnimationAsync(device, TimeSpan.FromMilliseconds(900));
             RaiseWorkspaceCounts();
             if (device.HasSclDesignModel)
