@@ -1166,7 +1166,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 var state = session.States[point.PointKey];
                 var display = update.HasValue
-                    ? Iec61850ValueFormatter.Format(update.Value, point.IecDataType, point.Unit)
+                    ? Iec61850ValueFormatter.FormatReportProcessValue(
+                        update.Value,
+                        point.IecDataType,
+                        point.Unit,
+                        point.Category,
+                        point.IecReference)
                     : state.Value;
                 if (update.HasValue && LooksLikeReferenceEcho(display, update.Reference, point.IecReference))
                     continue;
