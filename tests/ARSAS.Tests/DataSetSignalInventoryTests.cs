@@ -122,8 +122,13 @@ public sealed class DataSetSignalInventoryTests
         Assert.Equal("FLOAT32", signal.DataType);
         Assert.Equal("IEDLD0/LLN0.Analog", signal.DataSetReference);
         Assert.True(signal.CanPublishToRuntime);
-        Assert.Contains("exact schema primary leaf", signal.Source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("exact schema primary leaf", signal.ProbeStatus, StringComparison.OrdinalIgnoreCase);
+
+        // The semantic resolver may already have promoted this exact named scalar leaf
+        // before the application-side schema fallback runs. Provenance wording therefore
+        // is not the contract; exact member identity, exact scalar runtime binding and
+        // publishability are.
+        Assert.Contains("mandatory static DataSet member", signal.Source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("primary leaf unresolved", signal.ProbeStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
