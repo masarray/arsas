@@ -76,7 +76,8 @@ public sealed class SclExportOnlySemanticIsolationRegressionTests
             .ToArray();
         Assert.Equal(3, allowed.Length);
         Assert.Contains("src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs", allowed);
-        Assert.Contains("tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs", allowed);\n        Assert.Contains("src/AR.Iec61850/Discovery/Iec61850StandardModelRegistry.cs", allowed);
+        Assert.Contains("tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs", allowed);
+        Assert.Contains("src/AR.Iec61850/Discovery/Iec61850StandardModelRegistry.cs", allowed);
     }
 
     private static LiveIedModelDiscoveryDocument BuildModel()
