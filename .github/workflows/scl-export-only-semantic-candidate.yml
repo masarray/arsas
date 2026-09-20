@@ -1,0 +1,166 @@
+name: SCL Export-Only Semantic Candidate
+
+on:
+  pull_request:
+    paths:
+      - "engines/ARIEC61850.lock.json"
+      - "evidence/scl-export-only-semantic-candidate.json"
+      - "tests/ARSAS.Tests/P07ReleaseCandidateLockRegressionTests.cs"
+      - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
+      - "tests/ARSAS.Tests/SclExportOnlySemanticIsolationRegressionTests.cs"
+      - ".github/workflows/scl-export-only-semantic-candidate.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: scl-export-only-semantic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-export-only-candidate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact ARSAS candidate
+        shell: pwsh
+        env:
+          ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" ARSAS
+          git -C .\ARSAS fetch --quiet --depth 1 origin $env:ARSAS_SOURCE_SHA
+          git -C .\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA
+          $actual = (git -C .\ARSAS rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:ARSAS_SOURCE_SHA.ToLowerInvariant()) { throw "ARSAS SHA mismatch." }
+          "ARSAS_COMMIT=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Validate candidate contract
+        shell: pwsh
+        run: |
+          $baseline = Get-Content .\ARSAS\evidence\p0.7-release-candidate-lock.json -Raw | ConvertFrom-Json
+          $candidate = Get-Content .\ARSAS\evidence\scl-export-only-semantic-candidate.json -Raw | ConvertFrom-Json
+          $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+
+          if ($baseline.physicalReference.engineBaseline -ne '648124097621046f5f127ceb1cf853fea54db730' -or
+              [int]$baseline.acceptedRuntime.staticMembers -ne 58 -or
+              [int]$baseline.acceptedRuntime.selectedLiveRows -ne 58 -or
+              [int]$baseline.acceptedRuntime.analogRows -ne 22 -or
+              [int]$baseline.acceptedRuntime.digitalRows -ne 36 -or
+              [int]$baseline.acceptedRuntime.reportBackedRows -ne 58 -or
+              [int]$baseline.acceptedRuntime.cyclicMmsProcessPolling -ne 0) {
+            throw 'Frozen P0.7 baseline changed.'
+          }
+
+          if ($candidate.contractId -ne 'SCL-EXPORT-ONLY-SEMANTIC-P0' -or
+              [int]$candidate.replacementCandidate.enginePullRequest -ne 140 -or
+              $candidate.replacementCandidate.engineBase -ne '648124097621046f5f127ceb1cf853fea54db730' -or
+              $candidate.replacementCandidate.engineCommit -ne $lock.commit -or
+              -not [bool]$candidate.replacementCandidate.discoveryRuntimeSourceMustMatchPhysicalBaseline -or
+              [bool]$candidate.replacementCandidate.liveDiscoveryModelMutationAllowed -or
+              [bool]$candidate.replacementCandidate.acquisitionBehaviorChangeAllowed) {
+            throw 'Export-only semantic candidate contract invalid.'
+          }
+
+          if ([int]$lock.sourcePullRequest -ne 140) { throw 'Only engine PR #140 is permitted.' }
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = (Get-Content .\ARSAS\VERSION -Raw).Trim()
+          "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout exact engine candidate and baseline
+        shell: pwsh
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin 648124097621046f5f127ceb1cf853fea54db730
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+
+      - name: Prove engine is export-only
+        shell: pwsh
+        run: |
+          $base = '648124097621046f5f127ceb1cf853fea54db730'
+          $head = $env:ARIEC61850_COMMIT
+          $changed = @(git -C .\ARIEC61850 diff --name-only $base $head)
+          $expected = @(
+            'src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs',
+            'tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs'
+          )
+          $unexpected = @($changed | Where-Object { $_ -notin $expected })
+          $missing = @($expected | Where-Object { $_ -notin $changed })
+          if ($unexpected.Count -gt 0 -or $missing.Count -gt 0 -or $changed.Count -ne 2) {
+            $changed | ForEach-Object { Write-Host $_ }
+            throw 'Engine candidate is not export-only.'
+          }
+
+          git -C .\ARIEC61850 diff --exit-code $base $head -- src/AR.Iec61850/Discovery src/AR.Iec61850/Mms src/AR.Iec61850/Osi src/AR.Iec61850/Acse
+          if ($LASTEXITCODE -ne 0) { throw 'Discovery/wire source differs from physical baseline.' }
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build and test engine
+        shell: pwsh
+        run: |
+          dotnet restore .\ARIEC61850\ARIEC61850.sln
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build .\ARIEC61850\ARIEC61850.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test .\ARIEC61850\ARIEC61850.sln -c Release --no-build --no-restore --logger "trx;LogFileName=engine-export-only.trx" --results-directory .\ARSAS\TestResults
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and test ARSAS
+        shell: pwsh
+        run: |
+          dotnet restore .\ARSAS\ArIED61850Tester.sln
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-export-only.trx" --results-directory .\ARSAS\TestResults
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish portable candidate
+        shell: pwsh
+        run: |
+          .\ARSAS\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+      - name: Smoke test and manifest
+        shell: pwsh
+        run: |
+          $exe = ".\ARSAS\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (!(Test-Path $exe -PathType Leaf)) { throw "Portable EXE missing." }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP 'ARSAS-export-only-cache'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--portable-smoke-test') -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Portable EXE smoke test timed out.'
+          }
+          if ($process.ExitCode -ne 0) { throw "Portable smoke test failed." }
+
+          @(
+            'ARSAS SCL export-only semantic physical-retest candidate',
+            "ARSAS commit: $env:ARSAS_COMMIT",
+            "Engine candidate: $env:ARIEC61850_COMMIT",
+            'Physical engine baseline: 648124097621046f5f127ceb1cf853fea54db730',
+            'Engine diff is exactly LiveIedSclExporter.cs plus one export-only regression test.',
+            'Discovery/MMS/Osi/Acse source is byte-for-byte identical to the physical baseline.',
+            'Acceptance: discovery path/speed baseline, 58/58, analog 22, digital 36, report-backed 58, actual InformationReport, polling 0.',
+            'SCL target: CBClsCounter live runtime unchanged; saved/reopened SCL INS/INT32.'
+          ) | Set-Content .\ARSAS\dist\SCL-EXPORT-ONLY-CANDIDATE.txt -Encoding utf8
+
+      - name: Upload candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSAS-scl-export-only-semantic-win-x64
+          path: |
+            ARSAS\dist\ARSAS-*-win-x64-portable.exe
+            ARSAS\dist\SCL-EXPORT-ONLY-CANDIDATE.txt
+            ARSAS\evidence\p0.7-release-candidate-lock.json
+            ARSAS\evidence\scl-export-only-semantic-candidate.json
+            ARSAS\TestResults\*.trx
+          if-no-files-found: error
+          retention-days: 14
