@@ -1692,10 +1692,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 profile: "full-model");
             try
             {
+                var semanticPatch = SclExportSemanticParityPatch.ApplyForLiveModel(
+                    model,
+                    result.SclPath);
                 canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
                     _sclWorkspaceService,
                     canonical,
                     result);
+
+                if (semanticPatch.Changed)
+                {
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: export-only semantic parity applied after canonical serialization and before reload validation • " +
+                        string.Join(" ", semanticPatch.Messages));
+                }
             }
             catch
             {
