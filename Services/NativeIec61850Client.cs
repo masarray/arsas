@@ -62,7 +62,6 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         LastConnectionTechnicalSummary = string.Empty;
         _lastDiscovery = null;
         _liveModel = null;
-        ResetSmartDiscoveryAuthority(); // __P0_5C_CONNECT_RESET__
         ClearCanonicalModel();
         _reportMonitorSessions.Clear();
         _reportMonitorCoverage.Clear();
@@ -128,12 +127,6 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
     public async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsAsync(CancellationToken cancellationToken, IProgress<IedDiscoveryProgress>? progress = null)
     {
-        // Production source now uses the same bounded single-flight discovery route that
-        // produced the field-verified golden runtime. The old supplemental/recursive path
-        // remains below only as dormant compatibility code while parity is validated.
-        if (SmartDiscoveryCaptureModeEnabled)
-            return await DiscoverSignalsSmartForCaptureAsync(cancellationToken, progress).ConfigureAwait(false);
-
         LastDiscoverySummary = string.Empty;
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new IedDiscoveryProgress(
@@ -1957,8 +1950,6 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
     public async ValueTask DisposeAsync()
     {
-        ResetSmartDiscoveryAuthority(); // __P0_5C_DISPOSE_RESET__
-
         await DisposeControlSessionsAsync().ConfigureAwait(false);
         await StopReportMonitorsAsync().ConfigureAwait(false);
         await _mmsIoGate.WaitAsync().ConfigureAwait(false);
@@ -1988,9 +1979,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
             var service = new ArControl.Iec61850ControlService();
             var opened = await RunMmsOperationAsync(
-                () => _lastDiscovery != null
-                    ? service.OpenAsync(_session, signal.ObjectReference, _lastDiscovery.Snapshot.DomainVariables, cancellationToken)
-                    : service.OpenAsync(_session, signal.ObjectReference, cancellationToken),
+                () => service.OpenAsync(_session, signal.ObjectReference, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
             _controlSessions[key] = opened;
             return opened;
