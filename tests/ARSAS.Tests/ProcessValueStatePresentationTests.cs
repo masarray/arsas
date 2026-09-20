@@ -6,9 +6,11 @@ public sealed class ProcessValueStatePresentationTests
 {
     [Theory]
     [InlineData("True", "Boolean", Iec61850ValueStatePresentation.Active)]
+    [InlineData("True [1]", "Boolean", Iec61850ValueStatePresentation.Active)]
     [InlineData("ON", "Boolean", Iec61850ValueStatePresentation.Active)]
     [InlineData("Closed [10]", "Dbpos", Iec61850ValueStatePresentation.Active)]
     [InlineData("False", "Boolean", Iec61850ValueStatePresentation.Inactive)]
+    [InlineData("False [0]", "Boolean", Iec61850ValueStatePresentation.Inactive)]
     [InlineData("OFF", "Boolean", Iec61850ValueStatePresentation.Inactive)]
     [InlineData("Open [01]", "Dbpos", Iec61850ValueStatePresentation.Inactive)]
     [InlineData("Intermediate [00]", "Dbpos", Iec61850ValueStatePresentation.Abnormal)]
@@ -85,9 +87,9 @@ public sealed class ProcessValueStatePresentationTests
         Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionOpen\"", source, StringComparison.Ordinal);
         Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionClose\"", source, StringComparison.Ordinal);
         Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionIntermediate\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text\" Value=\"A\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text\" Value=\"B\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text\" Value=\"P\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Text\" Value=\"A\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Text\" Value=\"B\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Text\" Value=\"P\"", source, StringComparison.Ordinal);
 
         Assert.Contains("#F1EFFF", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#ECF8FF", source, StringComparison.OrdinalIgnoreCase);
