@@ -22,12 +22,14 @@
                     Background="#F6F8FB" BorderBrush="#DCE3EC" BorderThickness="1">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border x:Name="ProcessValueKindBadge"
-                            Width="17" Height="17" CornerRadius="5"
+                            MinWidth="20" Height="17" CornerRadius="5" Padding="3,0"
                             Margin="0,0,6,0" Visibility="Collapsed"
-                            Background="#EEF2F6" BorderBrush="#D6DEE8" BorderThickness="1">
+                            Background="#EEF2F6" BorderBrush="#D6DEE8" BorderThickness="1"
+                            ToolTip="{Binding IecDataType}">
                         <TextBlock x:Name="ProcessValueKindText"
-                                   Text="·" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontSize="8.4" FontWeight="Bold" Foreground="#65758A"/>
+                                   Text="{Binding ValueTypeToken}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontSize="8.2" FontWeight="Bold" Foreground="#65758A"/>
                     </Border>
                     <TextBlock x:Name="ProcessValueText"
                                Text="{Binding DisplayValue}" ToolTip="{Binding DisplayValue}"
@@ -36,25 +38,52 @@
                 </StackPanel>
             </Border>
             <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="Analog">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F5F7FA"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#D9E0E8"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#3F4E60"/>
+                <!-- Type markers are metadata-only: F/I/U/B/E/DP come from the declared
+                     IEC/MMS data type. No value-shape or name heuristic creates a badge. -->
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="F">
                     <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF2F6"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#D6DEE8"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="A"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#65758A"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF4F8"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#CCD9E3"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#536D7C"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="I">
+                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF7F3"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#C9DED5"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#4E7567"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="U">
+                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F1F7F0"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#D2E1CE"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#607B58"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="E">
+                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F5F3F8"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#DDD7E7"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6C6480"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="B">
+                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F3F0FF"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#D8D2F5"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6557B5"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ValueTypeToken}" Value="DP">
+                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF7FC"/>
+                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#C6DFEC"/>
+                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#347795"/>
                 </DataTrigger>
 
+                <!-- Process state changes tone only; it never changes the type token. -->
                 <DataTrigger Binding="{Binding ValueVisualKind}" Value="BooleanTrue">
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F1EFFF"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#D8D2F5"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#5A4DA7"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#7567D8"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#7567D8"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="B"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
                 </DataTrigger>
 
@@ -62,10 +91,8 @@
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F8F7FC"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#E2DFED"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#6C657D"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="Transparent"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#978DAA"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="B"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6F6681"/>
                 </DataTrigger>
 
@@ -73,10 +100,8 @@
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#ECF8FF"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#B9E2F4"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#1F6F8F"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="Transparent"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#3B9FC5"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="P"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#247A9B"/>
                 </DataTrigger>
 
@@ -84,10 +109,8 @@
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#EAF4FF"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#B8D8F5"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#245F9E"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#2F80ED"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#2F80ED"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="P"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
                 </DataTrigger>
 
@@ -95,10 +118,8 @@
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#FFF8E6"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#F2D28A"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#946200"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F59E0B"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#F59E0B"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="P"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
                 </DataTrigger>
 
@@ -106,10 +127,8 @@
                     <Setter TargetName="ProcessValueBadge" Property="Background" Value="#FFF2E8"/>
                     <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#F3BE91"/>
                     <Setter TargetName="ProcessValueText" Property="Foreground" Value="#A14B0A"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#E8791B"/>
                     <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#E8791B"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Text" Value="P"/>
                     <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
