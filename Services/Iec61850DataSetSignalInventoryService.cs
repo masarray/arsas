@@ -71,23 +71,21 @@ public static class Iec61850DataSetSignalInventoryService
             // Scalar members remain backward compatible: when the static member itself is
             // the resolved primary leaf, an existing exact IEC or engine-provided MMS-form
             // signal may be enriched instead of duplicated.
+            var runtimeBinding = ResolveRuntimeBinding(model, descriptor, inventoryReference);
+
             var current = FindExistingMembershipSignal(signals, descriptor, inventoryReference);
             if (current is not null)
             {
-                if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference))
+                if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference, runtimeBinding))
                     enriched++;
                 continue;
             }
 
-            var runtimeReference = FirstNonEmpty(
-                descriptor.PrimaryValueReference,
-                descriptor.DesignReference,
-                descriptor.ObservedReference);
-            var reference = FirstNonEmpty(runtimeReference, inventoryReference);
+            var reference = FirstNonEmpty(runtimeBinding.Reference, inventoryReference);
             if (string.IsNullOrWhiteSpace(reference))
                 continue;
 
-            var signal = CreateSignal(descriptor, reference, inventoryReference);
+            var signal = CreateSignal(descriptor, runtimeBinding, inventoryReference);
             signals.Add(signal);
             added.Add(signal);
         }
@@ -152,17 +150,26 @@ public static class Iec61850DataSetSignalInventoryService
     private static Iec61850DataSetSignalInventoryMergeResult EmptyResult()
         => new(Array.Empty<SignalDefinition>(), 0, 0);
 
+    private sealed record RuntimeBinding(
+        string Reference,
+        string DataType,
+        bool ResolvedFromExactSchema);
+
     private static SignalDefinition CreateSignal(
         Iec61850SignalDescriptor descriptor,
-        string runtimeReference,
+        RuntimeBinding runtimeBinding,
         string inventoryReference)
     {
         var primaryMembership = FirstMembership(descriptor);
         var report = descriptor.ReportMemberships.FirstOrDefault();
-        var dataType = FirstNonEmpty(descriptor.MmsType, descriptor.SclBType, "Unknown");
-        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
-        var staticReference = FirstNonEmpty(inventoryReference, runtimeReference);
-        var objectReference = unresolved ? staticReference : FirstNonEmpty(runtimeReference, staticReference);
+        var descriptorUnresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+        var runtimeResolved = !string.IsNullOrWhiteSpace(runtimeBinding.Reference) &&
+                              (!descriptorUnresolved || runtimeBinding.ResolvedFromExactSchema);
+        var staticReference = FirstNonEmpty(inventoryReference, runtimeBinding.Reference);
+        var objectReference = runtimeResolved
+            ? runtimeBinding.Reference
+            : staticReference;
+        var dataType = FirstNonEmpty(runtimeBinding.DataType, descriptor.MmsType, descriptor.SclBType, "Unknown");
 
         return new SignalDefinition
         {
@@ -174,25 +181,29 @@ public static class Iec61850DataSetSignalInventoryService
             FunctionalConstraint = descriptor.FunctionalConstraint,
             DataType = dataType,
             Category = "DataSet",
-            Confidence = unresolved ? "Medium" : "High",
+            Confidence = runtimeResolved ? "High" : "Medium",
             DataSetReference = primaryMembership?.DataSetReference ?? string.Empty,
             ReportControlReference = report?.ReportControlReference ?? string.Empty,
             QualityReference = descriptor.QualityReference,
             TimestampReference = descriptor.TimestampReference,
-            Source = unresolved
-                ? "ARIEC61850 signal inventory • mandatory static DataSet member • primary leaf unresolved"
-                : "ARIEC61850 signal inventory • mandatory static DataSet member",
+            Source = runtimeBinding.ResolvedFromExactSchema
+                ? "ARIEC61850 signal inventory • mandatory static DataSet member • exact schema primary leaf"
+                : runtimeResolved
+                    ? "ARIEC61850 signal inventory • mandatory static DataSet member"
+                    : "ARIEC61850 signal inventory • mandatory static DataSet member • primary leaf unresolved",
             IsSelected = false,
             IsReportCapable = true,
-            ReportCoverage = unresolved
+            ReportCoverage = runtimeResolved
                 ? report is null
-                    ? "Static DataSet member • primary leaf unresolved"
-                    : "Static report/DataSet • primary leaf unresolved"
+                    ? "Static DataSet member • exact runtime leaf"
+                    : "Static report/DataSet • exact runtime leaf"
                 : report is null
-                    ? "Static DataSet member • MMS polling fallback"
-                    : "Static report/DataSet • polling fallback",
+                    ? "Static DataSet member • primary leaf unresolved"
+                    : "Static report/DataSet • primary leaf unresolved",
             ReportCoverageReason = BuildCoverageReason(descriptor),
-            ProbeStatus = unresolved ? "DataSet member — primary leaf unresolved" : "Not probed",
+            ProbeStatus = runtimeBinding.ResolvedFromExactSchema
+                ? "DataSet member — exact schema primary leaf"
+                : runtimeResolved ? "Not probed" : "DataSet member — primary leaf unresolved",
             Value = "-",
             Quality = "Unknown",
             DeviceTimestamp = "-"
@@ -202,12 +213,40 @@ public static class Iec61850DataSetSignalInventoryService
     private static bool ApplyEngineDataSetAuthority(
         SignalDefinition signal,
         Iec61850SignalDescriptor descriptor,
-        string inventoryReference)
+        string inventoryReference,
+        RuntimeBinding runtimeBinding)
     {
         var changed = false;
         var membership = FirstMembership(descriptor);
         var report = descriptor.ReportMemberships.FirstOrDefault();
         var staticReference = FirstNonEmpty(inventoryReference, signal.DisplayReference, signal.ObjectReference);
+
+        // A row created from a previous unresolved discovery may be safely upgraded only
+        // when the current authoritative schema resolves one exact named primary leaf.
+        // The static membership identity remains DisplayReference; ObjectReference is the
+        // runtime leaf used for report matching/presentation.
+        if (runtimeBinding.ResolvedFromExactSchema &&
+            !string.IsNullOrWhiteSpace(runtimeBinding.Reference) &&
+            (string.Equals(signal.Category, "DataSet", StringComparison.OrdinalIgnoreCase) ||
+             (signal.Source ?? string.Empty).Contains("mandatory static DataSet member", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!ReferenceEquals(signal.ObjectReference, runtimeBinding.Reference))
+            {
+                signal.ObjectReference = runtimeBinding.Reference;
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(runtimeBinding.DataType) &&
+                !string.Equals(signal.DataType, runtimeBinding.DataType, StringComparison.OrdinalIgnoreCase))
+            {
+                signal.DataType = runtimeBinding.DataType;
+                changed = true;
+            }
+
+            signal.Confidence = "High";
+            signal.Source = "ARIEC61850 signal inventory • mandatory static DataSet member • exact schema primary leaf";
+            signal.ProbeStatus = "DataSet member — exact schema primary leaf";
+        }
 
         // Never replace the user-visible static DataSet member with a guessed/resolved leaf.
         // ObjectReference can remain the engine-resolved runtime leaf for MMS reads; the
@@ -273,6 +312,167 @@ public static class Iec61850DataSetSignalInventoryService
         }
 
         return changed;
+    }
+
+    private static RuntimeBinding ResolveRuntimeBinding(
+        LiveIedModelDiscoveryDocument model,
+        Iec61850SignalDescriptor descriptor,
+        string inventoryReference)
+    {
+        var descriptorReference = FirstNonEmpty(
+            descriptor.PrimaryValueReference,
+            descriptor.DesignReference,
+            descriptor.ObservedReference);
+
+        var descriptorType = FirstNonEmpty(
+            FindExactAttributeDataType(model, descriptorReference),
+            descriptor.SclBType,
+            descriptor.MmsType);
+
+        if (descriptor.ResolutionStatus != Iec61850SignalCatalogResolutionStatus.Unresolved &&
+            !string.IsNullOrWhiteSpace(descriptorReference))
+        {
+            return new RuntimeBinding(descriptorReference, descriptorType, false);
+        }
+
+        if (SchemaSafeAggregateProjectionService.TryResolveStaticDataSetPrimaryLeaf(
+                model,
+                inventoryReference,
+                descriptor.FunctionalConstraint,
+                out var leaf,
+                out _))
+        {
+            var schemaType = FirstNonEmpty(
+                FindExactAttributeDataType(model, leaf.Reference),
+                leaf.DataType,
+                descriptorType);
+            return new RuntimeBinding(leaf.Reference, schemaType, true);
+        }
+
+        return new RuntimeBinding(descriptorReference, descriptorType, false);
+    }
+
+    private static string FindExactAttributeDataType(
+        LiveIedModelDiscoveryDocument model,
+        string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return string.Empty;
+
+        var normalized = LiteralReference(reference).Replace('
+    {
+        var membership = FirstMembership(descriptor);
+        return FirstNonEmpty(
+            membership?.CanonicalMemberReference,
+            membership?.OriginalMemberReference,
+            descriptor.DesignReference,
+            descriptor.ObservedReference,
+            descriptor.PrimaryValueReference);
+    }
+
+    private static Iec61850SignalDataSetMembership? FirstMembership(Iec61850SignalDescriptor descriptor)
+        => descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .FirstOrDefault();
+
+    private static string BuildCoverageReason(Iec61850SignalDescriptor descriptor)
+    {
+        var memberships = descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .Select(membership => $"{membership.DataSetReference}[{membership.MemberIndex}]")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var membershipText = memberships.Length == 0
+            ? "static DataSet membership"
+            : string.Join(", ", memberships);
+        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+        var authorityText = unresolved
+            ? "mandatory static DataSet member"
+            : "mandatory primary DataSet signal";
+        var resolutionText = unresolved
+            ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
+            : " The static FCDA identity stays visible even when a readable primary DataAttribute is resolved for runtime acquisition.";
+
+        return $"ARIEC61850 {authorityText}: {membershipText}." +
+               resolutionText +
+               " Inventory presence is engine-authoritative; user selection remains independent.";
+    }
+
+    private static bool ReferenceEquals(string? left, string? right)
+        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string LiteralReference(string? reference)
+        => (reference ?? string.Empty).Trim();
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+}
+, '.');
+        var matches = model.LogicalDevices
+            .SelectMany(device => device.LogicalNodes)
+            .SelectMany(node => node.DataObjects)
+            .SelectMany(dataObject => dataObject.Attributes)
+            .Where(attribute => ReferenceEquals(
+                (attribute.ObjectReference ?? string.Empty).Replace('
+    {
+        var membership = FirstMembership(descriptor);
+        return FirstNonEmpty(
+            membership?.CanonicalMemberReference,
+            membership?.OriginalMemberReference,
+            descriptor.DesignReference,
+            descriptor.ObservedReference,
+            descriptor.PrimaryValueReference);
+    }
+
+    private static Iec61850SignalDataSetMembership? FirstMembership(Iec61850SignalDescriptor descriptor)
+        => descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .FirstOrDefault();
+
+    private static string BuildCoverageReason(Iec61850SignalDescriptor descriptor)
+    {
+        var memberships = descriptor.DataSetMemberships
+            .OrderBy(membership => membership.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(membership => membership.MemberIndex)
+            .Select(membership => $"{membership.DataSetReference}[{membership.MemberIndex}]")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var membershipText = memberships.Length == 0
+            ? "static DataSet membership"
+            : string.Join(", ", memberships);
+        var unresolved = descriptor.ResolutionStatus == Iec61850SignalCatalogResolutionStatus.Unresolved;
+        var authorityText = unresolved
+            ? "mandatory static DataSet member"
+            : "mandatory primary DataSet signal";
+        var resolutionText = unresolved
+            ? " The original DataSet member is preserved while its unique primary DataAttribute remains unresolved."
+            : " The static FCDA identity stays visible even when a readable primary DataAttribute is resolved for runtime acquisition.";
+
+        return $"ARIEC61850 {authorityText}: {membershipText}." +
+               resolutionText +
+               " Inventory presence is engine-authoritative; user selection remains independent.";
+    }
+
+    private static bool ReferenceEquals(string? left, string? right)
+        => string.Equals(LiteralReference(left), LiteralReference(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string LiteralReference(string? reference)
+        => (reference ?? string.Empty).Trim();
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+}
+, '.'),
+                normalized))
+            .ToArray();
+
+        if (matches.Length != 1)
+            return string.Empty;
+
+        return FirstNonEmpty(matches[0].SclBType, matches[0].MmsType);
     }
 
     private static string InventoryReference(Iec61850SignalDescriptor descriptor)
