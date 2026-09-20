@@ -28,8 +28,10 @@ public partial class MainWindow
         {
             if (_dataSetCapabilityBuildTokens.Remove(device.DeviceId, out var previous))
             {
+                // The superseded worker owns disposal in its own finally block. Cancelling
+                // here is sufficient and avoids disposing a token source while that worker
+                // is still observing the token.
                 previous.Cancel();
-                previous.Dispose();
             }
 
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
