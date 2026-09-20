@@ -640,11 +640,17 @@ public sealed class Iec61850MonitorPoint : ObservableObject
             {
                 Raise(nameof(DisplayValue));
                 Raise(nameof(ValueTone));
+                Raise(nameof(ValueVisualKind));
             }
         }
     }
     public string DisplayValue => Value;
     public string ValueTone => Iec61850ValueStatePresentation.Classify(Value, IecDataType);
+    public string ValueVisualKind => Iec61850ValueStatePresentation.ClassifyVisualKind(
+        Value,
+        IecDataType,
+        Category,
+        IecReference);
     public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string SourceMode { get => _sourceMode; set => Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
@@ -800,6 +806,11 @@ public sealed class Iec61850EventEntry
     public string EventValue => string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
     public string DisplayValue => EventValue;
     public string ValueTone => Iec61850ValueStatePresentation.Classify(EventValue, IecDataType);
+    public string ValueVisualKind => Iec61850ValueStatePresentation.ClassifyVisualKind(
+        EventValue,
+        IecDataType,
+        string.Empty,
+        IecReference);
     public string QualityTone => Iec61850QualityPresentation.Classify(Quality);
 
     public string IecTelegram => Iec61850MonitorPoint.StripIedNamePrefix(IecReference, DeviceName);
