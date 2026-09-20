@@ -80,17 +80,30 @@ jobs:
           $changed = @(git -C .\ARIEC61850 diff --name-only $base $head)
           $expected = @(
             'src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs',
-            'tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs'
+            'tests/AR.Iec61850.Tests/Scl/LiveIedSclExportOnlySemanticAuthorityTests.cs',
+            'src/AR.Iec61850/Discovery/Iec61850StandardModelRegistry.cs'
           )
           $unexpected = @($changed | Where-Object { $_ -notin $expected })
           $missing = @($expected | Where-Object { $_ -notin $changed })
-          if ($unexpected.Count -gt 0 -or $missing.Count -gt 0 -or $changed.Count -ne 2) {
+          if ($unexpected.Count -gt 0 -or $missing.Count -gt 0 -or $changed.Count -ne 3) {
             $changed | ForEach-Object { Write-Host $_ }
-            throw 'Engine candidate is not export-only.'
+            throw 'Engine candidate is not export-only plus the approved comment cleanup.'
           }
 
-          git -C .\ARIEC61850 diff --exit-code $base $head -- src/AR.Iec61850/Discovery src/AR.Iec61850/Mms src/AR.Iec61850/Osi src/AR.Iec61850/Acse
-          if ($LASTEXITCODE -ne 0) { throw 'Discovery/wire source differs from physical baseline.' }
+          $registryDiff = @(git -C .\ARIEC61850 diff --unified=0 $base $head -- src/AR.Iec61850/Discovery/Iec61850StandardModelRegistry.cs)
+          $registryChangedLines = @($registryDiff | Where-Object {
+            $_ -match '^[+-]' -and $_ -notmatch '^(---|\+\+\+)'
+          })
+          $registryCodeDelta = @($registryChangedLines | Where-Object {
+            $_ -notmatch '^[+-]\s*//'
+          })
+          if ($registryCodeDelta.Count -ne 0) {
+            $registryCodeDelta | ForEach-Object { Write-Host $_ }
+            throw 'StandardModelRegistry contains executable code drift; only source-clean comment wording is allowed.'
+          }
+
+          git -C .\ARIEC61850 diff --exit-code $base $head -- src/AR.Iec61850/Mms src/AR.Iec61850/Osi src/AR.Iec61850/Acse
+          if ($LASTEXITCODE -ne 0) { throw 'Wire/MMS source differs from physical baseline.' }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -146,8 +159,8 @@ jobs:
             "ARSAS commit: $env:ARSAS_COMMIT",
             "Engine candidate: $env:ARIEC61850_COMMIT",
             'Physical engine baseline: 648124097621046f5f127ceb1cf853fea54db730',
-            'Engine diff is exactly LiveIedSclExporter.cs plus one export-only regression test.',
-            'Discovery/MMS/Osi/Acse source is byte-for-byte identical to the physical baseline.',
+            'Engine executable diff is LiveIedSclExporter.cs only; one regression test plus two source-clean comment lines are the only additional changes.',
+            'Discovery executable logic plus MMS/Osi/Acse source matches the physical baseline; the registry delta is comment-only.',
             'Acceptance: discovery path/speed baseline, 58/58, analog 22, digital 36, report-backed 58, actual InformationReport, polling 0.',
             'SCL target: CBClsCounter live runtime unchanged; saved/reopened SCL INS/INT32.'
           ) | Set-Content .\ARSAS\dist\SCL-EXPORT-ONLY-CANDIDATE.txt -Encoding utf8
