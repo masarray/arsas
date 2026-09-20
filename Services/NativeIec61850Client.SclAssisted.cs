@@ -120,6 +120,7 @@ public sealed partial class NativeIec61850Client
         LastDiscoverySummary = string.Empty;
         _lastDiscovery = null;
         _liveModel = null;
+        ResetSmartDiscoveryAuthority();
         LastReportInventory = new NativeReportInventory();
         _reportMonitorSessions.Clear();
         _reportMonitorCoverage.Clear();
@@ -256,7 +257,7 @@ public sealed partial class NativeIec61850Client
 
             _liveModel = preparation.InitialReadDesign.Model;
             var reportInventory = BuildTrustedSclReportInventory(_liveModel);
-            var dataSetDirectories = BuildTrustedSclDataSetDirectories(_liveModel);
+            var dataSetDirectories = BuildModelDataSetDirectories(_liveModel, "TrustedScl");
             foreach (var directory in dataSetDirectories)
             {
                 _trustedSclDataSetDirectories[
@@ -455,8 +456,9 @@ public sealed partial class NativeIec61850Client
         return inventory;
     }
 
-    private static IReadOnlyList<ArMms.MmsDataSetDirectoryResult> BuildTrustedSclDataSetDirectories(
-        LiveIedModelDiscoveryDocument model)
+    private static IReadOnlyList<ArMms.MmsDataSetDirectoryResult> BuildModelDataSetDirectories(
+        LiveIedModelDiscoveryDocument model,
+        string source)
         => model.DataSets
             .Select(dataSet =>
             {
@@ -467,7 +469,7 @@ public sealed partial class NativeIec61850Client
                     dataSet.Name);
                 var members = dataSet.Members
                     .OrderBy(member => member.Index)
-                    .Select(member => BuildTrustedSclDataSetMember(member, domain))
+                    .Select(member => BuildModelDataSetMember(member, domain, source))
                     .ToArray();
                 return new ArMms.MmsDataSetDirectoryResult
                 {
@@ -478,14 +480,15 @@ public sealed partial class NativeIec61850Client
                     IsDeletable = dataSet.IsDeletable,
                     Members = members,
                     Message =
-                        $"Trusted SCL DataSet authority: {dataSet.Reference} has {members.Length} ordered member(s); no network directory request was sent."
+                        $"{source} DataSet authority: {dataSet.Reference} has {members.Length} ordered member(s); model order is preserved."
                 };
             })
             .ToArray();
 
-    private static ArMms.MmsDataSetDirectoryMember BuildTrustedSclDataSetMember(
+    private static ArMms.MmsDataSetDirectoryMember BuildModelDataSetMember(
         LiveIedDataSetMemberModel member,
-        string fallbackDomain)
+        string fallbackDomain,
+        string source)
     {
         var mmsReference = member.MmsReference?.Trim() ?? string.Empty;
         var slash = mmsReference.IndexOf('/');
@@ -507,7 +510,7 @@ public sealed partial class NativeIec61850Client
             FunctionalConstraint = member.FunctionalConstraint,
             LogicalNode = logicalNode,
             DataObjectPath = dataObjectPath,
-            Source = "TrustedScl",
+            Source = source,
             Confidence = 100
         };
     }

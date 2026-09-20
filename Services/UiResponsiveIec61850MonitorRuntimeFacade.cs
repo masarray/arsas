@@ -74,6 +74,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
 
+    public Task<int> EnrichSelectedStaticDataSetUnitsAsync(
+        Iec61850MonitorDevice device,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            device?.DeviceId,
+            cancellationToken,
+            token => _inner.EnrichSelectedStaticDataSetUnitsAsync(device, token));
+
     public Task<int> EnrichCanonicalForSclSaveAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)

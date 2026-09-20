@@ -123,6 +123,76 @@ public static class SchemaSafeAggregateProjectionService
         return false;
     }
 
+    /// <summary>
+    /// Resolves one exact scalar runtime leaf for a structured Static DataSet member
+    /// using only named attributes from the authoritative live/SCL schema. This is the
+    /// discovery-side counterpart of opened-SCL semantic projection: no child position,
+    /// numeric value, prefix guess, or report payload shape is used as type authority.
+    ///
+    /// Typical members are phase/subphase FCDs such as A.phsA, PPV.phsAB,
+    /// ThdA.phsA, and ThdPPV.phsAB. Canonical cVal.mag wins when present;
+    /// instantaneous magnitude is accepted only as an unambiguous named fallback.
+    /// </summary>
+    public static bool TryResolveStaticDataSetPrimaryLeaf(
+        LiveIedModelDiscoveryDocument? authorityModel,
+        string requestedReference,
+        string? functionalConstraint,
+        out ReadLeaf leaf,
+        out string status)
+    {
+        leaf = new ReadLeaf(string.Empty, string.Empty, string.Empty);
+        status = string.Empty;
+
+        if (authorityModel is null)
+        {
+            status = "Static DataSet primary-leaf resolution blocked: no authoritative IEC 61850 model is attached.";
+            return false;
+        }
+
+        if (!TryFindDataObject(authorityModel, requestedReference, out var dataObject))
+        {
+            status = $"Static DataSet primary-leaf resolution blocked: DataObject schema was not found uniquely for {requestedReference}.";
+            return false;
+        }
+
+        var requested = NormalizeReference(requestedReference).TrimEnd('.');
+        var dataObjectReference = NormalizeReference(dataObject.Reference).TrimEnd('.');
+        if (requested.Length <= dataObjectReference.Length ||
+            !requested.StartsWith(dataObjectReference + ".", StringComparison.OrdinalIgnoreCase))
+        {
+            status = $"Static DataSet primary-leaf resolution does not own top-level DataObject {requestedReference}.";
+            return false;
+        }
+
+        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        var tiers = new[]
+        {
+            new[] { requested + ".cval.mag.f" },
+            new[] { requested + ".mag.f" },
+            new[] { requested + ".cval.mag.i" },
+            new[] { requested + ".mag.i" },
+            new[] { requested + ".instcval.mag.f", requested + ".instmag.f" },
+            new[] { requested + ".instcval.mag.i", requested + ".instmag.i" }
+        };
+
+        if (!TryResolvePreferredAttribute(
+                dataObject,
+                tiers,
+                fc,
+                out var attribute,
+                out var reference,
+                out var failure))
+        {
+            status = $"Static DataSet primary-leaf resolution blocked for {requestedReference}: {failure}";
+            return false;
+        }
+
+        var dataType = FirstNonEmpty(attribute.SclBType, attribute.MmsType, "Unknown");
+        leaf = new ReadLeaf(reference, "Value", dataType);
+        status = $"Static DataSet primary leaf resolved from exact named schema attribute {reference} ({dataType}).";
+        return true;
+    }
+
     public static bool TryProject(
         LiveIedModelDiscoveryDocument? authorityModel,
         ArMms.MmsDataValue? value,
@@ -279,6 +349,29 @@ public static class SchemaSafeAggregateProjectionService
         out string reference,
         out string failure)
     {
+        if (TryResolvePreferredAttribute(
+                dataObject,
+                candidateTiers,
+                "MX",
+                out _,
+                out reference,
+                out failure))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryResolvePreferredAttribute(
+        LiveIedDataObjectModel dataObject,
+        IReadOnlyList<string[]> candidateTiers,
+        string functionalConstraint,
+        out LiveIedDataAttributeModel attribute,
+        out string reference,
+        out string failure)
+    {
+        attribute = new LiveIedDataAttributeModel();
         reference = string.Empty;
         failure = string.Empty;
 
@@ -286,27 +379,29 @@ public static class SchemaSafeAggregateProjectionService
         {
             var expected = tier.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var matches = dataObject.Attributes
-                .Select(attribute => new
+                .Select(candidate => new
                 {
-                    Attribute = attribute,
-                    EffectiveReference = EffectiveAttributeReference(dataObject, attribute)
+                    Attribute = candidate,
+                    EffectiveReference = EffectiveAttributeReference(dataObject, candidate)
                 })
                 .Where(item => expected.Contains(NormalizeReference(item.EffectiveReference)))
-                .Where(item => string.IsNullOrWhiteSpace(item.Attribute.FunctionalConstraint) ||
-                               item.Attribute.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase))
+                .Where(item => string.IsNullOrWhiteSpace(functionalConstraint) ||
+                               string.IsNullOrWhiteSpace(item.Attribute.FunctionalConstraint) ||
+                               item.Attribute.FunctionalConstraint.Equals(functionalConstraint, StringComparison.OrdinalIgnoreCase))
                 .GroupBy(item => NormalizeReference(item.EffectiveReference), StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First().EffectiveReference)
+                .Select(group => group.First())
                 .ToArray();
 
             if (matches.Length == 0)
                 continue;
             if (matches.Length != 1)
             {
-                failure = $"Approved named fallback tier is ambiguous: {string.Join(", ", matches)}.";
+                failure = $"Approved named fallback tier is ambiguous: {string.Join(", ", matches.Select(match => match.EffectiveReference))}.";
                 return false;
             }
 
-            reference = matches[0];
+            attribute = matches[0].Attribute;
+            reference = matches[0].EffectiveReference;
             return true;
         }
 
@@ -539,6 +634,9 @@ public static class SchemaSafeAggregateProjectionService
 
     private static bool IsUseful(string? value)
         => !string.IsNullOrWhiteSpace(value) && value != "-";
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private static string FormatDiagnostics(IReadOnlyList<string> diagnostics)
         => diagnostics.Count == 0

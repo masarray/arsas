@@ -4,6 +4,85 @@ namespace ARSAS.Tests;
 
 public sealed class Iec61850ValueFormatterTests
 {
+    [Theory]
+    [InlineData("true", "True [1]")]
+    [InlineData("false", "False [0]")]
+    [InlineData(true, "True [1]")]
+    [InlineData(false, "False [0]")]
+    public void FormatReportProcessValue_RestoresBooleanOperatorText(object value, string expected)
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            value,
+            "Boolean",
+            string.Empty,
+            "Status",
+            "IEDLD/GGIO1.SwLoc.stVal");
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Theory]
+    [InlineData("0", "False [0]")]
+    [InlineData("1", "True [1]")]
+    [InlineData(0, "False [0]")]
+    [InlineData(1, "True [1]")]
+    public void FormatReportProcessValue_UsesDeclaredBooleanTypeForNumericState(
+        object value,
+        string expected)
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            value,
+            "SPS",
+            string.Empty,
+            "Status",
+            "IEDLD/GGIO1.Ind1.stVal");
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Theory]
+    [InlineData("off", "Open [01]")]
+    [InlineData("on", "Close [10]")]
+    [InlineData("intermediate-state", "Intermediate [00]")]
+    [InlineData("bad-state", "Bad state [11]")]
+    public void FormatReportProcessValue_RestoresDpcOperatorContext(string value, string expected)
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            value,
+            "Enum",
+            string.Empty,
+            "Position",
+            "IEDLD/CSWI1.Pos.stVal");
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Fact]
+    public void FormatReportProcessValue_DoesNotInterpretGenericOnOffAsDpcOutsidePositionContext()
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            "off",
+            "Enum",
+            string.Empty,
+            "Status",
+            "IEDLD/GGIO1.AutoMode.stVal");
+
+        Assert.Equal("off", formatted);
+    }
+
+    [Fact]
+    public void FormatReportProcessValue_LeavesNumericMeasurementUnchanged()
+    {
+        var formatted = Iec61850ValueFormatter.FormatReportProcessValue(
+            "123.45",
+            "Float32",
+            "V",
+            "Measurement",
+            "IEDLD/MMXU1.PhV.phsA.cVal.mag.f");
+
+        Assert.Equal("123.45 V", formatted);
+    }
+
     [Fact]
     public void Format_Extracts_Boolean_StVal_From_Legacy_Report_Structure()
     {

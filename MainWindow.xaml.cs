@@ -276,7 +276,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         var connected = firstImported.IsConnected ||
                                         await ConnectUsingSavedModelAsync(firstImported);
                         if (connected && !firstImported.IsMonitoring)
+                        {
+                            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                                firstImported,
+                                _applicationCancellation.Token);
+                            firstImported.RefreshComputed();
                             await StartDeviceMonitorAsync(firstImported);
+                        }
                     }
                 }
                 else
@@ -763,12 +769,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.IsBusy = false;
             device.RefreshComputed();
 
-            if (openWizard && device.SignalCount > 0)
+            var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;
+            if (openWizard && (device.SignalCount > 0 || discoveredDataSetCount > 0))
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
-                    await OpenSignalSelectionWizardAsync(device, restoredCount);
+                {
+                    // Discovery and Open SCL converge here. Once a canonical model exists,
+                    // both sources present the same task-first IED Actions workflow so Static
+                    // DataSet acquisition is source-neutral.
+                    await OpenIedWorkspaceActionsAsync(device);
+                }
                 else
+                {
                     SetStatus($"{device.Name}: discovery complete. Use the edit icon on its IED card to review {restoredCount} restored selection(s).");
+                }
             }
             return true;
         }
@@ -1559,13 +1573,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             if (device.SclWorkspace == null && device.IsConnected)
             {
-                SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
-                var instanceEvidence = await _runtime
-                    .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
-                AddLog(
-                    "INFO",
-                    "SCL Export",
-                    $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+                if (device.IsMonitoring)
+                {
+                    // Save is a snapshot/export operation, not an acquisition-mode change.
+                    // Never tear down an armed report session merely to collect optional
+                    // instance <Val> evidence. The canonical discovery/model already bound
+                    // to this accepted MMS association is sufficient for interoperable SCL.
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: monitoring remains active; Save SCL uses the current canonical model and skips optional save-time value enrichment.");
+                }
+                else
+                {
+                    SetStatus($"{device.Name}: enriching Save SCL with bounded live FC-root values…");
+                    var instanceEvidence = await _runtime
+                        .EnrichCanonicalForSclSaveAsync(device, _applicationCancellation.Token);
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: save-time enrichment completed with {instanceEvidence:N0} exact instance-value leaf/leaves. Fast discovery remained unchanged.");
+                }
             }
 
             if (device.SclWorkspace != null &&
@@ -1664,10 +1692,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 profile: "full-model");
             try
             {
+                var semanticPatch = SclExportSemanticParityPatch.ApplyForLiveModel(
+                    model,
+                    result.SclPath);
                 canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
                     _sclWorkspaceService,
                     canonical,
                     result);
+
+                if (semanticPatch.Changed)
+                {
+                    AddLog(
+                        "INFO",
+                        "SCL Export",
+                        $"{device.Name}: export-only semantic parity applied after canonical serialization and before reload validation • " +
+                        string.Join(" ", semanticPatch.Messages));
+                }
             }
             catch
             {

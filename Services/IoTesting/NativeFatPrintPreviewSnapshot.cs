@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Models.IoTesting;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Services.IoTesting;
 
@@ -76,10 +77,10 @@ public sealed class NativeFatPrintPreviewSnapshot
                 Copy(displaySignal),
                 Copy(point.IecTelegram),
                 Copy(point.Quality),
-                Display(point.DisplayValue),
-                Display(value1),
+                DisplayProcessValue(point.DisplayValue, point),
+                DisplayProcessValue(value1, point),
                 DisplayTimestamp(capture1),
-                Display(value2),
+                DisplayProcessValue(value2, point),
                 DisplayTimestamp(capture2),
                 Display(result));
         }).ToArray();
@@ -92,6 +93,21 @@ public sealed class NativeFatPrintPreviewSnapshot
             device.Port,
             rows,
             auxiliaryEvidence ?? NativeFatAuxiliaryEvidenceSnapshot.Empty);
+    }
+
+    private static string DisplayProcessValue(
+        string? value,
+        Iec61850MonitorPoint point)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "—";
+
+        return Iec61850ValueFormatter.FormatReportProcessValue(
+            value.Trim(),
+            point.IecDataType,
+            point.Unit,
+            point.Category,
+            point.IecReference);
     }
 
     private static string DisplayTimestamp(FatValueEvidence? evidence)

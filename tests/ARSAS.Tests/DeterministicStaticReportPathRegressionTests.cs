@@ -11,7 +11,10 @@ public sealed class DeterministicStaticReportPathRegressionTests
         Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
         Assert.Contains("configurationModel.ReportControls", source, StringComparison.Ordinal);
         Assert.Contains("discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
-        Assert.Contains("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
+        Assert.Contains("BuildModelDataSetDirectories", source, StringComparison.Ordinal);
+        Assert.Contains("discovery.DataSetDirectories", source, StringComparison.Ordinal);
+        Assert.Contains("TryVerifyStaticDataSetMemberOrder", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
         Assert.Contains("MmsReportSubscriptionPlanStatus.ReadyRequiresWrite", source, StringComparison.Ordinal);
         Assert.Contains("triggerGeneralInterrogation: true", source, StringComparison.Ordinal);
         Assert.Contains("deleteDynamicDataSetOnStop: false", source, StringComparison.Ordinal);
@@ -44,19 +47,33 @@ public sealed class DeterministicStaticReportPathRegressionTests
     }
 
     [Fact]
-    public void StaticPath_RequiresConfiguredRcbFamilyAndOrderedLiveDataSetDirectory()
+    public void StaticPath_RequiresConfiguredRcbFamilyAndCanonicalOrderVerifiedByDiscoverySnapshot()
     {
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
         Assert.Contains("SameStaticReference(report.DataSetReference, dataSetGroup.Key)", source, StringComparison.Ordinal);
         Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
         Assert.Contains("arbitrary same-DataSet", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("live DataSet directory could not prove an ordered non-empty member list", source, StringComparison.Ordinal);
-        Assert.Contains("directory.Members", source, StringComparison.Ordinal);
+        Assert.Contains("canonical model has no ordered DataSet member list", source, StringComparison.Ordinal);
+        Assert.Contains("discovery authority has no ordered live DataSet directory", source, StringComparison.Ordinal);
+        Assert.Contains("canonical/live DataSet member order mismatch", source, StringComparison.Ordinal);
+        Assert.Contains("Members = modelDirectory.Members", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Members = liveDirectory.Members", source, StringComparison.Ordinal);
         Assert.Contains("No MMS process polling was substituted", source, StringComparison.Ordinal);
         Assert.Contains("authoritative configuration binds", source, StringComparison.Ordinal);
         Assert.Contains("live DatSet reports", source, StringComparison.Ordinal);
         Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StaticPath_DoesNotIssueSecondDataSetDirectoryRead()
+    {
+        var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
+
+        Assert.Contains("discovery.DataSetDirectories.SingleOrDefault", source, StringComparison.Ordinal);
+        Assert.Contains("Members = modelDirectory.Members", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Members = liveDirectory.Members", source, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -79,7 +79,7 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
             Assert.Equal("—", snapshot.Rows[0].Value1);
             Assert.Equal("Open [01]", snapshot.Rows[1].Value1);
             Assert.NotEqual("—", snapshot.Rows[1].Value1TimestampText);
-            Assert.Equal("Closed [10]", snapshot.Rows[1].Value2);
+            Assert.Equal("Close [10]", snapshot.Rows[1].Value2);
             Assert.NotEqual("—", snapshot.Rows[1].Value2TimestampText);
         }
         finally
@@ -160,11 +160,14 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
     }
 
     [Theory]
-    [InlineData("BOOLEAN", "True")]
-    [InlineData("FLOAT32", "1247.32 A")]
-    [InlineData("DbPos", "Closed [10]")]
-    [InlineData("INT32", "Tap 7")]
-    public void P4E_DigitalAnalogPositionAndTapEvidenceKeepMillisecondTimestamp(string dataType, string rawValue)
+    [InlineData("BOOLEAN", "True", "True [1]")]
+    [InlineData("FLOAT32", "1247.32 A", "1247.32 A")]
+    [InlineData("DbPos", "Closed [10]", "Close [10]")]
+    [InlineData("INT32", "Tap 7", "Tap 7")]
+    public void P4E_DigitalAnalogPositionAndTapEvidenceKeepMillisecondTimestamp(
+        string dataType,
+        string rawValue,
+        string expectedDisplay)
     {
         var device = Device("runtime-types", "AA1E1F06R4");
         var point = Point(device, "Evidence", "AA1E1F06R4LD0/GGIO1.Test.stVal", rawValue, dataType);
@@ -181,7 +184,13 @@ public sealed class NativeFatP4EEvidenceIsolationRegressionTests
             DateTimeOffset.UtcNow);
 
         var snapshot = NativeFatPrintPreviewSnapshot.Capture(device, cache);
-        Assert.Equal(rawValue, snapshot.Rows[0].Value1);
+        Assert.Equal(expectedDisplay, snapshot.Rows[0].Value1);
+        Assert.Equal(
+            rawValue,
+            NativeFatCanonicalEvidenceOverlay.ReadRaw(
+                cache,
+                point,
+                NativeFatEvidenceField.Value1));
         var expectedLocal = DateTimeOffset.Parse("2026-09-12T06:46:31.958+07:00")
             .ToLocalTime()
             .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);

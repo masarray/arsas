@@ -43,6 +43,131 @@ public static class Iec61850ValueFormatter
         };
     }
 
+    /// <summary>
+    /// Normalizes report-delivered process-state text for the operator-facing live/event
+    /// surfaces without mutating the raw MMS/report evidence. Semantic report projection can
+    /// legitimately deliver lower-case strings such as "true", "off" and
+    /// "intermediate-state"; the live UI must preserve the established IEC 61850 state
+    /// vocabulary and bit-code context.
+    /// </summary>
+    public static string FormatReportProcessValue(
+        object? value,
+        string dataType,
+        string unit,
+        string category,
+        string reference)
+    {
+        var normalizedValue = value;
+        if (TryExtractStructuredScalar(normalizedValue, dataType, out var structuredScalar))
+            normalizedValue = structuredScalar;
+
+        if (IsPositionSemantic(dataType, category, reference) &&
+            TryNormalizeDbpos(normalizedValue, out var dbpos))
+        {
+            return FormatOperatorDbpos(dbpos);
+        }
+
+        if (TryNormalizeBoolean(normalizedValue, out var boolean) ||
+            (IsBooleanDataType(dataType) &&
+             TryNormalizeBooleanCode(normalizedValue, out boolean)))
+        {
+            return boolean ? "True [1]" : "False [0]";
+        }
+
+        return Format(normalizedValue, dataType, unit);
+    }
+
+    private static bool IsPositionSemantic(string dataType, string category, string reference)
+    {
+        if (IsDbposDataType(dataType))
+            return true;
+
+        if ((category ?? string.Empty).Trim().Equals("Position", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var normalizedReference = (reference ?? string.Empty)
+            .Trim()
+            .Replace((char)36, '.')
+            .ToLowerInvariant();
+
+        return normalizedReference.Contains(".pos.stval", StringComparison.Ordinal) ||
+               normalizedReference.EndsWith(".pos", StringComparison.Ordinal);
+    }
+
+    private static bool TryNormalizeBoolean(object? value, out bool boolean)
+    {
+        switch (value)
+        {
+            case bool typed:
+                boolean = typed;
+                return true;
+            case string text when bool.TryParse(text.Trim(), out var parsed):
+                boolean = parsed;
+                return true;
+            default:
+                boolean = false;
+                return false;
+        }
+    }
+
+    private static bool IsBooleanDataType(string? dataType)
+    {
+        var normalized = (dataType ?? string.Empty)
+            .Trim()
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        return normalized is "BOOL" or "BOOLEAN" or "SPS" or "SPC" or "SINGLEPOINTSTATUS";
+    }
+
+    private static bool TryNormalizeBooleanCode(object? value, out bool boolean)
+    {
+        switch (value)
+        {
+            case byte b when b <= 1:
+                boolean = b == 1;
+                return true;
+            case sbyte b when b is 0 or 1:
+                boolean = b == 1;
+                return true;
+            case short s when s is 0 or 1:
+                boolean = s == 1;
+                return true;
+            case ushort s when s <= 1:
+                boolean = s == 1;
+                return true;
+            case int i when i is 0 or 1:
+                boolean = i == 1;
+                return true;
+            case uint i when i <= 1:
+                boolean = i == 1;
+                return true;
+            case long l when l is 0 or 1:
+                boolean = l == 1;
+                return true;
+            case ulong l when l <= 1:
+                boolean = l == 1;
+                return true;
+            case string text when text.Trim() is "0" or "1":
+                boolean = text.Trim() == "1";
+                return true;
+            default:
+                boolean = false;
+                return false;
+        }
+    }
+
+    private static string FormatOperatorDbpos(int code) => code switch
+    {
+        0 => "Intermediate [00]",
+        1 => "Open [01]",
+        2 => "Close [10]",
+        3 => "Bad state [11]",
+        _ => code.ToString(CultureInfo.InvariantCulture)
+    };
+
     public static bool TryNormalizeDbpos(object? value, out int code)
     {
         code = 0;

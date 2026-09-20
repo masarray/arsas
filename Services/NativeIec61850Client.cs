@@ -2278,13 +2278,47 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return corrected;
     }
 
-    private async Task<int> EnrichEngineeringUnitsAsync(IReadOnlyCollection<SignalDefinition> signals, CancellationToken cancellationToken)
+    public async Task<int> EnrichAuthoritativeEngineeringUnitsAsync(
+        IReadOnlyCollection<SignalDefinition> signals,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signals);
+
+        // Smart discovery deliberately keeps unit probes out of the latency-critical scan.
+        // Once the operator chooses Static DataSet monitoring, resolve units only for the
+        // selected measurement rows. Existing heuristic labels are cleared first so the UI
+        // never presents a guessed engineering unit as verified metadata.
+        var selected = signals
+            .Where(signal => signal.IsSelected &&
+                             !signal.IsControlSignal &&
+                             !string.IsNullOrWhiteSpace(signal.DataSetReference))
+            .ToArray();
+
+        foreach (var signal in selected.Where(signal => IsFloatingEngineeringType(signal.DataType)))
+            signal.Unit = string.Empty;
+
+        return await EnrichEngineeringUnitsAsync(
+                selected,
+                cancellationToken,
+                allowInferredFallback: false)
+            .ConfigureAwait(false);
+    }
+
+    private Task<int> EnrichEngineeringUnitsAsync(
+        IReadOnlyCollection<SignalDefinition> signals,
+        CancellationToken cancellationToken)
+        => EnrichEngineeringUnitsAsync(signals, cancellationToken, allowInferredFallback: true);
+
+    private async Task<int> EnrichEngineeringUnitsAsync(
+        IReadOnlyCollection<SignalDefinition> signals,
+        CancellationToken cancellationToken,
+        bool allowInferredFallback)
     {
         if (!_session.IsMmsInitiated)
             return 0;
 
         var groups = signals
-            .Where(s => s.DataType.Equals("Float32", StringComparison.OrdinalIgnoreCase))
+            .Where(s => IsFloatingEngineeringType(s.DataType))
             .Select(s => new { Signal = s, Owner = GetEngineeringUnitOwner(s.ObjectReference) })
             .Where(x => !string.IsNullOrWhiteSpace(x.Owner))
             .GroupBy(x => x.Owner, StringComparer.OrdinalIgnoreCase)
@@ -2300,7 +2334,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 var siUnitValue = await ReadValueAsync($"{group.Key}.units.SIUnit", "CF", "Enum", cancellationToken).ConfigureAwait(false);
                 var multiplierValue = await ReadValueAsync($"{group.Key}.units.multiplier", "CF", "Enum", cancellationToken).ConfigureAwait(false);
 
-                var fallbackBaseUnit = group.Select(x => x.Signal.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? string.Empty;
+                var fallbackBaseUnit = allowInferredFallback
+                    ? group.Select(x => x.Signal.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? string.Empty
+                    : string.Empty;
                 if (!TryResolveSiUnit(siUnitValue, fallbackBaseUnit, out var baseUnit))
                     continue;
 
@@ -2344,6 +2380,20 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
             ? $"{text} {resolvedUnit}"
             : value ?? string.Empty;
+    }
+
+    private static bool IsFloatingEngineeringType(string? dataType)
+    {
+        var type = (dataType ?? string.Empty).Trim();
+        return type.Equals("FLOAT32", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("FLOAT64", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("Float", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("FloatingPoint", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("floating-point", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("Double", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("REAL", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("Real32", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("Real64", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetEngineeringUnitOwner(string reference)
