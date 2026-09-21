@@ -16,7 +16,7 @@ CANONICAL_ROOT = "https://masarray.github.io/arsas/"
 INSTALLER = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe"
 PORTABLE = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe"
 CHECKSUMS = "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt"
-EXPECTED_NAV = {"overview", "learn", "capabilities", "io-fat", "solutions", "guides", "about", "download"}
+EXPECTED_NAV = {"overview", "learn", "capabilities", "solutions", "guides", "download"}
 GUIDES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html", "empty-dataset.html",
     "port-102-connection-failed.html", "comtrade-download.html", "goose-sequence.html",
@@ -163,11 +163,16 @@ def main() -> int:
         for key, value in expected_social_meta.items():
             if audit.meta.get(key) != value: errors.append(f"{home}: invalid {key}")
         if not audit.meta.get("twitter:image:alt"): errors.append(f"{home}: missing twitter:image:alt")
-        substation_images = [image for image in audit.images if image.get("src") == "assets/arsas-substation-context.webp"]
-        if len(substation_images) != 1:
-            errors.append(f"{home}: expected one substation context image")
-        elif substation_images[0].get("loading") != "lazy" or substation_images[0].get("fetchpriority") != "low":
-            errors.append(f"{home}: substation context image must be low-priority lazy media")
+        screenshot_images = [
+            image for image in audit.images
+            if str(image.get("src") or "").startswith("assets/screenshots/")
+        ]
+        if len(screenshot_images) != 7:
+            errors.append(f"{home}: expected hero plus six curated product screenshots, found {len(screenshot_images)}")
+        if any(image.get("src") == "assets/arsas-substation-context.webp" for image in audit.images):
+            errors.append(f"{home}: compact homepage must not load decorative substation media")
+        if "home.css" not in audit.refs:
+            errors.append(f"{home}: scoped home.css is missing")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
