@@ -15,6 +15,14 @@ LANDING = ROOT / "landing"
 TEMPLATES = LANDING / "templates"
 PARTIALS = LANDING / "partials"
 APP_ICON = ROOT / "Assets" / "app-icon.png"
+FONT_DIR = ROOT / "Assets" / "Fonts"
+FONT_FILES = (
+    "Inter-Regular.ttf",
+    "Inter-Medium.ttf",
+    "Inter-SemiBold.ttf",
+    "Inter-Bold.ttf",
+    "Inter-LICENSE.txt",
+)
 INCLUDE = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
@@ -217,6 +225,21 @@ def main() -> int:
             for value in search_contract:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
+            premium_contract = (
+                ("IEC 61850 testing, from live IED", "Download for Windows", "Real product evidence", "Progressive engineering")
+                if path == "" else
+                ("Pengujian IEC 61850, dari live IED", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+            )
+            for value in premium_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing premium homepage contract value {value}")
+            for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
+                if stale_section in rendered:
+                    errors.append(f"{label}: redundant homepage depth section remains: {stale_section}")
+            evidence_at = rendered.find("Real product evidence" if path == "" else "Evidence produk nyata")
+            depth_at = rendered.find("Progressive engineering")
+            if evidence_at < 0 or depth_at < 0 or evidence_at > depth_at:
+                errors.append(f"{label}: real product evidence must appear before progressive engineering")
             if path == "id.html":
                 for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                     if stale in rendered:
@@ -252,6 +275,16 @@ def main() -> int:
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
     for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
+    for font_name in FONT_FILES:
+        if not (FONT_DIR / font_name).is_file():
+            errors.append(f"missing bundled Inter asset Assets/Fonts/{font_name}")
+    polish = (LANDING / "polish.css").read_text(encoding="utf-8")
+    for value in ('font-family: "Inter"', 'Inter-Regular.ttf', 'Inter-Medium.ttf', 'Inter-SemiBold.ttf', 'Inter-Bold.ttf', "font-display: swap"):
+        if value not in polish:
+            errors.append(f"polish.css missing embedded Inter contract value {value}")
+    for external_font in ("fonts.googleapis.com", "fonts.gstatic.com", "rsms.me"):
+        if external_font in polish:
+            errors.append(f"polish.css must not depend on external font host {external_font}")
     if not APP_ICON.is_file(): errors.append("missing Assets/app-icon.png")
     else:
         try:
