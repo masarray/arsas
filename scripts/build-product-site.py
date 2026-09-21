@@ -22,6 +22,14 @@ RELEASE_NOTES_PATH = SOURCE / "release-notes.json"
 DEFAULT_RELEASE_EVIDENCE_PATH = SOURCE / "latest.json"
 PROJECT_PATH = ROOT / "ArIED61850Tester.csproj"
 APP_ICON_SOURCE = ROOT / "Assets" / "app-icon.png"
+FONT_SOURCE_DIR = ROOT / "Assets" / "Fonts"
+FONT_FILES = (
+    "Inter-Regular.ttf",
+    "Inter-Medium.ttf",
+    "Inter-SemiBold.ttf",
+    "Inter-Bold.ttf",
+    "Inter-LICENSE.txt",
+)
 INCLUDE_PATTERN = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION_PATTERN = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
@@ -261,6 +269,7 @@ def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
 def render(text: str, values: dict[str, str], icon_size: str) -> str:
     text = expand_partials(text)
     shared_styles = (
+        '  <link rel="preload" href="assets/fonts/Inter-Regular.ttf" as="font" type="font/ttf" crossorigin />\n'
         '  <link rel="stylesheet" href="polish.css" />\n'
         '  <link rel="stylesheet" href="design-system.css" />\n'
     )
@@ -345,6 +354,16 @@ def install_icon(output: Path, icon_size: str) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["icons"] = [{"src": "assets/app-icon.png", "sizes": icon_size, "type": "image/png", "purpose": "any maskable"}]
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def install_fonts(output: Path) -> None:
+    destination = output / "assets" / "fonts"
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in FONT_FILES:
+        source = FONT_SOURCE_DIR / name
+        if not source.is_file():
+            raise SystemExit(f"Missing bundled Inter font asset: {source}")
+        shutil.copy2(source, destination / name)
 
 
 def write_sitemap(output: Path, config: dict[str, object], pages: list[dict[str, object]]) -> None:
@@ -440,12 +459,15 @@ def build(output: Path, release_evidence_path: Path) -> None:
         raise SystemExit("Legacy landing HTML remains outside templates: " + ", ".join(source_html))
 
     install_icon(output, icon_size)
+    install_fonts(output)
     write_sitemap(output, config, pages)
     write_build_info(output, config, version, str(evidence["version"]), pages)
 
     required = {
         *generated, "site.json", "latest.json", "release-notes.json", "sitemap.xml", "build-info.json", str(index_now["keyFile"]),
         "assets/app-icon.png", "assets/social-card.png",
+        "assets/fonts/Inter-Regular.ttf", "assets/fonts/Inter-Medium.ttf",
+        "assets/fonts/Inter-SemiBold.ttf", "assets/fonts/Inter-Bold.ttf", "assets/fonts/Inter-LICENSE.txt",
         "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-multi-ied.webp",
         "assets/screenshots/arsas-live-values.webp", "assets/screenshots/arsas-event-log.webp",
         "assets/screenshots/arsas-goose.webp", "assets/screenshots/arsas-diagnostics.webp",

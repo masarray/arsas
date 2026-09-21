@@ -181,6 +181,21 @@ def main() -> int:
         )
         for value in search_contract:
             if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
+        premium_contract = (
+            ("IEC 61850 testing, from live IED", "Download for Windows", "Real product evidence", "Progressive engineering")
+            if home == "index.html" else
+            ("Pengujian IEC 61850, dari live IED", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+        )
+        for value in premium_contract:
+            if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")
+        for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
+            if stale_section in home_text: errors.append(f"{home}: redundant homepage depth section remains: {stale_section}")
+        evidence_at = home_text.find("Real product evidence" if home == "index.html" else "Evidence produk nyata")
+        depth_at = home_text.find("Progressive engineering")
+        if evidence_at < 0 or depth_at < 0 or evidence_at > depth_at:
+            errors.append(f"{home}: real product evidence must appear before progressive engineering")
+        if "assets/fonts/Inter-Regular.ttf" not in home_text:
+            errors.append(f"{home}: embedded Inter preload is missing")
         if home == "id.html":
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
@@ -202,6 +217,7 @@ def main() -> int:
 
     for required in (
         "assets/app-icon.png", "assets/social-card.png", "assets/arsas-substation-context.webp", "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
+        "assets/fonts/Inter-Regular.ttf", "assets/fonts/Inter-Medium.ttf", "assets/fonts/Inter-SemiBold.ttf", "assets/fonts/Inter-Bold.ttf", "assets/fonts/Inter-LICENSE.txt",
         "assets/screenshots/arsas-multi-ied.webp", "assets/screenshots/arsas-live-values.webp",
         "assets/screenshots/arsas-event-log.webp", "assets/screenshots/arsas-goose.webp",
         "assets/screenshots/arsas-diagnostics.webp", "assets/screenshots/arsas-rcb-scl-export.webp",
@@ -216,8 +232,11 @@ def main() -> int:
         if png_size(site / "assets/social-card.png") != (1200, 630): errors.append("rendered social card must be 1200x630")
     except (OSError, ValueError) as exc: errors.append(f"social card: {exc}")
 
+    polish = (site / "polish.css").read_text(encoding="utf-8") if (site / "polish.css").is_file() else ""
+    for value in ('font-family: "Inter"', 'Inter-Regular.ttf', 'Inter-Medium.ttf', 'Inter-SemiBold.ttf', 'Inter-Bold.ttf', "font-display: swap"):
+        if value not in polish: errors.append(f"rendered polish.css missing embedded Inter contract value {value}")
     combined = "\n".join((site / name).read_text(encoding="utf-8") for name in expected_pages if (site / name).is_file())
-    for value in ('href="http://', 'src="http://', "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot", '<meta name="keywords"'):
+    for value in ('href="http://', 'src="http://', "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot", '<meta name="keywords"', "fonts.googleapis.com", "fonts.gstatic.com", "rsms.me"):
         if value in combined: errors.append(f"forbidden public value remains: {value}")
     for value in (INSTALLER, PORTABLE, CHECKSUMS, "Ari Sulistiono", "GPL-3.0-or-later", "learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "io-list-fat-evidence.html", ".arsas"):
         if value not in combined: errors.append(f"public site missing trust value {value}")

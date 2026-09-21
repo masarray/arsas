@@ -2,8 +2,40 @@
    Loaded after styles.css so the product site can evolve without disturbing the
    stable information architecture or workflow-specific styles. */
 
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/Inter-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/Inter-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/Inter-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/Inter-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --polish-text: #f7fbff;
   --polish-muted: #bdccde;
@@ -29,13 +61,13 @@ body {
   line-height: 1.6;
   background:
     radial-gradient(circle at 12% 2%, rgba(56, 189, 248, .18), transparent 31rem),
-    radial-gradient(circle at 84% 18%, rgba(99, 102, 241, .14), transparent 34rem),
+    radial-gradient(circle at 84% 18%, rgba(37, 99, 235, .105), transparent 34rem),
     linear-gradient(180deg, #07111f 0%, #081528 46%, #07111f 100%);
 }
 
 ::selection {
   color: #fff;
-  background: rgba(79, 120, 255, .62);
+  background: rgba(14, 165, 233, .58);
 }
 
 p, li, figcaption {
@@ -136,7 +168,7 @@ h3 {
   border-radius: 12px !important;
   font-weight: 700 !important;
   letter-spacing: -.015em;
-  box-shadow: 0 12px 30px rgba(70, 87, 235, .25), inset 0 1px 0 rgba(255,255,255,.16);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, .2), inset 0 1px 0 rgba(255,255,255,.14);
 }
 
 .hero {
@@ -165,7 +197,7 @@ h3 {
 }
 
 .gradient-text {
-  background: linear-gradient(105deg, #eefaff 0%, #75d9ff 38%, #7b9dff 67%, #c595ff 100%);
+  background: linear-gradient(105deg, #f3fbff 0%, #7ddcff 42%, #5bb9ff 72%, #7fa8ff 100%);
   background-clip: text;
   -webkit-background-clip: text;
   filter: saturate(1.05);
@@ -205,13 +237,13 @@ h3 {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #337df2 0%, #5367e9 55%, #8b5cf6 100%);
-  box-shadow: 0 16px 38px rgba(66, 82, 232, .28), inset 0 1px 0 rgba(255,255,255,.18);
+  background: linear-gradient(135deg, #147fd1 0%, #2563eb 58%, #3158c9 100%);
+  box-shadow: 0 16px 38px rgba(37, 99, 235, .24), inset 0 1px 0 rgba(255,255,255,.16);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #3d87fa 0%, #5c70ef 55%, #9565f7 100%);
-  box-shadow: 0 20px 44px rgba(66, 82, 232, .34), inset 0 1px 0 rgba(255,255,255,.2);
+  background: linear-gradient(135deg, #1988db 0%, #2d6ff1 58%, #3862d6 100%);
+  box-shadow: 0 20px 44px rgba(37, 99, 235, .3), inset 0 1px 0 rgba(255,255,255,.19);
 }
 
 .hero-proof {
@@ -223,15 +255,15 @@ h3 {
 
 .hero-window {
   border-color: rgba(201, 227, 255, .17);
-  border-radius: 18px;
+  border-radius: 14px;
   background: rgba(14, 31, 53, .72);
-  box-shadow: 0 36px 90px rgba(0, 8, 26, .43), 0 0 0 1px rgba(255,255,255,.025);
-  transform: perspective(1500px) rotateY(-3deg) rotateX(1.2deg);
+  box-shadow: 0 30px 76px rgba(0, 8, 26, .38), 0 0 0 1px rgba(255,255,255,.03);
+  transform: perspective(1600px) rotateY(-1.2deg) rotateX(.45deg);
 }
 
 .hero-visual::before {
   inset: 5% 1% -4%;
-  background: linear-gradient(135deg, rgba(56,189,248,.28), rgba(99,102,241,.24), rgba(139,92,246,.18));
+  background: linear-gradient(135deg, rgba(56,189,248,.24), rgba(59,130,246,.18), rgba(37,99,235,.12));
   filter: blur(78px);
 }
 
@@ -363,8 +395,8 @@ h3 {
   border-color: rgba(96, 200, 255, .24);
   background:
     radial-gradient(circle at 8% 4%, rgba(56,189,248,.17), transparent 19rem),
-    radial-gradient(circle at 90% 80%, rgba(139,92,246,.11), transparent 20rem),
-    linear-gradient(135deg, rgba(31, 83, 150, .14), rgba(80, 46, 138, .09));
+    radial-gradient(circle at 90% 80%, rgba(59,130,246,.09), transparent 20rem),
+    linear-gradient(135deg, rgba(31, 83, 150, .14), rgba(29, 78, 216, .055));
   box-shadow: 0 28px 72px rgba(0, 8, 25, .25);
 }
 
