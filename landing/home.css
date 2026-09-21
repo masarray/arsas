@@ -3,7 +3,7 @@
    motion. Every selector is scoped to the overview page. */
 
 body[data-page="overview"] {
-  --home-hero-max: 1260px;
+  --home-hero-max: 1280px;
 }
 
 body[data-page="overview"] .hero {
@@ -29,6 +29,29 @@ body[data-page="overview"] .hero h1 {
   font-size: clamp(3rem, 4.25vw, 3.85rem);
   line-height: 1.01;
   letter-spacing: -.044em;
+}
+
+body[data-page="overview"] .hero h1 .gradient-text {
+  white-space: normal;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+body[data-page="overview"] .hero:lang(id) .hero-grid {
+  grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+}
+
+body[data-page="overview"] .hero:lang(id) h1 {
+  max-width: 13.5ch;
+  font-size: clamp(2.85rem, 4vw, 3.7rem);
+}
+
+body[data-page="overview"] .hero:lang(id) .eyebrow {
+  white-space: normal;
+}
+
+body[data-page="overview"] .hero:lang(id) .hero-actions {
+  flex-wrap: wrap;
 }
 
 body[data-page="overview"] .hero-copy {
@@ -86,7 +109,7 @@ body[data-page="overview"] .hero-window {
 
 body[data-page="overview"] .hero-window img {
   display: block;
-  filter: brightness(.94) saturate(.97) contrast(.99);
+  filter: brightness(.92) saturate(.96) contrast(.985);
 }
 
 body[data-page="overview"] .hero-visual::before {
@@ -110,7 +133,7 @@ body[data-page="overview"] .floating-chip.one {
 body[data-page="overview"] .floating-chip.two {
   right: -.35rem;
   bottom: 10%;
-  opacity: .8;
+  opacity: .78;
 }
 
 body[data-page="overview"] .home-paths-section {
