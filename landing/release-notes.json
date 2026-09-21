@@ -50,13 +50,13 @@
     "detailId": "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
   },
   "screenshot": {
-    "src": "assets/screenshots/arsas-live-values.webp",
-    "width": 1507,
-    "height": 893,
-    "alt": "ARSAS 1.6.40 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.40",
-    "caption": "ARSAS 1.6.40 stable Windows release with verified installer, portable package and release evidence.",
-    "captionId": "Stable release Windows ARSAS 1.6.40 dengan installer, portable package, dan release evidence yang terverifikasi."
+    "src": "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
+    "width": 1920,
+    "height": 1032,
+    "alt": "ARSAS 1.6.40 multi-IED Explorer with live IEC 61850 values and guarded command dock",
+    "altId": "IED Explorer multi-IED ARSAS 1.6.40 dengan live value IEC 61850 dan guarded command dock",
+    "caption": "ARSAS 1.6.40 keeps live values, acquisition evidence and validated command objects in one selected-IED shell.",
+    "captionId": "ARSAS 1.6.40 menyatukan live value, acquisition evidence, dan validated command object dalam satu shell selected-IED."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
   "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.40"

@@ -226,7 +226,7 @@ def main() -> int:
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
-    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-overview-v1.6.19.webp"):
+    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
     if not APP_ICON.is_file(): errors.append("missing Assets/app-icon.png")
     else:

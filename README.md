@@ -5,7 +5,7 @@
 
 ### From an IED IP address or approved IO List to attributable IEC 61850 evidence
 
-**Discover · Monitor · Test IO Lists · Diagnose · Generate SCL · Export Evidence**
+**Discover · Monitor · Annunciate · Control · Test · Analyze COMTRADE · Export Evidence**
 
 ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, commissioning, troubleshooting, and multi-vendor integration. Start from an approved IED endpoint, an SCL file, or an IO List workbook; inspect what the device actually exposes; and preserve the result as attributable engineering evidence.
 
@@ -26,18 +26,47 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 </div>
 
 <div align="center">
-  <a href="Assets/screenshot/arsas-overview-v1.6.19.webp">
-    <img src="Assets/screenshot/arsas-overview-v1.6.19.webp" alt="ARSAS v1.6.19 IEC 61850 Engineering and IO List FAT workspaces" width="100%" />
+  <a href="Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp">
+    <img src="Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp" alt="ARSAS v1.6.40 multi-IED Explorer, live signal values and guarded command dock" width="100%" />
   </a>
   <br />
-  <sub>Choose Engineering for live IEC 61850 discovery or IO List FAT for resumable, reviewable test evidence.</sub>
+  <sub>One persistent multi-IED shell for discovery, live values, reporting, events, alarms, guarded control, FAT, files and diagnostics.</sub>
 </div>
 
-> **Current ARSAS application version: v1.6.37.** The current source line aligns live RCB instance presentation with concrete runtime slots exposed by the connected IED while preserving canonical source-backed ReportControl identity, and makes in-process COMTRADE Phasor, Harmonics, and distance Locus interaction smoother without changing authoritative native engineering values.
+> **Current stable release: ARSAS v1.6.40.** Production packages use the physically proven Smart Discovery route and the pinned ARIEC61850 engine revision recorded in [`engines/ARIEC61850.lock.json`](engines/ARIEC61850.lock.json). The qualified AA1E1F06R4 field path reached zero SCL projection/cache-loss errors, 58/58 report-backed runtime points, and observed real `InformationReport` traffic.
 >
-> **Published-package boundary:** download version, file size, SHA-256, SBOM, provenance, and attestation claims remain tied to the latest actually published stable GitHub Release. `main` moving to a newer application version does not by itself advance public binary evidence.
+> **Evidence boundary:** those counts describe the recorded physical qualification target, not a universal claim for every IED. Download identity, SHA-256, SBOM, provenance, and attestations remain tied to the published GitHub Release.
 
-## What changed in v1.6.37
+## What changed in v1.6.40
+
+- **Efficient Smart Discovery is the production path** — release builds fail closed if they drift back to the legacy discovery route. Discovery is association-scoped and single-flight, reuses authoritative model evidence, and keeps network work bounded.
+- **Physical reporting proof** — the pinned engine/consumer combination was qualified against a real IED with actual `InformationReport` traffic and all 58 selected runtime points report-backed.
+- **Persistent multi-IED shell** — the IED Explorer keeps device-specific association, live model, monitoring, event, file, control, FAT and diagnostic context immediately accessible.
+- **Operator-first live workflow** — searchable live values, Sequence of Events, Alarm Annunciator and the Command Dock share the selected IED without duplicating protocol state.
+- **Native FAT workspace and report** — capture V1/V2 evidence, preserve timestamps and acquisition source, review COMTRADE/time-sync evidence, and generate the same immutable layout in Preview and PDF.
+- **Faster engineering exchange** — inspect concrete RCB availability, select only the required blocks, and export clean IEC 61850 Edition 2 or Edition 1 SCL from authoritative discovery/source evidence.
+- **Fault records to analysis** — scan and download COMTRADE records, then open them in-process for exact time signals, RMS, Phasor, Harmonics, six-loop distance Locus and digital protection timeline analysis.
+- **Dense-model responsiveness** — virtualized tables, coalesced UI updates, bounded background work and latest-value presentation keep large signal catalogs responsive. The recorded Smart Discovery target contains 4,925 semantic leaves; ARSAS does not publish an arbitrary universal device-count limit.
+
+## Current product tour
+
+| Live operation | Event and alarm supervision |
+|---|---|
+| [![IED Explorer, live values and command dock](Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp)](Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp) | [![Alarm Annunciator](Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp)](Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp) |
+| Searchable report-backed values and guarded controls remain attached to the selected IED. | Active, unacknowledged and returned alarms remain visually distinct and explicitly acknowledged. |
+| [![Sequence of Events](Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp)](Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp) | [![Native FAT workspace](Assets/screenshot/arsas-native-fat-v1.6.40.webp)](Assets/screenshot/arsas-native-fat-v1.6.40.webp) |
+| SOE preserves IED time, signal identity, value, quality and acquisition source. | FAT compares captured values and timestamps without leaving the shared engineering shell. |
+
+| Engineering exchange | Disturbance analysis |
+|---|---|
+| [![RCB selection and availability](Assets/screenshot/arsas-rcb-selection-v1.6.40.webp)](Assets/screenshot/arsas-rcb-selection-v1.6.40.webp) | [![COMTRADE time signals and protection timeline](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp) |
+| Audit live availability, membership and occupancy before exporting only the required RCBs. | Review RMS time signals, synchronized cursors and digital protection-event transitions together. |
+| [![SCL Edition 2 and Edition 1 export](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp)](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp) | [![COMTRADE phasor analysis](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp) |
+| Save Edition 2 IID or Edition 1 ICD with companion JSON and Markdown evidence. | Inspect native voltage and current phasors at one exact record position. |
+
+All screenshots are lossless WebP: pixel-exact UI text with substantially smaller transfer sizes than the source PNG files.
+
+## Earlier milestone: v1.6.37
 
 - **Concrete live RCB instances** — Legacy SAS RCB selection presents concrete instances such as `Buffer01`, `Buffer02`, `Unbuffer01`, and `Unbuffer02` when the connected IED actually exposes them, without adding duplicate logical placeholder rows.
 - **Canonical source-backed SCL export** — an opened engineering source preserves the logical `ReportControl` identity and `RptEnabled` indexing metadata; declarative `RptEnabled@max` is never used to invent runtime instance names.
@@ -80,11 +109,11 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 
 ARSAS shortens the path from **“the IED is reachable”** to **“the engineer has usable, attributable evidence.”** It does not turn an unsupported or ambiguous result into a false success.
 
-## Two connected workspaces
+## One persistent engineering shell
 
-### Engineering Workspace
+### IED Explorer and operator workspaces
 
-Use an approved IED IP address or SCL source for complete live discovery, signal selection, reporting, multi-IED monitoring, SOE, GOOSE, SMV, file transfer, SCL workflows, diagnostics, and guarded control.
+Use an approved IED IP address or SCL source for Smart Discovery, signal selection, reporting and multi-IED monitoring. The Explorer keeps the selected IED context while the operator moves between live values, Sequence of Events, Alarm Annunciator, GOOSE, diagnostics, FAT and the Command Dock. Device-specific associations, models and evidence are not flattened into one ambiguous global session.
 
 ### IO List FAT Workspace
 
@@ -160,11 +189,12 @@ The workflow preserves the existing stream-identity and continuity guards. `smpC
 | **Live discovery to SCL** | Available | Single-IED Edition 2 IID or Edition 1 ICD from the last complete typed discovery. |
 | **RCB inspection and source-backed export** | Available | Concrete live runtime instances remain visible online; source-backed export preserves canonical logical ReportControl identity and `RptEnabled` indexing metadata without inventing runtime slot names. |
 | **Reporting and live monitoring** | Available | BRCB/URCB inspection, immediate reads, exact coverage, bounded recovery, visible polling fallback, multi-IED monitoring, and SOE. |
+| **Alarm and event operation** | Available | Per-IED Alarm Annunciator with active/unacknowledged/returned state, explicit acknowledgement, and Sequence of Events carrying IED time, quality and acquisition source. |
 | **GOOSE subscriber** | Available | Read-only Npcap capture, one-click IED context, APPID/VLAN/MAC, sequence, TAL, ordered payload, timeline, and model binding. |
 | **Sampled Values / SMV** | Engineering preview | One-click IED context and bounded two-cycle raw waveform evidence; calibrated scaling, complete semantic mapping, synchronization proof, and sustained-performance validation remain bounded work. |
 | **IEC 61850 file transfer** | Available | MMS browsing/download, segmented responses, grouped records, reconnect boundaries, duplicate handling, and detailed diagnostics. |
-| **In-process COMTRADE** | Available | Pinned native ArdIrec bridge with exact cursor, Phasor, Harmonics, six-loop distance Locus, bounded display easing, and no external viewer process. |
-| **Smart Control** | Available / guarded | Live `ctlModel`, Direct and SBO sequences, Test/interlock/synchrocheck context, CommandTermination, timing, and mapped feedback. |
+| **In-process COMTRADE** | Available | Pinned native ArdIrec bridge with exact and RMS time signals, synchronized cursors, Phasor, Harmonics, six-loop distance Locus, digital protection timeline, bounded display easing, and no external viewer process. |
+| **Smart Control** | Available / guarded | Command Dock with live `ctlModel`, Direct and SBO sequences, Test/interlock/synchrocheck context, CommandTermination, timing, and mapped feedback. |
 | **Full visual SCL authoring** | Planned | Complete visual project editing, communication, DataSets, control blocks, diff, and reusable project output. |
 
 See [ROADMAP.md](ROADMAP.md) for definitions of done and explicit non-goals.
