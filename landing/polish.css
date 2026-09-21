@@ -564,3 +564,42 @@ code {
     transform: none;
   }
 }
+
+
+/* R2 interaction polish: visible state changes stay subtle and bounded. */
+.site-header {
+  transition: background .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.site-header.is-scrolled {
+  background: rgba(5, 14, 27, .92);
+  border-bottom-color: rgba(197, 225, 255, .14);
+  box-shadow: 0 12px 34px rgba(0, 7, 20, .22);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  color: #80d8ff;
+  text-decoration: none;
+  text-underline-offset: .22em;
+  font-size: .88rem;
+  font-weight: 620;
+  transition: color .18s ease, transform .18s ease;
+}
+
+.text-link:hover {
+  color: #dff6ff;
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header,
+  .text-link {
+    transition: none;
+  }
+
+  .text-link:hover {
+    transform: none;
+  }
+}
