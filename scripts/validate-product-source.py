@@ -18,7 +18,7 @@ APP_ICON = ROOT / "Assets" / "app-icon.png"
 INCLUDE = re.compile(r"\{\{>\s*([a-z0-9-]+)\s*\}\}", re.IGNORECASE)
 TOKEN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 VERIFICATION = re.compile(r"google[a-z0-9]+\.html", re.IGNORECASE)
-EXPECTED_NAV = {"overview", "learn", "capabilities", "io-fat", "solutions", "guides", "about", "download"}
+EXPECTED_NAV = {"overview", "learn", "capabilities", "solutions", "guides", "download"}
 GUIDES = {
     "reporting-silent.html", "brcb-vs-urcb.html", "rcb-reserved.html", "empty-dataset.html",
     "port-102-connection-failed.html", "comtrade-download.html", "goose-sequence.html",
@@ -199,11 +199,16 @@ def main() -> int:
             for key, value in expected_social_meta.items():
                 if audit.meta.get(key) != value: errors.append(f"{label}: invalid {key}")
             if not audit.meta.get("twitter:image:alt"): errors.append(f"{label}: missing twitter:image:alt")
-            substation_images = [image for image in audit.images if image.get("src") == "assets/arsas-substation-context.webp"]
-            if len(substation_images) != 1:
-                errors.append(f"{label}: expected one substation context image")
-            elif substation_images[0].get("loading") != "lazy" or substation_images[0].get("fetchpriority") != "low":
-                errors.append(f"{label}: substation context image must be low-priority lazy media")
+            if 'href="home.css"' not in raw:
+                errors.append(f"{label}: homepage must load scoped home.css in <head>")
+            screenshot_images = [
+                image for image in audit.images
+                if str(image.get("src") or "").startswith("assets/screenshots/")
+            ]
+            if len(screenshot_images) != 7:
+                errors.append(f"{label}: expected hero plus six curated product screenshots, found {len(screenshot_images)}")
+            if "arsas-substation-context.webp" in rendered:
+                errors.append(f"{label}: decorative substation media should not be loaded on the compact homepage")
         for image in audit.images:
             src = image.get("src") or ""
             if image.get("alt") is None or not image.get("width") or not image.get("height"): errors.append(f"{label}: incomplete image metadata {src}")
@@ -214,12 +219,19 @@ def main() -> int:
         if '<meta name="keywords"' in rendered.lower(): errors.append(f"{label}: meta keywords are forbidden")
         if path != "404.html" and ("{{> header}}" not in raw or "{{> footer}}" not in raw): errors.append(f"{label}: missing shared chrome")
         if item.get("contentType") == "localized":
-            if "{{> download-cta-id}}" not in raw or '"inLanguage":"id"' not in raw.replace(" ", "") or 'hreflang="en"' not in raw: errors.append(f"{label}: incomplete Indonesian contract")
+            if (path != "id.html" and "{{> download-cta-id}}" not in raw) or '"inLanguage":"id"' not in raw.replace(" ", "") or 'hreflang="en"' not in raw:
+                errors.append(f"{label}: incomplete Indonesian contract")
         elif path not in {"", "download.html", "404.html"} and "{{> download-cta}}" not in raw: errors.append(f"{label}: missing shared download CTA")
         if item.get("contentType") == "guide" and ('"@type":"TechArticle"' not in raw.replace(" ", "") or "{{> guide-boundary}}" not in raw): errors.append(f"{label}: incomplete guide contract")
 
     header = (PARTIALS / "header.html").read_text(encoding="utf-8")
     footer = (PARTIALS / "footer.html").read_text(encoding="utf-8")
+    if "rsms.me" in header:
+        errors.append("header must not depend on external web fonts")
+    if 'href="home.css"' in header:
+        errors.append("home.css must remain homepage-scoped")
+    if 'href="polish.css"' in header or 'href="design-system.css"' in header:
+        errors.append("shared stylesheet links belong in <head>, not the header partial")
     for nav in EXPECTED_NAV:
         if f'data-nav-page="{nav}"' not in header: errors.append(f"header missing navigation {nav}")
     for value in ("learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "quick-start.html", "io-list-fat-evidence.html", "compatibility.html", "privacy.html", "{{AUTHOR_LINKEDIN}}"):

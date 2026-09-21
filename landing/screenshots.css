@@ -8,9 +8,12 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 15px;
   background: rgba(255, 255, 255, .038);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, .2);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .17);
+  content-visibility: auto;
+  contain-intrinsic-size: 420px 340px;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
 .screenshot-card.wide {
@@ -52,29 +55,30 @@
   display: block;
   width: 100%;
   height: auto;
-  transition: transform .28s ease;
+  transition: transform .24s ease, filter .24s ease;
 }
 
 .screenshot-link:hover img {
-  transform: scale(1.008);
+  transform: scale(1.012);
+  filter: saturate(1.03) brightness(1.015);
 }
 
 .screenshot-caption {
-  padding: .95rem 1.05rem 1.05rem;
+  padding: .82rem .92rem .9rem;
 }
 
 .screenshot-caption h3 {
   display: flex;
   align-items: center;
   gap: .55rem;
-  font-size: 1.02rem;
+  font-size: .96rem;
   letter-spacing: -.015em;
 }
 
 .screenshot-caption p {
   margin: .42rem 0 0;
   color: var(--muted);
-  font-size: .9rem;
+  font-size: .84rem;
 }
 
 .screenshot-number {
@@ -120,6 +124,21 @@
 @media (prefers-reduced-motion: reduce) {
   .screenshot-link img,
   .screenshot-link::after {
+    transition: none;
+  }
+}
+
+
+@media (hover: hover) and (pointer: fine) {
+  .screenshot-card:hover {
+    border-color: rgba(111, 203, 255, .22);
+    box-shadow: 0 18px 46px rgba(0, 8, 24, .22);
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-card {
     transition: none;
   }
 }

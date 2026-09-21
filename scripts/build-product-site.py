@@ -260,6 +260,14 @@ def expand_partials(text: str, stack: tuple[str, ...] = ()) -> str:
 
 def render(text: str, values: dict[str, str], icon_size: str) -> str:
     text = expand_partials(text)
+    shared_styles = (
+        '  <link rel="stylesheet" href="polish.css" />\n'
+        '  <link rel="stylesheet" href="design-system.css" />\n'
+    )
+    if 'href="polish.css"' not in text:
+        if "</head>" not in text:
+            raise SystemExit("Landing template is missing </head> for shared styles")
+        text = text.replace("</head>", shared_styles + "</head>", 1)
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
     text = re.sub(
