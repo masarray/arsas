@@ -40,11 +40,17 @@ public sealed class WebsiteHeroLocalizationRegressionTests
     public void CssArchitecture_ReplacesPhaseOverridesWithSemanticScopedLayers()
     {
         var header = Read("landing/partials/header.html");
+        var index = Read("landing/templates/index.html");
+        var builder = Read("scripts/build-product-site.py");
         var home = Read("landing/home.css");
         var designSystem = Read("landing/design-system.css");
 
-        Assert.Contains("design-system.css", header, StringComparison.Ordinal);
-        Assert.Contains("home.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("design-system.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("polish.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("home.css", header, StringComparison.Ordinal);
+        Assert.Contains("home.css", index, StringComparison.Ordinal);
+        Assert.Contains("design-system.css", builder, StringComparison.Ordinal);
+        Assert.Contains("polish.css", builder, StringComparison.Ordinal);
         Assert.DoesNotContain("hero-p0.css", header, StringComparison.Ordinal);
         Assert.DoesNotContain("section-p1.css", header, StringComparison.Ordinal);
 
