@@ -23,8 +23,8 @@
     "keyFile": "arsas-iec61850-20260720-6f4a9d2c8b.txt"
   },
   "pages": [
-    {"path": "", "template": "index.html", "language": "en", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "1.0", "lastmod": "2026-09-21"},
-    {"path": "id.html", "template": "id.html", "language": "id", "contentType": "localized", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "0.97", "lastmod": "2026-09-21"},
+    {"path": "", "template": "index.html", "language": "en", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "1.0", "lastmod": "2026-09-22"},
+    {"path": "id.html", "template": "id.html", "language": "id", "contentType": "localized", "alternates": {"en": "", "id": "id.html", "x-default": ""}, "changefreq": "weekly", "priority": "0.97", "lastmod": "2026-09-22"},
     {"path": "download.html", "template": "download.html", "language": "en", "alternates": {"en": "download.html", "id": "unduh.html", "x-default": "download.html"}, "changefreq": "weekly", "priority": "0.98", "lastmod": "2026-07-22"},
     {"path": "unduh.html", "template": "unduh.html", "language": "id", "contentType": "localized", "alternates": {"en": "download.html", "id": "unduh.html", "x-default": "download.html"}, "changefreq": "weekly", "priority": "0.95", "lastmod": "2026-07-22"},
     {"path": "release-notes.html", "template": "release-notes.html", "language": "en", "contentType": "release", "alternates": {"en": "release-notes.html", "id": "catatan-rilis.html", "x-default": "release-notes.html"}, "changefreq": "weekly", "priority": "0.96", "lastmod": "2026-07-22"},
