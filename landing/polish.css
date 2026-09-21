@@ -168,7 +168,14 @@ h3 {
   border-radius: 12px !important;
   font-weight: 700 !important;
   letter-spacing: -.015em;
+  color: #fff !important;
+  background: linear-gradient(135deg, #147fd1 0%, #2563eb 68%, #3158c9 100%) !important;
   box-shadow: 0 12px 30px rgba(37, 99, 235, .2), inset 0 1px 0 rgba(255,255,255,.14);
+}
+
+.nav-cta:hover {
+  color: #fff !important;
+  background: linear-gradient(135deg, #1988db 0%, #2d6ff1 68%, #3862d6 100%) !important;
 }
 
 .hero {
@@ -216,6 +223,13 @@ h3 {
 .hero-actions,
 .section-actions {
   gap: .72rem;
+}
+
+.hero-tertiary {
+  align-self: center;
+  min-height: 46px;
+  padding-inline: .18rem;
+  justify-content: center;
 }
 
 .btn {
