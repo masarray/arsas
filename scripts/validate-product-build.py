@@ -173,6 +173,17 @@ def main() -> int:
             errors.append(f"{home}: compact homepage must not load decorative substation media")
         if "home.css" not in audit.refs:
             errors.append(f"{home}: scoped home.css is missing")
+        home_text = (site / home).read_text(encoding="utf-8")
+        search_contract = (
+            ("IEC 61850 tester", "learning-center.html", "connect-ied-ip-arsas.html", "fat-testing.html", "sat-testing.html", "multi-vendor-integration.html")
+            if home == "index.html" else
+            ("Tester IEC 61850", "pusat-belajar-iec61850.html", "cara-hubungkan-ied-ip-arsas.html", "pengujian-fat-iec61850.html", "pengujian-sat-iec61850.html", "integrasi-multi-vendor-iec61850.html")
+        )
+        for value in search_contract:
+            if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
+        if home == "id.html":
+            for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
+                if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"

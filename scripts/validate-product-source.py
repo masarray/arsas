@@ -209,6 +209,18 @@ def main() -> int:
                 errors.append(f"{label}: expected hero plus six curated product screenshots, found {len(screenshot_images)}")
             if "arsas-substation-context.webp" in rendered:
                 errors.append(f"{label}: decorative substation media should not be loaded on the compact homepage")
+            search_contract = (
+                ("IEC 61850 tester", "learning-center.html", "connect-ied-ip-arsas.html", "fat-testing.html", "sat-testing.html", "multi-vendor-integration.html")
+                if path == "" else
+                ("Tester IEC 61850", "pusat-belajar-iec61850.html", "cara-hubungkan-ied-ip-arsas.html", "pengujian-fat-iec61850.html", "pengujian-sat-iec61850.html", "integrasi-multi-vendor-iec61850.html")
+            )
+            for value in search_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing search-to-engineering contract value {value}")
+            if path == "id.html":
+                for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
+                    if stale in rendered:
+                        errors.append(f"{label}: stale English homepage localization remains: {stale}")
         for image in audit.images:
             src = image.get("src") or ""
             if image.get("alt") is None or not image.get("width") or not image.get("height"): errors.append(f"{label}: incomplete image metadata {src}")
