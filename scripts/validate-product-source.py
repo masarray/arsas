@@ -47,7 +47,7 @@ PAIRS = {
 KNOWN_TOKENS = {
     "ARSAS_VERSION", "PRODUCT_NAME", "CANONICAL_ROOT", "REPOSITORY_URL", "ENGINE_REPOSITORY_URL",
     "AUTHOR_NAME", "AUTHOR_LINKEDIN", "AUTHOR_GITHUB", "INSTALLER_URL", "PORTABLE_URL", "CHECKSUMS_URL",
-    "STABLE_VERSION", "STABLE_PUBLISHED_ISO", "STABLE_PUBLISHED_DATE", "STABLE_PUBLISHED_DATE_ID",
+    "STABLE_VERSION", "STABLE_TAG", "STABLE_SOURCE_COMMIT", "STABLE_PUBLISHED_ISO", "STABLE_PUBLISHED_DATE", "STABLE_PUBLISHED_DATE_ID",
     "INSTALLER_SIZE", "PORTABLE_SIZE", "INSTALLER_SHA256", "PORTABLE_SHA256", "RELEASE_TITLE",
     "RELEASE_TITLE_ID", "RELEASE_SUMMARY", "RELEASE_SUMMARY_ID", "RELEASE_HIGHLIGHTS",
     "RELEASE_HIGHLIGHTS_ID", "RELEASE_IMPROVEMENTS", "RELEASE_IMPROVEMENTS_ID", "RELEASE_LIMITATIONS",
@@ -126,6 +126,10 @@ def validate_release(errors: list[str]) -> None:
         errors.append("latest.json stable identity is invalid")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version) or notes.get("version") != version:
         errors.append("release evidence and notes versions differ")
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", str(evidence.get("tag", ""))):
+        errors.append("latest.json stable tag is invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(evidence.get("sourceCommit", ""))):
+        errors.append("latest.json stable source commit is invalid")
     installer = evidence.get("installer")
     if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
         errors.append("latest.json installer evidence is invalid")
@@ -257,6 +261,14 @@ def main() -> int:
             for value in discovery_scl_contract:
                 if value not in rendered:
                     errors.append(f"{label}: missing discovery-to-SCL contract value {value}")
+            trust_contract = (
+                ('data-trust-architecture="true"', "Trust the exact release because its evidence can be inspected.", "Open source is not automatic correctness.", "{{STABLE_SOURCE_COMMIT}}")
+                if path == "" else
+                ('data-trust-architecture="true"', "Percaya pada release exact karena evidence-nya dapat diperiksa.", "Open source bukan jaminan correctness otomatis.", "{{STABLE_SOURCE_COMMIT}}")
+            )
+            for value in trust_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.6 open-source reliability contract value {value}")
             for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
                 if ambiguous_ip in rendered:
                     errors.append(f"{label}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
@@ -271,6 +283,20 @@ def main() -> int:
                 for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
+        if path == "technical-review.html":
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate"):
+                if value not in raw and value not in rendered:
+                    errors.append(f"{label}: missing R5.6 technical-review trust value {value}")
+        if path in {"download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"}:
+            release_trust = (
+                ("{{STABLE_SOURCE_COMMIT}}", "{{STABLE_TAG}}", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json")
+            )
+            for value in release_trust:
+                if value not in rendered:
+                    errors.append(f"{label}: missing exact-release trust value {value}")
+            lower_release = rendered.lower()
+            if "reproducible build" not in lower_release:
+                errors.append(f"{label}: missing explicit reproducible-build boundary")
         if path == "features.html":
             for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
                 if value not in rendered:

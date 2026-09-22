@@ -215,6 +215,8 @@ def token_values(
         "PORTABLE_URL": str(downloads["portable"]),
         "CHECKSUMS_URL": str(downloads["checksums"]),
         "STABLE_VERSION": str(evidence["version"]),
+        "STABLE_TAG": str(evidence["tag"]),
+        "STABLE_SOURCE_COMMIT": str(evidence["sourceCommit"]),
         "STABLE_PUBLISHED_ISO": published_iso,
         "STABLE_PUBLISHED_DATE": published_en,
         "STABLE_PUBLISHED_DATE_ID": published_id,

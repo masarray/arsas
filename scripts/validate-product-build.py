@@ -113,6 +113,9 @@ def main() -> int:
     if info.get("repository") != "https://github.com/masarray/arsas": errors.append("build-info repository is invalid")
     if info.get("indexNowKeyLocation") != CANONICAL_ROOT + INDEXNOW_FILE: errors.append("build-info IndexNow location is invalid")
     if latest.get("version") != notes.get("version") or latest.get("channel") != "stable": errors.append("stable release JSON is inconsistent")
+    stable_source = str(latest.get("sourceCommit", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", stable_source): errors.append("stable release source commit is invalid")
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", str(latest.get("tag", ""))): errors.append("stable release tag is invalid")
     for key, url in (("installer", INSTALLER), ("portable", PORTABLE)):
         item = latest.get(key)
         if not isinstance(item, dict) or item.get("url") != url or not re.fullmatch(r"[0-9a-fA-F]{64}", str(item.get("sha256", ""))): errors.append(f"latest.json {key} evidence is invalid")
@@ -209,6 +212,13 @@ def main() -> int:
         )
         for value in discovery_scl_contract:
             if value not in home_text: errors.append(f"{home}: missing discovery-to-SCL contract value {value}")
+        trust_contract = (
+            ('data-trust-architecture="true"', "Trust the exact release because its evidence can be inspected.", "Open source is not automatic correctness.", stable_source)
+            if home == "index.html" else
+            ('data-trust-architecture="true"', "Percaya pada release exact karena evidence-nya dapat diperiksa.", "Open source bukan jaminan correctness otomatis.", stable_source)
+        )
+        for value in trust_contract:
+            if value not in home_text: errors.append(f"{home}: missing R5.6 open-source reliability value {value}")
         for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
             if ambiguous_ip in home_text: errors.append(f"{home}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
@@ -222,6 +232,13 @@ def main() -> int:
         if home == "id.html":
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
+    technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate"):
+        if value not in technical_review_text: errors.append(f"technical-review.html: missing R5.6 reliability value {value}")
+    for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
+        release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        for value in (stable_source, str(latest.get("tag", "")), "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"):
+            if value not in release_text: errors.append(f"{page}: missing rendered exact-release trust value {value}")
     features_text = (site / "features.html").read_text(encoding="utf-8") if (site / "features.html").is_file() else ""
     for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
         if value not in features_text: errors.append(f"features.html: missing R5 capability-domain contract value {value}")

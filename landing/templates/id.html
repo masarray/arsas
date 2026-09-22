@@ -234,7 +234,7 @@
         <div class="release-strip-copy">
           <span class="kicker">Release stabil terverifikasi</span>
           <h2>ARSAS {{STABLE_VERSION}} · Windows x64</h2>
-          <p>Dipublikasikan {{STABLE_PUBLISHED_DATE_ID}}. Identity package didukung evidence SHA-256 yang dipublikasikan; binary saat ini {{SIGNING_LABEL_ID}}.</p>
+          <p>Dipublikasikan {{STABLE_PUBLISHED_DATE_ID}}. Identity package didukung SHA-256 dan exact tagged-release evidence; status publisher-signing Windows tetap dijelaskan di Pusat Unduhan.</p>
         </div>
         <div class="release-facts" aria-label="Release facts">
           <span><strong>{{STABLE_VERSION}}</strong><small>stabil</small></span>
@@ -244,6 +244,8 @@
         <div class="release-actions"><a class="btn btn-primary" href="download.html">Unduh & verifikasi</a><a class="text-link" href="catatan-rilis.html">Catatan rilis →</a></div>
       </div>
     </section>
+
+    {{> trust-architecture-id}}
 
     <section class="section section-tight home-faq" data-reveal>
       <div class="container">
