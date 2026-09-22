@@ -144,6 +144,20 @@ def main() -> int:
         if text.count(step_class) != 6:
             errors.append(f"{name}: expected six capability tutorial steps")
 
+    investigation_contracts = {
+        "features.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "goose-analyzer.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Event / SOE", "Fault record", "COMTRADE"),
+        "file-transfer.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Engineering timeline"),
+        "multi-ied-monitoring.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "COMTRADE"),
+        "demo.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Fault record", "COMTRADE"),
+        "analyzer-goose-iec61850.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Event / SOE", "Fault record", "COMTRADE"),
+        "transfer-file-comtrade-iec61850.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Evidence network", "Timeline engineering"),
+        "demo-arsas.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Fault record", "COMTRADE"),
+    }
+    for name, required_values in investigation_contracts.items():
+        text = read(TEMPLATES / name, errors)
+        require_values(text, name, required_values, errors, "investigation workflow contract")
+
     for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
         text = read(TEMPLATES / name, errors)
         require_values(
