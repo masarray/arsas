@@ -242,8 +242,8 @@ def main() -> int:
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
-    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate"):
-        if value not in technical_review_text: errors.append(f"technical-review.html: missing R5.6 reliability value {value}")
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release"):
+        if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof route value {value}")
     for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in (stable_source, str(latest.get("tag", "")), "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"):
