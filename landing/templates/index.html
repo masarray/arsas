@@ -251,7 +251,7 @@
         <div class="release-strip-copy">
           <span class="kicker">Verified stable release</span>
           <h2>ARSAS {{STABLE_VERSION}} · Windows x64</h2>
-          <p>Published {{STABLE_PUBLISHED_DATE}}. Package identity is backed by published SHA-256 evidence; current binaries are {{SIGNING_LABEL}}.</p>
+          <p>Published {{STABLE_PUBLISHED_DATE}}. Package identity is backed by SHA-256 and exact tagged-release evidence; Windows publisher-signing status remains disclosed in the Download Center.</p>
         </div>
         <div class="release-facts" aria-label="Release facts">
           <span><strong>{{STABLE_VERSION}}</strong><small>stable</small></span>
@@ -261,6 +261,8 @@
         <div class="release-actions"><a class="btn btn-primary" href="download.html">Download & verify</a><a class="text-link" href="release-notes.html">Release notes →</a></div>
       </div>
     </section>
+
+    {{> trust-architecture}}
 
     <section class="section section-tight home-faq" data-reveal>
       <div class="container">
