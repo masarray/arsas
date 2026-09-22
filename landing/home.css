@@ -24,11 +24,11 @@ body[data-page="overview"] .hero-message {
 }
 
 body[data-page="overview"] .hero h1 {
-  max-width: 12ch;
+  max-width: 15ch;
   margin-top: 1.05rem;
-  font-size: clamp(3rem, 4.25vw, 3.85rem);
-  line-height: 1.01;
-  letter-spacing: -.044em;
+  font-size: clamp(2.7rem, 3.7vw, 3.35rem);
+  line-height: 1.04;
+  letter-spacing: -.038em;
 }
 
 body[data-page="overview"] .hero h1 .gradient-text {
@@ -42,8 +42,8 @@ body[data-page="overview"] .hero:lang(id) .hero-grid {
 }
 
 body[data-page="overview"] .hero:lang(id) h1 {
-  max-width: 13.5ch;
-  font-size: clamp(2.85rem, 4vw, 3.7rem);
+  max-width: 16ch;
+  font-size: clamp(2.6rem, 3.5vw, 3.2rem);
 }
 
 body[data-page="overview"] .hero:lang(id) .eyebrow {
@@ -138,6 +138,54 @@ body[data-page="overview"] .floating-chip.two {
 
 body[data-page="overview"] .home-paths-section {
   padding-top: clamp(3rem, 4.5vw, 3.9rem);
+}
+
+body[data-page="overview"] .home-quick-start-section {
+  padding-top: clamp(3.4rem, 5vw, 4.5rem);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(41, 157, 220, .085), transparent 33rem),
+    linear-gradient(180deg, rgba(11, 27, 49, .24), transparent 22rem);
+}
+
+body[data-page="overview"] .home-quick-start-section .section-head {
+  max-width: 800px;
+}
+
+body[data-page="overview"] .home-term-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(151, 205, 255, .14);
+  border-radius: 15px;
+  background: rgba(6, 18, 34, .52);
+}
+
+body[data-page="overview"] .home-term-strip div {
+  padding: 1rem 1.1rem;
+  border-left: 1px solid rgba(151, 205, 255, .11);
+}
+
+body[data-page="overview"] .home-term-strip div:first-child {
+  border-left: 0;
+}
+
+body[data-page="overview"] .home-term-strip strong,
+body[data-page="overview"] .home-term-strip span {
+  display: block;
+}
+
+body[data-page="overview"] .home-term-strip strong {
+  color: #e8f8ff;
+  font-size: .87rem;
+  letter-spacing: .01em;
+}
+
+body[data-page="overview"] .home-term-strip span {
+  margin-top: .35rem;
+  color: #9eb1c6;
+  font-size: .78rem;
+  line-height: 1.5;
 }
 
 body[data-page="overview"] .home-path-grid {
@@ -349,7 +397,7 @@ body[data-page="overview"] [data-reveal].reveal {
   }
 
   body[data-page="overview"] .hero h1 {
-    font-size: clamp(2.55rem, 12vw, 3.25rem);
+    font-size: clamp(2.35rem, 11vw, 3rem);
   }
 
   body[data-page="overview"] .hero-actions .btn,
@@ -363,6 +411,20 @@ body[data-page="overview"] [data-reveal].reveal {
 
   body[data-page="overview"] .home-path-grid {
     grid-template-columns: 1fr;
+  }
+
+  body[data-page="overview"] .home-term-strip {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="overview"] .home-term-strip div,
+  body[data-page="overview"] .home-term-strip div:first-child {
+    border-top: 1px solid rgba(151, 205, 255, .11);
+    border-left: 0;
+  }
+
+  body[data-page="overview"] .home-term-strip div:first-child {
+    border-top: 0;
   }
 
   body[data-page="overview"] .release-strip {

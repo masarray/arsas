@@ -167,8 +167,8 @@ def main() -> int:
             image for image in audit.images
             if str(image.get("src") or "").startswith("assets/screenshots/")
         ]
-        if len(screenshot_images) != 7:
-            errors.append(f"{home}: expected hero plus six curated product screenshots, found {len(screenshot_images)}")
+        if len(screenshot_images) != 10:
+            errors.append(f"{home}: expected hero, three Quick Start screenshots and six curated product screenshots, found {len(screenshot_images)}")
         if any(image.get("src") == "assets/arsas-substation-context.webp" for image in audit.images):
             errors.append(f"{home}: compact homepage must not load decorative substation media")
         if "home.css" not in audit.refs:
@@ -182,9 +182,9 @@ def main() -> int:
         for value in search_contract:
             if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
         premium_contract = (
-            ("IEC 61850 testing, from live IED", "Download for Windows", "Real product evidence", "Progressive engineering")
+            ("ARSAS is a free Windows app", "Your first three minutes", "Download for Windows", "Real product evidence", "Progressive engineering")
             if home == "index.html" else
-            ("Pengujian IEC 61850, dari live IED", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+            ("ARSAS adalah aplikasi Windows gratis", "Tiga menit pertama", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
         )
         for value in premium_contract:
             if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")
@@ -217,6 +217,7 @@ def main() -> int:
 
     for required in (
         "assets/app-icon.png", "assets/social-card.png", "assets/arsas-substation-context.webp", "assets/screenshots/arsas-first-launch.webp", "assets/screenshots/arsas-overview-v1.6.19.webp",
+        "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp",
         "assets/fonts/Inter-Regular.ttf", "assets/fonts/Inter-Medium.ttf", "assets/fonts/Inter-SemiBold.ttf", "assets/fonts/Inter-Bold.ttf", "assets/fonts/Inter-LICENSE.txt",
         "assets/screenshots/arsas-multi-ied.webp", "assets/screenshots/arsas-live-values.webp",
         "assets/screenshots/arsas-event-log.webp", "assets/screenshots/arsas-goose.webp",

@@ -37,6 +37,31 @@ public sealed class WebsiteHeroLocalizationRegressionTests
     }
 
     [Fact]
+    public void ProductScreenshots_PreserveTheirSourceAspectRatio()
+    {
+        var audit = Read("landing/audit.css");
+
+        Assert.Contains(".screenshot-link img { width: 100%; height: auto; object-fit: contain; }", audit, StringComparison.Ordinal);
+        Assert.DoesNotContain(".screenshot-link,\n.reporting-visual", audit.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("landing/templates/index.html", "Your first three minutes")]
+    [InlineData("landing/templates/id.html", "Tiga menit pertama")]
+    [InlineData("landing/templates/quick-start.html", "Three visible steps")]
+    [InlineData("landing/templates/panduan-mulai-arsas.html", "Tiga langkah yang terlihat")]
+    public void BeginnerJourney_UsesTheCurrentThreeStepProductFlow(string path, string heading)
+    {
+        var page = Read(path);
+
+        Assert.Contains(heading, page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-choose-source-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("SCL", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CssArchitecture_ReplacesPhaseOverridesWithSemanticScopedLayers()
     {
         var header = Read("landing/partials/header.html");

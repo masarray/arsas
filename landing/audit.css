@@ -53,12 +53,11 @@ h3 { font-weight: 680; }
 }
 .hero-actions, .section-actions { gap: .65rem; margin-top: 1.45rem; }
 
-.hero-window,
-.screenshot-link,
 .reporting-visual .screenshot-link { aspect-ratio: 1507 / 893; }
-.hero-window { border-radius: 18px; }
+.hero-window { aspect-ratio: auto; border-radius: 18px; }
 .hero-window img,
-.screenshot-link img { height: 100%; object-fit: cover; }
+.screenshot-link img { width: 100%; height: auto; object-fit: contain; }
+.reporting-visual .screenshot-link img { height: 100%; object-fit: cover; }
 .floating-chip { padding: .55rem .72rem; border-radius: 12px; font-size: .76rem; }
 
 .section { padding: 4.15rem 0; }

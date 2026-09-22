@@ -213,8 +213,8 @@ def main() -> int:
                 image for image in audit.images
                 if str(image.get("src") or "").startswith("assets/screenshots/")
             ]
-            if len(screenshot_images) != 7:
-                errors.append(f"{label}: expected hero plus six curated product screenshots, found {len(screenshot_images)}")
+            if len(screenshot_images) != 10:
+                errors.append(f"{label}: expected hero, three Quick Start screenshots and six curated product screenshots, found {len(screenshot_images)}")
             if "arsas-substation-context.webp" in rendered:
                 errors.append(f"{label}: decorative substation media should not be loaded on the compact homepage")
             search_contract = (
@@ -226,9 +226,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
             premium_contract = (
-                ("IEC 61850 testing, from live IED", "Download for Windows", "Real product evidence", "Progressive engineering")
+                ("ARSAS is a free Windows app", "Your first three minutes", "Download for Windows", "Real product evidence", "Progressive engineering")
                 if path == "" else
-                ("Pengujian IEC 61850, dari live IED", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+                ("ARSAS adalah aplikasi Windows gratis", "Tiga menit pertama", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
             )
             for value in premium_contract:
                 if value not in rendered:
@@ -273,7 +273,7 @@ def main() -> int:
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
-    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp"):
+    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
     for font_name in FONT_FILES:
         if not (FONT_DIR / font_name).is_file():

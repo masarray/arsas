@@ -47,8 +47,8 @@
       <div class="container hero-grid">
         <div class="hero-message">
           <span class="eyebrow">Free &amp; open source · Windows x64 · stable v{{STABLE_VERSION}}</span>
-          <h1>IEC 61850 testing, from live IED to <span class="gradient-text">traceable engineering evidence.</span></h1>
-          <p class="hero-copy">Connect to an IED, discover what it actually exposes, monitor or test the signals you need, and keep reviewable evidence for FAT, SAT and interoperability work. ARSAS stays free and open source; deeper MMS, Reporting, GOOSE and SCL detail is there when you need it.</p>
+          <h1>ARSAS is a free Windows app for <span class="gradient-text">IEC 61850 relay testing.</span></h1>
+          <p class="hero-copy">Use ARSAS to connect to a protection relay by IP address or open its IEC 61850 engineering file, then inspect live values, test an authorized control and keep reviewable FAT or SAT evidence. Start with the guided workflow; protocol detail remains available when you need it.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="download.html">Download for Windows</a>
             <a class="btn" href="connect-ied-ip-arsas.html">Test your first IED</a>
@@ -72,6 +72,35 @@
           </div>
           <div class="floating-chip one">Connect → discover → test</div>
           <div class="floating-chip two">Simple first · engineering depth inside</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section home-quick-start-section" id="quick-start" data-reveal>
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Your first three minutes</span>
+          <h2>From relay or SCL file to live monitoring—without guessing the next click.</h2>
+          <p>Start online with an approved relay IP address, or start offline from the engineering model supplied by the vendor or project.</p>
+        </div>
+        <div class="home-term-strip" aria-label="Plain-language IEC 61850 terms">
+          <div><strong>ARSAS</strong><span>The Windows application that connects, monitors, tests and records evidence.</span></div>
+          <div><strong>IED</strong><span>The protection, control or bay device you want to inspect—often a relay.</span></div>
+          <div><strong>SCL</strong><span>An IEC 61850 XML engineering model. ARSAS opens ICD, CID, IID and SCD files.</span></div>
+        </div>
+        <div class="first-run-flow">
+          <article class="first-run-step">
+            <figure class="first-run-media"><a class="screenshot-link" href="assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp" target="_blank" rel="noopener"><img src="assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp" width="1920" height="1032" alt="ARSAS Add IED menu with Open SCL and Discover IED by IP choices" loading="lazy" decoding="async" /></a></figure>
+            <div class="first-run-copy"><span class="first-run-number">01</span><span class="kicker">Choose the source</span><h3>Click Add IED, then choose live IP or SCL.</h3><p>Use <strong>Discover IED by IP</strong> for a reachable relay. Use <strong>Open SCL / CID / ICD</strong> to inspect a vendor or project model offline; IID and SCD are supported by the SCL workflow too.</p></div>
+          </article>
+          <article class="first-run-step">
+            <figure class="first-run-media"><a class="screenshot-link" href="assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp" target="_blank" rel="noopener"><img src="assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp" width="1919" height="1029" alt="ARSAS Add IEC 61850 IED dialog with relay IP address and Connect and Discover action" loading="lazy" decoding="async" /></a></figure>
+            <div class="first-run-copy"><span class="first-run-number">02</span><span class="kicker">Build the model</span><h3>Enter the relay IP and run Smart Discovery.</h3><p>ARSAS connects over IEC 61850 MMS on port 102, reads the real IED identity and builds its live model. If you chose an SCL file, ARSAS opens that configured model without making a live connection.</p></div>
+          </article>
+          <article class="first-run-step">
+            <figure class="first-run-media"><a class="screenshot-link" href="assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp" target="_blank" rel="noopener"><img src="assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp" width="1919" height="1031" alt="ARSAS IED Actions dialog with Static DataSet, Select Signals and guarded Command Dock" loading="lazy" decoding="async" /></a></figure>
+            <div class="first-run-copy"><span class="first-run-number">03</span><span class="kicker">Monitor and test</span><h3>Choose signals, watch live values, then test only approved controls.</h3><p>Start quickly from a discovered static DataSet or select signals manually. Live Monitor shows value, quality and timestamp; validated control objects appear in the guarded Command Dock for authorized test procedures.</p><div class="section-actions"><a class="btn btn-primary" href="quick-start.html">Open the complete Quick Start</a><a class="text-link" href="connect-ied-ip-arsas.html">Connection details →</a></div></div>
+          </article>
         </div>
       </div>
     </section>
@@ -129,10 +158,10 @@
         </div>
         <div class="comparison-grid">
           <article class="comparison-panel highlight">
-            <span class="kicker">First 10 minutes</span>
-            <h3>IP address → discover → choose signals → monitor or test → save evidence.</h3>
-            <ul><li>Connect one approved IED</li><li>Discover what the device actually exposes</li><li>Choose only the signals needed for the task</li><li>Watch values or run the approved test workflow</li><li>Keep evidence another engineer can review</li></ul>
-            <div class="section-actions"><a class="btn btn-primary" href="connect-ied-ip-arsas.html">Follow the first connection</a></div>
+            <span class="kicker">SCL in plain language</span>
+            <h3>An engineering model you can inspect before or beside a live connection.</h3>
+            <p>SCL is the IEC 61850 XML language used to describe IED capability and project configuration. ICD usually describes device capability, CID one configured IED, SCD an integrated substation project, and IID an instantiated IED exchange model.</p>
+            <div class="section-actions"><a class="btn btn-primary" href="scl-workspace.html">Understand the SCL workflow</a></div>
           </article>
           <article class="comparison-panel">
             <span class="kicker">Engineering depth</span>
