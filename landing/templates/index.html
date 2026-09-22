@@ -176,6 +176,32 @@
         </div>
       </div>
     </section>
+
+    <section class="section section-tight discovery-scl-showcase" id="discovery-to-scl" data-reveal>
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Discovery → engineering model</span>
+          <h2>Start from an IED IP. See what is really there. Keep a reusable SCL baseline.</h2>
+          <p>This is one of ARSAS’s core workflows: live discovery builds an observed device model first; only then do you choose what should be monitored, compared or exported.</p>
+        </div>
+        <div class="discovery-flow" aria-label="ARSAS live discovery to SCL workflow">
+          <div class="discovery-flow-step"><span>01</span><strong>IED IP</strong><small>A reachable relay on an authorized engineering network</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>02</span><strong>Live discovery</strong><small>Associate over IEC 61850 MMS and inspect the running server</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>03</span><strong>Observed model</strong><small>Identity, hierarchy, DataSets, RCBs and available services</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>04</span><strong>Engineering output</strong><small>Monitor the model or prepare bounded IID / ICD output</small></div>
+        </div>
+        <div class="source-compare-grid">
+          <article class="source-compare-card observed"><span class="capability-label">Observed live model</span><h3>What the connected IED exposes now</h3><p>Discovery shows the running server: identity, object hierarchy, current DataSets, concrete report-control instances and service evidence.</p></article>
+          <article class="source-compare-card"><span class="capability-label">Configured SCL intent</span><h3>What the engineering project says should exist</h3><p>ICD, CID, IID or SCD can carry configured intent and project relationships that a single live IED cannot reconstruct on its own.</p></article>
+        </div>
+        <div class="discovery-scl-boundary"><strong>ARSAS keeps both sources explicit.</strong><span>A generated IID/ICD is a bounded device baseline from observed evidence—not a replacement for the wider project SCD or a claim of universal interoperability.</span></div>
+        <div class="section-actions discovery-scl-actions"><a class="btn btn-primary" href="scl-workspace.html#ip-to-scl">Follow IP-to-SCL step by step</a><a class="btn" href="live-model-vs-scl.html">Compare live model vs SCL</a><a class="text-link" href="mms-client.html">How live discovery works →</a></div>
+      </div>
+    </section>
+
     <section class="section home-evidence" id="screenshots" data-reveal>
       <div class="container">
         <div class="section-head center">
