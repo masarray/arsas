@@ -307,6 +307,11 @@ def main() -> int:
         if name == "technical-review.html":
             require_values(text, name, ("Review field interoperability evidence", "Verify the stable release"), errors, "R6 technical-review proof route")
 
+    evidence_en = read(LANDING / "partials" / "evidence-contract.html", errors)
+    evidence_id = read(LANDING / "partials" / "evidence-contract-id.html", errors)
+    require_values(evidence_en, "evidence-contract.html", ("Review field interoperability evidence →", "Review engineering boundaries →"), errors, "R6 evidence proof routing")
+    require_values(evidence_id, "evidence-contract-id.html", ("Review evidence interoperabilitas field →", "Review batas engineering →"), errors, "R6 Indonesian evidence proof routing")
+
     # R5 final audit: preserve the beginner-to-evidence path while preventing duplicate overview layers.
     for name, trust_partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}")):
         text = read(TEMPLATES / name, errors)
