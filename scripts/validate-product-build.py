@@ -189,9 +189,9 @@ def main() -> int:
         for value in premium_contract:
             if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")
         onboarding_contract = (
-            ("I have a live relay or IED", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
+            ("I have a live relay or IED", "Recommended first connection", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
             if home == "index.html" else
-            ("Saya punya relay atau IED live", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
+            ("Saya punya relay atau IED live", "Disarankan untuk koneksi pertama", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
         )
         for value in onboarding_contract:
             if value not in home_text: errors.append(f"{home}: missing guided-onboarding contract value {value}")
