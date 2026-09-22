@@ -246,9 +246,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing guided-onboarding contract value {value}")
             capability_contract = (
-                ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.")
+                ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.", "Review interoperability evidence →", "Review the engineering boundary →")
                 if path == "" else
-                ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.")
+                ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.", "Review evidence interoperabilitas →", "Review batas engineering →")
             )
             for value in capability_contract:
                 if value not in rendered:
