@@ -348,9 +348,9 @@ def main() -> int:
         evidence_pages_en = {"mms-client.html", "smart-reporting.html", "goose-analyzer.html", "file-transfer.html", "scl-workspace.html", "control.html"}
         evidence_pages_id = {"mms-client-iec61850.html", "smart-reporting-iec61850.html", "analyzer-goose-iec61850.html", "transfer-file-comtrade-iec61850.html", "workspace-scl-iec61850.html"}
         if path in evidence_pages_en:
-            for value in ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."):
+            for value in ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →", "Review engineering boundaries →"):
                 if value not in rendered:
-                    errors.append(f"{label}: missing R5.3 evidence-contract value {value}")
+                    errors.append(f"{label}: missing evidence-contract proof route value {value}")
             if "{{> evidence-contract}}" not in raw:
                 errors.append(f"{label}: reusable EN evidence partial is not attached")
         if path in evidence_pages_id:
