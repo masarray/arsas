@@ -195,6 +195,13 @@ def main() -> int:
         )
         for value in onboarding_contract:
             if value not in home_text: errors.append(f"{home}: missing guided-onboarding contract value {value}")
+        capability_contract = (
+            ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.")
+            if home == "index.html" else
+            ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.")
+        )
+        for value in capability_contract:
+            if value not in home_text: errors.append(f"{home}: missing beginner-first capability contract value {value}")
         for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
             if ambiguous_ip in home_text: errors.append(f"{home}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
@@ -208,6 +215,9 @@ def main() -> int:
         if home == "id.html":
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
+    features_text = (site / "features.html").read_text(encoding="utf-8") if (site / "features.html").is_file() else ""
+    for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
+        if value not in features_text: errors.append(f"features.html: missing R5 capability-domain contract value {value}")
     for quick, contract in (
         ("quick-start.html", ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")),
         ("panduan-mulai-arsas.html", ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")),

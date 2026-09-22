@@ -241,6 +241,14 @@ def main() -> int:
             for value in onboarding_contract:
                 if value not in rendered:
                     errors.append(f"{label}: missing guided-onboarding contract value {value}")
+            capability_contract = (
+                ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.")
+                if path == "" else
+                ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.")
+            )
+            for value in capability_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing beginner-first capability contract value {value}")
             for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
                 if ambiguous_ip in rendered:
                     errors.append(f"{label}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
@@ -255,6 +263,12 @@ def main() -> int:
                 for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
+        if path == "features.html":
+            for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5 capability-domain contract value {value}")
+            if "Connect by approved IP address" in rendered or "Connect by approved IED IP" in rendered:
+                errors.append(f"{label}: ambiguous endpoint-authority wording remains in capability page")
         if path in {"quick-start.html", "panduan-mulai-arsas.html"}:
             quick_contract = (
                 ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")
