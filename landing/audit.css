@@ -299,6 +299,84 @@ pre code { padding: 0; background: transparent; }
   color: #ffe8a8;
 }
 
+
+.trust-architecture .section-head {
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.trust-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .8rem;
+}
+
+.trust-proof-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 1.08rem;
+  border: 1px solid rgba(151,205,255,.13);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(13,34,58,.66), rgba(6,18,35,.56));
+}
+
+.trust-proof-number {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  color: #dff7ff;
+  border: 1px solid rgba(75,197,247,.24);
+  border-radius: 9px;
+  background: rgba(56,189,248,.09);
+  font-size: .7rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.trust-proof-card h3 {
+  margin-top: .7rem;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.trust-proof-card p {
+  margin: .5rem 0 .8rem;
+  color: var(--muted);
+  font-size: .79rem;
+  line-height: 1.56;
+}
+
+.trust-proof-card code {
+  overflow-wrap: anywhere;
+  font-size: .7rem;
+}
+
+.trust-proof-card .text-link {
+  margin-top: auto;
+}
+
+.trust-proof-boundary {
+  display: flex;
+  align-items: baseline;
+  gap: .42rem .62rem;
+  flex-wrap: wrap;
+  margin-top: .9rem;
+  padding: .9rem 1rem;
+  border-left: 3px solid rgba(56,189,248,.58);
+  border-radius: 0 11px 11px 0;
+  color: #98abc0;
+  background: rgba(56,189,248,.05);
+  font-size: .8rem;
+  line-height: 1.55;
+}
+
+.trust-proof-boundary strong {
+  color: #dff7ff;
+}
+
 .footer-grid { grid-template-columns: 1.2fr repeat(4, .75fr); gap: 1.35rem; }
 .footer-legal { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem .9rem; }
 .footer-preference {
@@ -367,6 +445,7 @@ html[lang="id"] [data-lang="id"] { display: inline; }
   .nav-links a { width: 100%; }
 }
 @media (max-width: 980px) {
+  .trust-proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .investigation-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .investigation-arrow { display: none; }
   .evidence-contract-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -377,6 +456,7 @@ html[lang="id"] [data-lang="id"] { display: inline; }
   .consent-actions { justify-content: flex-start; }
 }
 @media (max-width: 760px) {
+  .trust-proof-grid { grid-template-columns: 1fr; }
   .investigation-flow { grid-template-columns: 1fr; }
   .evidence-contract-grid { grid-template-columns: 1fr; }
   .evidence-contract-grid div,
