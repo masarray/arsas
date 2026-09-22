@@ -260,6 +260,10 @@ def main() -> int:
             if value not in quick_text: errors.append(f"{quick}: missing beginner-to-engineering quick-start contract value {value}")
         for ambiguous_ip in ("approved relay IP", "approved IP address", "alamat IP relay yang disetujui", "alamat IP yang disetujui"):
             if ambiguous_ip in quick_text: errors.append(f"{quick}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
+    for page in ("compatibility.html", "bukti-kompatibilitas.html"):
+        matrix_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        for value in ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json"):
+            if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability matrix value {value}")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
