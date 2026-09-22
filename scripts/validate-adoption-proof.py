@@ -299,6 +299,36 @@ def main() -> int:
         if partial not in text:
             errors.append(f"{name}: missing reusable R5.6 trust partial {partial}")
 
+    # R5 final audit: preserve the beginner-to-evidence path while preventing duplicate overview layers.
+    for name, trust_partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}")):
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("home-quick-start-section", "home-paths-section", "home-capabilities", "discovery-scl-showcase", "home-evidence", "release-trust-section", trust_partial),
+            errors,
+            "R5 final overview contract",
+        )
+        if "home-workflows" in text:
+            errors.append(f"{name}: duplicated post-evidence SCL/depth overview section must stay removed")
+
+    features_text = read(TEMPLATES / "features.html", errors)
+    require_values(
+        features_text,
+        "features.html",
+        ("Six capability domains", "{{> investigation-path}}", 'id="product-areas"', "Project workflows"),
+        errors,
+        "R5 final capability-navigation contract",
+    )
+    for forbidden in ("approved IED IP address", "approved IP address", "Current source and published release", 'class="container metric-grid"'):
+        if forbidden.lower() in features_text.lower():
+            errors.append(f"features.html: final-audit duplication/authority wording returned: {forbidden}")
+
+    home_css = read(LANDING / "home.css", errors)
+    for obsolete_selector in ("home-workflows", "home-next-grid"):
+        if obsolete_selector in home_css:
+            errors.append(f"landing/home.css: obsolete overview selector returned: {obsolete_selector}")
+
     latest = json.loads(read(LANDING / "latest.json", errors) or "{}")
     if len(str(latest.get("sourceCommit", ""))) != 40 or not str(latest.get("tag", "")).startswith("v"):
         errors.append("latest.json: missing exact R5.6 source identity")
