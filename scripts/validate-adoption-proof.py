@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -197,8 +198,15 @@ def main() -> int:
     except json.JSONDecodeError as exc:
         errors.append(f"device-evidence.json: {exc}")
         evidence = {}
-    if evidence.get("schemaVersion") != 1 or evidence.get("product") != "ARSAS" or evidence.get("namedDeviceCount") != 0:
+    if evidence.get("schemaVersion") != 2 or evidence.get("product") != "ARSAS" or evidence.get("namedDeviceCount") != 0:
         errors.append("device-evidence.json identity or named-device boundary is invalid")
+    policy = evidence.get("freshnessPolicy")
+    if not isinstance(policy, dict) or policy.get("stableVersionSource") != "latest.json" or not all(
+        policy.get(key) for key in ("missingTestVersion", "missingRetest", "recordScope", "registryUpdate")
+    ):
+        errors.append("device-evidence.json: incomplete historical/retest policy")
+    if not re.fullmatch(r"20\\d{2}-\\d{2}-\\d{2}", str(evidence.get("updatedAt", ""))):
+        errors.append("device-evidence.json: invalid registry update date")
     vocabulary = evidence.get("statusVocabulary")
     if not isinstance(vocabulary, dict) or set(vocabulary) != STATUSES:
         errors.append("device-evidence.json status vocabulary is invalid")
@@ -221,6 +229,29 @@ def main() -> int:
             errors.append(f"{profile_id}: public evidence links are incomplete")
         if not isinstance(profile.get("conditions"), list) or len(profile["conditions"]) < 3:
             errors.append(f"{profile_id}: evidence conditions are incomplete")
+        if not re.fullmatch(r"20\\d{2}-(0[1-9]|1[0-2])", str(profile.get("evidenceDate", ""))):
+            errors.append(f"{profile_id}: invalid historical evidence month")
+        tested = profile.get("testedArsasVersion", "__missing__")
+        if tested != "__missing__" and tested is not None and not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", str(tested)):
+            errors.append(f"{profile_id}: invalid tested ARSAS version")
+        if tested == "__missing__":
+            errors.append(f"{profile_id}: missing explicit tested ARSAS version")
+        retest = profile.get("lastRetest", "__missing__")
+        if retest == "__missing__":
+            errors.append(f"{profile_id}: missing explicit lastRetest")
+        elif retest is not None:
+            if not isinstance(retest, dict) or not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", str(retest.get("arsasVersion", ""))) or not re.fullmatch(r"20\\d{2}-\\d{2}-\\d{2}", str(retest.get("date", ""))) or not isinstance(retest.get("evidenceLinks"), list) or not retest["evidenceLinks"]:
+                errors.append(f"{profile_id}: retest needs version, date and public evidence")
+        if profile.get("publicRecordType") != "engineering-implementation-trail" or profile.get("rawFieldCaptureLinked") is not False:
+            errors.append(f"{profile_id}: public engineering trail must not imply raw capture")
+        records = profile.get("serviceRecords")
+        declared = {key for key, status in services.items() if status != "not-tested"} if isinstance(services, dict) else set()
+        if not isinstance(records, dict) or set(records) != declared:
+            errors.append(f"{profile_id}: service-level record coverage does not match published statuses")
+        elif isinstance(links, list):
+            for service, urls in records.items():
+                if not isinstance(urls, list) or not urls or any(url not in links for url in urls):
+                    errors.append(f"{profile_id}/{service}: unsupported service-level engineering record")
 
     for name in ("compatibility.html", "bukti-kompatibilitas.html"):
         text = read(TEMPLATES / name, errors)
@@ -238,12 +269,31 @@ def main() -> int:
             profile_id = str(profile.get("id", ""))
             if f'data-evidence-profile="{profile_id}"' not in text:
                 errors.append(f"{name}: missing evidence profile {profile_id}")
+            if f'data-evidence-trace="{profile_id}"' not in text or f'data-service-records="{profile_id}"' not in text:
+                errors.append(f"{name}: missing profile freshness or service-record trace for {profile_id}")
+            if f'data-evidence-trace="{profile_id}" data-tested-version="not-recorded" data-current-stable-retest="not-documented"' not in text:
+                errors.append(f"{name}: historical unknown version/retest is not explicit for {profile_id}")
+            records = profile.get("serviceRecords")
+            if isinstance(records, dict):
+                record_start = text.find(f'data-service-records="{profile_id}"')
+                record_end = text.find("</p>", record_start) if record_start >= 0 else -1
+                record_block = text[record_start:record_end] if record_end >= 0 else ""
+                for service, urls in records.items():
+                    for url in urls:
+                        if f'href="{url}"' not in record_block:
+                            errors.append(f"{name}: missing linked engineering record for {profile_id}/{service}")
             services = profile.get("services")
             if isinstance(services, dict):
                 for service, status in services.items():
                     marker = f'data-evidence-cell="{profile_id}:{service}:{status}"'
                     if marker not in text:
                         errors.append(f"{name}: evidence matrix drift for {profile_id}/{service}/{status}")
+        if 'data-evidence-freshness="true"' not in text or "{{STABLE_VERSION}}" not in text:
+            errors.append(f"{name}: current stable source or historical freshness note missing")
+        if name == "compatibility.html":
+            require_values(text, name, ("Historical evidence", "not publicly recorded", "not documented", "not raw field captures"), errors, "R6.2 historical/retest boundary")
+        else:
+            require_values(text, name, ("Evidence historis", "belum tercatat secara publik", "belum terdokumentasi", "bukan raw field capture"), errors, "R6.2 historical/retest boundary")
         for status in ("verified", "conditional", "observed"):
             if f'data-status="{status}"' not in text:
                 errors.append(f"{name}: missing status {status}")
