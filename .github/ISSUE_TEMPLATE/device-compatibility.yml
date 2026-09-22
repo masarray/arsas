@@ -15,6 +15,29 @@ body:
     validations:
       required: true
   - type: input
+    id: evidence-date
+    attributes:
+      label: Evidence or test date (YYYY-MM-DD)
+      description: Use the actual test date, not the date this issue was filed.
+      placeholder: 2026-09-22
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence-kind
+    attributes:
+      label: Evidence type
+      description: A pull request or implementation history alone is not proof of a new physical-relay test.
+      options: [Sanitized field capture or test log, Sanitized ARSAS diagnostic and reproducible steps, Engineering or implementation history only, Planned test - no result yet]
+    validations:
+      required: true
+  - type: input
+    id: prior-profile
+    attributes:
+      label: Existing anonymized profile ID (if this is a retest)
+      placeholder: field-profile-a-file-service
+    validations:
+      required: false
+  - type: input
     id: windows-version
     attributes:
       label: Windows version

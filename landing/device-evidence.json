@@ -112,5 +112,34 @@
     "missingRetest": "No public retest on the current stable release is documented.",
     "recordScope": "Linked pull requests form a public engineering and implementation trail, not raw relay capture or independent field retest.",
     "registryUpdate": "A registry edit or website deployment does not change the evidence date or establish a retest."
+  },
+  "coveragePlan": {
+    "scope": "published-anonymized-profiles-only",
+    "serviceOrder": [
+      "mmsAssociation",
+      "liveModel",
+      "reporting",
+      "fileDirectory",
+      "fileTransfer",
+      "goose",
+      "control",
+      "selectedRcbExport"
+    ],
+    "noPublishedTestAcrossProfiles": [
+      "goose",
+      "control"
+    ],
+    "nextEvidence": {
+      "goose": "Sanitized capture showing publisher identity, GoID/AppID, stNum/sqNum, TAL, payload order and expected DataSet mapping; include negative or missing-frame findings.",
+      "control": "Approved non-energized test showing ctlModel, Direct/SBO sequence, service and CommandTermination results, rejection/AddCause and independently checked process feedback."
+    },
+    "stableRetest": {
+      "state": "not-publicly-documented",
+      "requirements": [
+        "Exact stable tag and ARSAS version",
+        "Test date and anonymized IED model/firmware or disclosure boundary",
+        "Positive and negative service result with sanitized diagnostics and acquisition conditions"
+      ]
+    }
   }
 }

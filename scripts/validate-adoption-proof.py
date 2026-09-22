@@ -253,6 +253,45 @@ def main() -> int:
                 if not isinstance(urls, list) or not urls or any(url not in links for url in urls):
                     errors.append(f"{profile_id}/{service}: unsupported service-level engineering record")
 
+    # R6.3 coverage is computed from declared profile statuses; an omitted service is
+    # Not declared, never silently converted into Not tested.
+    plan = evidence.get("coveragePlan")
+    if not isinstance(plan, dict) or plan.get("scope") != "published-anonymized-profiles-only":
+        errors.append("device-evidence.json: missing bounded coverage plan")
+        plan = {}
+    service_order = plan.get("serviceOrder")
+    declared_services = set().union(*(set(p.get("services", {})) for p in profiles if isinstance(p, dict) and isinstance(p.get("services"), dict)))
+    if not isinstance(service_order, list) or len(service_order) != len(set(service_order)) or set(service_order) != declared_services:
+        errors.append("device-evidence.json: coverage service inventory differs from profile declarations")
+        service_order = []
+    uncovered = {
+        service for service in service_order
+        if profiles and all(
+            isinstance(profile, dict)
+            and isinstance(profile.get("services"), dict)
+            and profile["services"].get(service) == "not-tested"
+            for profile in profiles
+        )
+    }
+    gaps = plan.get("noPublishedTestAcrossProfiles")
+    if not isinstance(gaps, list) or len(gaps) != len(set(gaps)) or set(gaps) != uncovered:
+        errors.append("device-evidence.json: cross-profile gaps must be derived from explicit Not tested statuses")
+        gaps = []
+    next_evidence = plan.get("nextEvidence")
+    if not isinstance(next_evidence, dict) or set(next_evidence) != uncovered or any(
+        not isinstance(value, str) or len(value.strip()) < 60 for value in next_evidence.values()
+    ):
+        errors.append("device-evidence.json: each uncovered service needs a concrete capture request")
+        next_evidence = {}
+    stable_retest = plan.get("stableRetest")
+    if not isinstance(stable_retest, dict) or stable_retest.get("state") != "not-publicly-documented" or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
+        errors.append("device-evidence.json: incomplete current-stable retest intake requirements")
+    if any(isinstance(p, dict) and p.get("lastRetest") is not None for p in profiles) and isinstance(stable_retest, dict) and stable_retest.get("state") == "not-publicly-documented":
+        errors.append("device-evidence.json: retest declaration changed; refresh coverage plan and page claims")
+
+    issue_form = read(ROOT / ".github" / "ISSUE_TEMPLATE" / "device-compatibility.yml", errors)
+    require_values(issue_form, "device-compatibility.yml", ("id: evidence-date", "id: evidence-kind", "id: prior-profile", "actual test date", "engineering or implementation history only"), errors, "R6.3 evidence intake")
+
     for name in ("compatibility.html", "bukti-kompatibilitas.html"):
         text = read(TEMPLATES / name, errors)
         if 'data-evidence-matrix="true"' not in text:
@@ -290,6 +329,20 @@ def main() -> int:
                         errors.append(f"{name}: evidence matrix drift for {profile_id}/{service}/{status}")
         if 'data-evidence-freshness="true"' not in text or "{{STABLE_VERSION}}" not in text:
             errors.append(f"{name}: current stable source or historical freshness note missing")
+        if 'data-evidence-coverage="published-anonymized-profiles-only"' not in text or 'data-stable-retest="not-publicly-documented"' not in text:
+            errors.append(f"{name}: missing bounded cross-profile coverage and stable-retest gap")
+        for service in gaps:
+            if f'data-uncovered-service="{service}"' not in text:
+                errors.append(f"{name}: missing explicit public evidence gap for {service}")
+        for service in declared_services - set(gaps):
+            if f'data-uncovered-service="{service}"' in text:
+                errors.append(f"{name}: declared service incorrectly shown as uncovered: {service}")
+        if name == "compatibility.html":
+            for prompt in next_evidence.values():
+                if prompt not in text:
+                    errors.append(f"{name}: coverage capture guidance drift from registry")
+        else:
+            require_values(text, name, ("GOOSE", "Control", "Not tested", "Not declared", "tanggal uji", "retest"), errors, "Indonesian coverage guidance")
         if name == "compatibility.html":
             require_values(text, name, ("Historical evidence", "not publicly recorded", "not documented", "not raw field captures"), errors, "R6.2 historical/retest boundary")
         else:
