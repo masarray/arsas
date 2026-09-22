@@ -264,17 +264,17 @@ def main() -> int:
         for value in contract:
             if value not in page_text: errors.append(f"{page}: missing R5.2 discovery/SCL contract value {value}")
     evidence_contract_pages = {
-        "mms-client.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "smart-reporting.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "goose-analyzer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "file-transfer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "scl-workspace.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "control.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "mms-client-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "smart-reporting-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "analyzer-goose-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "transfer-file-comtrade-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "workspace-scl-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "mms-client.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "smart-reporting.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "goose-analyzer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "file-transfer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "scl-workspace.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "control.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "mms-client-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "smart-reporting-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "analyzer-goose-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "transfer-file-comtrade-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "workspace-scl-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
     }
     for page, contract in evidence_contract_pages.items():
         page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
