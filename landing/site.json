@@ -1,7 +1,7 @@
 {
   "product": {
     "name": "ARSAS",
-    "tagline": "Free open-source IEC 61850 tester for learning, IED testing, FAT, SAT and interoperability evidence",
+    "tagline": "Free open-source IEC 61850 tester and evidence workstation for discovery, SCL, monitoring, FAT, SAT and troubleshooting",
     "canonicalRoot": "https://masarray.github.io/arsas/",
     "license": "GPL-3.0-or-later",
     "repository": "https://github.com/masarray/arsas",
@@ -43,7 +43,7 @@
     {"path": "bukti-kompatibilitas.html", "template": "bukti-kompatibilitas.html", "language": "id", "contentType": "localized", "alternates": {"en": "compatibility.html", "id": "bukti-kompatibilitas.html", "x-default": "compatibility.html"}, "changefreq": "monthly", "priority": "0.89", "lastmod": "2026-09-21"},
     {"path": "demo.html", "template": "demo.html", "language": "en", "contentType": "demo", "alternates": {"en": "demo.html", "id": "demo-arsas.html", "x-default": "demo.html"}, "changefreq": "monthly", "priority": "0.90", "lastmod": "2026-09-21"},
     {"path": "demo-arsas.html", "template": "demo-arsas.html", "language": "id", "contentType": "localized", "alternates": {"en": "demo.html", "id": "demo-arsas.html", "x-default": "demo.html"}, "changefreq": "monthly", "priority": "0.88", "lastmod": "2026-09-21"},
-    {"path": "features.html", "template": "features.html", "changefreq": "monthly", "priority": "0.96", "lastmod": "2026-09-21"},
+    {"path": "features.html", "template": "features.html", "changefreq": "monthly", "priority": "0.96", "lastmod": "2026-09-22"},
     {"path": "solutions.html", "template": "solutions.html", "changefreq": "monthly", "priority": "0.97", "lastmod": "2026-09-21"},
     {"path": "io-list-fat-evidence.html", "template": "io-list-fat-evidence.html", "language": "en", "contentType": "capability", "alternates": {"en": "io-list-fat-evidence.html", "id": "bukti-fat-iolist-iec61850.html", "x-default": "io-list-fat-evidence.html"}, "changefreq": "monthly", "priority": "0.97", "lastmod": "2026-07-28"},
     {"path": "bukti-fat-iolist-iec61850.html", "template": "bukti-fat-iolist-iec61850.html", "language": "id", "contentType": "localized", "alternates": {"en": "io-list-fat-evidence.html", "id": "bukti-fat-iolist-iec61850.html", "x-default": "io-list-fat-evidence.html"}, "changefreq": "monthly", "priority": "0.95", "lastmod": "2026-07-28"},
