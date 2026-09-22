@@ -29,6 +29,13 @@ def main() -> int:
     base = args.base_url.rstrip("/") + "/"
     nonce = urlencode({"adoption": args.source_commit})
     checks = {
+        "index.html": ('data-trust-architecture="true"', "Open-source reliability", "Open source is not automatic correctness."),
+        "id.html": ('data-trust-architecture="true"', "Reliability open-source", "Open source bukan jaminan correctness otomatis."),
+        "technical-review.html": ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate"),
+        "download.html": ("Open-source release verification", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"),
+        "unduh.html": ("Verifikasi release open-source", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"),
+        "release-notes.html": ("Exact release evidence", "ARSAS-Windows-x64-SBOM.spdx.json", "reproducible build"),
+        "catatan-rilis.html": ("Evidence release exact", "ARSAS-Windows-x64-SBOM.spdx.json", "reproducible build"),
         "learning-center.html": ("Learn IEC 61850", "What is IEC 61850", "Connect your first IED", "pusat-belajar-iec61850.html"),
         "pusat-belajar-iec61850.html": ("Belajar IEC 61850", "Apa itu IEC 61850", "Hubungkan IED pertama", "learning-center.html"),
         "what-is-iec61850.html": ("30-second takeaway", "Logical Node", "Reporting", "GOOSE", "FAQPage", "apa-itu-iec61850.html"),
@@ -72,6 +79,23 @@ def main() -> int:
         else:
             if evidence.get("namedDeviceCount") != 0 or len(evidence.get("profiles", [])) != 2:
                 errors.append("public compatibility evidence boundary is invalid")
+    status, body = fetch(urljoin(base, "latest.json") + "?" + nonce)
+    if status != 200:
+        errors.append(f"latest.json returned HTTP {status}")
+    else:
+        try:
+            latest = json.loads(body)
+        except json.JSONDecodeError as exc:
+            errors.append(f"latest.json is invalid JSON: {exc}")
+        else:
+            source_commit = str(latest.get("sourceCommit", ""))
+            if len(source_commit) != 40:
+                errors.append("public stable source commit is invalid")
+            else:
+                for page in ("index.html", "download.html", "release-notes.html"):
+                    page_status, page_body = fetch(urljoin(base, page) + "?" + nonce)
+                    if page_status != 200 or source_commit not in page_body:
+                        errors.append(f"{page} does not expose the exact stable source commit")
     if errors:
         print("Public ARSAS adoption attestation failed:")
         for error in errors:
@@ -80,7 +104,7 @@ def main() -> int:
     print(
         "Public ARSAS adoption attestation passed: Learning Center, beginner IEC 61850 guides, "
         "bilingual MMS, Reporting, GOOSE and SCL tutorials, Quick Start, IO FAT evidence, FAQ, "
-        "compatibility, demo, filters and responsive media are live."
+        "compatibility, open-source reliability proof, exact release identity, demo, filters and responsive media are live."
     )
     return 0
 
