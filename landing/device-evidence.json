@@ -4,7 +4,7 @@
   "updatedAt": "2026-09-22",
   "namedDeviceCount": 0,
   "statusVocabulary": {
-    "verified": "Repeated evidence exists for the declared scope and version. This is not IEC 61850 conformance certification.",
+    "verified": "Repeated evidence exists for the declared historical service scope. The tested ARSAS version must be disclosed when known; this is not IEC 61850 conformance certification.",
     "conditional": "The workflow succeeded only under the stated conditions, permissions, paths or server behavior.",
     "observed": "A real protocol behavior was captured and used to improve the implementation. Broad compatibility is not claimed.",
     "not-tested": "No public evidence is available for this service or profile.",
