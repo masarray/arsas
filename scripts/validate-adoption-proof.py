@@ -329,6 +329,20 @@ def main() -> int:
                         errors.append(f"{name}: evidence matrix drift for {profile_id}/{service}/{status}")
         if 'data-evidence-freshness="true"' not in text or "{{STABLE_VERSION}}" not in text:
             errors.append(f"{name}: current stable source or historical freshness note missing")
+        if 'data-evidence-coverage="published-anonymized-profiles-only"' not in text or 'data-stable-retest="not-publicly-documented"' not in text:
+            errors.append(f"{name}: missing bounded cross-profile coverage and stable-retest gap")
+        for service in gaps:
+            if f'data-uncovered-service="{service}"' not in text:
+                errors.append(f"{name}: missing explicit public evidence gap for {service}")
+        for service in declared_services - set(gaps):
+            if f'data-uncovered-service="{service}"' in text:
+                errors.append(f"{name}: declared service incorrectly shown as uncovered: {service}")
+        if name == "compatibility.html":
+            for prompt in next_evidence.values():
+                if prompt not in text:
+                    errors.append(f"{name}: coverage capture guidance drift from registry")
+        else:
+            require_values(text, name, ("GOOSE", "Control", "Not tested", "Not declared", "tanggal uji", "retest"), errors, "Indonesian coverage guidance")
         if name == "compatibility.html":
             require_values(text, name, ("Historical evidence", "not publicly recorded", "not documented", "not raw field captures"), errors, "R6.2 historical/retest boundary")
         else:
