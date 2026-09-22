@@ -199,9 +199,9 @@ def main() -> int:
         for value in onboarding_contract:
             if value not in home_text: errors.append(f"{home}: missing guided-onboarding contract value {value}")
         capability_contract = (
-            ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.")
+            ("One IED context, six engineering jobs.", "Discover the real device", "Evidence collector", "How acquired?", "Open and inspectable.", "Review interoperability evidence →", "Review the engineering boundary →")
             if home == "index.html" else
-            ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.")
+            ("Satu konteks IED, enam pekerjaan engineering.", "Temukan apa yang benar-benar diekspos device", "Evidence collector", "Diperoleh bagaimana?", "Open dan dapat diperiksa.", "Review evidence interoperabilitas →", "Review batas engineering →")
         )
         for value in capability_contract:
             if value not in home_text: errors.append(f"{home}: missing beginner-first capability contract value {value}")
