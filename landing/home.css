@@ -559,24 +559,8 @@ body[data-page="overview"] .discovery-scl-actions {
   margin-top: 1rem;
 }
 
-body[data-page="overview"] .home-workflows .comparison-grid {
-  gap: .9rem;
-}
 
-body[data-page="overview"] .home-workflows .comparison-panel {
-  border-radius: 16px;
-  padding: clamp(1.3rem, 2vw, 1.65rem);
-}
 
-body[data-page="overview"] .home-workflows .comparison-panel h3 {
-  margin-top: .65rem;
-  max-width: 26ch;
-  font-size: 1.18rem;
-}
-
-body[data-page="overview"] .home-workflows .comparison-panel ul {
-  margin-top: 1rem;
-}
 
 body[data-page="overview"] .home-evidence .product-tour-grid {
   grid-template-columns: 1fr;
@@ -611,19 +595,7 @@ body[data-page="overview"] .gallery-footer {
   margin-top: 1.2rem;
 }
 
-body[data-page="overview"] .home-next-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .8rem;
-}
 
-body[data-page="overview"] .home-next-grid .card {
-  padding: 1.25rem;
-}
-
-body[data-page="overview"] .home-next-grid .card h3 {
-  margin-top: 0;
-}
 
 body[data-page="overview"] .release-strip {
   display: grid;
@@ -766,10 +738,6 @@ body[data-page="overview"] [data-reveal].reveal {
   body[data-page="overview"] .hero-visual {
     width: min(100%, 780px);
     margin-inline: auto;
-  }
-
-  body[data-page="overview"] .home-next-grid {
-    grid-template-columns: 1fr;
   }
 
   body[data-page="overview"] .home-evidence .screenshot-card {
