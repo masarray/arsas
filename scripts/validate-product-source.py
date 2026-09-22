@@ -284,7 +284,7 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review"):
                 if value not in raw and value not in rendered:
                     errors.append(f"{label}: missing R5.6 technical-review trust value {value}")
         if path in {"download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"}:
