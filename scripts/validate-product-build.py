@@ -202,6 +202,13 @@ def main() -> int:
         )
         for value in capability_contract:
             if value not in home_text: errors.append(f"{home}: missing beginner-first capability contract value {value}")
+        discovery_scl_contract = (
+            ("Discovery → engineering model", "IED IP", "Live discovery", "Observed model", "Configured SCL intent", "bounded device baseline")
+            if home == "index.html" else
+            ("Discovery → model engineering", "IP IED", "Live discovery", "Observed model", "Configured SCL intent", "baseline device yang bounded")
+        )
+        for value in discovery_scl_contract:
+            if value not in home_text: errors.append(f"{home}: missing discovery-to-SCL contract value {value}")
         for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
             if ambiguous_ip in home_text: errors.append(f"{home}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
@@ -218,6 +225,15 @@ def main() -> int:
     features_text = (site / "features.html").read_text(encoding="utf-8") if (site / "features.html").is_file() else ""
     for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
         if value not in features_text: errors.append(f"features.html: missing R5 capability-domain contract value {value}")
+    for page, contract in (
+        ("scl-workspace.html", ("From IP to SCL in four steps", "Discovery builds observed device evidence before export begins.", "Generate IID Edition 2 or ICD Edition 1", 'id="source-boundary"')),
+        ("workspace-scl-iec61850.html", ("Dari IP ke SCL dalam empat langkah", "Discovery membangun observed device evidence sebelum export dimulai.", "Generate IID Edition 2 atau ICD Edition 1", 'id="source-boundary"')),
+        ("mms-client.html", ("Continue from discovery to SCL", "authorized engineering network")),
+        ("mms-client-iec61850.html", ("Lanjut dari discovery ke SCL", "network engineering yang berwenang")),
+    ):
+        page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        for value in contract:
+            if value not in page_text: errors.append(f"{page}: missing R5.2 discovery/SCL contract value {value}")
     for quick, contract in (
         ("quick-start.html", ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")),
         ("panduan-mulai-arsas.html", ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")),

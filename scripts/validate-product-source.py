@@ -249,6 +249,14 @@ def main() -> int:
             for value in capability_contract:
                 if value not in rendered:
                     errors.append(f"{label}: missing beginner-first capability contract value {value}")
+            discovery_scl_contract = (
+                ("Discovery → engineering model", "IED IP", "Live discovery", "Observed model", "Configured SCL intent", "bounded device baseline")
+                if path == "" else
+                ("Discovery → model engineering", "IP IED", "Live discovery", "Observed model", "Configured SCL intent", "baseline device yang bounded")
+            )
+            for value in discovery_scl_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing discovery-to-SCL contract value {value}")
             for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
                 if ambiguous_ip in rendered:
                     errors.append(f"{label}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
@@ -269,6 +277,30 @@ def main() -> int:
                     errors.append(f"{label}: missing R5 capability-domain contract value {value}")
             if "Connect by approved IP address" in rendered or "Connect by approved IED IP" in rendered:
                 errors.append(f"{label}: ambiguous endpoint-authority wording remains in capability page")
+        if path in {"scl-workspace.html", "workspace-scl-iec61850.html"}:
+            scl_contract = (
+                ("From IP to SCL in four steps", "Discovery builds observed device evidence before export begins.", "Generate IID Edition 2 or ICD Edition 1", "source-boundary")
+                if path == "scl-workspace.html" else
+                ("Dari IP ke SCL dalam empat langkah", "Discovery membangun observed device evidence sebelum export dimulai.", "Generate IID Edition 2 atau ICD Edition 1", "source-boundary")
+            )
+            for value in scl_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.2 IP-to-SCL contract value {value}")
+            for ambiguous_ip in ("approved IED endpoint", "approved IP address", "alamat IP IED yang disetujui", "endpoint IED yang disetujui"):
+                if ambiguous_ip in rendered:
+                    errors.append(f"{label}: ambiguous IP authority wording remains: {ambiguous_ip}")
+        if path in {"mms-client.html", "mms-client-iec61850.html"}:
+            mms_scl_contract = (
+                ("Continue from discovery to SCL", "authorized engineering network")
+                if path == "mms-client.html" else
+                ("Lanjut dari discovery ke SCL", "network engineering yang berwenang")
+            )
+            for value in mms_scl_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.2 discovery continuation value {value}")
+            for ambiguous_ip in ("approved IP address", "alamat IP yang disetujui", "alamat IP IED yang disetujui"):
+                if ambiguous_ip in rendered:
+                    errors.append(f"{label}: ambiguous MMS endpoint wording remains: {ambiguous_ip}")
         if path in {"quick-start.html", "panduan-mulai-arsas.html"}:
             quick_contract = (
                 ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")

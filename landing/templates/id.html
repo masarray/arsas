@@ -174,6 +174,32 @@
         </div>
       </div>
     </section>
+
+    <section class="section section-tight discovery-scl-showcase" id="discovery-to-scl" data-reveal>
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Discovery → model engineering</span>
+          <h2>Mulai dari IP IED. Lihat apa yang benar-benar ada. Simpan baseline SCL yang reusable.</h2>
+          <p>Ini salah satu workflow inti ARSAS: live discovery membangun observed device model terlebih dahulu; setelah itu Anda memilih apa yang perlu dimonitor, dibandingkan, atau diekspor.</p>
+        </div>
+        <div class="discovery-flow" aria-label="Workflow live discovery ke SCL ARSAS">
+          <div class="discovery-flow-step"><span>01</span><strong>IP IED</strong><small>Relay yang dapat dijangkau pada network engineering yang berwenang</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>02</span><strong>Live discovery</strong><small>Association lewat IEC 61850 MMS dan periksa running server</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>03</span><strong>Observed model</strong><small>Identity, hierarchy, DataSet, RCB, dan service yang tersedia</small></div>
+          <div class="discovery-flow-arrow" aria-hidden="true">→</div>
+          <div class="discovery-flow-step"><span>04</span><strong>Output engineering</strong><small>Monitor model atau siapkan output IID / ICD yang bounded</small></div>
+        </div>
+        <div class="source-compare-grid">
+          <article class="source-compare-card observed"><span class="capability-label">Observed live model</span><h3>Apa yang benar-benar diekspos IED saat ini</h3><p>Discovery menunjukkan running server: identity, object hierarchy, DataSet saat ini, concrete report-control instance, dan service evidence.</p></article>
+          <article class="source-compare-card"><span class="capability-label">Configured SCL intent</span><h3>Apa yang menurut project engineering seharusnya ada</h3><p>ICD, CID, IID atau SCD dapat membawa configured intent dan relationship project yang tidak dapat direkonstruksi hanya dari satu live IED.</p></article>
+        </div>
+        <div class="discovery-scl-boundary"><strong>ARSAS menjaga kedua sumber tetap eksplisit.</strong><span>IID/ICD hasil generate adalah baseline device yang bounded dari observed evidence—bukan pengganti project SCD yang lebih luas atau klaim interoperabilitas universal.</span></div>
+        <div class="section-actions discovery-scl-actions"><a class="btn btn-primary" href="workspace-scl-iec61850.html#ip-to-scl">Ikuti IP-to-SCL langkah demi langkah</a><a class="btn" href="workspace-scl-iec61850.html#source-boundary">Bandingkan live model vs SCL</a><a class="text-link" href="mms-client-iec61850.html">Cara kerja live discovery →</a></div>
+      </div>
+    </section>
+
     <section class="section home-evidence" id="screenshots" data-reveal>
       <div class="container">
         <div class="section-head center">
