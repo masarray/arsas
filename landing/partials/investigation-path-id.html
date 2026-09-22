@@ -1,0 +1,21 @@
+<section class="section section-tight investigation-path" data-investigation-path="true">
+  <div class="container">
+    <div class="section-head center">
+      <span class="kicker">Workflow investigasi</span>
+      <h2>Ketika sesuatu terjadi, ikuti evidence dari perilaku network sampai disturbance record.</h2>
+      <p>ARSAS menjaga view-view ini tetap terkait lewat IED dan konteks engineering. Mulai dari petunjuk yang Anda punya; masuk lebih dalam hanya ketika source berikutnya dapat menjawab pertanyaan baru.</p>
+    </div>
+    <div class="investigation-flow" aria-label="Workflow investigasi event dan disturbance ARSAS">
+      <article class="investigation-step"><span class="investigation-number">01</span><small>Evidence network</small><strong>Apa yang berubah di network?</strong><p>Periksa identity, sequence, timing dan konteks payload GOOSE; gunakan bounded SMV capture ketika workflow-nya berlaku.</p><a class="text-link" href="analyzer-goose-iec61850.html">Analisis GOOSE →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">02</span><small>Event / SOE</small><strong>Apa yang dilaporkan IED?</strong><p>Jaga signal reference, state, quality, waktu IED, receive context dan acquisition source tetap bersama.</p><a class="text-link" href="demo-arsas.html">Lihat evidence event →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">03</span><small>Fault record</small><strong>Disturbance record mana yang terkait?</strong><p>Tetap di session IED asal, scan file remote, lalu pertahankan completeness dan transfer state.</p><a class="text-link" href="transfer-file-comtrade-iec61850.html#workflow">Ambil record →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">04</span><small>COMTRADE</small><strong>Apa yang terjadi pada waveform?</strong><p>Buka record di ARSAS dan tinjau evidence analog/digital tersinkron, posisi trigger dan channel proteksi.</p><a class="text-link" href="demo-arsas.html">Lihat analisis native →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">05</span><small>Timeline engineering</small><strong>Apakah observasinya selaras?</strong><p>Bandingkan waktu dan state yang tersedia antar-source sambil menjaga perbedaan clock, source dan acquisition path tetap terlihat.</p><a class="text-link" href="technical-review.html">Review batas evidence →</a></article>
+    </div>
+    <div class="investigation-boundary"><strong>Korelasi bukan otomatis bukti sebab-akibat.</strong><span>Capture time GOOSE, event time IED, receive time Reporting dan waktu COMTRADE dapat berasal dari clock serta acquisition path yang berbeda. ARSAS membantu membuatnya reviewable; acceptance proteksi tetap membutuhkan metode test yang disetujui dan independent engineering checks.</span></div>
+  </div>
+</section>
