@@ -167,10 +167,35 @@ body[data-page="overview"] .start-choice-card {
 }
 
 body[data-page="overview"] .start-choice-card.highlight {
-  border-color: rgba(77, 190, 255, .26);
+  position: relative;
+  border-color: rgba(77, 190, 255, .42);
   background:
-    radial-gradient(circle at 0 0, rgba(56, 189, 248, .12), transparent 22rem),
-    linear-gradient(145deg, rgba(17, 42, 72, .8), rgba(8, 23, 44, .62));
+    radial-gradient(circle at 0 0, rgba(56, 189, 248, .18), transparent 22rem),
+    linear-gradient(145deg, rgba(17, 46, 78, .88), rgba(8, 24, 46, .68));
+  box-shadow: 0 20px 52px rgba(0, 26, 54, .2), inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+body[data-page="overview"] .start-choice-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  flex-wrap: wrap;
+}
+
+body[data-page="overview"] .recommended-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: .26rem .52rem;
+  border: 1px solid rgba(86, 205, 255, .28);
+  border-radius: 999px;
+  color: #dff7ff;
+  background: rgba(43, 175, 234, .11);
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: -.006em;
+  white-space: nowrap;
 }
 
 body[data-page="overview"] .start-choice-card h3 {
