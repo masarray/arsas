@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Technical Review and Evidence Policy | ARSAS</title>
-  <meta name="description" content="See how ARSAS product claims, IEC 61850 troubleshooting guides, screenshots, maturity labels and engineering boundaries are technically reviewed and maintained." />
+  <title>Open-Source Reliability, Technical Review &amp; Evidence Policy | ARSAS</title>
+  <meta name="description" content="Review ARSAS open-source reliability evidence: exact release identity, source commit, SHA-256, SBOM/provenance, CI regression gates, field evidence and explicit engineering boundaries." />
   <meta name="author" content="{{AUTHOR_NAME}}" />
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
   <meta name="theme-color" content="#07111f" />
@@ -24,7 +24,7 @@
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"AboutPage","name":"ARSAS Technical Review and Evidence Policy","url":"{{CANONICAL_ROOT}}technical-review.html","dateModified":"2026-07-20","author":{"@type":"Person","name":"{{AUTHOR_NAME}}","url":"{{CANONICAL_ROOT}}about.html","sameAs":["{{AUTHOR_LINKEDIN}}","{{AUTHOR_GITHUB}}"]},"about":{"@id":"{{CANONICAL_ROOT}}#software"}}
+  {"@context":"https://schema.org","@type":"AboutPage","name":"ARSAS Technical Review and Evidence Policy","url":"{{CANONICAL_ROOT}}technical-review.html","dateModified":"2026-09-22","author":{"@type":"Person","name":"{{AUTHOR_NAME}}","url":"{{CANONICAL_ROOT}}about.html","sameAs":["{{AUTHOR_LINKEDIN}}","{{AUTHOR_GITHUB}}"]},"about":{"@id":"{{CANONICAL_ROOT}}#software"}}
   </script>
 </head>
 <body data-page="about">
@@ -32,7 +32,9 @@
   <main id="main">
     <section class="hero"><div class="container"><span class="eyebrow">Authority · evidence · engineering boundary</span><h1>Technical review is part of the product—not decorative copy.</h1><p class="hero-copy">ARSAS documentation distinguishes what the current software visibly demonstrates, what depends on relay support or project permissions, what is still preview quality, and what remains roadmap intent.</p><div class="hero-actions"><a class="btn btn-primary" href="guides.html">Open troubleshooting guides</a><a class="btn" href="about.html">About Ari Sulistiono</a></div></div></section>
 
-    <section class="section section-tight"><div class="container comparison-grid"><article class="comparison-panel highlight"><span class="kicker">Current evidence</span><h3>Claims must point to inspectable behavior.</h3><ul><li>Current application screenshots and visible UI states</li><li>Deterministic source and rendered-site validation</li><li>Public release packages and SHA-256 checksums</li><li>Source history, issue context and implementation boundaries</li></ul></article><article class="comparison-panel"><span class="kicker">Not a conformance certificate</span><h3>Evidence narrows causes; it does not replace project acceptance.</h3><ul><li>Final conclusions depend on the approved design and test procedure</li><li>Vendor-specific behavior must be checked against vendor documentation</li><li>Network access, permissions and IED configuration remain project inputs</li><li>Independent verification remains required where the project demands it</li></ul></article></div></section>
+    {{> trust-architecture}}
+
+    <section class="section section-tight"><div class="container comparison-grid"><article class="comparison-panel highlight"><span class="kicker">Current evidence</span><h3>Claims must point to inspectable behavior.</h3><ul><li>Current application screenshots and visible UI states</li><li>Deterministic source and rendered-site validation</li><li>Tagged release package identity, SHA-256, SPDX SBOM and provenance evidence</li><li>Exact source commit, source history, CI regression evidence and implementation boundaries</li></ul></article><article class="comparison-panel"><span class="kicker">Not a conformance certificate</span><h3>Evidence narrows causes; it does not replace project acceptance.</h3><ul><li>Final conclusions depend on the approved design and test procedure</li><li>Vendor-specific behavior must be checked against vendor documentation</li><li>Network access, permissions and IED configuration remain project inputs</li><li>Independent verification remains required where the project demands it</li></ul></article></div></section>
 
     <section class="section"><div class="container"><div class="section-head"><span class="kicker">Claim governance</span><h2>Four labels keep product communication honest.</h2><p>ARSAS pages and guides are written to preserve the difference between implemented behavior and future intent.</p></div><div class="feature-grid"><article class="card"><span class="kicker">Available</span><h3>Implemented and inspectable</h3><p>The workflow is present in the current software and can be examined through the application, release artifact or source.</p></article><article class="card"><span class="kicker">Conditional</span><h3>Depends on device or project conditions</h3><p>Support can depend on IED services, writable attributes, network capture access, control model, permissions or configured engineering data.</p></article><article class="card"><span class="kicker">Preview</span><h3>Useful but still maturing</h3><p>The workflow is available for evaluation while interoperability breadth, UX or diagnostic coverage continues to mature.</p></article><article class="card"><span class="kicker">Roadmap</span><h3>Planned, not promised as current</h3><p>Roadmap content describes direction and is never presented as part of the current stable capability set.</p></article></div></div></section>
 
