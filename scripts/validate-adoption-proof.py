@@ -205,7 +205,7 @@ def main() -> int:
         policy.get(key) for key in ("missingTestVersion", "missingRetest", "recordScope", "registryUpdate")
     ):
         errors.append("device-evidence.json: incomplete historical/retest policy")
-    if not re.fullmatch(r"20\\d{2}-\\d{2}-\\d{2}", str(evidence.get("updatedAt", ""))):
+    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", str(evidence.get("updatedAt", ""))):
         errors.append("device-evidence.json: invalid registry update date")
     vocabulary = evidence.get("statusVocabulary")
     if not isinstance(vocabulary, dict) or set(vocabulary) != STATUSES:
@@ -229,10 +229,10 @@ def main() -> int:
             errors.append(f"{profile_id}: public evidence links are incomplete")
         if not isinstance(profile.get("conditions"), list) or len(profile["conditions"]) < 3:
             errors.append(f"{profile_id}: evidence conditions are incomplete")
-        if not re.fullmatch(r"20\\d{2}-(0[1-9]|1[0-2])", str(profile.get("evidenceDate", ""))):
+        if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", str(profile.get("evidenceDate", ""))):
             errors.append(f"{profile_id}: invalid historical evidence month")
         tested = profile.get("testedArsasVersion", "__missing__")
-        if tested != "__missing__" and tested is not None and not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", str(tested)):
+        if tested != "__missing__" and tested is not None and not re.fullmatch(r"\d+\.\d+\.\d+", str(tested)):
             errors.append(f"{profile_id}: invalid tested ARSAS version")
         if tested == "__missing__":
             errors.append(f"{profile_id}: missing explicit tested ARSAS version")
@@ -240,7 +240,7 @@ def main() -> int:
         if retest == "__missing__":
             errors.append(f"{profile_id}: missing explicit lastRetest")
         elif retest is not None:
-            if not isinstance(retest, dict) or not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", str(retest.get("arsasVersion", ""))) or not re.fullmatch(r"20\\d{2}-\\d{2}-\\d{2}", str(retest.get("date", ""))) or not isinstance(retest.get("evidenceLinks"), list) or not retest["evidenceLinks"]:
+            if not isinstance(retest, dict) or not re.fullmatch(r"\d+\.\d+\.\d+", str(retest.get("arsasVersion", ""))) or not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", str(retest.get("date", ""))) or not isinstance(retest.get("evidenceLinks"), list) or not retest["evidenceLinks"]:
                 errors.append(f"{profile_id}: retest needs version, date and public evidence")
         if profile.get("publicRecordType") != "engineering-implementation-trail" or profile.get("rawFieldCaptureLinked") is not False:
             errors.append(f"{profile_id}: public engineering trail must not imply raw capture")
