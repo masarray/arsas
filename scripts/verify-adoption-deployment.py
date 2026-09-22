@@ -47,7 +47,7 @@ def main() -> int:
         "io-list-fat-evidence.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "native executive PDF", "bukti-fat-iolist-iec61850.html"),
         "bukti-fat-iolist-iec61850.html": ("OFF → ON", "ON → OFF", "TestPointId", ".arsas", "PDF eksekutif native", "io-list-fat-evidence.html"),
         "faq.html": ('"@type":"FAQPage"', "faq-item", "faq-arsas.html"),
-        "compatibility.html": ("field-profile-a-file-service", "field-profile-b-rcb-export", "device-evidence.json"),
+        "compatibility.html": ("field-profile-a-file-service", "field-profile-b-rcb-export", "device-evidence.json", 'data-evidence-matrix="true"', "field-profile-b-rcb-export:selectedRcbExport:verified"),
         "demo.html": ("data-guided-demo", "data-demo-step", "demo.js", "data-responsive-media=\"webp\""),
         "guides.html": ("data-guide-filter", "data-guide-card", "guide-filter.js", "io-list-fat-evidence.html"),
     }
