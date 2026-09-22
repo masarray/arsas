@@ -354,9 +354,9 @@ def main() -> int:
             if "{{> evidence-contract}}" not in raw:
                 errors.append(f"{label}: reusable EN evidence partial is not attached")
         if path in evidence_pages_id:
-            for value in ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."):
+            for value in ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →", "Review batas engineering →"):
                 if value not in rendered:
-                    errors.append(f"{label}: missing R5.3 Indonesian evidence-contract value {value}")
+                    errors.append(f"{label}: missing Indonesian evidence-contract proof route value {value}")
             if "{{> evidence-contract-id}}" not in raw:
                 errors.append(f"{label}: reusable ID evidence partial is not attached")
         investigation_pages_en = {"features.html", "goose-analyzer.html", "file-transfer.html", "multi-ied-monitoring.html", "demo.html"}
