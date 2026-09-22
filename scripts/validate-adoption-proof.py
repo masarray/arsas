@@ -304,6 +304,8 @@ def main() -> int:
         text = read(TEMPLATES / name, errors)
         if partial not in text:
             errors.append(f"{name}: missing reusable R5.6 trust partial {partial}")
+        if name == "technical-review.html":
+            require_values(text, name, ("Review field interoperability evidence", "Verify the stable release"), errors, "R6 technical-review proof route")
 
     # R5 final audit: preserve the beginner-to-evidence path while preventing duplicate overview layers.
     for name, trust_partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}")):
