@@ -46,8 +46,8 @@ public sealed class WebsiteHeroLocalizationRegressionTests
     }
 
     [Theory]
-    [InlineData("landing/templates/index.html", "Your first three minutes")]
-    [InlineData("landing/templates/id.html", "Tiga menit pertama")]
+    [InlineData("landing/templates/index.html", "Start here")]
+    [InlineData("landing/templates/id.html", "Mulai di sini")]
     [InlineData("landing/templates/quick-start.html", "Three visible steps")]
     [InlineData("landing/templates/panduan-mulai-arsas.html", "Tiga langkah yang terlihat")]
     public void BeginnerJourney_UsesTheCurrentThreeStepProductFlow(string path, string heading)
@@ -59,6 +59,59 @@ public sealed class WebsiteHeroLocalizationRegressionTests
         Assert.Contains("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
         Assert.Contains("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
         Assert.Contains("SCL", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HomepageGuidedOnboarding_SurfacesBothEntryPathsAndSclFormats()
+    {
+        var english = Read("landing/templates/index.html");
+        var indonesian = Read("landing/templates/id.html");
+
+        foreach (var value in new[]
+                 {
+                     "I have a live relay or IED",
+                     "I have an engineering file",
+                     "Substation Configuration Language",
+                     "ICD", "CID", "IID", "SCD",
+                     "Open the complete Quick Start"
+                 })
+            Assert.Contains(value, english, StringComparison.Ordinal);
+
+        foreach (var value in new[]
+                 {
+                     "Saya punya relay atau IED live",
+                     "Saya punya file engineering",
+                     "Substation Configuration Language",
+                     "ICD", "CID", "IID", "SCD",
+                     "Buka Quick Start lengkap"
+                 })
+            Assert.Contains(value, indonesian, StringComparison.Ordinal);
+
+        foreach (var stale in new[]
+                 {
+                     "approved relay IP",
+                     "approved IED IP",
+                     "Connect by approved IP address",
+                     "alamat IP relay yang disetujui",
+                     "IP IED yang disetujui",
+                     "alamat IP yang disetujui"
+                 })
+        {
+            Assert.DoesNotContain(stale, english, StringComparison.Ordinal);
+            Assert.DoesNotContain(stale, indonesian, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void HomepageEvidence_UsesWideReadableScreenshotPresentation()
+    {
+        var home = Read("landing/home.css");
+        var english = Read("landing/templates/index.html");
+
+        Assert.Contains("body[data-page=\"overview\"] .home-evidence .product-tour-grid", home, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 1fr;", home, StringComparison.Ordinal);
+        Assert.Contains("minmax(0, 1.7fr)", home, StringComparison.Ordinal);
+        Assert.Contains("sizes=\"(max-width: 980px) 94vw, 68vw\"", english, StringComparison.Ordinal);
     }
 
     [Fact]

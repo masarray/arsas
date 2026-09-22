@@ -182,12 +182,21 @@ def main() -> int:
         for value in search_contract:
             if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
         premium_contract = (
-            ("ARSAS is a free Windows app", "Your first three minutes", "Download for Windows", "Real product evidence", "Progressive engineering")
+            ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence", "Progressive engineering")
             if home == "index.html" else
-            ("ARSAS adalah aplikasi Windows gratis", "Tiga menit pertama", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+            ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
         )
         for value in premium_contract:
             if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")
+        onboarding_contract = (
+            ("I have a live relay or IED", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
+            if home == "index.html" else
+            ("Saya punya relay atau IED live", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
+        )
+        for value in onboarding_contract:
+            if value not in home_text: errors.append(f"{home}: missing guided-onboarding contract value {value}")
+        for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
+            if ambiguous_ip in home_text: errors.append(f"{home}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
             if stale_section in home_text: errors.append(f"{home}: redundant homepage depth section remains: {stale_section}")
         evidence_at = home_text.find("Real product evidence" if home == "index.html" else "Evidence produk nyata")
@@ -199,6 +208,15 @@ def main() -> int:
         if home == "id.html":
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
+    for quick, contract in (
+        ("quick-start.html", ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")),
+        ("panduan-mulai-arsas.html", ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")),
+    ):
+        quick_text = (site / quick).read_text(encoding="utf-8") if (site / quick).is_file() else ""
+        for value in contract:
+            if value not in quick_text: errors.append(f"{quick}: missing beginner-to-engineering quick-start contract value {value}")
+        for ambiguous_ip in ("approved relay IP", "approved IP address", "alamat IP relay yang disetujui", "alamat IP yang disetujui"):
+            if ambiguous_ip in quick_text: errors.append(f"{quick}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
