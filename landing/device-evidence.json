@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "product": "ARSAS",
-  "updatedAt": "2026-07-22",
+  "updatedAt": "2026-09-22",
   "namedDeviceCount": 0,
   "statusVocabulary": {
     "verified": "Repeated evidence exists for the declared scope and version. This is not IEC 61850 conformance certification.",
@@ -39,7 +39,24 @@
         "https://github.com/masarray/arsas/pull/79",
         "https://github.com/masarray/arsas/pull/84",
         "https://github.com/masarray/arsas/pull/89"
-      ]
+      ],
+      "testedArsasVersion": null,
+      "lastRetest": null,
+      "publicRecordType": "engineering-implementation-trail",
+      "rawFieldCaptureLinked": false,
+      "serviceRecords": {
+        "mmsAssociation": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "fileDirectory": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "fileTransfer": [
+          "https://github.com/masarray/ARIEC61850/pull/38",
+          "https://github.com/masarray/ARIEC61850/pull/40",
+          "https://github.com/masarray/ARIEC61850/pull/42"
+        ]
+      }
     },
     {
       "id": "field-profile-b-rcb-export",
@@ -66,7 +83,34 @@
         "https://github.com/masarray/ARIEC61850/pull/36",
         "https://github.com/masarray/arsas/pull/79",
         "https://github.com/masarray/arsas/pull/101"
-      ]
+      ],
+      "testedArsasVersion": null,
+      "lastRetest": null,
+      "publicRecordType": "engineering-implementation-trail",
+      "rawFieldCaptureLinked": false,
+      "serviceRecords": {
+        "mmsAssociation": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "liveModel": [
+          "https://github.com/masarray/ARIEC61850/pull/36",
+          "https://github.com/masarray/arsas/pull/79"
+        ],
+        "reporting": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "selectedRcbExport": [
+          "https://github.com/masarray/ARIEC61850/pull/36",
+          "https://github.com/masarray/arsas/pull/79"
+        ]
+      }
     }
-  ]
+  ],
+  "freshnessPolicy": {
+    "stableVersionSource": "latest.json",
+    "missingTestVersion": "Not publicly recorded; do not infer the current stable version.",
+    "missingRetest": "No public retest on the current stable release is documented.",
+    "recordScope": "Linked pull requests form a public engineering and implementation trail, not raw relay capture or independent field retest.",
+    "registryUpdate": "A registry edit or website deployment does not change the evidence date or establish a retest."
+  }
 }
