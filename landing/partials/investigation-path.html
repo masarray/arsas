@@ -1,0 +1,21 @@
+<section class="section section-tight investigation-path" data-investigation-path="true">
+  <div class="container">
+    <div class="section-head center">
+      <span class="kicker">Investigation workflow</span>
+      <h2>When something happens, follow the evidence from network behavior to the disturbance record.</h2>
+      <p>ARSAS keeps these views connected by IED and engineering context. Start with the clue you have; move deeper only when the next source can answer a new question.</p>
+    </div>
+    <div class="investigation-flow" aria-label="ARSAS event and disturbance investigation workflow">
+      <article class="investigation-step"><span class="investigation-number">01</span><small>Network evidence</small><strong>What changed on the wire?</strong><p>Inspect GOOSE identity, sequence, timing and payload context; use bounded SMV capture where the workflow applies.</p><a class="text-link" href="goose-analyzer.html">GOOSE analysis →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">02</span><small>Event / SOE</small><strong>What did the IED report?</strong><p>Keep signal reference, state, quality, IED time, receive context and acquisition source together.</p><a class="text-link" href="multi-ied-monitoring.html#evidence">Event evidence →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">03</span><small>Fault record</small><strong>Which disturbance record belongs to it?</strong><p>Stay inside the originating IED session, scan remote files and preserve completeness and transfer state.</p><a class="text-link" href="file-transfer.html#workflow">Retrieve records →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">04</span><small>COMTRADE</small><strong>What happened in the waveform?</strong><p>Open the record in ARSAS and inspect synchronized analog/digital evidence, trigger position and protection channels.</p><a class="text-link" href="demo.html">See native analysis →</a></article>
+      <div class="investigation-arrow" aria-hidden="true">→</div>
+      <article class="investigation-step"><span class="investigation-number">05</span><small>Engineering timeline</small><strong>Do the observations line up?</strong><p>Compare the available times and states across sources while keeping clock, source and acquisition differences visible.</p><a class="text-link" href="technical-review.html">Review evidence boundaries →</a></article>
+    </div>
+    <div class="investigation-boundary"><strong>Correlation is not automatic causation proof.</strong><span>GOOSE capture time, IED event time, Reporting receive time and COMTRADE time can come from different clocks and acquisition paths. ARSAS helps keep them reviewable; protection acceptance still requires the approved test method and independent engineering checks.</span></div>
+  </div>
+</section>
