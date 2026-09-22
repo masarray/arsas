@@ -234,9 +234,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing premium homepage contract value {value}")
             onboarding_contract = (
-                ("I have a live relay or IED", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
+                ("I have a live relay or IED", "Recommended first connection", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
                 if path == "" else
-                ("Saya punya relay atau IED live", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
+                ("Saya punya relay atau IED live", "Disarankan untuk koneksi pertama", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
             )
             for value in onboarding_contract:
                 if value not in rendered:
