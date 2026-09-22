@@ -136,7 +136,7 @@
 .first-run-media {
   min-width: 0;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(190, 221, 255, .12);
   border-radius: 13px;
   background: #030812;
