@@ -185,9 +185,9 @@ def main() -> int:
         for value in search_contract:
             if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
         premium_contract = (
-            ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence", "Progressive engineering")
+            ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence")
             if home == "index.html" else
-            ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+            ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata")
         )
         for value in premium_contract:
             if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")
@@ -223,10 +223,19 @@ def main() -> int:
             if ambiguous_ip in home_text: errors.append(f"{home}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
             if stale_section in home_text: errors.append(f"{home}: redundant homepage depth section remains: {stale_section}")
-        evidence_at = home_text.find("Real product evidence" if home == "index.html" else "Evidence produk nyata")
-        depth_at = home_text.find("Progressive engineering")
-        if evidence_at < 0 or depth_at < 0 or evidence_at > depth_at:
-            errors.append(f"{home}: real product evidence must appear before progressive engineering")
+        overview_flow = (
+            "home-quick-start-section",
+            "home-paths-section",
+            "home-capabilities",
+            "discovery-scl-showcase",
+            "home-evidence",
+            "release-trust-section",
+        )
+        overview_positions = [home_text.find(marker) for marker in overview_flow]
+        if any(position < 0 for position in overview_positions) or overview_positions != sorted(overview_positions):
+            errors.append(f"{home}: beginner-to-evidence homepage flow is missing or out of order")
+        if "home-workflows" in home_text:
+            errors.append(f"{home}: duplicated progressive-engineering overview layer must stay removed")
         if "assets/fonts/Inter-Regular.ttf" not in home_text:
             errors.append(f"{home}: embedded Inter preload is missing")
         if home == "id.html":
@@ -242,6 +251,9 @@ def main() -> int:
     features_text = (site / "features.html").read_text(encoding="utf-8") if (site / "features.html").is_file() else ""
     for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
         if value not in features_text: errors.append(f"features.html: missing R5 capability-domain contract value {value}")
+    for forbidden in ("approved IED IP address", "approved IP address", "Current source and published release"):
+        if forbidden.lower() in features_text.lower():
+            errors.append(f"features.html: final-audit duplication/authority wording returned: {forbidden}")
     for page, contract in (
         ("scl-workspace.html", ("From IP to SCL in four steps", "Discovery builds observed device evidence before export begins.", "Generate IID Edition 2 or ICD Edition 1", 'id="source-boundary"')),
         ("workspace-scl-iec61850.html", ("Dari IP ke SCL dalam empat langkah", "Discovery membangun observed device evidence sebelum export dimulai.", "Generate IID Edition 2 atau ICD Edition 1", 'id="source-boundary"')),
