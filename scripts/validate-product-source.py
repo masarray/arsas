@@ -305,6 +305,9 @@ def main() -> int:
             for value in proof_route:
                 if value not in rendered:
                     errors.append(f"{label}: missing interoperability proof route value {value}")
+            for value in ('data-evidence-intake="submitted-not-verified"', 'docs/evidence-intake-review.md'):
+                if value not in raw:
+                    errors.append(f"{label}: missing R6.4 intake/review route {value}")
             for value in ('data-evidence-freshness="true"', '{{STABLE_VERSION}}', 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
                 if value not in raw:
                     errors.append(f"{label}: missing historical field/retest disclosure {value}")

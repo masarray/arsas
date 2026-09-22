@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Report service-level evidence, not a universal vendor conclusion. Remove credentials, private endpoints, customer names, confidential SCL, captures and disturbance records.
+        One issue = one bounded service result. A submission is not verified evidence and does not update the published matrix. Read the [evidence intake and maintainer review policy](https://github.com/masarray/arsas/blob/main/docs/evidence-intake-review.md) before posting. Remove credentials, private endpoints, customer/project names, confidential SCL, raw captures and disturbance records. Never upload a private file expecting maintainers to sanitize it in public.
   - type: input
     id: arsas-version
     attributes:
@@ -66,6 +66,22 @@ body:
     validations:
       required: true
   - type: textarea
+    id: expected-observed
+    attributes:
+      label: Expected versus observed behavior
+      description: Give the exact positive or negative result for this service. For a planned test, state "Not tested - no result yet"; do not infer a pass.
+      placeholder: "Expected: ... / Observed: ... / Failure or negative result: ..."
+    validations:
+      required: true
+  - type: input
+    id: public-evidence-link
+    attributes:
+      label: Public sanitized evidence link (optional)
+      description: Link only to material you are authorized to publish. An implementation PR alone is not a field-test capture.
+      placeholder: https://github.com/masarray/arsas/issues/...
+    validations:
+      required: false
+  - type: textarea
     id: conditions
     attributes:
       label: Conditions and reproducible steps
@@ -76,7 +92,7 @@ body:
     id: diagnostics
     attributes:
       label: Sanitized diagnostics
-      description: Paste exact ARSAS text or attach a sanitized screenshot. Do not include secrets or confidential project data.
+      description: Paste sanitized ARSAS text or attach a reviewed screenshot. For a planned test, write No capture yet. Never attach raw private captures, confidential SCL, credentials or disturbance records.
     validations:
       required: true
   - type: checkboxes
@@ -87,4 +103,6 @@ body:
         - label: I removed credentials, private endpoints and confidential project or device data.
           required: true
         - label: I understand this report is service-specific and is not IEC 61850 conformance certification.
+          required: true
+        - label: I understand an issue is a submission, not verified evidence; publication requires maintainer review and a separate registry PR.
           required: true

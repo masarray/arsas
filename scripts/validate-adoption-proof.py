@@ -291,6 +291,18 @@ def main() -> int:
 
     issue_form = read(ROOT / ".github" / "ISSUE_TEMPLATE" / "device-compatibility.yml", errors)
     require_values(issue_form, "device-compatibility.yml", ("id: evidence-date", "id: evidence-kind", "id: prior-profile", "actual test date", "engineering or implementation history only"), errors, "R6.3 evidence intake")
+    review_url = "https://github.com/masarray/arsas/blob/main/docs/evidence-intake-review.md"
+    require_values(issue_form, "device-compatibility.yml", (
+        review_url, "one issue = one bounded service result", "id: expected-observed",
+        "id: public-evidence-link", "a submission, not verified evidence",
+        "separate registry PR", "raw private captures",
+    ), errors, "R6.4 evidence intake/review gate")
+    review_policy = read(ROOT / "docs" / "evidence-intake-review.md", errors)
+    require_values(review_policy, "docs/evidence-intake-review.md", (
+        "submitted, not verified", "Privacy first", "Maintainer review gate",
+        "Promote only with a reviewed PR", "actual test date", "exact tested ARSAS version",
+        "not a retest", "registry", "not the physical truth",
+    ), errors, "R6.4 review policy")
 
     for name in ("compatibility.html", "bukti-kompatibilitas.html"):
         text = read(TEMPLATES / name, errors)
@@ -302,6 +314,18 @@ def main() -> int:
             ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
         )
         require_values(text, name, proof_route, errors, "R6 evaluator proof route")
+        if 'data-evidence-intake="submitted-not-verified"' not in text or review_url not in text:
+            errors.append(f"{name}: missing R6.4 submission-to-review policy route")
+        if name == "compatibility.html":
+            require_values(text, name, (
+                "Submit → maintainer review → registry PR", "a GitHub issue is a report",
+                "Planned tests and engineering history alone",
+            ), errors, "R6.4 EN publication gate")
+        else:
+            require_values(text, name, (
+                "Kirim → review maintainer → PR registry", "GitHub Issue adalah laporan",
+                "Planned test dan riwayat engineering saja",
+            ), errors, "R6.4 ID publication gate")
         for profile in profiles:
             if not isinstance(profile, dict):
                 continue

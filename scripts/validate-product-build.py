@@ -321,6 +321,8 @@ def main() -> int:
         )
         for value in contract:
             if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability proof value {value}")
+        for value in ('data-evidence-intake="submitted-not-verified"', 'docs/evidence-intake-review.md'):
+            if value not in matrix_text: errors.append(f"{page}: missing rendered R6.4 review gate {value}")
         for value in ('data-evidence-freshness="true"', f"v{latest.get('version')}", 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
             if value not in matrix_text: errors.append(f"{page}: missing rendered historical/current stable distinction {value}")
         if "{{STABLE_VERSION}}" in matrix_text:
