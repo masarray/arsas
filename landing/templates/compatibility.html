@@ -38,6 +38,32 @@
 
     <section class="section section-tight"><div class="container"><div class="section-head"><span class="kicker">Status vocabulary</span><h2>Read the status together with its conditions.</h2></div><div class="status-legend"><span class="status-pill" data-status="verified">Verified</span><span class="status-pill" data-status="conditional">Conditional</span><span class="status-pill" data-status="observed">Observed</span><span class="status-pill">Not tested</span><span class="status-pill" data-status="known-issue">Failed with known issue</span></div><p class="boundary-callout">“Verified” means repeated evidence exists for the declared service scope. It is not IEC 61850 conformance certification and does not approve every firmware, Logical Device or project configuration.</p></div></section>
 
+    <section class="section section-tight" id="service-matrix">
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Interoperability evidence matrix</span>
+          <h2>See exactly which IEC 61850 services have public evidence—and which do not.</h2>
+          <p>This is not a vendor scorecard. Each cell reports only the bounded public evidence in <code>device-evidence.json</code>. “Not tested” means no public test evidence is claimed; “Not declared” means that profile does not publish a status for that service.</p>
+        </div>
+        <div class="evidence-matrix-shell" data-evidence-matrix="true">
+          <table class="evidence-matrix">
+            <thead><tr><th scope="col">Service</th><th scope="col"><a href="#field-profile-a-file-service">Profile A · File service</a></th><th scope="col"><a href="#field-profile-b-rcb-export">Profile B · RCB / SCL</a></th></tr></thead>
+            <tbody>
+              <tr><th scope="row">MMS association</th><td data-evidence-cell="field-profile-a-file-service:mmsAssociation:observed"><span class="status-pill" data-status="observed">Observed</span></td><td data-evidence-cell="field-profile-b-rcb-export:mmsAssociation:observed"><span class="status-pill" data-status="observed">Observed</span></td></tr>
+              <tr><th scope="row">Live model discovery</th><td data-evidence-cell="field-profile-a-file-service:liveModel:not-tested"><span class="status-pill">Not tested</span></td><td data-evidence-cell="field-profile-b-rcb-export:liveModel:observed"><span class="status-pill" data-status="observed">Observed</span></td></tr>
+              <tr><th scope="row">Reporting</th><td data-evidence-cell="field-profile-a-file-service:reporting:not-tested"><span class="status-pill">Not tested</span></td><td data-evidence-cell="field-profile-b-rcb-export:reporting:conditional"><span class="status-pill" data-status="conditional">Conditional</span></td></tr>
+              <tr><th scope="row">FileDirectory</th><td data-evidence-cell="field-profile-a-file-service:fileDirectory:verified"><span class="status-pill" data-status="verified">Verified</span></td><td data-evidence-cell="field-profile-b-rcb-export:fileDirectory:not-tested"><span class="status-pill">Not tested</span></td></tr>
+              <tr><th scope="row">File transfer</th><td data-evidence-cell="field-profile-a-file-service:fileTransfer:conditional"><span class="status-pill" data-status="conditional">Conditional</span></td><td data-evidence-cell="field-profile-b-rcb-export:fileTransfer:not-tested"><span class="status-pill">Not tested</span></td></tr>
+              <tr><th scope="row">GOOSE</th><td data-evidence-cell="field-profile-a-file-service:goose:not-tested"><span class="status-pill">Not tested</span></td><td data-evidence-cell="field-profile-b-rcb-export:goose:not-tested"><span class="status-pill">Not tested</span></td></tr>
+              <tr><th scope="row">Control</th><td data-evidence-cell="field-profile-a-file-service:control:not-tested"><span class="status-pill">Not tested</span></td><td data-evidence-cell="field-profile-b-rcb-export:control:not-tested"><span class="status-pill">Not tested</span></td></tr>
+              <tr><th scope="row">Selected RCB export</th><td data-evidence-undeclared="field-profile-a-file-service:selectedRcbExport"><span class="status-pill">Not declared</span></td><td data-evidence-cell="field-profile-b-rcb-export:selectedRcbExport:verified"><span class="status-pill" data-status="verified">Verified</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="matrix-boundary"><strong>How to read this:</strong> one successful service does not imply another service works, and no row certifies IEC 61850 conformance. Open the profile below to see the exact conditions and public engineering records behind each status.</p>
+      </div>
+    </section>
+
     <section class="section"><div class="container evidence-grid">
       <article class="evidence-profile" id="field-profile-a-file-service" data-evidence-profile="field-profile-a-file-service"><span class="kicker">Evidence date · 2026-07</span><h2>Anonymized field profile A — MMS file-service transport</h2><p>Vendor, model, installation and firmware are not published. The public evidence concerns protocol behavior, not product endorsement.</p><table class="evidence-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody><tr><td>MMS association</td><td><span class="status-pill" data-status="observed">Observed</span></td></tr><tr><td>FileDirectory</td><td><span class="status-pill" data-status="verified">Verified</span></td></tr><tr><td>File transfer</td><td><span class="status-pill" data-status="conditional">Conditional</span></td></tr><tr><td>Live model, reporting, GOOSE, control</td><td><span class="status-pill">Not tested</span></td></tr></tbody></table><h3>Conditions</h3><ul><li>Nested FileDirectory entries and rooted file paths were observed.</li><li>FileOpen could return a signed Integer32 FRSM, including negative values.</li><li>Large FileRead responses required segmented COTP reassembly.</li><li>Transfer success does not prove record completeness or COMTRADE scaling.</li></ul><div class="section-actions"><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/36" target="_blank" rel="noopener">Directory evidence</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/38" target="_blank" rel="noopener">Signed FRSM</a><a class="btn" href="https://github.com/masarray/ARIEC61850/pull/42" target="_blank" rel="noopener">Segmented COTP</a></div></article>
 

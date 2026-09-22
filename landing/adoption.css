@@ -116,6 +116,51 @@
 }
 .evidence-table th { color: var(--subtle); }
 
+
+.evidence-matrix-shell {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: rgba(255,255,255,.025);
+  box-shadow: 0 16px 42px rgba(0,0,0,.14);
+}
+.evidence-matrix {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+.evidence-matrix th,
+.evidence-matrix td {
+  padding: .78rem .85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.evidence-matrix thead th {
+  color: var(--subtle);
+  background: rgba(7,17,31,.76);
+  font-size: .78rem;
+}
+.evidence-matrix tbody th {
+  width: 31%;
+  color: var(--text);
+  font-weight: 680;
+}
+.evidence-matrix tbody tr:last-child th,
+.evidence-matrix tbody tr:last-child td { border-bottom: 0; }
+.evidence-matrix a { color: #dff7ff; }
+.matrix-boundary {
+  margin: .9rem 0 0;
+  padding: .85rem 1rem;
+  border-left: 3px solid rgba(56,189,248,.58);
+  color: var(--muted);
+  background: rgba(56,189,248,.055);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.matrix-boundary strong { color: var(--text); }
+
 .guide-filter-panel { margin-bottom: 1.4rem; }
 .guide-search {
   width: 100%;

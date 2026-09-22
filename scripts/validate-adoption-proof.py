@@ -200,9 +200,20 @@ def main() -> int:
 
     for name in ("compatibility.html", "bukti-kompatibilitas.html"):
         text = read(TEMPLATES / name, errors)
-        for profile_id in profile_ids:
+        if 'data-evidence-matrix="true"' not in text:
+            errors.append(f"{name}: missing interoperability evidence matrix")
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                continue
+            profile_id = str(profile.get("id", ""))
             if f'data-evidence-profile="{profile_id}"' not in text:
                 errors.append(f"{name}: missing evidence profile {profile_id}")
+            services = profile.get("services")
+            if isinstance(services, dict):
+                for service, status in services.items():
+                    marker = f'data-evidence-cell="{profile_id}:{service}:{status}"'
+                    if marker not in text:
+                        errors.append(f"{name}: evidence matrix drift for {profile_id}/{service}/{status}")
         for status in ("verified", "conditional", "observed"):
             if f'data-status="{status}"' not in text:
                 errors.append(f"{name}: missing status {status}")
