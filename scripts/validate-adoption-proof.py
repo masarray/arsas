@@ -226,6 +226,12 @@ def main() -> int:
         text = read(TEMPLATES / name, errors)
         if 'data-evidence-matrix="true"' not in text:
             errors.append(f"{name}: missing interoperability evidence matrix")
+        proof_route = (
+            ("Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+            if name == "compatibility.html" else
+            ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+        )
+        require_values(text, name, proof_route, errors, "R6 evaluator proof route")
         for profile in profiles:
             if not isinstance(profile, dict):
                 continue
