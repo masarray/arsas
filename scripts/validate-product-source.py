@@ -126,6 +126,10 @@ def validate_release(errors: list[str]) -> None:
         errors.append("latest.json stable identity is invalid")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version) or notes.get("version") != version:
         errors.append("release evidence and notes versions differ")
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", str(evidence.get("tag", ""))):
+        errors.append("latest.json stable tag is invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(evidence.get("sourceCommit", ""))):
+        errors.append("latest.json stable source commit is invalid")
     installer = evidence.get("installer")
     if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
         errors.append("latest.json installer evidence is invalid")
