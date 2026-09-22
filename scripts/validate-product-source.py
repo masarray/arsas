@@ -230,9 +230,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
             premium_contract = (
-                ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence", "Progressive engineering")
+                ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence")
                 if path == "" else
-                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata")
             )
             for value in premium_contract:
                 if value not in rendered:
@@ -275,10 +275,19 @@ def main() -> int:
             for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
                 if stale_section in rendered:
                     errors.append(f"{label}: redundant homepage depth section remains: {stale_section}")
-            evidence_at = rendered.find("Real product evidence" if path == "" else "Evidence produk nyata")
-            depth_at = rendered.find("Progressive engineering")
-            if evidence_at < 0 or depth_at < 0 or evidence_at > depth_at:
-                errors.append(f"{label}: real product evidence must appear before progressive engineering")
+            overview_flow = (
+                "home-quick-start-section",
+                "home-paths-section",
+                "home-capabilities",
+                "discovery-scl-showcase",
+                "home-evidence",
+                "release-trust-section",
+            )
+            overview_positions = [rendered.find(marker) for marker in overview_flow]
+            if any(position < 0 for position in overview_positions) or overview_positions != sorted(overview_positions):
+                errors.append(f"{label}: beginner-to-evidence homepage flow is missing or out of order")
+            if "home-workflows" in rendered:
+                errors.append(f"{label}: duplicated progressive-engineering overview layer must stay removed")
             if path == "id.html":
                 for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                     if stale in rendered:
