@@ -62,6 +62,15 @@
           </table>
         </div>
         <p class="matrix-boundary"><strong>Cara membacanya:</strong> satu service yang berhasil tidak berarti service lain otomatis bekerja, dan tidak ada row yang menjadi sertifikasi conformance IEC 61850. Buka profile di bawah untuk melihat kondisi exact dan engineering record publik di balik statusnya.</p>
+        <div class="evidence-gap-panel" data-evidence-coverage="published-anonymized-profiles-only">
+          <div class="section-head"><span class="kicker">Gap evidence · capture berikutnya</span><h3>Apa yang belum dibuktikan secara publik pada kedua profil ini?</h3><p>GOOSE dan Control berstatus Not tested pada kedua profil. Ini gap evidence field publik, bukan pernyataan bahwa ARSAS tidak memiliki kemampuan tersebut. Service yang tidak dicantumkan oleh satu profil tetap Not declared, bukan Not tested.</p></div>
+          <div class="feature-grid">
+            <article class="card" data-uncovered-service="goose"><span class="status-pill">Not tested pada kedua profil</span><h4>GOOSE</h4><p>Kumpulkan capture yang disanitasi: identitas publisher, GoID/AppID, stNum/sqNum, TAL, urutan payload dan kecocokan DataSet; sertakan temuan negatif atau frame yang hilang.</p></article>
+            <article class="card" data-uncovered-service="control"><span class="status-pill">Not tested pada kedua profil</span><h4>Control</h4><p>Uji di lingkungan non-energized yang berwenang: ctlModel, urutan Direct/SBO, hasil service dan CommandTermination, rejection/AddCause serta process feedback yang diverifikasi terpisah.</p></article>
+            <article class="card" data-stable-retest="not-publicly-documented"><span class="status-pill">Retest stable terbaru belum terdokumentasi</span><h4>Uji ulang pada v{{STABLE_VERSION}}</h4><p>Untuk tiap service, sertakan tag stable dan versi ARSAS yang tepat; tanggal uji dan model/firmware IED anonim atau batas disclosure; hasil positif dan negatif dengan diagnostic serta kondisi acquisition yang disanitasi. Riwayat engineering lama tidak menggantikan uji field baru.</p></article>
+          </div>
+          <p class="matrix-boundary"><strong>Kontribusi hasil yang bounded:</strong> tulis tanggal uji sebenarnya, versi release, jenis evidence dan kondisi service. Sertakan hasil negatif; hapus identifier sensitif. <a href="https://github.com/masarray/arsas/issues/new?template=device-compatibility.yml" target="_blank" rel="noopener">Kirim evidence per service →</a> Matrix di atas tetap menjadi sumber status Not tested dan Not declared per profil.</p>
+        </div>
       </div>
     </section>
 
