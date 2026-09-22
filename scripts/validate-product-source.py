@@ -301,6 +301,20 @@ def main() -> int:
             for ambiguous_ip in ("approved IP address", "alamat IP yang disetujui", "alamat IP IED yang disetujui"):
                 if ambiguous_ip in rendered:
                     errors.append(f"{label}: ambiguous MMS endpoint wording remains: {ambiguous_ip}")
+        evidence_pages_en = {"mms-client.html", "smart-reporting.html", "goose-analyzer.html", "file-transfer.html", "scl-workspace.html", "control.html"}
+        evidence_pages_id = {"mms-client-iec61850.html", "smart-reporting-iec61850.html", "analyzer-goose-iec61850.html", "transfer-file-comtrade-iec61850.html", "workspace-scl-iec61850.html"}
+        if path in evidence_pages_en:
+            for value in ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."):
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.3 evidence-contract value {value}")
+            if "{{> evidence-contract}}" not in raw:
+                errors.append(f"{label}: reusable EN evidence partial is not attached")
+        if path in evidence_pages_id:
+            for value in ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."):
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.3 Indonesian evidence-contract value {value}")
+            if "{{> evidence-contract-id}}" not in raw:
+                errors.append(f"{label}: reusable ID evidence partial is not attached")
         if path in {"quick-start.html", "panduan-mulai-arsas.html"}:
             quick_contract = (
                 ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")

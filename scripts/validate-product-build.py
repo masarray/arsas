@@ -234,6 +234,23 @@ def main() -> int:
         page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in contract:
             if value not in page_text: errors.append(f"{page}: missing R5.2 discovery/SCL contract value {value}")
+    evidence_contract_pages = {
+        "mms-client.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "smart-reporting.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "goose-analyzer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "file-transfer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "scl-workspace.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "control.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
+        "mms-client-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "smart-reporting-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "analyzer-goose-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "transfer-file-comtrade-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "workspace-scl-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+    }
+    for page, contract in evidence_contract_pages.items():
+        page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        for value in contract:
+            if value not in page_text: errors.append(f"{page}: missing R5.3 evidence-contract value {value}")
     for quick, contract in (
         ("quick-start.html", ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")),
         ("panduan-mulai-arsas.html", ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")),
