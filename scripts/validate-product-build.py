@@ -242,8 +242,8 @@ def main() -> int:
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
-    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate"):
-        if value not in technical_review_text: errors.append(f"technical-review.html: missing R5.6 reliability value {value}")
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release"):
+        if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof route value {value}")
     for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in (stable_source, str(latest.get("tag", "")), "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"):
@@ -264,17 +264,17 @@ def main() -> int:
         for value in contract:
             if value not in page_text: errors.append(f"{page}: missing R5.2 discovery/SCL contract value {value}")
     evidence_contract_pages = {
-        "mms-client.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "smart-reporting.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "goose-analyzer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "file-transfer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "scl-workspace.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "control.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."),
-        "mms-client-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "smart-reporting-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "analyzer-goose-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "transfer-file-comtrade-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
-        "workspace-scl-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."),
+        "mms-client.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "smart-reporting.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "goose-analyzer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "file-transfer.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "scl-workspace.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "control.html": ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →"),
+        "mms-client-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "smart-reporting-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "analyzer-goose-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "transfer-file-comtrade-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
+        "workspace-scl-iec61850.html": ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →"),
     }
     for page, contract in evidence_contract_pages.items():
         page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
@@ -307,8 +307,13 @@ def main() -> int:
             if ambiguous_ip in quick_text: errors.append(f"{quick}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
     for page in ("compatibility.html", "bukti-kompatibilitas.html"):
         matrix_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
-        for value in ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json"):
-            if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability matrix value {value}")
+        contract = (
+            ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json", "Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+            if page == "compatibility.html" else
+            ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json", "Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+        )
+        for value in contract:
+            if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability proof value {value}")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"

@@ -226,6 +226,12 @@ def main() -> int:
         text = read(TEMPLATES / name, errors)
         if 'data-evidence-matrix="true"' not in text:
             errors.append(f"{name}: missing interoperability evidence matrix")
+        proof_route = (
+            ("Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+            if name == "compatibility.html" else
+            ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+        )
+        require_values(text, name, proof_route, errors, "R6 evaluator proof route")
         for profile in profiles:
             if not isinstance(profile, dict):
                 continue
@@ -298,6 +304,13 @@ def main() -> int:
         text = read(TEMPLATES / name, errors)
         if partial not in text:
             errors.append(f"{name}: missing reusable R5.6 trust partial {partial}")
+        if name == "technical-review.html":
+            require_values(text, name, ("Review field interoperability evidence", "Verify the stable release"), errors, "R6 technical-review proof route")
+
+    evidence_en = read(LANDING / "partials" / "evidence-contract.html", errors)
+    evidence_id = read(LANDING / "partials" / "evidence-contract-id.html", errors)
+    require_values(evidence_en, "evidence-contract.html", ("Review field interoperability evidence →", "Review engineering boundaries →"), errors, "R6 evidence proof routing")
+    require_values(evidence_id, "evidence-contract-id.html", ("Review evidence interoperabilitas field →", "Review batas engineering →"), errors, "R6 Indonesian evidence proof routing")
 
     # R5 final audit: preserve the beginner-to-evidence path while preventing duplicate overview layers.
     for name, trust_partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}")):

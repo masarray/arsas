@@ -293,9 +293,18 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release"):
                 if value not in raw and value not in rendered:
-                    errors.append(f"{label}: missing R5.6 technical-review trust value {value}")
+                    errors.append(f"{label}: missing technical-review proof route value {value}")
+        if path in {"compatibility.html", "bukti-kompatibilitas.html"}:
+            proof_route = (
+                ("Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+                if path == "compatibility.html" else
+                ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+            )
+            for value in proof_route:
+                if value not in rendered:
+                    errors.append(f"{label}: missing interoperability proof route value {value}")
         if path in {"download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"}:
             release_trust = (
                 ("{{STABLE_SOURCE_COMMIT}}", "{{STABLE_TAG}}", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json")
@@ -339,15 +348,15 @@ def main() -> int:
         evidence_pages_en = {"mms-client.html", "smart-reporting.html", "goose-analyzer.html", "file-transfer.html", "scl-workspace.html", "control.html"}
         evidence_pages_id = {"mms-client-iec61850.html", "smart-reporting-iec61850.html", "analyzer-goose-iec61850.html", "transfer-file-comtrade-iec61850.html", "workspace-scl-iec61850.html"}
         if path in evidence_pages_en:
-            for value in ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty."):
+            for value in ("Evidence contract", "Which IED?", "How acquired?", "No invented certainty.", "Review field interoperability evidence →", "Review engineering boundaries →"):
                 if value not in rendered:
-                    errors.append(f"{label}: missing R5.3 evidence-contract value {value}")
+                    errors.append(f"{label}: missing evidence-contract proof route value {value}")
             if "{{> evidence-contract}}" not in raw:
                 errors.append(f"{label}: reusable EN evidence partial is not attached")
         if path in evidence_pages_id:
-            for value in ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian."):
+            for value in ("Kontrak evidence", "Dari IED mana?", "Diperoleh bagaimana?", "Tidak mengarang kepastian.", "Review evidence interoperabilitas field →", "Review batas engineering →"):
                 if value not in rendered:
-                    errors.append(f"{label}: missing R5.3 Indonesian evidence-contract value {value}")
+                    errors.append(f"{label}: missing Indonesian evidence-contract proof route value {value}")
             if "{{> evidence-contract-id}}" not in raw:
                 errors.append(f"{label}: reusable ID evidence partial is not attached")
         investigation_pages_en = {"features.html", "goose-analyzer.html", "file-transfer.html", "multi-ied-monitoring.html", "demo.html"}
