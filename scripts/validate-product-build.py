@@ -307,8 +307,13 @@ def main() -> int:
             if ambiguous_ip in quick_text: errors.append(f"{quick}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
     for page in ("compatibility.html", "bukti-kompatibilitas.html"):
         matrix_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
-        for value in ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json"):
-            if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability matrix value {value}")
+        contract = (
+            ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json", "Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+            if page == "compatibility.html" else
+            ('data-evidence-matrix="true"', 'field-profile-a-file-service:mmsAssociation:observed', 'field-profile-b-rcb-export:selectedRcbExport:verified', "device-evidence.json", "Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+        )
+        for value in contract:
+            if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability proof value {value}")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
