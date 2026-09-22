@@ -242,8 +242,8 @@ def main() -> int:
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
-    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release"):
-        if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof route value {value}")
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", f"v{latest.get('version')}"):
+        if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof/freshness value {value}")
     for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in (stable_source, str(latest.get("tag", "")), "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"):
@@ -305,6 +305,13 @@ def main() -> int:
             if value not in quick_text: errors.append(f"{quick}: missing beginner-to-engineering quick-start contract value {value}")
         for ambiguous_ip in ("approved relay IP", "approved IP address", "alamat IP relay yang disetujui", "alamat IP yang disetujui"):
             if ambiguous_ip in quick_text: errors.append(f"{quick}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
+    try:
+        field_evidence = json.loads((site / "device-evidence.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"device-evidence.json: missing or invalid rendered registry: {exc}")
+        field_evidence = {}
+    if field_evidence.get("schemaVersion") != 2:
+        errors.append("rendered field evidence must use freshness schema v2")
     for page in ("compatibility.html", "bukti-kompatibilitas.html"):
         matrix_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         contract = (
@@ -314,6 +321,25 @@ def main() -> int:
         )
         for value in contract:
             if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability proof value {value}")
+        for value in ('data-evidence-freshness="true"', f"v{latest.get('version')}", 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
+            if value not in matrix_text: errors.append(f"{page}: missing rendered historical/current stable distinction {value}")
+        if "{{STABLE_VERSION}}" in matrix_text:
+            errors.append(f"{page}: stable version token was not rendered")
+        for profile in field_evidence.get("profiles", []):
+            if not isinstance(profile, dict):
+                continue
+            profile_id = str(profile.get("id", ""))
+            for marker in (f'data-evidence-trace="{profile_id}"', f'data-service-records="{profile_id}"'):
+                if marker not in matrix_text: errors.append(f"{page}: missing rendered profile trace {marker}")
+            start = matrix_text.find(f'data-service-records="{profile_id}"')
+            end = matrix_text.find("</p>", start) if start >= 0 else -1
+            record_block = matrix_text[start:end] if end >= 0 else ""
+            for service, urls in profile.get("serviceRecords", {}).items():
+                for url in urls:
+                    if f'href="{url}"' not in record_block:
+                        errors.append(f"{page}: missing {profile_id}/{service} public engineering trail")
+            if profile.get("testedArsasVersion") is not None or profile.get("lastRetest") is not None:
+                errors.append(f"{page}: registry version/retest changed; update the displayed provenance before publishing")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"

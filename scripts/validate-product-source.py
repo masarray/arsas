@@ -293,7 +293,7 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "{{STABLE_VERSION}}"):
                 if value not in raw and value not in rendered:
                     errors.append(f"{label}: missing technical-review proof route value {value}")
         if path in {"compatibility.html", "bukti-kompatibilitas.html"}:
@@ -305,6 +305,13 @@ def main() -> int:
             for value in proof_route:
                 if value not in rendered:
                     errors.append(f"{label}: missing interoperability proof route value {value}")
+            for value in ('data-evidence-freshness="true"', '{{STABLE_VERSION}}', 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
+                if value not in raw:
+                    errors.append(f"{label}: missing historical field/retest disclosure {value}")
+            for profile_id in ("field-profile-a-file-service", "field-profile-b-rcb-export"):
+                for marker in (f'data-evidence-trace="{profile_id}"', f'data-service-records="{profile_id}"'):
+                    if marker not in raw:
+                        errors.append(f"{label}: missing service-level trace {marker}")
         if path in {"download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"}:
             release_trust = (
                 ("{{STABLE_SOURCE_COMMIT}}", "{{STABLE_TAG}}", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json")
