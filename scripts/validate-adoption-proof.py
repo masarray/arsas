@@ -144,19 +144,29 @@ def main() -> int:
         if text.count(step_class) != 6:
             errors.append(f"{name}: expected six capability tutorial steps")
 
-    investigation_contracts = {
-        "features.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
-        "goose-analyzer.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Event / SOE", "Fault record", "COMTRADE"),
-        "file-transfer.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Engineering timeline"),
-        "multi-ied-monitoring.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "COMTRADE"),
-        "demo.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Fault record", "COMTRADE"),
-        "analyzer-goose-iec61850.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Event / SOE", "Fault record", "COMTRADE"),
-        "transfer-file-comtrade-iec61850.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Evidence network", "Timeline engineering"),
-        "demo-arsas.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Fault record", "COMTRADE"),
+    investigation_template_contracts = {
+        "features.html": "{{> investigation-path}}",
+        "goose-analyzer.html": "{{> investigation-path}}",
+        "file-transfer.html": "{{> investigation-path}}",
+        "multi-ied-monitoring.html": "{{> investigation-path}}",
+        "demo.html": "{{> investigation-path}}",
+        "analyzer-goose-iec61850.html": "{{> investigation-path-id}}",
+        "transfer-file-comtrade-iec61850.html": "{{> investigation-path-id}}",
+        "demo-arsas.html": "{{> investigation-path-id}}",
     }
-    for name, required_values in investigation_contracts.items():
+    for name, include_marker in investigation_template_contracts.items():
         text = read(TEMPLATES / name, errors)
-        require_values(text, name, required_values, errors, "investigation workflow contract")
+        if include_marker not in text:
+            errors.append(f"{name}: missing reusable investigation partial {include_marker}")
+
+    investigation_partials = {
+        "investigation-path.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "investigation-path-id.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."),
+    }
+    partial_dir = LANDING / "partials"
+    for name, required_values in investigation_partials.items():
+        text = read(partial_dir / name, errors)
+        require_values(text, name, required_values, errors, "investigation workflow partial contract")
 
     for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
         text = read(TEMPLATES / name, errors)
