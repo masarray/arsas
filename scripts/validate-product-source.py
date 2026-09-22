@@ -315,6 +315,20 @@ def main() -> int:
                     errors.append(f"{label}: missing R5.3 Indonesian evidence-contract value {value}")
             if "{{> evidence-contract-id}}" not in raw:
                 errors.append(f"{label}: reusable ID evidence partial is not attached")
+        investigation_pages_en = {"features.html", "goose-analyzer.html", "file-transfer.html", "multi-ied-monitoring.html", "demo.html"}
+        investigation_pages_id = {"analyzer-goose-iec61850.html", "transfer-file-comtrade-iec61850.html", "demo-arsas.html"}
+        if path in investigation_pages_en:
+            for value in ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."):
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.5 investigation-path value {value}")
+            if "{{> investigation-path}}" not in raw:
+                errors.append(f"{label}: reusable EN investigation partial is not attached")
+        if path in investigation_pages_id:
+            for value in ("Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."):
+                if value not in rendered:
+                    errors.append(f"{label}: missing R5.5 Indonesian investigation-path value {value}")
+            if "{{> investigation-path-id}}" not in raw:
+                errors.append(f"{label}: reusable ID investigation partial is not attached")
         if path in {"quick-start.html", "panduan-mulai-arsas.html"}:
             quick_contract = (
                 ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")
