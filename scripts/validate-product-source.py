@@ -226,13 +226,24 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
             premium_contract = (
-                ("ARSAS is a free Windows app", "Your first three minutes", "Download for Windows", "Real product evidence", "Progressive engineering")
+                ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence", "Progressive engineering")
                 if path == "" else
-                ("ARSAS adalah aplikasi Windows gratis", "Tiga menit pertama", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
+                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata", "Progressive engineering")
             )
             for value in premium_contract:
                 if value not in rendered:
                     errors.append(f"{label}: missing premium homepage contract value {value}")
+            onboarding_contract = (
+                ("I have a live relay or IED", "I have an engineering file", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Open the complete Quick Start")
+                if path == "" else
+                ("Saya punya relay atau IED live", "Saya punya file engineering", "Substation Configuration Language", "ICD", "CID", "IID", "SCD", "Buka Quick Start lengkap")
+            )
+            for value in onboarding_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing guided-onboarding contract value {value}")
+            for ambiguous_ip in ("approved relay IP", "approved IED IP", "Connect by approved IP address", "alamat IP relay yang disetujui", "IP IED yang disetujui", "alamat IP yang disetujui"):
+                if ambiguous_ip in rendered:
+                    errors.append(f"{label}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
             for stale_section in ("Go deeper when you are ready", "Masuk lebih dalam saat siap"):
                 if stale_section in rendered:
                     errors.append(f"{label}: redundant homepage depth section remains: {stale_section}")
@@ -244,6 +255,18 @@ def main() -> int:
                 for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
+        if path in {"quick-start.html", "panduan-mulai-arsas.html"}:
+            quick_contract = (
+                ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")
+                if path == "quick-start.html" else
+                ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")
+            )
+            for value in quick_contract:
+                if value not in rendered:
+                    errors.append(f"{label}: missing beginner-to-engineering quick-start contract value {value}")
+            for ambiguous_ip in ("approved relay IP", "approved IP address", "alamat IP relay yang disetujui", "alamat IP yang disetujui"):
+                if ambiguous_ip in rendered:
+                    errors.append(f"{label}: ambiguous endpoint-authority wording remains: {ambiguous_ip}")
         for image in audit.images:
             src = image.get("src") or ""
             if image.get("alt") is None or not image.get("width") or not image.get("height"): errors.append(f"{label}: incomplete image metadata {src}")
