@@ -293,9 +293,18 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release"):
                 if value not in raw and value not in rendered:
-                    errors.append(f"{label}: missing R5.6 technical-review trust value {value}")
+                    errors.append(f"{label}: missing technical-review proof route value {value}")
+        if path in {"compatibility.html", "bukti-kompatibilitas.html"}:
+            proof_route = (
+                ("Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+                if path == "compatibility.html" else
+                ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+            )
+            for value in proof_route:
+                if value not in rendered:
+                    errors.append(f"{label}: missing interoperability proof route value {value}")
         if path in {"download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"}:
             release_trust = (
                 ("{{STABLE_SOURCE_COMMIT}}", "{{STABLE_TAG}}", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json")
