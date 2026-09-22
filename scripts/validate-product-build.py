@@ -251,6 +251,22 @@ def main() -> int:
         page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in contract:
             if value not in page_text: errors.append(f"{page}: missing R5.3 evidence-contract value {value}")
+    investigation_contract_pages = {
+        "features.html": ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "goose-analyzer.html": ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "file-transfer.html": ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "multi-ied-monitoring.html": ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "demo.html": ("Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "analyzer-goose-iec61850.html": ("Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."),
+        "transfer-file-comtrade-iec61850.html": ("Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."),
+        "demo-arsas.html": ("Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."),
+    }
+    for page, contract in investigation_contract_pages.items():
+        page_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        if 'data-investigation-path="true"' not in page_text:
+            errors.append(f"{page}: missing R5.5 investigation path marker")
+        for value in contract:
+            if value not in page_text: errors.append(f"{page}: missing R5.5 investigation-path value {value}")
     for quick, contract in (
         ("quick-start.html", ("Beginner Quick Start", "Engineering Quick Start", "authorized test network", "Static DataSet", "Select Signals")),
         ("panduan-mulai-arsas.html", ("Quick Start pemula", "Quick Start Engineering", "network test yang berwenang", "Static DataSet", "Select Signals")),
