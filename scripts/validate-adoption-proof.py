@@ -290,11 +290,25 @@ def main() -> int:
     sbom_generator = read(ROOT / "scripts" / "generate-release-sbom.py", errors)
     require_values(sbom_generator, "generate-release-sbom.py", ("SPDX-2.3", "packageVerificationCode", "SHA256", "GPL-3.0-or-later"), errors, "SBOM contract")
 
+    trust_en = read(LANDING / "partials" / "trust-architecture.html", errors)
+    trust_id = read(LANDING / "partials" / "trust-architecture-id.html", errors)
+    require_values(trust_en, "trust-architecture.html", ("Open-source reliability", "STABLE_SOURCE_COMMIT", "SPDX SBOM", "CI", "Open source is not automatic correctness", "reproducible-build claim"), errors, "R5.6 trust contract")
+    require_values(trust_id, "trust-architecture-id.html", ("Reliability open-source", "STABLE_SOURCE_COMMIT", "SPDX SBOM", "CI", "Open source bukan jaminan correctness otomatis", "reproducible build"), errors, "R5.6 Indonesian trust contract")
+    for name, partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}"), ("technical-review.html", "{{> trust-architecture}}")):
+        text = read(TEMPLATES / name, errors)
+        if partial not in text:
+            errors.append(f"{name}: missing reusable R5.6 trust partial {partial}")
+
+    latest = json.loads(read(LANDING / "latest.json", errors) or "{}")
+    if len(str(latest.get("sourceCommit", ""))) != 40 or not str(latest.get("tag", "")).startswith("v"):
+        errors.append("latest.json: missing exact R5.6 source identity")
+
     for name in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         text = read(TEMPLATES / name, errors)
         lower = text.lower()
         if "SBOM" not in text or "provenance" not in lower:
             errors.append(f"{name}: missing supply-chain evidence guidance")
+        require_values(text, name, ("STABLE_SOURCE_COMMIT", "STABLE_TAG", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"), errors, "R5.6 exact-release trust")
         if not any(term in lower for term in ("does not claim", "does not infer", "tidak mengklaim", "tidak menganggap")):
             errors.append(f"{name}: missing honest current-release provenance boundary")
 
