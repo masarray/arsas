@@ -15,6 +15,22 @@ body:
     validations:
       required: true
   - type: input
+    id: tested-release-tag
+    attributes:
+      label: Tested release tag (or "unknown")
+      description: Use the tag of the binary actually tested, e.g. v1.6.40; do not substitute today's latest release. An unknown tag cannot establish a release-specific field-test claim.
+      placeholder: v1.6.40 or unknown
+    validations:
+      required: true
+  - type: input
+    id: tested-source-commit
+    attributes:
+      label: Tested release source commit (if documented)
+      description: Optional for initial submission. For release-specific publication, the maintainer must verify the exact source commit against the tagged release.
+      placeholder: 40-character commit SHA or unknown
+    validations:
+      required: false
+  - type: input
     id: evidence-date
     attributes:
       label: Evidence or test date (YYYY-MM-DD)
