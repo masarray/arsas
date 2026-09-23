@@ -35,6 +35,8 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 
 > **Current stable release: ARSAS v1.6.40.** Production packages use the physically proven Smart Discovery route and the pinned ARIEC61850 engine revision recorded in [`engines/ARIEC61850.lock.json`](engines/ARIEC61850.lock.json). The qualified AA1E1F06R4 field path reached zero SCL projection/cache-loss errors, 58/58 report-backed runtime points, and observed real `InformationReport` traffic.
 >
+> **Field acceptance record:** [v1.6.40 installed-release physical verification](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) documents the exact release/engine pair, 2.395 s Smart Discovery, 58/58 report-backed runtime points, and zero cyclic MMS process polling. This is distinct from the [v1.6.39 physical rejection](evidence/v1.6.39-physical-rejection.json).
+>
 > **Evidence boundary:** those counts describe the recorded physical qualification target, not a universal claim for every IED. Download identity, SHA-256, SBOM, provenance, and attestations remain tied to the published GitHub Release.
 
 ## What changed in v1.6.40
