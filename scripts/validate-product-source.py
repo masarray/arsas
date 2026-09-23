@@ -308,6 +308,19 @@ def main() -> int:
             for value in ('data-evidence-intake="submitted-not-verified"', 'docs/evidence-intake-review.md'):
                 if value not in raw:
                     errors.append(f"{label}: missing R6.4 intake/review route {value}")
+            for value in (
+                'data-release-traceability="reviewed-tests-only"',
+                'data-release-source="latest.json"',
+                'data-reviewed-release-test-count="0"',
+                'data-current-stable-field-test="not-publicly-documented"',
+                'data-release-records="none"',
+                '{{STABLE_TAG}}', '{{STABLE_SOURCE_COMMIT}}', '{{RELEASE_URL}}',
+            ):
+                if value not in raw:
+                    errors.append(f"{label}: missing R6.5 exact-release versus field-test distinction {value}")
+            for profile_id in ("field-profile-a-file-service", "field-profile-b-rcb-export"):
+                if f'data-release-trace-profile="{profile_id}"' not in raw:
+                    errors.append(f"{label}: missing historical release trace {profile_id}")
             for value in ('data-evidence-freshness="true"', '{{STABLE_VERSION}}', 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
                 if value not in raw:
                     errors.append(f"{label}: missing historical field/retest disclosure {value}")
