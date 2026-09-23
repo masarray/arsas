@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -284,24 +285,105 @@ def main() -> int:
         errors.append("device-evidence.json: each uncovered service needs a concrete capture request")
         next_evidence = {}
     stable_retest = plan.get("stableRetest")
-    if not isinstance(stable_retest, dict) or stable_retest.get("state") != "not-publicly-documented" or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
+    if not isinstance(stable_retest, dict) or stable_retest.get("state") not in {"not-publicly-documented", "documented-with-reviewed-records"} or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
         errors.append("device-evidence.json: incomplete current-stable retest intake requirements")
-    if any(isinstance(p, dict) and p.get("lastRetest") is not None for p in profiles) and isinstance(stable_retest, dict) and stable_retest.get("state") == "not-publicly-documented":
-        errors.append("device-evidence.json: retest declaration changed; refresh coverage plan and page claims")
+
+    # R6.5: a reviewed field-test ledger is distinct from package identity and
+    # historical engineering trails. There are deliberately no accepted records yet.
+    trace = evidence.get("releaseTraceability")
+    required_fields = {
+        "id", "profileId", "service", "testDate", "arsasVersion", "releaseTag",
+        "sourceCommit", "releaseUrl", "result", "evidenceKind",
+        "expectedObserved", "conditions", "deviceDisclosure",
+        "publicEvidenceUrl", "reviewIssueUrl", "reviewPrUrl",
+    }
+    if not isinstance(trace, dict) or trace.get("schemaVersion") != 1 or trace.get("currentStableSource") != "latest.json" or trace.get("reviewPolicyPath") != "docs/evidence-intake-review.md":
+        errors.append("releaseTraceability: missing exact-release review contract")
+        trace = {}
+    if not isinstance(trace.get("requiredRecordFields"), list) or len(trace["requiredRecordFields"]) != len(required_fields) or set(trace["requiredRecordFields"]) != required_fields:
+        errors.append("releaseTraceability: reviewed record requirements drifted")
+    if not isinstance(trace.get("claimBoundary"), str) or len(trace["claimBoundary"]) < 100:
+        errors.append("releaseTraceability: missing package versus field-test boundary")
+    reviewed = trace.get("reviewedTests")
+    if not isinstance(reviewed, list):
+        errors.append("releaseTraceability: reviewedTests must be an explicit list")
+        reviewed = []
+    exact_release = json.loads(read(LANDING / "latest.json", errors) or "{}")
+    current_version = exact_release.get("version")
+    current_tag = exact_release.get("tag")
+    current_commit = exact_release.get("sourceCommit")
+    record_ids: set[str] = set()
+    current_records: list[dict] = []
+    for record in reviewed:
+        if not isinstance(record, dict) or set(record) != required_fields:
+            errors.append("releaseTraceability: record missing required provenance fields")
+            continue
+        rid = str(record["id"])
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)+", rid) or rid in record_ids:
+            errors.append(f"releaseTraceability: invalid or duplicate test ID {rid}")
+        record_ids.add(rid)
+        profile = next((p for p in profiles if isinstance(p, dict) and p.get("id") == record["profileId"]), None)
+        if profile is None or record["service"] not in profile.get("services", {}):
+            errors.append(f"{rid}: unknown profile or undeclared service")
+        elif profile["services"][record["service"]] != record["result"]:
+            errors.append(f"{rid}: reviewed result differs from the profile service status")
+        if record["result"] not in STATUSES - {"not-tested"}:
+            errors.append(f"{rid}: not-tested cannot be a completed field result")
+        if record["evidenceKind"] != "sanitized-field-test":
+            errors.append(f"{rid}: implementation history or diagnostic alone is not a field test")
+        version = str(record["arsasVersion"])
+        tag = str(record["releaseTag"])
+        if not re.fullmatch(r"\d+\.\d+\.\d+", version) or tag != "v" + version:
+            errors.append(f"{rid}: invalid exact version/tag association")
+        if not re.fullmatch(r"[0-9a-f]{40}", str(record["sourceCommit"])):
+            errors.append(f"{rid}: invalid immutable source commit")
+        if record["releaseUrl"] != f"https://github.com/masarray/arsas/releases/tag/{tag}":
+            errors.append(f"{rid}: release URL does not match tested tag")
+        try:
+            tested_at = date.fromisoformat(str(record["testDate"]))
+            if tested_at > date.today():
+                errors.append(f"{rid}: test date cannot be in the future")
+        except ValueError:
+            errors.append(f"{rid}: invalid actual test date")
+        if len(str(record["expectedObserved"]).strip()) < 30 or not isinstance(record["conditions"], list) or len(record["conditions"]) < 2 or any(len(str(v).strip()) < 10 for v in record["conditions"]) or len(str(record["deviceDisclosure"]).strip()) < 12:
+            errors.append(f"{rid}: incomplete sanitized test context")
+        for key, suffix in (("publicEvidenceUrl", "issues"), ("reviewIssueUrl", "issues"), ("reviewPrUrl", "pull")):
+            if not re.fullmatch(rf"https://github\.com/masarray/arsas/{suffix}/[1-9]\d*", str(record[key])):
+                errors.append(f"{rid}: {key} must be a public ARSAS {suffix} record")
+        if version == current_version:
+            current_records.append(record)
+            if tag != current_tag or record["sourceCommit"] != current_commit or record["releaseUrl"] != exact_release.get("releaseUrl"):
+                errors.append(f"{rid}: claimed current stable test does not match latest.json")
+            if isinstance(record["testDate"], str) and record["testDate"] < str(exact_release.get("publishedAtUtc", ""))[:10]:
+                errors.append(f"{rid}: current release test predates publication of its exact tag")
+        if profile is not None and profile.get("lastRetest") is not None:
+            last = profile["lastRetest"]
+            if isinstance(last, dict) and last.get("date") == record["testDate"] and last.get("arsasVersion") == version and record["publicEvidenceUrl"] not in last.get("evidenceLinks", []):
+                errors.append(f"{rid}: profile retest is not linked to its public field record")
+    expected_state = "documented-with-reviewed-records" if current_records else "not-publicly-documented"
+    if trace.get("currentStableFieldTestState") != expected_state:
+        errors.append("releaseTraceability: current stable field-test state disagrees with accepted records")
+    if isinstance(stable_retest, dict) and stable_retest.get("state") != expected_state:
+        errors.append("coveragePlan: current stable retest state disagrees with accepted records")
+    for profile in profiles:
+        if isinstance(profile, dict) and isinstance(profile.get("lastRetest"), dict):
+            last = profile["lastRetest"]
+            if not any(record.get("profileId") == profile["id"] and record.get("testDate") == last.get("date") and record.get("arsasVersion") == last.get("arsasVersion") and record.get("publicEvidenceUrl") in last.get("evidenceLinks", []) for record in reviewed if isinstance(record, dict)):
+                errors.append(f"{profile['id']}: profile retest lacks a matching reviewed release record")
 
     issue_form = read(ROOT / ".github" / "ISSUE_TEMPLATE" / "device-compatibility.yml", errors)
     require_values(issue_form, "device-compatibility.yml", ("id: evidence-date", "id: evidence-kind", "id: prior-profile", "actual test date", "engineering or implementation history only"), errors, "R6.3 evidence intake")
     review_url = "https://github.com/masarray/arsas/blob/main/docs/evidence-intake-review.md"
     require_values(issue_form, "device-compatibility.yml", (
         review_url, "one issue = one bounded service result", "id: expected-observed",
-        "id: public-evidence-link", "a submission, not verified evidence",
+        "id: public-evidence-link", "id: tested-release-tag", "id: tested-source-commit", "a submission, not verified evidence",
         "separate registry PR", "raw private captures",
     ), errors, "R6.4 evidence intake/review gate")
     review_policy = read(ROOT / "docs" / "evidence-intake-review.md", errors)
     require_values(review_policy, "docs/evidence-intake-review.md", (
         "submitted, not verified", "Privacy first", "Maintainer review gate",
         "Promote only with a reviewed PR", "actual test date", "exact tested ARSAS version",
-        "not a retest", "registry", "not the physical truth",
+        "not a retest", "registry", "not the physical truth", "releaseTraceability.reviewedTests", "latest.json",
     ), errors, "R6.4 review policy")
 
     for name in ("compatibility.html", "bukti-kompatibilitas.html"):
@@ -316,6 +398,32 @@ def main() -> int:
         require_values(text, name, proof_route, errors, "R6 evaluator proof route")
         if 'data-evidence-intake="submitted-not-verified"' not in text or review_url not in text:
             errors.append(f"{name}: missing R6.4 submission-to-review policy route")
+        if 'data-release-traceability="reviewed-tests-only"' not in text or 'data-release-source="latest.json"' not in text:
+            errors.append(f"{name}: missing release-to-test traceability contract")
+        if f'data-reviewed-release-test-count="{len(reviewed)}"' not in text or f'data-current-stable-field-test="{expected_state}"' not in text:
+            errors.append(f"{name}: accepted test count/current release state disagrees with registry")
+        for token in ("{{STABLE_VERSION}}", "{{STABLE_TAG}}", "{{STABLE_SOURCE_COMMIT}}", "{{RELEASE_URL}}"):
+            if token not in text:
+                errors.append(f"{name}: missing exact release template token {token}")
+        for profile_id in profile_ids:
+            if f'data-release-trace-profile="{profile_id}"' not in text:
+                errors.append(f"{name}: missing historical release boundary {profile_id}")
+        displayed = re.findall(r'data-release-test-record="([^"]+)"', text)
+        if len(displayed) != len(set(displayed)) or set(displayed) != record_ids:
+            errors.append(f"{name}: release-test rows differ from reviewed ledger")
+        if not reviewed and 'data-release-records="none"' not in text:
+            errors.append(f"{name}: unverified empty ledger is not explicit")
+        if reviewed and 'data-release-records="none"' in text:
+            errors.append(f"{name}: stale empty-ledger claim remains after test promotion")
+        for record in reviewed:
+            if not isinstance(record, dict) or "id" not in record:
+                continue
+            start = text.find(f'data-release-test-record="{record["id"]}"')
+            end = text.find("</tr>", start) if start >= 0 else -1
+            row = text[start:end] if end >= 0 else ""
+            for value in (record["profileId"], record["service"], record["testDate"], record["arsasVersion"], record["releaseTag"], record["sourceCommit"], record["publicEvidenceUrl"], record["reviewPrUrl"]):
+                if str(value) not in row:
+                    errors.append(f"{name}: incomplete reviewed test row {record['id']}")
         if name == "compatibility.html":
             require_values(text, name, (
                 "Submit → maintainer review → registry PR", "a GitHub issue is a report",

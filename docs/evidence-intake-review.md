@@ -32,4 +32,14 @@ A maintainer may open a separate PR to update `landing/device-evidence.json` and
 4. Reconcile registry, service-to-record links, coverage gaps, English/Indonesian pages and claim boundaries; run source, rendered-site, adoption/field-proof and exact-head PR CI.
 5. Merge only after review and required checks pass; verify the final production Pages deployment. The published matrix is authoritative only after this gate.
 
+## 4. Link a reviewed field test to an exact release
+
+The `releaseTraceability.reviewedTests` ledger inside `landing/device-evidence.json` starts empty. It is the only registry list of accepted **release-specific field-test records**; historical service statuses, an issue, a merge, package SHA-256 and green CI never populate it automatically. The current stable package identity comes only from `landing/latest.json`, not the profile date or a guessed tested version.
+
+For an accepted field test, add **one ledger record per profile, service and exact release** in a separate reviewed PR. The record requires: unique `id`, existing `profileId`, declared `service`, actual ISO `testDate`, exact `arsasVersion`, `releaseTag`, 40-character `sourceCommit`, exact tagged `releaseUrl`, bounded `result`, `evidenceKind` (`sanitized-field-test`), detailed `expectedObserved`, explicit `conditions`, `deviceDisclosure`, authorized sanitized `publicEvidenceUrl`, `reviewIssueUrl`, and `reviewPrUrl`. Link a public, safely redacted test record—not an implementation PR, private attachment or unsupported issue assertion. The maintainer confirms that the public material genuinely describes the tested service and release; CI can check internal consistency, **not the physical truth** of a relay test.
+
+For a record naming the currently published stable version, its tag and source commit must match `latest.json`. A historical tagged release must use its own exact version, tag, source commit and release URL, not a retroactive current-stable mapping. An older test never becomes a current-stable retest solely because the website or registry changed. Negative and conditional results remain bounded and must not be silently promoted to success. A sanitized diagnostic alone without a documented field test remains review material, not a release-specific field-test record.
+
+Update the English and Indonesian traceability surfaces, record count, release-specific rows and current-stable state in the **same PR**. Reconcile any profile `lastRetest` claim, service status and coverage plan only with the matching reviewed record. Source/rendered/adoption CI must reject ledger–page drift and mismatched current release identity. Never backfill the July 2026 profiles' unknown tested version merely from present-day release metadata.
+
 An issue may remain open or be closed without a registry change. A green CI validates consistency of the published claims and links, **not the physical truth of a device test**.

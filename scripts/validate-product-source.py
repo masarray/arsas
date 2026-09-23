@@ -293,7 +293,7 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "{{STABLE_VERSION}}"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "{{STABLE_VERSION}}", "compatibility.html#release-traceability"):
                 if value not in raw and value not in rendered:
                     errors.append(f"{label}: missing technical-review proof route value {value}")
         if path in {"compatibility.html", "bukti-kompatibilitas.html"}:
@@ -308,6 +308,19 @@ def main() -> int:
             for value in ('data-evidence-intake="submitted-not-verified"', 'docs/evidence-intake-review.md'):
                 if value not in raw:
                     errors.append(f"{label}: missing R6.4 intake/review route {value}")
+            for value in (
+                'data-release-traceability="reviewed-tests-only"',
+                'data-release-source="latest.json"',
+                'data-reviewed-release-test-count="0"',
+                'data-current-stable-field-test="not-publicly-documented"',
+                'data-release-records="none"',
+                '{{STABLE_TAG}}', '{{STABLE_SOURCE_COMMIT}}', '{{RELEASE_URL}}',
+            ):
+                if value not in raw:
+                    errors.append(f"{label}: missing R6.5 exact-release versus field-test distinction {value}")
+            for profile_id in ("field-profile-a-file-service", "field-profile-b-rcb-export"):
+                if f'data-release-trace-profile="{profile_id}"' not in raw:
+                    errors.append(f"{label}: missing historical release trace {profile_id}")
             for value in ('data-evidence-freshness="true"', '{{STABLE_VERSION}}', 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
                 if value not in raw:
                     errors.append(f"{label}: missing historical field/retest disclosure {value}")

@@ -242,7 +242,7 @@ def main() -> int:
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
-    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", f"v{latest.get('version')}"):
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "compatibility.html#release-traceability", f"v{latest.get('version')}"):
         if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof/freshness value {value}")
     for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
@@ -312,6 +312,20 @@ def main() -> int:
         field_evidence = {}
     if field_evidence.get("schemaVersion") != 2:
         errors.append("rendered field evidence must use freshness schema v2")
+    release_trace = field_evidence.get("releaseTraceability", {})
+    reviewed_release_tests = release_trace.get("reviewedTests", []) if isinstance(release_trace, dict) else []
+    if not isinstance(reviewed_release_tests, list):
+        errors.append("rendered release traceability ledger must be a list")
+        reviewed_release_tests = []
+    current_reviewed = [
+        record for record in reviewed_release_tests if isinstance(record, dict)
+        and record.get("arsasVersion") == latest.get("version")
+        and record.get("releaseTag") == latest.get("tag")
+        and record.get("sourceCommit") == latest.get("sourceCommit")
+    ]
+    release_test_state = "documented-with-reviewed-records" if current_reviewed else "not-publicly-documented"
+    if not isinstance(release_trace, dict) or release_trace.get("schemaVersion") != 1 or release_trace.get("currentStableSource") != "latest.json" or release_trace.get("currentStableFieldTestState") != release_test_state:
+        errors.append("rendered registry exact-release evidence state differs from current release identity")
     for page in ("compatibility.html", "bukti-kompatibilitas.html"):
         matrix_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         contract = (
@@ -323,6 +337,40 @@ def main() -> int:
             if value not in matrix_text: errors.append(f"{page}: missing rendered interoperability proof value {value}")
         for value in ('data-evidence-intake="submitted-not-verified"', 'docs/evidence-intake-review.md'):
             if value not in matrix_text: errors.append(f"{page}: missing rendered R6.4 review gate {value}")
+        release_contract = (
+            'data-release-traceability="reviewed-tests-only"',
+            'data-release-source="latest.json"',
+            f'data-release-version="{latest.get("version")}"',
+            f'data-release-tag="{latest.get("tag")}"',
+            f'data-release-commit="{latest.get("sourceCommit")}"',
+            f'data-current-stable-field-test="{release_test_state}"',
+            f'data-reviewed-release-test-count="{len(reviewed_release_tests)}"',
+            str(latest.get("releaseUrl", "")),
+        )
+        for value in release_contract:
+            if value not in matrix_text: errors.append(f"{page}: missing rendered R6.5 release trace {value}")
+        for token in ("{{STABLE_TAG}}", "{{STABLE_SOURCE_COMMIT}}", "{{RELEASE_URL}}"):
+            if token in matrix_text: errors.append(f"{page}: unrendered exact-release identity token {token}")
+        for profile in field_evidence.get("profiles", []):
+            if isinstance(profile, dict) and f'data-release-trace-profile="{profile.get("id")}"' not in matrix_text:
+                errors.append(f"{page}: missing historical release boundary for {profile.get('id')}")
+        shown = re.findall(r'data-release-test-record="([^"]+)"', matrix_text)
+        expected = [str(record.get("id")) for record in reviewed_release_tests if isinstance(record, dict)]
+        if len(shown) != len(set(shown)) or sorted(shown) != sorted(expected):
+            errors.append(f"{page}: rendered reviewed field-test rows differ from ledger")
+        if not reviewed_release_tests and 'data-release-records="none"' not in matrix_text:
+            errors.append(f"{page}: empty reviewed field-test ledger is not disclosed")
+        if reviewed_release_tests and 'data-release-records="none"' in matrix_text:
+            errors.append(f"{page}: stale zero-test claim after promotion")
+        for record in reviewed_release_tests:
+            if not isinstance(record, dict) or "id" not in record:
+                continue
+            start = matrix_text.find(f'data-release-test-record="{record["id"]}"')
+            end = matrix_text.find("</tr>", start) if start >= 0 else -1
+            row = matrix_text[start:end] if end >= 0 else ""
+            for key in ("profileId", "service", "testDate", "arsasVersion", "releaseTag", "sourceCommit", "publicEvidenceUrl", "reviewPrUrl"):
+                if str(record.get(key)) not in row:
+                    errors.append(f"{page}: missing public release-test field {record['id']}/{key}")
         for value in ('data-evidence-freshness="true"', f"v{latest.get('version')}", 'data-tested-version="not-recorded"', 'data-current-stable-retest="not-documented"'):
             if value not in matrix_text: errors.append(f"{page}: missing rendered historical/current stable distinction {value}")
         if "{{STABLE_VERSION}}" in matrix_text:
@@ -340,8 +388,16 @@ def main() -> int:
                 for url in urls:
                     if f'href="{url}"' not in record_block:
                         errors.append(f"{page}: missing {profile_id}/{service} public engineering trail")
-            if profile.get("testedArsasVersion") is not None or profile.get("lastRetest") is not None:
-                errors.append(f"{page}: registry version/retest changed; update the displayed provenance before publishing")
+            if profile.get("testedArsasVersion") is not None:
+                errors.append(f"{page}: historical capture version cannot be inferred from a later release")
+            if isinstance(profile.get("lastRetest"), dict) and not any(
+                isinstance(record, dict) and record.get("profileId") == profile_id
+                and record.get("testDate") == profile["lastRetest"].get("date")
+                and record.get("arsasVersion") == profile["lastRetest"].get("arsasVersion")
+                and record.get("publicEvidenceUrl") in profile["lastRetest"].get("evidenceLinks", [])
+                for record in reviewed_release_tests
+            ):
+                errors.append(f"{page}: profile retest lacks matching accepted release evidence")
     if not GUIDES.issubset(set(expected_pages)): errors.append("troubleshooting guides are missing from the build")
 
     sitemap = site / "sitemap.xml"
