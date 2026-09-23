@@ -160,6 +160,7 @@
   line-height: 1.55;
 }
 .matrix-boundary strong { color: var(--text); }
+.evidence-gap-panel [data-release-source] code { overflow-wrap: anywhere; word-break: break-word; }
 .evidence-profile .evidence-trace { margin: .7rem 0 .9rem; padding: .7rem .8rem; font-size: .76rem; }
 .evidence-profile .evidence-records { margin: .65rem 0 .85rem; font-size: .78rem; line-height: 1.55; }
 .evidence-records a { color: #dff7ff; text-underline-offset: 2px; }
