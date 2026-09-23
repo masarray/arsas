@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "product": "ARSAS",
-  "updatedAt": "2026-09-22",
+  "updatedAt": "2026-09-23",
   "namedDeviceCount": 0,
   "statusVocabulary": {
     "verified": "Repeated evidence exists for the declared historical service scope. The tested ARSAS version must be disclosed when known; this is not IEC 61850 conformance certification.",
@@ -141,5 +141,31 @@
         "Positive and negative service result with sanitized diagnostics and acquisition conditions"
       ]
     }
+  },
+  "releaseTraceability": {
+    "schemaVersion": 1,
+    "currentStableSource": "latest.json",
+    "reviewPolicyPath": "docs/evidence-intake-review.md",
+    "currentStableFieldTestState": "not-publicly-documented",
+    "reviewedTests": [],
+    "requiredRecordFields": [
+      "id",
+      "profileId",
+      "service",
+      "testDate",
+      "arsasVersion",
+      "releaseTag",
+      "sourceCommit",
+      "releaseUrl",
+      "result",
+      "evidenceKind",
+      "expectedObserved",
+      "conditions",
+      "deviceDisclosure",
+      "publicEvidenceUrl",
+      "reviewIssueUrl",
+      "reviewPrUrl"
+    ],
+    "claimBoundary": "A release package identity, green CI, an issue, and implementation history are not evidence of a field test. Only a separately reviewed service-specific public test can enter reviewedTests; absence of entries is not a product failure."
   }
 }
