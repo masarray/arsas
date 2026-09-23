@@ -293,7 +293,7 @@ def main() -> int:
                     if stale in rendered:
                         errors.append(f"{label}: stale English homepage localization remains: {stale}")
         if path == "technical-review.html":
-            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "{{STABLE_VERSION}}"):
+            for value in ('{{> trust-architecture}}', "SPDX SBOM", "CI regression evidence", "Not a conformance certificate", "ARSAS Open-Source Reliability &amp; Technical Review", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "{{STABLE_VERSION}}", "compatibility.html#release-traceability"):
                 if value not in raw and value not in rendered:
                     errors.append(f"{label}: missing technical-review proof route value {value}")
         if path in {"compatibility.html", "bukti-kompatibilitas.html"}:
