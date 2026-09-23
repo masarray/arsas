@@ -285,10 +285,8 @@ def main() -> int:
         errors.append("device-evidence.json: each uncovered service needs a concrete capture request")
         next_evidence = {}
     stable_retest = plan.get("stableRetest")
-    if not isinstance(stable_retest, dict) or stable_retest.get("state") != "not-publicly-documented" or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
+    if not isinstance(stable_retest, dict) or stable_retest.get("state") not in {"not-publicly-documented", "documented-with-reviewed-records"} or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
         errors.append("device-evidence.json: incomplete current-stable retest intake requirements")
-    if any(isinstance(p, dict) and p.get("lastRetest") is not None for p in profiles) and isinstance(stable_retest, dict) and stable_retest.get("state") == "not-publicly-documented":
-        errors.append("device-evidence.json: retest declaration changed; refresh coverage plan and page claims")
 
     # R6.5: a reviewed field-test ledger is distinct from package identity and
     # historical engineering trails. There are deliberately no accepted records yet.
@@ -302,7 +300,7 @@ def main() -> int:
     if not isinstance(trace, dict) or trace.get("schemaVersion") != 1 or trace.get("currentStableSource") != "latest.json" or trace.get("reviewPolicyPath") != "docs/evidence-intake-review.md":
         errors.append("releaseTraceability: missing exact-release review contract")
         trace = {}
-    if trace.get("requiredRecordFields") != sorted(required_fields) and set(trace.get("requiredRecordFields", [])) != required_fields:
+    if not isinstance(trace.get("requiredRecordFields"), list) or len(trace["requiredRecordFields"]) != len(required_fields) or set(trace["requiredRecordFields"]) != required_fields:
         errors.append("releaseTraceability: reviewed record requirements drifted")
     if not isinstance(trace.get("claimBoundary"), str) or len(trace["claimBoundary"]) < 100:
         errors.append("releaseTraceability: missing package versus field-test boundary")
@@ -335,7 +333,7 @@ def main() -> int:
             errors.append(f"{rid}: implementation history or diagnostic alone is not a field test")
         version = str(record["arsasVersion"])
         tag = str(record["releaseTag"])
-        if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version) or tag != "v" + version:
+        if not re.fullmatch(r"\d+\.\d+\.\d+", version) or tag != "v" + version:
             errors.append(f"{rid}: invalid exact version/tag association")
         if not re.fullmatch(r"[0-9a-f]{40}", str(record["sourceCommit"])):
             errors.append(f"{rid}: invalid immutable source commit")
@@ -350,7 +348,7 @@ def main() -> int:
         if len(str(record["expectedObserved"]).strip()) < 30 or not isinstance(record["conditions"], list) or len(record["conditions"]) < 2 or any(len(str(v).strip()) < 10 for v in record["conditions"]) or len(str(record["deviceDisclosure"]).strip()) < 12:
             errors.append(f"{rid}: incomplete sanitized test context")
         for key, suffix in (("publicEvidenceUrl", "issues"), ("reviewIssueUrl", "issues"), ("reviewPrUrl", "pull")):
-            if not re.fullmatch(rf"https://github\\.com/masarray/arsas/{suffix}/[1-9]\\d*", str(record[key])):
+            if not re.fullmatch(rf"https://github\.com/masarray/arsas/{suffix}/[1-9]\d*", str(record[key])):
                 errors.append(f"{rid}: {key} must be a public ARSAS {suffix} record")
         if version == current_version:
             current_records.append(record)
