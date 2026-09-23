@@ -242,7 +242,7 @@ def main() -> int:
             for stale in ("Have the software?", "Connect an approved IED", "Follow the first connection"):
                 if stale in home_text: errors.append(f"{home}: stale English homepage localization remains: {stale}")
     technical_review_text = (site / "technical-review.html").read_text(encoding="utf-8") if (site / "technical-review.html").is_file() else ""
-    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", f"v{latest.get('version')}"):
+    for value in ('data-trust-architecture="true"', "SPDX SBOM", "CI regression evidence", stable_source, "Not a conformance certificate", "Review field interoperability evidence", "Verify the stable release", "July 2026 field profiles", "compatibility.html#release-traceability", f"v{latest.get('version')}"):
         if value not in technical_review_text: errors.append(f"technical-review.html: missing technical-review proof/freshness value {value}")
     for page in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
