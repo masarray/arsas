@@ -2272,9 +2272,29 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             return true;
         }
 
-        var isBooleanPoint = point.IecDataType.Contains("Boolean", StringComparison.OrdinalIgnoreCase);
+        // The operator formatter renders Boolean report values as "True [1]" / "False [0]".
+        // Those suffixes are presentation, not a new process state. Restrict this
+        // normalization to Boolean-family points; DPC [01]/[10] must retain its own semantics.
+        var normalizedDataType = (point.IecDataType ?? string.Empty)
+            .Trim().Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+        var isBooleanPoint = normalizedDataType.Equals("BOOL", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SINGLEPOINTSTATUS", StringComparison.OrdinalIgnoreCase);
         if (isBooleanPoint)
         {
+            if (text.Equals("True [1]", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("False [0]", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = text.StartsWith("True", StringComparison.OrdinalIgnoreCase)
+                    ? "bool:1"
+                    : "bool:0";
+                return true;
+            }
+
             if (text.Equals("1", StringComparison.OrdinalIgnoreCase) ||
                 text.Equals("1.0", StringComparison.OrdinalIgnoreCase) ||
                 text.Equals("on", StringComparison.OrdinalIgnoreCase) ||
