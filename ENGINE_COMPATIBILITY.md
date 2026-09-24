@@ -1,6 +1,6 @@
 # ARIEC61850 Engine Compatibility
 
-ARSAS 1.6.19 is an application-only repository. It compiles against the separately maintained ARIEC61850 source projects and uses engine-owned contracts for MMS, reporting, GOOSE, Sampled Values, file services, control, SCL workspace services, discovery, and diagnostics.
+ARSAS v1.6.40 is an application-only repository. It compiles against the separately maintained ARIEC61850 source projects and uses engine-owned contracts for MMS, reporting, GOOSE, Sampled Values, file services, control, SCL workspace services, discovery, and diagnostics.
 
 ## Immutable integration baseline
 
@@ -10,14 +10,20 @@ The reviewed engine revision used by CI and packaging is stored in:
 engines/ARIEC61850.lock.json
 ```
 
-Current baseline:
+Current v1.6.40 stable baseline:
 
 ```text
+ARSAS tag: v1.6.40
+ARSAS release source: 1b26dc1235b3bac0300bf84c1b5e8fc590934bc5
 repository: masarray/ARIEC61850
 ref: main
-commit: 0f8453182957900bc6d91287fb8177c8d9762188
-source PR: #45
+commit: 648124097621046f5f127ceb1cf853fea54db730
+source PR: #135
 ```
+
+The [installed-release field acceptance](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) confirms this exact application/engine pair and successful physical Smart Discovery with 58/58 static report-backed runtime points and zero cyclic MMS process polling. The historical P0-5g promotion switch does not select the current production route: the tracked Smart Discovery entrypoint is verified from source before building, without workflow-time source mutation.
+
+Do not change the pinned engine or compile a historical discovery path merely to fix documentation or post-release issues. Subsequent mainline commits do not retroactively change the published v1.6.40 binary.
 
 CI fetches the exact 40-character commit and checks it out detached. A temporary feature branch is not part of the reproducible build identity.
 
