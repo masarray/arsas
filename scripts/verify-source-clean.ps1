@@ -92,6 +92,21 @@ function Test-ContainsForbiddenIdentifier {
     $words = @([regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9]+') | ForEach-Object { $_.Value })
 
     for ($index = 0; $index -lt $words.Count; $index++) {
+        $word = $words[$index]
+
+        # Detect identifiers embedded in source/path tokens such as TypeNameSuffix.
+        # This closes the common case where a prohibited product name is attached
+        # to a class, fixture, job, or filename rather than separated by punctuation.
+        foreach ($length in $CandidateLengths) {
+            if ($word.Length -lt $length) { continue }
+            for ($offset = 0; $offset -le ($word.Length - $length); $offset++) {
+                $fragment = $word.Substring($offset, $length)
+                if ($ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $fragment))) {
+                    return $true
+                }
+            }
+        }
+
         $candidate = ""
         for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
             $candidate += $words[$index + $count - 1]
