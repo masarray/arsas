@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "recordType": "sanitized-installed-release-field-diagnostic",
+  "release": "v1.6.40",
+  "status": "field-observed-accepted-installed-release",
+  "maintainerAcceptance": "The maintainer confirms that v1.6.40 was published following successful Smart Discovery physical acceptance; this record supplies an additional diagnostic snapshot of the installed stable package.",
+  "observedAtLocal": "2026-09-23T20:36:50.323+07:00",
+  "testedDevice": "AA1E1F06R4",
+  "application": {
+    "version": "1.6.40",
+    "commit": "1b26dc1235b3bac0300bf84c1b5e8fc590934bc5",
+    "installedPackageObserved": true
+  },
+  "engine": {
+    "version": "1.6.40",
+    "commit": "648124097621046f5f127ceb1cf853fea54db730"
+  },
+  "discovery": {
+    "route": "SMART-CAPTURE PR134 P0-5c",
+    "freeze": "P0-R9-STRUCTURAL",
+    "associationFlight": "single-owner",
+    "mmsGate": "exclusive",
+    "authority": "new association",
+    "kpiConfirmedRequests": 204,
+    "duplicateRequests": 0,
+    "wireAccounting": "complete",
+    "peakOutstanding": 8,
+    "negotiatedCalling": 10,
+    "elapsedMs": 2395.3,
+    "logicalDevices": 32,
+    "logicalNodes": 119,
+    "dataObjects": 895,
+    "dataAttributes": 6335,
+    "rawVariables": 8730,
+    "fcPoints": 7994,
+    "typeProbes": 119,
+    "successfulTypeProbes": 119,
+    "initialFcRoots": "deferred",
+    "initialReadBatches": 0
+  },
+  "staticReporting": {
+    "dataSets": 2,
+    "staticMembers": 58,
+    "representedMembers": 58,
+    "missingMembers": 0,
+    "analogMembers": 22,
+    "digitalMembers": 36,
+    "selectedRuntimeRows": 58,
+    "reportBackedRuntimeRows": 58,
+    "finalUnresolvedRuntimeRows": 0,
+    "configuredRcbPlans": 2,
+    "analogRcb": "RP.Unbuffer01",
+    "digitalRcb": "BR.Buffer01",
+    "cyclicMmsProcessPolling": 0,
+    "dynamicDataSetCreation": false,
+    "reportProcessingObserved": true,
+    "structuredSemanticReportUpdatesObserved": true
+  },
+  "diagnosticNuances": {
+    "inventoryPrimaryUnresolvedBeforeRuntimeProjection": 14,
+    "finalUnresolvedRuntimeRows": 0,
+    "rcbAvailabilityUnknownAtPlanning": "Availability metadata remained Unknown, but exact RCB activation succeeded.",
+    "brcbResvTms": "Explicit ResvTms write returned type-inconsistent; the client continued through the supported implicit reservation/RptEna path and activated the BRCB.",
+    "reportSemanticStructWarning": "Structured semantic expansion entries show report processing; they are not REPORT_VALUE_REJECTED."
+  },
+  "evidenceBoundary": {
+    "rawDiagnosticPublished": false,
+    "rawPcapIncluded": false,
+    "executableSha256MeasuredByThisDiagnostic": false,
+    "portablePackagePhysicallyTestedByThisDiagnostic": false,
+    "observationScope": "One installed v1.6.40 package and one recorded physical relay session; the maintainer's release acceptance is distinct from the scope of this snapshot.",
+    "removedFromPublicRecord": [
+      "private IP addresses and adapter routes",
+      "local machine name",
+      "local filesystem paths",
+      "raw MMS request/response hex"
+    ]
+  },
+  "relatedRecords": [
+    "evidence/v1.6.39-physical-rejection.json",
+    ".release/published.json"
+  ]
+}
