@@ -51,6 +51,10 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
+      - name: Verify source-clean rejection fixtures
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\test-source-clean-guard.ps1
+
       - name: Verify premium UX, GOOSE, SMV, SAS and release invariants
         shell: powershell
         run: |
