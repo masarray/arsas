@@ -447,7 +447,7 @@ jobs:
             ArIED61850Tester/dist/ARSAS-Windows-x64-PROVENANCE.json
 
       - name: Create or update GitHub Release
-        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
+        if: (github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -464,10 +464,43 @@ jobs:
 
           $null = cmd /c "gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY >NUL 2>NUL"
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw "Failed to update GitHub Release assets." }
-            gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --title "ARSAS $env:RELEASE_VERSION" --latest
-            if ($LASTEXITCODE -ne 0) { throw "Failed to mark the GitHub Release as latest." }
+            # Existing stable tags/assets are immutable. A rerun with the same source and
+            # identical bytes is a no-op; a different source or binary is rejected.
+            $tagCommit = git -C .\ArIED61850Tester rev-list -n 1 $env:RELEASE_TAG
+            if ($LASTEXITCODE -ne 0 -or "$tagCommit".Trim() -ne $env:GITHUB_SHA) {
+              throw "Existing release $env:RELEASE_TAG belongs to a different source commit; use a new version/tag."
+            }
+
+            $published = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect existing release assets." }
+            $expectedNames = @($assets | ForEach-Object { [IO.Path]::GetFileName($_) })
+            $publishedNames = @($published.assets | ForEach-Object { $_.name })
+            if ($publishedNames.Count -ne $expectedNames.Count) {
+              throw "Existing release asset count differs; refusing to mutate published binaries."
+            }
+            foreach ($name in $expectedNames) {
+              if ($publishedNames -notcontains $name) {
+                throw "Existing release is missing $name; refusing in-place repair of a published tag."
+              }
+            }
+
+            $downloadDir = Join-Path $env:RUNNER_TEMP "arsas-existing-release-verification"
+            New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+            gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir $downloadDir
+            if ($LASTEXITCODE -ne 0) { throw "Cannot download existing release assets for integrity verification." }
+            foreach ($asset in $assets) {
+              $existingAsset = Join-Path $downloadDir ([IO.Path]::GetFileName($asset))
+              if (-not (Test-Path -LiteralPath $existingAsset -PathType Leaf)) {
+                throw "Missing existing release asset $existingAsset."
+              }
+              $rebuiltHash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash
+              $publishedHash = (Get-FileHash -LiteralPath $existingAsset -Algorithm SHA256).Hash
+              if ($rebuiltHash -ne $publishedHash) {
+                throw "Existing release asset differs: $([IO.Path]::GetFileName($asset)). Publish a new version/tag instead."
+              }
+            }
+            "RELEASE_ALREADY_PUBLISHED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Existing release matches the exact source and all published asset hashes; no mutation performed."
             exit 0
           }
 
@@ -488,7 +521,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Failed to create GitHub Release." }
 
       - name: Record verified release publication
-        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main' || inputs.publish_release == true
+        if: ((github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)) && env.RELEASE_ALREADY_PUBLISHED != 'true'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
