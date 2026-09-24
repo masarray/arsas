@@ -1,0 +1,14 @@
+# Repository-wide maintainer review
+* @masarray
+
+# Release, CI and provenance boundaries
+/.github/workflows/ @masarray
+/.release/ @masarray
+/engines/ @masarray
+/evidence/ @masarray
+/scripts/ @masarray
+
+# Runtime/protocol integration and engineering tests
+/Services/ @masarray
+/Protocol/ @masarray
+/tests/ @masarray
