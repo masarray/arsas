@@ -78,7 +78,6 @@
   },
   "relatedRecords": [
     "evidence/v1.6.39-physical-rejection.json",
-    "docs/IEDSCOUT_CONVERGENCE.md",
     ".release/published.json"
   ]
 }
