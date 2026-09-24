@@ -29,9 +29,9 @@ FAT Clock Sync telemetry intentionally distinguishes packet activity from actual
 
 A broadcast without a client request may still be valid when the relay is explicitly configured for broadcast NTP, but ARSAS does not treat it as an acknowledgement. For unicast SNTP, the strongest wire-level evidence is a Mode 3 request followed by a Mode 4 reply. Device-side time-quality or clock evidence is still required before declaring the relay synchronized.
 
-## commissioning compatibility stratum
+## Commissioning compatibility stratum
 
-Field commissioning has shown that a conservative high-stratum local source can be rejected or remain marked unsynchronized on some tested IED installations. ARSAS therefore uses `stratum 2` for both Mode 4 replies and Mode 5 broadcasts.
+Authorized field observations on the historical reference configuration showed that a conservative high-stratum local source could be rejected or remain marked unsynchronized. ARSAS therefore uses the same `stratum 2` advertisement for Mode 4 replies and Mode 5 broadcasts. This is a bounded commissioning default, not a claim about all IEDs. The original device-specific naming and observation context remain traceable in the [pre-migration source revision](https://github.com/masarray/arsas/commit/e03ff1caa7d83902ef106f0c4aafdc3fb24143e5).
 
 The value is named in code as `SntpServerProfile.CommissioningCompatibilityStratum` and is protected by regression tests. It does not claim that the Windows laptop is physically traceable to a stratum-1 GNSS/PTP/atomic source. `LOCL` remains the reference ID and ARSAS diagnostics describe the laptop as a local commissioning source.
 
