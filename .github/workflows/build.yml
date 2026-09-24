@@ -11,11 +11,24 @@ jobs:
     name: Build, test, validate and package Windows application
     runs-on: windows-latest
     steps:
-      - name: Checkout ARSAS application
+      - name: Checkout exact triggering ARSAS revision
+        uses: actions/checkout@v4
+        with:
+          path: ArIED61850Tester
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify tested application revision
         shell: powershell
         run: |
-          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
-          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "CI source revision mismatch. Expected $expected, checked out $actual."
+          }
+          "ARSAS_SOURCE_COMMIT=$actual" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Testing and packaging exact ARSAS source $actual"
 
       - name: Resolve immutable ARIEC61850 integration lock
         shell: powershell
