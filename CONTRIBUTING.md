@@ -40,6 +40,8 @@ python .\scripts\validate-landing.py
 .\scripts\verify-source-clean.ps1
 ```
 
+For the project's review requirements around independently produced source, synthetic fixtures, third-party assets, competitor-neutral product wording and immutable physical evidence, read [Independent implementation and provenance policy](docs/INDEPENDENT_IMPLEMENTATION_AND_PROVENANCE.md) before submitting a code, UI, fixture or marketing contribution.
+
 ## Application and engine boundary
 
 - ARSAS owns projects, device-session orchestration, visualization, UX, evidence presentation, and application persistence.
