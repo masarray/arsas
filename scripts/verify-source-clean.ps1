@@ -12,10 +12,17 @@
   publish or repeat unrelated product and company names.
 #>
 [CmdletBinding()]
-param()
+param(
+    [string]$RepositoryRoot,
+    [switch]$ScanOnly
+)
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$RepoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+} else {
+    (Resolve-Path -LiteralPath $RepositoryRoot).Path
+}
 
 $ForbiddenFilePatterns = @(
     "LICENSE-APACHE-2.0",
@@ -56,16 +63,8 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
-# These are first-party convergence authorities. They intentionally contain the
-# external interoperability label so the acceptance contract remains discoverable.
-$ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-@(
-    ".github/workflows/smart-discovery-post-merge-production.yml",
-    ".github/workflows/smart-discovery-mainline-readiness.yml",
-    ".github/workflows/scl-interoperability-r7.yml",
-    "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
-) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
-
+# No tracked path receives a whole-file external-identifier exemption. Historical
+# comparison evidence is linked by immutable commit rather than copied into active files.
 $Problems = New-Object System.Collections.Generic.List[string]
 
 function Normalize-RelativePath {
@@ -135,8 +134,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    $identifierScanExempt = $ApprovedConvergenceIdentifierPaths.Contains($relative)
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $relative)) {
+    if (Test-ContainsForbiddenIdentifier $relative) {
         $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
@@ -144,7 +142,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $content)) {
+    if (Test-ContainsForbiddenIdentifier $content) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 
@@ -162,7 +160,9 @@ if ($Problems.Count -gt 0) {
     throw "ARSAS source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-& (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
-& (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+if (-not $ScanOnly) {
+    & (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
+    & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+}
 
-Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, current-license, binding, and updater checks." -ForegroundColor Green
+Write-Host "All Git-tracked ARSAS content passed source and external-identifier checks." -ForegroundColor Green
