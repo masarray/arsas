@@ -60,12 +60,9 @@ $TextExtensions = @(
 # external interoperability label so the acceptance contract remains discoverable.
 $ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 @(
-    ".github/workflows/iedscout-convergence-guard.yml",
     ".github/workflows/smart-discovery-post-merge-production.yml",
     ".github/workflows/smart-discovery-mainline-readiness.yml",
     ".github/workflows/scl-interoperability-r7.yml",
-    "docs/IEDSCOUT_CONVERGENCE.md",
-    "evidence/iedscout-convergence-target.json",
     "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
 ) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
 

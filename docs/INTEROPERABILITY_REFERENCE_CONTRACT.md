@@ -1,14 +1,18 @@
-# IEDScout Convergence Contract
+# IEC 61850 Interoperability Reference Contract
 
 ## Product target
 
-ARSAS targets IEDScout-equivalent IEC 61850 engineering semantics with lower wire cost where possible:
+ARSAS targets independently verified IEC 61850 IEC 61850 engineering semantics with lower wire cost where possible:
 
 1. one accepted MMS association and bounded structure-first discovery;
 2. a complete canonical model with exact LN/DO/SDO/DA/FC identity;
 3. Edition 2 IID / Edition 1 ICD that can be reopened by ARSAS, reconnect to the same relay, hydrate values without full discovery, and run configured static reporting.
 
-The machine-readable authority is `evidence/iedscout-convergence-target.json`.
+The machine-readable authority is `evidence/interoperability-reference-target.json`.
+
+## Original reference provenance
+
+The same-relay comparison was an authorized black-box measurement against a separately operated engineering tool. Its original name, source-specific labels and historical context remain verifiable in the immutable [pre-migration repository commit](https://github.com/masarray/arsas/commit/36a4b87a3c2f6d34f73fa36c8a8a6a59763bd435), original evidence blob `a853fd0ea115b320a648b1b2a52fe9a7f6af94cd`. This active contract uses neutral aliases **without changing which tool generated the historical reference**. The measurements are comparison inputs, not proof of source-code or interface lineage.
 
 ## Merged proven baseline
 
@@ -37,8 +41,8 @@ GetNamedVariableListAttributes and 64 Reads, while preserving 32 LD / 119 LN /
 860 top-level DO / 906 DO+SDO / 4925 scalar leaves / 2 DataSets / 58 FCDA / 32
 logical ReportControls / 1 SettingControl.
 
-The same-relay IEDScout comparison remains about 417 confirmed requests, 119 GVA
-and 156 Reads. ARSAS must not add traffic merely to imitate IEDScout.
+The same-relay external black-box reference tool comparison remains about 417 confirmed requests, 119 GVA
+and 156 Reads. ARSAS must not add traffic merely to imitate external black-box reference tool.
 
 Forbidden regressions include a second discovery association, legacy supplemental
 browse, a second full GetNameList sweep, recursive per-leaf GVA, and eager FC-root
@@ -98,7 +102,7 @@ unchanged:
 - Ed2 exported `Val`: 3202;
 - Ed1 exported `Val`: 3106.
 
-IEDScout's golden file has about 1529 `Val` elements. A larger count is not
+The external reference SCL file has about 1529 `Val` elements. A larger count is not
 automatically better; the remaining task is semantic path/value comparison, not
 count chasing.
 
@@ -118,7 +122,7 @@ The accepted representation remains:
 R10 Ed2 is semantically correct but verbose:
 
 - ARSAS: 119 LNodeType / 906 DOType / 752 DAType / about 731 KB;
-- IEDScout reference: about 38 / 60 / 17 / about 247 KB.
+- external black-box reference tool reference: about 38 / 60 / 17 / about 247 KB.
 
 Next work may intern only templates with identical ordered semantic fingerprints.
 Expanded model counts, FC ownership, values, DataSets/RCBs and round-trip behavior
@@ -133,7 +137,7 @@ model-generation change or explicit refresh.
 
 ### 3. Semantic Val diff
 
-Compare ARSAS vs IEDScout by exact
+Compare ARSAS vs external black-box reference tool by exact
 `LD/LN/DO/SDO/DA/BDA/FC/bType/value` path, not raw XML position and not total
 `Val` count.
 

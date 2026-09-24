@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "name": "IEDScout discovery and SCL convergence",
+  "name": "independent black-box reference tool discovery and SCL convergence",
   "status": "physical-retest-passed-merge-ready",
   "target": {
-    "discovery": "Reach IEDScout-like MMS discovery efficiency without sacrificing exact IEC 61850 model evidence.",
+    "discovery": "Reach reference-grade MMS discovery efficiency without sacrificing exact IEC 61850 model evidence.",
     "model": "Build the canonical IEC 61850 model from structure-first MMS evidence with correct LN identity, DO/SDO hierarchy, FC ownership, DataSet/RCB semantics, and schema-aware CDC handling.",
     "scl": "Save Edition 2 IID / Edition 1 ICD that reopens in ARSAS, reconnects to the relay, and is usable as trusted SCL."
   },
@@ -39,7 +39,7 @@
     "dataSets": 2,
     "runtimeReportControls": 34,
     "logicalSclReportControls": 32,
-    "iedScoutCapture": {
+    "externalReferenceCapture": {
       "associations": 1,
       "confirmedMmsRequests": 417,
       "getVariableAccessAttributes": 119,
@@ -53,7 +53,7 @@
       "reads": 6548,
       "note": "Regression signature. A future field build showing this pattern is rejected."
     },
-    "iedScoutSclReference": {
+    "externalSclReference": {
       "lDevices": 32,
       "logicalNodes": 119,
       "dataSets": 2,
@@ -71,7 +71,7 @@
     "secondFullGetNameListSweepForbidden": true,
     "eagerInitialFcValueReadDuringStructuralDiscovery": false,
     "typeStrategy": "LN/root structure first, bounded leaf fallback only when exact structure evidence is unavailable.",
-    "physicalPerformanceGate": "Compare request count, GVA count, Read count, peak outstanding calls, TTFI and total discovery time against IEDScout on the same relay."
+    "physicalPerformanceGate": "Compare request count, GVA count, Read count, peak outstanding calls, TTFI and total discovery time against independent black-box reference tool on the same relay."
   },
   "modelAcceptance": {
     "prefixedLogicalNodeIdentityExamples": [
@@ -127,7 +127,7 @@
       "diagnostic report",
       "Ed2 SCL-assisted reuse diagnostic with projectionErrorSamples",
       "Ed1 SCL-assisted reuse diagnostic with projectionErrorSamples",
-      "same-relay comparison against IEDScout"
+      "same-relay comparison against independent black-box reference tool"
     ],
     "mergeAllowedAfterPhysicalRetest": true,
     "physicalRetestPassed": true,
@@ -332,13 +332,13 @@
     },
     "saveTimeInstanceValues": {
       "observedR9ExportValCount": 0,
-      "referenceIedScoutValCount": 1529,
+      "referenceSclValCount": 1529,
       "status": "mechanism-physically-proven-semantic-diff-open",
       "rule": "Keep structural discovery read-free; acquire bounded safe FC-root values only during explicit Save SCL and verify resulting instance evidence physically.",
       "r10InstanceEvidence": 3854,
       "r10Edition2ValCount": 3202,
       "r10Edition1ValCount": 3106,
-      "note": "Save-time value enrichment is physically proven. More Val elements than IEDScout is not treated as automatically better; exact semantic path/value comparison remains open."
+      "note": "Save-time value enrichment is physically proven. More Val elements than independent black-box reference tool is not treated as automatically better; exact semantic path/value comparison remains open."
     },
     "templateReuse": {
       "status": "next-improvement",
@@ -349,7 +349,7 @@
         "daType": 752,
         "fileBytes": 731266
       },
-      "iedScoutReference": {
+      "externalReference": {
         "lNodeType": 38,
         "doType": 60,
         "daType": 17,
