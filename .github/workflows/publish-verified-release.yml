@@ -145,7 +145,7 @@ jobs:
           Path('verified/release-notes.md').write_text('\n'.join(lines), encoding='utf-8')
           PY
 
-      - name: Publish or update stable GitHub release
+      - name: Publish immutable stable GitHub release
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -161,15 +161,12 @@ jobs:
           )
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "ARSAS $VERSION" --notes-file verified/release-notes.md \
-              --draft=false --prerelease=false --latest
-          else
-            gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" --title "ARSAS $VERSION" \
-              --notes-file verified/release-notes.md --latest
+            echo "Refusing to overwrite existing stable release $TAG. Use a new version/tag." >&2
+            exit 1
           fi
+          gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "ARSAS $VERSION" \
+            --notes-file verified/release-notes.md --latest
 
       - name: Verify published release assets
         if: github.event_name != 'pull_request'
