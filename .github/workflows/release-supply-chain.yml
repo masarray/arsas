@@ -115,7 +115,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         shell: bash
-        run: gh release upload "$RELEASE_TAG" _supply/ARSAS-Windows-x64-SBOM.spdx.json --repo "$GITHUB_REPOSITORY" --clobber
+        run: # Backfill is additive only. Published stable assets are immutable, even for a manual rerun.
+        if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq 'ARSAS-Windows-x64-SBOM.spdx.json'; then
+          echo "Stable SBOM already exists for $RELEASE_TAG; refusing to replace published bytes." >&2
+          exit 1
+        fi
+        gh release upload "$RELEASE_TAG" _supply/ARSAS-Windows-x64-SBOM.spdx.json --repo "$GITHUB_REPOSITORY"
 
       - name: Attest installer artifact digest
         uses: actions/attest@v4
