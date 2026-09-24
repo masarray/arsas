@@ -93,7 +93,7 @@ Required regressions:
 - identical duplicate source collapses safely;
 - conflicting IED/AP sources block;
 - fingerprint is order-independent;
-- Siemens-like 36 ST + 22 MX fixture remains 58/58.
+- Synthetic cross-LD 36 ST + 22 MX fixture remains 58/58.
 
 ### P4 — FAT workspace UX
 
