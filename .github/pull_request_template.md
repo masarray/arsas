@@ -69,6 +69,16 @@ For UI changes, include:
 - [ ] Public license, commercial-license, and trademark wording remains accurate.
 - [ ] Commits include the required DCO sign-off.
 
+## Independent implementation and provenance
+
+- [ ] Product-facing terminology and synthetic code/test identifiers are ARSAS-owned or neutral.
+- [ ] Any external comparison is authorized black-box evidence with its original provenance retained; no source, assets, UI or documentation were copied.
+- [ ] New/generated fixtures have an identified author or generator; third-party assets have verified licenses and notices.
+- [ ] Existing field evidence, DataSet order, release/tag/engine SHA and failed-case history remain unchanged unless a separate evidence-backed change explicitly supersedes them.
+- [ ] Rename or JSON-schema changes update all consumers and preserve numerical/semantic assertions.
+
+See [independent implementation and provenance policy](../docs/INDEPENDENT_IMPLEMENTATION_AND_PROVENANCE.md).
+
 ## Documentation
 
 - [ ] README, website, roadmap, support, security, or engineering documentation was updated where behavior or claim boundaries changed.
