@@ -24,9 +24,15 @@ The release workflow:
 9. compiles the Windows installer and performs silent install/uninstall smoke validation;
 10. creates SHA-256 checksums, SPDX 2.3 SBOM, and provenance evidence;
 11. creates GitHub artifact attestations for the public Windows binaries;
-12. creates or updates the stable GitHub Release and uploads the public assets.
+12. creates a new stable GitHub Release with the public assets; existing tags/assets are immutable and must not be overwritten.
 
 The workflow explicitly rejects legacy `ardirec.exe` and Qt runtime files from official packaging. ARSAS uses the pinned in-process `ardirec_bridge.dll` contract instead.
+
+## Historical publication workflows
+
+The v1.6.38 golden-installer build/publisher and golden-runtime recovery workflows were one-off recovery mechanisms, not the ongoing release authority. Their tracked workflow definitions have been retired from the current tree because they could replace old published assets or incorrectly mark an older release as latest. Their immutable history and `.release/recover-v1.6.38-golden*.json` evidence remain available for audit; retirement does not rewrite published history or change the v1.6.40 binary.
+
+The ongoing publisher is `.github/workflows/release-windows.yml`, governed by the reviewed `.release/windows.json` request and pinned app/engine/bridge source. The alternative verified-artifact publisher `.github/workflows/publish-verified-release.yml` refuses to overwrite an existing tag. Manual supply-chain backfill is additive only and refuses replacement of an existing published SBOM. Publication metadata and the website must follow the verified release rather than become a separate publication authority.
 
 ## Public assets
 
@@ -44,7 +50,7 @@ Versioned build artifacts may also exist inside the workflow run, but public doc
 
 For a controlled manual run, use **Actions → Release ARSAS Windows packages → Run workflow**. Supply a semantic version matching the checked-out ARSAS metadata and choose whether the workflow should publish a GitHub Release.
 
-A manual run with publication disabled is useful for packaging verification, but it is **not** a public stable release and must not be used to invent `landing/latest.json` evidence.
+A manual run with publication disabled is useful for packaging verification, but it is **not** a public stable release and must not be used to invent `landing/latest.json` evidence. An existing tag can be verified, but it must not be republished with different bytes or a different source; use a new version for changed packages.
 
 ## Installer behavior
 
@@ -83,7 +89,7 @@ Prerequisites:
 Use the repository packaging scripts rather than hand-assembling a release folder. For example:
 
 ```powershell
-.\scripts\publish-windows-portable.ps1 -Version 1.6.37
+.\scripts\publish-windows-portable.ps1 -Version 1.6.40
 .\scripts\build-windows-installer.ps1 -Version 1.6.37 -Runtime win-x64
 ```
 
