@@ -170,7 +170,7 @@ public readonly record struct SntpClientRequest(
 public sealed record SntpServerProfile
 {
     /// <summary>
-    /// commissioning compatibility advertisement used by ARSAS commissioning Clock Sync.
+    /// Commissioning compatibility advertisement used by ARSAS Clock Sync.
     /// Field experience with IED requires a trusted-looking low stratum; stratum 2
     /// is deliberately used instead of stratum 1 so ARSAS does not claim to be a primary
     /// GPS/PTP/atomic reference. ReferenceId remains LOCL and diagnostics state that the
