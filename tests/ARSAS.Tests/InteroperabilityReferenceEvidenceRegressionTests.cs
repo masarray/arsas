@@ -28,7 +28,7 @@ public sealed class InteroperabilityReferenceEvidenceRegressionTests
         Assert.Equal(30552, rejected.GetProperty("confirmedMmsRequests").GetInt32());
 
         var r10 = root.GetProperty("physicalEvidence").GetProperty("arsasR10");
-        foreach (var edition in new[] { "edition1", "edition2" })
+        foreach (var edition in new[] { "reuseEdition1", "reuseEdition2" })
         {
             var evidence = r10.GetProperty(edition);
             Assert.Equal(58, evidence.GetProperty("staticMembers").GetInt32());
