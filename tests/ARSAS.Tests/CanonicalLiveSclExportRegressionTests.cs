@@ -385,13 +385,13 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void SourceClean_GuardsApprovedFirstPartyConvergenceAuthorities()
+    public void SourceClean_DoesNotExemptNeutralReferenceEvidence()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-source-clean.ps1"));
 
         Assert.Contains("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
-        Assert.Contains("docs/INTEROPERABILITY_REFERENCE_CONTRACT.md", source, StringComparison.Ordinal);
-        Assert.Contains("evidence/interoperability-reference-target.json", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("docs/INTEROPERABILITY_REFERENCE_CONTRACT.md", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("evidence/interoperability-reference-target.json", source, StringComparison.Ordinal);
         Assert.Contains("CanonicalLiveSclExportRegressionTests.cs", source, StringComparison.Ordinal);
         Assert.Contains("identifierScanExempt", source, StringComparison.Ordinal);
     }
