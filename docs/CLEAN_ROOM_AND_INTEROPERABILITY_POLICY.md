@@ -1,6 +1,6 @@
 # Clean-Room and Interoperability Policy
 
-ArIED 61850 is an independently designed Windows application built on the separately maintained ARIEC61850 engine. This policy prevents copyright, license, trade-secret, trademark, and contractual contamination from unrelated external implementations and proprietary engineering products.
+ARSAS is an independently designed Windows application built on the separately maintained ARIEC61850 engine. This policy prevents copyright, license, trade-secret, trademark, and contractual contamination from unrelated external implementations and proprietary engineering products.
 
 ## Independent implementation rule
 
@@ -24,7 +24,7 @@ A protocol behavior observed with an external client must be reduced to a vendor
 
 Common engineering functions such as an IED tree, signal table, event list, report monitor, waveform plot, phasor diagram, SCL view, command panel, or diagnostic log may be implemented because they serve functional engineering needs. Their particular visual composition and expressive details must be independently designed.
 
-Do not use external screenshots as design specifications or imitate proprietary window layouts, ribbon structures, pane arrangements, icons, labels, report appearance, or marketing presentation. Project screenshots must be produced only from ArIED itself using synthetic or sanitized data.
+Do not use external screenshots as design specifications or imitate proprietary window layouts, ribbon structures, pane arrangements, icons, labels, report appearance, or marketing presentation. Project screenshots must be produced only from ARSAS itself using synthetic or sanitized data.
 
 ## Data and fixture provenance
 
