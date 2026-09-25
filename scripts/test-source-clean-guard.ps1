@@ -16,6 +16,8 @@ $cases = @(
     @{ Path = "docs/reference.md"; Text = "# $identifier"; Expected = "text" },
     @{ Path = "evidence/fixture.json"; Text = "{`"reference`": `"$identifier`"}"; Expected = "text" },
     @{ Path = ".github/workflows/smart-discovery-post-merge-production.yml"; Text = "name: $identifier"; Expected = "text" },
+    @{ Path = "NOTICE"; Text = "Policy marker: $identifier"; Expected = "text" },
+    @{ Path = ".gitignore"; Text = "# $identifier"; Expected = "text" },
     @{ Path = "tests/ARSAS.Tests/SyntheticFixture.cs"; Text = "// $identifier"; Expected = "text" },
     @{ Path = "docs/${identifier}-fixture.md"; Text = "# independently generated fixture"; Expected = "path" },
     @{ Path = "docs/split-name.md"; Text = $identifier.Substring(0, 3) + " " + $identifier.Substring(3); Expected = "text" },

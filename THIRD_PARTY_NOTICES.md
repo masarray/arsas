@@ -17,9 +17,11 @@ The bundled font files are redistributed unmodified. ARSAS does not rename the I
 
 ## External intellectual-property boundary
 
-No source code, binary, header, generated binding, wrapper, example, test, API layer, executable, manual, brochure, help file, screenshot, icon, logo, product photo, report template, UI resource, database, capture, or extracted asset from an unrelated external implementation or proprietary engineering product is included or directly required by this application repository.
+Project policy prohibits including source code, binary, header, generated binding, wrapper, example, test, API layer, executable, manual, brochure, help file, screenshot, icon, logo, product photo, report template, UI resource, database, capture, or extracted asset copied from an unrelated external implementation or proprietary engineering product.
 
 Interoperability testing with separately licensed tools does not make those tools application dependencies and does not authorize copying their software, documentation, visual design, reports, resources, or confidential data.
+
+Tracked visual and font assets are inventoried in [docs/ASSET_PROVENANCE_REGISTER.md](docs/ASSET_PROVENANCE_REGISTER.md) and its machine-readable manifest. An inventory entry or passing source-clean check is not a certification of authorship, license clearance, or visual independence; unresolved origin/rights review remains explicitly recorded there.
 
 ## Assets and releases
 
