@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout ARSAS application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ARSAS
 
@@ -48,7 +48,7 @@ jobs:
           }
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload focused compiler diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-sv-evidence-compiler-log
           path: ARSAS/sv-evidence-build.log
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload focused evidence test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-sv-evidence-test-results
           path: ARSAS/TestResults/*.trx

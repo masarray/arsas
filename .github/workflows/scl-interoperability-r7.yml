@@ -216,7 +216,7 @@ jobs:
           }
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -300,7 +300,7 @@ jobs:
           ) | Set-Content .\ARSAS\dist\R7-SCL-INTEROP-BUILD.txt -Encoding utf8
 
       - name: Upload R7 SCL interoperability build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-r7-scl-interoperability-win-x64
           path: |

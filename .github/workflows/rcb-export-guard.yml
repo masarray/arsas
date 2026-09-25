@@ -36,7 +36,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout ARSAS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout ARIEC61850 engine
         shell: powershell
@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload concise guard result
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rcb-guard-result
           path: rcb-guard-result.txt
