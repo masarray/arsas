@@ -46,9 +46,6 @@ $ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([
     "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8"
 ) | ForEach-Object { [void]$ForbiddenIdentifierHashes.Add($_) }
 
-$CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
-@(7, 8, 12, 22) | ForEach-Object { [void]$CandidateLengths.Add($_) }
-
 $ForbiddenTextPatterns = @(
     "C:\Users\",
     "C:\Program Files\dotnet\sdk",
@@ -72,57 +69,80 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
-$Sha256 = [System.Security.Cryptography.SHA256]::Create()
-$IdentifierCandidateCache = [System.Collections.Generic.Dictionary[string,bool]]::new([System.StringComparer]::Ordinal)
+# Keep the one-way fingerprint policy; execute the exhaustive substring scan in
+# compiled .NET code rather than millions of PowerShell pipeline/function calls.
+# The matcher preserves the original four-token, exact-length and embedded-token rules.
+$MatcherSource = @'
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 
-function Test-ForbiddenIdentifierCandidate {
-    param([Parameter(Mandatory=$true)][string]$Value)
+namespace ArsasSourceClean
+{
+    public sealed class IdentifierMatcher : IDisposable
+    {
+        private static readonly Regex Words = new Regex("[a-z0-9]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private readonly HashSet<string> hashes;
+        private readonly HashSet<int> lengths;
+        private readonly Dictionary<string, bool> cache = new Dictionary<string, bool>(StringComparer.Ordinal);
+        private readonly SHA256 sha = SHA256.Create();
 
-    if (-not $CandidateLengths.Contains($Value.Length)) { return $false }
-    if ($IdentifierCandidateCache.ContainsKey($Value)) {
-        return $IdentifierCandidateCache[$Value]
+        public IdentifierMatcher(string[] forbiddenHashes, int[] candidateLengths)
+        {
+            hashes = new HashSet<string>(forbiddenHashes, StringComparer.OrdinalIgnoreCase);
+            lengths = new HashSet<int>(candidateLengths);
+        }
+
+        private bool IsForbidden(string candidate)
+        {
+            if (!lengths.Contains(candidate.Length)) return false;
+            bool found;
+            if (cache.TryGetValue(candidate, out found)) return found;
+            string digest = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(candidate))).Replace("-", "");
+            found = hashes.Contains(digest);
+            cache[candidate] = found;
+            return found;
+        }
+
+        public bool ContainsForbiddenIdentifier(string text)
+        {
+            if (String.IsNullOrWhiteSpace(text)) return false;
+            MatchCollection words = Words.Matches(text.ToLowerInvariant());
+            for (int index = 0; index < words.Count; index++)
+            {
+                string word = words[index].Value;
+                foreach (int length in lengths)
+                {
+                    for (int offset = 0; offset <= word.Length - length; offset++)
+                    {
+                        if (IsForbidden(word.Substring(offset, length))) return true;
+                    }
+                }
+
+                string candidate = "";
+                for (int count = 1; count <= 4 && index + count - 1 < words.Count; count++)
+                {
+                    candidate += words[index + count - 1].Value;
+                    if (candidate.Length > 22) break;
+                    if (IsForbidden(candidate)) return true;
+                }
+            }
+            return false;
+        }
+
+        public void Dispose() { sha.Dispose(); }
     }
-
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-    $hash = -join ($Sha256.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
-    $isForbidden = $ForbiddenIdentifierHashes.Contains($hash)
-    $IdentifierCandidateCache[$Value] = $isForbidden
-    return $isForbidden
 }
+'@
+Add-Type -TypeDefinition $MatcherSource -Language CSharp -ErrorAction Stop
+$IdentifierMatcher = [ArsasSourceClean.IdentifierMatcher]::new(
+    [string[]]@($ForbiddenIdentifierHashes), [int[]]@(7, 8, 12, 22))
 
 function Test-ContainsForbiddenIdentifier {
     param([AllowEmptyString()][string]$Text)
-
-    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-    $words = @([regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9]+') | ForEach-Object { $_.Value })
-
-    for ($index = 0; $index -lt $words.Count; $index++) {
-        $word = $words[$index]
-
-        # Detect identifiers embedded in source/path tokens such as TypeNameSuffix.
-        # This closes the common case where a prohibited product name is attached
-        # to a class, fixture, job, or filename rather than separated by punctuation.
-        foreach ($length in $CandidateLengths) {
-            if ($word.Length -lt $length) { continue }
-            for ($offset = 0; $offset -le ($word.Length - $length); $offset++) {
-                $fragment = $word.Substring($offset, $length)
-                if (Test-ForbiddenIdentifierCandidate $fragment) {
-                    return $true
-                }
-            }
-        }
-
-        $candidate = ""
-        for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
-            $candidate += $words[$index + $count - 1]
-            if ($candidate.Length -gt 22) { break }
-            if (Test-ForbiddenIdentifierCandidate $candidate) {
-                return $true
-            }
-        }
-    }
-
-    return $false
+    return $IdentifierMatcher.ContainsForbiddenIdentifier($Text)
 }
 
 function Get-TrackedRelativePaths {
@@ -185,5 +205,5 @@ if (-not $ScanOnly) {
     & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
 }
 
-$Sha256.Dispose()
+$IdentifierMatcher.Dispose()
 Write-Host "All Git-tracked ARSAS content passed source and external-identifier checks." -ForegroundColor Green
