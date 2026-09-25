@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,xaml,csproj,props,targets,ps1}]
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,html,css,js,py,xml,svg,md}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
