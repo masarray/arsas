@@ -210,7 +210,7 @@ jobs:
 
       - name: Upload P0-5e regression evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-p0-5e-golden-budget-fixtures
           path: ArIED61850Tester\TestResults\P0-5E-*.json

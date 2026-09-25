@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout ARSAS application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
           fetch-depth: 0
@@ -151,12 +151,12 @@ jobs:
           }
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
       - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload release test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-${{ steps.release.outputs.version }}-release-tests
           path: ArIED61850Tester/TestResults/*.trx
@@ -432,7 +432,7 @@ jobs:
           sbom-path: ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json
 
       - name: Upload Windows release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-${{ steps.release.outputs.version }}-windows
           if-no-files-found: error

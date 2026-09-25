@@ -15,12 +15,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout ARSAS branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -104,7 +104,7 @@ jobs:
           Write-Host "SHA256=$hash"
 
       - name: Upload Progressive Static IED test artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-Progressive-Static-IED-Test
           path: |
