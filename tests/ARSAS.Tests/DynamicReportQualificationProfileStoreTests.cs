@@ -39,7 +39,7 @@ public sealed class DynamicReportQualificationProfileStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task DifferentStableIdentities_UseDifferentFiles()
+    public void DifferentStableIdentities_UseDifferentFiles()
     {
         var store = new DynamicReportQualificationProfileStore(_root);
 

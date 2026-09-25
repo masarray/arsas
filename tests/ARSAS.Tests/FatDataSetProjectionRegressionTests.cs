@@ -18,12 +18,12 @@ public sealed class FatDataSetProjectionRegressionTests
         Assert.Equal(2, rows.Count);
         Assert.All(rows, row => Assert.True(row.IsIncludedInFat));
 
-        var digital = Assert.Single(rows.Where(row => row.StaticMemberReference.Contains("GGIO1.Dig01", StringComparison.Ordinal)));
+        var digital = Assert.Single(rows, row => row.StaticMemberReference.Contains("GGIO1.Dig01", StringComparison.Ordinal));
         Assert.Equal(FatSignalKind.Discrete, digital.SignalKind);
         Assert.Equal(FatCaptureMode.AutomaticTransition, digital.CaptureMode);
         Assert.Equal("ST", digital.FunctionalConstraint);
 
-        var analog = Assert.Single(rows.Where(row => row.StaticMemberReference.Contains("MMXU1.Ana01", StringComparison.Ordinal)));
+        var analog = Assert.Single(rows, row => row.StaticMemberReference.Contains("MMXU1.Ana01", StringComparison.Ordinal));
         Assert.Equal(FatSignalKind.Analog, analog.SignalKind);
         Assert.Equal(FatCaptureMode.OperatorSnapshot, analog.CaptureMode);
         Assert.Equal("MX", analog.FunctionalConstraint);

@@ -93,8 +93,8 @@ public sealed class IoFatP53StructuredAnalogBindingRegressionTests
         {
             var staticMember = dataObject + "." + phase;
             var runtimeLeaf = staticMember + ".cVal.mag.f";
-            var signal = Assert.Single(signals.Where(candidate =>
-                candidate.DisplayReference.Equals(staticMember, StringComparison.OrdinalIgnoreCase)));
+            var signal = Assert.Single(signals, candidate =>
+                candidate.DisplayReference.Equals(staticMember, StringComparison.OrdinalIgnoreCase));
             Assert.Equal(runtimeLeaf, signal.ObjectReference);
         }
 
