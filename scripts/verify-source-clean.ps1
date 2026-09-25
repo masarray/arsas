@@ -60,6 +60,10 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
+$TextFileNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "LICENSE", "NOTICE", "VERSION") |
+    ForEach-Object { [void]$TextFileNames.Add($_) }
+
 # No tracked path receives a whole-file external-identifier exemption. Historical
 # comparison evidence is linked by immutable commit rather than copied into active files.
 $Problems = New-Object System.Collections.Generic.List[string]
@@ -179,7 +183,9 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     }
 
     if ($relative -eq "scripts/verify-source-clean.ps1") { continue }
-    if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
+    $extension = [IO.Path]::GetExtension($relative).ToLowerInvariant()
+    $leafName = [IO.Path]::GetFileName($relative)
+    if ($TextExtensions -notcontains $extension -and -not $TextFileNames.Contains($leafName)) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
     if (Test-ContainsForbiddenIdentifier $content) {
