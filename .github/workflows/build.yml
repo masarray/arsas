@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout exact triggering ARSAS revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
           ref: ${{ github.sha }}

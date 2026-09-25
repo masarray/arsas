@@ -36,7 +36,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout ARSAS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout ARIEC61850 engine
         shell: powershell
