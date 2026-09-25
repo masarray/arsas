@@ -105,8 +105,8 @@ public sealed class IoFatDirectSclLatencyAndIdentityRegressionTests
         Assert.Equal(2, signals.Count);
         Assert.Equal(runtimeLeaf, genericScalar.DisplayReference);
 
-        var membershipSignal = Assert.Single(signals.Where(signal =>
-            signal.DisplayReference.Equals(staticMember, StringComparison.OrdinalIgnoreCase)));
+        var membershipSignal = Assert.Single(signals, signal =>
+            signal.DisplayReference.Equals(staticMember, StringComparison.OrdinalIgnoreCase));
         Assert.NotSame(genericScalar, membershipSignal);
         Assert.Equal(runtimeLeaf, membershipSignal.ObjectReference);
         Assert.Equal(dataSet, membershipSignal.DataSetReference);
