@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "audited_repository": "masarray/arsas",
+  "audited_commit": "61ad333c2f61784ee49fda04b47f036206265cbc",
+  "audited_date": "2026-09-25",
+  "scope": "Git-tracked binary visual/font assets with extensions png,jpg,jpeg,webp,ico,svg,ttf,otf,woff2,gif",
+  "disclaimer": "Inventory and Git identity only. This manifest does not certify originality, license clearance, or freedom from resemblance. Manual origin/rights/content review remains required where disposition says so.",
+  "tracked_asset_count": 67,
+  "unique_blob_count": 44,
+  "files": [
+    {
+      "path": "Assets/Fonts/Inter-Bold.ttf",
+      "blob_sha": "9fb9b751e5b2441054f6eef670da7b3f53a3505a",
+      "size_bytes": 420428,
+      "duplicate_of": null,
+      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+    },
+    {
+      "path": "Assets/Fonts/Inter-Medium.ttf",
+      "blob_sha": "458cd0601d28013d3817481aa2839c9bbb5ded70",
+      "size_bytes": 417300,
+      "duplicate_of": null,
+      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+    },
+    {
+      "path": "Assets/Fonts/Inter-Regular.ttf",
+      "blob_sha": "b7aaca8de1fe458399e17311d35d543a1fa2f984",
+      "size_bytes": 411640,
+      "duplicate_of": null,
+      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+    },
+    {
+      "path": "Assets/Fonts/Inter-SemiBold.ttf",
+      "blob_sha": "47f8ab1d68144fc004b310d65d95180d502b449b",
+      "size_bytes": 419744,
+      "duplicate_of": null,
+      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+    },
+    {
+      "path": "Assets/RelayFascia.svg",
+      "blob_sha": "9a69c173b9efdbf8f622f630e4cbeb1f5318699a",
+      "size_bytes": 11506,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/app-icon-256.png",
+      "blob_sha": "fd8f941baa44811e97be408663c7e54b57ad85a1",
+      "size_bytes": 12891,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/app-icon.ico",
+      "blob_sha": "cc9036ccfb9b387891d9887b4367262b7d154bca",
+      "size_bytes": 208630,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/app-icon.png",
+      "blob_sha": "7b69ac247a7214d15437a69814f4036cedebc86e",
+      "size_bytes": 153165,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/black-fascia-ied.svg",
+      "blob_sha": "0c4594a762fe5f13df6ff7b005def3bc7b5cffd7",
+      "size_bytes": 14334,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/gateway-hero.png",
+      "blob_sha": "cb1141207830159642a8f73f981bccbce94e840e",
+      "size_bytes": 1658537,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/ied-protection-relay-fascia.png",
+      "blob_sha": "8d47aee5707eadd373489bc7670da9d99aa24238",
+      "size_bytes": 1131989,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (1).webp",
+      "blob_sha": "4ff8ea73132e1616e585f7020068dfcae29dcf77",
+      "size_bytes": 116714,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (2).webp",
+      "blob_sha": "275e7b3e64478c48a517b0665a3642cc78da4e37",
+      "size_bytes": 134920,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (3).webp",
+      "blob_sha": "8a873301cd7b7dfc1eb2502bf1f4371bc0d7e897",
+      "size_bytes": 126090,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (4).webp",
+      "blob_sha": "3f242ce2c1dd945395cf70c54d92e0eedeaf9fbe",
+      "size_bytes": 140392,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (5).webp",
+      "blob_sha": "dde93be42222734bbccb9f724119e12dcc08b7df",
+      "size_bytes": 138672,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas (6).webp",
+      "blob_sha": "5bed62792b9c383b99886df2024524b6d5d69db5",
+      "size_bytes": 142298,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp",
+      "blob_sha": "29b9b3866ce8b29b401df8ffde0cd9239b623b5d",
+      "size_bytes": 133632,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-comtrade-harmonics-v1.6.40.webp",
+      "blob_sha": "7d8484b8ed7e613ff283ad6fdcfdadb04a56d977",
+      "size_bytes": 85884,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-comtrade-locus-v1.6.40.webp",
+      "blob_sha": "b1a6bcb05222d491164b42fb8710d227e9de4e17",
+      "size_bytes": 64714,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp",
+      "blob_sha": "b820739847f984aff27d656387084efa2a90b53b",
+      "size_bytes": 77708,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp",
+      "blob_sha": "5a5c5aef148d5bb4bb0fae4d04ab742b93e4f036",
+      "size_bytes": 75964,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-comtrade-time-signals-v1.6.40.webp",
+      "blob_sha": "d9f4f7c4b7eeb1b18b059772592032ac4342021f",
+      "size_bytes": 87612,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-fat-report-preview-v1.6.40.webp",
+      "blob_sha": "5d2a566f4b2854a8469ec2fd4821d86fe5438c54",
+      "size_bytes": 49254,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-fault-records-v1.6.40.webp",
+      "blob_sha": "882b626dbc260b2846f946257c32a1aeea8c288f",
+      "size_bytes": 55328,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp",
+      "blob_sha": "3f1878f290454f278ab97a56f5683a8efbbb0a4d",
+      "size_bytes": 137946,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-landing-home-desktop-v1.6.19.png",
+      "blob_sha": "1c7c76eb8df9de60c5be0fe84977a9ea926d0e3b",
+      "size_bytes": 104657,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-landing-home-mobile-v1.6.19.png",
+      "blob_sha": "9fefd8a0503fbe17abbb7bcba2b0c013ddd48b8a",
+      "size_bytes": 38921,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-native-fat-v1.6.40.webp",
+      "blob_sha": "f7e47cfe02decd87cb9e53d699611b2d421963dd",
+      "size_bytes": 166496,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-overview-v1.6.19.webp",
+      "blob_sha": "ec0ba89c4f03dc6b29129b92f8032b54cb9be2b9",
+      "size_bytes": 111848,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-quick-start-choose-source-v1.6.40.webp",
+      "blob_sha": "303fbb149a639a3c14511cbe259017788fe51f5a",
+      "size_bytes": 136494,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-quick-start-discover-ip-v1.6.40.webp",
+      "blob_sha": "f63829ff8f49f3badee38dd20431d24671496325",
+      "size_bytes": 134446,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-quick-start-monitor-control-v1.6.40.webp",
+      "blob_sha": "b977d8bb592522678778d146f27b8c12424c260d",
+      "size_bytes": 98562,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-rcb-selection-v1.6.40.webp",
+      "blob_sha": "b1179f8acbc924c95f94d4d7b0c963fdd5db129d",
+      "size_bytes": 36876,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp",
+      "blob_sha": "a23c3576823e719a85e8f94e398a82e57fe40755",
+      "size_bytes": 29244,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp",
+      "blob_sha": "0bb53fa0f39320c57e6e3a812fbe0574b2fe18d9",
+      "size_bytes": 150598,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "Assets/social/arsas-og-industrial-background.webp",
+      "blob_sha": "9af8f6e4919fda46bc5ab1496eb6b30c86943335",
+      "size_bytes": 62230,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "landing/assets/arsas-substation-context.webp",
+      "blob_sha": "9af8f6e4919fda46bc5ab1496eb6b30c86943335",
+      "size_bytes": 62230,
+      "duplicate_of": "Assets/social/arsas-og-industrial-background.webp",
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "landing/assets/favicon.svg",
+      "blob_sha": "836e0b588a09245f969e6f2e9b9996d433d309f8",
+      "size_bytes": 547,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-alarm-annunciator-v1.6.40.webp",
+      "blob_sha": "29b9b3866ce8b29b401df8ffde0cd9239b623b5d",
+      "size_bytes": 133632,
+      "duplicate_of": "Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-comtrade-harmonics-v1.6.40.webp",
+      "blob_sha": "7d8484b8ed7e613ff283ad6fdcfdadb04a56d977",
+      "size_bytes": 85884,
+      "duplicate_of": "Assets/screenshot/arsas-comtrade-harmonics-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-comtrade-locus-v1.6.40.webp",
+      "blob_sha": "b1a6bcb05222d491164b42fb8710d227e9de4e17",
+      "size_bytes": 64714,
+      "duplicate_of": "Assets/screenshot/arsas-comtrade-locus-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-comtrade-phasor-v1.6.40.webp",
+      "blob_sha": "b820739847f984aff27d656387084efa2a90b53b",
+      "size_bytes": 77708,
+      "duplicate_of": "Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-comtrade-protection-timeline-v1.6.40.webp",
+      "blob_sha": "5a5c5aef148d5bb4bb0fae4d04ab742b93e4f036",
+      "size_bytes": 75964,
+      "duplicate_of": "Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-comtrade-time-signals-v1.6.40.webp",
+      "blob_sha": "d9f4f7c4b7eeb1b18b059772592032ac4342021f",
+      "size_bytes": 87612,
+      "duplicate_of": "Assets/screenshot/arsas-comtrade-time-signals-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-diagnostics.webp",
+      "blob_sha": "5bed62792b9c383b99886df2024524b6d5d69db5",
+      "size_bytes": 142298,
+      "duplicate_of": "Assets/screenshot/arsas (6).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-event-log.webp",
+      "blob_sha": "3f242ce2c1dd945395cf70c54d92e0eedeaf9fbe",
+      "size_bytes": 140392,
+      "duplicate_of": "Assets/screenshot/arsas (4).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-fat-report-preview-v1.6.40.webp",
+      "blob_sha": "5d2a566f4b2854a8469ec2fd4821d86fe5438c54",
+      "size_bytes": 49254,
+      "duplicate_of": "Assets/screenshot/arsas-fat-report-preview-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-fault-records-v1.6.40.webp",
+      "blob_sha": "882b626dbc260b2846f946257c32a1aeea8c288f",
+      "size_bytes": 55328,
+      "duplicate_of": "Assets/screenshot/arsas-fault-records-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-first-launch.webp",
+      "blob_sha": "8a873301cd7b7dfc1eb2502bf1f4371bc0d7e897",
+      "size_bytes": 126090,
+      "duplicate_of": "Assets/screenshot/arsas (3).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-goose.webp",
+      "blob_sha": "dde93be42222734bbccb9f724119e12dcc08b7df",
+      "size_bytes": 138672,
+      "duplicate_of": "Assets/screenshot/arsas (5).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
+      "blob_sha": "3f1878f290454f278ab97a56f5683a8efbbb0a4d",
+      "size_bytes": 137946,
+      "duplicate_of": "Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-live-values.webp",
+      "blob_sha": "275e7b3e64478c48a517b0665a3642cc78da4e37",
+      "size_bytes": 134920,
+      "duplicate_of": "Assets/screenshot/arsas (2).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-multi-ied.webp",
+      "blob_sha": "4ff8ea73132e1616e585f7020068dfcae29dcf77",
+      "size_bytes": 116714,
+      "duplicate_of": "Assets/screenshot/arsas (1).webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-native-fat-v1.6.40.webp",
+      "blob_sha": "f7e47cfe02decd87cb9e53d699611b2d421963dd",
+      "size_bytes": 166496,
+      "duplicate_of": "Assets/screenshot/arsas-native-fat-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-overview-v1.6.19.webp",
+      "blob_sha": "dfebe207b911f47e688da65893a83c5cb4105905",
+      "size_bytes": 101468,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp",
+      "blob_sha": "303fbb149a639a3c14511cbe259017788fe51f5a",
+      "size_bytes": 136494,
+      "duplicate_of": "Assets/screenshot/arsas-quick-start-choose-source-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp",
+      "blob_sha": "f63829ff8f49f3badee38dd20431d24671496325",
+      "size_bytes": 134446,
+      "duplicate_of": "Assets/screenshot/arsas-quick-start-discover-ip-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp",
+      "blob_sha": "b977d8bb592522678778d146f27b8c12424c260d",
+      "size_bytes": 98562,
+      "duplicate_of": "Assets/screenshot/arsas-quick-start-monitor-control-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-rcb-scl-export.webp",
+      "blob_sha": "33625676e8f2adcb3d0c93f56a6b2760a430de4d",
+      "size_bytes": 130058,
+      "duplicate_of": null,
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-rcb-selection-v1.6.40.webp",
+      "blob_sha": "b1179f8acbc924c95f94d4d7b0c963fdd5db129d",
+      "size_bytes": 36876,
+      "duplicate_of": "Assets/screenshot/arsas-rcb-selection-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-scl-edition-export-v1.6.40.webp",
+      "blob_sha": "a23c3576823e719a85e8f94e398a82e57fe40755",
+      "size_bytes": 29244,
+      "duplicate_of": "Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-sequence-of-events-v1.6.40.webp",
+      "blob_sha": "0bb53fa0f39320c57e6e3a812fbe0574b2fe18d9",
+      "size_bytes": 150598,
+      "duplicate_of": "Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp",
+      "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/social-card.png",
+      "blob_sha": "8708a22b5c0c8f96a9825ad6b39be249e9ddd075",
+      "size_bytes": 389388,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "landing/assets/social-card.svg",
+      "blob_sha": "11fc6b3b24db27ab5c231a31920763761cf3bb29",
+      "size_bytes": 3181,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "output/scl-signal-selection-comparison.png",
+      "blob_sha": "c3a6ff981b40eb6878da5349fe80d1fbe9eab09f",
+      "size_bytes": 598548,
+      "duplicate_of": null,
+      "review_status": "legacy-output-origin-and-visual-similarity-review-required"
+    },
+    {
+      "path": "output/scl-signal-selection-modern.png",
+      "blob_sha": "4f0acfe082833972f84de58c74280ad86991cbd3",
+      "size_bytes": 65657,
+      "duplicate_of": null,
+      "review_status": "legacy-output-origin-and-visual-similarity-review-required"
+    }
+  ]
+}
