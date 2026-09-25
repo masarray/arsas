@@ -64,6 +64,9 @@ $TextFileNames = [System.Collections.Generic.HashSet[string]]::new([System.Strin
 @(".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "LICENSE", "NOTICE", "VERSION") |
     ForEach-Object { [void]$TextFileNames.Add($_) }
 
+$InternalPatternPolicyFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(".gitignore") | ForEach-Object { [void]$InternalPatternPolicyFiles.Add($_) }
+
 # No tracked path receives a whole-file external-identifier exemption. Historical
 # comparison evidence is linked by immutable commit rather than copied into active files.
 $Problems = New-Object System.Collections.Generic.List[string]
@@ -192,9 +195,11 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 
-    foreach ($pattern in $ForbiddenTextPatterns) {
-        if ($content -match [regex]::Escape($pattern)) {
-            $Problems.Add("Forbidden internal-release text: $relative")
+    if (-not $InternalPatternPolicyFiles.Contains($leafName)) {
+        foreach ($pattern in $ForbiddenTextPatterns) {
+            if ($content -match [regex]::Escape($pattern)) {
+                $Problems.Add("Forbidden internal-release text: $relative")
+            }
         }
     }
 }
