@@ -12,10 +12,17 @@
   publish or repeat unrelated product and company names.
 #>
 [CmdletBinding()]
-param()
+param(
+    [string]$RepositoryRoot,
+    [switch]$ScanOnly
+)
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$RepoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+} else {
+    (Resolve-Path -LiteralPath $RepositoryRoot).Path
+}
 
 $ForbiddenFilePatterns = @(
     "LICENSE-APACHE-2.0",
@@ -56,16 +63,8 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
-# These are first-party convergence authorities. They intentionally contain the
-# external interoperability label so the acceptance contract remains discoverable.
-$ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-@(
-    ".github/workflows/smart-discovery-post-merge-production.yml",
-    ".github/workflows/smart-discovery-mainline-readiness.yml",
-    ".github/workflows/scl-interoperability-r7.yml",
-    "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
-) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
-
+# No tracked path receives a whole-file external-identifier exemption. Historical
+# comparison evidence is linked by immutable commit rather than copied into active files.
 $Problems = New-Object System.Collections.Generic.List[string]
 
 function Normalize-RelativePath {
@@ -73,17 +72,22 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
-function Get-Sha256Hex {
+$Sha256 = [System.Security.Cryptography.SHA256]::Create()
+$IdentifierCandidateCache = [System.Collections.Generic.Dictionary[string,bool]]::new([System.StringComparer]::Ordinal)
+
+function Test-ForbiddenIdentifierCandidate {
     param([Parameter(Mandatory=$true)][string]$Value)
 
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
+    if (-not $CandidateLengths.Contains($Value.Length)) { return $false }
+    if ($IdentifierCandidateCache.ContainsKey($Value)) {
+        return $IdentifierCandidateCache[$Value]
     }
-    finally {
-        $algorithm.Dispose()
-    }
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    $hash = -join ($Sha256.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
+    $isForbidden = $ForbiddenIdentifierHashes.Contains($hash)
+    $IdentifierCandidateCache[$Value] = $isForbidden
+    return $isForbidden
 }
 
 function Test-ContainsForbiddenIdentifier {
@@ -93,11 +97,26 @@ function Test-ContainsForbiddenIdentifier {
     $words = @([regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9]+') | ForEach-Object { $_.Value })
 
     for ($index = 0; $index -lt $words.Count; $index++) {
+        $word = $words[$index]
+
+        # Detect identifiers embedded in source/path tokens such as TypeNameSuffix.
+        # This closes the common case where a prohibited product name is attached
+        # to a class, fixture, job, or filename rather than separated by punctuation.
+        foreach ($length in $CandidateLengths) {
+            if ($word.Length -lt $length) { continue }
+            for ($offset = 0; $offset -le ($word.Length - $length); $offset++) {
+                $fragment = $word.Substring($offset, $length)
+                if (Test-ForbiddenIdentifierCandidate $fragment) {
+                    return $true
+                }
+            }
+        }
+
         $candidate = ""
         for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
             $candidate += $words[$index + $count - 1]
             if ($candidate.Length -gt 22) { break }
-            if ($CandidateLengths.Contains($candidate.Length) -and $ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $candidate))) {
+            if (Test-ForbiddenIdentifierCandidate $candidate) {
                 return $true
             }
         }
@@ -135,8 +154,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    $identifierScanExempt = $ApprovedConvergenceIdentifierPaths.Contains($relative)
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $relative)) {
+    if (Test-ContainsForbiddenIdentifier $relative) {
         $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
@@ -144,7 +162,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $content)) {
+    if (Test-ContainsForbiddenIdentifier $content) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 
@@ -162,7 +180,10 @@ if ($Problems.Count -gt 0) {
     throw "ARSAS source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-& (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
-& (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+if (-not $ScanOnly) {
+    & (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
+    & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+}
 
-Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, current-license, binding, and updater checks." -ForegroundColor Green
+$Sha256.Dispose()
+Write-Host "All Git-tracked ARSAS content passed source and external-identifier checks." -ForegroundColor Green

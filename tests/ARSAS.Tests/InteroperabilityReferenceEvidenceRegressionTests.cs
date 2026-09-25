@@ -55,7 +55,8 @@ public sealed class InteroperabilityReferenceEvidenceRegressionTests
         Assert.Contains("externalReferenceCapture", workflow, StringComparison.Ordinal);
         Assert.Contains("evidence/interoperability-reference-target.json", workflow, StringComparison.Ordinal);
         Assert.Contains("evidence/interoperability-reference-target.json", documentation, StringComparison.Ordinal);
-        Assert.Contains("ApprovedConvergenceIdentifierPaths", sourceClean, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApprovedConvergenceIdentifierPaths", sourceClean, StringComparison.Ordinal);
+        Assert.Contains("No tracked path receives a whole-file external-identifier exemption", sourceClean, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(string path)
