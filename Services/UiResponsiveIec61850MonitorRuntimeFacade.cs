@@ -78,7 +78,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
         => RunDeviceOperationAsync(
-            device?.DeviceId,
+            device.DeviceId,
             cancellationToken,
             token => _inner.EnrichSelectedStaticDataSetUnitsAsync(device, token));
 
@@ -86,7 +86,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
         => RunDeviceOperationAsync(
-            device?.DeviceId,
+            device.DeviceId,
             cancellationToken,
             token => _inner.EnrichCanonicalForSclSaveAsync(device, token));
 
@@ -95,7 +95,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress = null)
         => RunDeviceOperationAsync(
-            device?.DeviceId,
+            device.DeviceId,
             cancellationToken,
             token => _inner.ConnectAndDiscoverAsync(device, token, progress));
 
@@ -104,7 +104,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         CancellationToken cancellationToken,
         IProgress<IedDiscoveryProgress>? progress = null)
         => RunDeviceOperationAsync(
-            device?.DeviceId,
+            device.DeviceId,
             cancellationToken,
             token => _inner.ConnectUsingCachedModelAsync(device, token, progress));
 
@@ -114,7 +114,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         int pollingIntervalMs,
         CancellationToken cancellationToken)
         => RunDeviceOperationAsync(
-            device?.DeviceId,
+            device.DeviceId,
             cancellationToken,
             token => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, token));
 
