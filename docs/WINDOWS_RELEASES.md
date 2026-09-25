@@ -34,6 +34,21 @@ The v1.6.38 golden-installer build/publisher and golden-runtime recovery workflo
 
 The ongoing publisher is `.github/workflows/release-windows.yml`, governed by the reviewed `.release/windows.json` request and pinned app/engine/bridge source. The alternative verified-artifact publisher `.github/workflows/publish-verified-release.yml` refuses to overwrite an existing tag. Manual supply-chain backfill is additive only and refuses replacement of an existing published SBOM. Publication metadata and the website must follow the verified release rather than become a separate publication authority.
 
+## Release workflow ownership
+
+The active release automation has intentionally separate responsibilities. Maintainers should change the narrowest workflow that owns the required behavior rather than duplicating publication logic.
+
+| Workflow | Responsibility | Public release mutation |
+| --- | --- | --- |
+| `.github/workflows/release-windows.yml` | Canonical Windows build, test, portable/installer packaging, checksums, SBOM, provenance and new stable publication from the reviewed release request. | May create a new release only; existing published tag/assets are treated as immutable. |
+| `.github/workflows/installer-windows.yml` | Installer/portable packaging and smoke validation for engineering verification. | No stable GitHub Release publication authority. |
+| `.github/workflows/publish-verified-release.yml` | Alternative publication from already-tested workflow artifacts and an explicit verified publication request. | Create-only; refuses an existing tag rather than replacing it. |
+| `.github/workflows/release-supply-chain.yml` | Verify an existing stable release and add missing supply-chain evidence/attestation. | Additive only; refuses replacement of an existing published SBOM. |
+| `.github/workflows/sync-release-documentation.yml` | Synchronize website/release documentation from verified existing release evidence. | Does not build or replace Windows packages. |
+| `.github/workflows/sync-release-evidence.yml` | Validate `.release/published.json`, mirror updater evidence to the dedicated `release-evidence` branch and request a website refresh. | Does not mutate the stable release or write runtime source to `main`. |
+
+The packaging scripts under `scripts/` remain active implementation details of these workflows. Do not remove a script merely because it is not called from application code; verify its workflow consumer first.
+
 ## Public assets
 
 A successful stable release publishes these stable asset names:
@@ -89,8 +104,9 @@ Prerequisites:
 Use the repository packaging scripts rather than hand-assembling a release folder. For example:
 
 ```powershell
-.\scripts\publish-windows-portable.ps1 -Version 1.6.40
-.\scripts\build-windows-installer.ps1 -Version 1.6.37 -Runtime win-x64
+$version = (Get-Content .\VERSION -Raw).Trim()
+.\scripts\publish-windows-portable.ps1 -Version $version
+.\scripts\build-windows-installer.ps1 -Version $version -Runtime win-x64
 ```
 
 Official CI additionally supplies the pinned engine projects and ArdIrec source explicitly so the build cannot silently resolve an unreviewed revision.
