@@ -40,7 +40,7 @@ Each device session owns:
 - discovered or cached model;
 - selected signals and control objects;
 - report subscriptions and dynamic-report resources;
-- uncovered polling queue;
+- an uncovered polling queue only when the selected acquisition mode permits fallback;
 - event, diagnostic, file-transfer, GOOSE/SMV entry-point, and command evidence;
 - reconnect and cleanup lifecycle.
 
@@ -94,17 +94,31 @@ Discovery definitions remain associated with one device session, while the large
 - signal editing is disabled while that IED is actively monitoring;
 - row and column virtualization remain enabled for large models.
 
-## Report-first acquisition
+## Acquisition modes and static DataSet authority
 
-1. Build candidates from discovered static RCB and DataSet evidence.
-2. Attempt configured static report coverage.
-3. Validate actual FCD/FCDA member references and member order.
-4. For partial groups, build dynamic plans for the exact uncovered remainder where the IED permits it.
-5. For points without usable report coverage, place only the remaining points in the MMS polling priority queue.
-6. Allow real updates to prove reference aliases or coverage evidence.
-7. Clean up association-scoped temporary DataSets and report state during monitor shutdown.
+The monitoring acquisition policy is explicit per device. A configured Static DataSet selection is **not** a synonym for adaptive report-first acquisition, and neither Discovery nor opened SCL may silently switch its selected mode.
 
-A point is not removed from polling merely because it was placed into a report candidate. Coverage must be operationally usable or observed before fallback work is reduced.
+### Static DataSet Report Only
+
+- The canonical opened/discovered model and its ordered DataSet membership define the operator-visible signal inventory. The configured RCB-to-DataSet binding is authoritative.
+- Verify the live RCB instance, exact DataSet directory and member order before enabling the report receiver, `RptEna` and GI. Do not substitute an unrelated same-DataSet RCB or guess a positional mapping.
+- Use actual `InformationReport` traffic for process values. Disable cyclic MMS process polling and dynamic DataSet writes in this mode.
+- If report coverage is missing, occupied, or inconsistent, show explicit unavailable/diagnostic state rather than silently falling back to polling.
+- Discovery-built and opened-SCL models must converge on this same downstream authority once the canonical model is available. Preserve this mode when the FAT workspace consumes the shared session.
+
+The accepted v1.6.40 installed-release field record documents 58/58 selected static members report-backed, with no cyclic MMS process polling: [field acceptance](V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md). Those counts describe the tested device, not a hardcoded generic target.
+
+### Adaptive or hybrid monitoring
+
+Outside Static DataSet Report Only, the separate adaptive acquisition planner may:
+
+1. Build candidates from discovered RCB and DataSet evidence and validate operational coverage.
+2. Plan dynamic coverage for the exact uncovered remainder when explicitly permitted.
+3. Schedule only legitimately uncovered process points for bounded MMS polling.
+4. Reduce fallback only after coverage becomes operationally usable or observed.
+5. Clean up association-scoped report and temporary DataSet resources on shutdown.
+
+Hybrid fallback must never be enabled implicitly for a device held in Static DataSet Report Only mode.
 
 ## Passive process-bus workflows
 
@@ -120,7 +134,7 @@ GOOSE and Sampled Values capture are receive-only application workflows over eng
 ## Runtime scalability
 
 - one monitor loop per IED, not one timer or task per signal;
-- a `PriorityQueue` schedules only uncovered polling points;
+- outside Static DataSet Report Only, a `PriorityQueue` schedules only uncovered polling points;
 - report sessions are drained in bounded round-robin slices;
 - report lookup uses normalized and canonical reference indexes;
 - latest-value callbacks are coalesced by point key;
