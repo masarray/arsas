@@ -1,5 +1,7 @@
 # External IP and Provenance Review — 2026-07-14
 
+> **Historical snapshot — not current rights clearance.** The findings below record the scope and conclusions of the 2026-07-14 review and are retained for traceability; they must not be read as a current inventory, independent legal opinion, or certification of originality. The later [tracked asset provenance register](ASSET_PROVENANCE_REGISTER.md) and [per-file manifest](asset-provenance-manifest.json) explicitly leave origin, redistribution rights, screenshot sanitization, and visual-similarity review open for non-font assets. The current source-clean gate verifies tracked paths and supported text, but does not establish binary artwork provenance or off-repository inputs. Keep the historical findings and dates attributable rather than retroactively rewriting them.
+
 This document records repository evidence and project controls. It is not a legal opinion or a guarantee against every possible claim.
 
 ## Scope
