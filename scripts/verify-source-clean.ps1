@@ -12,10 +12,17 @@
   publish or repeat unrelated product and company names.
 #>
 [CmdletBinding()]
-param()
+param(
+    [string]$RepositoryRoot,
+    [switch]$ScanOnly
+)
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$RepoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+} else {
+    (Resolve-Path -LiteralPath $RepositoryRoot).Path
+}
 
 $ForbiddenFilePatterns = @(
     "LICENSE-APACHE-2.0",
@@ -39,9 +46,6 @@ $ForbiddenIdentifierHashes = [System.Collections.Generic.HashSet[string]]::new([
     "0e443fe512c39ce723fc1be519b8e2a13a4ba75916989123078b59308480b2f8"
 ) | ForEach-Object { [void]$ForbiddenIdentifierHashes.Add($_) }
 
-$CandidateLengths = [System.Collections.Generic.HashSet[int]]::new()
-@(7, 8, 12, 22) | ForEach-Object { [void]$CandidateLengths.Add($_) }
-
 $ForbiddenTextPatterns = @(
     "C:\Users\",
     "C:\Program Files\dotnet\sdk",
@@ -56,16 +60,8 @@ $TextExtensions = @(
     ".props", ".targets", ".sln", ".slnx", ".txt"
 )
 
-# These are first-party convergence authorities. They intentionally contain the
-# external interoperability label so the acceptance contract remains discoverable.
-$ApprovedConvergenceIdentifierPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-@(
-    ".github/workflows/smart-discovery-post-merge-production.yml",
-    ".github/workflows/smart-discovery-mainline-readiness.yml",
-    ".github/workflows/scl-interoperability-r7.yml",
-    "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
-) | ForEach-Object { [void]$ApprovedConvergenceIdentifierPaths.Add($_) }
-
+# No tracked path receives a whole-file external-identifier exemption. Historical
+# comparison evidence is linked by immutable commit rather than copied into active files.
 $Problems = New-Object System.Collections.Generic.List[string]
 
 function Normalize-RelativePath {
@@ -73,37 +69,80 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
-function Get-Sha256Hex {
-    param([Parameter(Mandatory=$true)][string]$Value)
+# Keep the one-way fingerprint policy; execute the exhaustive substring scan in
+# compiled .NET code rather than millions of PowerShell pipeline/function calls.
+# The matcher preserves the original four-token, exact-length and embedded-token rules.
+$MatcherSource = @'
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
-    }
-    finally {
-        $algorithm.Dispose()
+namespace ArsasSourceClean
+{
+    public sealed class IdentifierMatcher : IDisposable
+    {
+        private static readonly Regex Words = new Regex("[a-z0-9]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private readonly HashSet<string> hashes;
+        private readonly HashSet<int> lengths;
+        private readonly Dictionary<string, bool> cache = new Dictionary<string, bool>(StringComparer.Ordinal);
+        private readonly SHA256 sha = SHA256.Create();
+
+        public IdentifierMatcher(string[] forbiddenHashes, int[] candidateLengths)
+        {
+            hashes = new HashSet<string>(forbiddenHashes, StringComparer.OrdinalIgnoreCase);
+            lengths = new HashSet<int>(candidateLengths);
+        }
+
+        private bool IsForbidden(string candidate)
+        {
+            if (!lengths.Contains(candidate.Length)) return false;
+            bool found;
+            if (cache.TryGetValue(candidate, out found)) return found;
+            string digest = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(candidate))).Replace("-", "");
+            found = hashes.Contains(digest);
+            cache[candidate] = found;
+            return found;
+        }
+
+        public bool ContainsForbiddenIdentifier(string text)
+        {
+            if (String.IsNullOrWhiteSpace(text)) return false;
+            MatchCollection words = Words.Matches(text.ToLowerInvariant());
+            for (int index = 0; index < words.Count; index++)
+            {
+                string word = words[index].Value;
+                foreach (int length in lengths)
+                {
+                    for (int offset = 0; offset <= word.Length - length; offset++)
+                    {
+                        if (IsForbidden(word.Substring(offset, length))) return true;
+                    }
+                }
+
+                string candidate = "";
+                for (int count = 1; count <= 4 && index + count - 1 < words.Count; count++)
+                {
+                    candidate += words[index + count - 1].Value;
+                    if (candidate.Length > 22) break;
+                    if (IsForbidden(candidate)) return true;
+                }
+            }
+            return false;
+        }
+
+        public void Dispose() { sha.Dispose(); }
     }
 }
+'@
+Add-Type -TypeDefinition $MatcherSource -Language CSharp -ErrorAction Stop
+$IdentifierMatcher = [ArsasSourceClean.IdentifierMatcher]::new(
+    [string[]]@($ForbiddenIdentifierHashes), [int[]]@(7, 8, 12, 22))
 
 function Test-ContainsForbiddenIdentifier {
     param([AllowEmptyString()][string]$Text)
-
-    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-    $words = @([regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9]+') | ForEach-Object { $_.Value })
-
-    for ($index = 0; $index -lt $words.Count; $index++) {
-        $candidate = ""
-        for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
-            $candidate += $words[$index + $count - 1]
-            if ($candidate.Length -gt 22) { break }
-            if ($CandidateLengths.Contains($candidate.Length) -and $ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $candidate))) {
-                return $true
-            }
-        }
-    }
-
-    return $false
+    return $IdentifierMatcher.ContainsForbiddenIdentifier($Text)
 }
 
 function Get-TrackedRelativePaths {
@@ -135,8 +174,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         }
     }
 
-    $identifierScanExempt = $ApprovedConvergenceIdentifierPaths.Contains($relative)
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $relative)) {
+    if (Test-ContainsForbiddenIdentifier $relative) {
         $Problems.Add("Forbidden external identifier in path: $relative")
     }
 
@@ -144,7 +182,7 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
 
     $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-    if (-not $identifierScanExempt -and (Test-ContainsForbiddenIdentifier $content)) {
+    if (Test-ContainsForbiddenIdentifier $content) {
         $Problems.Add("Forbidden external identifier in text: $relative")
     }
 
@@ -162,7 +200,10 @@ if ($Problems.Count -gt 0) {
     throw "ARSAS source tree failed clean-room validation with $($Problems.Count) problem(s)."
 }
 
-& (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
-& (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+if (-not $ScanOnly) {
+    & (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
+    & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
+}
 
-Write-Host "All Git-tracked ARSAS content passed source, website, external-IP, current-license, binding, and updater checks." -ForegroundColor Green
+$IdentifierMatcher.Dispose()
+Write-Host "All Git-tracked ARSAS content passed source and external-identifier checks." -ForegroundColor Green

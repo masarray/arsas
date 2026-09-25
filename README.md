@@ -313,7 +313,7 @@ ARSAS is not an IEC 61850 conformance certificate, functional-safety certificati
 
 ## Contributing and license
 
-Focused, reproducible, independently authored contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [NOTICE.md](NOTICE.md).
+Focused, reproducible, independently authored contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), the [independent implementation and provenance policy](docs/INDEPENDENT_IMPLEMENTATION_AND_PROVENANCE.md), the [clean-room and interoperability policy](docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [NOTICE.md](NOTICE.md).
 
 The community edition is licensed under **GNU GPL v3.0 or later**. See [LICENSE](LICENSE). A separate commercial license is available for proprietary integration, OEM/white-label distribution, warranty, maintenance, priority support, training, and project-specific development; see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 

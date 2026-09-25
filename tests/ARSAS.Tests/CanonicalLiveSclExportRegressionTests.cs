@@ -385,15 +385,18 @@ public sealed class CanonicalLiveSclExportRegressionTests
     }
 
     [Fact]
-    public void SourceClean_DoesNotExemptNeutralReferenceEvidence()
+    public void SourceClean_GuardsEveryTrackedFileWithoutWholeFileExceptions()
     {
         var source = File.ReadAllText(FindRepoFile("scripts/verify-source-clean.ps1"));
+        var build = File.ReadAllText(FindRepoFile(".github/workflows/build.yml"));
 
-        Assert.Contains("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("docs/INTEROPERABILITY_REFERENCE_CONTRACT.md", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("evidence/interoperability-reference-target.json", source, StringComparison.Ordinal);
-        Assert.Contains("CanonicalLiveSclExportRegressionTests.cs", source, StringComparison.Ordinal);
-        Assert.Contains("identifierScanExempt", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("identifierScanExempt", source, StringComparison.Ordinal);
+        Assert.Contains("if (Test-ContainsForbiddenIdentifier $relative)", source, StringComparison.Ordinal);
+        Assert.Contains("if (Test-ContainsForbiddenIdentifier $content)", source, StringComparison.Ordinal);
+        Assert.Contains("test-source-clean-guard.ps1", build, StringComparison.Ordinal);
+        Assert.Contains("RepositoryRoot", source, StringComparison.Ordinal);
+        Assert.Contains("ScanOnly", source, StringComparison.Ordinal);
     }
 
 
