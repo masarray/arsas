@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "audited_repository": "masarray/arsas",
-  "audited_commit": "61ad333c2f61784ee49fda04b47f036206265cbc",
+  "audited_commit": "b953612b535445095c808f164bebfaa4bbcbb203",
   "audited_date": "2026-09-25",
   "scope": "Git-tracked binary visual/font assets with extensions png,jpg,jpeg,webp,ico,svg,ttf,otf,woff2,gif",
   "disclaimer": "Inventory and Git identity only. This manifest does not certify originality, license clearance, or freedom from resemblance. Manual origin/rights/content review remains required where disposition says so.",
-  "tracked_asset_count": 67,
-  "unique_blob_count": 44,
+  "tracked_asset_count": 65,
+  "unique_blob_count": 42,
   "files": [
     {
       "path": "Assets/Fonts/Inter-Bold.ttf",
@@ -470,20 +470,6 @@
       "size_bytes": 3181,
       "duplicate_of": null,
       "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
-      "path": "output/scl-signal-selection-comparison.png",
-      "blob_sha": "c3a6ff981b40eb6878da5349fe80d1fbe9eab09f",
-      "size_bytes": 598548,
-      "duplicate_of": null,
-      "review_status": "legacy-output-origin-and-visual-similarity-review-required"
-    },
-    {
-      "path": "output/scl-signal-selection-modern.png",
-      "blob_sha": "4f0acfe082833972f84de58c74280ad86991cbd3",
-      "size_bytes": 65657,
-      "duplicate_of": null,
-      "review_status": "legacy-output-origin-and-visual-similarity-review-required"
     }
   ]
 }
