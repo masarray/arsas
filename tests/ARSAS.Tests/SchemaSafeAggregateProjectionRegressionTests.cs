@@ -6,6 +6,21 @@ namespace ARSAS.Tests;
 public sealed class SchemaSafeAggregateProjectionRegressionTests
 {
     [Fact]
+    public void ReadPlan_NullReference_FailsClosedWithoutThrowing()
+    {
+        var ok = SchemaSafeAggregateProjectionService.TryBuildReadPlan(
+            Model(),
+            null,
+            out var plan,
+            out var status);
+
+        Assert.False(ok);
+        Assert.Equal(string.Empty, plan.ParentReference);
+        Assert.Empty(plan.Leaves);
+        Assert.Contains("DataObject schema was not found uniquely", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ThdA_ReadPlan_UsesExactNamedPhases_IndependentOfAttributeOrder()
     {
         const string parent = "IEDLD0/I_MHAI1.ThdA";

@@ -41,11 +41,12 @@ public static class SchemaSafeAggregateProjectionService
     /// </summary>
     public static bool TryBuildReadPlan(
         LiveIedModelDiscoveryDocument? authorityModel,
-        string requestedReference,
+        string? requestedReference,
         out ReadPlan plan,
         out string status)
     {
-        plan = new ReadPlan(requestedReference ?? string.Empty, string.Empty, Array.Empty<ReadLeaf>());
+        var requested = requestedReference ?? string.Empty;
+        plan = new ReadPlan(requested, string.Empty, Array.Empty<ReadLeaf>());
         status = string.Empty;
 
         if (authorityModel is null)
@@ -54,18 +55,18 @@ public static class SchemaSafeAggregateProjectionService
             return false;
         }
 
-        if (!TryFindDataObject(authorityModel, requestedReference, out var dataObject))
+        if (!TryFindDataObject(authorityModel, requested, out var dataObject))
         {
-            status = $"Schema-safe aggregate read plan blocked: DataObject schema was not found uniquely for {requestedReference}.";
+            status = $"Schema-safe aggregate read plan blocked: DataObject schema was not found uniquely for {requested}.";
             return false;
         }
 
-        if (IsThreePhaseThd(requestedReference, out var phases))
+        if (IsThreePhaseThd(requested, out var phases))
         {
             var leaves = new List<ReadLeaf>(phases.Count);
             foreach (var phase in phases)
             {
-                var prefix = NormalizeReference(requestedReference) + "." + phase.Path.ToLowerInvariant();
+                var prefix = NormalizeReference(requested) + "." + phase.Path.ToLowerInvariant();
                 var tiers = new[]
                 {
                     new[] { prefix + ".cval.mag.f" },
@@ -75,7 +76,7 @@ public static class SchemaSafeAggregateProjectionService
 
                 if (!TryResolvePreferredAttributeReference(dataObject, tiers, out var reference, out var failure))
                 {
-                    status = $"Schema-safe THD read plan blocked for {requestedReference}: phase {phase.Label} has no unique named magnitude leaf. {failure}";
+                    status = $"Schema-safe THD read plan blocked for {requested}: phase {phase.Label} has no unique named magnitude leaf. {failure}";
                     return false;
                 }
 
@@ -86,18 +87,18 @@ public static class SchemaSafeAggregateProjectionService
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count() != phases.Count)
             {
-                status = $"Schema-safe THD read plan blocked for {requestedReference}: phase leaves are not unique.";
+                status = $"Schema-safe THD read plan blocked for {requested}: phase leaves are not unique.";
                 return false;
             }
 
-            plan = new ReadPlan(requestedReference, "ThreePhaseThd", leaves);
+            plan = new ReadPlan(requested, "ThreePhaseThd", leaves);
             status = $"Schema-safe THD read plan resolved exact leaves: {string.Join(", ", leaves.Select(leaf => leaf.Reference))}.";
             return true;
         }
 
-        if (IsDemandEnergy(requestedReference))
+        if (IsDemandEnergy(requested))
         {
-            var prefix = NormalizeReference(requestedReference);
+            var prefix = NormalizeReference(requested);
             var tiers = new[]
             {
                 new[] { prefix + ".mag.f" },
@@ -107,19 +108,19 @@ public static class SchemaSafeAggregateProjectionService
 
             if (!TryResolvePreferredAttributeReference(dataObject, tiers, out var reference, out var failure))
             {
-                status = $"Schema-safe DmdWh read plan blocked for {requestedReference}: no unique named energy magnitude leaf. {failure}";
+                status = $"Schema-safe DmdWh read plan blocked for {requested}: no unique named energy magnitude leaf. {failure}";
                 return false;
             }
 
             plan = new ReadPlan(
-                requestedReference,
+                requested,
                 "DemandEnergy",
                 new[] { new ReadLeaf(reference, "Value", "Float32") });
             status = $"Schema-safe DmdWh read plan resolved exact leaf {reference}.";
             return true;
         }
 
-        status = $"Schema-safe aggregate read planning does not own {requestedReference}.";
+        status = $"Schema-safe aggregate read planning does not own {requested}.";
         return false;
     }
 
