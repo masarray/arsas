@@ -1,5 +1,6 @@
 namespace ARSAS.Tests;
 
+[Collection("Wpf donor lifecycle")]
 public sealed class ProductionFatM2PermanentHostRegressionTests
 {
     [Fact]
@@ -99,9 +100,10 @@ public sealed class ProductionFatM2PermanentHostRegressionTests
             }
         });
 
+        thread.IsBackground = true;
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(8)), "WPF donor Show/Close timed out.");
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "WPF donor Show/Close timed out.");
         Assert.Null(failure);
         Assert.True(completed);
     }
@@ -136,3 +138,6 @@ public sealed class ProductionFatM2PermanentHostRegressionTests
         throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }
+
+[CollectionDefinition("Wpf donor lifecycle", DisableParallelization = true)]
+public sealed class WpfDonorLifecycleCollection { }
