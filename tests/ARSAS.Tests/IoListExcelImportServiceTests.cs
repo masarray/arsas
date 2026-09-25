@@ -56,7 +56,7 @@ public sealed class IoListExcelImportServiceTests
         Assert.Equal(64, result.Project.SourceWorkbookSha256.Length);
         Assert.Contains(result.ParserFindings, finding => finding.Code == "XLSX_NON_SDI_SKIPPED");
 
-        var bcu = Assert.Single(result.Project.Ieds.Where(ied => ied.IedName == "AA1C1F03R4"));
+        var bcu = Assert.Single(result.Project.Ieds, ied => ied.IedName == "AA1C1F03R4");
         var signal = Assert.Single(bcu.TestPoints);
         Assert.Equal("CB closed", signal.SignalName);
         Assert.Equal("Active", signal.ExpectedOnText);

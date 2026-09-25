@@ -52,8 +52,8 @@ public sealed class P62BFieldStabilityRegressionTests
         };
 
         var projection = MmsReportValueProjector.Project(frame);
-        var selected = Assert.Single(projection.Updates.Where(update =>
-            update.Reference.Equals("IEDLD/TTMP1.WidTmpU.mag.f", StringComparison.OrdinalIgnoreCase)));
+        var selected = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals("IEDLD/TTMP1.WidTmpU.mag.f", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("42", selected.Value);
         Assert.Equal("good", selected.Quality);
