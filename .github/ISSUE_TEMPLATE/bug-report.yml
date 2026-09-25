@@ -1,54 +1,62 @@
 name: Engineering bug report
-description: Report a reproducible ArIED connection, discovery, monitoring, event, control, packaging, or UI defect.
-title: "[Bug] "
-labels: ["bug", "needs-triage"]
+description: Report a reproducible ARSAS defect using synthetic or sanitized evidence.
+title: "[Bug]: "
+labels:
+  - bug
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for helping improve ArIED 61850. Use synthetic or sanitized data only. Do not include credentials, customer names, station identifiers, confidential SCL, restricted addressing, or proprietary material.
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: Affected area
-      options:
-        - Connection / association
-        - SCL import / project workspace
-        - MMS discovery / model browser
-        - Signal selection
-        - Reporting / monitoring
-        - Event log / timestamps / quality
-        - Smart Control
-        - Diagnostics
-        - Build / packaging
-        - UI / accessibility / performance
-        - Documentation / website
-    validations:
-      required: true
+        Thank you for helping improve ARSAS. Do not include credentials, customer SCL files, relay settings, packet captures, disturbance records, private endpoints, or confidential station data.
 
   - type: input
-    id: app-version
+    id: arsas-version
     attributes:
-      label: ArIED version or commit
-      placeholder: "1.6.6 or commit SHA"
+      label: ARSAS version or commit
+      description: Provide the release version or full commit SHA.
+      placeholder: "1.6.16 or commit SHA"
     validations:
       required: true
 
   - type: input
     id: engine-version
     attributes:
-      label: ARIEC61850 branch or commit
-      placeholder: "main or commit SHA"
+      label: ARIEC61850 version or commit
+      description: Provide the engine branch, release, or full commit SHA.
+      placeholder: "main at commit SHA"
     validations:
       required: true
 
-  - type: input
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Affected workflow
+      options:
+        - MMS connection or discovery
+        - Reporting or live monitoring
+        - GOOSE subscriber
+        - Sampled Values / SMV
+        - IEC 61850 file transfer or COMTRADE retrieval
+        - SCL import, comparison, export, or generation
+        - Smart Control
+        - Sequence of events or diagnostics
+        - Project persistence
+        - Windows packaging or installer
+        - UI, accessibility, or performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Windows version, .NET SDK/runtime, and display scaling when relevant.
-      placeholder: "Windows 11 24H2, .NET SDK 8.0.x, 125% scaling"
+      description: Include Windows version, .NET version, connection method, adapter/Npcap details when relevant, and sanitized scale information.
+      placeholder: |
+        Windows 11 24H2
+        .NET 8.x
+        Connection: direct IP / saved project / SCL import
+        Scale: 3 IEDs, 1,200 selected signals
     validations:
       required: true
 
@@ -56,9 +64,10 @@ body:
     id: steps
     attributes:
       label: Reproduction steps
+      description: Provide the smallest deterministic sequence using synthetic or sanitized data.
       placeholder: |
-        1. Open...
-        2. Connect...
+        1. Add a synthetic IED endpoint...
+        2. Discover the model...
         3. Select...
         4. Observe...
     validations:
@@ -75,37 +84,31 @@ body:
     id: observed
     attributes:
       label: Observed behavior
+      description: Include sanitized diagnostic text and exact error messages when safe.
     validations:
       required: true
 
-  - type: textarea
-    id: diagnostics
-    attributes:
-      label: Sanitized diagnostic evidence
-      description: Paste a sanitized Copy Diagnostic report or the smallest relevant excerpt. Remove confidential data first.
-      render: text
-
   - type: dropdown
-    id: evidence-source
+    id: validation-source
     attributes:
-      label: Validation environment
+      label: Reproduction source
       options:
-        - Static source review only
-        - Unit or integration test
-        - Simulator / loopback
-        - Isolated laboratory IED
-        - Approved commissioning environment
+        - Unit test or deterministic fixture
+        - Loopback or simulator
+        - Authorized laboratory IED
+        - Authorized FAT/SAT/commissioning environment
+        - Unable to reproduce independently
     validations:
       required: true
 
   - type: checkboxes
-    id: confirmations
+    id: safety
     attributes:
-      label: Confirmations
+      label: Safety and data confirmation
       options:
-        - label: I removed confidential customer, employer, station, credential, and restricted network information.
+        - label: I removed credentials, private endpoints, customer names, station identifiers, relay settings, packet captures, disturbance records, and confidential SCL or diagnostic content.
           required: true
-        - label: I did not include external proprietary screenshots, manuals, code, or support material.
+        - label: This report does not claim switching authority, formal conformance, functional-safety certification, or universal interoperability.
           required: true
-        - label: Any active control or network test was performed under the required authority and test boundary.
+        - label: Any active testing described here was performed inside an approved boundary with the required authorization.
           required: true

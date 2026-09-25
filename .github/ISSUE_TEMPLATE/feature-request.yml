@@ -1,61 +1,94 @@
-name: Engineering feature request
-description: Propose a bounded ARSAS workflow, evidence, usability or diagnostic improvement.
-title: "[Feature] "
-labels: ["enhancement", "needs-evidence"]
+name: Engineering feature proposal
+description: Propose a bounded ARSAS or ARIEC61850 capability with a clear engineering outcome.
+title: "[Feature]: "
+labels:
+  - enhancement
 body:
   - type: markdown
     attributes:
       value: |
-        Describe the engineering problem before proposing the UI. Protocol behavior belongs in ARIEC61850; ARSAS should consume typed engine services.
-  - type: dropdown
-    id: area
-    attributes:
-      label: Product area
-      options: [MMS and model discovery, Reporting and RCB, Multi-IED monitoring, GOOSE, File transfer and COMTRADE, SCL, Control, Diagnostics, Packaging and update, Website and guidance, Other]
-    validations:
-      required: true
+        Describe the engineering problem before the preferred implementation. Large protocol changes may belong in ARIEC61850 rather than the ARSAS application layer.
+
   - type: textarea
     id: problem
     attributes:
       label: Engineering problem
-      description: Describe the current workflow, blocker and affected role without naming confidential projects.
+      description: What FAT, SAT, commissioning, troubleshooting, research, or development task is difficult today?
+      placeholder: "During ... engineers must ... which causes ..."
     validations:
       required: true
-  - type: textarea
-    id: evidence
-    attributes:
-      label: Current evidence and workaround
-      description: Include protocol objects, service sequence, sanitized diagnostics or repeatable examples.
-    validations:
-      required: true
+
   - type: textarea
     id: outcome
     attributes:
-      label: Desired bounded outcome
-      description: State what should become visible, repeatable or exportable. Avoid universal vendor claims.
+      label: Desired outcome
+      description: Describe the observable result and who benefits.
     validations:
       required: true
-  - type: textarea
-    id: acceptance
+
+  - type: dropdown
+    id: area
     attributes:
-      label: Acceptance criteria
-      placeholder: |
-        - Given...
-        - When...
-        - Then...
-    validations:
-      required: true
-  - type: textarea
-    id: boundary
-    attributes:
-      label: Application and engine boundary
-      description: Identify whether the request needs an ARIEC61850 contract, an ARSAS-only change or both.
-  - type: checkboxes
-    id: confirmation
-    attributes:
-      label: Confirmation
+      label: IEC 61850 area
       options:
-        - label: This request contains no credentials or confidential project, employer or device material.
+        - MMS discovery or services
+        - Reporting and DataSets
+        - GOOSE
+        - Sampled Values / SMV
+        - File transfer or COMTRADE
+        - SCL engineering or generation
+        - Smart Control
+        - SOE, diagnostics, or evidence export
+        - Project workflow
+        - UI, accessibility, or performance
+        - Packaging, installer, or release engineering
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Likely implementation layer
+      options:
+        - ARSAS application and UX
+        - ARIEC61850 protocol engine
+        - Both repositories
+        - Documentation or validation only
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed workflow
+      description: Explain the user flow, protocol evidence, failure behavior, and expected diagnostics. Avoid copying another product's UI or internal design.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Which unit tests, deterministic fixtures, simulator cases, laboratory devices, performance limits, and negative paths would demonstrate completion?
+    validations:
+      required: true
+
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Safety, security, and claim boundaries
+      description: Identify active operations, sensitive data, operational authority, interoperability limitations, and non-goals.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: provenance
+    attributes:
+      label: Provenance confirmation
+      options:
+        - label: This proposal is independently authored and does not reproduce proprietary source, documentation, tests, UI, screenshots, or restricted material.
           required: true
-        - label: I understand roadmap inclusion and timing are not guaranteed.
+        - label: I have not attached customer, employer, station, relay-setting, credential, capture, or confidential SCL data.
           required: true
