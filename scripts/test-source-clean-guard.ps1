@@ -38,8 +38,31 @@ function Invoke-Case {
         & git -C $root add --all
         if ($LASTEXITCODE -ne 0) { throw "Fixture Git staging failed." }
 
-        $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scanner -RepositoryRoot $root -ScanOnly 2>&1 | Out-String)
-        $exitCode = $LASTEXITCODE
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = "powershell.exe"
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+
+        $quotedScanner = '"' + $scanner.Replace('"', '\"') + '"'
+        $quotedRoot = '"' + $root.Replace('"', '\"') + '"'
+        $startInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -File $quotedScanner -RepositoryRoot $quotedRoot -ScanOnly"
+
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        if (-not $process.Start()) {
+            throw "Source-clean fixture scanner failed to start."
+        }
+
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
+        $output = @($stdout, $stderr) -join [Environment]::NewLine
+        $process.Dispose()
         if ($MustReject) {
             if ($exitCode -eq 0 -or $output -notmatch ("Forbidden external identifier in " + $Expected)) {
                 throw "Source-clean unexpectedly accepted a forbidden $Expected fixture: $RelativePath; exit=$exitCode; output=$output"
