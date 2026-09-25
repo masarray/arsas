@@ -156,7 +156,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
