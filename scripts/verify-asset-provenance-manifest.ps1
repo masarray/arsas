@@ -64,10 +64,13 @@ foreach ($relative in $trackedAssets) {
         throw "Asset provenance blob mismatch for $relative. Manifest=$($entry.blob_sha), actual=$actualSha"
     }
 
-    $fullPath = Join-Path $RepoRoot ($relative.Replace("/", [IO.Path]::DirectorySeparatorChar))
-    $actualSize = (Get-Item -LiteralPath $fullPath).Length
+    $actualSizeText = (& git -C $RepoRoot cat-file -s $actualSha).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($actualSizeText)) {
+        throw "Unable to read Git blob size for tracked asset: $relative"
+    }
+    $actualSize = [long]$actualSizeText
     if ([long]$entry.size_bytes -ne $actualSize) {
-        throw "Asset provenance size mismatch for $relative. Manifest=$($entry.size_bytes), actual=$actualSize"
+        throw "Asset provenance size mismatch for $relative. Manifest=$($entry.size_bytes), GitBlob=$actualSize"
     }
 
     $duplicateOf = [string]$entry.duplicate_of
