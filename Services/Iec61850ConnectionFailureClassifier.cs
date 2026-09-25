@@ -13,7 +13,7 @@ internal static class Iec61850ConnectionFailureClassifier
         string host,
         int port,
         Exception? exception,
-        string associationSummary)
+        string? associationSummary)
     {
         var endpoint = $"{host}:{port}";
         var combined = string.Join(" | ", new[]
@@ -88,7 +88,7 @@ internal static class Iec61850ConnectionFailureClassifier
 
     private static string BuildTechnicalSummary(
         Exception? exception,
-        string associationSummary,
+        string? associationSummary,
         SocketError? socketError)
     {
         var parts = new List<string>();
