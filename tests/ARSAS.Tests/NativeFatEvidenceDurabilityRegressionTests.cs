@@ -113,7 +113,8 @@ public sealed class NativeFatEvidenceDurabilityRegressionTests
 
             var preview = NativeFatPrintPreviewSnapshot.Capture(after, restored);
             var previewCswi = Assert.Single(
-                preview.Rows.Where(row => row.IecTelegram.Equals(cswiAfter.IecTelegram, StringComparison.OrdinalIgnoreCase)));
+                preview.Rows,
+                row => row.IecTelegram.Equals(cswiAfter.IecTelegram, StringComparison.OrdinalIgnoreCase));
             var expectedV1 = DateTimeOffset.Parse("2026-09-13T14:10:11.123+07:00")
                 .ToLocalTime()
                 .ToString("dd/MM/yyyy HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
