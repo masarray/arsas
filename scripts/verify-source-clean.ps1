@@ -201,6 +201,7 @@ if ($Problems.Count -gt 0) {
 }
 
 if (-not $ScanOnly) {
+    & (Join-Path $PSScriptRoot "verify-asset-provenance-manifest.ps1") -RepositoryRoot $RepoRoot
     & (Join-Path $PSScriptRoot "verify-fault-record-bindings.ps1")
     & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
 }
