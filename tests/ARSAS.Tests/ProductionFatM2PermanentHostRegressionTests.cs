@@ -140,4 +140,4 @@ public sealed class ProductionFatM2PermanentHostRegressionTests
 }
 
 [CollectionDefinition("Wpf donor lifecycle", DisableParallelization = true)]
-public sealed class WpfDonorLifecycleCollection;
+public sealed class WpfDonorLifecycleCollection { }
