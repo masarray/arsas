@@ -12,10 +12,11 @@ This register supports the [independent implementation and provenance policy](IN
 - This is a *path and Git-blob metadata inventory*, not an image-content, source-license, hidden-metadata, or legal review. The separately maintained source-clean gate scans tracked paths and supported text contents; it does not establish binary-image provenance.
 - The machine-readable [per-file asset manifest](asset-provenance-manifest.json) records all 67 tracked asset paths, their Git blob SHA, byte size, exact-duplicate relationship and explicit review status. There are 44 unique asset blobs; 23 duplicate groups are byte-for-byte deployments of the same Git blob at two paths.
 - CI validates that every tracked asset in this extension scope is represented and that its blob SHA still matches the manifest. Changing or adding an asset therefore requires an explicit provenance-manifest update rather than silently entering the tree.
+- Inter v4.1 font provenance was separately checked against the official upstream release identity plus independent public package/hash records. This establishes technical byte provenance for the four bundled static faces; it is not a legal-clearance or originality opinion.
 
 | Category | Count | Scope | Origin/rights disposition |
 | --- | ---: | --- | --- |
-| Bundled typeface faces | 4 | `Assets/Fonts/*.ttf` | Inter 4.1 is identified in `THIRD_PARTY_NOTICES.md`; preserve `Assets/Fonts/Inter-LICENSE.txt` and shipped attribution. Check exact upstream package/source when dependency or font is replaced. |
+| Bundled typeface faces | 4 | `Assets/Fonts/*.ttf` | Inter 4.1 release/archive and all four static-face SHA-256 values were technically corroborated on 2026-09-25; complete OFL-1.1 text is bundled. Re-verify upstream package/source whenever the dependency or bytes change. |
 | Application artwork | 8 | Other visual files under `Assets/`, including icons, relay fascia and social image | Contributor/creator, source, license or own-work declaration and generation history need a separately recorded review for each distinct work. |
 | Application screenshots | 25 | `Assets/screenshot/` | Verify capture comes from ARSAS, was generated with synthetic/sanitized data, and contains no confidential or unrelated-product image. Filename alone is not proof. |
 | Website artwork | 4 | `landing/assets/` outside screenshots | Review original source and distribution rights; where Git blobs match an application asset, share its review record rather than claiming independent creation. |

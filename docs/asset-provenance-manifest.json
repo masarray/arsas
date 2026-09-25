@@ -13,28 +13,36 @@
       "blob_sha": "9fb9b751e5b2441054f6eef670da7b3f53a3505a",
       "size_bytes": 420428,
       "duplicate_of": null,
-      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+      "upstream_release": "v4.1",
+      "upstream_sha256": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "review_status": "third-party-font; upstream-v4.1-archive-and-face-sha256-corroborated; bundled-ofl-1.1-present; bytes-treated-as-unmodified-static-face"
     },
     {
       "path": "Assets/Fonts/Inter-Medium.ttf",
       "blob_sha": "458cd0601d28013d3817481aa2839c9bbb5ded70",
       "size_bytes": 417300,
       "duplicate_of": null,
-      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+      "upstream_release": "v4.1",
+      "upstream_sha256": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "review_status": "third-party-font; upstream-v4.1-archive-and-face-sha256-corroborated; bundled-ofl-1.1-present; bytes-treated-as-unmodified-static-face"
     },
     {
       "path": "Assets/Fonts/Inter-Regular.ttf",
       "blob_sha": "b7aaca8de1fe458399e17311d35d543a1fa2f984",
       "size_bytes": 411640,
       "duplicate_of": null,
-      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+      "upstream_release": "v4.1",
+      "upstream_sha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "review_status": "third-party-font; upstream-v4.1-archive-and-face-sha256-corroborated; bundled-ofl-1.1-present; bytes-treated-as-unmodified-static-face"
     },
     {
       "path": "Assets/Fonts/Inter-SemiBold.ttf",
       "blob_sha": "47f8ab1d68144fc004b310d65d95180d502b449b",
       "size_bytes": 419744,
       "duplicate_of": null,
-      "review_status": "third-party-font-notice-present; exact-upstream-package-review-required"
+      "upstream_release": "v4.1",
+      "upstream_sha256": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+      "review_status": "third-party-font; upstream-v4.1-archive-and-face-sha256-corroborated; bundled-ofl-1.1-present; bytes-treated-as-unmodified-static-face"
     },
     {
       "path": "Assets/RelayFascia.svg",
