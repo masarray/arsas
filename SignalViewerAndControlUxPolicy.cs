@@ -38,7 +38,7 @@ internal static class SignalViewerAndControlUxPolicy
             new Action(() => ApplySignalViewerLayout(grid, bindingPath)));
     }
 
-    private static void ApplySignalViewerLayout(DataGrid grid, string bindingPath)
+    private static void ApplySignalViewerLayout(DataGrid grid, string? bindingPath)
     {
         ScrollViewer.SetHorizontalScrollBarVisibility(grid, ScrollBarVisibility.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(grid, ScrollBarVisibility.Auto);
