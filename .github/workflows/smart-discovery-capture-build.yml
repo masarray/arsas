@@ -2,6 +2,36 @@ name: Smart Discovery Field Capture Build
 
 on:
   pull_request:
+    paths:
+      - "*.cs"
+      - "**/*.cs"
+      - "*.csproj"
+      - "**/*.csproj"
+      - "*.sln"
+      - "**/*.sln"
+      - "*.props"
+      - "**/*.props"
+      - "*.targets"
+      - "**/*.targets"
+      - "global.json"
+      - "*.xaml"
+      - "**/*.xaml"
+      - "app.manifest"
+      - "VERSION"
+      - ".release/**"
+      - ".github/workflows/**"
+      - "Assets/**"
+      - "Resources/**"
+      - "installer/**"
+      - "engine-patches/**"
+      - "landing/release-notes*.json"
+      - "landing/latest.json"
+      - "engines/**"
+      - "scripts/**"
+      - "tests/**"
+      - "evidence/**"
+      - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
+      - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
 jobs:
