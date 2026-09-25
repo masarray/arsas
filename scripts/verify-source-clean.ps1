@@ -72,17 +72,22 @@ function Normalize-RelativePath {
     return $Path.Replace('\', '/').TrimStart('/')
 }
 
-function Get-Sha256Hex {
+$Sha256 = [System.Security.Cryptography.SHA256]::Create()
+$IdentifierCandidateCache = [System.Collections.Generic.Dictionary[string,bool]]::new([System.StringComparer]::Ordinal)
+
+function Test-ForbiddenIdentifierCandidate {
     param([Parameter(Mandatory=$true)][string]$Value)
 
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        return -join ($algorithm.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
+    if (-not $CandidateLengths.Contains($Value.Length)) { return $false }
+    if ($IdentifierCandidateCache.ContainsKey($Value)) {
+        return $IdentifierCandidateCache[$Value]
     }
-    finally {
-        $algorithm.Dispose()
-    }
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    $hash = -join ($Sha256.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") })
+    $isForbidden = $ForbiddenIdentifierHashes.Contains($hash)
+    $IdentifierCandidateCache[$Value] = $isForbidden
+    return $isForbidden
 }
 
 function Test-ContainsForbiddenIdentifier {
@@ -101,7 +106,7 @@ function Test-ContainsForbiddenIdentifier {
             if ($word.Length -lt $length) { continue }
             for ($offset = 0; $offset -le ($word.Length - $length); $offset++) {
                 $fragment = $word.Substring($offset, $length)
-                if ($ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $fragment))) {
+                if (Test-ForbiddenIdentifierCandidate $fragment) {
                     return $true
                 }
             }
@@ -111,7 +116,7 @@ function Test-ContainsForbiddenIdentifier {
         for ($count = 1; $count -le 4 -and ($index + $count - 1) -lt $words.Count; $count++) {
             $candidate += $words[$index + $count - 1]
             if ($candidate.Length -gt 22) { break }
-            if ($CandidateLengths.Contains($candidate.Length) -and $ForbiddenIdentifierHashes.Contains((Get-Sha256Hex $candidate))) {
+            if (Test-ForbiddenIdentifierCandidate $candidate) {
                 return $true
             }
         }
@@ -180,4 +185,5 @@ if (-not $ScanOnly) {
     & (Join-Path $PSScriptRoot "verify-auto-update.ps1")
 }
 
+$Sha256.Dispose()
 Write-Host "All Git-tracked ARSAS content passed source and external-identifier checks." -ForegroundColor Green
