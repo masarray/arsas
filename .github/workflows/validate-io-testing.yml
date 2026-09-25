@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout ARSAS application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ARSAS
 
@@ -53,7 +53,7 @@ jobs:
           }
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload IO testing compiler diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-io-testing-compiler-log
           path: ARSAS/io-testing-build.log
@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload IO testing test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-io-testing-test-results
           path: ARSAS/TestResults/*.trx

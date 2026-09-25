@@ -243,7 +243,7 @@ jobs:
 
       - name: Upload P0-5f regression evidence and field toolkit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-p0-5f-repeat-run-toolkit
           path: |

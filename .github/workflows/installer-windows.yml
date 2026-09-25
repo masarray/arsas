@@ -67,7 +67,7 @@ jobs:
 
     steps:
       - name: Checkout ARSAS application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
 
@@ -125,7 +125,7 @@ jobs:
           if ($actual -ne $env:ARDIREC_COMMIT) { throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT got $actual." }
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -254,7 +254,7 @@ jobs:
             -DistDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARSAS-${{ env.APP_VERSION }}-win-x64-installer
           if-no-files-found: error
