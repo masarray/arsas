@@ -1,10 +1,10 @@
 # Third-Party Notices
 
-ArIED 61850 is distributed under `GPL-3.0-or-later`. Its licensing does not change the license of ARIEC61850 or any included third-party package, standard, sample, font, image, or asset. Each component remains subject to its own license and attribution requirements.
+ARSAS is distributed under `GPL-3.0-or-later`. Its licensing does not change the license of ARIEC61850 or any included third-party package, standard, sample, font, image, or asset. Each component remains subject to its own license and attribution requirements.
 
 ## ARIEC61850 engine
 
-ArIED references the separately maintained ARIEC61850 source project at build time. Distributed combined builds must comply with the license and notices of the exact ARIEC61850 revision that is packaged. The application repository does not replace, relicense, or conceal the engine.
+ARSAS references the separately maintained ARIEC61850 source project at build time. Distributed combined builds must comply with the license and notices of the exact ARIEC61850 revision that is packaged. The application repository does not replace, relicense, or conceal the engine.
 
 
 ## Inter typeface
@@ -23,7 +23,7 @@ Interoperability testing with separately licensed tools does not make those tool
 
 ## Assets and releases
 
-All application icons, screenshots, illustrations, UI resources, and marketing images included in a release must be project-owned or separately licensed for that use. Screenshots must be generated from ArIED itself using synthetic or sanitized data.
+All application icons, screenshots, illustrations, UI resources, and marketing images included in a release must be project-owned or separately licensed for that use. Screenshots must be generated from ARSAS itself using synthetic or sanitized data.
 
 Before every public or commercial release:
 
