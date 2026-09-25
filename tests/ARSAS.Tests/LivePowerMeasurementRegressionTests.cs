@@ -72,8 +72,9 @@ public sealed class LivePowerMeasurementRegressionTests
             }
         };
 
-        var signal = Assert.Single(NativeMmsDiscoveryMapper.BuildSignals(snapshot)
-            .Where(item => item.ObjectReference.Equals("IEDLD/MMXU1.TotW.instMag.f", StringComparison.OrdinalIgnoreCase)));
+        var signal = Assert.Single(
+            NativeMmsDiscoveryMapper.BuildSignals(snapshot),
+            item => item.ObjectReference.Equals("IEDLD/MMXU1.TotW.instMag.f", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("Measurement", signal.Category);
         Assert.Equal("W", signal.Unit);
@@ -156,8 +157,8 @@ public sealed class LivePowerMeasurementRegressionTests
 
     private static void AssertMeasurement(IReadOnlyList<SignalDefinition> signals, string reference, string unit)
     {
-        var signal = Assert.Single(signals.Where(item =>
-            item.ObjectReference.Equals(reference, StringComparison.OrdinalIgnoreCase)));
+        var signal = Assert.Single(signals, item =>
+            item.ObjectReference.Equals(reference, StringComparison.OrdinalIgnoreCase));
         Assert.Equal("MX", signal.FunctionalConstraint);
         Assert.Equal("Float32", signal.DataType);
         Assert.Equal("Measurement", signal.Category);
