@@ -39,11 +39,21 @@ jobs:
     name: Verify P0-5e capture build and target provenance
     runs-on: windows-latest
     steps:
-      - name: Checkout ARSAS branch
+      - name: Checkout exact ARSAS candidate
+        uses: actions/checkout@v7
+        with:
+          path: ArIED61850Tester
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact candidate revision
         shell: powershell
         run: |
-          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
-          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" ArIED61850Tester
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "ARSAS source revision mismatch. Expected $expected, checked out $actual."
+          }
 
       - name: Execute P0-5e provenance fixtures
         shell: powershell
