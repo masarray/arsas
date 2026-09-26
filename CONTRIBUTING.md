@@ -14,6 +14,8 @@ Focused engineering contributions are welcome when they improve a reproducible I
 
 Open an issue before beginning a large architectural change so the ARSAS/ARIEC61850 boundary, maturity label, safety impact, and validation plan can be agreed first.
 
+For maintenance or refactoring, follow the existing [production engineering contract](AGENTS.md): use one clear subsystem owner per PR, record the base commit and behavior that must remain unchanged, and report the exact validation performed. Avoid mixing unrelated release, protocol, and UI changes.
+
 ## Development setup
 
 Use a sibling checkout unless an explicit engine path is supplied:

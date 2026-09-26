@@ -2,7 +2,7 @@
 
 This directory contains the engineering, validation, licensing, provenance, release, and operating-boundary documents for the ARSAS Windows IEC 61850 engineering workstation.
 
-The current application version on `main` is **ARSAS 1.6.37**. Public binary identity remains tied to the latest actually published stable GitHub Release and its verified package evidence.
+The current source version is recorded in [VERSION](../VERSION); the latest published package identity is recorded in [GitHub Releases](https://github.com/masarray/arsas/releases/latest) and its release evidence. Historical milestone documents retain their original version context.
 
 ## Start here
 
@@ -25,7 +25,7 @@ The current application version on `main` is **ARSAS 1.6.37**. Public binary ide
 |---|---|
 | [IO List FAT Evidence Testing](IO_LIST_FAT_EVIDENCE.md) | Dedicated one-IED FAT workspace, exact `TestPointId` mapping, ordered transition evidence, durable journal, `.xlsx`, native `.pdf`, and `.arsas` output. |
 | [Phase progress](../NEXT_PHASE_PROGRESS.md) | Historical signal-selection behavior and validation records. |
-| [Connection diagnostic audit](../CONNECTION_DIAGNOSTIC_AUDIT.md) | Example route and connection-failure reasoning. |
+| [Connection diagnostic audit](audits/CONNECTION_DIAGNOSTIC_AUDIT.md) | Example route and connection-failure reasoning. |
 | [Changelog](../CHANGELOG.md) | Public application, documentation, website, and release history. |
 
 ## Control engineering
@@ -33,7 +33,7 @@ The current application version on `main` is **ARSAS 1.6.37**. Public binary ide
 | Document | Purpose |
 |---|---|
 | [ARIEC61850 Smart Control integration](../ARIEC61850_SMART_CONTROL_INTEGRATION.md) | Application-to-engine control service integration. |
-| [Smart Control feedback audit](../SMART_CONTROL_FEEDBACK_AUDIT.md) | Control completion, feedback mapping, and evidence boundaries. |
+| [Smart Control feedback audit](audits/SMART_CONTROL_FEEDBACK_AUDIT.md) | Control completion, feedback mapping, and evidence boundaries. |
 | [Close feedback event verification](close-feedback-event-verification.md) | Event-driven feedback confirmation workflow. |
 
 ## Licensing and provenance
