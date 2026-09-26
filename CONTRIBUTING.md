@@ -63,7 +63,7 @@ A pull request should:
 - use synthetic, public-domain, or contributor-owned test data;
 - update public documentation when behavior, maturity, safety, or claim boundaries change;
 - preserve the GPL community license and separate commercial-licensing wording;
-- include a signed-off commit as required by the project DCO.
+- document contribution authorship, origin, and required third-party rights; a DCO commit sign-off is not required.
 
 For UI changes, include the tested Windows scaling level, resolution, keyboard workflow, and any accessibility impact. For protocol, reporting, GOOSE, SMV, file-transfer, SCL, or control changes, state whether validation used unit tests, deterministic fixtures, loopback, simulator, or an authorized laboratory IED.
 
@@ -72,16 +72,12 @@ For UI changes, include the tested Windows scaling level, resolution, keyboard w
 The current public project is distributed under `GPL-3.0-or-later` and maintains a separate commercial-licensing path. Before merge, contributors must:
 
 - read and affirmatively agree to [CONTRIBUTOR-LICENSE-AGREEMENT.md](CONTRIBUTOR-LICENSE-AGREEMENT.md);
-- sign off every commit under [DCO.txt](DCO.txt);
+- retain accurate Git authorship and document contribution provenance in the pull request;
 - have the legal right and any required employer authorization to contribute;
 - avoid confidential, proprietary, restricted, customer-owned, or security-sensitive material;
 - identify any third-party component and its license before introducing it.
 
-Example sign-off:
-
-```text
-Signed-off-by: Contributor Name <contributor@example.com>
-```
+ARSAS does not request or require DCO `Signed-off-by` trailers on new commits. [DCO.txt](DCO.txt) and sign-offs in existing Git history are retained as historical records, not active merge requirements. CLA agreement and source/provenance review remain required.
 
 ## Clean-room and data provenance
 

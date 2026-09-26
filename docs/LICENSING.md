@@ -24,7 +24,7 @@ ArIED links directly to ARIEC61850. A distributed combined build must use mutual
 
 ## Contributions and branding
 
-New contributions require DCO sign-off and agreement to [CONTRIBUTOR-LICENSE-AGREEMENT.md](../CONTRIBUTOR-LICENSE-AGREEMENT.md). Branding is governed separately by [TRADEMARK.md](../TRADEMARK.md).
+New contributions require affirmative agreement to [CONTRIBUTOR-LICENSE-AGREEMENT.md](../CONTRIBUTOR-LICENSE-AGREEMENT.md), accurate authorship and provenance, and review of any third-party rights. DCO commit sign-off is not required for new contributions; existing sign-offs remain part of Git history. Branding is governed separately by [TRADEMARK.md](../TRADEMARK.md).
 
 ## Ownership boundary
 
