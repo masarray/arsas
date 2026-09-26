@@ -127,7 +127,8 @@ public static class SclSafeTrialRunner
             var document = XDocument.Load(command.SclPath, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
             var sclXml = document.ToString(SaveOptions.DisableFormatting);
 
-            var client = new NativeIec61850Client();
+            // Own the entire read-only trial association, including failure and cancellation.
+            await using var client = new NativeIec61850Client();
             result = await client.ConnectUsingSclAsync(
                 sclXml,
                 command.IedName,

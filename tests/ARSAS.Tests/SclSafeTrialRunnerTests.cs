@@ -68,6 +68,19 @@ public sealed class SclSafeTrialRunnerTests
     }
 
     [Fact]
+    public void TrialRunner_SourceContract_DisposesTrialClientOnEveryExit()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/SclSafeTrialRunner.cs"));
+
+        // An awaited using declaration includes normal return, cancellation and
+        // exception paths, and keeps the association alive for snapshot capture.
+        Assert.Contains(
+            "await using var client = new NativeIec61850Client();",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TrialRunner_SourceContract_HasNoDiscoveryWriteControlOrReportingEntryPoint()
     {
         var source = File.ReadAllText(FindRepoFile("Services/SclSafeTrialRunner.cs"));
