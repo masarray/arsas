@@ -11,6 +11,7 @@ The current source version is recorded in [VERSION](../VERSION); the latest publ
 | [Project README](../README.md) | Product overview, current-version summary, feature scope, quick start, build instructions, and public claim boundary. |
 | [IO List FAT Evidence Testing](IO_LIST_FAT_EVIDENCE.md) | Imported SDI test plans, OFF → ON → OFF evidence, Excel/PDF export, portable `.arsas` projects, integrity checks, and cross-laptop continuation. |
 | [Architecture](ARCHITECTURE.md) | Multi-IED ownership, model identity, report-first acquisition, runtime scaling, and timestamp semantics. |
+| [Maintainability audit — 27 Sep 2026](audits/MAINTAINABILITY_BASELINE_2026-09-27.md) | Audited Git-tree metrics, verified defects versus risks, subsystem owners and sequenced refactor gates. |
 | [SCL export](SCL_EXPORT.md) | Live-discovery and source-backed SCL export, including the 1.6.37 logical ReportControl versus runtime RCB-instance boundary. |
 | [COMTRADE viewer integration](COMTRADE_VIEWER_INTEGRATION.md) | Native ArdIrec bridge, in-process cursor/Phasor/Harmonics/Locus analysis, packaging, and presentation-only easing contract. |
 | [Windows releases](WINDOWS_RELEASES.md) | Installer and portable single-EXE packaging, exact release gates, checksums, SBOM, provenance, attestations, and publication boundary. |
