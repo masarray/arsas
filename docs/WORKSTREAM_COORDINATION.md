@@ -2,7 +2,18 @@
 
 This file is a durable coordination note for parallel development threads working in the same ARSAS repository. It exists to prevent a later workstream from accidentally replacing already accepted work from another branch.
 
-## Current integration baseline
+## Current integration handoff — snapshot 27 September 2026
+
+This document's older COMTRADE/FAT branch notes below are historical context, **not a current open-PR list**. Before integrating any candidate, fetch the actual `main` and check open PRs and exact-head CI.
+
+- Repository audit base: `b897203fad3b9276492bd3f6220e6c86d14c59df`; [maintainability audit](audits/MAINTAINABILITY_BASELINE_2026-09-27.md) and [workstream issue #380](https://github.com/masarray/arsas/issues/380).
+- Published stable [v1.6.40](https://github.com/masarray/arsas/releases/tag/v1.6.40) remains physically accepted for its documented test condition. Its release application/engine identities and evidence are recorded in [installed field acceptance](V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md); later maintenance commits do not retroactively replace that package.
+- The source/CI/formatting/governance maintenance work (#416–#419) is already merged. Do not reopen or rebase it as a pending dependency.
+- The separate semantic-hardening PR #374 belongs to issue #341, **not** to the repository maintainability audit or stable-release requalification.
+- The read-only SCL-trial client lifetime correction (#420) is merged as `3a2da5279faa7b87e355628ea84475661bf06527`, with exact-head 9/9 and actual merged-main 2/2 CI success (1,320 app / 988 engine tests). It is a separately scoped maintenance fix, not a change to the accepted Discovery/reporting route.
+- `AGENTS.md`, `docs/architecture/INVARIANTS.md`, `docs/architecture/PERFORMANCE_BUDGET.md` and the [architecture overview](ARCHITECTURE.md) remain authoritative; do not invent parallel policy or session owners.
+
+## Historical COMTRADE/FAT coordination — preserved for provenance
 
 COMTRADE P1D.7 was field-accepted and integrated to `main` by PR #300 at commit:
 
@@ -12,7 +23,7 @@ The ArdIrec native bridge dependency used by that workstation was integrated fir
 
 The production `AGENTS.md` already present on `main` remains authoritative.
 
-## Parallel FAT workstream
+## Historical parallel FAT workstream
 
 The FAT workstream remains independent and is currently represented by the stacked FAT branches/PRs, including PR #290, PR #296, and PR #303. Their existing field gate remains authoritative; this coordination note does not waive or replace it.
 
