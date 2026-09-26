@@ -67,7 +67,7 @@ For UI changes, include:
 - [ ] No proprietary source, documentation wording, tests, UI, screenshots, or restricted engineering material was copied.
 - [ ] Third-party components and licenses are identified.
 - [ ] Public license, commercial-license, and trademark wording remains accurate.
-- [ ] Commits include the required DCO sign-off.
+- [ ] I have read and affirmatively agree to the [Contributor License Agreement](../CONTRIBUTOR-LICENSE-AGREEMENT.md) for this contribution, and I have the rights and any required authorization to submit it.
 
 ## Independent implementation and provenance
 
