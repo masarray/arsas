@@ -64,6 +64,7 @@ A pull request should:
 - update public documentation when behavior, maturity, safety, or claim boundaries change;
 - preserve the GPL community license and separate commercial-licensing wording;
 - document contribution authorship, origin, and required third-party rights; a DCO commit sign-off is not required.
+- use vendor-neutral terminology in public PR titles, descriptions, comments and release notes, without changing recorded engineering measurements;
 
 For UI changes, include the tested Windows scaling level, resolution, keyboard workflow, and any accessibility impact. For protocol, reporting, GOOSE, SMV, file-transfer, SCL, or control changes, state whether validation used unit tests, deterministic fixtures, loopback, simulator, or an authorized laboratory IED.
 
