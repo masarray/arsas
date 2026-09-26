@@ -55,6 +55,26 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\test-source-clean-guard.ps1
 
+      - name: Set up Python for read-only maintenance inventory
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Test and capture workflow-script consumer inventory
+        shell: powershell
+        run: |
+          python .\ArIED61850Tester\scripts\test-maintenance-dependencies.py
+          if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory tests failed." }
+          python .\ArIED61850Tester\scripts\audit-maintenance-dependencies.py --root .\ArIED61850Tester --output "$env:RUNNER_TEMP\arsas-maintenance-dependencies.json"
+          if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory generation failed." }
+
+      - name: Upload maintenance dependency inventory
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-maintenance-dependency-inventory
+          path: ${{ runner.temp }}/arsas-maintenance-dependencies.json
+          if-no-files-found: error
+
       - name: Verify premium UX, GOOSE, SMV, SAS and release invariants
         shell: powershell
         run: |
