@@ -25,7 +25,7 @@ The production `AGENTS.md` already present on `main` remains authoritative.
 
 ## Historical parallel FAT workstream
 
-The FAT workstream remains independent and is currently represented by the stacked FAT branches/PRs, including PR #290, PR #296, and PR #303. Their existing field gate remains authoritative; this coordination note does not waive or replace it.
+At the time of this historical note, the FAT workstream was tracked by stacked branches/PRs including #290, #296 and #303. This is not a present-day open-PR claim. Preserve the historical field gate evidence and check the current branch/PR status before integration.
 
 Before any FAT branch is merged to `main`, the FAT thread/agent MUST integrate the latest `main` containing COMTRADE P1D.7, resolve conflicts intentionally, and rerun its exact-head CI and field acceptance on the combined codebase.
 
