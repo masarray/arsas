@@ -133,6 +133,33 @@ public sealed class Iec61850ValueFormatterTests
         Assert.Equal(value, formatted);
     }
 
+    [Theory]
+    [InlineData("Structure(3) {stVal=false, q=Quality{V=1,D=0}}", "Boolean", "", "Status", "IEDLD/GGIO1.Ind1.stVal", "False [0]")]
+    [InlineData("Structure(3) {stVal=2, q=Quality{V=1,D=0}}", "Dbpos", "", "Position", "IEDLD/CSWI1.Pos.stVal", "Close [10]")]
+    [InlineData("Structure(5) {[0]=12345, [1]=Quality{V=1,D=0}}", "Int64", "Wh", "Measurement", "IEDLD/MMXU1.Wh.instMag.i", "12345 Wh")]
+    public void FormatReportProcessValue_NormalizesLegacyScalarAndKeepsOperatorSemantics(
+        string value,
+        string dataType,
+        string unit,
+        string category,
+        string reference,
+        string expected)
+    {
+        Assert.Equal(expected,
+            Iec61850ValueFormatter.FormatReportProcessValue(
+                value, dataType, unit, category, reference));
+    }
+
+    [Fact]
+    public void FormatReportProcessValue_DoesNotCollapseIndexedStructureWithoutNumericMetadata()
+    {
+        const string value = "Structure(2) {[0]=12345, [1]=Quality{V=1,D=0}}";
+
+        Assert.Equal(value,
+            Iec61850ValueFormatter.FormatReportProcessValue(
+                value, "Structure", string.Empty, "Measurement", "IEDLD/GGIO1.Raw"));
+    }
+
     [Fact]
     public void Format_Does_Not_Collapse_NonStVal_Structures()
     {

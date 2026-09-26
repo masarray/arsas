@@ -14,6 +14,13 @@ public static class Iec61850ValueFormatter
         if (TryExtractStructuredScalar(value, dataType, out var structuredScalar))
             value = structuredScalar;
 
+        return FormatNormalizedValue(value, dataType, unit);
+    }
+
+    // Both entry points normalize any legacy structure exactly once before formatting.
+    // Keep the established generic and report-specific state vocabularies separate.
+    private static string FormatNormalizedValue(object? value, string dataType, string unit)
+    {
         if (IsDbposDataType(dataType) && TryNormalizeDbpos(value, out var dbpos))
             return FormatDbpos(dbpos);
 
@@ -74,7 +81,7 @@ public static class Iec61850ValueFormatter
             return boolean ? "True [1]" : "False [0]";
         }
 
-        return Format(normalizedValue, dataType, unit);
+        return FormatNormalizedValue(normalizedValue, dataType, unit);
     }
 
     private static bool IsPositionSemantic(string dataType, string category, string reference)
