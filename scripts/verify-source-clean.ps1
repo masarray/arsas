@@ -204,6 +204,28 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
     }
 }
 
+# A PR's public title and description are published before merge, so validate them
+# through the same fingerprint matcher that protects Git-tracked paths and text.
+if ($env:GITHUB_EVENT_NAME -eq "pull_request") {
+    if ([string]::IsNullOrWhiteSpace($env:GITHUB_EVENT_PATH) -or
+        -not (Test-Path -LiteralPath $env:GITHUB_EVENT_PATH -PathType Leaf)) {
+        $Problems.Add("Missing PR event metadata for public identifier verification")
+    }
+    else {
+        $eventPayload = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+        if ($null -eq $eventPayload.pull_request) {
+            $Problems.Add("Missing pull_request object in PR event metadata")
+        }
+        else {
+            foreach ($field in @("title", "body")) {
+                if (Test-ContainsForbiddenIdentifier ([string]$eventPayload.pull_request.$field)) {
+                    $Problems.Add("Forbidden external identifier in PR $field")
+                }
+            }
+        }
+    }
+}
+
 if ($Problems.Count -gt 0) {
     foreach ($problem in ($Problems | Sort-Object -Unique)) {
         Write-Host "ERROR: $problem" -ForegroundColor Red
