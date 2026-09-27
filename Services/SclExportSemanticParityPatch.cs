@@ -30,24 +30,50 @@ public static class SclExportSemanticParityPatch
         if (!File.Exists(sclPath))
             throw new FileNotFoundException("Generated SCL file does not exist.", sclPath);
 
-        // This compatibility correction is deliberately keyed to the exact object
-        // proven by the physical comparison. It is not a generic name/value guess.
-        var targetExistsInLiveModel = liveModel.LogicalDevices
+        // The object name narrows the compatibility scope; it is not sufficient
+        // evidence for a CDC/type correction on another relay or firmware.
+        var targetDataObjects = liveModel.LogicalDevices
             .SelectMany(device => device.LogicalNodes)
             .Where(node => string.Equals(node.Name, TargetLogicalNodeName, StringComparison.Ordinal))
             .SelectMany(node => node.DataObjects)
-            .Any(dataObject =>
+            .Where(dataObject =>
                 string.Equals(dataObject.Name, TargetDataObject, StringComparison.Ordinal) &&
                 dataObject.Reference.EndsWith(
                     "/" + TargetLogicalNodeName + "." + TargetDataObject,
-                    StringComparison.Ordinal));
+                    StringComparison.Ordinal))
+            .ToArray();
 
-        if (!targetExistsInLiveModel)
+        if (targetDataObjects.Length == 0)
         {
+            return new SclExportSemanticParityPatchResult(
+                0, 0, Array.Empty<string>());
+        }
+
+        if (targetDataObjects.Length != 1)
+        {
+            throw new InvalidDataException(
+                $"Ambiguous live {TargetLogicalNodeName}.{TargetDataObject}: {targetDataObjects.Length} matching objects.");
+        }
+
+        var exactIntegerStatus = targetDataObjects[0].Attributes
+            .Where(attribute =>
+                string.Equals(attribute.AttributePath, "stVal", StringComparison.Ordinal) &&
+                string.Equals(attribute.FunctionalConstraint, "ST", StringComparison.Ordinal) &&
+                string.Equals(attribute.TypeDiscoveryStatus, "Exact", StringComparison.Ordinal) &&
+                attribute.TypeConfidence == LiveIedDiscoveryConfidenceLevel.Exact &&
+                string.Equals(attribute.SclBType, "INT32", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (exactIntegerStatus.Length != 1)
+        {
+            // Preserve a legitimately Boolean or unproven status object. Never invent
+            // INS/INT32 from the name, old inferred CDC, or an instance Val string.
             return new SclExportSemanticParityPatchResult(
                 0,
                 0,
-                Array.Empty<string>());
+                [
+                    $"{TargetLogicalNodeName}.{TargetDataObject}: export-only correction skipped; exact ST stVal INT32 TypeSpecification evidence is unavailable or ambiguous."
+                ]);
         }
 
         var document = XDocument.Load(sclPath, LoadOptions.PreserveWhitespace);

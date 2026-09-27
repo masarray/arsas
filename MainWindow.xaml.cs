@@ -1700,12 +1700,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     canonical,
                     result);
 
-                if (semanticPatch.Changed)
+                if (semanticPatch.Messages.Count > 0)
                 {
                     AddLog(
-                        "INFO",
+                        semanticPatch.Changed ? "INFO" : "WARN",
                         "SCL Export",
-                        $"{device.Name}: export-only semantic parity applied after canonical serialization and before reload validation • " +
+                        $"{device.Name}: export-only semantic parity {(semanticPatch.Changed ? "applied" : "skipped")} after canonical serialization and before reload validation • " +
                         string.Join(" ", semanticPatch.Messages));
                 }
             }

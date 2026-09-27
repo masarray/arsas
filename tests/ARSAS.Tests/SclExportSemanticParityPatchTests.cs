@@ -118,6 +118,45 @@ public sealed class SclExportSemanticParityPatchTests
         }
     }
 
+    [Theory]
+    [InlineData("BOOLEAN", "Exact", LiveIedDiscoveryConfidenceLevel.Exact)]
+    [InlineData("INT32", "NotRead", LiveIedDiscoveryConfidenceLevel.Low)]
+    [InlineData("INT32", "Exact", LiveIedDiscoveryConfidenceLevel.Low)]
+    [InlineData("INT32U", "Exact", LiveIedDiscoveryConfidenceLevel.Exact)]
+    public void MissingOrContradictoryLiveType_DoesNotInventInsInSavedScl(
+        string sclBType,
+        string discoveryStatus,
+        LiveIedDiscoveryConfidenceLevel confidence)
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "arsas-scl-exact-type-gate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "relay.iid");
+
+        try
+        {
+            const string xml = "<SCL xmlns=\"http://www.iec.ch/61850/2003/SCL\"><DataTypeTemplates /></SCL>";
+            File.WriteAllText(path, xml);
+            var model = PhysicalReferenceModel(sclBType, discoveryStatus, confidence);
+            var result = SclExportSemanticParityPatch.ApplyForLiveModel(model, path);
+
+            Assert.False(result.Changed);
+            Assert.Equal(0, result.PatchedDataObjects);
+            Assert.Contains(result.Messages, message =>
+                message.Contains("exact ST stVal INT32", StringComparison.Ordinal));
+            Assert.Equal(xml, File.ReadAllText(path));
+            Assert.Equal("SPS", Assert.Single(model.LogicalDevices
+                .SelectMany(device => device.LogicalNodes)
+                .SelectMany(node => node.DataObjects)).InferredCdc);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void NonTargetLiveModel_DoesNotRewriteSavedScl()
     {
@@ -179,7 +218,10 @@ public sealed class SclExportSemanticParityPatchTests
             StringComparison.Ordinal);
     }
 
-    private static LiveIedModelDiscoveryDocument PhysicalReferenceModel()
+    private static LiveIedModelDiscoveryDocument PhysicalReferenceModel(
+        string sclBType = "INT32",
+        string discoveryStatus = "Exact",
+        LiveIedDiscoveryConfidenceLevel confidence = LiveIedDiscoveryConfidenceLevel.Exact)
         => new()
         {
             LogicalDevices =
@@ -202,7 +244,19 @@ public sealed class SclExportSemanticParityPatchTests
                                 {
                                     Reference = "AA1E1F06R4ADD/MPLS_GGIO1.CBClsCounter",
                                     Name = "CBClsCounter",
-                                    InferredCdc = "SPS"
+                                    InferredCdc = "SPS",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "AA1E1F06R4ADD/MPLS_GGIO1.CBClsCounter.stVal",
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = sclBType,
+                                            TypeDiscoveryStatus = discoveryStatus,
+                                            TypeConfidence = confidence
+                                        }
+                                    ]
                                 }
                             ]
                         }
