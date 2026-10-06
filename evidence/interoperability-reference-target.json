@@ -496,5 +496,57 @@
       },
       "actualInformationReportObserved": true
     }
+  },
+  "postBaselineAcceptance": {
+    "sclAssociationInteroperability": {
+      "contractId": "SCL-ASSOC-PARTIAL-ADDR-PHYSICAL",
+      "status": "physically-accepted-engine-merged-consumer-pending-merge",
+      "scope": "Trusted-SCL reconnect when ConnectedAP omits called AP-title and/or AE qualifier while explicit IP/selectors remain authoritative.",
+      "preservesR10Baseline": true,
+      "engine": {
+        "pullRequest": 143,
+        "testedHead": "84e9820e5a32690475960e49d5ef74e6637847fd",
+        "mergedMain": "e5deed1d8aa11d97991695c6e390baafea7ab797",
+        "tree": "d92676dd6d6243ec997749dd0355aa8c36ad83bd"
+      },
+      "consumer": {
+        "pullRequest": 425,
+        "testedMergeTreeHead": "9dc35d722b54872ed8c506eba062a80945761aa9"
+      },
+      "physicalAcceptance": {
+        "date": "2026-10-06",
+        "associationProfile": "BalancedApTitle",
+        "associationAttempts": 1,
+        "expectedDomains": 5,
+        "observedDomains": 5,
+        "matchedDomains": 5,
+        "missingDomains": 0,
+        "extraDomains": 0,
+        "initialTargets": 395,
+        "successfulReads": 395,
+        "failedReads": 0,
+        "projectedLeaves": 4938,
+        "projectedUniqueValues": 4938,
+        "initialValueCache": 4938,
+        "cacheLoss": 0,
+        "projectionErrors": 0,
+        "fullDiscoverySkipped": true,
+        "staticDataSets": 1,
+        "staticMembers": 31,
+        "reportBackedRuntimePoints": 29,
+        "unresolvedRuntimePoints": 0,
+        "actualInformationReportObserved": true,
+        "cyclicMmsProcessPolling": 0
+      },
+      "invariants": {
+        "explicitSclAssociationFieldsRemainConstraints": true,
+        "malformedOrConflictingExplicitFieldsFailClosed": true,
+        "candidateEnumerationBounded": true,
+        "freshTransportPerCandidate": true,
+        "sourceSclNotMutated": true,
+        "noNamedVariableOrDatasetRediscovery": true,
+        "noFullDiscoveryFallback": true
+      }
+    }
   }
 }
