@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
+  "baselineName": "CI-P0 workflow-sprawl freeze",
+  "policy": "These are maximum textual CI-cost indicators after adding the lightweight CI-P0 integrity workflow. Raising a limit requires an explicit reviewed budget change. Lowering a limit is always allowed when workflows are consolidated.",
+  "preP0Observed": {
+    "workflowFiles": 28,
+    "actionsCheckout": 31,
+    "actionsSetupDotnet": 12,
+    "actionsSetupPython": 13,
+    "dotnetRestore": 15,
+    "dotnetBuild": 15,
+    "dotnetTest": 17,
+    "actionsUploadArtifact": 33,
+    "workflowsWithDotnetBuild": 12,
+    "workflowsWithDotnetTest": 11,
+    "workflowCall": 0
+  },
+  "limits": {
+    "workflowFiles": 29,
+    "actionsCheckout": 32,
+    "actionsSetupDotnet": 12,
+    "actionsSetupPython": 13,
+    "dotnetRestore": 15,
+    "dotnetBuild": 15,
+    "dotnetTest": 17,
+    "actionsUploadArtifact": 33,
+    "workflowsWithDotnetBuild": 12,
+    "workflowsWithDotnetTest": 11
+  },
+  "interpretation": [
+    "The limits freeze CI sprawl; they are not performance targets and do not prove semantic necessity.",
+    "CI-P1 is expected to reduce restore/build/test counts and introduce reusable workflow_call contracts. Any temporary migration increase must be explicit in the same reviewed change.",
+    "Release, physical evidence and IEC 61850 acceptance semantics remain owned by their existing contracts during CI-P0."
+  ]
+}
