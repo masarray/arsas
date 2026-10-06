@@ -1,0 +1,74 @@
+name: CI P0 Workflow Integrity
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/audit-ci-workflows.py"
+      - "scripts/test-ci-workflows.py"
+      - "evidence/ci-workflow-budget.json"
+      - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/audit-ci-workflows.py"
+      - "scripts/test-ci-workflows.py"
+      - "evidence/ci-workflow-budget.json"
+      - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-p0-workflow-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-integrity:
+    name: Validate workflow structure and CI-sprawl budget
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify standard-library Python is available
+        run: python3 --version
+
+      - name: Run offline CI workflow guard tests
+        run: python3 scripts/test-ci-workflows.py
+
+      - name: Validate tracked workflow topology and budget
+        run: |
+          python3 scripts/audit-ci-workflows.py \
+            --root . \
+            --budget evidence/ci-workflow-budget.json \
+            --output "${RUNNER_TEMP}/ci-workflow-inventory.json"
+
+      - name: Summarize CI topology
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "ci-workflow-inventory.json").read_text()
+          )
+          totals = report["totals"]
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## CI-P0 workflow inventory\n\n")
+              handle.write(f"- workflow files: {totals['workflowFiles']}\n")
+              handle.write(f"- .NET restore/build/test: {totals['dotnetRestore']}/{totals['dotnetBuild']}/{totals['dotnetTest']}\n")
+              handle.write(f"- setup-dotnet uses: {totals['actionsSetupDotnet']}\n")
+              handle.write(f"- checkout uses: {totals['actionsCheckout']}\n")
+              handle.write(f"- workflows containing .NET build: {totals['workflowsWithDotnetBuild']}\n")
+              handle.write(f"- workflows containing .NET test: {totals['workflowsWithDotnetTest']}\n")
+              handle.write("\nNo structural or budget violation was detected.\n")
+          PY
