@@ -170,11 +170,11 @@ public sealed class SclExportSemanticParityPatchTests
 
         var engineLock = ReadRepoFile("engines/ARIEC61850.lock.json");
         Assert.Contains(
-            "\"commit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            "\"mergedMainCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
             engineLock,
             StringComparison.Ordinal);
         Assert.Contains(
-            "\"sourcePullRequest\": 135",
+            "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             engineLock,
             StringComparison.Ordinal);
     }
