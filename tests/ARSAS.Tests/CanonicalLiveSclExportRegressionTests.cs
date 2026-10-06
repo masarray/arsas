@@ -401,18 +401,20 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
 
     [Fact]
-    public void EnginePin_MatchesPhysicalSclRepairHead()
+    public void EngineLock_PreservesPhysicalSclRepairBaselineAcrossCandidatePins()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
 
         Assert.Contains(
-            "\"commit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
+            "\"mergedMainCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
             lockFile,
             StringComparison.Ordinal);
         Assert.Contains(
             "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
             lockFile,
             StringComparison.Ordinal);
+        Assert.Contains("\"sourcePullRequest\": 143", lockFile, StringComparison.Ordinal);
+        Assert.Contains("\"previousStablePin\"", lockFile, StringComparison.Ordinal);
         Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
         Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
         Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
