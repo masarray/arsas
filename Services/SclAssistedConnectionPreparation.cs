@@ -7,6 +7,7 @@ namespace ArIED61850Tester.Services;
 public sealed class SclAssistedConnectionPreparation
 {
     public ArScl.SclAssistedMmsAssociationPlan? AssociationPlan { get; init; }
+    public ArScl.SclAssistedMmsAssociationResolution? AssociationResolution { get; init; }
     public ArScl.SclMmsDomainInventory DomainInventory { get; init; } = new();
     public ArScl.SclInitialFcReadDesign? InitialReadDesign { get; init; }
     public ArMms.InitialFcReadPlan? InitialReadPlan { get; init; }
@@ -14,7 +15,7 @@ public sealed class SclAssistedConnectionPreparation
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public bool IsSuccess =>
         Errors.Count == 0 &&
-        AssociationPlan is not null &&
+        AssociationResolution?.IsSuccess == true &&
         DomainInventory.IsSuccess &&
         InitialReadDesign?.IsSuccess == true &&
         InitialReadPlan?.IsValid == true;
@@ -126,28 +127,42 @@ public static class SclAssistedConnectionPreparationBuilder
         // association. The previous SclInteroperabilityDefault changed source TSEL
         // to 0000 and calling AE qualifier to 23, so a generated SCL could round-trip
         // its remote/called identity while still emitting a different wire handshake.
-        var association = ArScl.SclAssistedMmsAssociationPlanBuilder.BuildExact(
+        // Preserve the exact complete-SCL plan as a compatibility/round-trip contract,
+        // but do not treat an incomplete optional association identity as fatal. The
+        // engine resolver distinguishes missing from invalid/ambiguous fields and owns
+        // every interoperability candidate.
+        var exactAssociation = ArScl.SclAssistedMmsAssociationPlanBuilder.BuildExact(
             effectiveRemote,
             ArScl.MmsLocalAssociationProfile.ExistingRuntimeDefault);
-        warnings.AddRange(association.Warnings);
-        if (!association.IsSuccess || association.Plan is null)
+        warnings.AddRange(exactAssociation.Warnings);
+
+        ArScl.SclAssistedMmsAssociationPlan? runtimePlan = null;
+        if (exactAssociation.IsSuccess && exactAssociation.Plan is not null)
         {
-            errors.AddRange(association.Errors);
-            return Fail(errors, warnings);
+            runtimePlan = new ArScl.SclAssistedMmsAssociationPlan
+            {
+                Host = normalizedHost,
+                Port = normalizedPort,
+                IedName = exactAssociation.Plan.IedName,
+                AccessPointName = exactAssociation.Plan.AccessPointName,
+                LocalProfileName = exactAssociation.Plan.LocalProfileName,
+                Cotp = exactAssociation.Plan.Cotp,
+                Association = exactAssociation.Plan.Association,
+                CotpConnectRequest = exactAssociation.Plan.CotpConnectRequest,
+                SessionPresentationAcseMmsRequest = exactAssociation.Plan.SessionPresentationAcseMmsRequest
+            };
         }
 
-        var runtimePlan = new ArScl.SclAssistedMmsAssociationPlan
+        var associationResolution = ArScl.SclAssistedMmsAssociationCandidateResolver.Resolve(
+            effectiveRemote,
+            ArScl.MmsLocalAssociationProfile.ExistingRuntimeDefault,
+            normalizedPort);
+        warnings.AddRange(associationResolution.Warnings);
+        if (!associationResolution.IsSuccess)
         {
-            Host = normalizedHost,
-            Port = normalizedPort,
-            IedName = association.Plan.IedName,
-            AccessPointName = association.Plan.AccessPointName,
-            LocalProfileName = association.Plan.LocalProfileName,
-            Cotp = association.Plan.Cotp,
-            Association = association.Plan.Association,
-            CotpConnectRequest = association.Plan.CotpConnectRequest,
-            SessionPresentationAcseMmsRequest = association.Plan.SessionPresentationAcseMmsRequest
-        };
+            errors.AddRange(associationResolution.Errors);
+            return Fail(errors, warnings, associationResolution);
+        }
 
         var domains = ArScl.SclMmsDomainInventoryReader.Read(sclXml, normalizedIed, normalizedAccessPoint);
         warnings.AddRange(domains.Warnings);
@@ -174,6 +189,7 @@ public static class SclAssistedConnectionPreparationBuilder
         return new SclAssistedConnectionPreparation
         {
             AssociationPlan = runtimePlan,
+            AssociationResolution = associationResolution,
             DomainInventory = domains,
             InitialReadDesign = design,
             InitialReadPlan = initialReadPlan,
@@ -184,9 +200,11 @@ public static class SclAssistedConnectionPreparationBuilder
 
     private static SclAssistedConnectionPreparation Fail(
         IReadOnlyCollection<string> errors,
-        IReadOnlyCollection<string> warnings)
+        IReadOnlyCollection<string> warnings,
+        ArScl.SclAssistedMmsAssociationResolution? associationResolution = null)
         => new()
         {
+            AssociationResolution = associationResolution,
             Errors = errors.Where(message => !string.IsNullOrWhiteSpace(message)).Distinct(StringComparer.Ordinal).ToArray(),
             Warnings = warnings.Where(message => !string.IsNullOrWhiteSpace(message)).Distinct(StringComparer.Ordinal).ToArray()
         };
