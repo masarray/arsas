@@ -82,7 +82,27 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("physicalTestedCommit", workflow, StringComparison.Ordinal);
         Assert.Contains("mergedMainTree", workflow, StringComparison.Ordinal);
         Assert.Contains("Checkout exact merged ARIEC61850 authority", workflow, StringComparison.Ordinal);
-        Assert.Contains("Build and test ARSAS candidate", workflow, StringComparison.Ordinal);
+        Assert.Contains("Validate and test merged engine authority", workflow, StringComparison.Ordinal);
+        Assert.Contains(@"dotnet restore ..\ARIEC61850\ARIEC61850.sln", workflow, StringComparison.Ordinal);
+        Assert.Contains(@"dotnet build ..\ARIEC61850\ARIEC61850.sln", workflow, StringComparison.Ordinal);
+        Assert.Contains(@"dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj", workflow, StringComparison.Ordinal);
+
+        // The ARSAS suite is no longer compiled a second time here. Instead,
+        // this independent R10 gate fails closed unless the same PR synthetic
+        // merge tree and pinned engine have an all-pass canonical Build ARSAS
+        // run with matching TRX identity. Manual dispatch retains a reusable
+        // exact-SHA full regression job.
+        Assert.Contains("Require successful canonical Build ARSAS for same PR merge and engine", workflow, StringComparison.Ordinal);
+        Assert.Contains("scripts\\verify-ci-canonical-reuse.py", workflow, StringComparison.Ordinal);
+        Assert.Contains("--head-sha $env:PR_HEAD_SHA", workflow, StringComparison.Ordinal);
+        Assert.Contains("--merge-sha $env:PR_MERGE_SHA", workflow, StringComparison.Ordinal);
+        Assert.Contains("--engine-sha $env:ENGINE_COMMIT", workflow, StringComparison.Ordinal);
+        Assert.Contains("--wait-seconds 960", workflow, StringComparison.Ordinal);
+        Assert.Contains("manual-regression:", workflow, StringComparison.Ordinal);
+        Assert.Contains("_ci-p1-windows-build-test.yml", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"dotnet restore .\ArIED61850Tester.sln", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"dotnet build .\ArIED61850Tester.sln", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("perf/smart-ied-discovery", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("EvidenceEngineBaselineCommit", workflow, StringComparison.Ordinal);
     }
