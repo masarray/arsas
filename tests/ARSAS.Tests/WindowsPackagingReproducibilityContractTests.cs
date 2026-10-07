@@ -53,7 +53,23 @@ public sealed class WindowsPackagingReproducibilityContractTests
         Assert.Contains(identity, canonical, StringComparison.Ordinal);
         Assert.Contains(identity, capture, StringComparison.Ordinal);
         Assert.Contains(
-            "Packaging authority: independent Field Capture publish/smoke",
+            "Promote exact canonical portable artifact",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SMART_CAPTURE_PACKAGING_AUTHORITY=canonical-build-arsas:",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if: github.event_name == 'workflow_dispatch'",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SMART_CAPTURE_PACKAGING_AUTHORITY=independent-manual-field-capture-publish",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "identity.portableSha256 -ne $actualExeSha",
             capture,
             StringComparison.Ordinal);
     }
