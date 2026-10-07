@@ -396,6 +396,42 @@ class PackageReuseTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow)
 
+    def test_release_workflow_promotes_exact_sealed_package_and_keeps_manual_fallback(self):
+        workflow = (ROOT.parent / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        required = (
+            "Promote exact sealed canonical Windows package for release",
+            "verify-ci-package-reuse.py",
+            "--head-branch main",
+            "--event-name push",
+            "--allow-in-progress-artifact",
+            "proof.releaseFixturePath",
+            "RELEASE_PACKAGE_AUTHORITY=sealed-build-arsas:",
+            "RELEASE_INSTALLER_INPUT_DIR",
+            "RELEASE_PORTABLE_PATH",
+            "-PublishedDirectory $env:RELEASE_INSTALLER_INPUT_DIR",
+            "-TestAssemblyPath $env:RELEASE_TEST_ASSEMBLY",
+            "& dotnet vstest $env:RELEASE_TEST_ASSEMBLY",
+            "canonicalPackageArtifactSha256",
+            "canonicalPortableSha256",
+            "Release source mismatch",
+        )
+        for token in required:
+            self.assertIn(token, workflow)
+
+        manual_only = (
+            "Restore, build and test exact release source for manual fallback",
+            "Publish installer source folder for manual fallback",
+            "Publish real portable single EXE for manual fallback",
+        )
+        for token in manual_only:
+            self.assertIn(token, workflow)
+        self.assertNotIn(
+            "- name: Restore, build and test exact release source\n        shell:",
+            workflow,
+        )
+
     def test_in_progress_exact_artifact_can_be_reused(self):
         api = FakeApi(status="in_progress", conclusion=None)
         proof = verifier.verify_canonical_package(
