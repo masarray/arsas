@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P0 baseline + explicitly bounded CI-P1 shadow migration",
-  "policy": "CI-P0 observed baseline remains immutable below. Temporary CI-P1 classifier/reusable shadow overhead is explicitly approved for parity only, without changing legacy acceptance semantics. The next consolidation PR must reduce these maxima rather than treating them as a permanent efficiency target.",
+  "baselineName": "CI-P2A canonical regression reuse — first verified duplicate removal",
+  "policy": "CI-P0 observed baseline is immutable. CI-P1 bounded shadow remains opt-in. CI-P2A removes the redundant Merge Execution Guard restore/build/full-test pipeline; that guard must consume a completed successful canonical Build ARSAS proof for identical PR merge source and engine SHAs, otherwise fail closed. Subsequent reductions require equivalent explicit evidence.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -19,14 +19,14 @@
   "limits": {
     "workflowFiles": 31,
     "actionsCheckout": 35,
-    "actionsSetupDotnet": 13,
+    "actionsSetupDotnet": 12,
     "actionsSetupPython": 13,
-    "dotnetRestore": 16,
-    "dotnetBuild": 16,
-    "dotnetTest": 18,
+    "dotnetRestore": 15,
+    "dotnetBuild": 15,
+    "dotnetTest": 17,
     "actionsUploadArtifact": 34,
-    "workflowsWithDotnetBuild": 13,
-    "workflowsWithDotnetTest": 12
+    "workflowsWithDotnetBuild": 12,
+    "workflowsWithDotnetTest": 11
   },
   "interpretation": [
     "The limits freeze CI sprawl; they are not performance targets and do not prove semantic necessity.",
@@ -61,5 +61,43 @@
       "workflowsWithDotnetTest": 1
     },
     "exitGate": "Only retire a legacy workflow or lower limits after shadow parity on matching source/engine SHAs, equivalent test verdicts, and explicit review of physical/release gate ownership. No release/promotion claim based on shadow results."
+  },
+  "ciP2Consolidation": {
+    "issueNumber": 430,
+    "lane": "merge-execution-guard",
+    "approach": "Reuse completed canonical Build ARSAS exact-merge-SHA full-regression TRX artifact; no duplicate .NET compile for PR events. Keep original source-contract check and status name, read-only API, manual fallback via reusable full build/test.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 13,
+      "actionsSetupPython": 13,
+      "dotnetRestore": 16,
+      "dotnetBuild": 16,
+      "dotnetTest": 18,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 13,
+      "workflowsWithDotnetTest": 12
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 12,
+      "actionsSetupPython": 13,
+      "dotnetRestore": 15,
+      "dotnetBuild": 15,
+      "dotnetTest": 17,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 12,
+      "workflowsWithDotnetTest": 11
+    },
+    "canonicalEvidenceArtifact": "ARSAS-test-evidence",
+    "candidateVerification": {
+      "source": "exact PR synthetic merge SHA",
+      "engine": "exact immutable engine lock SHA",
+      "canonicalRun": "successful latest matching PR head/branch run",
+      "tests": "signed-by-workflow-at-execution manifest plus verified TRX SHA-256 and passing counters",
+      "noProductionPromotion": true
+    },
+    "rollback": "Restore original smart-discovery-merge-execution-guard.yml build/test steps if canonical evidence or cross-run matching causes flakiness; never skip P0-5h source-contract checks."
   }
 }
