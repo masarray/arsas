@@ -84,7 +84,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Cache immutable NuGet packages only
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: ci-p1-nuget-win-x64-${{ hashFiles('ARSAS/**/*.csproj', 'ARIEC61850/**/*.csproj', 'ARSAS/Directory.Packages.props', 'ARIEC61850/Directory.Packages.props') }}
@@ -133,7 +133,7 @@ jobs:
           $path = Join-Path $env:RUNNER_TEMP 'ci-p1-shadow-manifest.json'
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
           if ($manifest.engineExactShaVerified -ne $true -or $reportFiles.Count -eq 0) {
-            Write-Warning 'Shadow proof is incomplete; reusable test job must not be promoted.'
+            throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
       - name: Upload inspectable shadow TRX and SHA manifest
