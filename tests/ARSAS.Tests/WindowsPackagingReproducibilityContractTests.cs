@@ -72,6 +72,18 @@ public sealed class WindowsPackagingReproducibilityContractTests
             "identity.portableSha256 -ne $actualExeSha",
             capture,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "$run.head_sha -ne $env:PR_HEAD_SHA",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$run.head_branch -ne $env:PR_HEAD_BRANCH",
+            capture,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$identity.sourceCommit -ne $env:PR_MERGE_SHA",
+            capture,
+            StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(string relativePath)
