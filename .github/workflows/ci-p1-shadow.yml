@@ -1,0 +1,87 @@
+name: CI P1 Advisory Classifier and Opt-in Shadow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "scripts/classify-ci-changes.py"
+      - "scripts/test-classify-ci-changes.py"
+      - "scripts/resolve-ariec-lock.ps1"
+      - "scripts/test-resolve-ariec-lock.ps1"
+      - "engines/**"
+      - "Services/**"
+      - "Models/**"
+      - "tests/**"
+      - "evidence/**"
+      - "engine-patches/**"
+      - "*.cs"
+      - "*.csproj"
+      - "*.sln"
+      - "*.xaml"
+      - "MainWindow*.cs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-p1-shadow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify changed areas (advisory, fail-safe)
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.changed.outputs.build }}
+      tests: ${{ steps.changed.outputs.tests }}
+      iec: ${{ steps.changed.outputs.iec }}
+      sv: ${{ steps.changed.outputs.sv }}
+      io: ${{ steps.changed.outputs.io }}
+      packaging: ${{ steps.changed.outputs.packaging }}
+      ci: ${{ steps.changed.outputs.ci }}
+      risk: ${{ steps.changed.outputs.risk }}
+    steps:
+      - name: Checkout PR merge source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Run conservative classifier fixtures
+        run: python3 scripts/test-classify-ci-changes.py
+
+      - id: changed
+        name: Classify exact PR merge diff or conservative fallback
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            python3 scripts/classify-ci-changes.py \
+              --from-pr-merge \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          else
+            python3 scripts/classify-ci-changes.py \
+              --paths "__unclassified_source_change__" \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          fi
+
+  windows-shadow:
+    name: Compare reusable build/test with legacy authority
+    needs: classify
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' ||
+         github.head_ref == 'ci/p1-fast-gate-shadow' ||
+         contains(github.event.pull_request.labels.*.name, 'ci-p1-shadow')) &&
+        (needs.classify.outputs.build == 'true' ||
+         github.head_ref == 'ci/p1-fast-gate-shadow')
+      }}
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}
