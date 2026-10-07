@@ -561,6 +561,14 @@ jobs:
             }
           }
 
+          foreach ($extension in @('cfg', 'dat')) {
+            $releaseFixture = ".\ArIED61850Tester\tests\fixtures\comtrade\p1-release-smoke.$extension"
+            if (-not (Test-Path $releaseFixture -PathType Leaf)) {
+              throw "Canonical release native fixture is missing: $releaseFixture"
+            }
+            Copy-Item $releaseFixture (Join-Path $fixtures "p1-release-smoke.$extension") -Force
+          }
+
       - name: Seal exact tested Windows package payload
         shell: powershell
         run: |

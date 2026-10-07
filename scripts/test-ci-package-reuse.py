@@ -115,6 +115,8 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
         (tests / ".coverage-transient").write_text("must-not-promote", encoding="utf-8")
         (fixtures / "minimal_1999.cfg").write_text("cfg", encoding="utf-8")
         (fixtures / "distance_p1.cfg").write_text("locus", encoding="utf-8")
+        (fixtures / "p1-release-smoke.cfg").write_text("release-cfg", encoding="utf-8")
+        (fixtures / "p1-release-smoke.dat").write_bytes(b"release-dat")
 
         artifact = root / "artifact"
         manifest = producer.stage_and_create_manifest(
@@ -135,6 +137,7 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
             test_assembly_relative="ARSAS.Tests/ARSAS.Tests.dll",
             comtrade_fixture_relative="fixtures/minimal_1999.cfg",
             locus_fixture_relative="fixtures/distance_p1.cfg",
+            release_fixture_relative="fixtures/p1-release-smoke.cfg",
         )
 
         buffer = io.BytesIO()
@@ -154,6 +157,8 @@ class FakeApi:
         conclusion: str | None = "success",
         artifact_available: bool = True,
         binary_404_count: int = 0,
+        head_sha: str = HEAD,
+        branch: str = BRANCH,
     ):
         self.blob, _ = make_payload(event_name)
         self.artifact_available = artifact_available
@@ -162,8 +167,8 @@ class FakeApi:
             "id": RUN,
             "run_attempt": 1,
             "name": "Build ARSAS",
-            "head_sha": HEAD,
-            "head_branch": BRANCH,
+            "head_sha": head_sha,
+            "head_branch": branch,
             "event": event_name,
             "status": status,
             "conclusion": conclusion,
@@ -213,6 +218,10 @@ class PackageReuseTests(unittest.TestCase):
             manifest["portableIdentity"]["path"],
         )
         self.assertEqual(proof["nativeBridgeSha256"], manifest["nativeBridge"]["sha256"])
+        self.assertEqual(
+            proof["releaseFixturePath"],
+            manifest["verification"]["releaseFixturePath"],
+        )
 
     def test_safe_materialization_occurs_after_verification(self):
         blob, _ = make_payload()
@@ -389,6 +398,42 @@ class PackageReuseTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow)
 
+    def test_release_workflow_promotes_exact_sealed_package_and_keeps_manual_fallback(self):
+        workflow = (ROOT.parent / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        required = (
+            "Promote exact sealed canonical Windows package for release",
+            "verify-ci-package-reuse.py",
+            "--head-branch main",
+            "--event-name push",
+            "--allow-in-progress-artifact",
+            "proof.releaseFixturePath",
+            "RELEASE_PACKAGE_AUTHORITY=sealed-build-arsas:",
+            "RELEASE_INSTALLER_INPUT_DIR",
+            "RELEASE_PORTABLE_PATH",
+            "-PublishedDirectory $env:RELEASE_INSTALLER_INPUT_DIR",
+            "-TestAssemblyPath $env:RELEASE_TEST_ASSEMBLY",
+            "& dotnet vstest $env:RELEASE_TEST_ASSEMBLY",
+            "canonicalPackageArtifactSha256",
+            "canonicalPortableSha256",
+            "Release source mismatch",
+        )
+        for token in required:
+            self.assertIn(token, workflow)
+
+        manual_only = (
+            "Restore, build and test exact release source for manual fallback",
+            "Publish installer source folder for manual fallback",
+            "Publish real portable single EXE for manual fallback",
+        )
+        for token in manual_only:
+            self.assertIn(token, workflow)
+        self.assertNotIn(
+            "- name: Restore, build and test exact release source\n        shell:",
+            workflow,
+        )
+
     def test_in_progress_exact_artifact_can_be_reused(self):
         api = FakeApi(status="in_progress", conclusion=None)
         proof = verifier.verify_canonical_package(
@@ -405,6 +450,31 @@ class PackageReuseTests(unittest.TestCase):
         )
         self.assertEqual(proof["proofStage"], "sealed-package-artifact-ready")
         self.assertFalse(proof["workflowCompleted"])
+
+    def test_push_main_exact_source_package_can_be_reused_for_release(self):
+        api = FakeApi(
+            event_name="push",
+            status="completed",
+            conclusion="success",
+            head_sha=SOURCE,
+            branch="main",
+        )
+        proof = verifier.verify_canonical_package(
+            api,
+            repository="masarray/arsas",
+            branch="main",
+            head_sha=SOURCE,
+            source_sha=SOURCE,
+            engine_sha=ENGINE,
+            ardirec_sha=ARDIREC,
+            event_name="push",
+            wait_seconds=0,
+            poll_seconds=1,
+            allow_in_progress_artifact=True,
+        )
+        self.assertEqual(proof["sourceSha"], SOURCE)
+        self.assertEqual(proof["canonicalRunStatus"], "completed")
+        self.assertEqual(proof["proofStage"], "completed-workflow")
 
     def test_transient_artifact_archive_404_is_retried_without_fallback(self):
         api = FakeApi(

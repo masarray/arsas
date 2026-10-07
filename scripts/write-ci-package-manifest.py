@@ -120,6 +120,7 @@ def stage_and_create_manifest(
     test_assembly_relative: str,
     comtrade_fixture_relative: str,
     locus_fixture_relative: str,
+    release_fixture_relative: str,
 ) -> dict:
     source_sha = sha(source_sha, "source")
     engine_sha = sha(engine_sha, "engine")
@@ -164,11 +165,13 @@ def stage_and_create_manifest(
     test_assembly = verification_target / PurePosixPath(test_assembly_relative)
     comtrade_fixture = verification_target / PurePosixPath(comtrade_fixture_relative)
     locus_fixture = verification_target / PurePosixPath(locus_fixture_relative)
+    release_fixture = verification_target / PurePosixPath(release_fixture_relative)
     for label, path in (
         ("native bridge", bridge),
         ("test assembly", test_assembly),
         ("COMTRADE fixture", comtrade_fixture),
         ("locus fixture", locus_fixture),
+        ("release COMTRADE fixture", release_fixture),
     ):
         if not path.is_file():
             raise FileNotFoundError(f"Required {label} missing from sealed payload: {path}")
@@ -187,6 +190,7 @@ def stage_and_create_manifest(
     test_rel = safe_relative(test_assembly, artifact_root)
     comtrade_rel = safe_relative(comtrade_fixture, artifact_root)
     locus_rel = safe_relative(locus_fixture, artifact_root)
+    release_rel = safe_relative(release_fixture, artifact_root)
 
     try:
         build_identity = json.loads(portable_identity_target.read_text(encoding="utf-8-sig"))
@@ -236,6 +240,7 @@ def stage_and_create_manifest(
             "testAssemblyPath": test_rel,
             "comtradeFixturePath": comtrade_rel,
             "locusFixturePath": locus_rel,
+            "releaseFixturePath": release_rel,
         },
         "fileCount": len(files),
         "totalBytes": sum(entry["size"] for entry in files),
@@ -275,6 +280,10 @@ def main() -> int:
         "--locus-fixture-relative",
         default="fixtures/distance_p1.cfg",
     )
+    parser.add_argument(
+        "--release-fixture-relative",
+        default="fixtures/p1-release-smoke.cfg",
+    )
     args = parser.parse_args()
 
     manifest = stage_and_create_manifest(
@@ -295,6 +304,7 @@ def main() -> int:
         test_assembly_relative=args.test_assembly_relative,
         comtrade_fixture_relative=args.comtrade_fixture_relative,
         locus_fixture_relative=args.locus_fixture_relative,
+        release_fixture_relative=args.release_fixture_relative,
     )
     print(
         "Canonical Windows package sealed: "
