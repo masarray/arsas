@@ -28,8 +28,6 @@ internal sealed class TrustedSclInitialValue
 
 public sealed partial class NativeIec61850Client
 {
-    private readonly Dictionary<string, ArMms.MmsDataSetDirectoryResult> _trustedSclDataSetDirectories =
-        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TrustedSclInitialValue> _trustedSclInitialValues =
         // IEC 61850 object/member identity is case-sensitive. Edition 2 tracking
         // can legally expose distinct paths such as "...t" and "...T".
@@ -38,24 +36,6 @@ public sealed partial class NativeIec61850Client
 
     internal bool HasTrustedSclOnlineAuthority => _trustedSclOnlineAuthorityActive;
     internal int TrustedSclInitialValueCount => _trustedSclOnlineAuthorityActive ? _trustedSclInitialValues.Count : 0;
-
-    internal IReadOnlyList<ArMms.MmsReportControlCandidate> TrustedSclReportControls
-        => _trustedSclOnlineAuthorityActive && _lastDiscovery is not null
-            ? _lastDiscovery.ReportInventory.ReportControls
-            : Array.Empty<ArMms.MmsReportControlCandidate>();
-
-    internal bool TryGetTrustedSclDataSetDirectory(
-        string dataSetReference,
-        out ArMms.MmsDataSetDirectoryResult directory)
-    {
-        directory = null!;
-        if (!_trustedSclOnlineAuthorityActive)
-            return false;
-
-        return _trustedSclDataSetDirectories.TryGetValue(
-            NormalizeTrustedSclReference(dataSetReference),
-            out directory!);
-    }
 
     internal bool TryGetTrustedSclInitialValue(
         string reference,
@@ -73,7 +53,6 @@ public sealed partial class NativeIec61850Client
     private void ResetTrustedSclOnlineAuthority()
     {
         _trustedSclOnlineAuthorityActive = false;
-        _trustedSclDataSetDirectories.Clear();
         _trustedSclInitialValues.Clear();
     }
 
@@ -284,12 +263,6 @@ public sealed partial class NativeIec61850Client
                 _canonicalRuntimeModel
                 ?? throw new InvalidOperationException("Canonical SCL runtime model was lost after successful import."));
             var dataSetDirectories = BuildModelDataSetDirectories(_liveModel, "TrustedScl");
-            foreach (var directory in dataSetDirectories)
-            {
-                _trustedSclDataSetDirectories[
-                    NormalizeTrustedSclReference(directory.DataSetReference)] = directory;
-            }
-
             var projectedInitialValueKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var leaf in initialRead.Batches
                          .SelectMany(batch => batch.Projections)
