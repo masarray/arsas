@@ -144,7 +144,7 @@ class CanonicalReuseTests(unittest.TestCase):
 
     def test_reject_wrong_merge_sha(self):
         api = FakeApi()
-        with self.assertRaisesRegex(consumer.ProofError, "stale/different PR merge tree|Timed out"):
+        with self.assertRaisesRegex(consumer.ProofError, "stale/different source revision|Timed out"):
             consumer.validate_artifact_archive(
                 api.blob, merge_sha="f" * 40, engine_sha=ENGINE,
                 workflow_run_id=RUN, run_attempt=1,
