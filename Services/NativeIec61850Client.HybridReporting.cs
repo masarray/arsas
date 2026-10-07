@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Engineering.Canonical;
 using ArIED61850Tester.Models;
 using ArMms = AR.Iec61850.Mms;
 
@@ -21,6 +22,9 @@ public sealed partial class NativeIec61850Client
 
     private readonly Dictionary<string, AuthoritativeHybridSubscription> _authoritativeHybridSubscriptions =
         new(StringComparer.OrdinalIgnoreCase);
+    private object? _canonicalPlanningSource;
+    private CanonicalIedModel? _canonicalPlanningModel;
+
 
     // P6 field-stability circuit breaker. Some IEDs advertise Define/DeleteNamedVariableList
     // but abort the MMS association when a dynamic DataSet write is attempted. One real
@@ -35,6 +39,24 @@ public sealed partial class NativeIec61850Client
 
     internal bool CanUseHybridReportPlanner(Iec61850MonitorDevice device)
         => ResolveHybridPlanningModel(device) is not null;
+
+    private CanonicalIedModel? ResolveCanonicalPlanningModel(Iec61850MonitorDevice device)
+    {
+        object? source = device.LiveDiscoveryModel ?? (object?)device.SclWorkspace;
+        if (source is null)
+            return null;
+
+        if (ReferenceEquals(source, _canonicalPlanningSource) && _canonicalPlanningModel is not null)
+            return _canonicalPlanningModel;
+
+        _canonicalPlanningModel = device.LiveDiscoveryModel is not null
+            ? CanonicalLiveModelAdapter.FromLiveDiscovery(device.LiveDiscoveryModel)
+            : device.SclWorkspace is not null
+                ? CanonicalLiveModelAdapter.FromSclWorkspace(device.SclWorkspace)
+                : null;
+        _canonicalPlanningSource = source;
+        return _canonicalPlanningModel;
+    }
 
     public async Task<NativeHybridReportPlanningResult> BuildHybridReportPlansAsync(
         Iec61850MonitorDevice device,
@@ -181,27 +203,78 @@ public sealed partial class NativeIec61850Client
             .Where(reference => !string.IsNullOrWhiteSpace(reference))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        var dynamicWriteCircuitOpen = DynamicWriteCircuitByDevice.TryGetValue(device.DeviceId, out var dynamicCircuitReason);
+        var allowDynamicWrites = device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen;
+
+        // P7 smart hot path: canonical static coverage is resolved entirely in memory.
+        // When selected mapped points need no dynamic RCB pool search, ARSAS asks ARIEC
+        // to probe only the concrete live RCBs that can serve those static DataSets.
+        // If any mapped residual still needs dynamic reporting, availability remains broad
+        // so the engine can safely choose an empty/writable dynamic candidate.
+        var canonicalModel = ResolveCanonicalPlanningModel(device);
+        CanonicalStaticReportCoveragePlan? canonicalCoverage = null;
+        ArMms.MmsCanonicalStaticRcbTargetResolution? staticTargets = null;
+        IReadOnlySet<string> targetedRcbReferences =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (canonicalModel is not null && descriptorPoints.Count > 0)
+        {
+            canonicalCoverage = CanonicalStaticReportCoverageResolver.Resolve(
+                canonicalModel,
+                descriptorPoints.Values
+                    .GroupBy(point => point.PointKey, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .Select(point => new CanonicalStaticReportSelection
+                    {
+                        Reference = point.IecReference,
+                        FunctionalConstraint = point.FunctionalConstraint
+                    }));
+
+            staticTargets = ArMms.MmsCanonicalStaticRcbTargetResolver.Resolve(
+                canonicalCoverage,
+                discovery.ReportInventory);
+
+            var dynamicResidualExists =
+                allowDynamicWrites && canonicalCoverage.UncoveredSignalCount > 0;
+            var everyStaticSegmentTargeted =
+                staticTargets.Segments.Count > 0 &&
+                staticTargets.Segments.All(segment =>
+                    segment.ExactLiveReportControlReferences.Count > 0);
+
+            if (!dynamicResidualExists &&
+                canonicalCoverage.CoveredSignalCount > 0 &&
+                everyStaticSegmentTargeted)
+            {
+                targetedRcbReferences = staticTargets.ExactLiveReportControlReferences;
+            }
+        }
+
         var availability = await RunMmsOperationAsync(
             () => _session.CheckReportControlAvailabilityAsync(
                 discovery.ReportInventory,
                 discovery.IedDirectory,
                 new ArMms.MmsRcbAvailabilityOptions
                 {
-                    MaxReportControls = 512,
+                    MaxReportControls = targetedRcbReferences.Count > 0
+                        ? Math.Max(1, targetedRcbReferences.Count)
+                        : 512,
                     ReadDataSetDirectories = true,
+                    TargetReportControlReferences = targetedRcbReferences,
                     CallerOwnedRcbReferences = callerOwned
                 },
                 cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
-        var dynamicWriteCircuitOpen = DynamicWriteCircuitByDevice.TryGetValue(device.DeviceId, out var dynamicCircuitReason);
-        var allowDynamicWrites = device.AllowDynamicDataSetWrites && !dynamicWriteCircuitOpen;
         var plannerOptions = new ArMms.MmsHybridReportAcquisitionOptions
         {
             AllowStaticBrcb = true,
             AllowStaticUrcb = true,
             AllowDynamicBrcb = allowDynamicWrites,
             AllowDynamicUrcb = allowDynamicWrites,
+            // Configured static RCBs may proceed on explicitly reduced reservation metadata
+            // only when ARIEC has freshly verified the populated DataSet, RptEna=false and
+            // no positive busy evidence. Dynamic DataSet mutation remains exact-free only.
+            AllowConfiguredStaticWithMissingReservationEvidence = true,
             // Existing caller-owned RCB reuse needs session aliasing semantics in ARSAS.
             // Until that is explicit, fail closed instead of starting a second monitor
             // against an RCB already owned by this association.
@@ -291,6 +364,20 @@ public sealed partial class NativeIec61850Client
             .ToArray();
 
         var p6Warnings = new List<string>();
+        if (targetedRcbReferences.Count > 0)
+        {
+            p6Warnings.Add(
+                $"P7 targeted static hot path probed {availability.ReportControls.Count} concrete RCB(s) from {availability.InventoryReportControlCount} inventory RCB(s); " +
+                $"targetedStateReads={availability.TargetedRcbStateLogicalReadCount}, DataSet network reads={availability.DataSetDirectoryNetworkReadCount}, cache hits={availability.DataSetDirectoryCacheHitCount}.");
+        }
+        else if (canonicalCoverage is not null && canonicalCoverage.CoveredSignalCount > 0)
+        {
+            p6Warnings.Add(
+                $"P7 canonical static coverage found {canonicalCoverage.CoveredSignalCount}/{canonicalCoverage.RequestedSignalCount} mapped point(s), but the runtime kept broad availability because dynamic residual search or exact live RCB targeting was still required.");
+        }
+        if (staticTargets is not null)
+            p6Warnings.AddRange(staticTargets.Warnings);
+
         if (staticInventoryMappedCount > 0)
         {
             p6Warnings.Add(
