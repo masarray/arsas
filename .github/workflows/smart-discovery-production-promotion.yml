@@ -66,8 +66,13 @@ jobs:
             throw "Smart Discovery route guard checkout mismatch. Expected $env:EXPECTED_SOURCE_SHA, got $actual."
           }
 
+      - name: Setup Python for bounded canonical evidence verification
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
       - name: Run offline canonical-proof fail-closed fixtures
-        run: python3 .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
+        run: python .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
 
       - id: engine
         name: Resolve exact pinned ARIEC61850 integration authority
