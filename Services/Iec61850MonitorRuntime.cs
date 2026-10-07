@@ -1017,20 +1017,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<ReportControlPlan> legacyPlans,
         CancellationToken cancellationToken)
     {
-        if (session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority)
-        {
-            session.HybridValidation.Reset(null);
-            var trustedPlans = legacyPlans.Count > 0
-                ? legacyPlans
-                : Iec61850ReportPlanner.BuildPlans(
-                    session.Device,
-                    session.Points.Values,
-                    allowDynamicDataSetWrites: false);
-            Log("INFO", session.Device.Name,
-                $"Trusted SCL report planning retained {trustedPlans.Count} local static candidate(s). DataSet membership and RCB identity remain SCL-authoritative; online directory discovery and Hybrid availability probing are bypassed.");
-            return trustedPlans.Where(plan => !plan.AllowDynamicDataSetWrites).ToArray();
-        }
-
         if (session.Client.CanUseHybridReportPlanner(session.Device))
         {
             NativeHybridReportPlanningResult hybrid;
