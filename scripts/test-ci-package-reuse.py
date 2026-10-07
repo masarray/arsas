@@ -82,6 +82,30 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
         (installer / "ARSAS.exe").write_bytes(b"folder-app")
         (installer / "LICENSE").write_text("license", encoding="utf-8")
 
+        portable_identity = root / "ARSAS-1.6.40-win-x64-portable-build-identity.json"
+        portable_identity.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "kind": "arsas-portable-build-identity",
+                    "version": "1.6.40",
+                    "runtime": "win-x64",
+                    "sourceCommit": SOURCE,
+                    "engineCommit": ENGINE,
+                    "ardIrecLockCommit": ARDIREC,
+                    "ardIrecBridgeSha256": hashlib.sha256(bridge.read_bytes()).hexdigest(),
+                    "ardIrecBridgeSizeBytes": bridge.stat().st_size,
+                    "portableSha256": hashlib.sha256(portable.read_bytes()).hexdigest(),
+                    "portableSizeBytes": portable.stat().st_size,
+                    "deterministicManagedBuild": True,
+                    "reproducibleNativeLinkRequested": True,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
         verification = root / "verification-source"
         tests = verification / "ARSAS.Tests"
         fixtures = verification / "fixtures"
@@ -96,6 +120,7 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
         manifest = producer.stage_and_create_manifest(
             artifact_root=artifact,
             portable=portable,
+            portable_identity=portable_identity,
             installer_input=installer,
             verification_dir=verification,
             evidence_dir=evidence,
@@ -182,6 +207,11 @@ class PackageReuseTests(unittest.TestCase):
         )
         self.assertEqual(proof["passed"], 1320)
         self.assertEqual(proof["portableSha256"], manifest["portable"]["sha256"])
+        self.assertEqual(proof["portablePath"], manifest["portable"]["path"])
+        self.assertEqual(
+            proof["portableIdentityPath"],
+            manifest["portableIdentity"]["path"],
+        )
         self.assertEqual(proof["nativeBridgeSha256"], manifest["nativeBridge"]["sha256"])
 
     def test_safe_materialization_occurs_after_verification(self):
@@ -200,6 +230,32 @@ class PackageReuseTests(unittest.TestCase):
             )
             self.assertTrue((out / "ci-windows-package-authority.json").is_file())
             self.assertTrue((out / "installer-input/ARSAS-1.6.40-win-x64/ARSAS.exe").is_file())
+
+    def test_rejects_tampered_portable_build_identity(self):
+        blob, _ = make_payload()
+        src = zipfile.ZipFile(io.BytesIO(blob))
+        buffer = io.BytesIO()
+        with src, zipfile.ZipFile(buffer, "w") as dst:
+            for info in src.infolist():
+                data = src.read(info)
+                if info.filename.endswith("portable-build-identity.json"):
+                    identity = json.loads(data)
+                    identity["sourceCommit"] = "f" * 40
+                    data = json.dumps(identity, sort_keys=True).encode()
+                dst.writestr(info.filename, data)
+        with self.assertRaisesRegex(
+            verifier.PackageProofError,
+            "size differs|digest differs|Portable build identity",
+        ):
+            verifier.validate_package_archive(
+                buffer.getvalue(),
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                workflow_run_id=RUN,
+                run_attempt=1,
+                event_name="pull_request",
+            )
 
     def test_rejects_wrong_ardirec_identity(self):
         blob, _ = make_payload()

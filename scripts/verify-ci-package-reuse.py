@@ -313,10 +313,34 @@ def validate_package_archive(
         ):
             raise PackageProofError("Canonical regression proof does not match package manifest")
 
-        for key in ("portable", "nativeBridge"):
+        for key in ("portable", "portableIdentity", "nativeBridge"):
             record = manifest.get(key)
             if not isinstance(record, dict) or recorded.get(record.get("path")) != record:
                 raise PackageProofError(f"Canonical package {key} record is invalid")
+
+        identity_record = manifest["portableIdentity"]
+        try:
+            build_identity = json.loads(
+                archive.read(infos[identity_record["path"]]).decode("utf-8-sig")
+            )
+        except (ValueError, UnicodeDecodeError, KeyError, OSError, RuntimeError) as exc:
+            raise PackageProofError("Portable build identity cannot be decoded") from exc
+        if (
+            build_identity.get("schemaVersion") != 1
+            or build_identity.get("kind") != "arsas-portable-build-identity"
+            or build_identity.get("sourceCommit") != source_sha
+            or build_identity.get("engineCommit") != engine_sha
+            or build_identity.get("ardIrecLockCommit") != ardirec_sha
+            or build_identity.get("portableSha256") != manifest["portable"]["sha256"]
+            or build_identity.get("portableSizeBytes") != manifest["portable"]["size"]
+            or build_identity.get("ardIrecBridgeSha256") != manifest["nativeBridge"]["sha256"]
+            or build_identity.get("ardIrecBridgeSizeBytes") != manifest["nativeBridge"]["size"]
+            or build_identity.get("deterministicManagedBuild") is not True
+            or build_identity.get("reproducibleNativeLinkRequested") is not True
+        ):
+            raise PackageProofError(
+                "Portable build identity does not match canonical package authority"
+            )
         verification = manifest.get("verification")
         if not isinstance(verification, dict):
             raise PackageProofError("Canonical package verification references are missing")
@@ -348,6 +372,9 @@ def validate_package_archive(
         "fileCount": manifest["fileCount"],
         "totalBytes": manifest["totalBytes"],
         "portableSha256": manifest["portable"]["sha256"],
+        "portableSizeBytes": manifest["portable"]["size"],
+        "portablePath": manifest["portable"]["path"],
+        "portableIdentityPath": manifest["portableIdentity"]["path"],
         "nativeBridgeSha256": manifest["nativeBridge"]["sha256"],
         "installerInputRoot": manifest["installerInputRoot"],
         "testAssemblyPath": manifest["verification"]["testAssemblyPath"],

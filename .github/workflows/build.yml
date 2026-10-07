@@ -568,6 +568,7 @@ jobs:
           python .\ArIED61850Tester\scripts\write-ci-package-manifest.py `
             --artifact-root $artifactRoot `
             --portable ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe" `
+            --portable-identity ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable-build-identity.json" `
             --installer-input ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64" `
             --verification-dir ".\ArIED61850Tester\TestResults\windows-package-verification" `
             --evidence-dir ".\ArIED61850Tester\TestResults" `
@@ -590,7 +591,9 @@ jobs:
               -not [bool]$manifest.portableSmokePassed -or
               [bool]$manifest.installerBuilt -or
               [bool]$manifest.releasePromotionAuthority -or
-              $manifest.nativeBridge.sha256 -ne $env:ARDIREC_BRIDGE_SHA256) {
+              $manifest.nativeBridge.sha256 -ne $env:ARDIREC_BRIDGE_SHA256 -or
+              -not $manifest.portableIdentity -or
+              $manifest.portableIdentity.path -notmatch 'portable-build-identity\.json$') {
             throw "Canonical Windows package manifest does not match the tested build authority."
           }
 

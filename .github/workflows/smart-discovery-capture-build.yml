@@ -94,6 +94,12 @@ jobs:
             throw "Unexpected engine commit (physical baseline): $baselineEngineCommit"
           }
           $integrationEngineCommit = $lock.commit
+          $ardirecLock = Get-Content .\ArIED61850Tester\engines\ARDIREC.lock.json -Raw | ConvertFrom-Json
+          if ($ardirecLock.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirecLock.bridge.abi -ne 1 -or
+              $ardirecLock.bridge.mode -ne 'native-only') {
+            throw 'Invalid ArdIrec Field Capture pin.'
+          }
           $arsasCommit = (git -C .\ArIED61850Tester rev-parse HEAD).Trim()
           if ($arsasCommit -notmatch '^[0-9a-f]{40}$') {
             throw "Invalid cloned ARSAS commit: $arsasCommit"
@@ -101,6 +107,7 @@ jobs:
           "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARIEC61850_COMMIT=$integrationEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARIEC61850_BASELINE_COMMIT=$baselineEngineCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($ardirecLock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           $version = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
           "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
@@ -283,49 +290,88 @@ jobs:
             throw 'Field Capture Control path does not consume the authoritative smart domain inventory.'
           }
 
-      - name: Setup Python for canonical regression evidence
+      - name: Setup Python for sealed canonical package verification
         if: github.event_name == 'pull_request'
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
-      - name: Run offline canonical evidence safety fixtures
+      - name: Run offline sealed-package safety fixtures
         if: github.event_name == 'pull_request'
-        run: python .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
+        run: python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
 
-      - name: Reuse exact canonical ARSAS full regression
+      - name: Promote exact sealed canonical portable
         if: github.event_name == 'pull_request'
         shell: powershell
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_MERGE_SHA: ${{ github.sha }}
         run: |
+          $packageRoot = '.\ArIED61850Tester\TestResults\smart-capture-canonical-package'
           $proofPath = '.\ArIED61850Tester\TestResults\ci-smart-capture-canonical-proof.json'
-          python .\ArIED61850Tester\scripts\verify-ci-canonical-reuse.py `
+          python .\ArIED61850Tester\scripts\verify-ci-package-reuse.py `
             --repository $env:GITHUB_REPOSITORY `
             --head-branch $env:PR_HEAD_BRANCH `
             --head-sha $env:PR_HEAD_SHA `
-            --merge-sha $env:PR_MERGE_SHA `
+            --source-sha $env:GITHUB_SHA `
             --engine-sha $env:ARIEC61850_COMMIT `
-            --wait-seconds 960 `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --event-name pull_request `
+            --wait-seconds 1200 `
             --allow-in-progress-artifact `
-            --output $proofPath
+            --output-dir $packageRoot `
+            --proof-output $proofPath
           if ($LASTEXITCODE -ne 0) {
-            throw 'Field Capture requires exact canonical ARSAS full-regression evidence.'
+            throw 'Field Capture requires exact sealed canonical Windows package evidence.'
           }
 
           $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
-          if ($proof.mergeSha -ne $env:PR_MERGE_SHA -or
+          if ($proof.sourceSha -ne $env:GITHUB_SHA -or
               $proof.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $proof.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              $proof.version -ne $env:ARSAS_VERSION -or
               [int]$proof.failed -ne 0 -or
               [int]$proof.notExecuted -ne 0 -or
-              [int]$proof.passed -lt 1) {
-            throw 'Field Capture canonical regression proof is incomplete.'
+              [int]$proof.passed -lt 1 -or
+              [bool]$proof.releasePromotionAuthority) {
+            throw 'Field Capture sealed canonical package proof is incomplete.'
           }
-          "SMART_CAPTURE_REGRESSION_AUTHORITY=canonical-build-arsas:$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" |
+
+          $portable = Join-Path $packageRoot ($proof.portablePath -replace '/', '\')
+          $identity = Join-Path $packageRoot ($proof.portableIdentityPath -replace '/', '\')
+          foreach ($required in @($portable, $identity)) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Verified canonical portable payload is incomplete: $required"
+            }
+          }
+          $portableSha = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($portableSha -ne $proof.portableSha256 -or
+              [long](Get-Item $portable).Length -ne [long]$proof.portableSizeBytes) {
+            throw 'Verified canonical portable bytes differ after materialization.'
+          }
+
+          $dist = '.\ArIED61850Tester\dist'
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item $portable (Join-Path $dist (Split-Path $portable -Leaf)) -Force
+          Copy-Item $identity (Join-Path $dist (Split-Path $identity -Leaf)) -Force
+
+          "SMART_CAPTURE_REGRESSION_AUTHORITY=sealed-build-arsas:$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" |
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SMART_CAPTURE_PACKAGING_AUTHORITY=sealed-build-arsas:$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          @(
+            '## CI-P3B Field Capture exact-byte promotion',
+            '',
+            "- source: $env:GITHUB_SHA",
+            "- engine: $env:ARIEC61850_COMMIT",
+            "- ArdIrec: $env:ARDIREC_COMMIT",
+            "- Build ARSAS run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt)",
+            "- regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- portable SHA-256: $($proof.portableSha256)",
+            '- Field Capture retains field checks and independent runtime smoke'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
       - name: Record manual reusable regression authority
         if: github.event_name == 'workflow_dispatch'
@@ -333,13 +379,17 @@ jobs:
         run: |
           "SMART_CAPTURE_REGRESSION_AUTHORITY=manual-reusable-exact-sha" |
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SMART_CAPTURE_PACKAGING_AUTHORITY=independent-manual-field-capture-publish" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup .NET 8 for independent Field Capture publish
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
       - name: Publish portable single EXE x64
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -369,7 +419,7 @@ jobs:
             "ARIEC61850 physical baseline commit: $env:ARIEC61850_BASELINE_COMMIT",
             "Engine PR: 134",
             "Regression authority: $env:SMART_CAPTURE_REGRESSION_AUTHORITY",
-            "Packaging authority: independent Field Capture publish/smoke",
+            "Packaging authority: $env:SMART_CAPTURE_PACKAGING_AUTHORITY",
             "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
             "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
