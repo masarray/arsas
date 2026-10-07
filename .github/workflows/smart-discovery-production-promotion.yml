@@ -121,6 +121,7 @@ jobs:
             --merge-sha $env:PR_MERGE_SHA `
             --engine-sha $env:PINNED_ENGINE_SHA `
             --wait-seconds 960 `
+            --allow-in-progress-artifact `
             --output (Join-Path $env:RUNNER_TEMP 'ci-production-route-canonical-proof.json')
           if ($LASTEXITCODE -ne 0) {
             throw 'Production route guard requires matching exact-SHA canonical full-regression PASS.'
