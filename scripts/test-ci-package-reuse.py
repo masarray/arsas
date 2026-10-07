@@ -157,6 +157,8 @@ class FakeApi:
         conclusion: str | None = "success",
         artifact_available: bool = True,
         binary_404_count: int = 0,
+        head_sha: str = HEAD,
+        branch: str = BRANCH,
     ):
         self.blob, _ = make_payload(event_name)
         self.artifact_available = artifact_available
@@ -165,8 +167,8 @@ class FakeApi:
             "id": RUN,
             "run_attempt": 1,
             "name": "Build ARSAS",
-            "head_sha": HEAD,
-            "head_branch": BRANCH,
+            "head_sha": head_sha,
+            "head_branch": branch,
             "event": event_name,
             "status": status,
             "conclusion": conclusion,
@@ -448,6 +450,31 @@ class PackageReuseTests(unittest.TestCase):
         )
         self.assertEqual(proof["proofStage"], "sealed-package-artifact-ready")
         self.assertFalse(proof["workflowCompleted"])
+
+    def test_push_main_exact_source_package_can_be_reused_for_release(self):
+        api = FakeApi(
+            event_name="push",
+            status="completed",
+            conclusion="success",
+            head_sha=SOURCE,
+            branch="main",
+        )
+        proof = verifier.verify_canonical_package(
+            api,
+            repository="masarray/arsas",
+            branch="main",
+            head_sha=SOURCE,
+            source_sha=SOURCE,
+            engine_sha=ENGINE,
+            ardirec_sha=ARDIREC,
+            event_name="push",
+            wait_seconds=0,
+            poll_seconds=1,
+            allow_in_progress_artifact=True,
+        )
+        self.assertEqual(proof["sourceSha"], SOURCE)
+        self.assertEqual(proof["canonicalRunStatus"], "completed")
+        self.assertEqual(proof["proofStage"], "completed-workflow")
 
     def test_transient_artifact_archive_404_is_retried_without_fallback(self):
         api = FakeApi(
