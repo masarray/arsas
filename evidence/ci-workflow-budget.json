@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2E: exact-main canonical ARSAS regression reused post-merge",
-  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A-P2D consolidate PR regression evidence; P2E extends the same exact-SHA/digest/counter contract to push/main so post-merge production verification keeps independent R10 engine tests while reusing canonical Build ARSAS application regression.",
+  "baselineName": "CI-P2F: canonical regression reused by independent Field Capture packaging",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A-P2E consolidate exact-SHA regression evidence; P2F keeps Field Capture source/wire checks and independent publish/smoke, but reuses canonical application regression because source and integration engine are identical. Binary artifact reuse remains forbidden because observed canonical and Field Capture EXEs were not byte-identical.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -20,13 +20,13 @@
     "workflowFiles": 31,
     "actionsCheckout": 35,
     "actionsSetupDotnet": 11,
-    "actionsSetupPython": 16,
-    "dotnetRestore": 12,
-    "dotnetBuild": 12,
-    "dotnetTest": 14,
+    "actionsSetupPython": 17,
+    "dotnetRestore": 11,
+    "dotnetBuild": 11,
+    "dotnetTest": 13,
     "actionsUploadArtifact": 34,
-    "workflowsWithDotnetBuild": 11,
-    "workflowsWithDotnetTest": 10
+    "workflowsWithDotnetBuild": 10,
+    "workflowsWithDotnetTest": 9
   },
   "interpretation": [
     "The limits freeze CI sprawl; they are not performance targets and do not prove semantic necessity.",
@@ -246,5 +246,50 @@
     "diagnosticAttestationMarksIncompleteFailures": true,
     "noRuntimeOrPhysicalEvidenceRewrite": true,
     "rollback": "Restore direct ARSAS main restore/build/test in post-merge workflow; keep independent engine test and physical convergence assertions unchanged."
+  },
+  "ciP2FieldCaptureRegressionReuse": {
+    "issueNumber": 442,
+    "lane": "smart-discovery-capture-build",
+    "approach": "Preserve exact Field Capture source checks, P0-5d fixtures, integration engine checkout, independent publish and smoke; replace duplicate application restore/build/full-test with exact canonical Build ARSAS regression evidence. Manual dispatch retains full regression through reusable CI-P1 before packaging.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 16,
+      "dotnetRestore": 12,
+      "dotnetBuild": 12,
+      "dotnetTest": 14,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 11,
+      "workflowsWithDotnetTest": 10
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 17,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 13,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "binaryReuseForbidden": true,
+    "binaryParityEvidence": {
+      "sourceHead": "83286557f3a485f2e589ed4742f2d8f9a3d9b8ef",
+      "engineCommit": "648124097621046f5f127ceb1cf853fea54db730",
+      "canonicalExeBytes": 78397596,
+      "canonicalExeSha256": "49ff985f9ab969483836810dc15895da5ea0b9b046cfb57fdb96b8897269e774",
+      "fieldCaptureExeBytes": 78397601,
+      "fieldCaptureExeSha256": "ef80317a8665b7fa900473650864f8d7fb7f9250229880c11b5f4a558aaab40e",
+      "byteIdentical": false
+    },
+    "physicalBaselineCommitPreserved": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+    "integrationEngineStillCheckedOutForPackaging": true,
+    "independentPublishAndSmokeRetained": true,
+    "canonicalBuildRemainsRegressionAuthorityOnPullRequest": true,
+    "manualReusableRegressionRetained": true,
+    "rollback": "Restore direct Field Capture restore/build/dotnet test steps; do not substitute canonical EXE unless future reproducible-build evidence proves byte identity."
   }
 }
