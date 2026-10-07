@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2D: exact regression artifact-ready consumers",
-  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A/P2B/P2C reuse one canonical ARSAS full-regression proof; P2D keeps those exact-SHA/digest/counter guarantees but allows consumers to stop polling once that all-pass artifact is uploaded. Build ARSAS packaging/smoke remains an independent check and is not claimed by early regression proof.",
+  "baselineName": "CI-P2E: exact-main canonical ARSAS regression reused post-merge",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A-P2D consolidate PR regression evidence; P2E extends the same exact-SHA/digest/counter contract to push/main so post-merge production verification keeps independent R10 engine tests while reusing canonical Build ARSAS application regression.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -20,10 +20,10 @@
     "workflowFiles": 31,
     "actionsCheckout": 35,
     "actionsSetupDotnet": 11,
-    "actionsSetupPython": 15,
-    "dotnetRestore": 13,
-    "dotnetBuild": 13,
-    "dotnetTest": 15,
+    "actionsSetupPython": 16,
+    "dotnetRestore": 12,
+    "dotnetBuild": 12,
+    "dotnetTest": 14,
     "actionsUploadArtifact": 34,
     "workflowsWithDotnetBuild": 11,
     "workflowsWithDotnetTest": 10
@@ -207,5 +207,44 @@
     },
     "staticLimitsChanged": false,
     "rollback": "Remove the opt-in flag from P2A/P2B/P2C consumers to restore completed-workflow waiting without changing evidence formats or physical/release authority."
+  },
+  "ciP2PostMergeMainReuse": {
+    "issueNumber": 440,
+    "lane": "smart-discovery-post-merge-production",
+    "approach": "On push/main, preserve R10 physical assertions and independent engine restore/build/test, then consume exact same-main-SHA canonical Build ARSAS push artifact using event=push, branch=main, exact engine SHA and artifact-ready proof.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 15,
+      "dotnetRestore": 13,
+      "dotnetBuild": 13,
+      "dotnetTest": 15,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 11,
+      "workflowsWithDotnetTest": 10
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 16,
+      "dotnetRestore": 12,
+      "dotnetBuild": 12,
+      "dotnetTest": 14,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 11,
+      "workflowsWithDotnetTest": 10
+    },
+    "independentEngineFullRegressionRetained": true,
+    "exactMainSourceShaRequired": true,
+    "exactEngineShaRequired": true,
+    "canonicalEvent": "push",
+    "canonicalBranch": "main",
+    "canonicalBuildRemainsPackagingAuthority": true,
+    "attestationSchemaVersion": 1,
+    "diagnosticAttestationMarksIncompleteFailures": true,
+    "noRuntimeOrPhysicalEvidenceRewrite": true,
+    "rollback": "Restore direct ARSAS main restore/build/test in post-merge workflow; keep independent engine test and physical convergence assertions unchanged."
   }
 }
