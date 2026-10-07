@@ -47,7 +47,7 @@ class ProofError(RuntimeError):
 
 
 def validate_identity(repo: str, head_sha: str, merge_sha: str, engine_sha: str,
-                      branch: str) -> None:
+                      branch: str, event_name: str = "pull_request") -> None:
     if repo != "masarray/arsas":
         raise ProofError("Canonical CI reuse is restricted to masarray/arsas")
     for label, value in [
@@ -58,16 +58,20 @@ def validate_identity(repo: str, head_sha: str, merge_sha: str, engine_sha: str,
         except ValueError as exc:
             raise ProofError(str(exc)) from exc
     if not branch or len(branch) > 200 or "\n" in branch:
-        raise ProofError("Invalid PR head branch identity")
+        raise ProofError("Invalid canonical branch identity")
+    if event_name not in {"pull_request", "push"}:
+        raise ProofError("Unsupported canonical workflow event")
 
 
-def candidate_runs(payload: dict, head_sha: str, branch: str) -> list[dict]:
+def candidate_runs(
+    payload: dict, head_sha: str, branch: str, event_name: str = "pull_request"
+) -> list[dict]:
     runs = payload.get("workflow_runs", [])
     if not isinstance(runs, list):
         raise ProofError("GitHub Actions run listing is malformed")
     matches = [
         run for run in runs
-        if run.get("event") == "pull_request"
+        if run.get("event") == event_name
         and run.get("name") == "Build ARSAS"
         and run.get("head_sha") == head_sha
         and run.get("head_branch") == branch
@@ -79,7 +83,8 @@ def candidate_runs(payload: dict, head_sha: str, branch: str) -> list[dict]:
 
 def validate_artifact_archive(
     payload: bytes, *, merge_sha: str, engine_sha: str,
-    workflow_run_id: int, run_attempt: int
+    workflow_run_id: int, run_attempt: int,
+    expected_event_name: str = "pull_request",
 ) -> dict:
     if not payload or len(payload) > MAX_ARCHIVE_BYTES:
         raise ProofError("Canonical artifact is missing or exceeds bounded size")
@@ -125,8 +130,10 @@ def validate_artifact_archive(
         raise ProofError("Wrong canonical artifact provenance kind")
     if manifest.get("canonicalWorkflow") != "Build ARSAS":
         raise ProofError("Proof is not from canonical Build ARSAS")
-    if manifest.get("eventName") != "pull_request":
-        raise ProofError("Canonical proof was not produced by a PR run")
+    if manifest.get("eventName") != expected_event_name:
+        raise ProofError(
+            f"Canonical proof event mismatch: expected {expected_event_name}"
+        )
     if manifest.get("workflowRunId") != workflow_run_id:
         raise ProofError("Canonical workflow run ID differs from API run")
     if manifest.get("runAttempt") != run_attempt:
@@ -225,21 +232,24 @@ def verify_canonical(
     head_sha: str, merge_sha: str, engine_sha: str,
     wait_seconds: int = 960, poll_seconds: int = 10,
     allow_in_progress_artifact: bool = False,
+    event_name: str = "pull_request",
 ) -> dict:
-    validate_identity(repository, head_sha, merge_sha, engine_sha, branch)
+    validate_identity(
+        repository, head_sha, merge_sha, engine_sha, branch, event_name
+    )
     if wait_seconds < 0 or poll_seconds < 1:
         raise ProofError("Invalid bounded wait policy")
 
     base = "https://api.github.com/repos/" + repository
     query = urllib.parse.urlencode(
-        {"event": "pull_request", "head_sha": head_sha, "per_page": 100}
+        {"event": event_name, "head_sha": head_sha, "per_page": 100}
     )
     url = f"{base}/actions/workflows/build.yml/runs?{query}"
     deadline = time.monotonic() + wait_seconds
     previous = None
 
     while True:
-        runs = candidate_runs(api.get(url), head_sha, branch)
+        runs = candidate_runs(api.get(url), head_sha, branch, event_name)
         if runs:
             run = runs[0]  # Never use an older successful attempt over a newer failure.
             run_id, attempt = run["id"], run["run_attempt"]
@@ -270,7 +280,8 @@ def verify_canonical(
                     try:
                         proof = validate_artifact_archive(
                             blob, merge_sha=merge_sha, engine_sha=engine_sha,
-                            workflow_run_id=run_id, run_attempt=attempt
+                            workflow_run_id=run_id, run_attempt=attempt,
+                            expected_event_name=event_name,
                         )
                     except ProofError as exc:
                         if "stale/different PR merge tree" not in str(exc):
@@ -289,6 +300,8 @@ def verify_canonical(
                                 else "full-regression-artifact-ready"
                             ),
                             "packagingSmokeProven": status == "completed",
+                            "eventName": event_name,
+                            "branch": branch,
                         })
                         return proof
 
@@ -311,6 +324,11 @@ def main() -> int:
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--merge-sha", required=True)
     parser.add_argument("--engine-sha", required=True)
+    parser.add_argument(
+        "--event-name",
+        choices=("pull_request", "push"),
+        default="pull_request",
+    )
     parser.add_argument("--wait-seconds", type=int, default=960)
     parser.add_argument(
         "--allow-in-progress-artifact",
@@ -331,6 +349,7 @@ def main() -> int:
         engine_sha=args.engine_sha,
         wait_seconds=args.wait_seconds,
         allow_in_progress_artifact=args.allow_in_progress_artifact,
+        event_name=args.event_name,
     )
     payload = json.dumps(result, sort_keys=True)
     print("Canonical full-regression reuse PASS: " + payload)
