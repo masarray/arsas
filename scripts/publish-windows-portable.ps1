@@ -168,36 +168,7 @@ if ($SingleFile) {
             $repoRoot = (& git -C $path rev-parse --show-toplevel 2>$null).Trim()
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) { return $null }
             $head = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
-            if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}
-
-$requiredInstallerFiles = @(
-    "AR.Iec61850.Transports.Npcap.dll",
-    "SharpPcap.dll",
-    "PacketDotNet.dll",
-    "README.txt",
-    "LICENSE",
-    "COMMERCIAL-LICENSE.md",
-    "TRADEMARK.md",
-    "COPYRIGHT.md",
-    "THIRD_PARTY_NOTICES.md",
-    "NOTICE",
-    "LICENSING.md",
-    "engines\ARIEC61850.lock.json",
-    "engines\ARDIREC.lock.json",
-    "Tools\ArdIrec\ardirec_bridge.dll"
-)
-foreach ($runtimeFile in $requiredInstallerFiles) {
-    $runtimePath = Join-Path $publishDir $runtimeFile
-    if (-not (Test-Path $runtimePath -PathType Leaf)) {
-        throw "Installer-source dependency was not published: $runtimePath"
-    }
-}
-
-Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $folderZipPath -CompressionLevel Optimal
-Write-Host "==> Installer source executable: $exe"
-Write-Host "==> Legacy folder ZIP for diagnostics: $folderZipPath"
-Write-Output $publishDir
-) { return $null }
+            if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') { return $null }
             return $head
         }
         catch {
@@ -212,36 +183,7 @@ Write-Output $publishDir
     $ardirecLockCommit = $null
     if (Test-Path $ardirecLockPath -PathType Leaf) {
         $ardirecLock = Get-Content $ardirecLockPath -Raw | ConvertFrom-Json
-        if ($ardirecLock.commit -match '^[0-9a-f]{40}
-
-$requiredInstallerFiles = @(
-    "AR.Iec61850.Transports.Npcap.dll",
-    "SharpPcap.dll",
-    "PacketDotNet.dll",
-    "README.txt",
-    "LICENSE",
-    "COMMERCIAL-LICENSE.md",
-    "TRADEMARK.md",
-    "COPYRIGHT.md",
-    "THIRD_PARTY_NOTICES.md",
-    "NOTICE",
-    "LICENSING.md",
-    "engines\ARIEC61850.lock.json",
-    "engines\ARDIREC.lock.json",
-    "Tools\ArdIrec\ardirec_bridge.dll"
-)
-foreach ($runtimeFile in $requiredInstallerFiles) {
-    $runtimePath = Join-Path $publishDir $runtimeFile
-    if (-not (Test-Path $runtimePath -PathType Leaf)) {
-        throw "Installer-source dependency was not published: $runtimePath"
-    }
-}
-
-Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $folderZipPath -CompressionLevel Optimal
-Write-Host "==> Installer source executable: $exe"
-Write-Host "==> Legacy folder ZIP for diagnostics: $folderZipPath"
-Write-Output $publishDir
-) {
+        if ($ardirecLock.commit -match '^[0-9a-f]{40}$') {
             $ardirecLockCommit = [string]$ardirecLock.commit
         }
     }
