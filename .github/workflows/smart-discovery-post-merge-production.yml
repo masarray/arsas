@@ -6,15 +6,33 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smart-discovery-post-merge-production-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   post-merge-production:
     name: Verify R10 convergence authority on main
     runs-on: windows-latest
     steps:
-      - name: Checkout ARSAS main
+      - name: Checkout exact ARSAS main revision
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact post-merge source identity
+        shell: powershell
+        run: |
+          $actual = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -cne $env:GITHUB_SHA.ToLowerInvariant()) {
+            throw "Post-merge source mismatch. Expected $env:GITHUB_SHA, got $actual."
+          }
 
       - name: Verify R10 physical convergence authority
         shell: powershell
@@ -73,13 +91,67 @@ jobs:
           dotnet restore ..\ARIEC61850\ARIEC61850.sln
           dotnet build ..\ARIEC61850\ARIEC61850.sln -c Release --no-restore
           dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Independent R10 engine regression failed.' }
+          "ENGINE_FULL_REGRESSION_VERIFIED=true" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build and test ARSAS main
+      - name: Setup Python for exact-main canonical regression evidence
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run offline canonical evidence safety fixtures
+        run: python .\scripts\test-ci-canonical-reuse.py
+
+      - name: Reuse exact-main canonical ARSAS full regression
         shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          dotnet restore .\ArIED61850Tester.sln
-          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
-          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          $proofPath = Join-Path $env:RUNNER_TEMP 'ci-post-merge-canonical-proof.json'
+          python .\scripts\verify-ci-canonical-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch main `
+            --head-sha $env:GITHUB_SHA `
+            --merge-sha $env:GITHUB_SHA `
+            --engine-sha $env:ENGINE_COMMIT `
+            --event-name push `
+            --wait-seconds 960 `
+            --allow-in-progress-artifact `
+            --output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Post-merge production verification requires exact-main canonical ARSAS regression evidence.'
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if ($proof.eventName -ne 'push' -or
+              $proof.branch -ne 'main' -or
+              $proof.mergeSha -ne $env:GITHUB_SHA -or
+              $proof.engineSha -ne $env:ENGINE_COMMIT -or
+              [int]$proof.failed -ne 0 -or
+              [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1) {
+            throw 'Exact-main canonical ARSAS regression proof is incomplete.'
+          }
+
+          "ARSAS_CANONICAL_REGRESSION_VERIFIED=true" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_CANONICAL_RUN_ID=$($proof.canonicalRunId)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_CANONICAL_RUN_ATTEMPT=$($proof.canonicalRunAttempt)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_CANONICAL_TESTS_PASSED=$($proof.passed)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_CANONICAL_PROOF_STAGE=$($proof.proofStage)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARSAS_CANONICAL_PACKAGING_PROVEN=$($proof.packagingSmokeProven.ToString().ToLowerInvariant())" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          @(
+            '## R10 post-merge production verification',
+            '',
+            "- exact main SHA: $env:GITHUB_SHA",
+            "- exact engine SHA: $env:ENGINE_COMMIT",
+            '- R10 engine regression: independently executed',
+            "- canonical Build ARSAS run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt)",
+            "- canonical ARSAS regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- proof stage: $($proof.proofStage)",
+            "- packaging/smoke proven by this workflow: $($proof.packagingSmokeProven)",
+            '- Build ARSAS remains independent packaging/smoke authority'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
       - name: Write R10 post-merge evidence
         if: always()
@@ -87,12 +159,25 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force .\TestResults | Out-Null
           $target = Get-Content .\evidence\interoperability-reference-target.json -Raw | ConvertFrom-Json
+          $engineVerified = $env:ENGINE_FULL_REGRESSION_VERIFIED -eq 'true'
+          $arsasVerified = $env:ARSAS_CANONICAL_REGRESSION_VERIFIED -eq 'true'
+          $status = if ($engineVerified -and $arsasVerified) { 'passed' } else { 'incomplete-or-failed' }
+
           [ordered]@{
             schemaVersion = 1
+            verificationStatus = $status
             sourceCommit = $env:GITHUB_SHA
             engineCommit = $env:ENGINE_COMMIT
             convergenceStatus = $target.status
             physicalRetestPassed = [bool]$target.promotion.physicalRetestPassed
+            engineFullRegressionVerified = $engineVerified
+            arsasCanonicalRegressionVerified = $arsasVerified
+            arsasCanonicalRunId = $env:ARSAS_CANONICAL_RUN_ID
+            arsasCanonicalRunAttempt = $env:ARSAS_CANONICAL_RUN_ATTEMPT
+            arsasCanonicalTestsPassed = $env:ARSAS_CANONICAL_TESTS_PASSED
+            arsasCanonicalProofStage = $env:ARSAS_CANONICAL_PROOF_STAGE
+            arsasCanonicalPackagingProven = ($env:ARSAS_CANONICAL_PACKAGING_PROVEN -eq 'true')
+            buildArsasRemainsPackagingAuthority = $true
             ed2ProjectionErrors = [int]$target.physicalEvidence.arsasR10.reuseEdition2.projectionErrors
             ed2CacheLoss = [int]$target.physicalEvidence.arsasR10.reuseEdition2.cacheLoss
             ed1ProjectionErrors = [int]$target.physicalEvidence.arsasR10.reuseEdition1.projectionErrors
