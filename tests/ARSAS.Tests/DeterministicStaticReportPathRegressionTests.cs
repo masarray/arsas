@@ -28,21 +28,21 @@ public sealed class DeterministicStaticReportPathRegressionTests
     }
 
     [Fact]
-    public void TrustedSclStaticPath_RequestsOneShotGi_WhileSafeTrialRemainsReadOnly()
+    public void UnifiedConfiguredStaticPath_RequestsOneShotGi_WhileSafeTrialRemainsReadOnly()
     {
-        var trustedStatic = Read("Services/NativeIec61850Client.TrustedSclStaticReporting.cs");
+        var staticReporting = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
+        var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         var safeTrial = Read("Services/SclSafeTrialRunner.cs");
 
-        Assert.Contains("triggerGeneralInterrogation: true", trustedStatic, StringComparison.Ordinal);
-        Assert.Contains("one explicit GI=true", trustedStatic, StringComparison.Ordinal);
-        Assert.Contains("one-shot GI startup request", trustedStatic, StringComparison.Ordinal);
-        Assert.DoesNotContain("triggerGeneralInterrogation: false", trustedStatic, StringComparison.Ordinal);
+        Assert.Contains("StartConfiguredStaticReportMonitorAsync", staticReporting, StringComparison.Ordinal);
+        Assert.Contains("triggerGeneralInterrogation: true", staticReporting, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartTrustedSclStaticReportMonitorAsync", runtime, StringComparison.Ordinal);
 
         Assert.Contains("readOnly = true", safeTrial, StringComparison.Ordinal);
         Assert.Contains("writesAllowed = false", safeTrial, StringComparison.Ordinal);
         Assert.Contains("reportEnableAllowed = false", safeTrial, StringComparison.Ordinal);
         Assert.Contains("dynamicDataSetAllowed = false", safeTrial, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartTrustedSclStaticReportMonitorAsync", safeTrial, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartConfiguredStaticReportMonitorAsync", safeTrial, StringComparison.Ordinal);
     }
 
     [Fact]
