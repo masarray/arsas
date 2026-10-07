@@ -34,6 +34,10 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   mainline-readiness:
     name: Require R10 physical authority before mainline review
@@ -102,9 +106,57 @@ jobs:
           dotnet build ..\ARIEC61850\ARIEC61850.sln -c Release --no-restore
           dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
 
-      - name: Build and test ARSAS candidate
+      - name: Set up Python for canonical regression evidence verification
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Require successful canonical Build ARSAS for same PR merge and engine
+        if: github.event_name == 'pull_request'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+        run: |
+          python .\scripts\verify-ci-canonical-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --head-sha $env:PR_HEAD_SHA `
+            --merge-sha $env:PR_MERGE_SHA `
+            --engine-sha $env:ENGINE_COMMIT `
+            --wait-seconds 960 `
+            --output (Join-Path $env:RUNNER_TEMP 'ci-r10-canonical-reuse.json')
+          if ($LASTEXITCODE -ne 0) {
+            throw 'R10 Mainline Readiness cannot reuse canonical ARSAS regression evidence.'
+          }
+
+      - name: Report independent engine test plus exact ARSAS regression reuse
+        if: github.event_name == 'pull_request'
         shell: powershell
         run: |
-          dotnet restore .\ArIED61850Tester.sln
-          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
-          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          $proof = Get-Content (Join-Path $env:RUNNER_TEMP 'ci-r10-canonical-reuse.json') -Raw | ConvertFrom-Json
+          if ([int]$proof.failed -ne 0 -or [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1 -or $proof.engineSha -ne $env:ENGINE_COMMIT) {
+            throw 'R10 accepted engine/regression evidence is incomplete.'
+          }
+          @(
+            '## R10 Mainline Readiness — independent engine + canonical ARSAS tests',
+            '',
+            "- R10 engine integration SHA: $env:ENGINE_COMMIT",
+            "- canonical Build ARSAS run: $($proof.canonicalRunId)",
+            "- exact ARSAS PR merge SHA: $($proof.mergeSha)",
+            "- full ARSAS regression: $($proof.passed) passed, $($proof.failed) failed",
+            '- Historical physical authority validated independently before this reuse'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+  manual-regression:
+    name: Manual exact-SHA ARSAS regression for R10 readiness
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}
