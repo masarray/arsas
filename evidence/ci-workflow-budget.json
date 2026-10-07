@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2F: canonical regression reused by independent Field Capture packaging",
-  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A-P2E consolidate exact-SHA regression evidence; P2F keeps Field Capture source/wire checks and independent publish/smoke, but reuses canonical application regression because source and integration engine are identical. Binary artifact reuse remains forbidden because observed canonical and Field Capture EXEs were not byte-identical.",
+  "baselineName": "CI-P3A: reproducible portable build identity",
+  "policy": "P0-P2 reduced duplicate regression work. P3A does not add a heavy workflow or change static CI counts; it establishes deterministic Windows packaging inputs and hash-bound build identity so later artifact promotion can reuse only proven identical bits.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -291,5 +291,23 @@
     "canonicalBuildRemainsRegressionAuthorityOnPullRequest": true,
     "manualReusableRegressionRetained": true,
     "rollback": "Restore direct Field Capture restore/build/dotnet test steps; do not substitute canonical EXE unless future reproducible-build evidence proves byte identity."
+  },
+  "ciP3ReproduciblePortableBuild": {
+    "issueNumber": 447,
+    "lane": "canonical-and-field-capture-windows-packaging",
+    "approach": "Request reproducible MSVC bridge linking, explicit deterministic .NET publish, and emit source/engine/ArdIrec/bridge/portable hash identity from both existing independent builders. No binary promotion until cross-run parity is proven.",
+    "staticLimitsChanged": false,
+    "nativeLinkerFlag": "/Brepro",
+    "managedDeterminism": [
+      "Deterministic=true",
+      "ContinuousIntegrationBuild=true"
+    ],
+    "crossRunBuilders": [
+      "Build ARSAS",
+      "Smart Discovery Field Capture Build"
+    ],
+    "binaryPromotionAllowed": false,
+    "acceptance": "Matching source, ARIEC61850 and ArdIrec inputs must yield identical bridge and portable SHA-256 across independent workflow runs.",
+    "rollback": "Remove P3A deterministic flags and identity artifact additions only if toolchain incompatibility is proven; retain P2F binary-reuse prohibition."
   }
 }
