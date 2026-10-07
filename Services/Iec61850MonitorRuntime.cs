@@ -781,11 +781,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var result = session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority
-                    ? await session.Client.StartTrustedSclStaticReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
-                    : plan.IsEngineAuthoritative
-                        ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
-                        : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
+                // Discovery IP and Open SCL converge before execution. Once ARIEC has
+                // produced an engine-authoritative plan, both sources use the exact same
+                // report activation runtime; source provenance is diagnostics, not a second
+                // transport/reporting implementation.
+                var result = plan.IsEngineAuthoritative
+                    ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
+                    : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
                 session.HybridValidation.RecordActivation(plan, result);
                 if (!result.IsSuccess)
                 {
