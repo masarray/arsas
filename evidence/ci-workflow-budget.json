@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2A canonical regression reuse — first verified duplicate removal",
-  "policy": "CI-P0 observed baseline is immutable. CI-P1 bounded shadow remains opt-in. CI-P2A removes the redundant Merge Execution Guard restore/build/full-test pipeline; that guard must consume a completed successful canonical Build ARSAS proof for identical PR merge source and engine SHAs, otherwise fail closed. Subsequent reductions require equivalent explicit evidence.",
+  "baselineName": "CI-P2B: canonical ARSAS regression reused by Mainline Readiness",
+  "policy": "CI-P0 historical observed baseline and CI-P1 opt-in shadow remain recorded; P2A+P2B now reuse canonical Build ARSAS SHA/TRX proof from Merge Execution and Mainline Readiness. Independent R10 engine tests, physical authority assertions and production gates remain unchanged. Small Python setup overhead is explicit and bounded.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -20,10 +20,10 @@
     "workflowFiles": 31,
     "actionsCheckout": 35,
     "actionsSetupDotnet": 12,
-    "actionsSetupPython": 13,
-    "dotnetRestore": 15,
-    "dotnetBuild": 15,
-    "dotnetTest": 17,
+    "actionsSetupPython": 14,
+    "dotnetRestore": 14,
+    "dotnetBuild": 14,
+    "dotnetTest": 16,
     "actionsUploadArtifact": 34,
     "workflowsWithDotnetBuild": 12,
     "workflowsWithDotnetTest": 11
@@ -95,9 +95,44 @@
       "source": "exact PR synthetic merge SHA",
       "engine": "exact immutable engine lock SHA",
       "canonicalRun": "successful latest matching PR head/branch run",
-      "tests": "signed-by-workflow-at-execution manifest plus verified TRX SHA-256 and passing counters",
+      "tests": "Workflow-produced, not cryptographically signed, exact-SHA manifest plus independently verified all-pass TRX SHA-256 and counters.",
       "noProductionPromotion": true
     },
     "rollback": "Restore original smart-discovery-merge-execution-guard.yml build/test steps if canonical evidence or cross-run matching causes flakiness; never skip P0-5h source-contract checks."
+  },
+  "ciP2MainlineReadiness": {
+    "issueNumber": 432,
+    "lane": "smart-discovery-mainline-readiness",
+    "approach": "After preserving R10 physical authority and running the engine's independent full restore/build/test, reuse immutable successful canonical Build ARSAS exact PR merge/engine SHA artifact instead of a second application restore/build/test. No cross-run proof bypass.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 12,
+      "actionsSetupPython": 13,
+      "dotnetRestore": 15,
+      "dotnetBuild": 15,
+      "dotnetTest": 17,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 12,
+      "workflowsWithDotnetTest": 11
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 12,
+      "actionsSetupPython": 14,
+      "dotnetRestore": 14,
+      "dotnetBuild": 14,
+      "dotnetTest": 16,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 12,
+      "workflowsWithDotnetTest": 11
+    },
+    "existingR10EngineFullRegressionRetained": true,
+    "existingPhysicalAuthorityChecksRetained": true,
+    "exactCanonicalProofRequiredOnPullRequest": true,
+    "manualExecutionRunsReusableApplicationFullTests": true,
+    "actionsPermissionScope": "read-only contents/actions",
+    "rollback": "Restore direct application restore/build/test step if verifier fails legitimate parity; retain current R10 evidence and engine full tests without modification."
   }
 }
