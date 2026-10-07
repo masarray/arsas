@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3: sealed canonical Windows package reused by installer validation",
-  "policy": "P0 historical workflow-sprawl baseline remains immutable. CI-P3 establishes build-once/package-many for Windows installer validation: Build ARSAS seals exact tested portable + installer-input bytes with source/engine/ArdIrec/TRX/file digests; PR/main installer runs verify and consume those bytes instead of rebuilding the application. Manual workflow_dispatch retains a local fallback. Stable release mutation remains unchanged in this milestone.",
+  "baselineName": "CI-P3B: exact sealed canonical portable promoted into Field Capture",
+  "policy": "CI-P3 build-once/package-many now uses one sealed Windows package as the exact-byte promotion substrate for installer validation and PR Field Capture. P3B removes the normal PR Field Capture native/.NET republish after P3A proved matching independent builders are byte-reproducible; field-specific source/wire checks and runtime smoke remain independent, while workflow_dispatch retains an independent publish fallback.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -362,8 +362,34 @@
       "Build ARSAS",
       "Smart Discovery Field Capture Build"
     ],
-    "binaryPromotionAllowed": false,
+    "binaryPromotionAllowed": true,
     "acceptance": "Matching source, ARIEC61850 and ArdIrec inputs must yield identical bridge and portable SHA-256 across independent workflow runs.",
-    "rollback": "Remove P3A deterministic flags and identity artifact additions only if toolchain incompatibility is proven; retain P2F binary-reuse prohibition."
+    "rollback": "Remove P3A deterministic flags and identity artifact additions only if toolchain incompatibility is proven; retain P2F binary-reuse prohibition.",
+    "acceptedParity": {
+      "syntheticMergeSha": "3794b29fa71695ec4ea099469ae2e55054d3d3f8",
+      "engineCommit": "648124097621046f5f127ceb1cf853fea54db730",
+      "ardIrecCommit": "7dbc7149db668126a493ce338264363a6ec5ec00",
+      "bridgeSha256": "fa8efcaf26e8ebb0a29808a2e52ad5c9f466ec2df146945d29c5d662987c41ce",
+      "portableSha256": "9fa7fac00c96acb24c98e64ff91ca9ee1709d9f1b89bf55030284ee3da4fc369",
+      "portableSizeBytes": 78789758,
+      "independentBuilders": 2
+    }
+  },
+  "ciP3CanonicalPortablePromotion": {
+    "issueNumber": 449,
+    "lane": "smart-discovery-capture-build",
+    "approach": "On pull_request consume the exact hash-complete ARSAS-windows-package-input already produced by Build ARSAS. The shared sealed-package verifier validates exact PR head/branch, synthetic merge/source SHA, ARIEC61850 SHA, ArdIrec SHA, workflow run/attempt, all-pass TRX counters, portable/native hashes and the sealed portable build-identity before materialization. Field Capture retains P0-5c/P0-5d/physical checks, then smoke-tests and republishes those exact canonical portable bytes under the stable field artifact contract. workflow_dispatch retains independent publish.",
+    "staticLimitsChanged": false,
+    "canonicalPromotionSubstrate": "ARSAS-windows-package-input",
+    "separatePortableDownloadMechanism": false,
+    "sealedPortableIdentityRequired": true,
+    "transientArchive404UsesSharedBoundedRetry": true,
+    "prIndependentDotnetPublishRemoved": true,
+    "fieldSourceAndWireChecksRetained": true,
+    "fieldPortableSmokeRetained": true,
+    "manualIndependentPublishRetained": true,
+    "artifactNameStable": "ARSAS-smart-discovery-pr134-win-x64",
+    "noInstallerOrReleaseAuthorityChange": true,
+    "rollback": "Restore PR Field Capture independent publish path if sealed package promotion becomes unavailable; never bypass exact package identity, digest, build-identity or runtime-smoke validation."
   }
 }
