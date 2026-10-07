@@ -128,9 +128,11 @@ class FakeApi:
         status: str = "completed",
         conclusion: str | None = "success",
         artifact_available: bool = True,
+        binary_404_count: int = 0,
     ):
         self.blob, _ = make_payload(event_name)
         self.artifact_available = artifact_available
+        self.binary_404_count = binary_404_count
         self.runs = [{
             "id": RUN,
             "run_attempt": 1,
@@ -144,6 +146,12 @@ class FakeApi:
 
     def get(self, url: str, *, binary: bool = False):
         if binary:
+            if self.binary_404_count > 0:
+                self.binary_404_count -= 1
+                raise verifier.GitHubRequestError(
+                    "GitHub package evidence request failed: HTTP 404 Not Found",
+                    status=404,
+                )
             return self.blob
         if "/workflows/build.yml/runs?" in url:
             return {"workflow_runs": self.runs}
@@ -341,6 +349,82 @@ class PackageReuseTests(unittest.TestCase):
         )
         self.assertEqual(proof["proofStage"], "sealed-package-artifact-ready")
         self.assertFalse(proof["workflowCompleted"])
+
+    def test_transient_artifact_archive_404_is_retried_without_fallback(self):
+        api = FakeApi(
+            status="in_progress",
+            conclusion=None,
+            binary_404_count=2,
+        )
+        original_sleep = verifier.time.sleep
+        try:
+            verifier.time.sleep = lambda _: None
+            proof = verifier.verify_canonical_package(
+                api,
+                repository="masarray/arsas",
+                branch=BRANCH,
+                head_sha=HEAD,
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                wait_seconds=2,
+                poll_seconds=1,
+                allow_in_progress_artifact=True,
+            )
+        finally:
+            verifier.time.sleep = original_sleep
+        self.assertEqual(proof["proofStage"], "sealed-package-artifact-ready")
+        self.assertEqual(api.binary_404_count, 0)
+
+    def test_persistent_artifact_archive_404_times_out_fail_closed(self):
+        api = FakeApi(
+            status="in_progress",
+            conclusion=None,
+            binary_404_count=100,
+        )
+        with self.assertRaisesRegex(
+            verifier.PackageProofError,
+            "Timed out waiting for exact canonical Windows package artifact",
+        ):
+            verifier.verify_canonical_package(
+                api,
+                repository="masarray/arsas",
+                branch=BRANCH,
+                head_sha=HEAD,
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                wait_seconds=0,
+                poll_seconds=1,
+                allow_in_progress_artifact=True,
+            )
+
+    def test_non_404_artifact_download_error_remains_hard_failure(self):
+        api = FakeApi(status="in_progress", conclusion=None)
+        original_get = api.get
+
+        def failing_get(url: str, *, binary: bool = False):
+            if binary:
+                raise verifier.GitHubRequestError(
+                    "GitHub package evidence request failed: HTTP 403 Forbidden",
+                    status=403,
+                )
+            return original_get(url, binary=binary)
+
+        api.get = failing_get
+        with self.assertRaisesRegex(verifier.GitHubRequestError, "HTTP 403"):
+            verifier.verify_canonical_package(
+                api,
+                repository="masarray/arsas",
+                branch=BRANCH,
+                head_sha=HEAD,
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                wait_seconds=0,
+                poll_seconds=1,
+                allow_in_progress_artifact=True,
+            )
 
     def test_completed_failed_latest_run_is_never_reused(self):
         api = FakeApi(status="completed", conclusion="failure")

@@ -42,6 +42,14 @@ class PackageProofError(RuntimeError):
     pass
 
 
+class GitHubRequestError(PackageProofError):
+    """Typed read-only GitHub request failure used for bounded retry decisions."""
+
+    def __init__(self, message: str, *, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
+
 def validate_identity(
     repository: str, branch: str, head_sha: str, source_sha: str,
     engine_sha: str, ardirec_sha: str, event_name: str
@@ -387,8 +395,15 @@ class GitHubReadOnly:
                 return data if binary else json.loads(data)
         except PackageProofError:
             raise
-        except (urllib.error.HTTPError, urllib.error.URLError, ValueError) as exc:
-            raise PackageProofError(f"GitHub package evidence request failed: {exc}") from exc
+        except urllib.error.HTTPError as exc:
+            raise GitHubRequestError(
+                f"GitHub package evidence request failed: HTTP {exc.code} {exc.reason}",
+                status=exc.code,
+            ) from exc
+        except (urllib.error.URLError, ValueError) as exc:
+            raise GitHubRequestError(
+                f"GitHub package evidence request failed: {exc}"
+            ) from exc
 
 
 def verify_canonical_package(
@@ -432,35 +447,46 @@ def verify_canonical_package(
                     allow_missing=(status != "completed"),
                 )
                 if artifact is not None:
-                    blob = api.get(artifact["archive_download_url"], binary=True)
                     try:
-                        proof = validate_package_archive(
-                            blob,
-                            source_sha=source_sha,
-                            engine_sha=engine_sha,
-                            ardirec_sha=ardirec_sha,
-                            workflow_run_id=run_id,
-                            run_attempt=attempt,
-                            event_name=event_name,
-                            output_dir=output_dir,
-                        )
-                    except PackageProofError as exc:
-                        if "identity or authority is invalid" not in str(exc):
+                        blob = api.get(artifact["archive_download_url"], binary=True)
+                    except GitHubRequestError as exc:
+                        # GitHub can expose artifact metadata before the archive
+                        # redirect is readable. Retry only the observed transient
+                        # 404, within the existing bounded deadline.
+                        if exc.status != 404:
                             raise
-                        previous = f"{previous} (stale/different package identity)"
+                        previous = (
+                            f"{previous} (artifact metadata ready; archive download pending)"
+                        )
                     else:
-                        proof.update({
-                            "canonicalRunStatus": status,
-                            "canonicalRunConclusion": conclusion,
-                            "workflowCompleted": status == "completed",
-                            "proofStage": (
-                                "completed-workflow"
-                                if status == "completed"
-                                else "sealed-package-artifact-ready"
-                            ),
-                            "releasePromotionAuthority": False,
-                        })
-                        return proof
+                        try:
+                            proof = validate_package_archive(
+                                blob,
+                                source_sha=source_sha,
+                                engine_sha=engine_sha,
+                                ardirec_sha=ardirec_sha,
+                                workflow_run_id=run_id,
+                                run_attempt=attempt,
+                                event_name=event_name,
+                                output_dir=output_dir,
+                            )
+                        except PackageProofError as exc:
+                            if "identity or authority is invalid" not in str(exc):
+                                raise
+                            previous = f"{previous} (stale/different package identity)"
+                        else:
+                            proof.update({
+                                "canonicalRunStatus": status,
+                                "canonicalRunConclusion": conclusion,
+                                "workflowCompleted": status == "completed",
+                                "proofStage": (
+                                    "completed-workflow"
+                                    if status == "completed"
+                                    else "sealed-package-artifact-ready"
+                                ),
+                                "releasePromotionAuthority": False,
+                            })
+                            return proof
 
         if time.monotonic() >= deadline:
             raise PackageProofError(
