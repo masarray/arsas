@@ -70,7 +70,7 @@ jobs:
               $script, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -ne 0) {
               $messages = ($errors | ForEach-Object Message) -join '; '
-              throw "PowerShell syntax validation failed for $script: $messages"
+              throw "PowerShell syntax validation failed for ${script}: $messages"
             }
           }
 
