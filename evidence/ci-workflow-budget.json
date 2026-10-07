@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P0 workflow-sprawl freeze",
-  "policy": "These are maximum textual CI-cost indicators after adding the lightweight CI-P0 integrity workflow. Raising a limit requires an explicit reviewed budget change. Lowering a limit is always allowed when workflows are consolidated.",
+  "baselineName": "CI-P0 baseline + explicitly bounded CI-P1 shadow migration",
+  "policy": "CI-P0 observed baseline remains immutable below. Temporary CI-P1 classifier/reusable shadow overhead is explicitly approved for parity only, without changing legacy acceptance semantics. The next consolidation PR must reduce these maxima rather than treating them as a permanent efficiency target.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -17,20 +17,49 @@
     "workflowCall": 0
   },
   "limits": {
-    "workflowFiles": 29,
-    "actionsCheckout": 32,
-    "actionsSetupDotnet": 12,
+    "workflowFiles": 31,
+    "actionsCheckout": 35,
+    "actionsSetupDotnet": 13,
     "actionsSetupPython": 13,
-    "dotnetRestore": 15,
-    "dotnetBuild": 15,
-    "dotnetTest": 17,
-    "actionsUploadArtifact": 33,
-    "workflowsWithDotnetBuild": 12,
-    "workflowsWithDotnetTest": 11
+    "dotnetRestore": 16,
+    "dotnetBuild": 16,
+    "dotnetTest": 18,
+    "actionsUploadArtifact": 34,
+    "workflowsWithDotnetBuild": 13,
+    "workflowsWithDotnetTest": 12
   },
   "interpretation": [
     "The limits freeze CI sprawl; they are not performance targets and do not prove semantic necessity.",
     "CI-P1 is expected to reduce restore/build/test counts and introduce reusable workflow_call contracts. Any temporary migration increase must be explicit in the same reviewed change.",
     "Release, physical evidence and IEC 61850 acceptance semantics remain owned by their existing contracts during CI-P0."
-  ]
+  ],
+  "ciP1MigrationShadow": {
+    "issueNumber": 428,
+    "purpose": "Two additive workflows: one advisory change classifier and one reusable exact-SHA Windows compile/test job for opt-in shadow parity. No legacy workflow retired or replaced.",
+    "originalP0Limits": {
+      "workflowFiles": 29,
+      "actionsCheckout": 32,
+      "actionsSetupDotnet": 12,
+      "actionsSetupPython": 13,
+      "dotnetRestore": 15,
+      "dotnetBuild": 15,
+      "dotnetTest": 17,
+      "actionsUploadArtifact": 33,
+      "workflowsWithDotnetBuild": 12,
+      "workflowsWithDotnetTest": 11
+    },
+    "temporaryIncrement": {
+      "workflowFiles": 2,
+      "actionsCheckout": 3,
+      "actionsSetupDotnet": 1,
+      "actionsSetupPython": 0,
+      "dotnetRestore": 1,
+      "dotnetBuild": 1,
+      "dotnetTest": 1,
+      "actionsUploadArtifact": 1,
+      "workflowsWithDotnetBuild": 1,
+      "workflowsWithDotnetTest": 1
+    },
+    "exitGate": "Only retire a legacy workflow or lower limits after shadow parity on matching source/engine SHAs, equivalent test verdicts, and explicit review of physical/release gate ownership. No release/promotion claim based on shadow results."
+  }
 }

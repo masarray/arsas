@@ -1,0 +1,40 @@
+name: Resolve immutable ARIEC61850 engine lock
+description: Validate the tracked ARIEC61850 exact SHA and expose it without rewriting historical field authority.
+inputs:
+  lock-path:
+    description: Path to tracked engine lock, relative to the runner workspace
+    required: false
+    default: ARSAS/engines/ARIEC61850.lock.json
+outputs:
+  repository:
+    description: Trusted pinned engine repository
+    value: ${{ steps.resolve.outputs.repository }}
+  ref:
+    description: Canonical repository ref metadata
+    value: ${{ steps.resolve.outputs.ref }}
+  commit:
+    description: Exact immutable integration engine SHA
+    value: ${{ steps.resolve.outputs.commit }}
+  physical-tested-commit:
+    description: Historical physical engine head; never substituted for integration SHA
+    value: ${{ steps.resolve.outputs.physical_tested_commit }}
+  merged-main-commit:
+    description: Historical merged-main engine head
+    value: ${{ steps.resolve.outputs.merged_main_commit }}
+  baseline-is-current:
+    description: Whether integration SHA equals historical merged-main baseline
+    value: ${{ steps.resolve.outputs.baseline_is_current }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      name: Validate pinned engine lock without remote lookups
+      shell: pwsh
+      env:
+        CI_LOCK_PATH: ${{ inputs.lock-path }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $resolver = Join-Path $env:GITHUB_ACTION_PATH '..\..\..\scripts\resolve-ariec-lock.ps1'
+        $lockPath = Join-Path $env:GITHUB_WORKSPACE $env:CI_LOCK_PATH
+        & $resolver -LockPath $lockPath -GitHubOutput $env:GITHUB_OUTPUT | Out-Null
