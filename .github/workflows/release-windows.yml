@@ -200,7 +200,108 @@ jobs:
             }
           }
 
-      - name: Restore, build and test exact release source
+      - name: Run offline sealed-package safety fixtures
+        if: github.event_name != 'workflow_dispatch'
+        shell: powershell
+        run: python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
+
+      - name: Promote exact sealed canonical Windows package for release
+        if: github.event_name != 'workflow_dispatch'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'arsas-release-canonical-package'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-release-canonical-package-proof.json'
+          python .\ArIED61850Tester\scripts\verify-ci-package-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch main `
+            --head-sha $env:GITHUB_SHA `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --event-name push `
+            --wait-seconds 1200 `
+            --allow-in-progress-artifact `
+            --output-dir $packageRoot `
+            --proof-output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Production release requires the exact sealed Build ARSAS package for this main commit.'
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if ($proof.sourceSha -ne $env:GITHUB_SHA -or
+              $proof.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $proof.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              $proof.version -ne $env:RELEASE_VERSION -or
+              [int]$proof.failed -ne 0 -or
+              [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1 -or
+              [bool]$proof.releasePromotionAuthority) {
+            throw 'Canonical package identity does not match release authority.'
+          }
+
+          $installerInput = Join-Path $packageRoot ($proof.installerInputRoot -replace '/', '\')
+          $portable = Join-Path $packageRoot ($proof.portablePath -replace '/', '\')
+          $testAssembly = Join-Path $packageRoot ($proof.testAssemblyPath -replace '/', '\')
+          $releaseFixture = Join-Path $packageRoot ($proof.releaseFixturePath -replace '/', '\')
+          $locusFixture = Join-Path $packageRoot ($proof.locusFixturePath -replace '/', '\')
+          foreach ($required in @($installerInput, $portable, $testAssembly, $releaseFixture, $locusFixture)) {
+            if (-not (Test-Path $required)) {
+              throw "Verified release package materialization is incomplete: $required"
+            }
+          }
+
+          $dist = Join-Path $env:GITHUB_WORKSPACE 'ArIED61850Tester\dist'
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          $releaseInput = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64"
+          if (Test-Path $releaseInput) { Remove-Item $releaseInput -Recurse -Force }
+          Copy-Item $installerInput $releaseInput -Recurse -Force
+
+          $releasePortable = Join-Path $dist "ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
+          Copy-Item $portable $releasePortable -Force
+          $portableSha = (Get-FileHash $releasePortable -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($portableSha -ne $proof.portableSha256 -or
+              [long](Get-Item $releasePortable).Length -ne [long]$proof.portableSizeBytes) {
+            throw 'Promoted release portable bytes differ from the sealed package proof.'
+          }
+
+          $bridge = Join-Path $releaseInput 'Tools\ArdIrec\ardirec_bridge.dll'
+          $bridgeSha = (Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($bridgeSha -ne $proof.nativeBridgeSha256) {
+            throw 'Promoted release native bridge differs from the sealed package proof.'
+          }
+
+          $evidenceDir = '.\ArIED61850Tester\TestResults\release-promoted-evidence'
+          New-Item -ItemType Directory -Force $evidenceDir | Out-Null
+          Copy-Item (Join-Path $packageRoot 'evidence\arsas-tests.trx') (Join-Path $evidenceDir 'arsas-tests.trx') -Force
+          Copy-Item $proofPath (Join-Path $evidenceDir 'ci-release-package-proof.json') -Force
+
+          "RELEASE_INSTALLER_INPUT_DIR=$releaseInput" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PORTABLE_PATH=$releasePortable" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_TEST_ASSEMBLY=$testAssembly" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_COMTRADE_FIXTURE=$releaseFixture" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_LOCUS_FIXTURE=$locusFixture" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_AUTHORITY=sealed-build-arsas:$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_RUN=$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_ARTIFACT_SHA256=$($proof.artifactSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_CANONICAL_PORTABLE_SHA256=$($proof.portableSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          @(
+            '## CI-P3C exact-byte release promotion',
+            '',
+            "- source: $env:GITHUB_SHA",
+            "- engine: $env:ARIEC61850_COMMIT",
+            "- ArdIrec: $env:ARDIREC_COMMIT",
+            "- Build ARSAS run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt)",
+            "- canonical regression: $($proof.passed) passed / $($proof.failed) failed",
+            "- portable SHA-256: $($proof.portableSha256)",
+            "- sealed artifact SHA-256: $($proof.artifactSha256)",
+            '- release does not rebuild application bytes'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Restore, build and test exact release source for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
@@ -215,15 +316,8 @@ jobs:
             --results-directory .\ArIED61850Tester\TestResults
           if ($LASTEXITCODE -ne 0) { throw "Release application regression tests failed." }
 
-      - name: Upload release test evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-${{ steps.release.outputs.version }}-release-tests
-          path: ArIED61850Tester/TestResults/*.trx
-          if-no-files-found: error
-
-      - name: Publish installer source folder with pinned native bridge
+      - name: Publish installer source folder for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -235,26 +329,33 @@ jobs:
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec"
 
+          "RELEASE_INSTALLER_INPUT_DIR=$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_TEST_ASSEMBLY=$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_COMTRADE_FIXTURE=$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\fixtures\comtrade\p1-release-smoke.cfg" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_LOCUS_FIXTURE=$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_AUTHORITY=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_RUN=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_PACKAGE_ARTIFACT_SHA256=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Exercise managed native bridge before release packaging
         shell: powershell
         run: |
-          $publish = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64"
-          $bridge = Join-Path $publish "Tools\ArdIrec\ardirec_bridge.dll"
-          $fixture = "$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\fixtures\comtrade\p1-release-smoke.cfg"
-          $locusFixture = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
-          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not published: $bridge" }
-          if (-not (Test-Path $fixture -PathType Leaf)) { throw "ARSAS native release fixture was not found: $fixture" }
-          if (-not (Test-Path $locusFixture -PathType Leaf)) { throw "Pinned ArdIrec locus fixture was not found: $locusFixture" }
+          $bridge = Join-Path $env:RELEASE_INSTALLER_INPUT_DIR "Tools\ArdIrec\ardirec_bridge.dll"
+          foreach ($required in @($bridge, $env:RELEASE_TEST_ASSEMBLY, $env:RELEASE_COMTRADE_FIXTURE, $env:RELEASE_LOCUS_FIXTURE)) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Release native verification prerequisite is missing: $required"
+            }
+          }
 
           $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridge
-          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $fixture
-          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = $locusFixture
-          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
-            -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $env:RELEASE_COMTRADE_FIXTURE
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = $env:RELEASE_LOCUS_FIXTURE
+          & dotnet vstest $env:RELEASE_TEST_ASSEMBLY `
+            "--TestCaseFilter:FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
           if ($LASTEXITCODE -ne 0) { throw "Release managed ArdIrec bridge/locus integration test failed." }
 
-      - name: Publish real portable single EXE with embedded native bridge
+      - name: Publish real portable single EXE for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -265,12 +366,35 @@ jobs:
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec"
+          "RELEASE_PORTABLE_PATH=$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $manualPortableSha = (Get-FileHash $env:RELEASE_PORTABLE_PATH -Algorithm SHA256).Hash.ToLowerInvariant()
+          "RELEASE_CANONICAL_PORTABLE_SHA256=$manualPortableSha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Smoke-test real portable single EXE
+      - name: Upload canonical release regression evidence
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-${{ steps.release.outputs.version }}-release-tests
+          path: ArIED61850Tester/TestResults/release-promoted-evidence/*
+          if-no-files-found: error
+
+      - name: Upload manual release test evidence
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-${{ steps.release.outputs.version }}-release-tests
+          path: ArIED61850Tester/TestResults/*.trx
+          if-no-files-found: error
+
+      - name: Smoke-test exact release portable single EXE
         shell: powershell
         run: |
-          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
-          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $exe = $env:RELEASE_PORTABLE_PATH
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Release portable single EXE is missing: $exe" }
+          $actualSha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualSha -ne $env:RELEASE_CANONICAL_PORTABLE_SHA256) {
+            throw 'Release portable bytes changed after package promotion.'
+          }
           $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-release-bundle-cache"
           $diagnostic = Join-Path ([System.IO.Path]::GetTempPath()) "ARSAS-portable-smoke-error.txt"
           Remove-Item $diagnostic -Force -ErrorAction SilentlyContinue
