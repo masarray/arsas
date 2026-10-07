@@ -26,7 +26,13 @@ IO_TOKENS = ("iotest", "iolist", "iofat", "fatdataset", "fatscl", "io-testing")
 
 def classify(paths: list[str]) -> dict:
     """Pure classifier. Unknown files intentionally require the broad build."""
-    changed = sorted({name.replace("\\", "/").lstrip("./") for name in paths if name.strip()})
+    def normalize(name: str) -> str:
+        normalized = name.replace("\\", "/")
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
+        return normalized
+
+    changed = sorted({normalize(name) for name in paths if name.strip()})
     areas: set[str] = set()
     build = tests = iec = sv = io = packaging = website = ci = unknown = False
 
@@ -174,8 +180,7 @@ def merge_diff(root: Path) -> list[str]:
             return ["__unclassified_source_change__"]
 
         raw = subprocess.check_output(
-            ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMRTUXB",
-             "-z", parents[1], "HEAD"],
+            ["git", "-C", str(root), "diff", "--name-only", "-z", parents[1], "HEAD"],
             stderr=subprocess.PIPE,
         )
         return [name.decode("utf-8", "surrogateescape")
