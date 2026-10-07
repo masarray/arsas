@@ -94,12 +94,15 @@ class ClassifierTests(unittest.TestCase):
             self.assertEqual(
                 module.merge_diff(root), ["__unclassified_source_change__"]
             )
+            base_branch = subprocess.check_output(
+                ["git", "-C", str(root), "branch", "--show-current"]
+            ).decode("utf-8").strip()
             git("checkout", "-qb", "feature")
             (root / "Services").mkdir()
             (root / "Services" / "MmsReporting.cs").write_text("// change\n")
             git("add", "-A")
             git("commit", "-qm", "feature")
-            git("checkout", "-q", "master")
+            git("checkout", "-q", base_branch)
             git("merge", "--no-ff", "-qm", "merge feature", "feature")
             self.assertEqual(
                 module.merge_diff(root), ["Services/MmsReporting.cs"]
