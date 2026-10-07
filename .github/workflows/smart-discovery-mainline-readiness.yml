@@ -128,6 +128,7 @@ jobs:
             --merge-sha $env:PR_MERGE_SHA `
             --engine-sha $env:ENGINE_COMMIT `
             --wait-seconds 960 `
+            --allow-in-progress-artifact `
             --output (Join-Path $env:RUNNER_TEMP 'ci-r10-canonical-reuse.json')
           if ($LASTEXITCODE -ne 0) {
             throw 'R10 Mainline Readiness cannot reuse canonical ARSAS regression evidence.'
