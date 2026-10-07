@@ -150,6 +150,10 @@ jobs:
             "- canonical Build ARSAS run: $($proof.canonicalRunId)",
             "- exact ARSAS PR merge SHA: $($proof.mergeSha)",
             "- full ARSAS regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- canonical proof stage: $($proof.proofStage)",
+            "- canonical workflow completed: $($proof.workflowCompleted)",
+            "- packaging/smoke proven here: $($proof.packagingSmokeProven)",
+            '- Build ARSAS remains the independent packaging/smoke check',
             '- Historical physical authority validated independently before this reuse'
           ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
