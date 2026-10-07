@@ -115,6 +115,8 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
         (tests / ".coverage-transient").write_text("must-not-promote", encoding="utf-8")
         (fixtures / "minimal_1999.cfg").write_text("cfg", encoding="utf-8")
         (fixtures / "distance_p1.cfg").write_text("locus", encoding="utf-8")
+        (fixtures / "p1-release-smoke.cfg").write_text("release-cfg", encoding="utf-8")
+        (fixtures / "p1-release-smoke.dat").write_bytes(b"release-dat")
 
         artifact = root / "artifact"
         manifest = producer.stage_and_create_manifest(
@@ -135,6 +137,7 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
             test_assembly_relative="ARSAS.Tests/ARSAS.Tests.dll",
             comtrade_fixture_relative="fixtures/minimal_1999.cfg",
             locus_fixture_relative="fixtures/distance_p1.cfg",
+            release_fixture_relative="fixtures/p1-release-smoke.cfg",
         )
 
         buffer = io.BytesIO()
@@ -213,6 +216,10 @@ class PackageReuseTests(unittest.TestCase):
             manifest["portableIdentity"]["path"],
         )
         self.assertEqual(proof["nativeBridgeSha256"], manifest["nativeBridge"]["sha256"])
+        self.assertEqual(
+            proof["releaseFixturePath"],
+            manifest["verification"]["releaseFixturePath"],
+        )
 
     def test_safe_materialization_occurs_after_verification(self):
         blob, _ = make_payload()
