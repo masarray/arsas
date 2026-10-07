@@ -164,7 +164,7 @@ jobs:
           $status = if ($engineVerified -and $arsasVerified) { 'passed' } else { 'incomplete-or-failed' }
 
           [ordered]@{
-            schemaVersion = 2
+            schemaVersion = 1
             verificationStatus = $status
             sourceCommit = $env:GITHUB_SHA
             engineCommit = $env:ENGINE_COMMIT
