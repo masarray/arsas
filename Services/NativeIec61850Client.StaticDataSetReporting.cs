@@ -487,15 +487,6 @@ public sealed partial class NativeIec61850Client
         return true;
     }
 
-    private static int StaticRcbAvailabilityRank(ArMms.MmsRcbOperationalAvailability availability)
-        => availability switch
-        {
-            ArMms.MmsRcbOperationalAvailability.UsedByCaller => 0,
-            ArMms.MmsRcbOperationalAvailability.Available => 1,
-            ArMms.MmsRcbOperationalAvailability.Unknown => 2,
-            _ => int.MaxValue
-        };
-
     private static bool SameStaticReference(string? left, string? right)
         => string.Equals(
             NormalizeStaticReference(left),
