@@ -7,6 +7,9 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "scripts/classify-ci-changes.py"
+      - "scripts/test-classify-ci-changes.py"
+      - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
   pull_request:
@@ -14,6 +17,9 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "scripts/classify-ci-changes.py"
+      - "scripts/test-classify-ci-changes.py"
+      - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
   workflow_dispatch:
@@ -41,6 +47,9 @@ jobs:
 
       - name: Run offline CI workflow guard tests
         run: python3 scripts/test-ci-workflows.py
+
+      - name: Run conservative CI P1 classifier fixtures
+        run: python3 scripts/test-classify-ci-changes.py
 
       - name: Validate tracked workflow topology and budget
         run: |
