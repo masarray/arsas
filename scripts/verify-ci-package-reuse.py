@@ -113,6 +113,38 @@ def _zip_relative(info: zipfile.ZipInfo, prefix: PurePosixPath) -> str:
     return rel_text
 
 
+WINDOWS_RESERVED_NAMES = {
+    "con", "prn", "aux", "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+
+def _windows_path_key(path_text: str) -> str:
+    """Return a Windows-canonical collision key or reject unsafe aliases."""
+    path = PurePosixPath(path_text)
+    normalized = []
+    for part in path.parts:
+        if (
+            not part
+            or part in {".", ".."}
+            or part.endswith((" ", "."))
+            or any(ord(ch) < 32 for ch in part)
+        ):
+            raise PackageProofError(
+                "Canonical package contains a Windows-unsafe path component"
+            )
+        device = part.split(".", 1)[0].casefold()
+        if device in WINDOWS_RESERVED_NAMES:
+            raise PackageProofError(
+                "Canonical package contains a reserved Windows device path"
+            )
+        normalized.append(part.casefold())
+    if not normalized:
+        raise PackageProofError("Canonical package contains an empty Windows path")
+    return "/".join(normalized)
+
+
 def _is_symlink(info: zipfile.ZipInfo) -> bool:
     return ((info.external_attr >> 16) & 0o170000) == 0o120000
 
@@ -151,6 +183,7 @@ def validate_package_archive(
         prefix = PurePosixPath(manifest_info.filename.replace("\\", "/")).parent
 
         infos: dict[str, zipfile.ZipInfo] = {}
+        windows_archive_paths: dict[str, str] = {}
         total_uncompressed = 0
         for info in raw_files:
             if info.flag_bits & 0x1 or _is_symlink(info):
@@ -163,6 +196,13 @@ def validate_package_archive(
             rel = _zip_relative(info, prefix)
             if rel in infos:
                 raise PackageProofError("Canonical package contains duplicate normalized paths")
+            windows_key = _windows_path_key(rel)
+            previous = windows_archive_paths.get(windows_key)
+            if previous is not None and previous != rel:
+                raise PackageProofError(
+                    "Canonical package contains a Windows-normalized path collision"
+                )
+            windows_archive_paths[windows_key] = rel
             infos[rel] = info
 
         if MANIFEST_NAME not in infos:
@@ -196,6 +236,7 @@ def validate_package_archive(
         if not isinstance(records, list) or not records or len(records) > MAX_FILES:
             raise PackageProofError("Canonical package file manifest is malformed")
         recorded: dict[str, dict] = {}
+        windows_record_paths: dict[str, str] = {}
         for record in records:
             if not isinstance(record, dict):
                 raise PackageProofError("Canonical package file record is malformed")
@@ -205,6 +246,13 @@ def validate_package_archive(
             parsed = PurePosixPath(path)
             if parsed.is_absolute() or ".." in parsed.parts or ":" in path or path in recorded:
                 raise PackageProofError("Canonical package file manifest has unsafe/duplicate paths")
+            windows_key = _windows_path_key(path)
+            previous = windows_record_paths.get(windows_key)
+            if previous is not None and previous != path:
+                raise PackageProofError(
+                    "Canonical package file manifest has a Windows-normalized path collision"
+                )
+            windows_record_paths[windows_key] = path
             if not isinstance(record.get("size"), int) or record["size"] < 0:
                 raise PackageProofError("Canonical package file size is invalid")
             digest = record.get("sha256")
