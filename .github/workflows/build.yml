@@ -613,20 +613,3 @@ jobs:
             ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
             ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
           if-no-files-found: error
-
-      - name: Upload sealed Windows package input
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-windows-package-input
-          path: ArIED61850Tester\TestResults\windows-package-artifact
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload portable single EXE
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-win-x64-portable-single-exe
-          path: |
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
-          if-no-files-found: error
