@@ -11,20 +11,21 @@ The current stable application version is **1.6.40**. Public download metadata r
 
 The canonical release request is `.release/windows.json`. A reviewed change to that file on `main` triggers `.github/workflows/release-windows.yml`.
 
-The release workflow:
+The production release workflow:
 
 1. resolves the semantic version from the release request or tag and verifies it against `VERSION`, `Directory.Build.props`, and `ArIED61850Tester.csproj`;
-2. resolves and checks out the immutable ARIEC61850 engine revision from `engines/ARIEC61850.lock.json`;
-3. resolves and checks out the immutable ArdIrec revision from `engines/ARDIREC.lock.json`;
-4. verifies source and licensing boundaries;
-5. restores, builds, and runs the ARSAS regression suite against the exact release source;
-6. exercises the managed native COMTRADE bridge, including cursor, phasor, harmonics, and distance-locus integration;
-7. publishes the multi-file self-contained source used by the installer;
-8. publishes and smoke-tests the self-contained portable single EXE;
-9. compiles the Windows installer and performs silent install/uninstall smoke validation;
-10. creates SHA-256 checksums, SPDX 2.3 SBOM, and provenance evidence;
-11. creates GitHub artifact attestations for the public Windows binaries;
-12. creates a new stable GitHub Release with the public assets; existing tags/assets are immutable and must not be overwritten.
+2. resolves the immutable ARIEC61850 and ArdIrec lock SHAs without rebuilding those dependencies;
+3. verifies source, licensing and physical-proven Smart Discovery route boundaries;
+4. requires the exact successful Build ARSAS `push/main` sealed Windows package for the same source, engine and ArdIrec SHAs;
+5. validates the canonical all-pass TRX, portable build identity and SHA-256/size of every sealed payload file before materialization;
+6. promotes the exact tested installer-input folder and portable EXE bytes instead of rebuilding the application;
+7. reruns the release-specific managed native COMTRADE bridge/locus verification and portable runtime smoke;
+8. compiles the Windows installer from the verified installer input and performs silent install/uninstall plus installed native bridge validation;
+9. creates SHA-256 checksums, SPDX 2.3 SBOM, and provenance evidence that records the canonical package run/artifact identity;
+10. creates GitHub artifact attestations for the public Windows binaries;
+11. creates a new stable GitHub Release with the public assets; existing tags/assets are immutable and must not be overwritten.
+
+A production tag whose exact commit has no matching canonical Build ARSAS package fails closed rather than silently rebuilding. `workflow_dispatch` retains an explicit local rebuild fallback for controlled engineering recovery.
 
 The workflow explicitly rejects legacy `ardirec.exe` and Qt runtime files from official packaging. ARSAS uses the pinned in-process `ardirec_bridge.dll` contract instead.
 
@@ -40,7 +41,7 @@ The active release automation has intentionally separate responsibilities. Maint
 
 | Workflow | Responsibility | Public release mutation |
 | --- | --- | --- |
-| `.github/workflows/release-windows.yml` | Canonical Windows build, test, portable/installer packaging, checksums, SBOM, provenance and new stable publication from the reviewed release request. | May create a new release only; existing published tag/assets are treated as immutable. |
+| `.github/workflows/release-windows.yml` | Exact-byte promotion from the canonical Build ARSAS package, release-native verification, installer compilation, checksums, SBOM, provenance and new stable publication from the reviewed release request. | May create a new release only; existing published tag/assets are treated as immutable. |
 | `.github/workflows/installer-windows.yml` | Installer/portable packaging and smoke validation for engineering verification. | No stable GitHub Release publication authority. |
 | `.github/workflows/publish-verified-release.yml` | Alternative publication from already-tested workflow artifacts and an explicit verified publication request. | Create-only; refuses an existing tag rather than replacing it. |
 | `.github/workflows/release-supply-chain.yml` | Verify an existing stable release and add missing supply-chain evidence/attestation. | Additive only; refuses replacement of an existing published SBOM. |
