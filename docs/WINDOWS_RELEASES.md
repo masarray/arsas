@@ -41,7 +41,7 @@ The active release automation has intentionally separate responsibilities. Maint
 
 | Workflow | Responsibility | Public release mutation |
 | --- | --- | --- |
-| `.github/workflows/release-windows.yml` | Exact-byte promotion from the canonical Build ARSAS package, release-native verification, installer compilation, checksums, SBOM, provenance and new stable publication from the reviewed release request. | May create a new release only; existing published tag/assets are treated as immutable. |
+| `.github/workflows/release-windows.yml` | Exact-byte promotion from the canonical Build ARSAS package and the matching installed-smoke-tested installer, release-specific runtime re-verification, checksums, SBOM, provenance and new stable publication from the reviewed release request. Manual dispatch retains local installer compilation fallback. | May create a new release only; existing published tag/assets are treated as immutable. |
 | `.github/workflows/installer-windows.yml` | Installer/portable packaging and smoke validation for engineering verification. | No stable GitHub Release publication authority. |
 | `.github/workflows/publish-verified-release.yml` | Alternative publication from already-tested workflow artifacts and an explicit verified publication request. | Create-only; refuses an existing tag rather than replacing it. |
 | `.github/workflows/release-supply-chain.yml` | Verify an existing stable release and add missing supply-chain evidence/attestation. | Additive only; refuses replacement of an existing published SBOM. |
