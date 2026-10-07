@@ -284,7 +284,7 @@ def verify_canonical(
                             expected_event_name=event_name,
                         )
                     except ProofError as exc:
-                        if "stale/different PR merge tree" not in str(exc):
+                        if "stale/different source revision" not in str(exc):
                             raise
                         # A stale green artifact is not authoritative for the current
                         # synthetic merge tree; a replacement run can still arrive.
