@@ -365,10 +365,6 @@ jobs:
           if ($null -eq $artifact) {
             throw 'Timed out waiting for exact canonical portable artifact.'
           }
-          if ($artifact.workflow_run.id -and
-              [long]$artifact.workflow_run.id -ne [long]$env:SMART_CAPTURE_CANONICAL_RUN_ID) {
-            throw 'Canonical portable artifact run identity mismatch.'
-          }
 
           $runJson = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SMART_CAPTURE_CANONICAL_RUN_ID"
           if ($LASTEXITCODE -ne 0) { throw 'Could not revalidate canonical Build ARSAS run.' }
@@ -404,7 +400,21 @@ jobs:
               $identity.ardIrecLockCommit -ne $ardirecLock.commit -or
               $identity.portableSha256 -ne $actualExeSha -or
               [long]$identity.portableSizeBytes -ne [long]$executables[0].Length -or
-              $identity.ardIrecBridgeSha256 -notmatch '^[0-9a-f]{64}
+              $identity.ardIrecBridgeSha256 -notmatch '^[0-9a-f]{64}$' -or
+              [long]$identity.ardIrecBridgeSizeBytes -le 0 -or
+              -not [bool]$identity.deterministicManagedBuild -or
+              -not [bool]$identity.reproducibleNativeLinkRequested) {
+            throw 'Canonical portable build identity is incomplete or does not match this Field Capture candidate.'
+          }
+
+          $dist = '.\ArIED61850Tester\dist'
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item $executables[0].FullName (Join-Path $dist $executables[0].Name) -Force
+          Copy-Item $identities[0].FullName (Join-Path $dist $identities[0].Name) -Force
+          "SMART_CAPTURE_PACKAGING_AUTHORITY=canonical-build-arsas:$env:SMART_CAPTURE_CANONICAL_RUN_ID/$env:SMART_CAPTURE_CANONICAL_RUN_ATTEMPT" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Record manual reusable regression authority
         if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
@@ -451,98 +461,6 @@ jobs:
             "Engine PR: 134",
             "Regression authority: $env:SMART_CAPTURE_REGRESSION_AUTHORITY",
             "Packaging authority: $env:SMART_CAPTURE_PACKAGING_AUTHORITY",
-            "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
-            "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
-            "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
-            "Field invariant: one association capture, zero duplicate semantic confirmed requests, peak outstanding never above negotiated calling limit",
-            "Deferred during discovery: supplemental naming, reflection fallback, and adaptive sibling/equipment/reference/unit probes; bounded report/DataSet semantic enrichment remains enabled"
-          ) | Set-Content .\ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt -Encoding utf8
-
-      - name: Upload smart field-capture build
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-smart-discovery-pr134-win-x64
-          path: |
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
-            ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt
-            ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1
-            ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1
-            ArIED61850Tester\scripts\verify-smart-discovery-golden-lock.ps1
-            ArIED61850Tester\docs\P0-5D_PHYSICAL_CAPTURE_PROOF.md
-            ArIED61850Tester\docs\P0-5E_GOLDEN_CAPTURE_BUDGET_LOCK.md
-            ArIED61850Tester\evidence\smart-discovery-golden-target.json
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload regression evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-smart-discovery-pr134-test-evidence
-          path: |
-            ArIED61850Tester\TestResults\ci-smart-capture-canonical-proof.json
-            ArIED61850Tester\TestResults\P0-5D-*.json
-            ArIED61850Tester\TestResults\P0-5E-*.json
-          if-no-files-found: warn
-          retention-days: 14
- -or
-              [long]$identity.ardIrecBridgeSizeBytes -le 0 -or
-              -not [bool]$identity.deterministicManagedBuild -or
-              -not [bool]$identity.reproducibleNativeLinkRequested) {
-            throw 'Canonical portable build identity is incomplete or does not match this Field Capture candidate.'
-          }
-
-          $dist = '.\ArIED61850Tester\dist'
-          New-Item -ItemType Directory -Force $dist | Out-Null
-          Copy-Item $executables[0].FullName (Join-Path $dist $executables[0].Name) -Force
-          Copy-Item $identities[0].FullName (Join-Path $dist $identities[0].Name) -Force
-          "SMART_CAPTURE_PACKAGING_AUTHORITY=canonical-build-arsas:$env:SMART_CAPTURE_CANONICAL_RUN_ID/$env:SMART_CAPTURE_CANONICAL_RUN_ATTEMPT" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Record manual reusable regression authority
-        if: github.event_name == 'workflow_dispatch'
-        shell: powershell
-        run: |
-          "SMART_CAPTURE_REGRESSION_AUTHORITY=manual-reusable-exact-sha" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Setup .NET 8 for independent Field Capture publish
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Publish portable single EXE x64
-        shell: powershell
-        run: |
-          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
-            -Version $env:ARSAS_VERSION `
-            -Runtime win-x64 `
-            -SingleFile $true `
-            -SelfContained $true `
-            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
-            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
-
-      - name: Smoke test portable executable
-        shell: powershell
-        run: |
-          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
-          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable EXE missing: $exe" }
-          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP 'ARSAS-smart-capture-bundle-cache'
-          $process = Start-Process -FilePath $exe -ArgumentList @('--portable-smoke-test') -PassThru
-          if (-not $process.WaitForExit(30000)) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw 'Portable EXE smoke test timed out.'
-          }
-          if ($process.ExitCode -ne 0) { throw "Portable EXE smoke test failed: $($process.ExitCode)" }
-          @(
-            "ARSAS smart discovery field-capture build",
-            "ARSAS commit: $env:ARSAS_COMMIT",
-            "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
-            "ARIEC61850 physical baseline commit: $env:ARIEC61850_BASELINE_COMMIT",
-            "Engine PR: 134",
-            "Regression authority: $env:SMART_CAPTURE_REGRESSION_AUTHORITY",
-            "Packaging authority: independent Field Capture publish/smoke",
             "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
             "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
