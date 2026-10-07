@@ -161,14 +161,16 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
     }
 
     [Fact]
-    public void StaticReporting_UsesCanonicalMemberOrder_WithoutSecondDirectoryRead()
+    public void StaticReporting_UsesEngineCanonicalHotPath_AndCanonicalMemberOrder()
     {
         var source = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
 
-        Assert.Contains("BuildModelDataSetDirectories", source, StringComparison.Ordinal);
-        Assert.Contains("discovery.DataSetDirectories.SingleOrDefault", source, StringComparison.Ordinal);
+        Assert.Contains("PrepareCanonicalStaticAcquisitionSmartAsync", source, StringComparison.Ordinal);
+        Assert.Contains("MmsConfiguredStaticRcbEligibilityPolicy.Evaluate", source, StringComparison.Ordinal);
+        Assert.Contains("DirectoryFromAvailability", source, StringComparison.Ordinal);
         Assert.Contains("TryVerifyStaticDataSetMemberOrder", source, StringComparison.Ordinal);
         Assert.Contains("Members = modelDirectory.Members", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("discovery.DataSetDirectories.SingleOrDefault", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Members = liveDirectory.Members", source, StringComparison.Ordinal);
         Assert.Contains("PollingPointKeys = Array.Empty<string>()", source, StringComparison.Ordinal);
@@ -183,6 +185,22 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         Assert.Contains("BuildModelDataSetDirectories(_liveModel, \"TrustedScl\")", source, StringComparison.Ordinal);
         Assert.Contains("private static IReadOnlyList<ArMms.MmsDataSetDirectoryResult> BuildModelDataSetDirectories", source, StringComparison.Ordinal);
         Assert.Contains("Source = source", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiscoveryAndOpenScl_StaticPlanning_EnterOneEngineAcquisitionContract()
+    {
+        var canonical = Read("Services/NativeIec61850Client.CanonicalAcquisition.cs");
+        var staticReporting = Read("Services/NativeIec61850Client.StaticDataSetReporting.cs");
+
+        Assert.Contains("CanonicalLiveModelAdapter.FromLiveDiscovery", canonical, StringComparison.Ordinal);
+        Assert.Contains("CanonicalIngressKind.SclFile", canonical, StringComparison.Ordinal);
+        Assert.Contains("BuildCanonicalStaticSelections", canonical, StringComparison.Ordinal);
+        Assert.Contains("PrepareCanonicalStaticAcquisitionSmartAsync", staticReporting, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850StaticRcbReferenceMatcher.MatchRank", staticReporting, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnsureDiscoveryForReportingAsync(cancellationToken)", staticReporting, StringComparison.Ordinal);
+        Assert.Contains("StartConfiguredStaticReportMonitorAsync", staticReporting, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReportMonitorClientCompatibleAsync", staticReporting, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -225,11 +243,12 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         Assert.DoesNotContain("errors.AddRange(exactAssociation.Errors)", preparation, StringComparison.Ordinal);
 
         var client = Read("Services/NativeIec61850Client.SclAssisted.cs");
+        var canonical = Read("Services/NativeIec61850Client.CanonicalAcquisition.cs");
         var start = client.IndexOf(
             "public async Task<SclAssistedClientConnectResult> ConnectUsingSclAsync",
             StringComparison.Ordinal);
         var end = client.IndexOf(
-            "private static ArMms.MmsReportInventory BuildTrustedSclReportInventory",
+            "private static IReadOnlyList<ArMms.MmsDataSetDirectoryResult> BuildModelDataSetDirectories",
             start,
             StringComparison.Ordinal);
 
@@ -238,10 +257,15 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
 
         Assert.Contains("preparation.AssociationResolution", connectFlow, StringComparison.Ordinal);
         Assert.Contains("_session.ConnectSclAssistedAsync", connectFlow, StringComparison.Ordinal);
+        Assert.Contains("TryInstallCanonicalSclRuntimeModel", connectFlow, StringComparison.Ordinal);
+        Assert.Contains("MmsCanonicalReportInventoryProjection.Build", connectFlow, StringComparison.Ordinal);
         Assert.Contains("online.SelectedAssociationCandidateName", connectFlow, StringComparison.Ordinal);
         Assert.Contains("online.AssociationAttemptCount", connectFlow, StringComparison.Ordinal);
         Assert.DoesNotContain(".DiscoverAsync(", connectFlow, StringComparison.Ordinal);
         Assert.DoesNotContain("DiscoverSignals", connectFlow, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildTrustedSclReportInventory", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConcreteFirstStaticRcbReference", client, StringComparison.Ordinal);
+        Assert.Contains("SclCanonicalImporter.Import", canonical, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
