@@ -55,6 +55,25 @@ jobs:
         shell: powershell
         run: .\ArIED61850Tester\scripts\test-source-clean-guard.ps1
 
+      - name: Validate Windows packaging PowerShell syntax
+        shell: powershell
+        run: |
+          $scripts = @(
+            '.\ArIED61850Tester\scripts\build-ardirec-bridge.ps1',
+            '.\ArIED61850Tester\scripts\publish-windows-portable.ps1',
+            '.\ArIED61850Tester\scripts\build-windows-installer.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) {
+              $messages = ($errors | ForEach-Object Message) -join '; '
+              throw "PowerShell syntax validation failed for $script: $messages"
+            }
+          }
+
       - name: Set up Python for read-only maintenance inventory
         uses: actions/setup-python@v6
         with:
