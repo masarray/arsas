@@ -9,6 +9,10 @@ on:
       - "scripts/create-windows-release-checksums.ps1"
       - "scripts/publish-windows-portable.ps1"
       - "scripts/stage-ardirec-viewer.ps1"
+      - "scripts/write-ci-package-manifest.py"
+      - "scripts/verify-ci-package-reuse.py"
+      - "scripts/test-ci-package-reuse.py"
+      - ".github/workflows/build.yml"
       - ".github/workflows/installer-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
       - "ComtradeWorkspaceWindow*"
@@ -35,6 +39,10 @@ on:
       - "scripts/create-windows-release-checksums.ps1"
       - "scripts/publish-windows-portable.ps1"
       - "scripts/stage-ardirec-viewer.ps1"
+      - "scripts/write-ci-package-manifest.py"
+      - "scripts/verify-ci-package-reuse.py"
+      - "scripts/test-ci-package-reuse.py"
+      - ".github/workflows/build.yml"
       - ".github/workflows/installer-windows.yml"
       - "FaultRecordWindow.ComtradeOpen.cs"
       - "ComtradeWorkspaceWindow*"
@@ -58,6 +66,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   installer:
@@ -66,10 +75,22 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout ARSAS application
+      - name: Checkout exact ARSAS application revision
         uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact installer source identity
+        shell: powershell
+        run: |
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Installer source mismatch. Expected $expected, got $actual."
+          }
 
       - name: Resolve application version and immutable engine locks
         shell: powershell
@@ -106,7 +127,97 @@ jobs:
           "ARDIREC_REPOSITORY=$($ardirecLock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_COMMIT=$($ardirecLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Checkout immutable ARIEC61850 engine revision
+      - name: Setup Python for sealed package verification
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run offline package verifier safety fixtures
+        if: github.event_name != 'workflow_dispatch'
+        run: python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
+
+      - name: Reuse exact tested canonical Windows package
+        if: github.event_name != 'workflow_dispatch'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $eventName = 'pull_request'
+            $headBranch = $env:PR_HEAD_BRANCH
+            $headSha = $env:PR_HEAD_SHA
+          }
+          else {
+            $eventName = 'push'
+            $headBranch = 'main'
+            $headSha = $env:GITHUB_SHA
+          }
+
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'arsas-canonical-windows-package'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-canonical-windows-package-proof.json'
+          python .\ArIED61850Tester\scripts\verify-ci-package-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch $headBranch `
+            --head-sha $headSha `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --event-name $eventName `
+            --wait-seconds 1200 `
+            --allow-in-progress-artifact `
+            --output-dir $packageRoot `
+            --proof-output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installer requires the exact sealed Build ARSAS package payload."
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if ($proof.sourceSha -ne $env:GITHUB_SHA -or
+              $proof.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $proof.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              $proof.version -ne $env:APP_VERSION -or
+              [int]$proof.failed -ne 0 -or
+              [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1 -or
+              [bool]$proof.releasePromotionAuthority) {
+            throw "Canonical Windows package proof does not match installer source authority."
+          }
+
+          $installerInput = Join-Path $packageRoot ($proof.installerInputRoot -replace '/', '\')
+          $testAssembly = Join-Path $packageRoot ($proof.testAssemblyPath -replace '/', '\')
+          $comtradeFixture = Join-Path $packageRoot ($proof.comtradeFixturePath -replace '/', '\')
+          $locusFixture = Join-Path $packageRoot ($proof.locusFixturePath -replace '/', '\')
+          foreach ($required in @($installerInput, $testAssembly, $comtradeFixture, $locusFixture)) {
+            if (-not (Test-Path $required)) {
+              throw "Verified package materialization is incomplete: $required"
+            }
+          }
+
+          "INSTALLER_INPUT_DIR=$installerInput" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_TEST_ASSEMBLY=$testAssembly" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_COMTRADE_FIXTURE=$comtradeFixture" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_LOCUS_FIXTURE=$locusFixture" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_PACKAGE_RUN=$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_PACKAGE_ARTIFACT_SHA256=$($proof.artifactSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          @(
+            '## CI-P3 installer package reuse',
+            '',
+            "- exact source: $env:GITHUB_SHA",
+            "- engine: $env:ARIEC61850_COMMIT",
+            "- ArdIrec: $env:ARDIREC_COMMIT",
+            "- Build ARSAS run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt)",
+            "- full regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- package files: $($proof.fileCount)",
+            "- proof stage: $($proof.proofStage)",
+            '- installer remains separate compile/install/runtime-smoke authority'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Checkout immutable ARIEC61850 engine revision for manual build
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
@@ -115,7 +226,8 @@ jobs:
           $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
           if ($actual -ne $env:ARIEC61850_COMMIT) { throw "ARIEC61850 pin mismatch." }
 
-      - name: Checkout immutable ArdIrec engine revision
+      - name: Checkout immutable ArdIrec engine revision for manual build
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
@@ -124,7 +236,7 @@ jobs:
           $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
           if ($actual -ne $env:ARDIREC_COMMIT) { throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT got $actual." }
 
-      - name: Setup .NET 8
+      - name: Setup .NET 8 for native verification
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
@@ -139,7 +251,8 @@ jobs:
           $after = (Get-FileHash $native -Algorithm SHA256).Hash
           if ($before -ne $after) { throw 'Installer verification mutated discovery source.' }
 
-      - name: Restore build and test application solution
+      - name: Restore build and test application solution for manual packaging
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
@@ -149,7 +262,8 @@ jobs:
           dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
           if ($LASTEXITCODE -ne 0) { throw "Application regression tests failed." }
 
-      - name: Publish installer source
+      - name: Publish installer source for manual packaging
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -159,41 +273,43 @@ jobs:
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+          if ($LASTEXITCODE -ne 0) { throw "Manual installer source publish failed." }
 
-      - name: Stage pinned ArdIrec native analysis bridge
+      - name: Stage pinned ArdIrec native analysis bridge for manual packaging
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\stage-ardirec-viewer.ps1 `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
             -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
             -BuildDirectory "$env:RUNNER_TEMP\ardirec-installer-build"
+          if ($LASTEXITCODE -ne 0) { throw "Manual ArdIrec staging failed." }
 
-      - name: Exercise managed analysis bridge before packaging
-        shell: powershell
-        run: |
-          $publish = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64"
-          $bridge = Join-Path $publish "Tools\ArdIrec\ardirec_bridge.dll"
-          if (-not (Test-Path $bridge -PathType Leaf)) { throw "Native bridge was not staged: $bridge" }
-          $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridge
-          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
-          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
-          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
-            -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
-          if ($LASTEXITCODE -ne 0) { throw "Managed ArdIrec bridge/locus integration test failed." }
+          "INSTALLER_INPUT_DIR=$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_TEST_ASSEMBLY=$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_COMTRADE_FIXTURE=$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_LOCUS_FIXTURE=$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANONICAL_PACKAGE_RUN=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install Inno Setup compiler
         shell: powershell
         run: choco install innosetup --no-progress --yes
 
-      - name: Compile installer
+      - name: Compile installer from exact tested payload
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\build-windows-installer.ps1 `
             -Version $env:APP_VERSION `
             -Runtime win-x64 `
-            -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:APP_VERSION-win-x64" `
-            -OutputDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
+            -PublishedDirectory $env:INSTALLER_INPUT_DIR `
+            -OutputDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist" `
+            -TestAssemblyPath $env:CANONICAL_TEST_ASSEMBLY `
+            -FixtureCfg $env:CANONICAL_COMTRADE_FIXTURE `
+            -LocusFixtureCfg $env:CANONICAL_LOCUS_FIXTURE
 
       - name: Silent install and field-runtime smoke test
         shell: powershell
@@ -231,11 +347,10 @@ jobs:
           }
 
           $env:ARSAS_ARDIREC_BRIDGE_PATH = Join-Path $installRoot "Tools\ArdIrec\ardirec_bridge.dll"
-          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
-          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
-          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
-            -c Release --no-build --no-restore `
-            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $env:CANONICAL_COMTRADE_FIXTURE
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = $env:CANONICAL_LOCUS_FIXTURE
+          & dotnet vstest $env:CANONICAL_TEST_ASSEMBLY `
+            "--TestCaseFilter:FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
           if ($LASTEXITCODE -ne 0) { throw "Installed bridge/locus runtime validation failed." }
 
           $uninstaller = Join-Path $installRoot "unins000.exe"

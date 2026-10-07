@@ -30,7 +30,7 @@ jobs:
           "ARSAS_SOURCE_COMMIT=$actual" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Testing and packaging exact ARSAS source $actual"
 
-      - name: Resolve immutable ARIEC61850 integration lock
+      - name: Resolve immutable engine and native bridge locks
         shell: powershell
         run: |
           $lockPath = ".\ArIED61850Tester\engines\ARIEC61850.lock.json"
@@ -43,10 +43,28 @@ jobs:
               $lock.commit -notmatch '^[0-9a-f]{40}$') {
             throw "ARIEC61850 lock metadata is invalid."
           }
+
+          $ardirecPath = ".\ArIED61850Tester\engines\ARDIREC.lock.json"
+          if (!(Test-Path $ardirecPath)) {
+            throw "ArdIrec lock file was not found."
+          }
+          $ardirec = Get-Content $ardirecPath -Raw | ConvertFrom-Json
+          if ($ardirec.schema -ne 3 -or
+              $ardirec.repository -notmatch '^[^/]+/[^/]+$' -or
+              $ardirec.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
+              $ardirec.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirec.bridge.abi -ne 1 -or
+              $ardirec.bridge.mode -ne 'native-only' -or
+              $ardirec.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+            throw "ArdIrec native bridge lock metadata is invalid."
+          }
+
           "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARIEC61850_REF=$($lock.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
+          "ARDIREC_REPOSITORY=$($ardirec.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REF=$($ardirec.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($ardirec.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify source, website and license boundaries
         shell: powershell
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
@@ -295,6 +313,20 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
+      - name: Checkout immutable ArdIrec native bridge revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          if ($LASTEXITCODE -ne 0) { throw "Could not clone pinned ArdIrec repository." }
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch pinned ArdIrec revision." }
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw "Could not checkout pinned ArdIrec revision." }
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
       - name: Verify required ARIEC61850 APIs
         shell: powershell
         run: |
@@ -401,7 +433,79 @@ jobs:
             ArIED61850Tester\TestResults\ci-canonical-authority.json
           if-no-files-found: error
 
-      - name: Publish real portable single EXE x64
+      - name: Build and test exact pinned ArdIrec native bridge once
+        shell: powershell
+        run: |
+          $bridgeDir = Join-Path $env:RUNNER_TEMP 'arsas-canonical-ardirec-bridge'
+          $bridgeBuild = Join-Path $env:RUNNER_TEMP 'arsas-canonical-ardirec-build'
+          $bridge = [string](
+            .\ArIED61850Tester\scripts\build-ardirec-bridge.ps1 `
+              -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+              -OutputDirectory $bridgeDir `
+              -BuildDirectory $bridgeBuild |
+              Select-Object -Last 1
+          )
+          $bridge = $bridge.Trim()
+          if (-not (Test-Path $bridge -PathType Leaf)) {
+            throw "Canonical ArdIrec bridge build did not produce a DLL: $bridge"
+          }
+          "ARDIREC_BRIDGE_PATH=$bridge" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_BRIDGE_SHA256=$((Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant())" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish canonical installer-input folder
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $false `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecBridgePath $env:ARDIREC_BRIDGE_PATH
+          if ($LASTEXITCODE -ne 0) { throw "Canonical installer-input publish failed." }
+
+          $publish = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64"
+          $ardirecDir = Join-Path $publish 'Tools\ArdIrec'
+          New-Item -ItemType Directory -Force $ardirecDir | Out-Null
+          $license = ".\ArdIrec\LICENSE"
+          if (Test-Path $license -PathType Leaf) {
+            Copy-Item $license (Join-Path $ardirecDir 'LICENSE.txt') -Force
+          }
+
+          $packagedBridge = Join-Path $ardirecDir 'ardirec_bridge.dll'
+          if (-not (Test-Path $packagedBridge -PathType Leaf)) {
+            throw "Canonical installer-input folder is missing the native bridge."
+          }
+          $packagedHash = (Get-FileHash $packagedBridge -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($packagedHash -ne $env:ARDIREC_BRIDGE_SHA256) {
+            throw "Installer-input bridge bytes differ from the tested canonical bridge."
+          }
+
+      - name: Exercise exact packaged native bridge through managed tests
+        shell: powershell
+        run: |
+          $env:ARSAS_ARDIREC_BRIDGE_PATH = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64\Tools\ArdIrec\ardirec_bridge.dll"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
+          foreach ($required in @(
+            $env:ARSAS_ARDIREC_BRIDGE_PATH,
+            $env:ARSAS_NATIVE_COMTRADE_TEST_CFG,
+            $env:ARSAS_NATIVE_LOCUS_TEST_CFG
+          )) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Canonical native bridge verification prerequisite is missing: $required"
+            }
+          }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
+            -c Release --no-build --no-restore `
+            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Canonical packaged ArdIrec bridge failed managed integration tests."
+          }
+
+      - name: Publish real portable single EXE from the same native bridge
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -410,7 +514,9 @@ jobs:
             -SingleFile $true `
             -SelfContained $true `
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
-            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecBridgePath $env:ARDIREC_BRIDGE_PATH
+          if ($LASTEXITCODE -ne 0) { throw "Canonical portable publish failed." }
 
       - name: Smoke-test real portable single EXE
         shell: powershell
@@ -429,6 +535,72 @@ jobs:
             if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Host }
             throw "Portable single EXE smoke test failed with exit code $($process.ExitCode)."
           }
+
+      - name: Stage package verification runtime and fixtures
+        shell: powershell
+        run: |
+          $verification = ".\ArIED61850Tester\TestResults\windows-package-verification"
+          if (Test-Path $verification) { Remove-Item $verification -Recurse -Force }
+          $tests = Join-Path $verification 'ARSAS.Tests'
+          $fixtures = Join-Path $verification 'fixtures'
+          New-Item -ItemType Directory -Force -Path $tests, $fixtures | Out-Null
+
+          $testOutput = ".\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows"
+          if (-not (Test-Path (Join-Path $testOutput 'ARSAS.Tests.dll') -PathType Leaf)) {
+            throw "Canonical prebuilt ARSAS.Tests runtime is missing."
+          }
+          Copy-Item (Join-Path $testOutput '*') $tests -Recurse -Force
+
+          foreach ($stem in @('minimal_1999', 'distance_p1')) {
+            $matches = @(Get-ChildItem ".\ArdIrec\tests\data\$stem.*" -File -ErrorAction SilentlyContinue)
+            if (-not ($matches | Where-Object Extension -eq '.cfg')) {
+              throw "Pinned ArdIrec fixture is missing: $stem.cfg"
+            }
+            foreach ($file in $matches) {
+              Copy-Item $file.FullName (Join-Path $fixtures $file.Name) -Force
+            }
+          }
+
+      - name: Seal exact tested Windows package payload
+        shell: powershell
+        run: |
+          $artifactRoot = ".\ArIED61850Tester\TestResults\windows-package-artifact"
+          python .\ArIED61850Tester\scripts\write-ci-package-manifest.py `
+            --artifact-root $artifactRoot `
+            --portable ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe" `
+            --installer-input ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64" `
+            --verification-dir ".\ArIED61850Tester\TestResults\windows-package-verification" `
+            --evidence-dir ".\ArIED61850Tester\TestResults" `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --version $env:ARSAS_VERSION `
+            --runtime win-x64 `
+            --run-id $env:GITHUB_RUN_ID `
+            --attempt $env:GITHUB_RUN_ATTEMPT `
+            --event-name $env:GITHUB_EVENT_NAME
+          if ($LASTEXITCODE -ne 0) { throw "Canonical Windows package sealing failed." }
+
+          $manifest = Get-Content (Join-Path $artifactRoot 'ci-windows-package-authority.json') -Raw | ConvertFrom-Json
+          if ($manifest.sourceSha -ne $env:GITHUB_SHA -or
+              $manifest.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $manifest.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              -not [bool]$manifest.fullRegressionPassed -or
+              -not [bool]$manifest.nativeBridgeIntegrationPassed -or
+              -not [bool]$manifest.portableSmokePassed -or
+              [bool]$manifest.installerBuilt -or
+              [bool]$manifest.releasePromotionAuthority -or
+              $manifest.nativeBridge.sha256 -ne $env:ARDIREC_BRIDGE_SHA256) {
+            throw "Canonical Windows package manifest does not match the tested build authority."
+          }
+
+      - name: Upload sealed Windows package input
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-windows-package-input
+          path: ArIED61850Tester\TestResults\windows-package-artifact
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload portable single EXE
         uses: actions/upload-artifact@v7
