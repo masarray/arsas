@@ -415,5 +415,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ARSAS-win-x64-portable-single-exe
-          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          path: |
+            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
           if-no-files-found: error
