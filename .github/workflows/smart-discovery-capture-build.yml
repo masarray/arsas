@@ -34,8 +34,32 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smart-discovery-field-capture-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  manual-regression:
+    name: Manual exact-SHA full regression before Field Capture packaging
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}
+
   build-smart-capture:
+    needs: [manual-regression]
+    if: >-
+      ${{
+        always() &&
+        (github.event_name != 'workflow_dispatch' ||
+         needs.manual-regression.result == 'success')
+      }}
     name: Build smart-discovery portable field capture
     runs-on: windows-latest
     steps:
@@ -242,23 +266,12 @@ jobs:
             throw 'Pinned P0-5b engine does not expose the required smart discovery, hierarchy-budget, and authoritative-Control invariants.'
           }
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Restore
-        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
-
-      - name: Build Release
-        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
-
-      - name: Verify smart route and association lifecycle resets were installed
+      - name: Verify smart route and association lifecycle resets before packaging
         shell: powershell
         run: |
           $native = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.cs -Raw
           if ($native -notmatch 'return await DiscoverSignalsSmartForCaptureAsync\(cancellationToken, progress\)') {
-            throw 'Build-time smart discovery route was not installed.'
+            throw 'Field Capture smart discovery route is not installed.'
           }
           if ($native -notmatch '_lastDiscovery = null;\s*_liveModel = null;\s*ResetSmartDiscoveryAuthority\(\);\s*// __P0_5C_CONNECT_RESET__') {
             throw 'P0-5c ConnectAsync association-generation reset was not installed.'
@@ -267,11 +280,64 @@ jobs:
             throw 'P0-5c DisposeAsync association-generation reset was not installed.'
           }
           if ($native -notmatch 'service\.OpenAsync\(_session, signal\.ObjectReference, _lastDiscovery\.Snapshot\.DomainVariables, cancellationToken\)') {
-            throw 'Build-time Control path does not consume the authoritative smart domain inventory.'
+            throw 'Field Capture Control path does not consume the authoritative smart domain inventory.'
           }
 
-      - name: Run ARSAS regression tests
-        run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-smart-capture-tests.trx" --results-directory .\ArIED61850Tester\TestResults
+      - name: Setup Python for canonical regression evidence
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run offline canonical evidence safety fixtures
+        if: github.event_name == 'pull_request'
+        run: python .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
+
+      - name: Reuse exact canonical ARSAS full regression
+        if: github.event_name == 'pull_request'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+        run: |
+          $proofPath = '.\ArIED61850Tester\TestResults\ci-smart-capture-canonical-proof.json'
+          python .\ArIED61850Tester\scripts\verify-ci-canonical-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --head-sha $env:PR_HEAD_SHA `
+            --merge-sha $env:PR_MERGE_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --wait-seconds 960 `
+            --allow-in-progress-artifact `
+            --output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Field Capture requires exact canonical ARSAS full-regression evidence.'
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if ($proof.mergeSha -ne $env:PR_MERGE_SHA -or
+              $proof.engineSha -ne $env:ARIEC61850_COMMIT -or
+              [int]$proof.failed -ne 0 -or
+              [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1) {
+            throw 'Field Capture canonical regression proof is incomplete.'
+          }
+          "SMART_CAPTURE_REGRESSION_AUTHORITY=canonical-build-arsas:$($proof.canonicalRunId)/$($proof.canonicalRunAttempt)" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Record manual reusable regression authority
+        if: github.event_name == 'workflow_dispatch'
+        shell: powershell
+        run: |
+          "SMART_CAPTURE_REGRESSION_AUTHORITY=manual-reusable-exact-sha" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup .NET 8 for independent Field Capture publish
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
 
       - name: Publish portable single EXE x64
         shell: powershell
@@ -302,6 +368,8 @@ jobs:
             "ARIEC61850 commit: $env:ARIEC61850_COMMIT",
             "ARIEC61850 physical baseline commit: $env:ARIEC61850_BASELINE_COMMIT",
             "Engine PR: 134",
+            "Regression authority: $env:SMART_CAPTURE_REGRESSION_AUTHORITY",
+            "Packaging authority: independent Field Capture publish/smoke",
             "Mode: P0-5e golden capture acceptance over P0-5d physical wire proof, P0-5c association single-flight and P0-5b hierarchy request-budget convergence",
             "CI invariant: duplicate semantic request, duplicate GetNameList/GVA, second naming sweep, invoke-ID reuse and outstanding-window proof logic execute against deterministic fixtures",
             "Golden invariant: production hard budget is derived only from a fresh physical P0-5d PASS plus raw capture/proof SHA-256 provenance",
@@ -331,7 +399,7 @@ jobs:
         with:
           name: ARSAS-smart-discovery-pr134-test-evidence
           path: |
-            ArIED61850Tester\TestResults\*.trx
+            ArIED61850Tester\TestResults\ci-smart-capture-canonical-proof.json
             ArIED61850Tester\TestResults\P0-5D-*.json
             ArIED61850Tester\TestResults\P0-5E-*.json
           if-no-files-found: warn
