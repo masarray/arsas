@@ -92,19 +92,21 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
     }
 
     [Fact]
-    public void DeterministicStaticPlanner_PreservesSclConfigurationAndConcreteLiveRcbAuthority()
+    public void DeterministicStaticPlanner_DelegatesConfigurationAndLiveRcbAuthorityToEngine()
     {
         var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.StaticDataSetReporting.cs"));
+        var canonical = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.CanonicalAcquisition.cs"));
 
         Assert.Contains("device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel", source, StringComparison.Ordinal);
-        Assert.Contains("var configurationModel = projectionModel", source, StringComparison.Ordinal);
-        Assert.Contains("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
-        Assert.Contains("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
-        Assert.Contains("ReportControlReference = concreteReportReference", source, StringComparison.Ordinal);
-        Assert.Contains("Install InformationReport receiver before enabling the RCB", source, StringComparison.Ordinal);
-        Assert.Contains("enable RptEna, then request GI after receiver registration", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("configurationModels", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("var configured = configuredReports[0]", source, StringComparison.Ordinal);
+        Assert.Contains("ResolveCanonicalRuntimeModel", source, StringComparison.Ordinal);
+        Assert.Contains("PrepareCanonicalStaticAcquisitionSmartAsync", source, StringComparison.Ordinal);
+        Assert.Contains("MmsConfiguredStaticRcbEligibilityPolicy.Evaluate", source, StringComparison.Ordinal);
+        Assert.Contains("ReportControlReference = selected.Snapshot.Reference", source, StringComparison.Ordinal);
+        Assert.Contains("StartConfiguredStaticReportMonitorAsync", source, StringComparison.Ordinal);
+        Assert.Contains("traffic proof remains asynchronous", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CanonicalLiveModelAdapter.FromLiveDiscovery", canonical, StringComparison.Ordinal);
+        Assert.DoesNotContain("Iec61850StaticRcbReferenceMatcher.MatchRank", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectMany(configured => discovery.ReportInventory.ReportControls", source, StringComparison.Ordinal);
         Assert.DoesNotContain("AllowDynamicDataSetWrites = true", source, StringComparison.Ordinal);
         Assert.DoesNotContain("PollingPointKeys = points.Select", source, StringComparison.Ordinal);
     }

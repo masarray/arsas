@@ -46,6 +46,8 @@ jobs:
 
       - name: Verify R10 physical convergence authority
         shell: powershell
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
         run: |
           $target = Get-Content .\evidence\interoperability-reference-target.json -Raw | ConvertFrom-Json
           $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
@@ -82,9 +84,11 @@ jobs:
           if ($association.contractId -ne 'SCL-ASSOC-PARTIAL-ADDR-PHYSICAL' -or
               $association.status -ne 'physically-accepted-engine-merged-consumer-pending-merge' -or
               -not [bool]$association.preservesR10Baseline -or
-              $association.engine.testedHead -ne $lock.commit -or
-              [int]$association.engine.pullRequest -ne [int]$lock.sourcePullRequest -or
-              [int]$lock.sourcePullRequest -ne 143 -or
+              $association.engine.testedHead -ne $lock.sclAssociationInteroperability.testedEngineCommit -or
+              [int]$association.engine.pullRequest -ne [int]$lock.sclAssociationInteroperability.sourcePullRequest -or
+              [int]$lock.sclAssociationInteroperability.sourcePullRequest -ne 143 -or
+              $association.engine.mergedMain -ne $lock.sclAssociationInteroperability.mergedEngineCommit -or
+              $association.engine.tree -ne $lock.sclAssociationInteroperability.engineTree -or
               -not [bool]$association.physicalAcceptance.fullDiscoverySkipped -or
               [int]$association.physicalAcceptance.failedReads -ne 0 -or
               [int]$association.physicalAcceptance.projectionErrors -ne 0 -or
@@ -92,6 +96,27 @@ jobs:
               [int]$association.physicalAcceptance.unresolvedRuntimePoints -ne 0 -or
               -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
             throw 'Post-baseline SCL association acceptance is missing or inconsistent.'
+          }
+
+          $trial = $lock.smartInteroperabilityCodeTrial
+          if ($null -ne $trial -and $lock.commit -eq $trial.exactCommit) {
+            if ($trial.status -ne 'code-verified-not-physical' -or
+                [int]$trial.issue -ne 144 -or
+                [int]$trial.integrationPullRequest -ne 148 -or
+                [int]$lock.sourcePullRequest -ne [int]$trial.integrationPullRequest -or
+                -not [bool]$trial.physicalPromotionRequired) {
+              throw 'Smart interoperability code-trial metadata is inconsistent.'
+            }
+
+            if ($env:PR_BASE_REF -eq 'main') {
+              throw 'CodeVerified smart-interoperability trial cannot pass mainline readiness before fresh physical qualification.'
+            }
+
+            Write-Host "Stacked consumer trial accepted for CI against $($trial.exactCommit); historical physical authority remains $($association.engine.testedHead)."
+          }
+          elseif ($lock.commit -ne $association.engine.testedHead -or
+                  [int]$lock.sourcePullRequest -ne 143) {
+            throw 'Runtime engine pin is neither the physically accepted authority nor an explicit stacked CodeVerified trial.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append

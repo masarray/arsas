@@ -69,11 +69,10 @@ jobs:
               $association.status -ne 'physically-accepted-engine-merged-consumer-pending-merge' -or
               -not [bool]$association.preservesR10Baseline -or
               [int]$association.engine.pullRequest -ne 143 -or
-              $association.engine.testedHead -ne $lock.commit -or
+              $association.engine.testedHead -ne $lock.sclAssociationInteroperability.testedEngineCommit -or
               $association.engine.mergedMain -ne $lock.sclAssociationInteroperability.mergedEngineCommit -or
               $association.engine.tree -ne $lock.sclAssociationInteroperability.engineTree -or
-              [int]$lock.sourcePullRequest -ne 143 -or
-              $lock.sclAssociationInteroperability.testedEngineCommit -ne $lock.commit -or
+              [int]$lock.sclAssociationInteroperability.sourcePullRequest -ne 143 -or
               -not [bool]$association.physicalAcceptance.fullDiscoverySkipped -or
               [int]$association.physicalAcceptance.associationAttempts -ne 1 -or
               [int]$association.physicalAcceptance.matchedDomains -ne 5 -or
@@ -85,6 +84,26 @@ jobs:
               -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
             throw 'Accepted post-baseline SCL association authority drifted or lost physical evidence.'
           }
+          $trial = $lock.smartInteroperabilityCodeTrial
+          if ($null -ne $trial) {
+            if ($trial.status -ne 'code-verified-not-physical' -or
+                [int]$trial.issue -ne 144 -or
+                [int]$trial.integrationPullRequest -ne 148 -or
+                $trial.exactCommit -ne $lock.commit -or
+                [int]$lock.sourcePullRequest -ne [int]$trial.integrationPullRequest -or
+                -not [bool]$trial.fullDiscoveryFallbackForbidden -or
+                -not [bool]$trial.vendorBranchingForbidden -or
+                -not [bool]$trial.physicalPromotionRequired) {
+              throw 'Smart interoperability code-trial authority is malformed or was silently promoted.'
+            }
+
+            if ($lock.sclAssociationInteroperability.testedEngineCommit -ne $association.engine.testedHead -or
+                $lock.sclAssociationInteroperability.mergedEngineCommit -ne $association.engine.mergedMain -or
+                $lock.sclAssociationInteroperability.engineTree -ne $association.engine.tree) {
+              throw 'Code trial replaced or mutated the physically accepted SCL-association ancestry.'
+            }
+          }
+
           if ([bool]$target.promotion.productionPromoted -or
               [bool]$target.promotion.mergeAllowedBeforePhysicalRetest -or
               [bool]$target.promotion.physicalRetestRequired -or

@@ -81,7 +81,7 @@ public sealed class SmartDiscoveryProductionPromotionRegressionTests
         Assert.Contains("engineModelAndScl.mainMerge", workflow, StringComparison.Ordinal);
         Assert.Contains("physicalTestedCommit", workflow, StringComparison.Ordinal);
         Assert.Contains("mergedMainTree", workflow, StringComparison.Ordinal);
-        Assert.Contains("Checkout exact merged ARIEC61850 authority", workflow, StringComparison.Ordinal);
+        Assert.Contains("Checkout exact accepted ARIEC61850 integration authority", workflow, StringComparison.Ordinal);
         Assert.Contains("Build and test ARSAS candidate", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("perf/smart-ied-discovery", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("EvidenceEngineBaselineCommit", workflow, StringComparison.Ordinal);

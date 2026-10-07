@@ -25,26 +25,29 @@ public sealed class SclGoldenWireIntegrationContractTests
     }
 
     [Fact]
-    public void Runtime_TrustedSclStaticReporting_BypassesHybridAndLegacyStartPaths()
+    public void Runtime_OpenSclAndDiscovery_UseOneEngineAuthoritativeActivationPath()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
-        Assert.Contains("session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority", source, StringComparison.Ordinal);
-        Assert.Contains("StartTrustedSclStaticReportMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("DataSet membership and RCB identity remain SCL-authoritative", source, StringComparison.Ordinal);
+
+        Assert.Contains("plan.IsEngineAuthoritative", source, StringComparison.Ordinal);
+        Assert.Contains("StartHybridReportMonitorAsync", source, StringComparison.Ordinal);
+        Assert.Contains("Discovery IP and Open SCL converge before execution", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartTrustedSclStaticReportMonitorAsync(plan", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void TrustedSclStaticAdapter_HasGoldenWireSafetyContract()
+    public void UnifiedConfiguredStaticAdapter_HasGoldenWireSafetyContract()
     {
-        var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.TrustedSclStaticReporting.cs"));
-        Assert.Contains("TryGetTrustedSclDataSetDirectory", source, StringComparison.Ordinal);
-        Assert.Contains("StartStaticSclReportMonitorAsync", source, StringComparison.Ordinal);
+        var source = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.StaticDataSetReporting.cs"));
+
+        Assert.Contains("PrepareCanonicalStaticAcquisitionSmartAsync", source, StringComparison.Ordinal);
+        Assert.Contains("StartConfiguredStaticReportMonitorAsync", source, StringComparison.Ordinal);
         Assert.Contains("triggerGeneralInterrogation: true", source, StringComparison.Ordinal);
-        Assert.Contains("one explicit GI=true", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("triggerGeneralInterrogation: false", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("GetDataSetDirectoriesAsync", source, StringComparison.Ordinal);
+        Assert.Contains("Install InformationReport receiver before RptEna mutation", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnsureDiscoveryForReportingAsync(cancellationToken)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("DefineNamedVariableList", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartPersistentReportMonitorAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReportMonitorClientCompatibleAsync", source, StringComparison.Ordinal);
     }
 
     [Fact]

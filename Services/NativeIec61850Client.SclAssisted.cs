@@ -28,8 +28,6 @@ internal sealed class TrustedSclInitialValue
 
 public sealed partial class NativeIec61850Client
 {
-    private readonly Dictionary<string, ArMms.MmsDataSetDirectoryResult> _trustedSclDataSetDirectories =
-        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TrustedSclInitialValue> _trustedSclInitialValues =
         // IEC 61850 object/member identity is case-sensitive. Edition 2 tracking
         // can legally expose distinct paths such as "...t" and "...T".
@@ -38,24 +36,6 @@ public sealed partial class NativeIec61850Client
 
     internal bool HasTrustedSclOnlineAuthority => _trustedSclOnlineAuthorityActive;
     internal int TrustedSclInitialValueCount => _trustedSclOnlineAuthorityActive ? _trustedSclInitialValues.Count : 0;
-
-    internal IReadOnlyList<ArMms.MmsReportControlCandidate> TrustedSclReportControls
-        => _trustedSclOnlineAuthorityActive && _lastDiscovery is not null
-            ? _lastDiscovery.ReportInventory.ReportControls
-            : Array.Empty<ArMms.MmsReportControlCandidate>();
-
-    internal bool TryGetTrustedSclDataSetDirectory(
-        string dataSetReference,
-        out ArMms.MmsDataSetDirectoryResult directory)
-    {
-        directory = null!;
-        if (!_trustedSclOnlineAuthorityActive)
-            return false;
-
-        return _trustedSclDataSetDirectories.TryGetValue(
-            NormalizeTrustedSclReference(dataSetReference),
-            out directory!);
-    }
 
     internal bool TryGetTrustedSclInitialValue(
         string reference,
@@ -73,7 +53,6 @@ public sealed partial class NativeIec61850Client
     private void ResetTrustedSclOnlineAuthority()
     {
         _trustedSclOnlineAuthorityActive = false;
-        _trustedSclDataSetDirectories.Clear();
         _trustedSclInitialValues.Clear();
     }
 
@@ -113,6 +92,7 @@ public sealed partial class NativeIec61850Client
         var initialReadDuration = TimeSpan.Zero;
 
         ResetTrustedSclOnlineAuthority();
+        ResetCanonicalRuntimeModel();
         await DisposeControlSessionsAsync().ConfigureAwait(false);
         LastErrorMessage = string.Empty;
         LastConnectionFailureKind = string.Empty;
@@ -152,6 +132,29 @@ public sealed partial class NativeIec61850Client
             {
                 Preparation = preparation,
                 Warnings = preparation.Warnings,
+                TotalDuration = totalWatch.Elapsed,
+                Message = LastErrorMessage
+            };
+        }
+
+        if (!TryInstallCanonicalSclRuntimeModel(
+                sclXml,
+                iedName,
+                accessPointName,
+                out var canonicalError,
+                out var canonicalWarnings))
+        {
+            LastConnectionFailureKind = "SCL_CANONICAL_IMPORT_INVALID";
+            LastErrorMessage = canonicalError;
+            LastConnectionTechnicalSummary = canonicalError;
+            totalWatch.Stop();
+            return new SclAssistedClientConnectResult
+            {
+                Preparation = preparation,
+                Warnings = preparation.Warnings
+                    .Concat(canonicalWarnings)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
                 TotalDuration = totalWatch.Elapsed,
                 Message = LastErrorMessage
             };
@@ -256,14 +259,10 @@ public sealed partial class NativeIec61850Client
                     StringComparer.Ordinal);
 
             _liveModel = preparation.InitialReadDesign.Model;
-            var reportInventory = BuildTrustedSclReportInventory(_liveModel);
+            var reportInventory = ArMms.MmsCanonicalReportInventoryProjection.Build(
+                _canonicalRuntimeModel
+                ?? throw new InvalidOperationException("Canonical SCL runtime model was lost after successful import."));
             var dataSetDirectories = BuildModelDataSetDirectories(_liveModel, "TrustedScl");
-            foreach (var directory in dataSetDirectories)
-            {
-                _trustedSclDataSetDirectories[
-                    NormalizeTrustedSclReference(directory.DataSetReference)] = directory;
-            }
-
             var projectedInitialValueKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var leaf in initialRead.Batches
                          .SelectMany(batch => batch.Projections)
@@ -344,6 +343,7 @@ public sealed partial class NativeIec61850Client
                     : string.Empty;
 
             var warnings = preparation.Warnings
+                .Concat(canonicalWarnings)
                 .Concat(online.AssociationResolutionNotes)
                 .Concat(extraDomains > 0
                     ? new[] { $"IED exposes {extraDomains} extra online MMS domain(s); they remain evidence only and do not mutate the SCL model." }
@@ -393,70 +393,6 @@ public sealed partial class NativeIec61850Client
                 Message = LastErrorMessage
             };
         }
-    }
-
-    private static ArMms.MmsReportInventory BuildTrustedSclReportInventory(
-        LiveIedModelDiscoveryDocument model)
-    {
-        var inventory = new ArMms.MmsReportInventory();
-        foreach (var dataSet in model.DataSets)
-        {
-            var (domain, itemName) = ParseTrustedSclDataSetReference(
-                dataSet.Reference,
-                dataSet.Domain,
-                dataSet.LogicalNode,
-                dataSet.Name);
-            inventory.DataSets.Add(new ArMms.MmsDataSetCandidate
-            {
-                Domain = domain,
-                LogicalNode = dataSet.LogicalNode,
-                Name = dataSet.Name,
-                Reference = dataSet.Reference,
-                RawMmsName = itemName
-            });
-        }
-
-        foreach (var report in model.ReportControls)
-        {
-            var reference = ConcreteFirstStaticRcbReference(report.Reference, report.Indexed);
-            var candidate = new ArMms.MmsReportControlCandidate
-            {
-                Domain = report.Domain,
-                LogicalNode = report.LogicalNode,
-                FunctionalConstraint = report.Buffered ? "BR" : "RP",
-                Name = StaticRcbLeaf(reference),
-                Reference = reference,
-                Buffered = report.Buffered,
-                DataSetReference = report.DataSetReference,
-                DataSetProbeState = ArMms.MmsRcbDataSetProbeState.NotAttempted,
-                DataSetProbeMessage = "Trusted SCL authority; no live DataSet probe performed.",
-                ReportId = report.ReportId,
-                ConfRev = report.ConfRev,
-                IntegrityPeriodMs = report.IntegrityPeriodMs,
-                EnabledState = report.EnabledState,
-                ReservationState = report.ReservationState,
-                ReservationTimeSeconds = report.ReservationTimeSeconds,
-                BufferTimeMs = report.BufferTimeMs,
-                TriggerOptions = report.TriggerOptions,
-                OptionalFields = report.OptionalFields,
-                Status = "TrustedSclAuthority"
-            };
-
-            candidate.Attributes.AddRange(report.Buffered
-                ? new[]
-                {
-                    "RptID", "RptEna", "DatSet", "ConfRev", "OptFlds", "BufTm", "SqNum",
-                    "TrgOps", "IntgPd", "GI", "PurgeBuf", "EntryID", "TimeOfEntry", "ResvTms", "Owner"
-                }
-                : new[]
-                {
-                    "RptID", "RptEna", "Resv", "DatSet", "ConfRev", "OptFlds", "BufTm",
-                    "SqNum", "TrgOps", "IntgPd", "GI", "Owner"
-                });
-            inventory.ReportControls.Add(candidate);
-        }
-
-        return inventory;
     }
 
     private static IReadOnlyList<ArMms.MmsDataSetDirectoryResult> BuildModelDataSetDirectories(
@@ -555,19 +491,6 @@ public sealed partial class NativeIec61850Client
             : $"{logicalNode}${functionalConstraint}${dataPath}";
     }
 
-    private static string ConcreteFirstStaticRcbReference(string reference, bool indexed)
-    {
-        var normalized = reference?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(normalized) || !indexed)
-            return normalized;
-
-        var separator = Math.Max(normalized.LastIndexOf('$'), normalized.LastIndexOf('.'));
-        var leaf = separator >= 0 ? normalized[(separator + 1)..] : normalized;
-        return leaf.Length > 0 && !char.IsDigit(leaf[^1])
-            ? normalized + "01"
-            : normalized;
-    }
-
     private static object? ConvertTrustedSclInitialValue(ArMms.MmsDataValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -596,14 +519,6 @@ public sealed partial class NativeIec61850Client
         var data = raw.Skip(1).ToArray();
         var hex = data.Length == 0 ? "00" : Convert.ToHexString(data);
         return $"bits({hex},unused={unusedBits})";
-    }
-
-    private static string StaticRcbLeaf(string reference)
-    {
-        var separator = Math.Max(reference.LastIndexOf('$'), reference.LastIndexOf('.'));
-        return separator >= 0 && separator + 1 < reference.Length
-            ? reference[(separator + 1)..]
-            : reference;
     }
 
     private static bool IsSafeTrustedSclInitialReadFc(string? functionalConstraint)

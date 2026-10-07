@@ -401,42 +401,56 @@ public sealed class CanonicalLiveSclExportRegressionTests
 
 
     [Fact]
-    public void EngineLock_PreservesPhysicalSclRepairBaselineAcrossCandidatePins()
+    public void EngineLock_PreservesPhysicalSclRepairBaselineAcrossCodeVerifiedInteropTrial()
     {
         var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+        using var document = System.Text.Json.JsonDocument.Parse(lockFile);
+        var root = document.RootElement;
 
-        Assert.Contains(
-            "\"mergedMainCommit\": \"648124097621046f5f127ceb1cf853fea54db730\"",
-            lockFile,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "\"physicalTestedCommit\": \"9935d6902d786cc69b299260fe36b835944d5e81\"",
-            lockFile,
-            StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 143", lockFile, StringComparison.Ordinal);
-        Assert.Contains("\"previousStablePin\"", lockFile, StringComparison.Ordinal);
-        Assert.Contains("\"sourcePullRequest\": 135", lockFile, StringComparison.Ordinal);
-        Assert.Contains("exact association request bytes accepted by the IED", lockFile, StringComparison.Ordinal);
-        Assert.Contains("accepted COTP destination selector", lockFile, StringComparison.Ordinal);
-        Assert.Contains("runtime-mutable", lockFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("DataSet/ConfRev/domain/LN/buffered identity", lockFile, StringComparison.Ordinal);
-        Assert.Contains("full-model SCL", lockFile, StringComparison.Ordinal);
-        Assert.Contains("CDC-aware WYE/DEL/SEQ SDO", lockFile, StringComparison.Ordinal);
-        Assert.Contains("FC ownership", lockFile, StringComparison.Ordinal);
-        Assert.Contains("TCTR/TVTR/LTIM/EEName/MltLev", lockFile, StringComparison.Ordinal);
-        Assert.Contains("LTRK service-tracking", lockFile, StringComparison.Ordinal);
-        Assert.Contains("Edition-1 schema downgrade protection", lockFile, StringComparison.Ordinal);
-        Assert.Contains("TypeSpecification declaration order", lockFile, StringComparison.Ordinal);
-        Assert.Contains("SG/SE as setting data", lockFile, StringComparison.Ordinal);
-        Assert.Contains("MHAI THD phase groups as WYE/CMV", lockFile, StringComparison.Ordinal);
-        Assert.Contains("bounded FC-read policy", lockFile, StringComparison.Ordinal);
-        Assert.Contains("complete PR #134 smart-discovery performance head", lockFile, StringComparison.Ordinal);
-        Assert.Contains("Production promotion remains fail-closed", lockFile, StringComparison.Ordinal);
-        Assert.Contains(
-            "\"commit\": \"4467124775d8d9d76f3db194f9fbfd97144767a8\"",
-            lockFile,
-            StringComparison.Ordinal);
+        Assert.Equal(
+            "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+            root.GetProperty("commit").GetString());
+        Assert.Equal(148, root.GetProperty("sourcePullRequest").GetInt32());
+
+        Assert.Equal(
+            "648124097621046f5f127ceb1cf853fea54db730",
+            root.GetProperty("mergedMainCommit").GetString());
+        Assert.Equal(
+            "9935d6902d786cc69b299260fe36b835944d5e81",
+            root.GetProperty("physicalTestedCommit").GetString());
+
+        var stable = root.GetProperty("previousStablePin");
+        Assert.Equal(
+            "648124097621046f5f127ceb1cf853fea54db730",
+            stable.GetProperty("commit").GetString());
+        Assert.Equal(135, stable.GetProperty("sourcePullRequest").GetInt32());
+
+        var association = root.GetProperty("sclAssociationInteroperability");
+        Assert.Equal(143, association.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(
+            "84e9820e5a32690475960e49d5ef74e6637847fd",
+            association.GetProperty("testedEngineCommit").GetString());
+        Assert.Equal(
+            "e5deed1d8aa11d97991695c6e390baafea7ab797",
+            association.GetProperty("mergedEngineCommit").GetString());
+        Assert.True(association.GetProperty("preservesR10DiscoveryModelBaseline").GetBoolean());
+        Assert.True(association.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+
+        var trial = root.GetProperty("smartInteroperabilityCodeTrial");
+        Assert.Equal("code-verified-not-physical", trial.GetProperty("status").GetString());
+        Assert.Equal(
+            root.GetProperty("commit").GetString(),
+            trial.GetProperty("exactCommit").GetString());
+        Assert.Equal(759, trial.GetProperty("ciRun").GetInt32());
+        Assert.True(trial.GetProperty("physicalPromotionRequired").GetBoolean());
+        Assert.True(trial.GetProperty("vendorBranchingForbidden").GetBoolean());
+
+        var previousTrial = root.GetProperty("previousTrialPin");
+        Assert.Equal(
+            "4467124775d8d9d76f3db194f9fbfd97144767a8",
+            previousTrial.GetProperty("commit").GetString());
     }
+
 
 
     private static string FindRepoFile(string relativePath)

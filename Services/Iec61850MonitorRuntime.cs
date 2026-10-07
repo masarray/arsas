@@ -781,11 +781,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var result = session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority
-                    ? await session.Client.StartTrustedSclStaticReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
-                    : plan.IsEngineAuthoritative
-                        ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
-                        : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
+                // Discovery IP and Open SCL converge before execution. Once ARIEC has
+                // produced an engine-authoritative plan, both sources use the exact same
+                // report activation runtime; source provenance is diagnostics, not a second
+                // transport/reporting implementation.
+                var result = plan.IsEngineAuthoritative
+                    ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
+                    : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
                 session.HybridValidation.RecordActivation(plan, result);
                 if (!result.IsSuccess)
                 {
@@ -1015,20 +1017,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<ReportControlPlan> legacyPlans,
         CancellationToken cancellationToken)
     {
-        if (session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority)
-        {
-            session.HybridValidation.Reset(null);
-            var trustedPlans = legacyPlans.Count > 0
-                ? legacyPlans
-                : Iec61850ReportPlanner.BuildPlans(
-                    session.Device,
-                    session.Points.Values,
-                    allowDynamicDataSetWrites: false);
-            Log("INFO", session.Device.Name,
-                $"Trusted SCL report planning retained {trustedPlans.Count} local static candidate(s). DataSet membership and RCB identity remain SCL-authoritative; online directory discovery and Hybrid availability probing are bypassed.");
-            return trustedPlans.Where(plan => !plan.AllowDynamicDataSetWrites).ToArray();
-        }
-
         if (session.Client.CanUseHybridReportPlanner(session.Device))
         {
             NativeHybridReportPlanningResult hybrid;
