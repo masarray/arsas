@@ -25,12 +25,15 @@ public sealed class SclGoldenWireIntegrationContractTests
     }
 
     [Fact]
-    public void Runtime_TrustedSclStaticReporting_BypassesHybridAndLegacyStartPaths()
+    public void Runtime_OpenSclAndDiscovery_UseOneEngineAuthoritativeActivationPath()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
-        Assert.Contains("session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority", source, StringComparison.Ordinal);
-        Assert.Contains("StartTrustedSclStaticReportMonitorAsync", source, StringComparison.Ordinal);
-        Assert.Contains("DataSet membership and RCB identity remain SCL-authoritative", source, StringComparison.Ordinal);
+
+        Assert.Contains("plan.IsEngineAuthoritative", source, StringComparison.Ordinal);
+        Assert.Contains("StartHybridReportMonitorAsync", source, StringComparison.Ordinal);
+        Assert.Contains("Discovery IP and Open SCL converge before execution", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("session.StaticDataSetReportOnly && session.Client.HasTrustedSclOnlineAuthority", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartTrustedSclStaticReportMonitorAsync(plan", source, StringComparison.Ordinal);
     }
 
     [Fact]
