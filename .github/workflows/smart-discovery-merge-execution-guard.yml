@@ -34,10 +34,19 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smart-discovery-merge-execution-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-merge-execution-contract:
     name: Verify P0-5h ordered merge contract
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
     steps:
       - name: Checkout ARSAS branch
         uses: actions/checkout@v7
@@ -45,7 +54,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate P0-5h source contract
-        shell: powershell
+        shell: pwsh
         run: |
           $target = '.\evidence\smart-discovery-mainline-merge-target.json'
           $writer = '.\scripts\new-smart-discovery-mainline-merge-manifest.ps1'
@@ -85,33 +94,59 @@ jobs:
             }
           }
 
-      - name: Checkout pinned ARIEC61850 dependency
-        shell: powershell
-        run: |
-          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
-          if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
-            throw 'Invalid ARIEC61850 engine lock.'
-          }
+      - name: Validate offline canonical evidence producer/consumer fixtures
+        run: python3 scripts/test-ci-canonical-reuse.py
 
-          $enginePath = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'ARIEC61850'
-          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$($lock.repository).git" $enginePath
-          git -C $enginePath fetch --quiet --depth 1 origin $lock.commit
-          git -C $enginePath checkout --quiet --detach $lock.commit
-
-          $actual = (git -C $enginePath rev-parse HEAD).Trim().ToLowerInvariant()
-          if ($actual -ne ([string]$lock.commit).ToLowerInvariant()) {
-            throw "Pinned engine checkout mismatch: expected $($lock.commit), got $actual"
-          }
-          Write-Host "P0-5h regression dependency engine: $actual"
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v6
+      - id: pinned-engine
+        name: Resolve exact integration engine authority
+        uses: ./.github/actions/resolve-ariec-engine
         with:
-          dotnet-version: 8.0.x
+          lock-path: engines/ARIEC61850.lock.json
 
-      - name: Run ARSAS regression tests
-        shell: powershell
+      - name: Require same-head canonical Build ARSAS regression proof
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+          PINNED_ENGINE_SHA: ${{ steps.pinned-engine.outputs.commit }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          dotnet restore .\ArIED61850Tester.sln
-          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
-          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          python3 scripts/verify-ci-canonical-reuse.py \
+            --repository "$REPOSITORY" \
+            --head-branch "$PR_HEAD_BRANCH" \
+            --head-sha "$PR_HEAD_SHA" \
+            --merge-sha "$PR_MERGE_SHA" \
+            --engine-sha "$PINNED_ENGINE_SHA" \
+            --wait-seconds 960 \
+            --output "$RUNNER_TEMP/ci-canonical-reuse-proof.json"
+
+      - name: Summarize exact canonical-regression reuse
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          proof = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "ci-canonical-reuse-proof.json").read_text()
+          )
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as out:
+              out.write("## Canonical ARSAS regression reuse — fail-closed PASS\\n\\n")
+              out.write(f"- canonical Build ARSAS run: {proof['canonicalRunId']}, attempt {proof['canonicalRunAttempt']}\\n")
+              out.write(f"- exact PR merge SHA: {proof['mergeSha']}\\n")
+              out.write(f"- exact engine SHA: {proof['engineSha']}\\n")
+              out.write(f"- full regression: {proof['passed']} passed, {proof['failed']} failed\\n")
+              out.write("- Source P0-5h ordered-merge contract: passed independently\\n")
+          PY
+
+  manual-regression:
+    name: Manual exact-SHA reusable full regression
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}
