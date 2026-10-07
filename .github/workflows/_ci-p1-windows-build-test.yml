@@ -1,0 +1,148 @@
+name: Reusable ARSAS Windows Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact ARSAS source SHA (PR merge tree or main commit)
+        type: string
+        required: true
+      shadow_mode:
+        description: Prevent this primitive from being mistaken for release/promotion authority
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build-and-test:
+    name: Shared exact-SHA Windows compilation and regression
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact ARSAS source
+        uses: actions/checkout@v7
+        with:
+          path: ARSAS
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Assert source identity and shadow-only execution
+        shell: pwsh
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          SHADOW_ONLY: ${{ inputs.shadow_mode }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SHADOW_ONLY -ne 'true') {
+            throw 'CI-P1 reusable job is not approved as production/release authority.'
+          }
+          if ($env:EXPECTED_SOURCE_SHA -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'CI-P1 source_sha must be an immutable 40-character Git SHA.'
+          }
+          $actual = (git -C .\ARSAS rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -cne $env:EXPECTED_SOURCE_SHA) {
+            throw "ARSAS source SHA mismatch: expected $env:EXPECTED_SOURCE_SHA, got $actual."
+          }
+
+      - name: Verify immutable engine resolver synthetic fixtures
+        shell: pwsh
+        run: .\ARSAS\scripts\test-resolve-ariec-lock.ps1
+
+      - id: engine
+        name: Resolve exact pinned ARIEC61850 engine identity
+        uses: ./ARSAS/.github/actions/resolve-ariec-engine
+        with:
+          lock-path: ARSAS/engines/ARIEC61850.lock.json
+
+      - name: Checkout exact engine SHA
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.engine.outputs.repository }}
+          ref: ${{ steps.engine.outputs.commit }}
+          path: ARIEC61850
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact engine and immutable history provenance
+        shell: pwsh
+        env:
+          EXPECTED_ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -cne $env:EXPECTED_ENGINE_SHA) {
+            throw "ARIEC61850 pinned checkout drifted: expected $env:EXPECTED_ENGINE_SHA, got $actual."
+          }
+          Write-Host "Reproducible compilation authority: ARSAS + pinned ARIEC61850."
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache immutable NuGet packages only
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ci-p1-nuget-win-x64-${{ hashFiles('ARSAS/**/*.csproj', 'ARIEC61850/**/*.csproj', 'ARSAS/Directory.Packages.props', 'ARIEC61850/Directory.Packages.props') }}
+          restore-keys: |
+            ci-p1-nuget-win-x64-
+
+      - name: Restore solution once
+        run: dotnet restore .\ARSAS\ArIED61850Tester.sln
+
+      - name: Build solution once
+        run: dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
+
+      - name: Run full ARSAS regression suite once
+        run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=ci-p1-shadow.trx" --results-directory .\ARSAS\TestResults
+
+      - name: Write non-promotion build authority manifest
+        if: always()
+        shell: pwsh
+        env:
+          ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+          ENGINE_REPOSITORY: ${{ steps.engine.outputs.repository }}
+          HISTORICAL_ENGINE_SHA: ${{ steps.engine.outputs.merged-main-commit }}
+          PHYSICAL_TESTED_ENGINE_SHA: ${{ steps.engine.outputs.physical-tested-commit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceSha = (git -C .\ARSAS rev-parse HEAD).Trim().ToLowerInvariant()
+          $engineActual = if (Test-Path -LiteralPath .\ARIEC61850\.git) {
+            (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          } else { '' }
+          $reportFiles = @(Get-ChildItem -Path .\ARSAS\TestResults -Filter '*.trx' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name)
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            kind = 'ci-p1-nonpromotion-shadow'
+            exactArsasSha = $sourceSha
+            exactEngineSha = $engineActual
+            expectedEngineSha = $env:ENGINE_SHA
+            engineRepository = $env:ENGINE_REPOSITORY
+            historicalMergedEngineSha = $env:HISTORICAL_ENGINE_SHA
+            historicalPhysicalTestedSha = $env:PHYSICAL_TESTED_ENGINE_SHA
+            engineExactShaVerified = ($engineActual -ceq $env:ENGINE_SHA)
+            testReports = $reportFiles
+            workflowRunId = $env:GITHUB_RUN_ID
+            noReleaseOrPromotion = $true
+          }
+          $path = Join-Path $env:RUNNER_TEMP 'ci-p1-shadow-manifest.json'
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
+          if ($manifest.engineExactShaVerified -ne $true -or $reportFiles.Count -eq 0) {
+            Write-Warning 'Shadow proof is incomplete; reusable test job must not be promoted.'
+          }
+
+      - name: Upload inspectable shadow TRX and SHA manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-p1-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ARSAS/TestResults/*.trx
+            ${{ runner.temp }}/ci-p1-shadow-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
