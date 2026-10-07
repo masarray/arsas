@@ -139,7 +139,7 @@ def validate_artifact_archive(
     if manifest.get("runAttempt") != run_attempt:
         raise ProofError("Canonical run attempt differs from API run attempt")
     if manifest.get("exactSourceSha") != merge_sha:
-        raise ProofError("Canonical test proof is for a stale/different PR merge tree")
+        raise ProofError("Canonical test proof is for a stale/different source revision")
     if manifest.get("exactEngineSha") != engine_sha:
         raise ProofError("Canonical engine SHA differs from this PR's immutable lock")
     if manifest.get("fullRegressionPassed") is not True:
@@ -262,7 +262,7 @@ def verify_canonical(
             # packaging/smoke failure.
             if status == "completed" and conclusion != "success":
                 raise ProofError(
-                    f"Latest canonical Build ARSAS PR run failed: {previous}"
+                    f"Latest canonical Build ARSAS run failed: {previous}"
                 )
 
             can_read_artifact = (
