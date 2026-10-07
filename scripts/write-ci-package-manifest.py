@@ -105,6 +105,7 @@ def stage_and_create_manifest(
     *,
     artifact_root: Path,
     portable: Path,
+    portable_identity: Path,
     installer_input: Path,
     verification_dir: Path,
     evidence_dir: Path,
@@ -131,8 +132,8 @@ def stage_and_create_manifest(
         raise ValueError("Invalid workflow run identity")
     if event_name not in {"push", "pull_request", "workflow_dispatch"}:
         raise ValueError("Unexpected workflow event")
-    if not portable.is_file() or not installer_input.is_dir():
-        raise FileNotFoundError("Portable or installer-input payload is missing")
+    if not portable.is_file() or not portable_identity.is_file() or not installer_input.is_dir():
+        raise FileNotFoundError("Portable, build identity, or installer-input payload is missing")
 
     canonical, trx = verify_canonical_evidence(
         evidence_dir, source_sha, engine_sha, workflow_run_id, run_attempt, event_name
@@ -145,6 +146,8 @@ def stage_and_create_manifest(
     portable_target = artifact_root / "portable" / portable.name
     portable_target.parent.mkdir(parents=True)
     shutil.copy2(portable, portable_target)
+    portable_identity_target = artifact_root / "portable" / portable_identity.name
+    shutil.copy2(portable_identity, portable_identity_target)
 
     installer_target = artifact_root / "installer-input" / installer_input.name
     copy_tree(installer_input, installer_target)
@@ -179,10 +182,31 @@ def stage_and_create_manifest(
 
     by_path = {entry["path"]: entry for entry in files}
     portable_rel = safe_relative(portable_target, artifact_root)
+    portable_identity_rel = safe_relative(portable_identity_target, artifact_root)
     bridge_rel = safe_relative(bridge, artifact_root)
     test_rel = safe_relative(test_assembly, artifact_root)
     comtrade_rel = safe_relative(comtrade_fixture, artifact_root)
     locus_rel = safe_relative(locus_fixture, artifact_root)
+
+    try:
+        build_identity = json.loads(portable_identity_target.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("Portable build identity cannot be decoded") from exc
+
+    if (
+        build_identity.get("schemaVersion") != 1
+        or build_identity.get("kind") != "arsas-portable-build-identity"
+        or build_identity.get("sourceCommit") != source_sha
+        or build_identity.get("engineCommit") != engine_sha
+        or build_identity.get("ardIrecLockCommit") != ardirec_sha
+        or build_identity.get("portableSha256") != by_path[portable_rel]["sha256"]
+        or build_identity.get("portableSizeBytes") != by_path[portable_rel]["size"]
+        or build_identity.get("ardIrecBridgeSha256") != by_path[bridge_rel]["sha256"]
+        or build_identity.get("ardIrecBridgeSizeBytes") != by_path[bridge_rel]["size"]
+        or build_identity.get("deterministicManagedBuild") is not True
+        or build_identity.get("reproducibleNativeLinkRequested") is not True
+    ):
+        raise ValueError("Portable build identity does not match sealed package authority")
 
     manifest = {
         "schemaVersion": 1,
@@ -206,6 +230,7 @@ def stage_and_create_manifest(
         "releasePromotionAuthority": False,
         "installerInputRoot": safe_relative(installer_target, artifact_root),
         "portable": by_path[portable_rel],
+        "portableIdentity": by_path[portable_identity_rel],
         "nativeBridge": by_path[bridge_rel],
         "verification": {
             "testAssemblyPath": test_rel,
@@ -226,6 +251,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--portable", type=Path, required=True)
+    parser.add_argument("--portable-identity", type=Path, required=True)
     parser.add_argument("--installer-input", type=Path, required=True)
     parser.add_argument("--verification-dir", type=Path, required=True)
     parser.add_argument("--evidence-dir", type=Path, required=True)
@@ -254,6 +280,7 @@ def main() -> int:
     manifest = stage_and_create_manifest(
         artifact_root=args.artifact_root,
         portable=args.portable,
+        portable_identity=args.portable_identity,
         installer_input=args.installer_input,
         verification_dir=args.verification_dir,
         evidence_dir=args.evidence_dir,
