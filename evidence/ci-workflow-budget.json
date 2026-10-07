@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3A: reproducible portable build identity",
-  "policy": "P0-P2 reduced duplicate regression work. P3A does not add a heavy workflow or change static CI counts; it establishes deterministic Windows packaging inputs and hash-bound build identity so later artifact promotion can reuse only proven identical bits.",
+  "baselineName": "CI-P3: sealed canonical Windows package reused by installer validation",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. CI-P3 establishes build-once/package-many for Windows installer validation: Build ARSAS seals exact tested portable + installer-input bytes with source/engine/ArdIrec/TRX/file digests; PR/main installer runs verify and consume those bytes instead of rebuilding the application. Manual workflow_dispatch retains a local fallback. Stable release mutation remains unchanged in this milestone.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -20,11 +20,11 @@
     "workflowFiles": 31,
     "actionsCheckout": 35,
     "actionsSetupDotnet": 11,
-    "actionsSetupPython": 17,
+    "actionsSetupPython": 18,
     "dotnetRestore": 11,
     "dotnetBuild": 11,
-    "dotnetTest": 13,
-    "actionsUploadArtifact": 34,
+    "dotnetTest": 12,
+    "actionsUploadArtifact": 35,
     "workflowsWithDotnetBuild": 10,
     "workflowsWithDotnetTest": 9
   },
@@ -291,6 +291,62 @@
     "canonicalBuildRemainsRegressionAuthorityOnPullRequest": true,
     "manualReusableRegressionRetained": true,
     "rollback": "Restore direct Field Capture restore/build/dotnet test steps; do not substitute canonical EXE unless future reproducible-build evidence proves byte identity."
+  },
+  "ciP3CanonicalWindowsPackage": {
+    "issueNumber": 444,
+    "lane": "canonical-windows-package-and-installer-reuse",
+    "approach": "Build ARSAS builds/tests once, builds one pinned ArdIrec bridge, uses those exact bridge bytes for installer-input and portable outputs, runs managed native integration tests, portable smoke, seals all package/test bytes into a hash-complete artifact, and installer PR/main consumes the exact package rather than restoring/building/publishing ARSAS again.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 17,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 13,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 18,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "staticBudgetNote": "Manual installer workflow_dispatch fallback intentionally keeps restore/build/full-test source commands in YAML, so static restore/build counts do not fall even though PR/main execution removes them.",
+    "artifact": "ARSAS-windows-package-input",
+    "exactIdentity": [
+      "source SHA",
+      "ARIEC61850 SHA",
+      "ArdIrec SHA",
+      "Build ARSAS run ID/attempt/event"
+    ],
+    "proof": [
+      "canonical all-pass TRX digest/counters",
+      "portable SHA-256",
+      "native bridge SHA-256",
+      "every installer-input and verification payload file SHA-256"
+    ],
+    "nativeBridgeSingleBuild": true,
+    "portableAndInstallerInputShareExactBridgeBytes": true,
+    "installerApplicationRebuildOnPullRequest": false,
+    "installerApplicationRebuildOnMainPush": false,
+    "installerManualFallbackRetained": true,
+    "installerStillCompilesInno": true,
+    "installerStillRunsSilentInstallUninstall": true,
+    "installerStillRunsInstalledNativeBridgeTests": true,
+    "releasePromotionAuthority": false,
+    "releaseWorkflowUnchanged": true,
+    "reproducibleBuildRequiredForReuse": false,
+    "exactBytePromotion": true,
+    "rollback": "Restore installer PR/main source restore/build/test/publish/stage steps and stop consuming ARSAS-windows-package-input. Keep sealed artifact producer/verifier available for diagnosis; never weaken hash or identity checks."
   },
   "ciP3ReproduciblePortableBuild": {
     "issueNumber": 447,

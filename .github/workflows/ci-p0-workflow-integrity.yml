@@ -12,6 +12,9 @@ on:
       - "scripts/write-ci-canonical-proof.py"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
+      - "scripts/write-ci-package-manifest.py"
+      - "scripts/verify-ci-package-reuse.py"
+      - "scripts/test-ci-package-reuse.py"
       - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
@@ -25,6 +28,9 @@ on:
       - "scripts/write-ci-canonical-proof.py"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
+      - "scripts/write-ci-package-manifest.py"
+      - "scripts/verify-ci-package-reuse.py"
+      - "scripts/test-ci-package-reuse.py"
       - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
@@ -59,6 +65,9 @@ jobs:
 
       - name: Run canonical CI P2 evidence safety fixtures
         run: python3 scripts/test-ci-canonical-reuse.py
+
+      - name: Run canonical CI P3 package safety fixtures
+        run: python3 scripts/test-ci-package-reuse.py
 
       - name: Validate tracked workflow topology and budget
         run: |
