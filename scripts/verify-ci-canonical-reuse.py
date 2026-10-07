@@ -171,6 +171,21 @@ def choose_artifact(payload: dict, run_id: int) -> dict:
     return matches[0]
 
 
+class StripCrossOriginAuthorization(urllib.request.HTTPRedirectHandler):
+    """Do not forward GitHub bearer credentials to artifact blob hosts."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(
+            request, fp, code, msg, headers, newurl
+        )
+        if redirected is not None:
+            before = urllib.parse.urlparse(request.full_url).netloc.lower()
+            after = urllib.parse.urlparse(newurl).netloc.lower()
+            if before != after:
+                redirected.remove_header("Authorization")
+        return redirected
+
+
 class GitHubReadOnly:
     def __init__(self, token: str):
         if not token:
@@ -189,7 +204,8 @@ class GitHubReadOnly:
             method="GET",
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as reply:
+            opener = urllib.request.build_opener(StripCrossOriginAuthorization())
+            with opener.open(req, timeout=30) as reply:
                 data = reply.read(MAX_ARCHIVE_BYTES + 1 if binary else 3 * 1024 * 1024)
                 if binary:
                     return data
