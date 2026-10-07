@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3B: exact sealed canonical portable promoted into Field Capture",
-  "policy": "CI-P3 build-once/package-many now uses one sealed Windows package as the exact-byte promotion substrate for installer validation and PR Field Capture. P3B removes the normal PR Field Capture native/.NET republish after P3A proved matching independent builders are byte-reproducible; field-specific source/wire checks and runtime smoke remain independent, while workflow_dispatch retains an independent publish fallback.",
+  "baselineName": "CI-P3C: exact sealed package promoted through production release",
+  "policy": "CI-P3 build-once/package-many now has one sealed Windows package as the exact-byte substrate for installer validation, Field Capture PR runtime smoke and production release. P3C removes non-manual release application rebuilds while preserving release-owned installer compile/install smoke, checksum, SBOM, provenance, attestations and immutable publication; workflow_dispatch retains a local rebuild recovery path.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -391,5 +391,65 @@
     "artifactNameStable": "ARSAS-smart-discovery-pr134-win-x64",
     "noInstallerOrReleaseAuthorityChange": true,
     "rollback": "Restore PR Field Capture independent publish path if sealed package promotion becomes unavailable; never bypass exact package identity, digest, build-identity or runtime-smoke validation."
+  },
+  "ciP3ReleaseExactPackagePromotion": {
+    "issueNumber": 455,
+    "lane": "release-windows",
+    "approach": "For push/main release requests and tags, resolve the reviewed release identity then require the exact successful Build ARSAS push/main sealed package for the same source, ARIEC61850 and ArdIrec SHAs. Materialize only after full hash/TRX/build-identity verification; promote exact portable and installer-input bytes into release-owned installer/smoke/SBOM/provenance/publication stages.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 18,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 18,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "staticLimitsChanged": false,
+    "staticBudgetNote": "workflow_dispatch intentionally retains restore/build/test/publish source commands in release-windows.yml, so static topology counts do not fall even though production push/tag execution removes those rebuilds.",
+    "productionEvents": [
+      "push-main-release-request",
+      "push-tag"
+    ],
+    "canonicalBuildLookup": {
+      "event": "push",
+      "branch": "main",
+      "exactHeadSha": true
+    },
+    "productionApplicationRebuild": false,
+    "tagWithoutCanonicalMainPackageFailsClosed": true,
+    "manualLocalRebuildFallbackRetained": true,
+    "releaseFixturePreserved": "p1-release-smoke.cfg",
+    "releaseFixtureAndDatSealedAndHashed": true,
+    "exactPortableBytesPromoted": true,
+    "exactInstallerInputBytesPromoted": true,
+    "releaseNativeBridgePrePackageTestRetained": true,
+    "installedNativeBridgeTestAdded": true,
+    "installerCompileRetained": true,
+    "silentInstallUninstallRetained": true,
+    "checksumSbomProvenanceAttestationRetained": true,
+    "stableReleaseImmutabilityRetained": true,
+    "provenanceAdds": [
+      "canonicalPackageAuthority",
+      "canonicalPackageRun",
+      "canonicalPackageArtifactSha256",
+      "canonicalPortableSha256"
+    ],
+    "rollback": "Restore non-manual release restore/build/test/publish steps and stop requiring the sealed package. Never weaken exact source/engine/ArdIrec identity, package file hashes, canonical TRX, portable identity or stable-release immutability to make promotion pass."
   }
 }
