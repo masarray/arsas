@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2B: canonical ARSAS regression reused by Mainline Readiness",
-  "policy": "CI-P0 historical observed baseline and CI-P1 opt-in shadow remain recorded; P2A+P2B now reuse canonical Build ARSAS SHA/TRX proof from Merge Execution and Mainline Readiness. Independent R10 engine tests, physical authority assertions and production gates remain unchanged. Small Python setup overhead is explicit and bounded.",
+  "baselineName": "CI-P2C: reuse canonical regression in production route guard",
+  "policy": "P0 immutable historical baseline and P1 opt-in shadow remain recorded. P2A/P2B/P2C successively remove redundant ARSAS restore/build/test invocations by verifying the latest exact PR synthetic-merge-SHA and pinned-engine canonical Build ARSAS TRX, while preserving independent source-route and physical engine guards.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -19,14 +19,14 @@
   "limits": {
     "workflowFiles": 31,
     "actionsCheckout": 35,
-    "actionsSetupDotnet": 12,
-    "actionsSetupPython": 14,
-    "dotnetRestore": 14,
-    "dotnetBuild": 14,
-    "dotnetTest": 16,
+    "actionsSetupDotnet": 11,
+    "actionsSetupPython": 15,
+    "dotnetRestore": 13,
+    "dotnetBuild": 13,
+    "dotnetTest": 15,
     "actionsUploadArtifact": 34,
-    "workflowsWithDotnetBuild": 12,
-    "workflowsWithDotnetTest": 11
+    "workflowsWithDotnetBuild": 11,
+    "workflowsWithDotnetTest": 10
   },
   "interpretation": [
     "The limits freeze CI sprawl; they are not performance targets and do not prove semantic necessity.",
@@ -134,5 +134,40 @@
     "manualExecutionRunsReusableApplicationFullTests": true,
     "actionsPermissionScope": "read-only contents/actions",
     "rollback": "Restore direct application restore/build/test step if verifier fails legitimate parity; retain current R10 evidence and engine full tests without modification."
+  },
+  "ciP2ProductionRoute": {
+    "issueNumber": 436,
+    "lane": "smart-discovery-production-promotion",
+    "approach": "For PRs independently verify source route and its unchanged SHA256 before/after consuming exact-PR-merge + exact-engine-commit full-regression canonical Build ARSAS proof. Preserve manual full regression via reusable Windows workflow.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 12,
+      "actionsSetupPython": 14,
+      "dotnetRestore": 14,
+      "dotnetBuild": 14,
+      "dotnetTest": 16,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 12,
+      "workflowsWithDotnetTest": 11
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 15,
+      "dotnetRestore": 13,
+      "dotnetBuild": 13,
+      "dotnetTest": 15,
+      "actionsUploadArtifact": 34,
+      "workflowsWithDotnetBuild": 11,
+      "workflowsWithDotnetTest": 10
+    },
+    "evidence": "Latest successful canonical Build ARSAS matching exact PR head/branch, merge SHA, immutable engine SHA, passing all-test TRX digest/counters",
+    "sourceRouteChecksIndependent": true,
+    "sourceSha256BeforeAfter": true,
+    "noPhysicalAuthorityRewrite": true,
+    "noPromotionActions": true,
+    "rollback": "Revert this workflow change to restore direct production-route .NET build/test if canonical proof or sequencing fails. Never omit source route checks."
   }
 }
