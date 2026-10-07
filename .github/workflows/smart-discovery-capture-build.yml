@@ -34,6 +34,14 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smart-discovery-field-capture-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-smart-capture:
     name: Build smart-discovery portable field capture
@@ -242,15 +250,51 @@ jobs:
             throw 'Pinned P0-5b engine does not expose the required smart discovery, hierarchy-budget, and authoritative-Control invariants.'
           }
 
+      - name: Verify canonical CI reuse contract fixtures
+        run: |
+          python .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical proof reader synthetic tests failed.' }
+          python .\ArIED61850Tester\scripts\test-ci-field-capture-reuse.py
+          if ($LASTEXITCODE -ne 0) { throw 'Field Capture PR/manual safety contract failed.' }
+
+      - id: pinned-engine
+        name: Resolve exact integration engine with shared authority contract
+        uses: ./ArIED61850Tester/.github/actions/resolve-ariec-engine
+        with:
+          lock-path: ArIED61850Tester/engines/ARIEC61850.lock.json
+
+      - name: Require validated same-head canonical Build ARSAS regression
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+          PINNED_ENGINE_SHA: ${{ steps.pinned-engine.outputs.commit }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python .\ArIED61850Tester\scripts\verify-ci-canonical-reuse.py `
+            --repository "$env:REPOSITORY" `
+            --head-branch "$env:PR_HEAD_BRANCH" `
+            --head-sha "$env:PR_HEAD_SHA" `
+            --merge-sha "$env:PR_MERGE_SHA" `
+            --engine-sha "$env:PINNED_ENGINE_SHA" `
+            --wait-seconds 960 `
+            --output "$env:RUNNER_TEMP/ci-field-capture-canonical-proof.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Exact canonical full-regression proof failed closed.' }
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore
+      - name: Restore solution for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
 
-      - name: Build Release
+      - name: Build Release for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
 
       - name: Verify smart route and association lifecycle resets were installed
@@ -270,8 +314,27 @@ jobs:
             throw 'Build-time Control path does not consume the authoritative smart domain inventory.'
           }
 
-      - name: Run ARSAS regression tests
+      - name: Run full ARSAS regression for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-smart-capture-tests.trx" --results-directory .\ArIED61850Tester\TestResults
+
+      - name: Summarize canonical regression reuse
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $proofPath = Join-Path $env:RUNNER_TEMP 'ci-field-capture-canonical-proof.json'
+          $proof = Get-Content -LiteralPath $proofPath -Raw | ConvertFrom-Json
+          @(
+            '## Field Capture — reused canonical full regression',
+            '',
+            "- Exact source merge SHA: $($proof.mergeSha)",
+            "- Exact engine SHA: $($proof.engineSha)",
+            "- Canonical Build ARSAS: $($proof.canonicalRunId) / attempt $($proof.canonicalRunAttempt)",
+            "- Full tests: $($proof.passed) passed, $($proof.failed) failed",
+            '- P0-5c source and P0-5d deterministic wire-contract checks remain independent',
+            '- Portable publish + smoke still executed in this workflow',
+            '- No physical evidence or release-promotion authority changed'
+          ) | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding UTF8
 
       - name: Publish portable single EXE x64
         shell: powershell
@@ -332,6 +395,7 @@ jobs:
           name: ARSAS-smart-discovery-pr134-test-evidence
           path: |
             ArIED61850Tester\TestResults\*.trx
+            ${{ runner.temp }}/ci-field-capture-canonical-proof.json
             ArIED61850Tester\TestResults\P0-5D-*.json
             ArIED61850Tester\TestResults\P0-5E-*.json
           if-no-files-found: warn
