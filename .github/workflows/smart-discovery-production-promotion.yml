@@ -34,49 +34,53 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smart-discovery-production-promotion-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-production-route:
     name: Verify physical-proven Smart Discovery production parity
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
 
     steps:
       - name: Checkout exact ARSAS candidate
         uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Resolve immutable ARIEC61850 engine lock
-        shell: powershell
+      - name: Verify exact tested ARSAS candidate SHA
+        shell: pwsh
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
         run: |
-          $lock = Get-Content '.\ArIED61850Tester\engines\ARIEC61850.lock.json' -Raw | ConvertFrom-Json
-          if ($lock.repository -ne 'masarray/ARIEC61850' -or $lock.commit -notmatch '^[0-9a-f]{40}$') {
-            throw 'Invalid ARIEC61850 production lock.'
-          }
-          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Checkout exact ARIEC61850 engine
-        shell: powershell
-        run: |
-          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
-          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
-          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
-          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
-          if ($actual -ne $env:ARIEC61850_COMMIT.ToLowerInvariant()) {
-            throw "Engine pin mismatch: expected $env:ARIEC61850_COMMIT got $actual"
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -cne $env:EXPECTED_SOURCE_SHA) {
+            throw "Smart Discovery route guard checkout mismatch. Expected $env:EXPECTED_SOURCE_SHA, got $actual."
           }
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v6
+      - name: Run offline canonical-proof fail-closed fixtures
+        run: python3 .\ArIED61850Tester\scripts\test-ci-canonical-reuse.py
+
+      - id: engine
+        name: Resolve exact pinned ARIEC61850 integration authority
+        uses: ./ArIED61850Tester/.github/actions/resolve-ariec-engine
         with:
-          dotnet-version: 8.0.x
+          lock-path: ArIED61850Tester/engines/ARIEC61850.lock.json
 
-      - name: Verify tracked production route before build
+      - name: Verify tracked production route and preserve source hash
         shell: powershell
         run: |
           $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
           $before = (Get-FileHash $native -Algorithm SHA256).Hash
+          "SMART_ROUTE_SOURCE_SHA256=$before" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           & .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -VerifyOnly
           if ($LASTEXITCODE -ne 0) { throw 'Smart Discovery route verification failed.' }
           $after = (Get-FileHash $native -Algorithm SHA256).Hash
@@ -95,25 +99,75 @@ jobs:
             }
           }
 
-      - name: Restore build and test the exact production route
-        shell: powershell
+      - name: Require matching canonical Build ARSAS full regression evidence
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+          PINNED_ENGINE_SHA: ${{ steps.engine.outputs.commit }}
         run: |
-          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
-          if ($LASTEXITCODE -ne 0) { throw 'ARSAS restore failed.' }
-          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { throw 'ARSAS production-route build failed.' }
-          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
-          if ($LASTEXITCODE -ne 0) { throw 'ARSAS production-route regression tests failed.' }
+          python .\ArIED61850Tester\scripts\verify-ci-canonical-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --head-sha $env:PR_HEAD_SHA `
+            --merge-sha $env:PR_MERGE_SHA `
+            --engine-sha $env:PINNED_ENGINE_SHA `
+            --wait-seconds 960 `
+            --output (Join-Path $env:RUNNER_TEMP 'ci-production-route-canonical-proof.json')
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Production route guard requires matching exact-SHA canonical full-regression PASS.'
+          }
 
-      - name: Prove build did not select or synthesize another route
+      - name: Summarize exact-source canonical regression parity
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $proof = Get-Content (Join-Path $env:RUNNER_TEMP 'ci-production-route-canonical-proof.json') -Raw | ConvertFrom-Json
+          if ([int]$proof.failed -ne 0 -or [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1 -or
+              $proof.engineSha -ne '${{ steps.engine.outputs.commit }}') {
+            throw 'Production-route canonical full-regression proof is incomplete.'
+          }
+          @(
+            '## Smart Discovery production route — canonical full-regression reuse',
+            '',
+            "- exact PR merge SHA: $($proof.mergeSha)",
+            "- exact pinned engine SHA: $($proof.engineSha)",
+            "- canonical Build ARSAS run: $($proof.canonicalRunId)",
+            "- full regression: $($proof.passed) passed, $($proof.failed) failed",
+            '- Production route source verified independently without any mutation',
+            '- No promotion or release action was performed'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Prove canonical route remains immutable after evidence verification
         shell: powershell
         run: |
           $native = '.\ArIED61850Tester\Services\NativeIec61850Client.cs'
+          $actualHash = (Get-FileHash $native -Algorithm SHA256).Hash
+          if ($actualHash -cne $env:SMART_ROUTE_SOURCE_SHA256) {
+            throw 'Route source changed during canonical evidence verification.'
+          }
           & .\ArIED61850Tester\scripts\enable-smart-discovery-capture.ps1 -VerifyOnly
-          if ($LASTEXITCODE -ne 0) { throw 'Post-build Smart Discovery route verification failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Post-proof Smart Discovery route verification failed.' }
+          $finalHash = (Get-FileHash $native -Algorithm SHA256).Hash
+          if ($finalHash -cne $env:SMART_ROUTE_SOURCE_SHA256) {
+            throw 'Route verifier mutated production source.'
+          }
 
           $targets = Get-Content '.\ArIED61850Tester\Directory.Build.targets' -Raw
           if ($targets -match 'GITHUB_WORKFLOW' -or $targets -match 'SmartDiscoveryProductionPromoted') {
             throw 'Discovery runtime still depends on workflow name or promotion switch.'
           }
-          Write-Host 'Production, R7, installer and local builds now compile the same tracked Smart Discovery route.'
+          Write-Host 'Same tracked Smart Discovery route verified; exact-SHA canonical Build ARSAS supplies full regression proof.'
+
+  manual-regression:
+    name: Manual exact-SHA full production-route regression
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}
