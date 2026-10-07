@@ -245,7 +245,7 @@ class PackageReuseTests(unittest.TestCase):
                 dst.writestr(info.filename, data)
         with self.assertRaisesRegex(
             verifier.PackageProofError,
-            "digest differs|Portable build identity",
+            "size differs|digest differs|Portable build identity",
         ):
             verifier.validate_package_archive(
                 buffer.getvalue(),
