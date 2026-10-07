@@ -363,52 +363,39 @@ public sealed partial class NativeIec61850Client
             };
         }
 
-        var discovery = await EnsureDiscoveryForReportingAsync(cancellationToken).ConfigureAwait(false);
-        if (discovery is null)
-        {
-            return new NativeReportMonitorStartResult
-            {
-                IsSuccess = false,
-                PlanId = plan.PlanId,
-                Message = string.IsNullOrWhiteSpace(LastErrorMessage) ? "Fresh report discovery unavailable." : LastErrorMessage,
-                SubscriptionSummary = subscription.Summary,
-                MemberCount = subscription.Members.Count,
-                FailureReason = "FreshReportDiscoveryUnavailable"
-            };
-        }
-
         var coveredReferences = ExtractSubscriptionMemberReferences(subscription.Members);
-        var attempt = await RunMmsOperationAsync(
-            () => _session.StartPersistentReportMonitorClientCompatibleAsync(
+
+        // The plan already contains engine-proven exact live RCB/DataSet evidence.
+        // Do not repeat broad report discovery here. Configured-static activation owns
+        // the minimal transactional lifecycle: receiver first, JIT RCB snapshot,
+        // direct RptEna primary path, bounded reservation compatibility fallback,
+        // readback proof, then optional GI.
+        var start = await _session.StartConfiguredStaticReportMonitorAsync(
                 subscription,
                 triggerGeneralInterrogation: true,
-                deleteDynamicDataSetOnStop: false,
-                discovery.IedDirectory,
-                cancellationToken),
-            cancellationToken).ConfigureAwait(false);
-        var start = attempt.StartResult;
+                cancellationToken)
+            .ConfigureAwait(false);
         var warnings = start.Warnings
             .Concat(subscription.Warnings)
-            .Concat(attempt.CleanupWarnings)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (!attempt.IsSuccess || start.Session is null)
+        if (!start.IsSuccess || start.Session is null)
         {
             return new NativeReportMonitorStartResult
             {
                 IsSuccess = false,
                 PlanId = plan.PlanId,
-                Message = $"Deterministic Static DataSet activation failed for {plan.DisplayReference}: {start.Message}",
+                Message = $"Engine configured-static activation failed for {plan.DisplayReference}: {start.Message}",
                 SubscriptionSummary = subscription.Summary,
                 MemberCount = subscription.Members.Count,
                 WriteStepCount = start.WriteSteps.Count,
                 UsedDynamicDataSet = false,
                 DynamicAttempted = false,
                 DynamicAttemptState = "NotApplicable",
-                FailureReason = attempt.FailureReason.ToString(),
-                CleanupAttempted = attempt.CleanupAttempted,
-                CleanupSucceeded = attempt.CleanupSucceeded,
+                FailureReason = "ConfiguredStaticActivationFailed",
+                CleanupAttempted = false,
+                CleanupSucceeded = false,
                 ReportControlReference = plan.ReportControlReference,
                 DataSetReference = plan.DataSetReference,
                 CoveredReferences = coveredReferences,
@@ -428,7 +415,7 @@ public sealed partial class NativeIec61850Client
         {
             IsSuccess = true,
             PlanId = plan.PlanId,
-            Message = $"Deterministic Static DataSet {plan.EngineAcquisitionKind} active. {start.Message}",
+            Message = $"Engine configured-static {plan.EngineAcquisitionKind} active; traffic proof remains asynchronous. {start.Message}",
             SubscriptionSummary = subscription.Summary,
             MemberCount = subscription.Members.Count,
             WriteStepCount = start.WriteSteps.Count,
