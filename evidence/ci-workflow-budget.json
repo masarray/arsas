@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3C: exact sealed package promoted through production release",
-  "policy": "CI-P3 build-once/package-many now has one sealed Windows package as the exact-byte substrate for installer validation, Field Capture PR runtime smoke and production release. P3C removes non-manual release application rebuilds while preserving release-owned installer compile/install smoke, checksum, SBOM, provenance, attestations and immutable publication; workflow_dispatch retains a local rebuild recovery path.",
+  "baselineName": "CI-P3D: exact validated installer promotion",
+  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3C establish reproducible, sealed exact-byte application/package promotion. P3D seals the installed-smoke-tested installer and makes production release promote those exact installer bytes while retaining release-specific install/runtime smoke, supply-chain evidence and publication authority.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -451,5 +451,33 @@
       "canonicalPortableSha256"
     ],
     "rollback": "Restore non-manual release restore/build/test/publish steps and stop requiring the sealed package. Never weaken exact source/engine/ArdIrec identity, package file hashes, canonical TRX, portable identity or stable-release immutability to make promotion pass."
+  },
+  "ciP3ValidatedInstallerPromotion": {
+    "issueNumber": 457,
+    "lane": "installer-windows-to-release-windows",
+    "approach": "Installer validation compiles once from the exact sealed Build ARSAS package, performs silent install/uninstall plus installed native tests, then seals installer SHA/size and exact source/engine/ArdIrec/canonical-package provenance. Production release waits for the matching successful push/main installer validation, verifies that authority, promotes the exact installer bytes and keeps release-specific installed runtime smoke before checksums/SBOM/provenance/attestation/publication.",
+    "staticLimitsChanged": false,
+    "installerArtifactName": "ARSAS-<version>-win-x64-installer",
+    "installerManifest": "ci-installer-authority.json",
+    "exactIdentity": [
+      "source SHA",
+      "ARIEC61850 SHA",
+      "ArdIrec SHA",
+      "canonical package artifact SHA-256",
+      "installer workflow run/attempt",
+      "installer SHA-256/size"
+    ],
+    "installerValidationReleasePromotionAuthority": false,
+    "productionInnoCompileRemoved": true,
+    "releaseSpecificSilentInstallUninstallRetained": true,
+    "releaseSpecificInstalledNativeTestRetained": true,
+    "manualInnoCompileFallbackRetained": true,
+    "tagRequiresExactMainInstaller": true,
+    "provenanceAdds": [
+      "validatedInstallerAuthority",
+      "validatedInstallerArtifactSha256",
+      "validatedInstallerSha256"
+    ],
+    "rollback": "Restore production Inno install/compile in release-windows.yml and stop consuming validated installer authority. Never weaken exact source/package/installer identity or stable-release immutability."
   }
 }
