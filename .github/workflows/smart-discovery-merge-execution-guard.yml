@@ -121,6 +121,7 @@ jobs:
             --merge-sha "$PR_MERGE_SHA" \
             --engine-sha "$PINNED_ENGINE_SHA" \
             --wait-seconds 960 \
+            --allow-in-progress-artifact \
             --output "$RUNNER_TEMP/ci-canonical-reuse-proof.json"
 
       - name: Summarize exact canonical-regression reuse
