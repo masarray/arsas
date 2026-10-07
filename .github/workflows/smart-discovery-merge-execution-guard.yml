@@ -121,6 +121,7 @@ jobs:
             --merge-sha "$PR_MERGE_SHA" \
             --engine-sha "$PINNED_ENGINE_SHA" \
             --wait-seconds 960 \
+            --allow-in-progress-artifact \
             --output "$RUNNER_TEMP/ci-canonical-reuse-proof.json"
 
       - name: Summarize exact canonical-regression reuse
@@ -140,6 +141,10 @@ jobs:
               out.write(f"- exact PR merge SHA: {proof['mergeSha']}\\n")
               out.write(f"- exact engine SHA: {proof['engineSha']}\\n")
               out.write(f"- full regression: {proof['passed']} passed, {proof['failed']} failed\\n")
+              out.write(f"- proof stage: {proof['proofStage']}\\n")
+              out.write(f"- canonical workflow completed: {proof['workflowCompleted']}\\n")
+              out.write(f"- packaging/smoke proven by this guard: {proof['packagingSmokeProven']}\\n")
+              out.write("- Build ARSAS remains the independent packaging/smoke check\\n")
               out.write("- Source P0-5h ordered-merge contract: passed independently\\n")
           PY
 

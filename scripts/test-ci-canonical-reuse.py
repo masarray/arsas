@@ -65,8 +65,14 @@ def zip_archive(manifest: dict, trx: bytes = TRX, extra: dict | None = None) -> 
 
 
 class FakeApi:
-    def __init__(self, run_status: str = "completed", result: str = "success"):
+    def __init__(
+        self,
+        run_status: str = "completed",
+        result: str = "success",
+        artifact_available: bool = True,
+    ):
         self.status, self.result = run_status, result
+        self.artifact_available = artifact_available
         self.blob = zip_archive(fixture())
         self.listing = [
             {"id": RUN, "run_attempt": 1, "name": "Build ARSAS",
@@ -80,6 +86,8 @@ class FakeApi:
         if "/workflows/build.yml/runs?" in url:
             return {"workflow_runs": self.listing}
         if "/runs/" in url and "/artifacts" in url:
+            if not self.artifact_available:
+                return {"artifacts": []}
             return {"artifacts": [
                 {"id": 22, "name": "ARSAS-test-evidence", "expired": False,
                  "archive_download_url": "https://example.invalid/artifact.zip",
@@ -88,11 +96,12 @@ class FakeApi:
         raise RuntimeError("Unexpected test API request " + url)
 
 
-def run_once(api: FakeApi):
+def run_once(api: FakeApi, *, allow_in_progress_artifact: bool = False):
     return consumer.verify_canonical(
         api, repository="masarray/arsas", branch=BRANCH,
         head_sha=HEAD, merge_sha=SOURCE, engine_sha=ENGINE,
         wait_seconds=0, poll_seconds=1,
+        allow_in_progress_artifact=allow_in_progress_artifact,
     )
 
 
@@ -172,6 +181,31 @@ class CanonicalReuseTests(unittest.TestCase):
     def test_pending_run_fails_closed_at_timeout(self):
         with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
             run_once(FakeApi(run_status="in_progress", result=None))
+
+    def test_artifact_ready_mode_accepts_exact_all_pass_proof_while_packaging_runs(self):
+        proof = run_once(
+            FakeApi(run_status="in_progress", result=None),
+            allow_in_progress_artifact=True,
+        )
+        self.assertEqual(proof["proofStage"], "full-regression-artifact-ready")
+        self.assertIs(proof["workflowCompleted"], False)
+        self.assertIs(proof["packagingSmokeProven"], False)
+        self.assertEqual(proof["canonicalRunStatus"], "in_progress")
+        self.assertEqual(proof["passed"], 1320)
+
+    def test_artifact_ready_mode_still_rejects_completed_failed_run(self):
+        with self.assertRaisesRegex(consumer.ProofError, "Latest canonical.*failed"):
+            run_once(
+                FakeApi(run_status="completed", result="failure"),
+                allow_in_progress_artifact=True,
+            )
+
+    def test_artifact_ready_mode_waits_when_expected_artifact_is_not_uploaded(self):
+        with self.assertRaisesRegex(consumer.ProofError, "artifact-ready canonical"):
+            run_once(
+                FakeApi(run_status="in_progress", result=None, artifact_available=False),
+                allow_in_progress_artifact=True,
+            )
 
     def test_different_pr_head_or_branch_fails_closed(self):
         api = FakeApi()

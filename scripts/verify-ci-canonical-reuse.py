@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """CI-P2: reuse canonical Build ARSAS regression proof, fail closed.
 
-This proof reader runs on read-only GitHub token. The canonical Build ARSAS
-must have completed successfully for the same PR HEAD and the exact synthetic
-PR merge SHA; otherwise the Smart Discovery Merge Execution Guard fails.
+This proof reader runs on a read-only GitHub token. Strict mode requires the
+canonical Build ARSAS workflow to complete successfully. CI-P2D adds an explicit
+artifact-ready mode that can prove the full regression earlier, after the exact
+manifest/TRX artifact is uploaded, while portable packaging/smoke remains a
+separate Build ARSAS responsibility.
 
 Downloaded artifacts are treated strictly as untrusted ZIP *data*. No file
 from the artifact is extracted or executed.
@@ -159,13 +161,17 @@ def validate_artifact_archive(
     }
 
 
-def choose_artifact(payload: dict, run_id: int) -> dict:
+def choose_artifact(payload: dict, run_id: int, *, allow_missing: bool = False) -> dict | None:
     artifacts = payload.get("artifacts", [])
+    if not isinstance(artifacts, list):
+        raise ProofError("Canonical artifact listing is malformed")
     matches = [
         obj for obj in artifacts if obj.get("name") == EXPECTED_ARTIFACT
         and obj.get("expired") is False and isinstance(obj.get("id"), int)
         and obj.get("workflow_run", {}).get("id", run_id) == run_id
     ]
+    if not matches and allow_missing:
+        return None
     if len(matches) != 1:
         raise ProofError("Expected exactly one non-expired canonical test artifact")
     return matches[0]
@@ -217,7 +223,8 @@ class GitHubReadOnly:
 def verify_canonical(
     api: GitHubReadOnly, *, repository: str, branch: str,
     head_sha: str, merge_sha: str, engine_sha: str,
-    wait_seconds: int = 960, poll_seconds: int = 10
+    wait_seconds: int = 960, poll_seconds: int = 10,
+    allow_in_progress_artifact: bool = False,
 ) -> dict:
     validate_identity(repository, head_sha, merge_sha, engine_sha, branch)
     if wait_seconds < 0 or poll_seconds < 1:
@@ -235,36 +242,67 @@ def verify_canonical(
         runs = candidate_runs(api.get(url), head_sha, branch)
         if runs:
             run = runs[0]  # Never use an older successful attempt over a newer failure.
-            previous = f"{run['id']}/{run['run_attempt']} {run.get('status')}/{run.get('conclusion')}"
-            if run.get("status") == "completed":
-                if run.get("conclusion") != "success":
-                    raise ProofError(
-                        f"Latest canonical Build ARSAS PR run failed: {previous}"
-                    )
-                run_id, attempt = run["id"], run["run_attempt"]
+            run_id, attempt = run["id"], run["run_attempt"]
+            status = run.get("status")
+            conclusion = run.get("conclusion")
+            previous = f"{run_id}/{attempt} {status}/{conclusion}"
+
+            # A canonical run that has already finished red is never usable, even
+            # if an all-pass regression artifact was uploaded before a later
+            # packaging/smoke failure.
+            if status == "completed" and conclusion != "success":
+                raise ProofError(
+                    f"Latest canonical Build ARSAS PR run failed: {previous}"
+                )
+
+            can_read_artifact = (
+                status == "completed"
+                or (allow_in_progress_artifact and status == "in_progress")
+            )
+            if can_read_artifact:
                 artifact = choose_artifact(
                     api.get(f"{base}/actions/runs/{run_id}/artifacts?per_page=100"),
                     run_id,
+                    allow_missing=(status != "completed"),
                 )
-                blob = api.get(artifact["archive_download_url"], binary=True)
-                try:
-                    return validate_artifact_archive(
-                        blob, merge_sha=merge_sha, engine_sha=engine_sha,
-                        workflow_run_id=run_id, run_attempt=attempt
-                    )
-                except ProofError as exc:
-                    if "stale/different PR merge tree" not in str(exc):
-                        raise
-                    # A stale green run is not authoritative for the current base;
-                    # a newly triggered canonical build can still arrive.
-                    previous = f"{previous} (stale merge tree)"
+                if artifact is not None:
+                    blob = api.get(artifact["archive_download_url"], binary=True)
+                    try:
+                        proof = validate_artifact_archive(
+                            blob, merge_sha=merge_sha, engine_sha=engine_sha,
+                            workflow_run_id=run_id, run_attempt=attempt
+                        )
+                    except ProofError as exc:
+                        if "stale/different PR merge tree" not in str(exc):
+                            raise
+                        # A stale green artifact is not authoritative for the current
+                        # synthetic merge tree; a replacement run can still arrive.
+                        previous = f"{previous} (stale merge tree)"
+                    else:
+                        proof.update({
+                            "canonicalRunStatus": status,
+                            "canonicalRunConclusion": conclusion,
+                            "workflowCompleted": status == "completed",
+                            "proofStage": (
+                                "completed-workflow"
+                                if status == "completed"
+                                else "full-regression-artifact-ready"
+                            ),
+                            "packagingSmokeProven": status == "completed",
+                        })
+                        return proof
+
         if time.monotonic() >= deadline:
+            mode = (
+                "artifact-ready canonical Build ARSAS evidence"
+                if allow_in_progress_artifact
+                else "completed canonical Build ARSAS evidence"
+            )
             raise ProofError(
-                f"Timed out waiting for matching canonical Build ARSAS evidence "
+                f"Timed out waiting for {mode} "
                 f"for head={head_sha}, merge={merge_sha}, last={previous}"
             )
         time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -274,6 +312,14 @@ def main() -> int:
     parser.add_argument("--merge-sha", required=True)
     parser.add_argument("--engine-sha", required=True)
     parser.add_argument("--wait-seconds", type=int, default=960)
+    parser.add_argument(
+        "--allow-in-progress-artifact",
+        action="store_true",
+        help=(
+            "Accept exact all-pass regression manifest/TRX from the latest matching "
+            "in-progress Build ARSAS run. Does not prove later packaging/smoke."
+        ),
+    )
     parser.add_argument("--output", default="")
     args = parser.parse_args()
     result = verify_canonical(
@@ -284,6 +330,7 @@ def main() -> int:
         merge_sha=args.merge_sha,
         engine_sha=args.engine_sha,
         wait_seconds=args.wait_seconds,
+        allow_in_progress_artifact=args.allow_in_progress_artifact,
     )
     payload = json.dumps(result, sort_keys=True)
     print("Canonical full-regression reuse PASS: " + payload)

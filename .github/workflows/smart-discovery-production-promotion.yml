@@ -121,6 +121,7 @@ jobs:
             --merge-sha $env:PR_MERGE_SHA `
             --engine-sha $env:PINNED_ENGINE_SHA `
             --wait-seconds 960 `
+            --allow-in-progress-artifact `
             --output (Join-Path $env:RUNNER_TEMP 'ci-production-route-canonical-proof.json')
           if ($LASTEXITCODE -ne 0) {
             throw 'Production route guard requires matching exact-SHA canonical full-regression PASS.'
@@ -143,6 +144,10 @@ jobs:
             "- exact pinned engine SHA: $($proof.engineSha)",
             "- canonical Build ARSAS run: $($proof.canonicalRunId)",
             "- full regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- canonical proof stage: $($proof.proofStage)",
+            "- canonical workflow completed: $($proof.workflowCompleted)",
+            "- packaging/smoke proven by this guard: $($proof.packagingSmokeProven)",
+            '- Build ARSAS remains the independent packaging/smoke check',
             '- Production route source verified independently without any mutation',
             '- No promotion or release action was performed'
           ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

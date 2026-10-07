@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P2C: reuse canonical regression in production route guard",
-  "policy": "P0 immutable historical baseline and P1 opt-in shadow remain recorded. P2A/P2B/P2C successively remove redundant ARSAS restore/build/test invocations by verifying the latest exact PR synthetic-merge-SHA and pinned-engine canonical Build ARSAS TRX, while preserving independent source-route and physical engine guards.",
+  "baselineName": "CI-P2D: exact regression artifact-ready consumers",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. P2A/P2B/P2C reuse one canonical ARSAS full-regression proof; P2D keeps those exact-SHA/digest/counter guarantees but allows consumers to stop polling once that all-pass artifact is uploaded. Build ARSAS packaging/smoke remains an independent check and is not claimed by early regression proof.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -169,5 +169,43 @@
     "noPhysicalAuthorityRewrite": true,
     "noPromotionActions": true,
     "rollback": "Revert this workflow change to restore direct production-route .NET build/test if canonical proof or sequencing fails. Never omit source route checks."
+  },
+  "ciP2ArtifactReady": {
+    "issueNumber": 438,
+    "lane": "canonical-regression-consumers",
+    "observedReferenceRun": {
+      "buildRunId": 37567436447,
+      "regressionEvidenceUploadedAt": "2026-10-07T03:37:44Z",
+      "canonicalWorkflowCompletedAt": "2026-10-07T03:39:45Z",
+      "observedPostRegressionPackagingWindowSeconds": 121,
+      "consumers": 3,
+      "note": "Observed timing is diagnostic evidence only, not a hard CI timing assertion."
+    },
+    "verifierMode": {
+      "default": "completed-workflow-only",
+      "optInFlag": "--allow-in-progress-artifact",
+      "acceptsStatuses": [
+        "in_progress",
+        "completed-success"
+      ],
+      "completedFailureRejected": true,
+      "exactPrHeadAndBranchRequired": true,
+      "exactSyntheticMergeShaRequired": true,
+      "exactEngineShaRequired": true,
+      "exactRunIdAttemptRequired": true,
+      "trxDigestAndAllPassCountersRequired": true,
+      "missingArtifactWaitsBoundedly": true
+    },
+    "authorityBoundary": {
+      "proves": "full ARSAS regression artifact",
+      "doesNotProve": [
+        "portable publish",
+        "portable smoke",
+        "release promotion"
+      ],
+      "canonicalBuildRemainsIndependent": true
+    },
+    "staticLimitsChanged": false,
+    "rollback": "Remove the opt-in flag from P2A/P2B/P2C consumers to restore completed-workflow waiting without changing evidence formats or physical/release authority."
   }
 }
