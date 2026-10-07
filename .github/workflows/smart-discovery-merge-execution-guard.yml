@@ -68,7 +68,8 @@ jobs:
           foreach ($script in @($writer,$preflight,$postMerge)) {
             $tokens = $null
             $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($script,[ref]$tokens,[ref]$errors) | Out-Null
+            $scriptAbsolute = (Resolve-Path -LiteralPath $script).Path
+            [System.Management.Automation.Language.Parser]::ParseFile($scriptAbsolute,[ref]$tokens,[ref]$errors) | Out-Null
             if ($errors.Count -ne 0) {
               $messages = @($errors | ForEach-Object { $_.Message }) -join '; '
               throw "PowerShell parse failure in ${script}: $messages"
