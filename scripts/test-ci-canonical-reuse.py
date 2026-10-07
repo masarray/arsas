@@ -40,7 +40,7 @@ TRX = b"""<?xml version="1.0" encoding="UTF-8"?>
 </TestRun>"""
 
 
-def fixture():
+def fixture(event_name: str = "pull_request"):
     return producer.create_manifest(
         source_sha=SOURCE,
         checkout_sha=SOURCE,
@@ -48,7 +48,7 @@ def fixture():
         engine_actual=ENGINE,
         workflow_run_id=RUN,
         run_attempt=1,
-        event_name="pull_request",
+        event_name=event_name,
         trx=TRX,
         trx_name="arsas-tests.trx",
     )
@@ -70,13 +70,24 @@ class FakeApi:
         run_status: str = "completed",
         result: str = "success",
         artifact_available: bool = True,
+        event_name: str = "pull_request",
+        branch: str = BRANCH,
+        head_sha: str = HEAD,
+        source_sha: str = SOURCE,
     ):
         self.status, self.result = run_status, result
         self.artifact_available = artifact_available
-        self.blob = zip_archive(fixture())
+        self.event_name = event_name
+        self.branch = branch
+        self.head_sha = head_sha
+        manifest = fixture(event_name=event_name)
+        if source_sha != SOURCE:
+            manifest = dict(manifest)
+            manifest["exactSourceSha"] = source_sha
+        self.blob = zip_archive(manifest)
         self.listing = [
             {"id": RUN, "run_attempt": 1, "name": "Build ARSAS",
-             "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+             "head_sha": head_sha, "head_branch": branch, "event": event_name,
              "status": self.status, "conclusion": self.result}
         ]
 
@@ -96,12 +107,26 @@ class FakeApi:
         raise RuntimeError("Unexpected test API request " + url)
 
 
-def run_once(api: FakeApi, *, allow_in_progress_artifact: bool = False):
+def run_once(
+    api: FakeApi,
+    *,
+    allow_in_progress_artifact: bool = False,
+    event_name: str = "pull_request",
+    branch: str = BRANCH,
+    head_sha: str = HEAD,
+    source_sha: str = SOURCE,
+):
     return consumer.verify_canonical(
-        api, repository="masarray/arsas", branch=BRANCH,
-        head_sha=HEAD, merge_sha=SOURCE, engine_sha=ENGINE,
-        wait_seconds=0, poll_seconds=1,
+        api,
+        repository="masarray/arsas",
+        branch=branch,
+        head_sha=head_sha,
+        merge_sha=source_sha,
+        engine_sha=ENGINE,
+        wait_seconds=0,
+        poll_seconds=1,
         allow_in_progress_artifact=allow_in_progress_artifact,
+        event_name=event_name,
     )
 
 
@@ -205,6 +230,67 @@ class CanonicalReuseTests(unittest.TestCase):
             run_once(
                 FakeApi(run_status="in_progress", result=None, artifact_available=False),
                 allow_in_progress_artifact=True,
+            )
+
+    def test_main_push_accepts_exact_same_sha_artifact_ready_proof(self):
+        main_sha = "d" * 40
+        api = FakeApi(
+            run_status="in_progress",
+            result=None,
+            event_name="push",
+            branch="main",
+            head_sha=main_sha,
+            source_sha=main_sha,
+        )
+        proof = run_once(
+            api,
+            allow_in_progress_artifact=True,
+            event_name="push",
+            branch="main",
+            head_sha=main_sha,
+            source_sha=main_sha,
+        )
+        self.assertEqual(proof["eventName"], "push")
+        self.assertEqual(proof["branch"], "main")
+        self.assertEqual(proof["mergeSha"], main_sha)
+        self.assertEqual(proof["proofStage"], "full-regression-artifact-ready")
+        self.assertFalse(proof["packagingSmokeProven"])
+
+    def test_main_push_rejects_pr_manifest_event_mismatch(self):
+        main_sha = "d" * 40
+        api = FakeApi(
+            run_status="completed",
+            result="success",
+            event_name="push",
+            branch="main",
+            head_sha=main_sha,
+            source_sha=main_sha,
+        )
+        api.blob = zip_archive(fixture(event_name="pull_request"))
+        with self.assertRaisesRegex(consumer.ProofError, "event mismatch"):
+            run_once(
+                api,
+                event_name="push",
+                branch="main",
+                head_sha=main_sha,
+                source_sha=main_sha,
+            )
+
+    def test_main_push_rejects_wrong_branch_or_sha(self):
+        main_sha = "d" * 40
+        api = FakeApi(
+            event_name="push",
+            branch="main",
+            head_sha=main_sha,
+            source_sha=main_sha,
+        )
+        with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
+            run_once(
+                api,
+                event_name="push",
+                branch="release",
+                head_sha=main_sha,
+                source_sha=main_sha,
             )
 
     def test_different_pr_head_or_branch_fails_closed(self):
