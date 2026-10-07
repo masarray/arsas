@@ -344,7 +344,12 @@ def validate_package_archive(
         verification = manifest.get("verification")
         if not isinstance(verification, dict):
             raise PackageProofError("Canonical package verification references are missing")
-        for key in ("testAssemblyPath", "comtradeFixturePath", "locusFixturePath"):
+        for key in (
+            "testAssemblyPath",
+            "comtradeFixturePath",
+            "locusFixturePath",
+            "releaseFixturePath",
+        ):
             path = verification.get(key)
             if not isinstance(path, str) or path not in recorded:
                 raise PackageProofError(f"Canonical package verification path is invalid: {key}")
@@ -380,6 +385,7 @@ def validate_package_archive(
         "testAssemblyPath": manifest["verification"]["testAssemblyPath"],
         "comtradeFixturePath": manifest["verification"]["comtradeFixturePath"],
         "locusFixturePath": manifest["verification"]["locusFixturePath"],
+        "releaseFixturePath": manifest["verification"]["releaseFixturePath"],
         "artifactSha256": hashlib.sha256(payload).hexdigest(),
     }
 
