@@ -383,6 +383,7 @@ jobs:
           name: ARSAS-smart-discovery-pr134-win-x64
           path: |
             ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
             ArIED61850Tester\dist\SMART-CAPTURE-BUILD.txt
             ArIED61850Tester\scripts\verify-smart-discovery-pcap.ps1
             ArIED61850Tester\scripts\new-smart-discovery-golden-lock.ps1

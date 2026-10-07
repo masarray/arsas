@@ -84,7 +84,8 @@ Write-Host "==> Configuring pinned ArdIrec native bridge (desktop/Qt disabled)"
     -DARDIREC_BUILD_DESKTOP=OFF `
     -DARDIREC_BUILD_BRIDGE=ON `
     -DARDIREC_BUILD_TESTS=ON `
-    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+    -DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/Brepro
 if ($LASTEXITCODE -ne 0) {
     throw "ArdIrec bridge CMake configure failed with exit code $LASTEXITCODE."
 }
