@@ -370,20 +370,35 @@ jobs:
           $manualPortableSha = (Get-FileHash $env:RELEASE_PORTABLE_PATH -Algorithm SHA256).Hash.ToLowerInvariant()
           "RELEASE_CANONICAL_PORTABLE_SHA256=$manualPortableSha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Upload canonical release regression evidence
-        if: github.event_name != 'workflow_dispatch'
+      - name: Stage unified release regression evidence
+        if: always()
+        shell: powershell
+        run: |
+          $evidenceDir = '.\ArIED61850Tester\TestResults\release-promoted-evidence'
+          New-Item -ItemType Directory -Force $evidenceDir | Out-Null
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $trx = @(Get-ChildItem '.\ArIED61850Tester\TestResults\*.trx' -File -ErrorAction SilentlyContinue)
+            if ($trx.Count -lt 1) {
+              throw 'Manual release regression TRX is missing.'
+            }
+            foreach ($file in $trx) {
+              Copy-Item $file.FullName (Join-Path $evidenceDir $file.Name) -Force
+            }
+            [ordered]@{
+              schemaVersion = 1
+              authority = 'manual-local-build'
+              sourceCommit = $env:GITHUB_SHA
+              engineCommit = $env:ARIEC61850_COMMIT
+              ardIrecCommit = $env:ARDIREC_COMMIT
+            } | ConvertTo-Json | Set-Content (Join-Path $evidenceDir 'ci-release-package-proof.json') -Encoding utf8
+          }
+
+      - name: Upload release regression evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ARSAS-${{ steps.release.outputs.version }}-release-tests
           path: ArIED61850Tester/TestResults/release-promoted-evidence/*
-          if-no-files-found: error
-
-      - name: Upload manual release test evidence
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-${{ steps.release.outputs.version }}-release-tests
-          path: ArIED61850Tester/TestResults/*.trx
           if-no-files-found: error
 
       - name: Smoke-test exact release portable single EXE
