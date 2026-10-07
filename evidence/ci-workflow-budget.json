@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3A: reproducible portable build identity",
-  "policy": "P0-P2 reduced duplicate regression work. P3A does not add a heavy workflow or change static CI counts; it establishes deterministic Windows packaging inputs and hash-bound build identity so later artifact promotion can reuse only proven identical bits.",
+  "baselineName": "CI-P3B: exact canonical portable promoted into Field Capture",
+  "policy": "P3A proved reproducible Windows portable bits across independent runners. P3B promotes the exact canonical Build ARSAS portable artifact into the PR Field Capture lane after fail-closed identity/hash validation; manual dispatch retains independent publish fallback. Static workflow-token limits are unchanged because the fallback remains tracked, while normal PR runner work removes one independent native/.NET publish.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -306,8 +306,30 @@
       "Build ARSAS",
       "Smart Discovery Field Capture Build"
     ],
-    "binaryPromotionAllowed": false,
+    "binaryPromotionAllowed": true,
     "acceptance": "Matching source, ARIEC61850 and ArdIrec inputs must yield identical bridge and portable SHA-256 across independent workflow runs.",
-    "rollback": "Remove P3A deterministic flags and identity artifact additions only if toolchain incompatibility is proven; retain P2F binary-reuse prohibition."
+    "rollback": "Remove P3A deterministic flags and identity artifact additions only if toolchain incompatibility is proven; retain P2F binary-reuse prohibition.",
+    "acceptedParity": {
+      "syntheticMergeSha": "3794b29fa71695ec4ea099469ae2e55054d3d3f8",
+      "engineCommit": "648124097621046f5f127ceb1cf853fea54db730",
+      "ardIrecCommit": "7dbc7149db668126a493ce338264363a6ec5ec00",
+      "bridgeSha256": "fa8efcaf26e8ebb0a29808a2e52ad5c9f466ec2df146945d29c5d662987c41ce",
+      "portableSha256": "9fa7fac00c96acb24c98e64ff91ca9ee1709d9f1b89bf55030284ee3da4fc369",
+      "portableSizeBytes": 78789758,
+      "independentBuilders": 2
+    }
+  },
+  "ciP3CanonicalPortablePromotion": {
+    "issueNumber": 449,
+    "lane": "smart-discovery-capture-build",
+    "approach": "On pull_request reuse exact canonical Build ARSAS portable artifact from the already verified canonical run; validate run/source/engine/ArdIrec identity plus executable SHA-256/size before Field Capture smoke and repackaging. workflow_dispatch retains independent publish.",
+    "staticLimitsChanged": false,
+    "prIndependentDotnetPublishRemoved": true,
+    "fieldSourceAndWireChecksRetained": true,
+    "fieldPortableSmokeRetained": true,
+    "manualIndependentPublishRetained": true,
+    "artifactNameStable": "ARSAS-smart-discovery-pr134-win-x64",
+    "noInstallerOrReleaseAuthorityChange": true,
+    "rollback": "Restore PR Field Capture independent publish step if canonical artifact promotion becomes unavailable; never bypass exact identity/hash validation."
   }
 }
