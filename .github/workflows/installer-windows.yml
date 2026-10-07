@@ -30,6 +30,7 @@ on:
       - "scripts/enable-smart-discovery-capture.ps1"
       - "tests/ARSAS.Tests/SmartDiscoveryProductionPromotionRegressionTests.cs"
       - "VERSION"
+      - ".release/windows.json"
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
   pull_request:
@@ -60,6 +61,7 @@ on:
       - "scripts/enable-smart-discovery-capture.ps1"
       - "tests/ARSAS.Tests/SmartDiscoveryProductionPromotionRegressionTests.cs"
       - "VERSION"
+      - ".release/windows.json"
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
   workflow_dispatch:
