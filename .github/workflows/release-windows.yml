@@ -423,11 +423,69 @@ jobs:
             throw "Portable single EXE smoke test failed with exit code $($process.ExitCode)."
           }
 
-      - name: Install Inno Setup compiler
+      - name: Promote exact validated Windows installer for release
+        if: github.event_name != 'workflow_dispatch'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $validated = Join-Path $env:RUNNER_TEMP 'arsas-validated-installer'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-validated-installer-proof.json'
+          python .\ArIED61850Tester\scripts\verify-ci-installer-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --source-sha $env:GITHUB_SHA `
+            --version $env:RELEASE_VERSION `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --package-artifact-sha256 $env:RELEASE_PACKAGE_ARTIFACT_SHA256 `
+            --wait-seconds 1800 `
+            --output-dir $validated `
+            --proof-output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Production release requires the exact installed-smoke-tested installer for this main commit.'
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if ($proof.sourceSha -ne $env:GITHUB_SHA -or
+              $proof.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $proof.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              $proof.version -ne $env:RELEASE_VERSION -or
+              $proof.canonicalPackageArtifactSha256 -ne $env:RELEASE_PACKAGE_ARTIFACT_SHA256 -or
+              -not [bool]$proof.installedSmokePassed -or
+              [bool]$proof.releasePromotionAuthority) {
+            throw 'Validated installer authority does not match release identity.'
+          }
+
+          $source = Join-Path $validated $proof.installerFile
+          $target = ".\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-setup.exe"
+          Copy-Item $source $target -Force
+          $actual = (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $proof.installerSha256 -or
+              [long](Get-Item $target).Length -ne [long]$proof.installerSizeBytes) {
+            throw 'Promoted installer bytes differ from validated installer proof.'
+          }
+
+          "RELEASE_INSTALLER_AUTHORITY=validated-installer:$($proof.installerRunId)/$($proof.installerRunAttempt)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_INSTALLER_SHA256=$($proof.installerSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_INSTALLER_ARTIFACT_SHA256=$($proof.artifactSha256)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          @(
+            '## CI-P3D exact installer promotion',
+            '',
+            "- source: $env:GITHUB_SHA",
+            "- canonical package: $env:RELEASE_PACKAGE_RUN",
+            "- validated installer: $($proof.installerRunId)/$($proof.installerRunAttempt)",
+            "- installer SHA-256: $($proof.installerSha256)",
+            '- release-specific install/runtime smoke remains required'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Install Inno Setup compiler for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: choco install innosetup --no-progress --yes
 
-      - name: Build Windows installer
+      - name: Build Windows installer for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\build-windows-installer.ps1 `
@@ -438,6 +496,11 @@ jobs:
             -TestAssemblyPath $env:RELEASE_TEST_ASSEMBLY `
             -FixtureCfg $env:RELEASE_COMTRADE_FIXTURE `
             -LocusFixtureCfg $env:RELEASE_LOCUS_FIXTURE
+          $installer = ".\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-setup.exe"
+          $sha = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          "RELEASE_INSTALLER_AUTHORITY=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_INSTALLER_SHA256=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_INSTALLER_ARTIFACT_SHA256=manual-local-build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Smoke-test silent installer and uninstaller
         shell: powershell
@@ -558,6 +621,9 @@ jobs:
             canonicalPackageRun = $env:RELEASE_PACKAGE_RUN
             canonicalPackageArtifactSha256 = $env:RELEASE_PACKAGE_ARTIFACT_SHA256
             canonicalPortableSha256 = $env:RELEASE_CANONICAL_PORTABLE_SHA256
+            validatedInstallerAuthority = $env:RELEASE_INSTALLER_AUTHORITY
+            validatedInstallerArtifactSha256 = $env:RELEASE_INSTALLER_ARTIFACT_SHA256
+            validatedInstallerSha256 = $env:RELEASE_INSTALLER_SHA256
             workflow = "release-windows.yml"
           }
           $evidence | ConvertTo-Json -Depth 4 | Set-Content `
@@ -590,7 +656,10 @@ jobs:
               $provenance.canonicalPackageAuthority -ne $env:RELEASE_PACKAGE_AUTHORITY -or
               $provenance.canonicalPackageRun -ne $env:RELEASE_PACKAGE_RUN -or
               $provenance.canonicalPackageArtifactSha256 -ne $env:RELEASE_PACKAGE_ARTIFACT_SHA256 -or
-              $provenance.canonicalPortableSha256 -ne $env:RELEASE_CANONICAL_PORTABLE_SHA256) {
+              $provenance.canonicalPortableSha256 -ne $env:RELEASE_CANONICAL_PORTABLE_SHA256 -or
+              $provenance.validatedInstallerAuthority -ne $env:RELEASE_INSTALLER_AUTHORITY -or
+              $provenance.validatedInstallerArtifactSha256 -ne $env:RELEASE_INSTALLER_ARTIFACT_SHA256 -or
+              $provenance.validatedInstallerSha256 -ne $env:RELEASE_INSTALLER_SHA256) {
             throw "Release provenance does not match the tested app, IEC engine and native COMTRADE bridge revisions."
           }
 

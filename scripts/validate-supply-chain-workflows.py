@@ -79,6 +79,10 @@ def main() -> int:
         "Promote exact sealed canonical Windows package for release",
         "verify-ci-package-reuse.py", "--head-branch main", "--event-name push",
         "RELEASE_PACKAGE_AUTHORITY=sealed-build-arsas:",
+        "Promote exact validated Windows installer for release",
+        "verify-ci-installer-reuse.py",
+        "RELEASE_INSTALLER_AUTHORITY=validated-installer:",
+        "validatedInstallerArtifactSha256", "validatedInstallerSha256",
         "-PublishedDirectory $env:RELEASE_INSTALLER_INPUT_DIR",
         "canonicalPackageArtifactSha256", "canonicalPortableSha256",
     )
