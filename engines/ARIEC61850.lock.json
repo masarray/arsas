@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "84e9820e5a32690475960e49d5ef74e6637847fd",
-  "sourcePullRequest": 143,
-  "purpose": "Physically accepted post-v1.6.40 SCL-assisted MMS association interoperability layer. Exact tested engine head 84e9820e5a32690475960e49d5ef74e6637847fd is preserved as the runtime pin; engine PR #143 is merged on main at e5deed1d8aa11d97991695c6e390baafea7ab797 with identical tree d92676dd6d6243ec997749dd0355aa8c36ad83bd. Missing ConnectedAP association fields remain unresolved rather than fabricated; explicit valid SCL fields are immutable constraints, malformed/conflicting declarations fail closed, candidates are bounded/serial with fresh transport, and successful SCL-assisted association performs Domain/VMD validation only with no full discovery fallback. The R10 discovery/model baseline remains independently frozen by physicalTestedCommit/mergedMainCommit/mergedMainTree and previousStablePin.",
+  "commit": "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+  "sourcePullRequest": 148,
+  "purpose": "CODE-VERIFIED INTEROPERABILITY TRIAL ONLY; not a production/physical promotion. Pins the exact P0-P6.1 smart interoperability integration head that passed ARIEC61850 .NET CI #759: typed RCB mutation including signed ResvTms, canonical Discovery/Open-SCL convergence, JIT configured-static activation proof, targeted RCB availability, event-driven report receive, source-aware canonical acquisition preflight, and targeted live RCB reconciliation without full discovery. All historical physical baselines and the physically accepted SCL-association ancestry below remain unchanged authority until fresh physical qualification.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -40,5 +40,25 @@
     "preservesR10DiscoveryModelBaseline": true,
     "fullDiscoveryFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true
+  },
+  "smartInteroperabilityCodeTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 144,
+    "integrationPullRequest": 148,
+    "featurePullRequests": [
+      145,
+      146,
+      147,
+      149,
+      150,
+      151
+    ],
+    "exactCommit": "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+    "ciRun": 759,
+    "consumerIssue": 446,
+    "consumerBasePullRequest": 425,
+    "fullDiscoveryFallbackForbidden": true,
+    "vendorBranchingForbidden": true,
+    "physicalPromotionRequired": true
   }
 }
