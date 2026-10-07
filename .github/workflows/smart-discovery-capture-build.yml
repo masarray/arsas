@@ -336,6 +336,8 @@ jobs:
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_MERGE_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -369,10 +371,12 @@ jobs:
           $runJson = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SMART_CAPTURE_CANONICAL_RUN_ID"
           if ($LASTEXITCODE -ne 0) { throw 'Could not revalidate canonical Build ARSAS run.' }
           $run = $runJson | ConvertFrom-Json
-          if ($run.head_sha -ne $env:PR_MERGE_SHA -or
-              $run.name -ne 'Build ARSAS' -or
+          if ($run.name -ne 'Build ARSAS' -or
+              $run.event -ne 'pull_request' -or
+              $run.head_branch -ne $env:PR_HEAD_BRANCH -or
+              $run.head_sha -ne $env:PR_HEAD_SHA -or
               ($run.status -eq 'completed' -and $run.conclusion -ne 'success')) {
-            throw 'Canonical portable artifact is not from the exact acceptable Build ARSAS run.'
+            throw 'Canonical portable artifact is not from the exact acceptable Build ARSAS PR run.'
           }
 
           $downloadRoot = Join-Path $env:RUNNER_TEMP 'arsas-canonical-portable'
