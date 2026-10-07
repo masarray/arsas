@@ -9,7 +9,7 @@ import json
 import tempfile
 import unittest
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent
 
@@ -236,6 +236,54 @@ class PackageReuseTests(unittest.TestCase):
                 dst.writestr(info.filename, src.read(info))
             dst.writestr("../escape.txt", b"bad")
         with self.assertRaisesRegex(verifier.PackageProofError, "unsafe|outside"):
+            verifier.validate_package_archive(
+                buffer.getvalue(),
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                workflow_run_id=RUN,
+                run_attempt=1,
+                event_name="pull_request",
+            )
+
+    def test_rejects_windows_casefold_archive_collision(self):
+        blob, _ = make_payload()
+        src = zipfile.ZipFile(io.BytesIO(blob))
+        buffer = io.BytesIO()
+        with src, zipfile.ZipFile(buffer, "w") as dst:
+            names = src.namelist()
+            for info in src.infolist():
+                dst.writestr(info.filename, src.read(info))
+            target = next(
+                name for name in names
+                if name.endswith("installer-input/ARSAS-1.6.40-win-x64/ARSAS.exe")
+            )
+            dst.writestr(target[:-9] + "arsas.exe", b"collision")
+        with self.assertRaisesRegex(
+            verifier.PackageProofError, "Windows-normalized path collision"
+        ):
+            verifier.validate_package_archive(
+                buffer.getvalue(),
+                source_sha=SOURCE,
+                engine_sha=ENGINE,
+                ardirec_sha=ARDIREC,
+                workflow_run_id=RUN,
+                run_attempt=1,
+                event_name="pull_request",
+            )
+
+    def test_rejects_windows_trailing_dot_archive_path(self):
+        blob, _ = make_payload()
+        src = zipfile.ZipFile(io.BytesIO(blob))
+        buffer = io.BytesIO()
+        with src, zipfile.ZipFile(buffer, "w") as dst:
+            for info in src.infolist():
+                dst.writestr(info.filename, src.read(info))
+            prefix = PurePosixPath(src.namelist()[0]).parts[0]
+            dst.writestr(f"{prefix}/installer-input/bad./payload.txt", b"bad")
+        with self.assertRaisesRegex(
+            verifier.PackageProofError, "Windows-unsafe path component"
+        ):
             verifier.validate_package_archive(
                 buffer.getvalue(),
                 source_sha=SOURCE,
