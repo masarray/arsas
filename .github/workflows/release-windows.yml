@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
   id-token: write
   attestations: write
 
@@ -36,11 +37,23 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout ARSAS application
+      - name: Checkout exact ARSAS release source
         uses: actions/checkout@v7
         with:
           path: ArIED61850Tester
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact release source identity
+        shell: powershell
+        run: |
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Release source mismatch. Expected $expected, checked out $actual."
+          }
+          "RELEASE_SOURCE_COMMIT=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Resolve release identity and immutable engine locks
         id: release
@@ -128,7 +141,8 @@ jobs:
           "ARDIREC_BRIDGE_ABI=$($ardirecLock.bridge.abi)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_BRIDGE_RELATIVE_LIBRARY=$($ardirecLock.bridge.relativeLibrary)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Checkout immutable ARIEC61850 engine revision
+      - name: Checkout immutable ARIEC61850 engine revision for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
@@ -139,7 +153,8 @@ jobs:
             throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
           }
 
-      - name: Checkout immutable ArdIrec native engine revision
+      - name: Checkout immutable ArdIrec native engine revision for manual fallback
+        if: github.event_name == 'workflow_dispatch'
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
