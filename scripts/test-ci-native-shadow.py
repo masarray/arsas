@@ -166,6 +166,66 @@ class NativeShadowTests(unittest.TestCase):
         self.assertFalse(result["fullCanonicalBuildPassed"])
         self.assertFalse(result["deduplicationAuthorized"])
 
+    def test_completed_success_is_required_for_final_shadow(self):
+        result = shadow.compare_online(
+            FakeApi(blob=self.blob, digest=self.digest),
+            **dict(self.kwargs, require_completed=True),
+        )
+        self.assertTrue(result["fullCanonicalBuildPassed"])
+        self.assertTrue(result["completedCanonicalRequired"])
+        self.assertFalse(result["provisional"])
+        self.assertTrue(result["shadowParityObserved"])
+
+    def test_in_progress_cannot_pass_final_shadow_even_if_bits_equal(self):
+        with self.assertRaisesRegex(shadow.ShadowError, "timeout"):
+            shadow.compare_online(
+                FakeApi(blob=self.blob, digest=self.digest,
+                        run_status="in_progress", run_conclusion=None),
+                **dict(self.kwargs, require_completed=True),
+            )
+
+    def test_final_shadow_rejects_failed_canonical_run(self):
+        with self.assertRaisesRegex(shadow.ShadowError, "Latest matching"):
+            shadow.compare_online(
+                FakeApi(blob=self.blob, digest=self.digest,
+                        run_status="completed", run_conclusion="failure"),
+                **dict(self.kwargs, require_completed=True),
+            )
+
+    def test_final_shadow_blocks_missing_artifact_even_after_build_success(self):
+        with self.assertRaisesRegex(shadow.ShadowError, "timeout"):
+            shadow.compare_online(
+                FakeApi(blob=self.blob, digest=self.digest, artifact=False),
+                **dict(self.kwargs, require_completed=True),
+            )
+
+    def test_final_shadow_ignores_in_progress_then_checks_completed_run(self):
+        class CompletingApi(FakeApi):
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.polls = 0
+                self.artifact_before_completion = False
+
+            def get(self, url: str, *, binary=False):
+                if "/workflows/build.yml/runs?" in url:
+                    self.polls += 1
+                    self.run_status = "in_progress" if self.polls == 1 else "completed"
+                    self.run_conclusion = None if self.polls == 1 else "success"
+                if "/artifacts?" in url and self.run_status != "completed":
+                    self.artifact_before_completion = True
+                return super().get(url, binary=binary)
+
+        api = CompletingApi(blob=self.blob, digest=self.digest)
+        result = shadow.compare_online(
+            api,
+            **dict(self.kwargs, require_completed=True,
+                   wait_seconds=3, poll_seconds=1),
+        )
+        self.assertGreaterEqual(api.polls, 2)
+        self.assertFalse(api.artifact_before_completion)
+        self.assertTrue(result["fullCanonicalBuildPassed"])
+        self.assertFalse(result["provisional"])
+
     def test_missing_digest_and_modified_archive_are_rejected(self):
         with self.assertRaisesRegex(shadow.ShadowError, "metadata missing"):
             shadow.parse_small_artifact(self.blob, "")
@@ -220,6 +280,7 @@ class NativeShadowTests(unittest.TestCase):
         self.assertNotIn("build-ardirec-bridge.ps1", observer)
         self.assertNotIn("ctest --test-dir", observer)
         self.assertIn("compare-ci-native-shadow.py", observer)
+        self.assertIn("--require-completed-canonical", observer)
         self.assertIn("continue-on-error: true", observer)
         self.assertEqual(comtrade.count("native-shadow-observer:"), 1)
         self.assertIn("workflow_dispatch", before)

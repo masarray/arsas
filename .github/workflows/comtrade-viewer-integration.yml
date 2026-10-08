@@ -241,6 +241,7 @@ jobs:
             --independent-junit native-input/ctest.xml \
             --independent-bridge native-input/ardirec_bridge.dll \
             --wait-seconds 600 \
+            --require-completed-canonical \
             --output native-shadow-parity.json
           verdict=$?
           set -e
