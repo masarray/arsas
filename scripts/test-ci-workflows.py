@@ -193,6 +193,44 @@ jobs:
         )
         self.assertNotIn(expected_group, release)
 
+    def test_p3i_main_and_manual_verification_runs_are_not_superseded(self):
+        """PR updates may cancel old PR work; main and manual runs must keep their proof."""
+        repo = Path(__file__).resolve().parents[1]
+        isolated = {
+            "ci-p0-workflow-integrity.yml": "ci-p0-workflow-integrity",
+            "smart-discovery-capture-build.yml": "smart-discovery-field-capture",
+            "scl-interoperability-r7.yml": "scl-interoperability-r7",
+            "smart-discovery-merge-execution-guard.yml": "smart-discovery-merge-execution",
+            "smart-discovery-production-promotion.yml": "smart-discovery-production-promotion",
+            "interoperability-reference-guard.yml": "interoperability-reference",
+        }
+        pr_or_unique_run = (
+            "${{ github.event_name == 'pull_request' && "
+            "github.event.pull_request.number || github.run_id }}"
+        )
+        for filename, prefix in isolated.items():
+            source = (repo / ".github/workflows" / filename).read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(source.count("\nconcurrency:\n"), 1, filename)
+            block = source.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+            self.assertIn(f"group: {prefix}-{pr_or_unique_run}", block, filename)
+            self.assertIn("cancel-in-progress: true", block, filename)
+            self.assertNotIn("|| github.ref", block, filename)
+
+        post_merge = (
+            repo / ".github/workflows/smart-discovery-post-merge-production.yml"
+        ).read_text(encoding="utf-8")
+        block = post_merge.split("\nconcurrency:\n", 1)[1].split(
+            "\njobs:\n", 1
+        )[0]
+        self.assertIn(
+            "group: smart-discovery-post-merge-production-${{ github.run_id }}",
+            block,
+        )
+        self.assertIn("cancel-in-progress: false", block)
+        self.assertNotIn("github.ref", block)
+
     def test_budget_rejects_new_duplicate_build_cost(self):
         self.write(
             ".github/workflows/build.yml",

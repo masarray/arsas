@@ -39,7 +39,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: smart-discovery-field-capture-${{ github.event.pull_request.number || github.ref }}
+  group: smart-discovery-field-capture-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
