@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Scl.Workspace;
 
@@ -46,6 +47,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public BulkObservableCollection<Iec61850MonitorPoint> Points { get; } = new();
     public BulkObservableCollection<SignalDefinition> CommandSignals { get; } = new();
     public Iec61850DeviceDiagnosticSnapshot LastDiagnosticSnapshot { get; set; } = new();
+
+    [JsonIgnore]
+    public StaticAcquisitionParitySnapshot StaticAcquisitionParity { get; set; } = new();
 
     public SclIedWorkspace? SclWorkspace
     {
