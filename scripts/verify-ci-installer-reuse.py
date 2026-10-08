@@ -187,14 +187,25 @@ def verify(api: GitHubReadOnly, *, repository: str, source_sha: str, version: st
                 matches = [a for a in arts if a.get("name") == name and a.get("expired") is False]
                 if len(matches) != 1:
                     raise InstallerProofError("Expected exactly one non-expired validated installer artifact")
-                blob = api.get(matches[0]["archive_download_url"], binary=True)
-                proof = validate_archive(
-                    blob, version=version, source_sha=source_sha, engine_sha=engine_sha,
-                    ardirec_sha=ardirec_sha, package_artifact_sha256=package_artifact_sha256,
-                    workflow_run_id=run["id"], run_attempt=run["run_attempt"], output_dir=output_dir)
-                proof["installerRunStatus"] = "completed"
-                proof["installerRunConclusion"] = "success"
-                return proof
+                try:
+                    blob = api.get(matches[0]["archive_download_url"], binary=True)
+                except GitHubRequestError as exc:
+                    # Artifact metadata can become visible shortly before GitHub's
+                    # archive redirect is readable. Retry only this transient 404
+                    # within the existing bounded deadline; all other errors fail.
+                    if exc.status != 404:
+                        raise
+                    last = (
+                        f"{last} (installer metadata ready; archive download pending)"
+                    )
+                else:
+                    proof = validate_archive(
+                        blob, version=version, source_sha=source_sha, engine_sha=engine_sha,
+                        ardirec_sha=ardirec_sha, package_artifact_sha256=package_artifact_sha256,
+                        workflow_run_id=run["id"], run_attempt=run["run_attempt"], output_dir=output_dir)
+                    proof["installerRunStatus"] = "completed"
+                    proof["installerRunConclusion"] = "success"
+                    return proof
         if time.monotonic() >= deadline:
             raise InstallerProofError(f"Timed out waiting for exact validated installer, last={last}")
         time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
