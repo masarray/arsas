@@ -407,10 +407,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
         using var document = System.Text.Json.JsonDocument.Parse(lockFile);
         var root = document.RootElement;
 
+        // The current source is the explicit P6.2 code-only trial. P6.1 remains
+        // immutable ancestry, not a field-proven replacement or a new main pin.
         Assert.Equal(
-            "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+            "e45259b710e5e6962203428abbc7fa063a25f52d",
             root.GetProperty("commit").GetString());
-        Assert.Equal(148, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(153, root.GetProperty("sourcePullRequest").GetInt32());
 
         Assert.Equal(
             "648124097621046f5f127ceb1cf853fea54db730",
@@ -439,8 +441,17 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var trial = root.GetProperty("smartInteroperabilityCodeTrial");
         Assert.Equal("code-verified-not-physical", trial.GetProperty("status").GetString());
         Assert.Equal(
-            root.GetProperty("commit").GetString(),
+            "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
             trial.GetProperty("exactCommit").GetString());
+        var serverAt = root.GetProperty("sclServerAtTrial");
+        Assert.Equal("code-verified-candidate-not-physical", serverAt.GetProperty("status").GetString());
+        Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(trial.GetProperty("exactCommit").GetString(),
+            serverAt.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(root.GetProperty("commit").GetString(),
+            serverAt.GetProperty("exactCommit").GetString());
+        Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
         Assert.Equal(759, trial.GetProperty("ciRun").GetInt32());
         Assert.True(trial.GetProperty("physicalPromotionRequired").GetBoolean());
         Assert.True(trial.GetProperty("vendorBranchingForbidden").GetBoolean());
