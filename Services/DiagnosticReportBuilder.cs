@@ -42,7 +42,7 @@ internal static class DiagnosticReportBuilder
         foreach (var device in devices)
         {
             builder.AppendLine(
-                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary}");
+                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary} | routedTraffic={device.StaticAcquisitionParity.TrafficQualificationSummary}");
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -137,6 +137,8 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"Detail           : {device.Detail}");
                 builder.AppendLine($"Acquisition      : {device.AcquisitionMode}");
                 AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
+                if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
+                    AppendStaticInitialImage(builder, device.Points);
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
@@ -220,24 +222,43 @@ internal static class DiagnosticReportBuilder
     }
 
 
+    private static void AppendStaticInitialImage(
+        StringBuilder builder,
+        IEnumerable<Iec61850MonitorPoint> points)
+    {
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points);
+        builder.AppendLine($"Static initial image: {image.Summary}");
+        builder.AppendLine("  Interpretation : display completeness only; Unknown q does not mean missing value, and RCB setup or first report does not prove every selected member is live.");
+        foreach (var group in image.Groups.Take(12))
+            builder.AppendLine($"  DataSet/RCB     : {group.DataSetReference} | {group.RcbReference} | visible={group.ValueVisible}/{group.Selected}, pending={group.ValuePending}, qNotSupplied={group.QualityNotSupplied}");
+        foreach (var point in image.PendingPoints.Take(12))
+            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
+        if (image.PendingPoints.Count > 12)
+            builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
+    }
+
     private static void AppendStaticIngressParity(
         StringBuilder builder,
         StaticAcquisitionParitySnapshot parity)
     {
         builder.AppendLine($"Static parity    : {parity.Summary}");
+        builder.AppendLine($"Routed traffic   : {parity.TrafficQualificationSummary}");
+        builder.AppendLine("Physical qualifier: semantic MATCH is not traffic proof; each planned static RCB needs a schema-safe routed process value on its own ingress.");
 
         if (parity.Discovery is { } discovery)
         {
             builder.AppendLine($"  Discovery      : {discovery.Summary}");
+            builder.AppendLine($"    traffic       : {discovery.RoutedTrafficSummary}; first={discovery.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in discovery.RuntimeTargets.Take(8))
-                builder.AppendLine($"    runtime       : {target}");
+                builder.AppendLine($"    runtime       : {target} [{(discovery.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
         }
 
         if (parity.OpenScl is { } openScl)
         {
             builder.AppendLine($"  Open SCL       : {openScl.Summary}");
+            builder.AppendLine($"    traffic       : {openScl.RoutedTrafficSummary}; first={openScl.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in openScl.RuntimeTargets.Take(8))
-                builder.AppendLine($"    runtime       : {target}");
+                builder.AppendLine($"    runtime       : {target} [{(openScl.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
         }
 
         foreach (var difference in parity.Differences.Take(12))
