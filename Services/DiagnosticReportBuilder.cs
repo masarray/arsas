@@ -43,6 +43,8 @@ internal static class DiagnosticReportBuilder
         {
             builder.AppendLine(
                 $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary} | routedTraffic={device.StaticAcquisitionParity.TrafficQualificationSummary}");
+            if (device.SclEndpointCandidates.Count > 0)
+                builder.AppendLine($"  SCD selected AP={device.SclAccessPointName}; MMS APs={string.Join(", ", device.SclEndpointCandidates.Select(ap => $"{ap.AccessPointName}={ap.IpAddress}:{ap.Port}"))}");
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -130,6 +132,18 @@ internal static class DiagnosticReportBuilder
 
                 builder.AppendLine($"IED              : {device.Name}");
                 builder.AppendLine($"Endpoint         : {device.EndpointText}");
+                if (device.SclEndpointCandidates.Count > 0)
+                {
+                    builder.AppendLine($"SCD selected AP  : {device.SclAccessPointName}");
+                    builder.AppendLine($"SCD MMS APs      : {device.SclEndpointCandidates.Count}");
+                    foreach (var ap in device.SclEndpointCandidates)
+                    {
+                        var current = ap.AccessPointName.Equals(device.SclAccessPointName, StringComparison.OrdinalIgnoreCase) &&
+                                      ap.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase) &&
+                                      ap.Port == device.Port;
+                        builder.AppendLine($"  {(current ? "SELECTED" : "AVAILABLE")} {ap.IedName}/{ap.AccessPointName} -> {ap.IpAddress}:{ap.Port} ({ap.SubNetworkName})");
+                    }
+                }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
                 builder.AppendLine($"Monitoring       : {device.IsMonitoring}");
                 builder.AppendLine($"Busy             : {device.IsBusy}");
