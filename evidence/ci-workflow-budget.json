@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3D: exact validated installer promotion",
-  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3C establish reproducible, sealed exact-byte application/package promotion. P3D seals the installed-smoke-tested installer and makes production release promote those exact installer bytes while retaining release-specific install/runtime smoke, supply-chain evidence and publication authority.",
+  "baselineName": "CI-P3F: package-ready gate defers Windows installer allocation",
+  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3D establish reproducible sealed exact-byte promotion through installer/release. P3F changes orchestration only: a non-authoritative Ubuntu metadata gate waits for the exact canonical package artifact before allocating the Windows installer runner; full package-byte verification and installer validation remain unchanged.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -479,5 +479,37 @@
       "validatedInstallerSha256"
     ],
     "rollback": "Restore production Inno install/compile in release-windows.yml and stop consuming validated installer authority. Never weaken exact source/package/installer identity or stable-release immutability."
+  },
+  "ciP3InstallerPackageReadyGate": {
+    "issueNumber": 460,
+    "lane": "installer-windows",
+    "approach": "For PR/push events, wait on ubuntu-latest for the latest exact Build ARSAS head/branch/event run to expose exactly one non-expired ARSAS-windows-package-input artifact. Only then allocate the Windows installer job. Metadata gate never downloads package bytes or claims package/installer authority; Windows verifier remains the fail-closed authority.",
+    "observedBaseline": {
+      "mainCommit": "0814793c7473dbae1c1c64da56df12cbeecf5df7",
+      "buildRunId": 37695338673,
+      "installerRunId": 37695338631,
+      "installerStartedAt": "2026-10-07T22:18:39Z",
+      "packageWaitStartedAt": "2026-10-07T22:19:01Z",
+      "packageArtifactCreatedAt": "2026-10-07T22:24:11Z",
+      "packageReuseCompletedAt": "2026-10-07T22:24:27Z",
+      "observedWindowsPackageWaitSeconds": 326,
+      "installerSpecificWorkAfterPackageSeconds": 152
+    },
+    "staticLimitsChanged": false,
+    "addedWorkflowFiles": 0,
+    "addedCheckoutActions": 0,
+    "addedSetupPythonActions": 0,
+    "metadataGateRunner": "ubuntu-latest",
+    "windowsRunnerDeferred": true,
+    "latestCompletedCanonicalFailureRejected": true,
+    "duplicateCanonicalPackageMetadataRejected": true,
+    "packageBytesTrustedByGate": false,
+    "fullPackageVerifierRetained": true,
+    "installerCompileRetained": true,
+    "silentInstallUninstallRetained": true,
+    "installedNativeRuntimeTestsRetained": true,
+    "manualWorkflowDispatchBypassesGate": true,
+    "releaseAuthorityChanged": false,
+    "rollback": "Remove package-ready job and installer needs/if dependency to restore direct Windows polling. Never remove the full sealed-package verifier or installer/runtime smoke to reduce wait time."
   }
 }
