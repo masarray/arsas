@@ -66,18 +66,26 @@ public sealed class P0LatestFieldRegressionTests
     }
 
     [Fact]
-    public void AssociationWatchdog_DetectsOfflineWithoutCyclicMmsProcessReadsAndArmsReconnect()
+    public void AssociationLiveness_IsOwnedByMmsRuntimeWithoutIcmpOrCyclicProcessHeartbeat()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.P0AssociationLiveness.cs"));
+        var shell = File.ReadAllText(FindRepoFile("MainWindow.P0AssociationLiveness.cs"));
+        var runtime = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
 
-        Assert.Contains("TryPingEndpointAsync", source, StringComparison.Ordinal);
-        Assert.Contains("failures < 2", source, StringComparison.Ordinal);
-        Assert.Contains("device.Status = \"Offline\"", source, StringComparison.Ordinal);
-        Assert.Contains("_associationReconnectWanted.Add", source, StringComparison.Ordinal);
-        Assert.Contains("IsMmsEndpointReachableAsync", source, StringComparison.Ordinal);
-        Assert.Contains("ConnectUsingSavedModelAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReadValueAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("IecSignalReadResolver", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "Association liveness belongs to the per-IED MMS runtime",
+            shell,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("TryPingEndpointAsync", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendPingAsync", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("_associationReconnectWanted", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("StopDeviceConnectionAsync", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReadValueAsync", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("IecSignalReadResolver", shell, StringComparison.Ordinal);
+
+        Assert.Contains("TryReconnectAsync(session", runtime, StringComparison.Ordinal);
+        Assert.Contains("ForceReconnectAsync(session", runtime, StringComparison.Ordinal);
+        Assert.Contains("SmartReconnectPolicy.ClientCleanupBudget", runtime, StringComparison.Ordinal);
+        Assert.Contains("session.Device.HasReportStream = false;", runtime, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1847,17 +1847,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
         session.Device.IsConnected = true;
         session.Device.Status = "Monitoring";
-        session.Device.AcquisitionMode = "MMS recovered • static report re-arm pending";
-        session.Device.Detail =
-            $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. " +
-            $"{session.Points.Count} point(s) resumed with staggered MMS recovery; report re-arm continues in the background.";
+        session.Device.AcquisitionMode = session.StaticDataSetReportOnly
+            ? "MMS recovered • Static DataSet report re-arm pending"
+            : "MMS recovered • report re-arm pending";
+        session.Device.Detail = session.StaticDataSetReportOnly
+            ? $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Static DataSet process polling remains disabled; configured RCB re-arm continues in the background."
+            : $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. {session.Points.Count} point(s) resumed with staggered MMS recovery; report re-arm continues in the background.";
         session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
             "Smart reconnect MMS associated; report re-arm deferred");
         session.Device.RefreshComputed();
 
         Log("INFO", session.Device.Name,
-            $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. " +
-            $"Polling resumed immediately with a {SmartReconnectPolicy.RecoveryWarmupDuration.TotalSeconds:0} s recovery warm-up; static report re-arm is deferred to the background pipeline.");
+            session.StaticDataSetReportOnly
+                ? $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Static DataSet process polling remains disabled; configured RCB re-arm is deferred to the background pipeline."
+                : $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Polling resumed immediately with a {SmartReconnectPolicy.RecoveryWarmupDuration.TotalSeconds:0} s recovery warm-up; report re-arm is deferred to the background pipeline.");
     }
 
     private void ScheduleReconnectRetry(
@@ -1930,6 +1933,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private static void ResetAssociationReportEvidence(DeviceSession session)
     {
+        // InformationReport proof is association-scoped. A report observed on the old
+        // socket must never make the replacement association look TrafficProven before
+        // the first routed report of the new generation arrives.
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
+
         foreach (var state in session.States.Values)
         {
             state.ReportTrafficSeen = false;
@@ -1974,6 +1983,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         var wasConnected = session.Device.IsConnected;
         session.Device.IsConnected = false;
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
         session.Device.Status = "Offline";
         session.Device.Detail = detail;
         session.Device.AcquisitionMode = "Connection lost • reconnect pending";
