@@ -11,8 +11,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: smart-discovery-post-merge-production-${{ github.ref }}
-  cancel-in-progress: true
+  group: smart-discovery-post-merge-production-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   post-merge-production:

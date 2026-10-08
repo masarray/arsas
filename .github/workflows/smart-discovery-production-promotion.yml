@@ -39,7 +39,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: smart-discovery-production-promotion-${{ github.event.pull_request.number || github.ref }}
+  group: smart-discovery-production-promotion-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
