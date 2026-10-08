@@ -572,7 +572,7 @@
   "ciP3SupersededPrCancellation": {
     "issueNumber": 464,
     "lane": "windows-heavy-pull-request-workflows",
-    "approach": "Add workflow+PR scoped concurrency with github.run_id fallback and cancel-in-progress only for pull_request. New PR synchronize events supersede stale Windows work; non-PR runs never share a cancellable group.",
+    "approach": "Share one concurrency group only for the same pull request; all non-PR events fall back to unique github.run_id. cancel-in-progress is unconditional inside the group, so only stale PR revisions can collide and be cancelled.",
     "staticLimitsChanged": false,
     "affectedWorkflows": [
       "build.yml",
@@ -586,8 +586,8 @@
       "smart-discovery-golden-budget-lock.yml",
       "smart-discovery-repeat-run-stability.yml"
     ],
-    "groupExpression": "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}",
-    "cancelExpression": "${{ github.event_name == 'pull_request' }}",
+    "groupExpression": "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}",
+    "cancelExpression": "true",
     "pullRequestSupersession": true,
     "pushMainCancellation": false,
     "tagCancellation": false,
@@ -595,6 +595,7 @@
     "releaseAuthorityChanged": false,
     "canonicalPackageAuthorityChanged": false,
     "installerAuthorityChanged": false,
-    "rollback": "Remove the P3H concurrency blocks from affected workflows. Never broaden cancel-in-progress to main/tag/manual runs."
+    "rollback": "Remove the P3H concurrency blocks from affected workflows. Never broaden cancel-in-progress to main/tag/manual runs.",
+    "observedFirstAttempt": "Event-scoped cancel expression left newer runs pending behind older runs; corrected to unique non-PR grouping plus unconditional cancellation."
   }
 }
