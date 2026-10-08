@@ -48,6 +48,7 @@ jobs:
         run: |
           $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
           $target = Get-Content .\ARSAS\evidence\interoperability-reference-target.json -Raw | ConvertFrom-Json
+          $association = $target.postBaselineAcceptance.sclAssociationInteroperability
 
           if ($target.status -ne 'physical-retest-passed-merge-ready') {
             throw "Convergence status changed unexpectedly: $($target.status)"
@@ -58,9 +59,31 @@ jobs:
               [int]$target.activeStack.consumerIntegration.pullRequest -ne 324) {
             throw 'Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance.'
           }
-          if ($lock.commit -ne $target.activeStack.engineModelAndScl.head -or
-              [int]$lock.sourcePullRequest -ne 135) {
-            throw 'Engine lock drifted from the convergence single source of truth.'
+          if ($lock.mergedMainCommit -ne $target.activeStack.engineModelAndScl.head -or
+              $lock.previousStablePin.commit -ne $lock.mergedMainCommit -or
+              [int]$lock.previousStablePin.sourcePullRequest -ne 135) {
+            throw 'Historical engine authority drifted from the R10 convergence single source of truth.'
+          }
+
+          if ($association.contractId -ne 'SCL-ASSOC-PARTIAL-ADDR-PHYSICAL' -or
+              $association.status -ne 'physically-accepted-engine-merged-consumer-pending-merge' -or
+              -not [bool]$association.preservesR10Baseline -or
+              [int]$association.engine.pullRequest -ne 143 -or
+              $association.engine.testedHead -ne $lock.commit -or
+              $association.engine.mergedMain -ne $lock.sclAssociationInteroperability.mergedEngineCommit -or
+              $association.engine.tree -ne $lock.sclAssociationInteroperability.engineTree -or
+              [int]$lock.sourcePullRequest -ne 143 -or
+              $lock.sclAssociationInteroperability.testedEngineCommit -ne $lock.commit -or
+              -not [bool]$association.physicalAcceptance.fullDiscoverySkipped -or
+              [int]$association.physicalAcceptance.associationAttempts -ne 1 -or
+              [int]$association.physicalAcceptance.matchedDomains -ne 5 -or
+              [int]$association.physicalAcceptance.failedReads -ne 0 -or
+              [int]$association.physicalAcceptance.projectionErrors -ne 0 -or
+              [int]$association.physicalAcceptance.cacheLoss -ne 0 -or
+              [int]$association.physicalAcceptance.unresolvedRuntimePoints -ne 0 -or
+              [int]$association.physicalAcceptance.cyclicMmsProcessPolling -ne 0 -or
+              -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
+            throw 'Accepted post-baseline SCL association authority drifted or lost physical evidence.'
           }
           if ([bool]$target.promotion.productionPromoted -or
               [bool]$target.promotion.mergeAllowedBeforePhysicalRetest -or

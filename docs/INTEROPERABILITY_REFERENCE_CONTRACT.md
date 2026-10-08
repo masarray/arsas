@@ -31,6 +31,39 @@ Merged engine provenance:
 - PR #135 → main merge `648124097621046f5f127ceb1cf853fea54db730`: canonical model, SCL interoperability, P1/P2 value pipeline.
 - ARSAS PR #324: consumer integration and physical R10 proof.
 
+## Post-baseline SCL association interoperability — physically accepted
+
+A later, narrowly scoped interoperability layer extends trusted-SCL reconnect when a
+ConnectedAP omits called AP-title and/or AE qualifier. It does **not** replace the
+R10 Smart Discovery/model baseline above.
+
+Accepted source authority:
+
+- ARIEC61850 PR #143 tested head `84e9820e5a32690475960e49d5ef74e6637847fd`;
+- engine main merge `e5deed1d8aa11d97991695c6e390baafea7ab797`;
+- both engine commits have identical tree
+  `d92676dd6d6243ec997749dd0355aa8c36ad83bd`;
+- ARSAS PR #425 physical merge-test tree
+  `9dc35d722b54872ed8c506eba062a80945761aa9`.
+
+The physical trusted-SCL session accepted the bounded `BalancedApTitle` candidate on
+attempt 1, matched all 5 expected MMS domains, completed 395/395 bounded initial
+reads, produced `projectionErrors=0` and `cacheLoss=0`, skipped full discovery,
+kept cyclic MMS process polling at zero, and observed live InformationReport traffic
+with final runtime unresolved count zero.
+
+The contract remains fail-closed:
+
+- explicit valid SCL association fields are immutable constraints;
+- malformed or conflicting explicit values are not repaired by guessing;
+- only genuinely unspecified fields may be completed by bounded engine-owned profiles;
+- each candidate starts on a fresh transport;
+- the source SCL is never rewritten by association negotiation;
+- SCL-assisted success does not trigger NamedVariable/DataSet rediscovery or full discovery.
+
+The historical R10 baseline remains the discovery/model authority. This section is a
+post-baseline accepted layer, not a rewrite of R10 evidence.
+
 ## P0 — structural discovery freeze
 
 Contract: `P0-R9-STRUCTURAL`.

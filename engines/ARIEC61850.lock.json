@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "648124097621046f5f127ceb1cf853fea54db730",
-  "sourcePullRequest": 135,
-  "purpose": "R7 physical SCL repair pin on the complete PR #134 smart-discovery performance head. Accepted remote AP-title/AE/PSEL/SSEL remain decoded from the exact association request bytes accepted by the IED and TSEL remains bound to the accepted COTP destination selector. Physical AA1E1F06R4 evidence additionally proved that indexed RCB siblings may differ in writable/current BufTm, IntgPd, TrgOps and OptFlds while still representing one logical SCL ReportControl; engine head 648124097621046f5f127ceb1cf853fea54db730 preserves DataSet/ConfRev/domain/LN/buffered identity while allowing that runtime-mutable setting drift. ARSAS consumer-side reconnect must reproduce the proven native calling identity byte-for-byte and canonical save uses full-model SCL with prefixed-LN identity, CDC-aware WYE/DEL/SEQ SDO and FC ownership, plus exact standard TCTR/TVTR/LTIM/EEName/MltLev CDC authority and Edition-2-only LTRK service-tracking CDCs with Edition-1 schema downgrade protection; physical R8 reuse evidence additionally requires exact MMS TypeSpecification declaration order through canonical model/SCL reload, treats SG/SE as setting data rather than control blocks, and maps MHAI THD phase groups as WYE/CMV; safety is enforced by bounded FC-read policy rather than deleting discovered model leaves. Production promotion remains fail-closed and still requires fresh physical authority. R9 reuse lock additionally preserves rptID-backed preallocated singleton RCB indexing, case-distinct canonical instance values, and compile-safe logical RCB projection; unresolved 46 trusted-SCL projection errors remain a fail-open diagnostic gap but a fail-closed promotion gap until physical evidence reaches zero. P1 trusted-SCL projection repair removes cross-DO positional dependence for multi-DO CF structures: SCL LNodeType order is not treated as MMS FC-structure order, so CF hydration is split into exact DO-scoped structured Reads and remains batched/bounded. P0 structural discovery remains unchanged. P2 makes instance-value identity exact-case end-to-end: ARSAS trusted-SCL caching uses StringComparer.Ordinal and reports projectedUniqueValues/cacheLoss; engine TypeSpecification member resolution and canonical DO/DA instance-value targeting are case-sensitive so legal paths such as tracking t/T cannot collapse or cross-resolve. R10 physical acceptance passed on AA1E1F06R4: Ed2 and Ed1 both reached projectionErrors=0 and cacheLoss=0, all planned reads succeeded, 58/58 runtime points were report-backed, and actual InformationReport traffic was observed. The exact tested commit 9935d6902d786cc69b299260fe36b835944d5e81 and merged main commit 648124097621046f5f127ceb1cf853fea54db730 have the identical source tree 1cf7e08f333f24994625e8fe8416dbd0a16195b1.",
+  "commit": "84e9820e5a32690475960e49d5ef74e6637847fd",
+  "sourcePullRequest": 143,
+  "purpose": "Physically accepted post-v1.6.40 SCL-assisted MMS association interoperability layer. Exact tested engine head 84e9820e5a32690475960e49d5ef74e6637847fd is preserved as the runtime pin; engine PR #143 is merged on main at e5deed1d8aa11d97991695c6e390baafea7ab797 with identical tree d92676dd6d6243ec997749dd0355aa8c36ad83bd. Missing ConnectedAP association fields remain unresolved rather than fabricated; explicit valid SCL fields are immutable constraints, malformed/conflicting declarations fail closed, candidates are bounded/serial with fresh transport, and successful SCL-assisted association performs Domain/VMD validation only with no full discovery fallback. The R10 discovery/model baseline remains independently frozen by physicalTestedCommit/mergedMainCommit/mergedMainTree and previousStablePin.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -22,5 +22,23 @@
   },
   "physicalTestedCommit": "9935d6902d786cc69b299260fe36b835944d5e81",
   "mergedMainCommit": "648124097621046f5f127ceb1cf853fea54db730",
-  "mergedMainTree": "1cf7e08f333f24994625e8fe8416dbd0a16195b1"
+  "mergedMainTree": "1cf7e08f333f24994625e8fe8416dbd0a16195b1",
+  "previousStablePin": {
+    "commit": "648124097621046f5f127ceb1cf853fea54db730",
+    "sourcePullRequest": 135,
+    "purpose": "ARSAS v1.6.40 merged/physically accepted Smart Discovery + canonical SCL/R10 baseline retained unchanged as historical discovery/model authority beneath the separately accepted SCL-association interoperability layer."
+  },
+  "sclAssociationInteroperability": {
+    "contractId": "SCL-ASSOC-PARTIAL-ADDR-PHYSICAL",
+    "status": "physically-accepted-engine-merged-consumer-pending-merge",
+    "sourcePullRequest": 143,
+    "testedEngineCommit": "84e9820e5a32690475960e49d5ef74e6637847fd",
+    "mergedEngineCommit": "e5deed1d8aa11d97991695c6e390baafea7ab797",
+    "engineTree": "d92676dd6d6243ec997749dd0355aa8c36ad83bd",
+    "consumerPullRequest": 425,
+    "consumerPhysicalMergeTestCommit": "9dc35d722b54872ed8c506eba062a80945761aa9",
+    "preservesR10DiscoveryModelBaseline": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
+  }
 }

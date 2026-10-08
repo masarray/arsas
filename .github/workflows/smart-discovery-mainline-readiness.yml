@@ -77,17 +77,35 @@ jobs:
             }
           }
 
-          if ($lock.commit -ne $target.activeStack.engineModelAndScl.mainMerge -or
-              $lock.commit -ne $r10.testedArtifact.engineMergedMain -or
+          if ($lock.mergedMainCommit -ne $target.activeStack.engineModelAndScl.mainMerge -or
+              $lock.mergedMainCommit -ne $r10.testedArtifact.engineMergedMain -or
               $lock.physicalTestedCommit -ne $r10.testedArtifact.engineTestedHead -or
-              $lock.mergedMainTree -ne $r10.testedArtifact.engineTree) {
-            throw 'ARSAS engine lock no longer matches the R10 physical authority.'
+              $lock.mergedMainTree -ne $r10.testedArtifact.engineTree -or
+              $lock.previousStablePin.commit -ne $lock.mergedMainCommit -or
+              [int]$lock.previousStablePin.sourcePullRequest -ne 135) {
+            throw 'Historical ARSAS engine baseline no longer matches the R10 physical authority.'
+          }
+
+          $association = $target.postBaselineAcceptance.sclAssociationInteroperability
+          if ($association.contractId -ne 'SCL-ASSOC-PARTIAL-ADDR-PHYSICAL' -or
+              $association.status -ne 'physically-accepted-engine-merged-consumer-pending-merge' -or
+              -not [bool]$association.preservesR10Baseline -or
+              $association.engine.testedHead -ne $lock.commit -or
+              [int]$association.engine.pullRequest -ne [int]$lock.sourcePullRequest -or
+              [int]$lock.sourcePullRequest -ne 143 -or
+              -not [bool]$association.physicalAcceptance.fullDiscoverySkipped -or
+              [int]$association.physicalAcceptance.failedReads -ne 0 -or
+              [int]$association.physicalAcceptance.projectionErrors -ne 0 -or
+              [int]$association.physicalAcceptance.cacheLoss -ne 0 -or
+              [int]$association.physicalAcceptance.unresolvedRuntimePoints -ne 0 -or
+              -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
+            throw 'Post-baseline SCL association acceptance is missing or inconsistent.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Checkout exact merged ARIEC61850 authority
+      - name: Checkout exact accepted ARIEC61850 integration authority
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ..\ARIEC61850
@@ -95,7 +113,7 @@ jobs:
           git -C ..\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
           $actual = (git -C ..\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
           if ($actual -ne $env:ENGINE_COMMIT) {
-            throw "R10 engine authority mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+            throw "Accepted engine authority mismatch. Expected $env:ENGINE_COMMIT, got $actual."
           }
 
       - name: Setup .NET 8
@@ -103,7 +121,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Validate and test merged engine authority
+      - name: Validate and test accepted engine authority
         shell: powershell
         run: |
           dotnet restore ..\ARIEC61850\ARIEC61850.sln

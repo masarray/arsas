@@ -213,6 +213,37 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         Assert.Contains("cyclic MMS process polling and dynamic DataSet writes remain disabled", shared, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void OpenScl_Uses_EngineOwned_Bounded_Association_Resolution_Without_Discovery_Fallback()
+    {
+        var preparation = Read("Services/SclAssistedConnectionPreparation.cs");
+        Assert.Contains(
+            "SclAssistedMmsAssociationCandidateResolver.Resolve",
+            preparation,
+            StringComparison.Ordinal);
+        Assert.Contains("AssociationResolution = associationResolution", preparation, StringComparison.Ordinal);
+        Assert.DoesNotContain("errors.AddRange(exactAssociation.Errors)", preparation, StringComparison.Ordinal);
+
+        var client = Read("Services/NativeIec61850Client.SclAssisted.cs");
+        var start = client.IndexOf(
+            "public async Task<SclAssistedClientConnectResult> ConnectUsingSclAsync",
+            StringComparison.Ordinal);
+        var end = client.IndexOf(
+            "private static ArMms.MmsReportInventory BuildTrustedSclReportInventory",
+            start,
+            StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var connectFlow = client[start..end];
+
+        Assert.Contains("preparation.AssociationResolution", connectFlow, StringComparison.Ordinal);
+        Assert.Contains("_session.ConnectSclAssistedAsync", connectFlow, StringComparison.Ordinal);
+        Assert.Contains("online.SelectedAssociationCandidateName", connectFlow, StringComparison.Ordinal);
+        Assert.Contains("online.AssociationAttemptCount", connectFlow, StringComparison.Ordinal);
+        Assert.DoesNotContain(".DiscoverAsync(", connectFlow, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiscoverSignals", connectFlow, StringComparison.Ordinal);
+    }
+
     private static string Read(string relativePath)
         => File.ReadAllText(FindRepoFile(relativePath)).Replace("\r\n", "\n", StringComparison.Ordinal);
 

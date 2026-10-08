@@ -138,7 +138,7 @@ public sealed partial class NativeIec61850Client
             _port,
             maximumVariableReferencesPerRead);
         if (!preparation.IsSuccess ||
-            preparation.AssociationPlan is null ||
+            preparation.AssociationResolution is null ||
             preparation.InitialReadDesign is null ||
             preparation.InitialReadPlan is null)
         {
@@ -161,7 +161,7 @@ public sealed partial class NativeIec61850Client
         {
             var associationWatch = Stopwatch.StartNew();
             var online = await _session.ConnectSclAssistedAsync(
-                preparation.AssociationPlan,
+                preparation.AssociationResolution,
                 preparation.DomainInventory,
                 TimeSpan.FromSeconds(8),
                 cancellationToken).ConfigureAwait(false);
@@ -324,7 +324,9 @@ public sealed partial class NativeIec61850Client
             var partial = initialRead.Status == ArMms.InitialFcReadExecutionStatus.Partial ||
                           initialValueCacheLoss > 0;
             LastDiscoverySummary =
-                $"SCL-assisted MMS: domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
+                $"SCL-assisted MMS: associationCandidate={online.SelectedAssociationCandidateName}, " +
+                $"associationSource={online.SelectedAssociationCandidateSource}, associationAttempts={online.AssociationAttemptCount}, " +
+                $"domains={reconciledDomains.Count}, extraOnlineDomains={extraDomains}, " +
                 $"initialTargets={initialRead.Plan.Targets.Count}, fcRootTargets={fcRootTargets}, doScopedTargets={dataObjectScopedTargets}, " +
                 $"successfulReads={initialRead.SuccessfulTargetCount}, failedReads={initialRead.FailedTargetCount}, projectedLeaves={initialRead.ProjectedLeafCount}, " +
                 $"projectedUniqueValues={projectedUniqueValues}, initialValueCache={_trustedSclInitialValues.Count}, cacheLoss={initialValueCacheLoss}, " +
@@ -342,6 +344,7 @@ public sealed partial class NativeIec61850Client
                     : string.Empty;
 
             var warnings = preparation.Warnings
+                .Concat(online.AssociationResolutionNotes)
                 .Concat(extraDomains > 0
                     ? new[] { $"IED exposes {extraDomains} extra online MMS domain(s); they remain evidence only and do not mutate the SCL model." }
                     : Array.Empty<string>())
