@@ -42,7 +42,7 @@ internal static class DiagnosticReportBuilder
         foreach (var device in devices)
         {
             builder.AppendLine(
-                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status}");
+                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary}");
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -136,6 +136,7 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"Status           : {device.Status}");
                 builder.AppendLine($"Detail           : {device.Detail}");
                 builder.AppendLine($"Acquisition      : {device.AcquisitionMode}");
+                AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
@@ -218,6 +219,30 @@ internal static class DiagnosticReportBuilder
         return builder.ToString();
     }
 
+
+    private static void AppendStaticIngressParity(
+        StringBuilder builder,
+        StaticAcquisitionParitySnapshot parity)
+    {
+        builder.AppendLine($"Static parity    : {parity.Summary}");
+
+        if (parity.Discovery is { } discovery)
+        {
+            builder.AppendLine($"  Discovery      : {discovery.Summary}");
+            foreach (var target in discovery.RuntimeTargets.Take(8))
+                builder.AppendLine($"    runtime       : {target}");
+        }
+
+        if (parity.OpenScl is { } openScl)
+        {
+            builder.AppendLine($"  Open SCL       : {openScl.Summary}");
+            foreach (var target in openScl.RuntimeTargets.Take(8))
+                builder.AppendLine($"    runtime       : {target}");
+        }
+
+        foreach (var difference in parity.Differences.Take(12))
+            builder.AppendLine($"  difference     : {difference}");
+    }
 
     private static RouteAnalysis AnalyzeRoute(string targetText)
     {
