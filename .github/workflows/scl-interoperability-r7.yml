@@ -94,6 +94,22 @@ jobs:
             }
             Write-Host 'Running stacked interoperability checks on a CodeVerified-only engine; no physical/mainline promotion is implied.'
           }
+          elseif ($lock.commit -eq $lock.sclServerAtTrial.exactCommit) {
+            $serverAt = $lock.sclServerAtTrial
+            if ($lock.commit -ne 'ebffc41c9da7a1ef32d19da452b21a489ffd9fb0' -or
+                $lock.ref -ne 'main' -or
+                [int]$lock.sourcePullRequest -ne 153 -or
+                [int]$serverAt.sourcePullRequest -ne 153 -or
+                $serverAt.baseEngineCommit -ne $trial.exactCommit -or
+                $trial.status -ne 'code-verified-not-physical' -or
+                $serverAt.status -ne 'code-verified-candidate-not-physical' -or
+                -not [bool]$serverAt.physicalQualificationRequired -or
+                -not [bool]$serverAt.noAutomaticMmsFailover -or
+                $lock.purpose -notmatch 'CODE-VERIFIED INTEROPERABILITY TRIAL ONLY') {
+              throw 'P6.2 ServerAt trial provenance is invalid or silently promoted.'
+            }
+            Write-Host 'Running exact P6.2 ServerAt trial on the P6.1 code-only ancestry; physical/main promotion remains blocked.'
+          }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
                 $lock.purpose -notmatch 'R7 physical SCL repair pin') {
