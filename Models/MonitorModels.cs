@@ -43,6 +43,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _sclIedName = string.Empty;
     private string _sclAccessPointName = string.Empty;
     private string _sclEndpointOrigin = "Unbound";
+    private Iec61850ReportContinuitySnapshot? _reportContinuityEvidence;
 
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
@@ -52,6 +53,15 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     [JsonIgnore]
     public StaticAcquisitionParitySnapshot StaticAcquisitionParity { get; set; } = new();
+
+    // Snapshot publication is atomic across runtime/diagnostic threads, never a
+    // mutable live ReportStreams dictionary. Association reset clears its scope.
+    [JsonIgnore]
+    public Iec61850ReportContinuitySnapshot? ReportContinuityEvidence
+    {
+        get => System.Threading.Volatile.Read(ref _reportContinuityEvidence);
+        set => System.Threading.Volatile.Write(ref _reportContinuityEvidence, value);
+    }
 
     public SclIedWorkspace? SclWorkspace
     {
