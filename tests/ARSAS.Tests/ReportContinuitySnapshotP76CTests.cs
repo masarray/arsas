@@ -119,7 +119,7 @@ public sealed class ReportContinuitySnapshotP76CTests
         {
             dict["key" + i] = new Iec61850ReportContinuityState
             {
-                ReportControlReference = new string('R', 550) + "\r\nStatic parity : INJECTED",
+                ReportControlReference = "RCB\r\nStatic parity : INJECTED" + new string('R', 550),
                 ReportId = "report",
                 Buffered = true,
                 FramesSeen = 1,
