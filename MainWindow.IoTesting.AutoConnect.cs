@@ -496,33 +496,95 @@ public partial class MainWindow
         Iec61850MonitorDevice device,
         TimeSpan proofWindow)
     {
+        var startedUtc = DateTime.UtcNow;
         try
         {
-            await Task.Delay(proofWindow, _applicationCancellation.Token);
+            var trafficObserved = await WaitForReportStreamAsync(
+                device,
+                proofWindow,
+                _applicationCancellation.Token).ConfigureAwait(true);
+
             if (!device.IsMonitoring || !IsSharedStaticDataSetAuthority(device))
                 return;
 
-            if (device.HasReportStream)
+            if (trafficObserved && device.HasReportStream)
             {
                 var reportPoints = device.Points.Count(point =>
                     IsReportSource(point.SourceMode) &&
                     !point.SourceMode.Contains("pending", StringComparison.OrdinalIgnoreCase));
+                var firstReportLatency = DateTime.UtcNow - startedUtc;
                 AddLog(
                     "INFO",
                     device.Name,
-                    $"Static DataSet report evidence: actual InformationReport traffic observed; report-backed runtime point(s)={reportPoints}. RCB/GI path is alive.");
+                    $"Static DataSet report evidence: actual InformationReport traffic observed after {firstReportLatency.TotalMilliseconds:0} ms; report-backed runtime point(s)={reportPoints}. RCB/GI path is alive.");
                 return;
             }
 
             AddLog(
                 "WARN",
                 device.Name,
-                $"Static DataSet report evidence: configured RCB setup/GI was requested, but no InformationReport traffic was observed within {proofWindow.TotalSeconds:0.#} s. ARSAS will remain report-pending and will NOT switch process values to cyclic MMS polling. Check RptEna/ownership, GI support and whether the IED server actually emits reports for the configured DataSet.");
+                $"Static DataSet report evidence: configured RCB setup/GI was requested, but no InformationReport traffic was observed within {proofWindow.TotalSeconds:0.#} s. Activation remains armed/report-pending; absence of traffic alone is not treated as RCB activation failure and ARSAS will NOT switch process values to cyclic MMS polling.");
             MarkDiagnosticAlert();
         }
         catch (OperationCanceledException)
         {
             // Application shutdown or explicit lifecycle cancellation needs no warning.
+        }
+    }
+
+    private static async Task<bool> WaitForReportStreamAsync(
+        Iec61850MonitorDevice device,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        if (device.HasReportStream)
+            return true;
+        if (!device.IsMonitoring)
+            return false;
+
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        System.ComponentModel.PropertyChangedEventHandler? handler = null;
+        handler = (_, args) =>
+        {
+            if (args.PropertyName == nameof(Iec61850MonitorDevice.HasReportStream) &&
+                device.HasReportStream)
+            {
+                completion.TrySetResult(true);
+                return;
+            }
+
+            if (args.PropertyName == nameof(Iec61850MonitorDevice.IsMonitoring) &&
+                !device.IsMonitoring)
+            {
+                completion.TrySetResult(false);
+            }
+        };
+
+        device.PropertyChanged += handler;
+        try
+        {
+            // Close the subscribe/check race without polling.
+            if (device.HasReportStream)
+                return true;
+            if (!device.IsMonitoring)
+                return false;
+
+            try
+            {
+                return await completion.Task
+                    .WaitAsync(timeout, cancellationToken)
+                    .ConfigureAwait(true);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
+        finally
+        {
+            device.PropertyChanged -= handler;
         }
     }
 
