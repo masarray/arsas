@@ -125,7 +125,7 @@ def parse_small_artifact(blob: bytes, expected_digest: str) -> tuple[bytes, byte
             if any(i.file_size > MAX_ZIP or i.flag_bits & 0x1 for i in files):
                 raise ShadowError("Canonical native artifact contains unsafe entries")
             return archive.read(JUNIT), archive.read(PROOF)
-    except (zipfile.BadZipFile, RuntimeError, KeyError) as exc:
+    except (zipfile.BadZipFile, OSError, KeyError, EOFError) as exc:
         raise ShadowError("Canonical native shadow artifact is not a readable ZIP") from exc
 
 
