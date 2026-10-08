@@ -200,6 +200,9 @@ class NativeShadowTests(unittest.TestCase):
         self.assertIn("ARSAS-native-ctest-shadow", canonical)
         self.assertIn("actions/upload-artifact@v7", canonical)
         self.assertIn("Build and test pinned native bridge", comtrade)
+        self.assertEqual(comtrade.count("name: Validate COMTRADE viewer integration"), 1)
+        self.assertEqual(comtrade.count("name: Advisory same-SHA native"), 1)
+        self.assertEqual(comtrade.count("name: Checkout immutable ArdIrec revision"), 1)
         self.assertIn("ARIEC61850_COMMIT=$($engineLock.commit)", comtrade)
         self.assertIn("engines\\ARIEC61850.lock.json", comtrade)
 
