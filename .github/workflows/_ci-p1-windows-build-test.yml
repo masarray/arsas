@@ -84,7 +84,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Cache immutable NuGet packages only
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ci-p1-nuget-win-x64-${{ hashFiles('ARSAS/**/*.csproj', 'ARIEC61850/**/*.csproj', 'ARSAS/Directory.Packages.props', 'ARIEC61850/Directory.Packages.props') }}

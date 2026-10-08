@@ -95,7 +95,7 @@ jobs:
           "ENGINE_FULL_REGRESSION_VERIFIED=true" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup Python for exact-main canonical regression evidence
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
