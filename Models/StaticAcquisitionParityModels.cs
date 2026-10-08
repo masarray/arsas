@@ -12,7 +12,8 @@ public enum StaticAcquisitionParityStatus
     NotAvailable,
     AwaitingOtherIngress,
     Equivalent,
-    Mismatch
+    Mismatch,
+    InsufficientEvidence
 }
 
 /// <summary>
@@ -36,6 +37,8 @@ public sealed class StaticAcquisitionIngressEvidence
     public int UncoveredSignalCount { get; init; }
     public IReadOnlyList<string> SemanticLines { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> RuntimeTargets { get; init; } = Array.Empty<string>();
+    public bool IsComparable { get; init; }
+    public string IncomparableReason { get; init; } = string.Empty;
 
     public string Summary =>
         $"{Ingress}: fingerprint={SemanticFingerprint}, requested={RequestedPointCount}, " +
@@ -56,6 +59,8 @@ public sealed class StaticAcquisitionParitySnapshot
             $"MATCH • {Discovery?.SemanticFingerprint ?? OpenScl?.SemanticFingerprint ?? "unavailable"}",
         StaticAcquisitionParityStatus.Mismatch =>
             $"MISMATCH • discovery={Discovery?.SemanticFingerprint ?? "missing"} • scl={OpenScl?.SemanticFingerprint ?? "missing"}",
+        StaticAcquisitionParityStatus.InsufficientEvidence =>
+            $"INCOMPLETE EVIDENCE • {string.Join("; ", Differences.Take(2))}",
         StaticAcquisitionParityStatus.AwaitingOtherIngress =>
             $"AWAITING PEER INGRESS • {(Discovery is not null ? "Discovery captured" : "Open SCL captured")}",
         _ => "not captured"
