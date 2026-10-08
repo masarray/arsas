@@ -171,6 +171,7 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"Detail           : {device.Detail}");
                 builder.AppendLine($"Acquisition      : {device.AcquisitionMode}");
                 AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
+                AppendReportContinuity(builder, device.ReportContinuityEvidence);
                 if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
                     AppendStaticInitialImage(builder, device.Points);
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
@@ -269,6 +270,48 @@ internal static class DiagnosticReportBuilder
             builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
         if (image.PendingPoints.Count > 12)
             builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
+    }
+
+    internal static void AppendReportContinuity(
+        StringBuilder builder, Iec61850ReportContinuitySnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            builder.AppendLine("Report continuity : NOT CAPTURED • no monitor evidence in current association");
+            return;
+        }
+
+        var verdict = snapshot.Frames == 0 ? "NO FRAME METADATA" :
+            snapshot.UntrackedStreamCount > 0 ? "INCOMPLETE • metadata stream limit reached" :
+            snapshot.Findings > 0 ? "ANOMALY OBSERVED" :
+            snapshot.Sequenced < snapshot.Frames ? "PARTIAL SqNum EVIDENCE" :
+            "OBSERVED WITHOUT SEQUENCE ALERTS";
+        builder.AppendLine($"Report continuity : {verdict} • frames={snapshot.Frames}, " +
+            $"sequenced={snapshot.Sequenced}, processUpdates={snapshot.ProcessUpdatesSeen}, " +
+            $"streams={snapshot.StreamCount}, findings={snapshot.Findings}, " +
+            $"BufOvfl={snapshot.Overflows}, untracked={snapshot.UntrackedStreamCount}");
+        builder.AppendLine("  Qualification   : association-local decoded metadata only; no alerts " +
+            "does not prove SOE/event continuity, GI causality or reconnect/replay completeness.");
+
+        foreach (var (stream, index) in snapshot.Streams.Select((stream, index) => (stream, index)))
+        {
+            static string Safe(string value)
+            {
+                var text = (value ?? string.Empty).Replace("\r", @"\r", StringComparison.Ordinal)
+                    .Replace("\n", @"\n", StringComparison.Ordinal);
+                return text.Length > 240 ? text[..240] + "…[TRUNCATED]" : text;
+            }
+            builder.AppendLine($"  stream[{index}]      : {(stream.Buffered ? "BRCB" : "URCB")}, " +
+                $"rcb={Safe(stream.Rcb)}, dataset={Safe(stream.DataSet)}, " +
+                $"rptId={Safe(stream.ReportId)}, frames={stream.Frames}, " +
+                $"SqNum={stream.Sequenced}, missingSqNum={stream.SequenceMissing}, " +
+                $"segmented={stream.Segmented}, findings={stream.Findings}, " +
+                $"BufOvfl={stream.Overflow}, ConfRevChanges={stream.ConfRevChanges}, " +
+                $"EntryIDPresent={stream.EntryIdPresent}, firstSqNum={stream.FirstSqNum?.ToString() ?? "-"}, " +
+                $"lastSqNum={stream.LastSqNum?.ToString() ?? "-"}");
+        }
+        if (snapshot.StreamCount > snapshot.Streams.Count)
+            builder.AppendLine($"  stream list     : TRUNCATED • shown={snapshot.Streams.Count}, total={snapshot.StreamCount}");
     }
 
     internal static void AppendStaticIngressParity(

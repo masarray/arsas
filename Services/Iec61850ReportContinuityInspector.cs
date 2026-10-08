@@ -16,7 +16,59 @@ internal sealed class Iec61850ReportContinuityState
     public bool AwaitingMoreSegments { get; set; }
     public ulong? ConfigurationRevision { get; set; }
     public string LastEntryIdHex { get; set; } = string.Empty;
+
+    // All counts belong to this exact report stream within the current
+    // association. No static state, no process/control-plane side effects.
+    public string ReportControlReference { get; set; } = string.Empty;
+    public string DataSetReference { get; set; } = string.Empty;
+    public string ReportId { get; set; } = string.Empty;
+    public bool Buffered { get; set; }
+    public long FramesSeen { get; set; }
+    public long SequencedFrames { get; set; }
+    public long MissingSequenceFrames { get; set; }
+    public long SegmentedFrames { get; set; }
+    public long AnomalyFindings { get; set; }
+    public long BufferOverflows { get; set; }
+    public long ConfRevChanges { get; set; }
+    public long EntryIdPresentFrames { get; set; }
+    public ulong? FirstSequenceNumber { get; set; }
 }
+
+/// <summary>
+/// Immutable copyable diagnostic evidence. Counts describe decoded metadata,
+/// NOT completeness of SOE delivery or absence of lost events.
+/// </summary>
+public sealed record Iec61850ReportContinuityStreamSnapshot
+{
+    public string Rcb { get; init; } = string.Empty;
+    public string DataSet { get; init; } = string.Empty;
+    public string ReportId { get; init; } = string.Empty;
+    public bool Buffered { get; init; }
+    public long Frames { get; init; }
+    public long Sequenced { get; init; }
+    public long SequenceMissing { get; init; }
+    public long Segmented { get; init; }
+    public long Findings { get; init; }
+    public long Overflow { get; init; }
+    public long ConfRevChanges { get; init; }
+    public long EntryIdPresent { get; init; }
+    public ulong? FirstSqNum { get; init; }
+    public ulong? LastSqNum { get; init; }
+}
+
+public sealed record Iec61850ReportContinuitySnapshot
+{
+    public long ProcessUpdatesSeen { get; init; }
+    public int StreamCount { get; init; }
+    public int UntrackedStreamCount { get; init; }
+    public long Frames { get; init; }
+    public long Sequenced { get; init; }
+    public long Findings { get; init; }
+    public long Overflows { get; init; }
+    public IReadOnlyList<Iec61850ReportContinuityStreamSnapshot> Streams { get; init; } =
+        Array.Empty<Iec61850ReportContinuityStreamSnapshot>();
+}
+
 
 internal static class Iec61850ReportContinuityInspector
 {
@@ -35,8 +87,25 @@ internal static class Iec61850ReportContinuityInspector
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(frame);
 
+        if (state.FramesSeen < long.MaxValue) state.FramesSeen++;
+        if (frame.SequenceNumber.HasValue)
+        {
+            if (state.SequencedFrames < long.MaxValue) state.SequencedFrames++;
+            if (frame.SequenceNumber.Value <= MaxSequenceNumber)
+                state.FirstSequenceNumber ??= frame.SequenceNumber;
+        }
+        else if (state.MissingSequenceFrames < long.MaxValue) state.MissingSequenceFrames++;
+        if (frame.SubSequenceNumber.HasValue && state.SegmentedFrames < long.MaxValue)
+            state.SegmentedFrames++;
+        if (!string.IsNullOrEmpty(frame.EntryIdHex) && state.EntryIdPresentFrames < long.MaxValue)
+            state.EntryIdPresentFrames++;
+
         List<string>? findings = null;
-        void Warn(string message) => (findings ??= new List<string>(2)).Add(message);
+        void Warn(string message)
+        {
+            (findings ??= new List<string>(2)).Add(message);
+            if (state.AnomalyFindings < long.MaxValue) state.AnomalyFindings++;
+        }
 
         var priorEntryIdPresent = !string.IsNullOrEmpty(state.LastEntryIdHex);
         var entryIdPresent = !string.IsNullOrEmpty(frame.EntryIdHex);
@@ -50,6 +119,7 @@ internal static class Iec61850ReportContinuityInspector
 
         if (frame.BufferOverflow == true)
         {
+            if (state.BufferOverflows < long.MaxValue) state.BufferOverflows++;
             Warn(buffered
                 ? "BRCB BufOvfl=true: possible loss of buffered entries; continuity cannot be certified from SqNum alone"
                 : "URCB carried unexpected BufOvfl=true; inspect report OptionFields/decoder attribution");
@@ -60,6 +130,7 @@ internal static class Iec61850ReportContinuityInspector
             if (state.ConfigurationRevision.HasValue &&
                 state.ConfigurationRevision.Value != frame.ConfRev.Value)
             {
+                if (state.ConfRevChanges < long.MaxValue) state.ConfRevChanges++;
                 Warn($"Report ConfRev changed: previous={state.ConfigurationRevision.Value}, " +
                      $"current={frame.ConfRev.Value}; DataSet schema and member bindings require revalidation");
             }
@@ -137,6 +208,49 @@ internal static class Iec61850ReportContinuityInspector
             state.LastEntryIdHex = frame.EntryIdHex;
 
         return findings is null ? Array.Empty<string>() : findings;
+    }
+
+    internal static Iec61850ReportContinuitySnapshot Snapshot(
+        IReadOnlyDictionary<string, Iec61850ReportContinuityState> streams,
+        long processUpdatesSeen,
+        int untrackedStreamCount,
+        int maxShown = 12)
+    {
+        ArgumentNullException.ThrowIfNull(streams);
+        var ordered = streams.Values
+            .OrderBy(state => state.ReportControlReference, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(state => state.ReportId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(state => state.DataSetReference, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var shown = ordered.Take(Math.Clamp(maxShown, 0, 32)).Select(state =>
+            new Iec61850ReportContinuityStreamSnapshot
+            {
+                Rcb = state.ReportControlReference,
+                DataSet = state.DataSetReference,
+                ReportId = state.ReportId,
+                Buffered = state.Buffered,
+                Frames = state.FramesSeen,
+                Sequenced = state.SequencedFrames,
+                SequenceMissing = state.MissingSequenceFrames,
+                Segmented = state.SegmentedFrames,
+                Findings = state.AnomalyFindings,
+                Overflow = state.BufferOverflows,
+                ConfRevChanges = state.ConfRevChanges,
+                EntryIdPresent = state.EntryIdPresentFrames,
+                FirstSqNum = state.FirstSequenceNumber,
+                LastSqNum = state.LastSequenceNumber
+            }).ToArray();
+        return new Iec61850ReportContinuitySnapshot
+        {
+            ProcessUpdatesSeen = processUpdatesSeen,
+            StreamCount = ordered.Length,
+            UntrackedStreamCount = untrackedStreamCount,
+            Frames = ordered.Sum(state => state.FramesSeen),
+            Sequenced = ordered.Sum(state => state.SequencedFrames),
+            Findings = ordered.Sum(state => state.AnomalyFindings),
+            Overflows = ordered.Sum(state => state.BufferOverflows),
+            Streams = shown
+        };
     }
 
     private static string? DescribeSequenceAnomaly(ulong? previous, ulong current)
