@@ -179,21 +179,19 @@ jobs:
         ]
         expected_group = (
             "group: ${{ github.workflow }}-"
-            "${{ github.event.pull_request.number || github.run_id }}"
+            "${{ github.event_name == 'pull_request' && "
+            "github.event.pull_request.number || github.run_id }}"
         )
-        expected_cancel = (
-            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
-        )
+        expected_cancel = "cancel-in-progress: true"
         for relative in workflows:
             source = (repo / relative).read_text(encoding="utf-8")
             self.assertIn(expected_group, source, relative)
             self.assertIn(expected_cancel, source, relative)
-            self.assertNotIn("cancel-in-progress: true", source, relative)
 
         release = (repo / ".github/workflows/release-windows.yml").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn(expected_cancel, release)
+        self.assertNotIn(expected_group, release)
 
     def test_budget_rejects_new_duplicate_build_cost(self):
         self.write(
