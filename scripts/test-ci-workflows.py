@@ -163,6 +163,36 @@ jobs:
             any("duplicate job id 'validate'" in item for item in report["structureErrors"])
         )
 
+    def test_p3h_windows_pr_workflows_cancel_only_superseded_pr_runs(self):
+        repo = Path(__file__).resolve().parents[1]
+        workflows = [
+            ".github/workflows/build.yml",
+            ".github/workflows/installer-windows.yml",
+            ".github/workflows/smart-discovery-mainline-readiness.yml",
+            ".github/workflows/rcb-export-guard.yml",
+            ".github/workflows/validate-sv-evidence.yml",
+            ".github/workflows/validate-io-testing.yml",
+            ".github/workflows/comtrade-viewer-integration.yml",
+            ".github/workflows/smart-discovery-golden-provenance.yml",
+            ".github/workflows/smart-discovery-golden-budget-lock.yml",
+            ".github/workflows/smart-discovery-repeat-run-stability.yml",
+        ]
+        expected_group = (
+            "group: ${{ github.workflow }}-"
+            "${{ github.event_name == 'pull_request' && "
+            "github.event.pull_request.number || github.run_id }}"
+        )
+        expected_cancel = "cancel-in-progress: true"
+        for relative in workflows:
+            source = (repo / relative).read_text(encoding="utf-8")
+            self.assertIn(expected_group, source, relative)
+            self.assertIn(expected_cancel, source, relative)
+
+        release = (repo / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn(expected_group, release)
+
     def test_budget_rejects_new_duplicate_build_cost(self):
         self.write(
             ".github/workflows/build.yml",

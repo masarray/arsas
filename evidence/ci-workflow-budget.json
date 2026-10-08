@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3G: release-ready gate defers Windows release allocation",
-  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3F establish reproducible exact-byte promotion and defer installer Windows allocation. P3G adds a metadata-only Ubuntu release gate so production Windows release capacity is allocated only after the exact canonical package and exact completed-success validated installer artifacts exist; all byte/hash/TRX/runtime/release verification remains in the Windows release authority.",
+  "baselineName": "CI-P3H: cancel superseded Windows PR runs",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. P3H changes scheduling only: Windows-heavy pull_request workflows cancel stale revisions when a newer commit arrives, while push/main, tag, release and workflow_dispatch runs remain non-cancellable. Exact artifact, regression, installer and release authority contracts are unchanged.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -568,5 +568,34 @@
       "persistent404TimesOut": true
     },
     "rollback": "Remove release-ready job and windows-release needs/if dependency to restore direct Windows polling. Keep exact package and installer verifiers, runtime smoke and release authority unchanged."
+  },
+  "ciP3SupersededPrCancellation": {
+    "issueNumber": 464,
+    "lane": "windows-heavy-pull-request-workflows",
+    "approach": "Share one concurrency group only for the same pull request; all non-PR events fall back to unique github.run_id. cancel-in-progress is unconditional inside the group, so only stale PR revisions can collide and be cancelled.",
+    "staticLimitsChanged": false,
+    "affectedWorkflows": [
+      "build.yml",
+      "installer-windows.yml",
+      "smart-discovery-mainline-readiness.yml",
+      "rcb-export-guard.yml",
+      "validate-sv-evidence.yml",
+      "validate-io-testing.yml",
+      "comtrade-viewer-integration.yml",
+      "smart-discovery-golden-provenance.yml",
+      "smart-discovery-golden-budget-lock.yml",
+      "smart-discovery-repeat-run-stability.yml"
+    ],
+    "groupExpression": "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}",
+    "cancelExpression": "true",
+    "pullRequestSupersession": true,
+    "pushMainCancellation": false,
+    "tagCancellation": false,
+    "manualCancellation": false,
+    "releaseAuthorityChanged": false,
+    "canonicalPackageAuthorityChanged": false,
+    "installerAuthorityChanged": false,
+    "rollback": "Remove the P3H concurrency blocks from affected workflows. Never broaden cancel-in-progress to main/tag/manual runs.",
+    "observedFirstAttempt": "Event-scoped cancel expression left newer runs pending behind older runs; corrected to unique non-PR grouping plus unconditional cancellation."
   }
 }
