@@ -199,15 +199,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
 
                 importedSources.Add((sourcePath, document.SourceSha256));
-                offlineCount += document.Ieds.Count(item => item.CanBrowseOffline);
-                endpointCount += document.Ieds.Count(item => !item.RequiresEndpointBinding);
+                var workspaces = SelectPrimarySclWorkspaces(document);
+                offlineCount += workspaces.Count(item => item.CanBrowseOffline);
+                endpointCount += workspaces.Count(item => !item.RequiresEndpointBinding);
 
-                foreach (var workspace in document.Ieds)
+                if (workspaces.Count < document.Ieds.Count)
                 {
-                    var device = Devices.FirstOrDefault(item =>
-                        item.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
-                        item.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
-                        item.SclAccessPointName.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase));
+                    AddLog(
+                        "INFO",
+                        "SCL",
+                        $"{sourceName}: collapsed {document.Ieds.Count} AccessPoint workspace(s) into {workspaces.Count} logical IED card(s); one Engineering card is owned per IEDName.");
+                }
+
+                foreach (var workspace in workspaces)
+                {
+                    var device = FindReusableSclDevice(document, workspace);
 
                     if (device != null && (device.IsConnected || device.IsBusy || device.IsMonitoring))
                     {
@@ -230,6 +236,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
 
                     ApplySclWorkspaceToDevice(device, document, workspace, signals);
+                    RestoreKnownSclEndpointIfAvailable(device, workspace);
+                    RemoveRedundantOfflineSclCards(device, document.SourceSha256, workspace.IedName);
                     firstImported ??= device;
                     importedDevices.Add(device);
                 }
@@ -377,12 +385,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.SclIedName = workspace.IedName;
         device.SclAccessPointName = workspace.AccessPointName;
         device.HasDiscoveryCache = signals.Count > 0;
-        device.Status = workspace.RequiresEndpointBinding ? "SCL model ready — bind endpoint" : "SCL model ready";
+
+        // The SCL may omit a direct MMS address while this exact IEDName already has a
+        // previously proven endpoint in the current workspace. Do not erase that runtime
+        // identity merely because the design file is offline-only.
+        var requiresEndpointBinding = string.IsNullOrWhiteSpace(device.IpAddress);
+        device.Status = requiresEndpointBinding ? "SCL model ready — bind endpoint" : "SCL model ready";
         device.Detail = allowDynamicReporting
-            ? (workspace.RequiresEndpointBinding
+            ? (requiresEndpointBinding
                 ? "LD/LN/DO/DA are available offline. Static report coverage is incomplete; after signal selection and endpoint binding, ARSAS will create an association-scoped dynamic DataSet and use a safe free RCB before polling fallback."
                 : "LD/LN/DO/DA were loaded offline. Static report coverage is incomplete; ARSAS will use static coverage where available and create an association-scoped dynamic DataSet for uncovered selected signals before polling fallback.")
-            : (workspace.RequiresEndpointBinding
+            : (requiresEndpointBinding
                 ? "LD/LN/DO/DA are available offline. Press Play to bind an MMS endpoint; no discovery traffic was sent while opening the file."
                 : "LD/LN/DO/DA were loaded offline. Play performs a fast MMS association; Re-scan performs full design-versus-live verification.");
         device.AcquisitionMode = allowDynamicReporting
@@ -399,6 +412,109 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.RecountSelectedSignals();
         device.RefreshComputed();
         ScheduleGooseBindingRefreshFromWorkspace();
+    }
+
+    private IReadOnlyList<SclIedWorkspace> SelectPrimarySclWorkspaces(SclWorkspaceDocument document)
+    {
+        return document.Ieds
+            .GroupBy(workspace => workspace.IedName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(workspace => workspace.PreferredEndpoint?.HasUsableAddress == true)
+                .ThenByDescending(workspace => document.EngineeringProfile.AccessPoints.Any(accessPoint =>
+                    accessPoint.IedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
+                    accessPoint.Name.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase) &&
+                    accessPoint.HasServer))
+                .ThenByDescending(workspace => workspace.ReportControls.Count)
+                .ThenByDescending(workspace => workspace.DataSets.Count)
+                .ThenByDescending(workspace => workspace.DesignModel.Coverage.LogicalDeviceCount)
+                .ThenBy(workspace => workspace.AccessPointName, StringComparer.OrdinalIgnoreCase)
+                .First())
+            .OrderBy(workspace => workspace.IedName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private Iec61850MonitorDevice? FindReusableSclDevice(
+        SclWorkspaceDocument document,
+        SclIedWorkspace workspace)
+    {
+        var exactSource = Devices
+            .Where(item =>
+                item.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
+                item.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.IsConnected || item.IsMonitoring)
+            .ThenByDescending(item => !string.IsNullOrWhiteSpace(item.IpAddress))
+            .FirstOrDefault();
+        if (exactSource != null)
+            return exactSource;
+
+        var sclEndpoint = workspace.PreferredEndpoint;
+        return Devices
+            .Where(item => item.Name.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase))
+            .Where(item =>
+                sclEndpoint?.HasUsableAddress != true ||
+                string.IsNullOrWhiteSpace(item.IpAddress) ||
+                (item.IpAddress.Equals(sclEndpoint.IpAddress, StringComparison.OrdinalIgnoreCase) &&
+                 item.Port == sclEndpoint.Port))
+            .OrderByDescending(item => item.IsConnected || item.IsMonitoring)
+            .ThenByDescending(item => !string.IsNullOrWhiteSpace(item.IpAddress))
+            .ThenByDescending(item => item.HasDiscoveryCache)
+            .FirstOrDefault();
+    }
+
+    private void RestoreKnownSclEndpointIfAvailable(
+        Iec61850MonitorDevice device,
+        SclIedWorkspace workspace)
+    {
+        if (!string.IsNullOrWhiteSpace(device.IpAddress) ||
+            workspace.PreferredEndpoint?.HasUsableAddress == true)
+        {
+            return;
+        }
+
+        if (!UserPreferenceStore.TryLoadSuccessfulEndpointForIed(
+                workspace.IedName,
+                out var ipAddress,
+                out var port))
+        {
+            return;
+        }
+
+        device.IpAddress = ipAddress;
+        device.Port = port;
+        device.Status = "SCL model ready • remembered endpoint";
+        device.Detail =
+            $"The SCL does not declare a direct MMS IP for this AccessPoint. ARSAS restored {ipAddress}:{port} from the most recent successful session for the exact IEDName '{workspace.IedName}'. Play will validate it with a fresh MMS association before any live operation.";
+        device.RefreshComputed();
+        AddLog(
+            "INFO",
+            device.Name,
+            $"SCL has no direct MMS endpoint; restored previously successful endpoint {ipAddress}:{port} for exact IEDName {workspace.IedName}. Live use still requires a fresh association.");
+    }
+
+    private void RemoveRedundantOfflineSclCards(
+        Iec61850MonitorDevice keeper,
+        string sourceSha256,
+        string iedName)
+    {
+        var redundant = Devices
+            .Where(item =>
+                !ReferenceEquals(item, keeper) &&
+                !item.IsConnected &&
+                !item.IsMonitoring &&
+                !item.IsBusy &&
+                item.SclSourceSha256.Equals(sourceSha256, StringComparison.OrdinalIgnoreCase) &&
+                item.SclIedName.Equals(iedName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        foreach (var item in redundant)
+        {
+            DetachSignalHandlers(item.Signals);
+            Devices.Remove(item);
+            AddLog(
+                "INFO",
+                "SCL",
+                $"Removed redundant offline AccessPoint card {item.SclIedName}/{item.SclAccessPointName}; logical IED ownership remains on one Engineering card.");
+        }
     }
 
     private static string BuildSclWorkspaceSummary(SclIedWorkspace workspace)
@@ -2342,6 +2458,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var button = sender as Button;
         var previousContent = button?.Content;
+        Iec61850MonitorDevice[] devices = Array.Empty<Iec61850MonitorDevice>();
+        DiagnosticEntry[] logs = Array.Empty<DiagnosticEntry>();
+
         try
         {
             if (button != null)
@@ -2353,8 +2472,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Include any protocol entries that are still waiting for the normal
             // 100 ms UI batch before taking an immutable support snapshot.
             UiFlushTimer_Tick(null, EventArgs.Empty);
-            var devices = Devices.ToArray();
-            var logs = Logs.ToArray();
+            devices = Devices.ToArray();
+            logs = Logs.ToArray();
             var report = await DiagnosticReportBuilder.BuildAsync(
                 devices,
                 logs,
@@ -2371,8 +2490,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            AddLog("ERROR", "Diagnostics", $"Copy Diagnostic failed: {ex.GetType().Name}: {ex.Message}");
-            SetStatus("Copy Diagnostic failed. The error is recorded in Diagnostics.");
+            // Support evidence must remain available precisely when workspace state is
+            // broken. Fall back to a probe-free report instead of turning diagnostics
+            // into a second failure that hides the original defect.
+            try
+            {
+                if (devices.Length == 0)
+                    devices = Devices.ToArray();
+                if (logs.Length == 0)
+                    logs = Logs.ToArray();
+
+                var fallback = DiagnosticReportBuilder.BuildEmergency(
+                    devices,
+                    logs,
+                    SelectedDevice,
+                    ex);
+                Clipboard.SetText(fallback, TextDataFormat.UnicodeText);
+                AddLog(
+                    "WARN",
+                    "Diagnostics",
+                    $"Normal diagnostic collection degraded ({ex.GetType().Name}: {ex.Message}); emergency support report copied instead.");
+                SetStatus($"Emergency diagnostic report copied ({fallback.Length:N0} characters). Paste it into the support conversation.");
+            }
+            catch (Exception fallbackError)
+            {
+                AddLog(
+                    "ERROR",
+                    "Diagnostics",
+                    $"Copy Diagnostic failed after emergency fallback: {fallbackError.GetType().Name}: {fallbackError.Message}; original={ex.GetType().Name}: {ex.Message}");
+                SetStatus("Copy Diagnostic could not access the Windows clipboard. The collection error remains recorded in Diagnostics.");
+            }
         }
         finally
         {

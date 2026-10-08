@@ -79,6 +79,51 @@ public static class UserPreferenceStore
         File.WriteAllText(PreferencesPath, JsonSerializer.Serialize(prefs, Options));
     }
 
+    public static bool TryLoadSuccessfulEndpointForIed(
+        string iedName,
+        out string ipAddress,
+        out int port)
+    {
+        ipAddress = string.Empty;
+        port = 102;
+
+        var nameKey = NormalizeName(iedName);
+        if (string.IsNullOrWhiteSpace(nameKey))
+            return false;
+
+        var prefs = LoadPreferences();
+        var endpoint = prefs.SuccessfulRelays
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.IpAddress) &&
+                NormalizeName(item.IedName).Equals(nameKey, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.LastConnectedUtc)
+            .FirstOrDefault();
+
+        if (endpoint != null)
+        {
+            ipAddress = endpoint.IpAddress.Trim();
+            port = endpoint.MmsPort <= 0 ? 102 : endpoint.MmsPort;
+            return true;
+        }
+
+        // Older preference files may have the IEDName-to-endpoint relation only in the
+        // signal-selection profile. This is still user-local, previously successful intent;
+        // use it only as a fallback when no successful-relay record exists.
+        var profile = prefs.SignalSelectionProfiles
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.IpAddress) &&
+                NormalizeName(item.IedName).Equals(nameKey, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.LastSavedUtc)
+            .FirstOrDefault();
+
+        if (profile == null)
+            return false;
+
+        ipAddress = profile.IpAddress.Trim();
+        port = profile.Port <= 0 ? 102 : profile.Port;
+        return true;
+    }
+
     public static IReadOnlyCollection<string> LoadSignalSelectionProfile(string iedName, string ipAddress, int port)
     {
         var prefs = LoadPreferences();

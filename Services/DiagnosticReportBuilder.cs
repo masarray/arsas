@@ -11,9 +11,59 @@ namespace ArIED61850Tester.Services;
 
 internal static class DiagnosticReportBuilder
 {
-    private sealed record TcpProbeResult(string Endpoint, string Result, string Detail);
+    private sealed record TcpProbeResult(string DeviceId, string Endpoint, string Result, string Detail);
     private sealed record AdapterIpv4(string Name, NetworkInterfaceType Type, IPAddress Address, int PrefixLength);
     private sealed record RouteAnalysis(string Source, string MatchingAdapters, string AdapterMatrix, string Note);
+
+    public static string BuildEmergency(
+        IReadOnlyCollection<Iec61850MonitorDevice> devices,
+        IReadOnlyCollection<DiagnosticEntry> logs,
+        Iec61850MonitorDevice? selectedDevice,
+        Exception collectionFailure)
+    {
+        ArgumentNullException.ThrowIfNull(collectionFailure);
+
+        var appAssembly = Assembly.GetEntryAssembly() ?? typeof(DiagnosticReportBuilder).Assembly;
+        var engineAssembly = typeof(AR.Iec61850.Mms.MmsClientSession).Assembly;
+        var builder = new StringBuilder(16 * 1024);
+        builder.AppendLine("ARSAS Emergency Diagnostic Report");
+        builder.AppendLine("Diagnostic collection degraded, but support evidence was preserved.");
+        builder.AppendLine(new string('=', 72));
+        builder.AppendLine($"Generated local : {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}");
+        builder.AppendLine($"App version     : {GetAssemblyVersion(appAssembly)}");
+        builder.AppendLine($"Engine version  : {GetAssemblyVersion(engineAssembly)}");
+        builder.AppendLine($"Collection error: {collectionFailure.GetType().Name}: {collectionFailure.Message}");
+        builder.AppendLine($"IED count       : {devices.Count}");
+        builder.AppendLine($"Selected IED    : {selectedDevice?.Name ?? "none"}");
+        builder.AppendLine();
+
+        builder.AppendLine("IED SNAPSHOT");
+        builder.AppendLine(new string('-', 72));
+        foreach (var device in devices)
+        {
+            builder.AppendLine(
+                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status}");
+        }
+        if (devices.Count == 0)
+            builder.AppendLine("No IED card is present.");
+
+        builder.AppendLine();
+        builder.AppendLine("RECENT DIAGNOSTICS");
+        builder.AppendLine(new string('-', 72));
+        foreach (var entry in logs.OrderBy(item => item.Time).TakeLast(200))
+        {
+            builder.AppendLine(
+                $"{entry.Time:yyyy-MM-dd HH:mm:ss.fff} | {entry.Level} | {entry.Source} | {entry.Message}");
+        }
+        if (logs.Count == 0)
+            builder.AppendLine("No diagnostic entries.");
+
+        builder.AppendLine();
+        builder.AppendLine("NOTE");
+        builder.AppendLine(new string('-', 72));
+        builder.AppendLine("This fallback report intentionally skips network probes and complex aggregation so diagnostics remain copyable even when the normal collector encounters malformed workspace state.");
+        return builder.ToString();
+    }
 
     public static async Task<string> BuildAsync(
         IReadOnlyCollection<Iec61850MonitorDevice> devices,
@@ -24,7 +74,14 @@ internal static class DiagnosticReportBuilder
         var appAssembly = Assembly.GetEntryAssembly() ?? typeof(DiagnosticReportBuilder).Assembly;
         var engineAssembly = typeof(AR.Iec61850.Mms.MmsClientSession).Assembly;
         var probes = await Task.WhenAll(devices.Select(device => ProbeDeviceAsync(device, cancellationToken))).ConfigureAwait(false);
-        var probeByEndpoint = probes.ToDictionary(result => result.Endpoint, StringComparer.OrdinalIgnoreCase);
+
+        // Diagnostics must remain available even when the workspace itself is malformed,
+        // duplicated, offline-only or contains multiple cards with the same endpoint text
+        // (for example "No endpoint"). DeviceId is the stable per-card identity; endpoint
+        // text is evidence, not a dictionary key.
+        var probeByDeviceId = probes
+            .GroupBy(result => result.DeviceId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
         var builder = new StringBuilder(64 * 1024);
         builder.AppendLine("ARSAS Diagnostic Report");
@@ -69,7 +126,7 @@ internal static class DiagnosticReportBuilder
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var diagnostic = device.LastDiagnosticSnapshot ?? new Iec61850DeviceDiagnosticSnapshot();
-                probeByEndpoint.TryGetValue(device.EndpointText, out var probe);
+                probeByDeviceId.TryGetValue(device.DeviceId, out var probe);
 
                 builder.AppendLine($"IED              : {device.Name}");
                 builder.AppendLine($"Endpoint         : {device.EndpointText}");
@@ -274,10 +331,10 @@ internal static class DiagnosticReportBuilder
         CancellationToken cancellationToken)
     {
         if (device.IsConnected)
-            return new TcpProbeResult(device.EndpointText, "SKIPPED", "active MMS session already connected");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "SKIPPED", "active MMS session already connected");
 
         if (string.IsNullOrWhiteSpace(device.IpAddress) || device.Port is <= 0 or > 65535)
-            return new TcpProbeResult(device.EndpointText, "INVALID", "invalid endpoint");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "INVALID", "invalid endpoint");
 
         using var client = new TcpClient();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -287,12 +344,13 @@ internal static class DiagnosticReportBuilder
         {
             await client.ConnectAsync(device.IpAddress, device.Port, timeout.Token).ConfigureAwait(false);
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "OPEN", $"TCP accepted in {stopwatch.Elapsed.TotalMilliseconds:0} ms");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "OPEN", $"TCP accepted in {stopwatch.Elapsed.TotalMilliseconds:0} ms");
         }
         catch (SocketException ex)
         {
             stopwatch.Stop();
             return new TcpProbeResult(
+                device.DeviceId,
                 device.EndpointText,
                 ex.SocketErrorCode == SocketError.ConnectionRefused ? "REFUSED" : "SOCKET_ERROR",
                 $"SocketError={ex.SocketErrorCode}; {ex.Message}; {stopwatch.Elapsed.TotalMilliseconds:0} ms");
@@ -300,12 +358,12 @@ internal static class DiagnosticReportBuilder
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "TIMEOUT", $"> {stopwatch.Elapsed.TotalMilliseconds:0} ms");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "TIMEOUT", $"> {stopwatch.Elapsed.TotalMilliseconds:0} ms");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "FAILED", $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 
