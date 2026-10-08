@@ -38,6 +38,58 @@ internal static class StaticAcquisitionParityTracker
         return updated;
     }
 
+    /// <summary>
+    /// Credits actual schema-safe routed process report traffic to one exact planned RCB,
+    /// and only to the planning attempt that owns this association. A previous association,
+    /// a sibling RCB or a different ingress must not satisfy this proof.
+    /// No MMS calls, RCB writes or fallback behaviors originate here.
+    /// </summary>
+    internal static bool TryRecordRoutedReport(
+        Iec61850MonitorDevice device,
+        ReportControlPlan plan,
+        Guid expectedPlanningAttemptId,
+        out StaticAcquisitionParitySnapshot updated)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var previous = device.StaticAcquisitionParity;
+        updated = previous;
+        if (expectedPlanningAttemptId == Guid.Empty ||
+            !plan.IsEngineAuthoritative ||
+            !plan.EngineAcquisitionKind.StartsWith("Static", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var evidence = previous.Discovery?.PlanningAttemptId == expectedPlanningAttemptId
+            ? previous.Discovery
+            : previous.OpenScl?.PlanningAttemptId == expectedPlanningAttemptId
+                ? previous.OpenScl
+                : null;
+
+        if (evidence is null || evidence.Ingress != ResolveIngress(device))
+            return false;
+
+        var target = BuildRuntimeTarget(plan);
+        if (!evidence.RuntimeTargets.Contains(target, StringComparer.Ordinal) ||
+            evidence.RoutedReportTargets.Contains(target, StringComparer.Ordinal))
+            return false;
+
+        var routed = evidence.RoutedReportTargets.Append(target)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToArray();
+        var credited = evidence with
+        {
+            RoutedReportTargets = routed,
+            FirstRoutedReportAtUtc = evidence.FirstRoutedReportAtUtc ?? DateTimeOffset.UtcNow
+        };
+
+        updated = Compare(
+            evidence.Ingress == StaticAcquisitionIngressKind.LiveDiscovery ? credited : previous.Discovery,
+            evidence.Ingress == StaticAcquisitionIngressKind.OpenScl ? credited : previous.OpenScl);
+        device.StaticAcquisitionParity = updated;
+        return true;
+    }
+
     internal static StaticAcquisitionIngressEvidence BuildEvidence(
         Iec61850MonitorDevice device,
         NativeHybridReportPlanningResult planning,
@@ -114,9 +166,7 @@ internal static class StaticAcquisitionParityTracker
                 $"{kind}|dataset={dataSetReference}|members={members.Length}[{string.Join(",", members)}]|" +
                 $"selected={selected.Length}[{string.Join(",", selected)}]");
 
-            runtimeTargets.Add(
-                $"{kind}|dataset={dataSetReference}|rcb={NormalizeReference(plan.ReportControlReference)}|" +
-                $"bindings={plan.Bindings.Count}");
+            runtimeTargets.Add(BuildRuntimeTarget(plan));
         }
 
         var canonicalText = string.Join("\n", semanticLines);
@@ -206,6 +256,10 @@ internal static class StaticAcquisitionParityTracker
             Differences = differences
         };
     }
+
+    private static string BuildRuntimeTarget(ReportControlPlan plan)
+        => $"{NormalizeKind(plan.EngineAcquisitionKind)}|dataset={NormalizeReference(plan.DataSetReference)}|" +
+           $"rcb={NormalizeReference(plan.ReportControlReference)}|bindings={plan.Bindings.Count}";
 
     private static StaticAcquisitionIngressKind ResolveIngress(Iec61850MonitorDevice device)
     {
