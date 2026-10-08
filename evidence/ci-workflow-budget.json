@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3H: cancel superseded Windows PR runs",
-  "policy": "P0 historical workflow-sprawl baseline remains immutable. P3H changes scheduling only: Windows-heavy pull_request workflows cancel stale revisions when a newer commit arrives, while push/main, tag, release and workflow_dispatch runs remain non-cancellable. Exact artifact, regression, installer and release authority contracts are unchanged.",
+  "baselineName": "CI-P3I: canonical domain-test proof replaces duplicate specialized PR compilation",
+  "policy": "P0 historical workflow-sprawl baseline remains immutable. P3I preserves static topology and manual focused diagnostics, but SV Evidence and IO Testing PR runs consume exact canonical Build ARSAS TRX proof for their required test families on ubuntu-latest instead of compiling/testing the same application again on windows-latest.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -597,5 +597,43 @@
     "installerAuthorityChanged": false,
     "rollback": "Remove the P3H concurrency blocks from affected workflows. Never broaden cancel-in-progress to main/tag/manual runs.",
     "observedFirstAttempt": "Event-scoped cancel expression left newer runs pending behind older runs; corrected to unique non-PR grouping plus unconditional cancellation."
+  },
+  "ciP3SpecializedTestPromotion": {
+    "issueNumber": 467,
+    "lane": "validate-sv-evidence + validate-io-testing",
+    "approach": "On pull_request, preserve workflow/job check names but run on ubuntu-latest, resolve exact engine lock, and require exact canonical Build ARSAS all-pass TRX plus explicit domain test-family presence. workflow_dispatch retains existing focused Windows restore/build/test diagnostics.",
+    "staticLimitsChanged": false,
+    "addedWorkflowFiles": 0,
+    "addedCheckoutActions": 0,
+    "addedSetupPythonActions": 0,
+    "addedSetupDotnetActions": 0,
+    "addedUploadArtifactActions": 0,
+    "prWindowsRunnerRequired": false,
+    "canonicalIdentity": [
+      "PR head/branch",
+      "synthetic merge/source SHA",
+      "ARIEC61850 SHA",
+      "Build ARSAS run ID/attempt",
+      "canonical TRX SHA-256 and all-pass counters"
+    ],
+    "requiredDomainTests": {
+      "sv": [
+        "SmvSnapshotEvidenceExporterTests"
+      ],
+      "io": [
+        "IoTest",
+        "IoList",
+        "IoFat",
+        "FatDataSet",
+        "FatScl"
+      ]
+    },
+    "missingDomainTestFailsClosed": true,
+    "nonPassingDomainMatchFailsClosed": true,
+    "manualFocusedWindowsDiagnosticsRetained": true,
+    "releaseAuthorityChanged": false,
+    "packageAuthorityChanged": false,
+    "physicalAuthorityChanged": false,
+    "rollback": "Restore pull_request execution to the focused Windows restore/build/test path. Never waive exact canonical identity or required domain-test assertions to make a specialized check pass."
   }
 }
