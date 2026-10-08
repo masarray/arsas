@@ -78,6 +78,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
         public StaticDataSetReportProjectionAccumulator StaticReportProjection { get; } = new();
         public bool StaticDataSetReportOnly { get; set; }
+        public Guid CurrentStaticParityAttemptId { get; set; }
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
@@ -1017,6 +1018,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<ReportControlPlan> legacyPlans,
         CancellationToken cancellationToken)
     {
+        session.CurrentStaticParityAttemptId = Guid.Empty;
         if (session.Client.CanUseHybridReportPlanner(session.Device))
         {
             NativeHybridReportPlanningResult hybrid;
@@ -1051,6 +1053,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             if (session.StaticDataSetReportOnly)
             {
                 var parity = StaticAcquisitionParityTracker.Record(session.Device, hybrid);
+                var ingressEvidence = session.Device.SclWorkspace?.DesignModel is not null
+                    ? parity.OpenScl : parity.Discovery;
+                session.CurrentStaticParityAttemptId = ingressEvidence?.PlanningAttemptId ?? Guid.Empty;
                 Log(
                     parity.Status is StaticAcquisitionParityStatus.Mismatch or StaticAcquisitionParityStatus.InsufficientEvidence ? "WARN" : "INFO",
                     session.Device.Name,
@@ -1272,6 +1277,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
                     trustReportEdge: true,
                     hasProcessValue: update.HasValue);
+
+                // A routed, schema-safe process value is the data-plane proof. RptEna,
+                // GI, raw/unrouted frames, rejected values, or stale associations
+                // cannot satisfy exact per-RCB ingress qualification.
+                if (session.StaticDataSetReportOnly && update.HasValue &&
+                    StaticAcquisitionParityTracker.TryRecordRoutedReport(
+                        session.Device, plan, session.CurrentStaticParityAttemptId,
+                        out var updatedParity))
+                {
+                    Log("INFO", session.Device.Name,
+                        $"Static RCB routed traffic proven for {plan.ReportControlReference} / {plan.DataSetReference}. " +
+                        $"{updatedParity.TrafficQualificationSummary}. Semantic parity: {updatedParity.Summary}. " +
+                        "No cyclic MMS process polling was introduced.");
+                }
                 }
             }
 
@@ -1942,6 +1961,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private static void ResetAssociationReportEvidence(DeviceSession session)
     {
+        session.CurrentStaticParityAttemptId = Guid.Empty;
         // InformationReport proof is association-scoped. A report observed on the old
         // socket must never make the replacement association look TrafficProven before
         // the first routed report of the new generation arrives.
@@ -1990,6 +2010,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private void MarkSessionOffline(DeviceSession session, string detail)
     {
+        // Retain timestamped historical ingress proof but do not let the old socket
+        // credit a future planning attempt after transport loss.
+        session.CurrentStaticParityAttemptId = Guid.Empty;
         var wasConnected = session.Device.IsConnected;
         session.Device.IsConnected = false;
         session.Device.HasReportStream = false;
