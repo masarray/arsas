@@ -1930,6 +1930,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     private static void ResetAssociationReportEvidence(DeviceSession session)
     {
+        // InformationReport proof is association-scoped. A report observed on the old
+        // socket must never make the replacement association look TrafficProven before
+        // the first routed report of the new generation arrives.
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
+
         foreach (var state in session.States.Values)
         {
             state.ReportTrafficSeen = false;
@@ -1974,6 +1980,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         var wasConnected = session.Device.IsConnected;
         session.Device.IsConnected = false;
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
         session.Device.Status = "Offline";
         session.Device.Detail = detail;
         session.Device.AcquisitionMode = "Connection lost • reconnect pending";
