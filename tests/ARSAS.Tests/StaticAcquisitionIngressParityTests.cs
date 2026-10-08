@@ -57,6 +57,14 @@ public sealed class StaticAcquisitionIngressParityTests
             LiveModel("IED-A", "IED-A/LLN0.Events",
                 (0, "IED-A/MMXU1.A.phsA.cVal.mag.f", "MX"),
                 (1, "IED-A/XCBR1.Pos.stVal", "ST")));
+        // A genuine order comparison requires both ingress models to be populated.
+        // Without this workspace the old regression "passed" due to missing SCL data.
+        sclDevice.SclWorkspace = new SclIedWorkspace
+        {
+            IedName = "IED-A",
+            AccessPointName = "AP1",
+            DesignModel = sclDevice.LiveDiscoveryModel!
+        };
 
         var discovery = StaticAcquisitionParityTracker.BuildEvidence(
             discoveryDevice,
