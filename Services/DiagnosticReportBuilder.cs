@@ -48,6 +48,12 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"  SCD selected AP={device.SclAccessPointName}; endpoint provenance={device.SclEndpointOrigin}");
                 builder.AppendLine($"  SCD AP choices={string.Join(", ", device.SclAccessPointChoices.Select(choice => choice.HasDeclaredAddress ? $"{choice.AccessPointName}={choice.DeclaredEndpoint!.EndpointText} [SCD]" : $"{choice.AccessPointName}=[No SCD IP]"))}");
             }
+            else if (device.SclEndpointCandidates.Count > 0)
+            {
+                // Backward-compatible diagnostics for older cached/project models
+                // that supplied only direct ConnectedAP endpoints.
+                builder.AppendLine($"  SCD selected AP={device.SclAccessPointName}; MMS APs={string.Join(", ", device.SclEndpointCandidates.Select(ap => $"{ap.AccessPointName}={ap.IpAddress}:{ap.Port}"))}");
+            }
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -149,6 +155,14 @@ internal static class DiagnosticReportBuilder
                             : "No SCD IP (local binding required)";
                         builder.AppendLine($"  {(current ? "SELECTED" : "AVAILABLE")} {choice.IedName}/{choice.AccessPointName} -> {declared}");
                     }
+                }
+                else if (device.SclEndpointCandidates.Count > 0)
+                {
+                    builder.AppendLine($"SCD selected AP  : {device.SclAccessPointName}");
+                    builder.AppendLine($"Endpoint origin  : {device.SclEndpointOrigin}");
+                    builder.AppendLine($"SCD MMS APs      : {device.SclEndpointCandidates.Count}");
+                    foreach (var ap in device.SclEndpointCandidates)
+                        builder.AppendLine($"  {ap.IedName}/{ap.AccessPointName} -> {ap.IpAddress}:{ap.Port} ({ap.SubNetworkName})");
                 }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
                 builder.AppendLine($"Monitoring       : {device.IsMonitoring}");
