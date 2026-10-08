@@ -15,10 +15,10 @@ public partial class SclSignalSelectionModeWindow : Window
         InitializeComponent();
 
         DialogTitle = targetDevice is null ? "SCL Quick Start" : $"IED Actions — {targetDevice.Name}";
-        ContextHeading = targetDevice is null ? "Workspace opened offline" : $"IED actions — {targetDevice.Name}";
+        ContextHeading = targetDevice is null ? "Workspace opened offline" : "IED Actions";
         ContextSubtitle = targetDevice is null
-            ? "Choose a task. ARSAS only connects when that task needs the IED."
-            : "Choose what to do with this IED. Closing this window changes nothing.";
+            ? "Choose a monitoring or engineering task."
+            : "Choose how to work with this IED.";
         ImportScopeText = targetDevice is not null
             ? targetDevice.Name
             : iedCount == 1
@@ -31,7 +31,7 @@ public partial class SclSignalSelectionModeWindow : Window
         if (targetDevice is null)
         {
             CanUseStaticDataSet = true;
-            StaticDataSetAvailabilityText = "Select + monitor";
+            StaticDataSetAvailabilityText = "Start report monitoring";
         }
         else
         {
@@ -42,9 +42,9 @@ public partial class SclSignalSelectionModeWindow : Window
 
             CanUseStaticDataSet = dataSetCount > 0;
             StaticDataSetAvailabilityText = dataSetCount == 0
-                ? "No static DataSet"
+                ? "No static DataSets"
                 : reportBackedCount > 0
-                    ? $"{dataSetCount} DataSet(s) • report ready"
+                    ? $"{dataSetCount} DataSet(s) ready"
                     : $"{dataSetCount} DataSet(s) • no configured RCB";
         }
 
