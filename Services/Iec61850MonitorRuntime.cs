@@ -1052,7 +1052,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 var parity = StaticAcquisitionParityTracker.Record(session.Device, hybrid);
                 Log(
-                    parity.Status == StaticAcquisitionParityStatus.Mismatch ? "WARN" : "INFO",
+                    parity.Status is StaticAcquisitionParityStatus.Mismatch or StaticAcquisitionParityStatus.InsufficientEvidence ? "WARN" : "INFO",
                     session.Device.Name,
                     $"Static ingress parity evidence: {parity.Summary}. Concrete live RCB slots are diagnostic-only and excluded from the semantic fingerprint.");
 
