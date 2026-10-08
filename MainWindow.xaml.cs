@@ -2321,7 +2321,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 // source-declared AP choices; no duplicate file I/O or lost APs.
                 var restoredSclDocument = await TryRestoreSclWorkspaceAsync(profile);
                 var restoredSclWorkspace = restoredSclDocument?.Ieds.FirstOrDefault(item =>
-                    item.IedName.Equals(profile.SclIedName, StringComparison.OrdinalIgnoreCase) &&
+                    (string.IsNullOrWhiteSpace(profile.SclIedName) ||
+                     item.IedName.Equals(profile.SclIedName, StringComparison.OrdinalIgnoreCase)) &&
                     (string.IsNullOrWhiteSpace(profile.SclAccessPointName) ||
                      item.AccessPointName.Equals(profile.SclAccessPointName, StringComparison.OrdinalIgnoreCase)));
                 var cachedSignals = (profile.CachedSignals ?? new List<Iec61850CachedSignalProfile>())
