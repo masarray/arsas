@@ -134,6 +134,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         set => Set(ref _sclAccessPointName, value?.Trim() ?? string.Empty);
     }
 
+    // Imported ConnectedAP alternatives are source-file evidence, not live state.
+    // Keep the authoritative model and selected AP bound to the same candidate.
+    [JsonIgnore]
+    public IReadOnlyList<SclMmsEndpoint> SclEndpointCandidates { get; set; } = Array.Empty<SclMmsEndpoint>();
+
+    [JsonIgnore]
+    public string SclEndpointHint => SclEndpointCandidates.Count > 1
+        ? $"SCD AccessPoint {SclAccessPointName} • {EndpointText}. Right-click to choose another declared MMS endpoint."
+        : EndpointText;
+
     public bool HasSclDesignModel => SclWorkspace != null || !string.IsNullOrWhiteSpace(SclSourceSha256);
     public bool RequiresEndpointBinding => HasSclDesignModel && string.IsNullOrWhiteSpace(IpAddress);
     public bool HasSclConfigurationDrift => SclComparison?.RequiresFullDiscovery == true;
@@ -569,6 +579,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public void RefreshComputed()
     {
         Raise(nameof(EndpointText));
+        Raise(nameof(SclEndpointHint));
         Raise(nameof(SignalCount));
         Raise(nameof(SelectedSignalCount));
         Raise(nameof(SelectedLiveSignalCount));
