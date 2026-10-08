@@ -166,13 +166,13 @@ public sealed class StaticAcquisitionIngressParityTests
     {
         var point1 = new Iec61850MonitorPoint
         {
-            PointKey = "p1",
+            DeviceId = "device-a",
             IecReference = "IED-A/XCBR1.Pos.stVal",
             FunctionalConstraint = "ST"
         };
         var point2 = new Iec61850MonitorPoint
         {
-            PointKey = "p2",
+            DeviceId = "device-a",
             IecReference = "IED-A/MMXU1.A.phsA.cVal.mag.f",
             FunctionalConstraint = "MX"
         };
