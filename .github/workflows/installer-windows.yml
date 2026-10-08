@@ -476,8 +476,8 @@ jobs:
                   $_.event -eq $eventName -and
                   $_.head_sha -eq $headSha -and
                   $_.head_branch -eq $headBranch -and
-                  $_.id -is [long] -and
-                  $_.run_attempt -is [int]
+                  [long]$_.id -gt 0 -and
+                  [int]$_.run_attempt -gt 0
                 } |
                 Sort-Object @{Expression='id';Descending=$true}, @{Expression='run_attempt';Descending=$true}
             )
