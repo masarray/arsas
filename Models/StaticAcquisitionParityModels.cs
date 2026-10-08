@@ -24,9 +24,11 @@ public enum StaticAcquisitionParityStatus
 /// Rpt01 to Rpt02 across associations while the configured DataSet/report semantics remain
 /// equivalent.
 /// </summary>
-public sealed class StaticAcquisitionIngressEvidence
+public sealed record class StaticAcquisitionIngressEvidence
 {
     public DateTimeOffset CapturedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+    // Runtime-only evidence token. Never part of the semantic fingerprint.
+    public Guid PlanningAttemptId { get; init; } = Guid.NewGuid();
     public StaticAcquisitionIngressKind Ingress { get; init; }
     public string IedName { get; init; } = string.Empty;
     public string SemanticFingerprint { get; init; } = string.Empty;
@@ -37,6 +39,13 @@ public sealed class StaticAcquisitionIngressEvidence
     public int UncoveredSignalCount { get; init; }
     public IReadOnlyList<string> SemanticLines { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> RuntimeTargets { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> RoutedReportTargets { get; init; } = Array.Empty<string>();
+    public DateTimeOffset? FirstRoutedReportAtUtc { get; init; }
+
+    public int RoutedTargetCount => RoutedReportTargets.Count;
+    public bool AllPlannedTargetsRouted => IsComparable && RuntimeTargets.Count > 0 &&
+        RuntimeTargets.All(target => RoutedReportTargets.Contains(target, StringComparer.Ordinal));
+    public string RoutedTrafficSummary => $"{RoutedTargetCount}/{RuntimeTargets.Count} exact static RCB target(s) routed";
     public bool IsComparable { get; init; }
     public string IncomparableReason { get; init; } = string.Empty;
 
@@ -52,6 +61,15 @@ public sealed class StaticAcquisitionParitySnapshot
     public StaticAcquisitionIngressEvidence? OpenScl { get; init; }
     public StaticAcquisitionParityStatus Status { get; init; } = StaticAcquisitionParityStatus.NotAvailable;
     public IReadOnlyList<string> Differences { get; init; } = Array.Empty<string>();
+
+    // Distinct from configuration equality: both ingress associations must actually route
+    // process reports from each planned concrete RCB (BRCB and URCB independently).
+    public bool DualIngressTrafficProven => Status == StaticAcquisitionParityStatus.Equivalent &&
+        Discovery?.AllPlannedTargetsRouted == true && OpenScl?.AllPlannedTargetsRouted == true;
+
+    public string TrafficQualificationSummary => DualIngressTrafficProven
+        ? "DUAL INGRESS TRAFFIC PROVEN (routed static RCB data from both paths)"
+        : $"TRAFFIC PENDING • Discovery {Discovery?.RoutedTrafficSummary ?? "not captured"} • Open SCL {OpenScl?.RoutedTrafficSummary ?? "not captured"}";
 
     public string Summary => Status switch
     {
