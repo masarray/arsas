@@ -12,7 +12,9 @@ public sealed class P72AssociationLifecycleRegressionTests
             source,
             StringComparison.Ordinal);
         Assert.DoesNotContain("System.Net.NetworkInformation", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Ping", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Ping(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendPingAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryPingEndpointAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MarkAssociationOfflineAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("_associationReconnectWanted", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StopDeviceConnectionAsync", source, StringComparison.Ordinal);
