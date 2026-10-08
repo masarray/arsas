@@ -11,13 +11,13 @@ main, tag, manual, installer, package, or release authority.
 
 Ten Windows-heavy pull-request workflows use:
 
-- group: workflow name + pull-request number;
-- fallback group identity: unique github.run_id for non-PR events;
-- cancel-in-progress: true only when event_name is pull_request.
+- group: workflow name + pull-request number only for `pull_request`;
+- fallback group identity: unique `github.run_id` for every non-PR event;
+- `cancel-in-progress: true`.
 
 This means a synchronize event for the same PR cancels the older revision,
 while push/main, tags, release production paths, and workflow_dispatch runs
-cannot cancel one another through this policy.
+cannot cancel one another because their group identity is unique per run.
 
 ## Why this matters
 
@@ -60,6 +60,15 @@ P3H changes scheduling only. It does not change:
 `scripts/test-ci-workflows.py` asserts the exact PR-only concurrency expressions
 for all ten workflows and confirms the production release workflow does not gain
 the PR cancellation policy.
+
+## Corrected concurrency shape
+
+An initial implementation used an event-scoped boolean for `cancel-in-progress`.
+Real synchronize validation showed the newer runs waiting behind older runs instead
+of cancelling them. P3H therefore uses the safer concurrency invariant: only PR
+runs share a group; all other events use `github.run_id`; cancellation is always
+true inside a group. This preserves the intended PR-only effect without relying
+on a separate boolean expression.
 
 ## Validation protocol
 
