@@ -18,6 +18,8 @@ on:
       - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
       - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
       - "tests/ARSAS.Tests/CanonicalSclReloadValidatorTests.cs"
+      - "scripts/verify-p7-dual-ingress-diagnostic.py"
+      - "scripts/test-p7-dual-ingress-diagnostic.py"
       - ".github/workflows/scl-interoperability-r7.yml"
   workflow_dispatch:
 
@@ -47,6 +49,17 @@ jobs:
             throw "ARSAS SHA mismatch. Expected $env:ARSAS_SOURCE_SHA, got $arsasCommit."
           }
           "ARSAS_COMMIT=$arsasCommit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set up Python for read-only physical-intake guard
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: P7.6 verify field diagnostic parser safety fixtures
+        shell: pwsh
+        run: |
+          python .\ARSAS\scripts\test-p7-dual-ingress-diagnostic.py
+          if ($LASTEXITCODE -ne 0) { throw 'P7.6 diagnostic qualification safety fixtures failed.' }
 
       - name: Resolve current engine while preserving R7/R10 authority
         shell: pwsh
