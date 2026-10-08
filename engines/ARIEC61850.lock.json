@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "ref": "fix/144-p62-scd-serverat-authority",
+  "ref": "main",
   "commit": "ebffc41c9da7a1ef32d19da452b21a489ffd9fb0",
   "sourcePullRequest": 153,
-  "purpose": "CODE-VERIFIED TRIAL ONLY, PHYSICAL ACCEPTANCE PENDING. P6.2 ServerAt owner-model projection and engineering warnings on top of exact P0-P6.1 9c529257 pin. No process polling fallback, RCB activation change, vendor branching or physical baseline promotion. Preserve previousSmartInteroperabilityTrial and physically proven ancestry.",
+  "purpose": "CODE-VERIFIED INTEROPERABILITY TRIAL ONLY; P6.2 ServerAt authority extends P0-P6.1 at immutable commit ebffc41c9da7a1ef32d19da452b21a489ffd9fb0. Neither code verification nor the SCD readout implies physical validation or production promotion. All historical physical and P6.1 baselines remain unchanged; static RCB/report semantics and no cyclic polling invariant are untouched.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
