@@ -54,9 +54,62 @@ jobs:
           $lock = Get-Content .\ARSAS\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
           $convergence = Get-Content .\ARSAS\evidence\interoperability-reference-target.json -Raw | ConvertFrom-Json
           $association = $convergence.postBaselineAcceptance.sclAssociationInteroperability
+          $accepted = $lock.sclAssociationInteroperability
 
           if ($lock.repository -ne 'masarray/ARIEC61850' -or
-              $lock.commit -notmatch '^[0-9a-f]{40}
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid engine lock repository or commit SHA.'
+          }
+          if ($convergence.status -ne 'physical-retest-passed-merge-ready' -or
+              [int]$convergence.activeStack.enginePerformance.pullRequest -ne 134 -or
+              [int]$convergence.activeStack.engineModelAndScl.pullRequest -ne 135 -or
+              [int]$convergence.activeStack.consumerIntegration.pullRequest -ne 324 -or
+              [bool]$convergence.promotion.productionPromoted -or
+              -not [bool]$convergence.promotion.physicalRetestPassed -or
+              [bool]$convergence.promotion.mergeAllowedBeforePhysicalRetest) {
+            throw 'Immutable R7/R10 physical convergence evidence was weakened.'
+          }
+          if ($accepted.contractId -ne 'SCL-ASSOC-PARTIAL-ADDR-PHYSICAL' -or
+              [int]$accepted.sourcePullRequest -ne 143 -or
+              $accepted.testedEngineCommit -ne $association.engine.testedHead -or
+              $accepted.mergedEngineCommit -ne $association.engine.mergedMain -or
+              -not [bool]$accepted.preservesR10DiscoveryModelBaseline -or
+              -not [bool]$accepted.fullDiscoveryFallbackForbidden -or
+              -not [bool]$accepted.cyclicMmsProcessPollingForbidden -or
+              [int]$association.physicalAcceptance.failedReads -ne 0 -or
+              -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
+            throw 'Physical SCL-association/R10 provenance is not intact.'
+          }
+
+          $trial = $lock.smartInteroperabilityCodeTrial
+          if ($null -ne $trial -and $lock.commit -eq $trial.exactCommit) {
+            if ([int]$lock.sourcePullRequest -ne 148 -or
+                [int]$trial.integrationPullRequest -ne 148 -or
+                [int]$trial.ciRun -ne 759 -or
+                $trial.status -ne 'code-verified-not-physical' -or
+                -not [bool]$trial.physicalPromotionRequired -or
+                -not [bool]$trial.fullDiscoveryFallbackForbidden -or
+                $lock.purpose -notmatch 'CODE-VERIFIED INTEROPERABILITY TRIAL ONLY') {
+              throw 'Smart interoperability trial is not strictly CodeVerified and promotion-blocked.'
+            }
+            Write-Host 'Running stacked interoperability checks on a CodeVerified-only engine; no physical/mainline promotion is implied.'
+          }
+          elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
+            if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
+                $lock.purpose -notmatch 'R7 physical SCL repair pin') {
+              throw 'Historical R7 engine pin authority mismatch.'
+            }
+          }
+          else {
+            throw 'Unknown engine pin; neither physical R7 nor exact CodeVerified trial.'
+          }
+
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_SOURCE_PR=$($lock.sourcePullRequest)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = (Get-Content .\ARSAS\VERSION -Raw).Trim()
+          "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Checkout exact ARIEC61850 engine revision
         shell: pwsh
         run: |
