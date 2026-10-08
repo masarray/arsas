@@ -78,14 +78,6 @@ jobs:
             --require-test-substring FatScl \
             --output ARSAS/TestResults/io-canonical-domain-proof.json
 
-      - name: Upload exact canonical IO test proof
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-io-testing-test-results
-          path: ARSAS/TestResults/io-canonical-domain-proof.json
-          if-no-files-found: error
-
       - name: Checkout immutable ARIEC61850 engine revision for manual diagnostics
         if: github.event_name == 'workflow_dispatch'
         shell: powershell
@@ -134,22 +126,17 @@ jobs:
           }
           Get-Content $log -Tail 12
 
-      - name: Upload IO testing compiler diagnostics
-        if: github.event_name == 'workflow_dispatch' && always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-io-testing-compiler-log
-          path: ARSAS/io-testing-build.log
-          if-no-files-found: error
-
       - name: Run IO testing regression tests
         if: github.event_name == 'workflow_dispatch'
         run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~IoTest|FullyQualifiedName~IoList|FullyQualifiedName~IoFat|FullyQualifiedName~FatDataSet|FullyQualifiedName~FatScl" --logger "trx;LogFileName=io-testing-tests.trx" --results-directory .\ARSAS\TestResults
 
-      - name: Upload IO testing test results
-        if: github.event_name == 'workflow_dispatch' && always()
+      - name: Upload IO validation evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ARSAS-io-testing-test-results
-          path: ARSAS/TestResults/*.trx
-          if-no-files-found: ignore
+          path: |
+            ARSAS/TestResults/io-canonical-domain-proof.json
+            ARSAS/TestResults/*.trx
+            ARSAS/io-testing-build.log
+          if-no-files-found: warn
