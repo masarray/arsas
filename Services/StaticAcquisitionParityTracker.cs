@@ -57,7 +57,7 @@ internal static class StaticAcquisitionParityTracker
 
         var semanticLines = new List<string>
         {
-            $"requested={planning.RequestedPointCount}|catalog={planning.CatalogMappedPointCount}|" +
+            $"ied={NormalizeReference(device.Name)}|requested={planning.RequestedPointCount}|catalog={planning.CatalogMappedPointCount}|" +
             $"staticBrcbSignals={planning.StaticBrcbSignalCount}|staticUrcbSignals={planning.StaticUrcbSignalCount}|" +
             $"uncovered={planning.UncoveredSignalCount}|staticPlans={staticPlans.Length}"
         };
