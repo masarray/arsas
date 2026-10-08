@@ -55,6 +55,20 @@ internal static class StaticAcquisitionParityTracker
             .ThenBy(plan => NormalizeKind(plan.EngineAcquisitionKind), StringComparer.Ordinal)
             .ToArray();
 
+        // A matching hash must never establish parity when the engine did not provide
+        // a complete, authoritative Static DataSet plan and ordered membership model.
+        var evidenceIssues = new List<string>();
+        if (!planning.IsAuthoritative)
+            evidenceIssues.Add("planner was not authoritative");
+        if (planning.RequestedPointCount <= 0)
+            evidenceIssues.Add("no selected runtime points");
+        if (planning.UncoveredSignalCount > 0)
+            evidenceIssues.Add($"{planning.UncoveredSignalCount} uncovered runtime point(s)");
+        if (staticPlans.Length == 0)
+            evidenceIssues.Add("no engine-authoritative static report plans");
+        if (model is null)
+            evidenceIssues.Add("ingress model missing");
+
         var semanticLines = new List<string>
         {
             $"ied={NormalizeReference(device.Name)}|requested={planning.RequestedPointCount}|" +
@@ -78,6 +92,13 @@ internal static class StaticAcquisitionParityTracker
                 .ToArray()
                 ?? Array.Empty<string>();
 
+            if (dataSet is null)
+                evidenceIssues.Add($"DataSet {dataSetReference} missing from {ingress} model");
+            else if (members.Length == 0)
+                evidenceIssues.Add($"DataSet {dataSetReference} has no ordered member evidence");
+            else if (dataSet.MemberCount > 0 && dataSet.MemberCount != members.Length)
+                evidenceIssues.Add($"DataSet {dataSetReference} has {members.Length}/{dataSet.MemberCount} member descriptors");
+
             var selected = plan.Bindings
                 .Where(point => !string.IsNullOrWhiteSpace(point.IecReference))
                 .Select(point =>
@@ -85,6 +106,9 @@ internal static class StaticAcquisitionParityTracker
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
+
+            if (selected.Length == 0)
+                evidenceIssues.Add($"DataSet {dataSetReference} has no selected point bindings");
 
             semanticLines.Add(
                 $"{kind}|dataset={dataSetReference}|members={members.Length}[{string.Join(",", members)}]|" +
@@ -112,7 +136,9 @@ internal static class StaticAcquisitionParityTracker
             StaticUrcbSignalCount = planning.StaticUrcbSignalCount,
             UncoveredSignalCount = planning.UncoveredSignalCount,
             SemanticLines = semanticLines,
-            RuntimeTargets = runtimeTargets
+            RuntimeTargets = runtimeTargets,
+            IsComparable = evidenceIssues.Count == 0,
+            IncomparableReason = string.Join("; ", evidenceIssues)
         };
     }
 
@@ -130,6 +156,22 @@ internal static class StaticAcquisitionParityTracker
                 Discovery = discovery,
                 OpenScl = openScl,
                 Status = StaticAcquisitionParityStatus.AwaitingOtherIngress
+            };
+        }
+
+        if (!discovery.IsComparable || !openScl.IsComparable)
+        {
+            var issues = new List<string>();
+            if (!discovery.IsComparable)
+                issues.Add($"Discovery: {discovery.IncomparableReason}");
+            if (!openScl.IsComparable)
+                issues.Add($"Open SCL: {openScl.IncomparableReason}");
+            return new StaticAcquisitionParitySnapshot
+            {
+                Discovery = discovery,
+                OpenScl = openScl,
+                Status = StaticAcquisitionParityStatus.InsufficientEvidence,
+                Differences = issues
             };
         }
 
