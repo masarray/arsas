@@ -61,6 +61,12 @@ P3H changes scheduling only. It does not change:
 for all ten workflows and confirms the production release workflow does not gain
 the PR cancellation policy.
 
+## Validation protocol
+
+The PR acceptance intentionally performs one synchronize event after the first
+Windows-heavy run set starts. The previous head must become stale and the newest
+head must become the sole active PR authority for P3H-managed workflows.
+
 ## Rollback
 
 Remove the P3H concurrency blocks. Never replace the event-scoped expression
