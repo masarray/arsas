@@ -350,6 +350,7 @@ internal static class DiagnosticReportBuilder
         {
             stopwatch.Stop();
             return new TcpProbeResult(
+                device.DeviceId,
                 device.EndpointText,
                 ex.SocketErrorCode == SocketError.ConnectionRefused ? "REFUSED" : "SOCKET_ERROR",
                 $"SocketError={ex.SocketErrorCode}; {ex.Message}; {stopwatch.Elapsed.TotalMilliseconds:0} ms");
