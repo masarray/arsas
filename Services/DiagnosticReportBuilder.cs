@@ -42,7 +42,7 @@ internal static class DiagnosticReportBuilder
         foreach (var device in devices)
         {
             builder.AppendLine(
-                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary}");
+                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary} | routedTraffic={device.StaticAcquisitionParity.TrafficQualificationSummary}");
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -225,19 +225,23 @@ internal static class DiagnosticReportBuilder
         StaticAcquisitionParitySnapshot parity)
     {
         builder.AppendLine($"Static parity    : {parity.Summary}");
+        builder.AppendLine($"Routed traffic   : {parity.TrafficQualificationSummary}");
+        builder.AppendLine("Physical qualifier: semantic MATCH is not traffic proof; each planned static RCB needs a schema-safe routed process value on its own ingress.");
 
         if (parity.Discovery is { } discovery)
         {
             builder.AppendLine($"  Discovery      : {discovery.Summary}");
+            builder.AppendLine($"    traffic       : {discovery.RoutedTrafficSummary}; first={discovery.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in discovery.RuntimeTargets.Take(8))
-                builder.AppendLine($"    runtime       : {target}");
+                builder.AppendLine($"    runtime       : {target} [{(discovery.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
         }
 
         if (parity.OpenScl is { } openScl)
         {
             builder.AppendLine($"  Open SCL       : {openScl.Summary}");
+            builder.AppendLine($"    traffic       : {openScl.RoutedTrafficSummary}; first={openScl.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in openScl.RuntimeTargets.Take(8))
-                builder.AppendLine($"    runtime       : {target}");
+                builder.AppendLine($"    runtime       : {target} [{(openScl.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
         }
 
         foreach (var difference in parity.Differences.Take(12))
