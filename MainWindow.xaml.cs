@@ -2458,6 +2458,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var button = sender as Button;
         var previousContent = button?.Content;
+        Iec61850MonitorDevice[] devices = Array.Empty<Iec61850MonitorDevice>();
+        DiagnosticEntry[] logs = Array.Empty<DiagnosticEntry>();
+
         try
         {
             if (button != null)
@@ -2469,8 +2472,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Include any protocol entries that are still waiting for the normal
             // 100 ms UI batch before taking an immutable support snapshot.
             UiFlushTimer_Tick(null, EventArgs.Empty);
-            var devices = Devices.ToArray();
-            var logs = Logs.ToArray();
+            devices = Devices.ToArray();
+            logs = Logs.ToArray();
             var report = await DiagnosticReportBuilder.BuildAsync(
                 devices,
                 logs,
@@ -2487,8 +2490,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            AddLog("ERROR", "Diagnostics", $"Copy Diagnostic failed: {ex.GetType().Name}: {ex.Message}");
-            SetStatus("Copy Diagnostic failed. The error is recorded in Diagnostics.");
+            // Support evidence must remain available precisely when workspace state is
+            // broken. Fall back to a probe-free report instead of turning diagnostics
+            // into a second failure that hides the original defect.
+            try
+            {
+                if (devices.Length == 0)
+                    devices = Devices.ToArray();
+                if (logs.Length == 0)
+                    logs = Logs.ToArray();
+
+                var fallback = DiagnosticReportBuilder.BuildEmergency(
+                    devices,
+                    logs,
+                    SelectedDevice,
+                    ex);
+                Clipboard.SetText(fallback, TextDataFormat.UnicodeText);
+                AddLog(
+                    "WARN",
+                    "Diagnostics",
+                    $"Normal diagnostic collection degraded ({ex.GetType().Name}: {ex.Message}); emergency support report copied instead.");
+                SetStatus($"Emergency diagnostic report copied ({fallback.Length:N0} characters). Paste it into the support conversation.");
+            }
+            catch (Exception fallbackError)
+            {
+                AddLog(
+                    "ERROR",
+                    "Diagnostics",
+                    $"Copy Diagnostic failed after emergency fallback: {fallbackError.GetType().Name}: {fallbackError.Message}; original={ex.GetType().Name}: {ex.Message}");
+                SetStatus("Copy Diagnostic could not access the Windows clipboard. The collection error remains recorded in Diagnostics.");
+            }
         }
         finally
         {
