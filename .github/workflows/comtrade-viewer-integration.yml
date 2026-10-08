@@ -163,39 +163,103 @@ jobs:
 
           Write-Host "COMTRADE Open uses the field-tested in-process workstation with Phasor, Harmonics and Locus; no Qt/external ArdIrec process launch remains."
 
-      - name: Advisory same-SHA native CTest and bridge byte shadow comparison
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $nativeInputs = ".\ARSAS\TestResults\native-shadow-independent"
+            New-Item -ItemType Directory -Force -Path $nativeInputs | Out-Null
+            Copy-Item $env:INDEPENDENT_CTEST_JUNIT (Join-Path $nativeInputs "ctest.xml") -Force
+            Copy-Item $env:NATIVE_BRIDGE_PATH (Join-Path $nativeInputs "ardirec_bridge.dll") -Force
+            if (-not (Test-Path (Join-Path $nativeInputs "ctest.xml") -PathType Leaf) -or
+                -not (Test-Path (Join-Path $nativeInputs "ardirec_bridge.dll") -PathType Leaf)) {
+              throw "Independently tested COMTRADE native evidence could not be staged."
+            }
+          }
+
+
+
+      - name: Upload independent tested COMTRADE native inputs for shadow comparison
         if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-independent-native-ctest-shadow
+          path: ARSAS/TestResults/native-shadow-independent/
+          if-no-files-found: error
+          retention-days: 14
+
+  native-shadow-observer:
+    name: Advisory native byte and CTest parity (Ubuntu, no native rebuild)
+    if: github.event_name == 'pull_request'
+    needs: windows-viewer-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR synthetic merge source
+        uses: actions/checkout@v7
+        with:
+          path: ARSAS
+          persist-credentials: false
+
+      - name: Download independently tested COMTRADE DLL and JUnit
+        uses: actions/download-artifact@v8
+        with:
+          name: ARSAS-independent-native-ctest-shadow
+          path: native-input
+
+      - name: Verify independently built native inputs and source locks
+        shell: bash
+        run: |
+          test -s native-input/ardirec_bridge.dll
+          test -s native-input/ctest.xml
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('ARIEC61850', 'ARDIREC'):
+              lock = json.loads(Path(f'ARSAS/engines/{name}.lock.json').read_text())
+              value = lock.get('commit')
+              if not isinstance(value, str) or len(value) != 40 or any(
+                  c not in '0123456789abcdef' for c in value
+              ):
+                  raise SystemExit(f'Invalid exact {name} lock SHA')
+          PY
+
+      - name: Advisory exact-SHA native comparison (never deduplication authority)
         continue-on-error: true
-        shell: powershell
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          $out = Join-Path $env:RUNNER_TEMP 'ci-p3j-c-native-shadow-parity.json'
-          python .\ARSAS\scripts\compare-ci-native-shadow.py `
-            --head-sha $env:PR_HEAD_SHA `
-            --head-branch $env:PR_HEAD_BRANCH `
-            --source-sha $env:GITHUB_SHA `
-            --engine-sha $env:ARIEC61850_COMMIT `
-            --ardirec-sha $env:ARDIREC_COMMIT `
-            --independent-junit $env:INDEPENDENT_CTEST_JUNIT `
-            --independent-bridge $env:NATIVE_BRIDGE_PATH `
-            --wait-seconds 600 `
-            --output $out
-          $verdict = $LASTEXITCODE
-          "### CI-P3J-C native shadow parity (advisory)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          if (Test-Path $out -PathType Leaf) {
-            $proof = Get-Content $out -Raw | ConvertFrom-Json
-            "- canonical run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt), status: $($proof.canonicalRunStatus)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            "- CTest case inventory equal: $($proof.ctestInventoryEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            "- Independent vs canonical bridge bytes equal: $($proof.bridgeBytesEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            "- Canonical build completed-success: $($proof.fullCanonicalBuildPassed)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          } else {
-            "- canonical comparison unavailable; no native equivalence may be claimed" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
-          "- COMTRADE Windows CMake/CTest is retained; this is not release or deduplication authority" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          if ($verdict -ne 0) {
-            Write-Warning "Advisory CI-P3J-C comparison failed/unavailable; independent native CTest remains mandatory."
-            exit $verdict
-          }
+          ENGINE_SHA="$(python3 -c 'import json;print(json.load(open("ARSAS/engines/ARIEC61850.lock.json"))["commit"])')"
+          ARDIREC_SHA="$(python3 -c 'import json;print(json.load(open("ARSAS/engines/ARDIREC.lock.json"))["commit"])')"
+          set +e
+          python3 ARSAS/scripts/compare-ci-native-shadow.py \
+            --head-sha "$PR_HEAD_SHA" \
+            --head-branch "$PR_HEAD_BRANCH" \
+            --source-sha "$GITHUB_SHA" \
+            --engine-sha "$ENGINE_SHA" \
+            --ardirec-sha "$ARDIREC_SHA" \
+            --independent-junit native-input/ctest.xml \
+            --independent-bridge native-input/ardirec_bridge.dll \
+            --wait-seconds 600 \
+            --output native-shadow-parity.json
+          verdict=$?
+          set -e
+          {
+            echo '### CI-P3J-D native parity observer (advisory only)'
+            if [ -f native-shadow-parity.json ]; then
+              python3 - <<'PY'
+          import json
+          p = json.load(open('native-shadow-parity.json'))
+          print(f"- Canonical run: {p['canonicalRunId']}/{p['canonicalRunAttempt']} ({p['canonicalRunStatus']})")
+          print(f"- Native CTest case inventory identical: {p['ctestInventoryEqual']}")
+          print(f"- Independently tested native DLL SHA-256 identical: {p['bridgeBytesEqual']}")
+          print(f"- Canonical completed-success: {p['fullCanonicalBuildPassed']}")
+          print(f"- Provisional: {p['provisional']}")
+          PY
+            else
+              echo '- Canonical parity unavailable; no native equivalence may be claimed'
+            fi
+            echo '- Independent Windows CMake/CTest and native-only route guards remain mandatory'
+            echo '- This observer does not authorize binary reuse or release promotion'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$verdict"
