@@ -105,6 +105,87 @@ public sealed class StaticAcquisitionIngressParityTests
     }
 
     [Fact]
+    public void TwoMissingStaticPlans_MustNotBeMistakenForEquivalentRuntimeReporting()
+    {
+        var device = Device("IED-A", LiveModel("IED-A", "IED-A/LLN0.Events",
+            (0, "IED-A/XCBR1.Pos.stVal", "ST")));
+        var noPlan = new NativeHybridReportPlanningResult
+        {
+            IsAuthoritative = true,
+            RequestedPointCount = 1,
+            UncoveredSignalCount = 1
+        };
+        var discovery = StaticAcquisitionParityTracker.BuildEvidence(
+            device, noPlan, StaticAcquisitionIngressKind.LiveDiscovery);
+        var scl = StaticAcquisitionParityTracker.BuildEvidence(
+            device, noPlan, StaticAcquisitionIngressKind.OpenScl);
+
+        // Equal hashes for equally absent plans do not prove parity.
+        Assert.Equal(discovery.SemanticFingerprint, scl.SemanticFingerprint);
+        Assert.False(discovery.IsComparable);
+        Assert.False(scl.IsComparable);
+        var parity = StaticAcquisitionParityTracker.Compare(discovery, scl);
+        Assert.Equal(StaticAcquisitionParityStatus.InsufficientEvidence, parity.Status);
+        Assert.Contains("INCOMPLETE EVIDENCE", parity.Summary, StringComparison.Ordinal);
+        Assert.NotEmpty(parity.Differences);
+    }
+
+    [Fact]
+    public void MissingOrderedDataSetAuthority_MustNotProduceMatch()
+    {
+        var model = LiveModel("IED-A", "IED-A/LLN0.Unrelated",
+            (0, "IED-A/XCBR1.Pos.stVal", "ST"));
+        var device = Device("IED-A", model);
+        device.SclWorkspace = new SclIedWorkspace
+        {
+            IedName = "IED-A",
+            AccessPointName = "AP1",
+            DesignModel = model
+        };
+
+        var discovery = StaticAcquisitionParityTracker.BuildEvidence(
+            device, Planning("IED-A/LLN0.BR.Rpt_ind01"),
+            StaticAcquisitionIngressKind.LiveDiscovery);
+        var scl = StaticAcquisitionParityTracker.BuildEvidence(
+            device, Planning("IED-A/LLN0.BR.Rpt_ind02"),
+            StaticAcquisitionIngressKind.OpenScl);
+
+        Assert.Equal(discovery.SemanticFingerprint, scl.SemanticFingerprint);
+        Assert.False(discovery.IsComparable);
+        Assert.False(scl.IsComparable);
+        Assert.Contains("missing", discovery.IncomparableReason, StringComparison.Ordinal);
+        Assert.Equal(StaticAcquisitionParityStatus.InsufficientEvidence,
+            StaticAcquisitionParityTracker.Compare(discovery, scl).Status);
+    }
+
+    [Fact]
+    public void IncompleteNewIngress_ReplacesOldProofRatherThanRetainingStaleMatch()
+    {
+        var device = Device("IED-A", LiveModel("IED-A", "IED-A/LLN0.Events",
+            (0, "IED-A/XCBR1.Pos.stVal", "ST"),
+            (1, "IED-A/MMXU1.A.phsA.cVal.mag.f", "MX")));
+        StaticAcquisitionParityTracker.Record(device, Planning("IED-A/LLN0.BR.Rpt_ind01"));
+        device.SclWorkspace = new SclIedWorkspace
+        {
+            IedName = "IED-A",
+            AccessPointName = "AP1",
+            DesignModel = device.LiveDiscoveryModel!
+        };
+        var matched = StaticAcquisitionParityTracker.Record(device, Planning("IED-A/LLN0.BR.Rpt_ind02"));
+        Assert.Equal(StaticAcquisitionParityStatus.Equivalent, matched.Status);
+
+        var failure = new NativeHybridReportPlanningResult
+        {
+            IsAuthoritative = false,
+            RequestedPointCount = 2,
+            UncoveredSignalCount = 2
+        };
+        var afterFailure = StaticAcquisitionParityTracker.Record(device, failure);
+        Assert.Equal(StaticAcquisitionParityStatus.InsufficientEvidence, afterFailure.Status);
+        Assert.False(afterFailure.OpenScl!.IsComparable);
+    }
+
+    [Fact]
     public void P73_RuntimeAndDiagnosticsExposeParityWithoutUsingConcreteSlotAsIdentity()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
@@ -117,10 +198,15 @@ public sealed class StaticAcquisitionIngressParityTests
         Assert.Contains("Concrete live RCB slots are diagnostic-only", runtime, StringComparison.Ordinal);
         Assert.Contains("RuntimeTargets", tracker, StringComparison.Ordinal);
 
+        // Slot identity belongs to runtime diagnostics; only semanticLines are hashed.
+        // The old guard included runtimeTargets.Add(...) and falsely rejected valid diagnostics.
         var fingerprintRegion = tracker[
-            tracker.IndexOf("var semanticLines", StringComparison.Ordinal)..
-            tracker.IndexOf("var canonicalText", StringComparison.Ordinal)];
+            tracker.IndexOf("var canonicalText", StringComparison.Ordinal)..
+            tracker.IndexOf("return new StaticAcquisitionIngressEvidence", StringComparison.Ordinal)];
+        Assert.Contains("SHA256.HashData", fingerprintRegion, StringComparison.Ordinal);
+        Assert.Contains("Encoding.UTF8.GetBytes(canonicalText)", fingerprintRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("ReportControlReference", fingerprintRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("runtimeTargets", fingerprintRegion, StringComparison.Ordinal);
     }
 
     private static Iec61850MonitorDevice Device(
