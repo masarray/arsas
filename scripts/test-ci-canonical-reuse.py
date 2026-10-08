@@ -37,6 +37,14 @@ TRX = b"""<?xml version="1.0" encoding="UTF-8"?>
       notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="1320"
       inProgress="0" pending="0" />
   </ResultSummary>
+  <Results>
+    <UnitTestResult testName="ARSAS.Tests.SmvSnapshotEvidenceExporterTests.ExportsEvidence" outcome="Passed" />
+    <UnitTestResult testName="ARSAS.Tests.IoTestWorkflowTests.BuildsPlan" outcome="Passed" />
+    <UnitTestResult testName="ARSAS.Tests.IoListParserTests.ParsesRows" outcome="Passed" />
+    <UnitTestResult testName="ARSAS.Tests.IoFatOrchestratorTests.RunsFat" outcome="Passed" />
+    <UnitTestResult testName="ARSAS.Tests.FatDataSetPlannerTests.BuildsStaticDataSet" outcome="Passed" />
+    <UnitTestResult testName="ARSAS.Tests.FatSclProjectionTests.ProjectsScl" outcome="Passed" />
+  </Results>
 </TestRun>"""
 
 
@@ -115,6 +123,7 @@ def run_once(
     branch: str = BRANCH,
     head_sha: str = HEAD,
     source_sha: str = SOURCE,
+    required_test_substrings: list[str] | None = None,
 ):
     return consumer.verify_canonical(
         api,
@@ -127,6 +136,7 @@ def run_once(
         poll_seconds=1,
         allow_in_progress_artifact=allow_in_progress_artifact,
         event_name=event_name,
+        required_test_substrings=required_test_substrings,
     )
 
 
@@ -141,6 +151,50 @@ class CanonicalReuseTests(unittest.TestCase):
     def test_manifest_never_claims_release_authority(self):
         self.assertIs(fixture()["releasePromotionAuthority"], False)
         self.assertTrue(fixture()["fullRegressionPassed"])
+
+    def test_required_domain_test_family_is_proven_from_canonical_trx(self):
+        proof = run_once(
+            FakeApi(),
+            required_test_substrings=[
+                "SmvSnapshotEvidenceExporterTests",
+                "IoTest",
+                "IoList",
+                "IoFat",
+                "FatDataSet",
+                "FatScl",
+            ],
+        )
+        self.assertEqual(proof["requiredTests"]["SmvSnapshotEvidenceExporterTests"], 1)
+        self.assertEqual(proof["requiredTests"]["IoTest"], 1)
+        self.assertEqual(proof["requiredTests"]["FatScl"], 1)
+
+    def test_missing_required_domain_test_family_fails_closed(self):
+        with self.assertRaisesRegex(consumer.ProofError, "missing required test family"):
+            run_once(
+                FakeApi(),
+                required_test_substrings=["DefinitelyMissingTests"],
+            )
+
+    def test_required_domain_test_family_rejects_nonpassing_match(self):
+        bad = TRX.replace(
+            b'testName="ARSAS.Tests.IoTestWorkflowTests.BuildsPlan" outcome="Passed"',
+            b'testName="ARSAS.Tests.IoTestWorkflowTests.BuildsPlan" outcome="Failed"',
+        )
+        manifest = producer.create_manifest(
+            source_sha=SOURCE,
+            checkout_sha=SOURCE,
+            engine_expected=ENGINE,
+            engine_actual=ENGINE,
+            workflow_run_id=RUN,
+            run_attempt=1,
+            event_name="pull_request",
+            trx=bad,
+            trx_name="arsas-tests.trx",
+        )
+        api = FakeApi()
+        api.blob = zip_archive(manifest, bad)
+        with self.assertRaisesRegex(consumer.ProofError, "not entirely Passed"):
+            run_once(api, required_test_substrings=["IoTest"])
 
     def test_reject_wrong_merge_sha(self):
         api = FakeApi()
