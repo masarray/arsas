@@ -96,7 +96,7 @@ jobs:
           }
           elseif ($lock.commit -eq $lock.sclServerAtTrial.exactCommit) {
             $serverAt = $lock.sclServerAtTrial
-            if ($lock.commit -ne 'ebffc41c9da7a1ef32d19da452b21a489ffd9fb0' -or
+            if ($lock.commit -ne 'e45259b710e5e6962203428abbc7fa063a25f52d' -or
                 $lock.ref -ne 'main' -or
                 [int]$lock.sourcePullRequest -ne 153 -or
                 [int]$serverAt.sourcePullRequest -ne 153 -or
