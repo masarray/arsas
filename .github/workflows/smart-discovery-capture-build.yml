@@ -320,6 +320,7 @@ jobs:
             --event-name pull_request `
             --wait-seconds 1200 `
             --allow-in-progress-artifact `
+            --require-native-ctest-proof `
             --output-dir $packageRoot `
             --proof-output $proofPath
           if ($LASTEXITCODE -ne 0) {

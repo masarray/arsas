@@ -31,6 +31,13 @@ CANONICAL_TRX = _producer.CANONICAL_TRX
 counters_from_trx = _producer.counters_from_trx
 sha = _producer.sha
 
+_native_spec = importlib.util.spec_from_file_location(
+    "arsas_ci_native_ctest", _here / "write-ci-native-ctest-proof.py"
+)
+assert _native_spec and _native_spec.loader
+_native = importlib.util.module_from_spec(_native_spec)
+_native_spec.loader.exec_module(_native)
+
 EXPECTED_ARTIFACT = "ARSAS-windows-package-input"
 MAX_ARCHIVE_BYTES = 768 * 1024 * 1024
 MAX_FILE_BYTES = 256 * 1024 * 1024
@@ -168,7 +175,7 @@ def _hash_zip_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 def validate_package_archive(
     payload: bytes, *, source_sha: str, engine_sha: str, ardirec_sha: str,
     workflow_run_id: int, run_attempt: int, event_name: str,
-    output_dir: Path | None = None
+    output_dir: Path | None = None, require_native_ctest_proof: bool = False
 ) -> dict:
     if not payload or len(payload) > MAX_ARCHIVE_BYTES:
         raise PackageProofError("Canonical package artifact is missing or exceeds bounded size")
@@ -354,6 +361,34 @@ def validate_package_archive(
             if not isinstance(path, str) or path not in recorded:
                 raise PackageProofError(f"Canonical package verification path is invalid: {key}")
 
+        native_proof = None
+        junit_path = "verification/native/ctest.xml"
+        proof_path = "verification/native/ci-native-ctest-authority.json"
+        has_junit = junit_path in infos
+        has_proof = proof_path in infos
+        if has_junit != has_proof:
+            raise PackageProofError("Native CTest JUnit/proof pair is incomplete")
+        if require_native_ctest_proof and not has_proof:
+            raise PackageProofError("Required native CTest archive proof is missing")
+        if has_proof:
+            try:
+                native_proof = _native.verify_sealed_native_proof(
+                    proof_bytes=archive.read(infos[proof_path]),
+                    junit_bytes=archive.read(infos[junit_path]),
+                    bridge_sha256=manifest["nativeBridge"]["sha256"],
+                    bridge_size=manifest["nativeBridge"]["size"],
+                    source_sha=source_sha,
+                    engine_sha=engine_sha,
+                    ardirec_sha=ardirec_sha,
+                    run_id=workflow_run_id,
+                    attempt=run_attempt,
+                    event=event_name,
+                )
+            except (ValueError, KeyError, TypeError) as exc:
+                raise PackageProofError(
+                    f"Native CTest archive proof is invalid: {exc}"
+                ) from exc
+
         if output_dir is not None:
             if output_dir.exists():
                 shutil.rmtree(output_dir)
@@ -365,6 +400,10 @@ def validate_package_archive(
                     shutil.copyfileobj(src, dst, 1024 * 1024)
 
     return {
+        "nativeCtestProofAvailable": native_proof is not None,
+        "nativeCtestPassed": native_proof is not None and native_proof["nativeCTestPassed"],
+        "nativeTestNames": native_proof["testNames"] if native_proof else [],
+        "nativeCtestJunitSha256": native_proof["ctestJunitSha256"] if native_proof else None,
         "canonicalRunId": workflow_run_id,
         "canonicalRunAttempt": run_attempt,
         "sourceSha": source_sha,
@@ -444,7 +483,7 @@ def verify_canonical_package(
     head_sha: str, source_sha: str, engine_sha: str, ardirec_sha: str,
     event_name: str = "pull_request", wait_seconds: int = 1200,
     poll_seconds: int = 10, allow_in_progress_artifact: bool = False,
-    output_dir: Path | None = None
+    output_dir: Path | None = None, require_native_ctest_proof: bool = False
 ) -> dict:
     validate_identity(
         repository, branch, head_sha, source_sha, engine_sha, ardirec_sha, event_name
@@ -502,6 +541,7 @@ def verify_canonical_package(
                                 run_attempt=attempt,
                                 event_name=event_name,
                                 output_dir=output_dir,
+                                require_native_ctest_proof=require_native_ctest_proof,
                             )
                         except PackageProofError as exc:
                             if "identity or authority is invalid" not in str(exc):
@@ -542,6 +582,7 @@ def main() -> int:
     parser.add_argument("--allow-in-progress-artifact", action="store_true")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--proof-output", type=Path)
+    parser.add_argument("--require-native-ctest-proof", action="store_true")
     args = parser.parse_args()
 
     proof = verify_canonical_package(
@@ -556,6 +597,7 @@ def main() -> int:
         wait_seconds=args.wait_seconds,
         allow_in_progress_artifact=args.allow_in_progress_artifact,
         output_dir=args.output_dir,
+        require_native_ctest_proof=args.require_native_ctest_proof,
     )
     payload = json.dumps(proof, sort_keys=True)
     print("Canonical Windows package reuse PASS: " + payload)

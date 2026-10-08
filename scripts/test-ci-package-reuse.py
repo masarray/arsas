@@ -223,6 +223,24 @@ class PackageReuseTests(unittest.TestCase):
             manifest["verification"]["releaseFixturePath"],
         )
 
+    def test_strict_current_consumers_keep_manual_fallback_intact(self):
+        root = ROOT.parent
+        installer = (root / ".github/workflows/installer-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        capture = (root / ".github/workflows/smart-discovery-capture-build.yml").read_text(
+            encoding="utf-8"
+        )
+        release = (root / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        for workflow in (installer, capture):
+            self.assertIn("--require-native-ctest-proof", workflow)
+            self.assertIn("--allow-in-progress-artifact", workflow)
+        self.assertIn("workflow_dispatch", installer)
+        self.assertIn("workflow_dispatch", capture)
+        self.assertNotIn("--require-native-ctest-proof", release)
+
     def test_safe_materialization_occurs_after_verification(self):
         blob, _ = make_payload()
         with tempfile.TemporaryDirectory() as temp:
