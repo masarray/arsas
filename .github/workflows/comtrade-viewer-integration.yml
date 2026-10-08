@@ -77,6 +77,128 @@ jobs:
             }
           }
 
+          $engineLock = Get-Content ".\ARSAS\engines\ARIEC61850.lock.json" -Raw | ConvertFrom-Json
+          if ($engineLock.commit -notmatch '^[0-9a-f]{40}
+          "ARDIREC_REF=$($lock.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout immutable ArdIrec revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
+      - name: Build and test pinned native bridge
+        shell: powershell
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "arsas-native-comtrade"
+          $nativeJunit = Join-Path $env:RUNNER_TEMP "comtrade-independent-ctest.xml"
+          .\ARSAS\scripts\build-ardirec-bridge.ps1 `
+            -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+            -OutputDirectory $stage `
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-native-build" `
+            -CTestJunitPath $nativeJunit
+
+          $bridge = Join-Path $stage "ardirec_bridge.dll"
+          if (-not (Test-Path $bridge -PathType Leaf)) {
+            throw "Pinned ArdIrec native bridge was not staged: $bridge"
+          }
+          "NATIVE_BRIDGE_PATH=$bridge" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "INDEPENDENT_CTEST_JUNIT=$nativeJunit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Enforce field-tested native-only ARSAS COMTRADE routing
+        shell: powershell
+        run: |
+          $openPath = ".\ARSAS\FaultRecordWindow.ComtradeOpen.cs"
+          $launcherPath = ".\ARSAS\Services\ArdIrecViewerLauncher.cs"
+          $bridgePath = ".\ARSAS\Services\ArdIrecNativeBridge.cs"
+          $bootstrapPath = ".\ARSAS\Services\ArdIrecEmbeddedBridgeBootstrap.cs"
+          $projectPath = ".\ARSAS\ArIED61850Tester.csproj"
+          $workspacePath = ".\ARSAS\ComtradeWorkspaceWindow.xaml"
+          $locusViewPath = ".\ARSAS\Controls\ComtradeLocusView.cs"
+
+          $open = Get-Content $openPath -Raw
+          $launcher = Get-Content $launcherPath -Raw
+          $bridge = Get-Content $bridgePath -Raw
+          $bootstrap = Get-Content $bootstrapPath -Raw
+          $project = Get-Content $projectPath -Raw
+          $workspace = Get-Content $workspacePath -Raw
+          $locusView = Get-Content $locusViewPath -Raw
+
+          if ($open -notmatch 'ArdIrecNativeBridge\.TryOpen' -or
+              $open -notmatch 'ComtradeWorkspaceWindow' -or
+              $open -match 'Process\.Start|TryLaunch\(') {
+            throw "Fault-record Open must route only to the in-process native COMTRADE workspace."
+          }
+
+          if ($launcher -match 'Process\.Start|ProcessStartInfo|ardirec\.exe|ARSAS_ARDIREC_PATH|ARDIREC_VIEWER_PATH|TryLaunch\(') {
+            throw "External ArdIrec process-launch compatibility code is not allowed."
+          }
+
+          if ($bridge -notmatch 'ardirec_bridge\.dll' -or
+              $bridge -notmatch 'ExpectedAbiVersion = 1' -or
+              $bridge -notmatch 'Harmonic' -or
+              $bridge -notmatch 'Distance' -or
+              $bootstrap -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
+              $project -notmatch 'ArIED61850Tester\.Native\.ardirec_bridge\.dll' -or
+              $project -notmatch 'Tools\\ArdIrec\\ardirec_bridge\.dll') {
+            throw "Field-tested native ArdIrec analysis/packaging contract is incomplete."
+          }
+
+          if ($workspace -notmatch 'ComtradePhasorView' -or
+              $workspace -notmatch 'ComtradeHarmonicsWorkstationView' -or
+              $locusView -notmatch 'class\s+ComtradeLocusView') {
+            throw "Production COMTRADE Phasor, Harmonics or Locus analysis surface is missing."
+          }
+
+          Write-Host "COMTRADE Open uses the field-tested in-process workstation with Phasor, Harmonics and Locus; no Qt/external ArdIrec process launch remains."
+
+      - name: Advisory same-SHA native CTest and bridge byte shadow comparison
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'ci-p3j-c-native-shadow-parity.json'
+          python .\ARSAS\scripts\compare-ci-native-shadow.py `
+            --head-sha $env:PR_HEAD_SHA `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --independent-junit $env:INDEPENDENT_CTEST_JUNIT `
+            --independent-bridge $env:NATIVE_BRIDGE_PATH `
+            --wait-seconds 600 `
+            --output $out
+          $verdict = $LASTEXITCODE
+          "### CI-P3J-C native shadow parity (advisory)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if (Test-Path $out -PathType Leaf) {
+            $proof = Get-Content $out -Raw | ConvertFrom-Json
+            "- canonical run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt), status: $($proof.canonicalRunStatus)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- CTest case inventory equal: $($proof.ctestInventoryEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- Independent vs canonical bridge bytes equal: $($proof.bridgeBytesEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- Canonical build completed-success: $($proof.fullCanonicalBuildPassed)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            "- canonical comparison unavailable; no native equivalence may be claimed" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "- COMTRADE Windows CMake/CTest is retained; this is not release or deduplication authority" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($verdict -ne 0) {
+            Write-Warning "Advisory CI-P3J-C comparison failed/unavailable; independent native CTest remains mandatory."
+            exit $verdict
+          }
+) {
+            throw "Canonical shadow comparison needs an exact ARIEC61850 engine SHA."
+          }
+          "ARIEC61850_COMMIT=$($engineLock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
           "ARDIREC_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_REF=$($lock.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
