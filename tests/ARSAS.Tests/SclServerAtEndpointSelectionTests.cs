@@ -61,6 +61,9 @@ public sealed class SclServerAtEndpointSelectionTests
         Assert.Contains("SclEndpointTopology.FindExactWorkspace(document, selected)", chooser, StringComparison.Ordinal);
         Assert.Contains("document.SourceSha256.Equals(originalHash", chooser, StringComparison.Ordinal);
         Assert.Contains("device.IsConnected || device.IsBusy || device.IsMonitoring", chooser, StringComparison.Ordinal);
+        Assert.Contains("RemoveDevicePoints(device.DeviceId)", chooser, StringComparison.Ordinal);
+        Assert.Contains("device.Points.Clear()", chooser, StringComparison.Ordinal);
+        Assert.Contains("device.LiveDiscoveryModel = null", chooser, StringComparison.Ordinal);
         Assert.DoesNotContain("ConnectAsync(", chooser, StringComparison.Ordinal);
         Assert.DoesNotContain("TryReconnect", chooser, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Delay(", chooser, StringComparison.Ordinal);
