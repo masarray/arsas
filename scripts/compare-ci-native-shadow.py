@@ -177,6 +177,7 @@ def compare_online(
     api, *, head_sha: str, head_branch: str, source_sha: str,
     engine_sha: str, ardirec_sha: str, independent_junit: Path,
     independent_bridge: Path, wait_seconds: int = 600, poll_seconds: int = 15,
+    require_completed: bool = False,
 ) -> dict:
     for label, sha in (("head", head_sha), ("source", source_sha),
                        ("engine", engine_sha), ("ArdIrec", ardirec_sha)):
@@ -202,7 +203,7 @@ def compare_online(
             last = f"run {run['id']}/{run['run_attempt']} {status}/{conclusion}"
             if status == "completed" and conclusion != "success":
                 raise ShadowError("Latest matching canonical build failed: " + last)
-            if status in {"in_progress", "completed"}:
+            if status == "completed" or (status == "in_progress" and not require_completed):
                 art = one_artifact(
                     api.get(f"{base}/actions/runs/{run['id']}/artifacts?per_page=100"),
                     run["id"],
@@ -230,6 +231,7 @@ def compare_online(
                             status == "completed" and conclusion == "success"
                         )
                         result["provisional"] = not result["fullCanonicalBuildPassed"]
+                        result["completedCanonicalRequired"] = require_completed
                         return result
         if time.monotonic() >= deadline:
             raise ShadowError(f"Bounded shadow comparison timeout; last={last}")
@@ -246,6 +248,7 @@ def main() -> int:
     parser.add_argument("--independent-junit", type=Path, required=True)
     parser.add_argument("--independent-bridge", type=Path, required=True)
     parser.add_argument("--wait-seconds", type=int, default=600)
+    parser.add_argument("--require-completed-canonical", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = compare_online(
@@ -256,6 +259,7 @@ def main() -> int:
         independent_junit=args.independent_junit,
         independent_bridge=args.independent_bridge,
         wait_seconds=args.wait_seconds,
+        require_completed=args.require_completed_canonical,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n",
