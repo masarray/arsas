@@ -137,6 +137,8 @@ internal static class DiagnosticReportBuilder
                 builder.AppendLine($"Detail           : {device.Detail}");
                 builder.AppendLine($"Acquisition      : {device.AcquisitionMode}");
                 AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
+                if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
+                    AppendStaticInitialImage(builder, device.Points);
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
@@ -219,6 +221,21 @@ internal static class DiagnosticReportBuilder
         return builder.ToString();
     }
 
+
+    private static void AppendStaticInitialImage(
+        StringBuilder builder,
+        IEnumerable<Iec61850MonitorPoint> points)
+    {
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points);
+        builder.AppendLine($"Static initial image: {image.Summary}");
+        builder.AppendLine("  Interpretation : display completeness only; Unknown q does not mean missing value, and RCB setup or first report does not prove every selected member is live.");
+        foreach (var group in image.Groups.Take(12))
+            builder.AppendLine($"  DataSet/RCB     : {group.DataSetReference} | {group.RcbReference} | visible={group.ValueVisible}/{group.Selected}, pending={group.ValuePending}, qNotSupplied={group.QualityNotSupplied}");
+        foreach (var point in image.PendingPoints.Take(12))
+            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
+        if (image.PendingPoints.Count > 12)
+            builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
+    }
 
     private static void AppendStaticIngressParity(
         StringBuilder builder,
