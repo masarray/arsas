@@ -78,7 +78,12 @@ public partial class MainWindow
                 return;
             }
 
-            // Switching an offline SCD AP cannot borrow a previous association's live model.
+            // Switching an offline SCD AP cannot borrow a previous association's
+            // live model, displayed process values, or queued point updates.
+            RemoveDevicePoints(device.DeviceId);
+            device.Points.Clear();
+            _reportPulseUntil.Remove(device.DeviceId);
+            RemoveDeviceHighlights(device.DeviceId);
             device.LiveDiscoveryModel = null;
             device.LiveCanonicalModel = null;
             device.SclComparison = null;
