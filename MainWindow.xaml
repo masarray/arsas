@@ -427,7 +427,13 @@
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <TextBlock Text="{Binding EndpointText}" FontSize="11.1"
                                                                Foreground="{StaticResource Muted}" TextOptions.TextFormattingMode="Ideal" Margin="0,2,0,0"
-                                                               TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
+                                                               TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"
+                                                               ToolTip="{Binding SclEndpointHint}"
+                                                               ContextMenuOpening="SclEndpoint_ContextMenuOpening">
+                                                        <TextBlock.ContextMenu>
+                                                            <ContextMenu/>
+                                                        </TextBlock.ContextMenu>
+                                                    </TextBlock>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
                                       <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="62,4,1,0" Panel.ZIndex="10">
