@@ -615,8 +615,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.RequiresEndpointBinding)
             return true;
 
-        var initialIp = string.IsNullOrWhiteSpace(NewDeviceIp) ? "192.168.1.10" : NewDeviceIp;
-        var wizard = new IpConnectWizardWindow(initialIp, device.Port <= 0 ? 102 : device.Port) { Owner = this };
+        // A different card's "New IED" address is NOT an AP-bound address.
+        // Require explicit IP entry when this specific SCD AP is unbound.
+        var wizard = new IpConnectWizardWindow(string.Empty, device.Port <= 0 ? 102 : device.Port) { Owner = this };
         if (wizard.ShowDialog() != true)
         {
             SetStatus($"{device.Name}: endpoint binding cancelled; the SCL model remains available offline.");
