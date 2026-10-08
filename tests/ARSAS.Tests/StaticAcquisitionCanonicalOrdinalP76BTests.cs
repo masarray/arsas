@@ -202,6 +202,6 @@ public sealed class StaticAcquisitionCanonicalOrdinalP76BTests
                 DeviceId = "device-a",
                 IecReference = point.Reference,
                 FunctionalConstraint = point.Fc
-            }).ToArray()
+            }).ToList()
         };
 }
