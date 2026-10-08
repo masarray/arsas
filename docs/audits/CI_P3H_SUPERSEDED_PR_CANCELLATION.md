@@ -78,6 +78,6 @@ head must become the sole active PR authority for P3H-managed workflows.
 
 ## Rollback
 
-Remove the P3H concurrency blocks. Never replace the event-scoped expression
-with unconditional `cancel-in-progress: true` on workflows that can run on main,
-tags, or manual recovery events.
+Remove the P3H concurrency blocks. `cancel-in-progress: true` is safe here only
+because every non-PR event falls back to its unique `github.run_id`; never change
+the group expression so main, tags, release, or manual recovery runs can collide.
