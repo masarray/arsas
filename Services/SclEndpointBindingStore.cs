@@ -117,12 +117,12 @@ internal static class SclEndpointBindingStore
     }
 
     private static bool Match(Binding candidate, string sourceSha, string ied, string ap) =>
-        candidate.SourceSha256.Equals(sourceSha, StringComparison.OrdinalIgnoreCase) &&
-        candidate.IedName.Equals(ied, StringComparison.OrdinalIgnoreCase) &&
-        candidate.AccessPointName.Equals(ap, StringComparison.OrdinalIgnoreCase);
+        string.Equals(candidate.SourceSha256, sourceSha, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(candidate.IedName, ied, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(candidate.AccessPointName, ap, StringComparison.OrdinalIgnoreCase);
 
     private static bool ValidIdentity(string sourceSha, string ied, string ap) =>
-        sourceSha.Length == 64 &&
+        sourceSha is { Length: 64 } &&
         sourceSha.All(Uri.IsHexDigit) &&
         !string.IsNullOrWhiteSpace(ied) &&
         !string.IsNullOrWhiteSpace(ap);
