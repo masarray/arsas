@@ -467,11 +467,26 @@ jobs:
             --event $env:GITHUB_EVENT_NAME `
             --output $ctestProof
           if ($LASTEXITCODE -ne 0) { throw "Canonical native CTest proof sealing failed." }
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $shadowDir = '.\ArIED61850Tester\TestResults\native-shadow'
+            New-Item -ItemType Directory -Path $shadowDir -Force | Out-Null
+            Copy-Item $ctestJunit (Join-Path $shadowDir 'ctest.xml') -Force
+            Copy-Item $ctestProof (Join-Path $shadowDir 'ci-native-ctest-authority.json') -Force
+          }
           "NATIVE_CTEST_JUNIT=$ctestJunit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "NATIVE_CTEST_PROOF=$ctestProof" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_BRIDGE_PATH=$bridge" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ARDIREC_BRIDGE_SHA256=$((Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant())" |
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload canonical native CTest shadow evidence
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-native-ctest-shadow
+          path: ArIED61850Tester/TestResults/native-shadow/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Publish canonical installer-input folder
         shell: powershell

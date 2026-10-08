@@ -24,7 +24,7 @@
     "dotnetRestore": 11,
     "dotnetBuild": 11,
     "dotnetTest": 12,
-    "actionsUploadArtifact": 33,
+    "actionsUploadArtifact": 34,
     "workflowsWithDotnetBuild": 10,
     "workflowsWithDotnetTest": 9
   },
@@ -668,5 +668,28 @@
       "ARSAS-sv-evidence-compiler-log",
       "ARSAS-io-testing-compiler-log"
     ]
+  },
+  "ciP3JNativeShadowParity": {
+    "issueNumber": 470,
+    "lane": "canonical Build ARSAS / independent COMTRADE Windows",
+    "approach": "Record two small, SHA-bound CTest files after canonical native build, compare exact PR synthetic merge SHA, PR head/branch, ARIEC61850/ArdIrec pin, test inventory and independently built native bridge SHA-256; keep independent COMTRADE CMake/CTest and routing guards mandatory.",
+    "staticLimitsChanged": true,
+    "addedWorkflowFiles": 0,
+    "addedCheckoutActions": 0,
+    "addedUploadArtifactActions": 1,
+    "artifactName": "ARSAS-native-ctest-shadow",
+    "artifactContents": ["ctest.xml", "ci-native-ctest-authority.json"],
+    "artifactRetentionDays": 14,
+    "boundedShadowWaitSeconds": 600,
+    "crossRunRouting": ["exact PR head SHA", "exact PR branch", "exact synthetic merge source SHA", "engine lock SHA", "ArdIrec lock SHA", "canonical run ID/attempt"],
+    "comparisonStatus": "advisory",
+    "provisionalEvidenceDoesNotImplyCompletedCanonicalBuild": true,
+    "nativeBridgeIdentityDifferenceIsVisibleNotWaived": true,
+    "independentComtradeWindowsCTestRetained": true,
+    "sourceRoutingContractRetained": true,
+    "releaseAuthorityChanged": false,
+    "physicalAuthorityChanged": false,
+    "binaryReuseAllowed": false,
+    "rollback": "Remove the tiny shadow upload and advisory comparison only. Keep canonical package native CTest proof, independent Windows CMake/CTest and all release/physical authority intact."
   }
 }
