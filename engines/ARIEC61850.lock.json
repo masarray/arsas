@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "ref": "main",
-  "commit": "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
-  "sourcePullRequest": 148,
-  "purpose": "CODE-VERIFIED INTEROPERABILITY TRIAL ONLY; not a production/physical promotion. Pins the exact P0-P6.1 smart interoperability integration head that passed ARIEC61850 .NET CI #759: typed RCB mutation including signed ResvTms, canonical Discovery/Open-SCL convergence, JIT configured-static activation proof, targeted RCB availability, event-driven report receive, source-aware canonical acquisition preflight, and targeted live RCB reconciliation without full discovery. All historical physical baselines and the physically accepted SCL-association ancestry below remain unchanged authority until fresh physical qualification.",
+  "ref": "fix/144-p62-scd-serverat-authority",
+  "commit": "ebffc41c9da7a1ef32d19da452b21a489ffd9fb0",
+  "sourcePullRequest": 153,
+  "purpose": "CODE-VERIFIED TRIAL ONLY, PHYSICAL ACCEPTANCE PENDING. P6.2 ServerAt owner-model projection and engineering warnings on top of exact P0-P6.1 9c529257 pin. No process polling fallback, RCB activation change, vendor branching or physical baseline promotion. Preserve previousSmartInteroperabilityTrial and physically proven ancestry.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -60,5 +60,17 @@
     "fullDiscoveryFallbackForbidden": true,
     "vendorBranchingForbidden": true,
     "physicalPromotionRequired": true
+  },
+  "sclServerAtTrial": {
+    "status": "code-verified-candidate-not-physical",
+    "sourcePullRequest": 153,
+    "baseEngineCommit": "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+    "exactCommit": "ebffc41c9da7a1ef32d19da452b21a489ffd9fb0",
+    "consumerIssue": 446,
+    "consumerMilestone": "P7.5",
+    "realStationSclNotCommitted": true,
+    "fixture": "sanitized J Server / F ServerAt multi-AP",
+    "noAutomaticMmsFailover": true,
+    "physicalQualificationRequired": true
   }
 }
