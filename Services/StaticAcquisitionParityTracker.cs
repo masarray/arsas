@@ -120,6 +120,24 @@ internal static class StaticAcquisitionParityTracker
             evidenceIssues.Add("no engine-authoritative static report plans");
         if (model is null)
             evidenceIssues.Add("ingress model missing");
+        else if (string.IsNullOrWhiteSpace(model.IedName) ||
+                 !string.Equals(model.IedName.Trim(), device.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+            evidenceIssues.Add($"ingress model IED identity '{model.IedName}' does not match selected IED '{device.Name}'");
+
+        // Comparing equal hashes is not meaningful if two independently malformed or
+        // partially projected plans happen to describe the same visible subset.
+        // These are evidence-only checks: reporting activation remains engine-owned.
+        var brcbBindings = staticPlans
+            .Where(plan => NormalizeKind(plan.EngineAcquisitionKind) == "static-brcb")
+            .Sum(plan => plan.Bindings.Count);
+        var urcbBindings = staticPlans
+            .Where(plan => NormalizeKind(plan.EngineAcquisitionKind) == "static-urcb")
+            .Sum(plan => plan.Bindings.Count);
+        if (brcbBindings != planning.StaticBrcbSignalCount ||
+            urcbBindings != planning.StaticUrcbSignalCount)
+            evidenceIssues.Add("static plan bindings do not match engine coverage counters");
+        if (brcbBindings + urcbBindings + planning.UncoveredSignalCount != planning.RequestedPointCount)
+            evidenceIssues.Add("static plan coverage does not account for all requested runtime points");
 
         var semanticLines = new List<string>
         {
@@ -134,8 +152,17 @@ internal static class StaticAcquisitionParityTracker
         {
             var dataSetReference = NormalizeReference(plan.DataSetReference);
             var kind = NormalizeKind(plan.EngineAcquisitionKind);
-            var dataSet = model?.DataSets.FirstOrDefault(candidate =>
-                NormalizeReference(candidate.Reference).Equals(dataSetReference, StringComparison.Ordinal));
+            var matchingDataSets = model?.DataSets
+                .Where(candidate => NormalizeReference(candidate.Reference) == dataSetReference)
+                .Take(2)
+                .ToArray() ?? Array.Empty<LiveIedDataSetModel>();
+            var dataSet = matchingDataSets.FirstOrDefault();
+            if (matchingDataSets.Length > 1)
+                evidenceIssues.Add($"DataSet {dataSetReference} is ambiguous: multiple normalized definitions");
+
+            if (kind == "static-report" ||
+                (kind == "static-brcb") != plan.Buffered)
+                evidenceIssues.Add($"DataSet {dataSetReference} has inconsistent static RCB family evidence");
 
             var members = dataSet?.Members
                 .OrderBy(member => member.Index)
@@ -151,6 +178,17 @@ internal static class StaticAcquisitionParityTracker
             else if (dataSet.MemberCount > 0 && dataSet.MemberCount != members.Length)
                 evidenceIssues.Add($"DataSet {dataSetReference} has {members.Length}/{dataSet.MemberCount} member descriptors");
 
+            if (dataSet is not null)
+            {
+                if (dataSet.Members.Select(member => member.Index).Distinct().Count() != members.Length ||
+                    dataSet.Members.Any(member => member.Index < 0))
+                    evidenceIssues.Add($"DataSet {dataSetReference} has invalid or duplicate ordered member indices");
+                if (dataSet.Members.Any(member =>
+                        string.IsNullOrWhiteSpace(member.Reference) ||
+                        string.IsNullOrWhiteSpace(member.FunctionalConstraint)))
+                    evidenceIssues.Add($"DataSet {dataSetReference} has incomplete member identity or FC evidence");
+            }
+
             var selected = plan.Bindings
                 .Where(point => !string.IsNullOrWhiteSpace(point.IecReference))
                 .Select(point =>
@@ -161,6 +199,10 @@ internal static class StaticAcquisitionParityTracker
 
             if (selected.Length == 0)
                 evidenceIssues.Add($"DataSet {dataSetReference} has no selected point bindings");
+            if (plan.Bindings.Any(point =>
+                    string.IsNullOrWhiteSpace(point.IecReference) ||
+                    string.IsNullOrWhiteSpace(point.FunctionalConstraint)))
+                evidenceIssues.Add($"DataSet {dataSetReference} has incomplete selected signal identity or FC evidence");
 
             semanticLines.Add(
                 $"{kind}|dataset={dataSetReference}|members={members.Length}[{string.Join(",", members)}]|" +
