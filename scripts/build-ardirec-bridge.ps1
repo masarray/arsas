@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
 
-    [string]$BuildDirectory = ""
+    [string]$BuildDirectory = "",
+
+    [string]$CTestJunitPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +35,10 @@ New-Item -ItemType Directory -Path $output -Force | Out-Null
 $destinationBridge = Join-Path $output "ardirec_bridge.dll"
 
 if (Test-Path $destinationBridge -PathType Leaf) {
+    if (-not [string]::IsNullOrWhiteSpace($CTestJunitPath) -and
+        -not (Test-Path $CTestJunitPath -PathType Leaf)) {
+        throw "Cannot reuse pinned bridge without its requested CTest JUnit evidence."
+    }
     Write-Host "==> Reusing pinned ArdIrec bridge: $destinationBridge"
     Write-Output $destinationBridge
     exit 0
@@ -97,9 +103,20 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "==> Running ArdIrec core/bridge regression tests"
-& ctest --test-dir $build -C Release --output-on-failure
+if (-not [string]::IsNullOrWhiteSpace($CTestJunitPath)) {
+    $ctestOutput = [System.IO.Path]::GetFullPath($CTestJunitPath)
+    New-Item -ItemType Directory -Force (Split-Path -Parent $ctestOutput) | Out-Null
+    if (Test-Path $ctestOutput) { Remove-Item $ctestOutput -Force }
+    & ctest --test-dir $build -C Release --output-on-failure --output-junit $ctestOutput
+} else {
+    & ctest --test-dir $build -C Release --output-on-failure
+}
 if ($LASTEXITCODE -ne 0) {
     throw "ArdIrec native regression tests failed with exit code $LASTEXITCODE."
+}
+if (-not [string]::IsNullOrWhiteSpace($CTestJunitPath) -and
+    -not (Test-Path $ctestOutput -PathType Leaf)) {
+    throw "CTest completed but the requested JUnit evidence was not produced."
 }
 
 $builtBridge = Join-Path $build "bridge\Release\ardirec_bridge.dll"

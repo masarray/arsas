@@ -15,6 +15,8 @@ on:
       - "scripts/write-ci-package-manifest.py"
       - "scripts/verify-ci-package-reuse.py"
       - "scripts/test-ci-package-reuse.py"
+      - "scripts/write-ci-native-ctest-proof.py"
+      - "scripts/test-ci-native-ctest-proof.py"
       - "scripts/write-ci-installer-manifest.py"
       - "scripts/verify-ci-installer-reuse.py"
       - "scripts/test-ci-installer-reuse.py"
@@ -36,6 +38,8 @@ on:
       - "scripts/write-ci-package-manifest.py"
       - "scripts/verify-ci-package-reuse.py"
       - "scripts/test-ci-package-reuse.py"
+      - "scripts/write-ci-native-ctest-proof.py"
+      - "scripts/test-ci-native-ctest-proof.py"
       - "scripts/write-ci-installer-manifest.py"
       - "scripts/verify-ci-installer-reuse.py"
       - "scripts/test-ci-installer-reuse.py"
@@ -78,6 +82,9 @@ jobs:
 
       - name: Run canonical CI P3 package safety fixtures
         run: python3 scripts/test-ci-package-reuse.py
+
+      - name: Run CI-P3J native CTest authority safety fixtures
+        run: python3 scripts/test-ci-native-ctest-proof.py
 
       - name: Run validated installer CI P3D safety fixtures
         run: python3 scripts/test-ci-installer-reuse.py
