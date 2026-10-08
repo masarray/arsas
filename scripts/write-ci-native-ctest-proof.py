@@ -28,8 +28,7 @@ def local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def parse_ctest_junit(path: Path) -> list[str]:
-    payload = path.read_bytes()
+def parse_ctest_junit_bytes(payload: bytes) -> list[str]:
     if not payload or len(payload) > MAX_JUNIT_BYTES:
         raise ValueError("CTest JUnit evidence missing or exceeds bounded size")
     if b"<!DOCTYPE" in payload.upper() or b"<!ENTITY" in payload.upper():
@@ -68,22 +67,29 @@ def parse_ctest_junit(path: Path) -> list[str]:
     return sorted(names)
 
 
-def expected_proof(
-    *, junit: Path, bridge: Path, source_sha: str, engine_sha: str,
-    ardirec_sha: str, run_id: int, attempt: int, event: str,
+def parse_ctest_junit(path: Path) -> list[str]:
+    return parse_ctest_junit_bytes(path.read_bytes())
+
+
+def record_from_bytes(
+    *, junit_bytes: bytes, bridge_sha256: str, bridge_size: int,
+    source_sha: str, engine_sha: str, ardirec_sha: str,
+    run_id: int, attempt: int, event: str,
 ) -> dict:
     for label, value in (
         ("source", source_sha), ("engine", engine_sha), ("ArdIrec", ardirec_sha)
     ):
         if not SHA_RE.fullmatch(value):
             raise ValueError(f"Invalid {label} SHA")
+    if not isinstance(bridge_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", bridge_sha256):
+        raise ValueError("Invalid native bridge digest")
+    if not isinstance(bridge_size, int) or bridge_size <= 0:
+        raise ValueError("Invalid native bridge size")
     if run_id < 1 or attempt < 1 or event not in {
         "push", "pull_request", "workflow_dispatch"
     }:
         raise ValueError("Invalid canonical GitHub Actions run identity")
-    if not bridge.is_file() or bridge.stat().st_size < 1:
-        raise ValueError("Native bridge is missing or empty")
-    names = parse_ctest_junit(junit)
+    names = parse_ctest_junit_bytes(junit_bytes)
     return {
         "schemaVersion": 1,
         "kind": KIND,
@@ -95,9 +101,9 @@ def expected_proof(
         "engineSha": engine_sha,
         "ardirecSha": ardirec_sha,
         "buildProfile": PROFILE,
-        "ctestJunitSha256": digest(junit),
-        "nativeBridgeSha256": digest(bridge),
-        "nativeBridgeSizeBytes": bridge.stat().st_size,
+        "ctestJunitSha256": hashlib.sha256(junit_bytes).hexdigest(),
+        "nativeBridgeSha256": bridge_sha256,
+        "nativeBridgeSizeBytes": bridge_size,
         "testNames": names,
         "nativeTestsPassed": len(names),
         "nativeTestsFailed": 0,
@@ -106,6 +112,42 @@ def expected_proof(
         "independentComtradeLaneReplaced": False,
         "releasePromotionAuthority": False,
     }
+
+
+def verify_sealed_native_proof(
+    *, proof_bytes: bytes, junit_bytes: bytes, bridge_sha256: str, bridge_size: int,
+    source_sha: str, engine_sha: str, ardirec_sha: str,
+    run_id: int, attempt: int, event: str,
+) -> dict:
+    """Verify sealed archive native evidence independently of its producer."""
+    if len(proof_bytes) > 64 * 1024:
+        raise ValueError("Native CTest proof JSON exceeds bounded size")
+    try:
+        actual = json.loads(proof_bytes.decode("utf-8-sig"))
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("Native CTest proof JSON is not valid") from exc
+    expected = record_from_bytes(
+        junit_bytes=junit_bytes, bridge_sha256=bridge_sha256,
+        bridge_size=bridge_size, source_sha=source_sha, engine_sha=engine_sha,
+        ardirec_sha=ardirec_sha, run_id=run_id, attempt=attempt, event=event,
+    )
+    if actual != expected:
+        raise ValueError("Native CTest archive proof identity/coverage/digests disagree")
+    return expected
+
+
+def expected_proof(
+    *, junit: Path, bridge: Path, source_sha: str, engine_sha: str,
+    ardirec_sha: str, run_id: int, attempt: int, event: str,
+) -> dict:
+    if not bridge.is_file() or bridge.stat().st_size < 1:
+        raise ValueError("Native bridge is missing or empty")
+    return record_from_bytes(
+        junit_bytes=junit.read_bytes(), bridge_sha256=digest(bridge),
+        bridge_size=bridge.stat().st_size, source_sha=source_sha,
+        engine_sha=engine_sha, ardirec_sha=ardirec_sha,
+        run_id=run_id, attempt=attempt, event=event,
+    )
 
 
 def write_or_verify(proof_path: Path, *, verify_only: bool, **kwargs) -> dict:

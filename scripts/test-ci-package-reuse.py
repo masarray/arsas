@@ -24,6 +24,7 @@ def load(name: str, filename: str):
 
 producer = load("arsas_package_producer", "write-ci-package-manifest.py")
 verifier = load("arsas_package_verifier", "verify-ci-package-reuse.py")
+native = load("arsas_native_ctest", "write-ci-native-ctest-proof.py")
 
 SOURCE = "a" * 40
 ENGINE = "b" * 40
@@ -118,6 +119,26 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
         (fixtures / "p1-release-smoke.cfg").write_text("release-cfg", encoding="utf-8")
         (fixtures / "p1-release-smoke.dat").write_bytes(b"release-dat")
 
+        # CI-P3J-B: native evidence must be bound to the tested bridge and run.
+        native_dir = verification / "native"
+        native_dir.mkdir()
+        native_junit = native_dir / "ctest.xml"
+        native_junit.write_text(
+            '<testsuite name="ArdIrec" tests="2" failures="0" errors="0" skipped="0">'
+            '<testcase name="NativeBridgeAbi" classname="native" />'
+            '<testcase name="NativeLocus" classname="native" />'
+            '</testsuite>',
+            encoding="utf-8",
+        )
+        native_record = native.expected_proof(
+            junit=native_junit, bridge=bridge, source_sha=SOURCE, engine_sha=ENGINE,
+            ardirec_sha=ARDIREC, run_id=RUN, attempt=1, event=event_name,
+        )
+        (native_dir / "ci-native-ctest-authority.json").write_text(
+            json.dumps(native_record, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
         artifact = root / "artifact"
         manifest = producer.stage_and_create_manifest(
             artifact_root=artifact,
@@ -146,6 +167,37 @@ def make_payload(event_name: str = "pull_request") -> tuple[bytes, dict]:
                 if path.is_file():
                     archive.write(path, "payload/" + path.relative_to(artifact).as_posix())
         return buffer.getvalue(), manifest
+
+
+def update_sealed_fixture(
+    blob: bytes, *, updates: dict[str, bytes | None]
+) -> bytes:
+    """Mutate a test archive AND recalculate its file manifest digests."""
+    with zipfile.ZipFile(io.BytesIO(blob)) as source:
+        names = source.namelist()
+        raw = {info.filename: source.read(info) for info in source.infolist()}
+    manifest_name = next(name for name in names if name.endswith("/ci-windows-package-authority.json"))
+    manifest = json.loads(raw[manifest_name])
+    for name, data in updates.items():
+        archive_name = next(item for item in names if item.endswith(name))
+        if data is None:
+            raw.pop(archive_name)
+            manifest["files"] = [
+                f for f in manifest["files"] if not archive_name.endswith(f["path"])
+            ]
+        else:
+            raw[archive_name] = data
+            entry = next(f for f in manifest["files"] if archive_name.endswith(f["path"]))
+            entry["size"] = len(data)
+            entry["sha256"] = hashlib.sha256(data).hexdigest()
+    manifest["fileCount"] = len(manifest["files"])
+    manifest["totalBytes"] = sum(x["size"] for x in manifest["files"])
+    raw[manifest_name] = (json.dumps(manifest, sort_keys=True) + "\n").encode()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as dest:
+        for name, data in raw.items():
+            dest.writestr(name, data)
+    return buffer.getvalue()
 
 
 class FakeApi:
@@ -222,6 +274,122 @@ class PackageReuseTests(unittest.TestCase):
             proof["releaseFixturePath"],
             manifest["verification"]["releaseFixturePath"],
         )
+
+    def test_native_archive_verifier_requires_real_ctest_evidence(self):
+        blob, manifest = make_payload()
+        proof = verifier.validate_package_archive(
+            blob, source_sha=SOURCE, engine_sha=ENGINE, ardirec_sha=ARDIREC,
+            workflow_run_id=RUN, run_attempt=1, event_name="pull_request",
+            require_native_ctest_proof=True,
+        )
+        self.assertTrue(proof["nativeCtestProofAvailable"])
+        self.assertTrue(proof["nativeCtestPassed"])
+        self.assertEqual(proof["nativeTestNames"], ["NativeBridgeAbi", "NativeLocus"])
+        self.assertEqual(proof["nativeBridgeSha256"], manifest["nativeBridge"]["sha256"])
+
+    def test_missing_ctest_pair_is_legacy_only_not_authoritative(self):
+        blob, _ = make_payload()
+        blob = update_sealed_fixture(
+            blob, updates={
+                "verification/native/ctest.xml": None,
+                "verification/native/ci-native-ctest-authority.json": None,
+            },
+        )
+        legacy = verifier.validate_package_archive(
+            blob, source_sha=SOURCE, engine_sha=ENGINE, ardirec_sha=ARDIREC,
+            workflow_run_id=RUN, run_attempt=1, event_name="pull_request",
+        )
+        self.assertFalse(legacy["nativeCtestProofAvailable"])
+        with self.assertRaisesRegex(verifier.PackageProofError, "Required native CTest"):
+            verifier.validate_package_archive(
+                blob, source_sha=SOURCE, engine_sha=ENGINE, ardirec_sha=ARDIREC,
+                workflow_run_id=RUN, run_attempt=1, event_name="pull_request",
+                require_native_ctest_proof=True,
+            )
+
+    def test_half_present_native_proof_rejected_even_in_legacy_mode(self):
+        blob, _ = make_payload()
+        blob = update_sealed_fixture(
+            blob, updates={"verification/native/ctest.xml": None},
+        )
+        with self.assertRaisesRegex(verifier.PackageProofError, "pair is incomplete"):
+            verifier.validate_package_archive(
+                blob, source_sha=SOURCE, engine_sha=ENGINE, ardirec_sha=ARDIREC,
+                workflow_run_id=RUN, run_attempt=1, event_name="pull_request",
+            )
+
+    def test_tampered_native_identity_is_rejected_even_with_resealed_file_hash(self):
+        blob, _ = make_payload()
+        with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+            raw = next(
+                archive.read(x) for x in archive.namelist()
+                if x.endswith("verification/native/ci-native-ctest-authority.json")
+            )
+        for key, value in (
+            ("sourceSha", "f" * 40),
+            ("engineSha", "f" * 40),
+            ("ardirecSha", "f" * 40),
+            ("workflowRunId", 999),
+            ("nativeBridgeSha256", "0" * 64),
+            ("nativeCTestPassed", False),
+            ("releasePromotionAuthority", True),
+            ("independentComtradeLaneReplaced", True),
+        ):
+            with self.subTest(key=key):
+                value_json = json.loads(raw)
+                value_json[key] = value
+                edited = update_sealed_fixture(
+                    blob,
+                    updates={
+                        "verification/native/ci-native-ctest-authority.json":
+                            json.dumps(value_json).encode(),
+                    },
+                )
+                with self.assertRaisesRegex(verifier.PackageProofError, "Native CTest archive proof"):
+                    verifier.validate_package_archive(
+                        edited, source_sha=SOURCE, engine_sha=ENGINE,
+                        ardirec_sha=ARDIREC, workflow_run_id=RUN,
+                        run_attempt=1, event_name="pull_request",
+                    )
+
+    def test_failing_native_junit_rejected_even_when_file_digest_resealed(self):
+        blob, _ = make_payload()
+        with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+            raw = next(
+                archive.read(x) for x in archive.namelist()
+                if x.endswith("verification/native/ctest.xml")
+            )
+        edited = update_sealed_fixture(
+            blob,
+            updates={
+                "verification/native/ctest.xml":
+                    raw.replace(b'failures="0"', b'failures="1"'),
+            },
+        )
+        with self.assertRaisesRegex(verifier.PackageProofError, "Native CTest archive proof"):
+            verifier.validate_package_archive(
+                edited, source_sha=SOURCE, engine_sha=ENGINE,
+                ardirec_sha=ARDIREC, workflow_run_id=RUN,
+                run_attempt=1, event_name="pull_request",
+            )
+
+    def test_strict_current_consumers_keep_manual_fallback_intact(self):
+        root = ROOT.parent
+        installer = (root / ".github/workflows/installer-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        capture = (root / ".github/workflows/smart-discovery-capture-build.yml").read_text(
+            encoding="utf-8"
+        )
+        release = (root / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        for workflow in (installer, capture):
+            self.assertIn("--require-native-ctest-proof", workflow)
+            self.assertIn("--allow-in-progress-artifact", workflow)
+        self.assertIn("workflow_dispatch", installer)
+        self.assertIn("workflow_dispatch", capture)
+        self.assertNotIn("--require-native-ctest-proof", release)
 
     def test_safe_materialization_occurs_after_verification(self):
         blob, _ = make_payload()
