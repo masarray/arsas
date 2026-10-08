@@ -130,7 +130,7 @@ internal static class Iec61850ReportContinuityInspector
         if (entryIdPresent)
             state.LastEntryIdHex = frame.EntryIdHex;
 
-        return findings ?? Array.Empty<string>();
+        return findings is null ? Array.Empty<string>() : findings;
     }
 
     private static void CheckSequence(
