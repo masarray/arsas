@@ -1,4 +1,5 @@
 using AR.Iec61850.Scl.Workspace;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -67,6 +68,31 @@ public sealed class SclServerAtEndpointSelectionTests
         Assert.DoesNotContain("ConnectAsync(", chooser, StringComparison.Ordinal);
         Assert.DoesNotContain("TryReconnect", chooser, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Delay(", chooser, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Emergency_Diagnostic_Records_Source_Declared_Ap_Topology()
+    {
+        var document = new SclWorkspaceService().Parse(SanitizedStation(), "station.scd");
+        var candidates = SclEndpointTopology.Candidates(document, "GR_X_7SX85");
+        var device = new Iec61850MonitorDevice
+        {
+            Name = "GR_X_7SX85",
+            IpAddress = "192.0.2.11",
+            Port = 102,
+            SclIedName = "GR_X_7SX85",
+            SclAccessPointName = "J",
+            SclEndpointCandidates = candidates
+        };
+
+        var report = DiagnosticReportBuilder.BuildEmergency(
+            new[] { device },
+            Array.Empty<DiagnosticEntry>(),
+            device,
+            new InvalidOperationException("offline support evidence"));
+        Assert.Contains("SCD selected AP=J", report, StringComparison.Ordinal);
+        Assert.Contains("J=192.0.2.11:102", report, StringComparison.Ordinal);
+        Assert.Contains("F=198.51.100.12:102", report, StringComparison.Ordinal);
     }
 
     private static string SanitizedStation() => """
