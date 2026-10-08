@@ -384,6 +384,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.SclSourceSha256 = document.SourceSha256;
         device.SclIedName = workspace.IedName;
         device.SclAccessPointName = workspace.AccessPointName;
+        device.SclEndpointCandidates = SclEndpointTopology.Candidates(document, workspace.IedName);
         device.HasDiscoveryCache = signals.Count > 0;
 
         // The SCL may omit a direct MMS address while this exact IEDName already has a

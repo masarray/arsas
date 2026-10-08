@@ -99,20 +99,31 @@ jobs:
           }
 
           $trial = $lock.smartInteroperabilityCodeTrial
-          if ($null -ne $trial -and $lock.commit -eq $trial.exactCommit) {
+          $serverAt = $lock.sclServerAtTrial
+          $originalTrial = $lock.commit -eq $trial.exactCommit -and
+                           [int]$lock.sourcePullRequest -eq 148
+          $serverAtTrial = $null -ne $serverAt -and
+                           $lock.commit -eq $serverAt.exactCommit -and
+                           $lock.commit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
+                           $serverAt.baseEngineCommit -eq $trial.exactCommit -and
+                           [int]$lock.sourcePullRequest -eq 153 -and
+                           [int]$serverAt.sourcePullRequest -eq 153 -and
+                           $serverAt.status -eq 'code-verified-candidate-not-physical' -and
+                           [bool]$serverAt.physicalQualificationRequired -and
+                           [bool]$serverAt.noAutomaticMmsFailover
+          if ($null -ne $trial -and ($originalTrial -or $serverAtTrial)) {
             if ($trial.status -ne 'code-verified-not-physical' -or
                 [int]$trial.issue -ne 144 -or
                 [int]$trial.integrationPullRequest -ne 148 -or
-                [int]$lock.sourcePullRequest -ne [int]$trial.integrationPullRequest -or
                 -not [bool]$trial.physicalPromotionRequired) {
               throw 'Smart interoperability code-trial metadata is inconsistent.'
             }
 
             if ($env:PR_BASE_REF -eq 'main') {
-              throw 'CodeVerified smart-interoperability trial cannot pass mainline readiness before fresh physical qualification.'
+              throw 'Unqualified P6.1/P6.2 trial cannot pass mainline readiness before fresh physical qualification.'
             }
 
-            Write-Host "Stacked consumer trial accepted for CI against $($trial.exactCommit); historical physical authority remains $($association.engine.testedHead)."
+            Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); historical physical authority remains $($association.engine.testedHead)."
           }
           elseif ($lock.commit -ne $association.engine.testedHead -or
                   [int]$lock.sourcePullRequest -ne 143) {

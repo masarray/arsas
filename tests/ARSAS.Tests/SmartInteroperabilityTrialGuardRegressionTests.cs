@@ -9,7 +9,12 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
 
         Assert.Contains("$lock.smartInteroperabilityCodeTrial", workflow, StringComparison.Ordinal);
         Assert.Contains("code-verified-not-physical", workflow, StringComparison.Ordinal);
-        Assert.Contains("$trial.exactCommit -ne $lock.commit", workflow, StringComparison.Ordinal);
+        // P6.1 remains frozen, and exactly one P6.2 SHA is accepted only as
+        // a stacked CodeVerified candidate with physical promotion blocked.
+        Assert.Contains("$lock.sclServerAtTrial", workflow, StringComparison.Ordinal);
+        Assert.Contains("$serverAt.baseEngineCommit -eq $trial.exactCommit", workflow, StringComparison.Ordinal);
+        Assert.Contains("$serverAt.physicalQualificationRequired", workflow, StringComparison.Ordinal);
+        Assert.Contains("$serverAt.noAutomaticMmsFailover", workflow, StringComparison.Ordinal);
         Assert.Contains(
             "$lock.sclAssociationInteroperability.testedEngineCommit -ne $association.engine.testedHead",
             workflow,
@@ -29,7 +34,7 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         Assert.Contains("$lock.smartInteroperabilityCodeTrial", workflow, StringComparison.Ordinal);
         Assert.Contains("$env:PR_BASE_REF -eq 'main'", workflow, StringComparison.Ordinal);
         Assert.Contains(
-            "CodeVerified smart-interoperability trial cannot pass mainline readiness before fresh physical qualification",
+            "Unqualified P6.1/P6.2 trial cannot pass mainline readiness before fresh physical qualification",
             workflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -50,7 +55,17 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
 
         Assert.Equal("code-verified-not-physical", trial.GetProperty("status").GetString());
         Assert.True(trial.GetProperty("physicalPromotionRequired").GetBoolean());
-        Assert.Equal(root.GetProperty("commit").GetString(), trial.GetProperty("exactCommit").GetString());
+        Assert.Equal("9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+            trial.GetProperty("exactCommit").GetString());
+        var serverAt = root.GetProperty("sclServerAtTrial");
+        Assert.Equal("code-verified-candidate-not-physical", serverAt.GetProperty("status").GetString());
+        Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(trial.GetProperty("exactCommit").GetString(),
+            serverAt.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(root.GetProperty("commit").GetString(),
+            serverAt.GetProperty("exactCommit").GetString());
+        Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
 
         Assert.Equal(143, association.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(
