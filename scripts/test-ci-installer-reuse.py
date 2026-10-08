@@ -33,10 +33,16 @@ def archive(m=None, installer=b"installer", extra=None):
     return b.getvalue()
 
 class FakeApi:
-    def __init__(self,status="completed",conclusion="success"):
+    def __init__(self,status="completed",conclusion="success",binary_failures=0,binary_status=404):
         self.status=status; self.conclusion=conclusion; self.blob=archive()
+        self.binary_failures=binary_failures; self.binary_status=binary_status
     def get(self,url,*,binary=False):
-        if binary:return self.blob
+        if binary:
+            if self.binary_failures > 0:
+                self.binary_failures -= 1
+                raise verifier.GitHubRequestError(
+                    f"fixture HTTP {self.binary_status}", status=self.binary_status)
+            return self.blob
         if "installer-windows.yml/runs?" in url:
             return {"workflow_runs":[{"id":RUN,"run_attempt":1,"name":"Validate ARSAS Windows installer",
               "event":"push","head_branch":"main","head_sha":S,"status":self.status,"conclusion":self.conclusion}]}
@@ -70,6 +76,30 @@ class InstallerReuseTests(unittest.TestCase):
         with self.assertRaisesRegex(verifier.InstallerProofError,"failed"):
             verifier.verify(FakeApi(conclusion="failure"),repository="masarray/arsas",source_sha=S,version="1.6.40",
               engine_sha=E,ardirec_sha=A,package_artifact_sha256=P,wait_seconds=0,poll_seconds=1,output_dir=None)
+
+    def test_transient_archive_404_recovers_within_existing_deadline(self):
+        proof = verifier.verify(
+            FakeApi(binary_failures=1, binary_status=404),
+            repository="masarray/arsas", source_sha=S, version="1.6.40",
+            engine_sha=E, ardirec_sha=A, package_artifact_sha256=P,
+            wait_seconds=1, poll_seconds=1, output_dir=None)
+        self.assertTrue(proof["installedSmokePassed"])
+
+    def test_persistent_archive_404_times_out_fail_closed(self):
+        with self.assertRaisesRegex(verifier.InstallerProofError, "Timed out"):
+            verifier.verify(
+                FakeApi(binary_failures=100, binary_status=404),
+                repository="masarray/arsas", source_sha=S, version="1.6.40",
+                engine_sha=E, ardirec_sha=A, package_artifact_sha256=P,
+                wait_seconds=0, poll_seconds=1, output_dir=None)
+
+    def test_non_transient_archive_error_is_hard_failure(self):
+        with self.assertRaises(verifier.GitHubRequestError):
+            verifier.verify(
+                FakeApi(binary_failures=1, binary_status=403),
+                repository="masarray/arsas", source_sha=S, version="1.6.40",
+                engine_sha=E, ardirec_sha=A, package_artifact_sha256=P,
+                wait_seconds=1, poll_seconds=1, output_dir=None)
     def test_release_workflow_promotes_validated_installer_and_keeps_manual_compile(self):
         w=(ROOT.parent/".github/workflows/release-windows.yml").read_text(encoding="utf-8")
         for token in ("Promote exact validated Windows installer for release","verify-ci-installer-reuse.py",

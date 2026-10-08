@@ -32,8 +32,100 @@ permissions:
   attestations: write
 
 jobs:
+  release-ready:
+    name: Wait for exact package and validated installer metadata
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.ready.outputs.version }}
+      engine_sha: ${{ steps.ready.outputs.engine_sha }}
+      ardirec_sha: ${{ steps.ready.outputs.ardirec_sha }}
+      build_run_id: ${{ steps.ready.outputs.build_run_id }}
+      package_artifact_id: ${{ steps.ready.outputs.package_artifact_id }}
+      installer_run_id: ${{ steps.ready.outputs.installer_run_id }}
+      installer_artifact_id: ${{ steps.ready.outputs.installer_artifact_id }}
+    steps:
+      - name: Checkout exact release source for metadata gating
+        uses: actions/checkout@v7
+        with:
+          path: ArIED61850Tester
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Python for release-ready gate
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Run offline release-ready and installer-verifier fixtures
+        run: |
+          python .\ArIED61850Tester\scripts\test-ci-release-ready.py
+          if ($LASTEXITCODE -ne 0) { throw 'Release-ready metadata gate fixtures failed.' }
+          python .\ArIED61850Tester\scripts\test-ci-installer-reuse.py
+          if ($LASTEXITCODE -ne 0) { throw 'Validated-installer verifier fixtures failed.' }
+
+      - name: Wait for exact immutable release dependencies
+        id: ready
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-release-ready.json'
+          python .\ArIED61850Tester\scripts\wait-ci-release-ready.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --source-dir .\ArIED61850Tester `
+            --source-sha $env:GITHUB_SHA `
+            --ref-type $env:GITHUB_REF_TYPE `
+            --ref-name $env:GITHUB_REF_NAME `
+            --wait-seconds 2700 `
+            --output $proofPath
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release dependencies did not become metadata-ready within the bounded gate.'
+          }
+
+          $proof = Get-Content $proofPath -Raw | ConvertFrom-Json
+          if (-not [bool]$proof.metadataReady -or
+              [bool]$proof.releasePromotionAuthority -or
+              $proof.sourceSha -ne $env:GITHUB_SHA) {
+            throw 'Release-ready metadata proof is incomplete or overclaims authority.'
+          }
+
+          "version=$($proof.version)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "engine_sha=$($proof.engineSha)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "ardirec_sha=$($proof.ardirecSha)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "build_run_id=$($proof.buildRunId)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "package_artifact_id=$($proof.packageArtifactId)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "installer_run_id=$($proof.installerRunId)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "installer_artifact_id=$($proof.installerArtifactId)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          @(
+            '## CI-P3G release-ready scheduling gate',
+            '',
+            "- source: $($proof.sourceSha)",
+            "- version: $($proof.version)",
+            "- engine: $($proof.engineSha)",
+            "- ArdIrec: $($proof.ardirecSha)",
+            "- canonical Build ARSAS: $($proof.buildRunId)/$($proof.buildRunAttempt)",
+            "- package artifact id: $($proof.packageArtifactId)",
+            "- validated installer: $($proof.installerRunId)/$($proof.installerRunAttempt)",
+            "- installer artifact id: $($proof.installerArtifactId)",
+            '- authority: scheduling metadata only; Windows release revalidates all artifact bytes'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
   windows-release:
     name: Build, test and release ARSAS Windows packages
+    needs: [release-ready]
+    if: >-
+      ${{
+        always() &&
+        (github.event_name == 'workflow_dispatch' ||
+         needs.release-ready.result == 'success')
+      }}
     runs-on: windows-latest
 
     steps:
@@ -54,6 +146,22 @@ jobs:
             throw "Release source mismatch. Expected $expected, checked out $actual."
           }
           "RELEASE_SOURCE_COMMIT=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Record release-ready scheduling metadata
+        if: github.event_name != 'workflow_dispatch'
+        shell: powershell
+        run: |
+          @(
+            '## CI-P3G Windows runner allocation',
+            '',
+            '- Windows release runner started only after metadata-ready gate',
+            "- gate version: ${{ needs.release-ready.outputs.version }}",
+            "- gate engine: ${{ needs.release-ready.outputs.engine_sha }}",
+            "- gate ArdIrec: ${{ needs.release-ready.outputs.ardirec_sha }}",
+            "- canonical Build run: ${{ needs.release-ready.outputs.build_run_id }}",
+            "- validated installer run: ${{ needs.release-ready.outputs.installer_run_id }}",
+            '- authority: diagnostic scheduling metadata only'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
       - name: Resolve release identity and immutable engine locks
         id: release
@@ -203,7 +311,11 @@ jobs:
       - name: Run offline sealed-package safety fixtures
         if: github.event_name != 'workflow_dispatch'
         shell: powershell
-        run: python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
+        run: |
+          python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical package verifier fixtures failed.' }
+          python .\ArIED61850Tester\scripts\test-ci-installer-reuse.py
+          if ($LASTEXITCODE -ne 0) { throw 'Validated installer verifier fixtures failed.' }
 
       - name: Promote exact sealed canonical Windows package for release
         if: github.event_name != 'workflow_dispatch'

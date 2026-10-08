@@ -18,6 +18,8 @@ on:
       - "scripts/write-ci-installer-manifest.py"
       - "scripts/verify-ci-installer-reuse.py"
       - "scripts/test-ci-installer-reuse.py"
+      - "scripts/wait-ci-release-ready.py"
+      - "scripts/test-ci-release-ready.py"
       - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
@@ -37,6 +39,8 @@ on:
       - "scripts/write-ci-installer-manifest.py"
       - "scripts/verify-ci-installer-reuse.py"
       - "scripts/test-ci-installer-reuse.py"
+      - "scripts/wait-ci-release-ready.py"
+      - "scripts/test-ci-release-ready.py"
       - ".github/actions/resolve-ariec-engine/**"
       - "evidence/ci-workflow-budget.json"
       - "docs/audits/CI_P0_WORKFLOW_BASELINE.md"
@@ -77,6 +81,9 @@ jobs:
 
       - name: Run validated installer CI P3D safety fixtures
         run: python3 scripts/test-ci-installer-reuse.py
+
+      - name: Run release-ready CI P3G safety fixtures
+        run: python3 scripts/test-ci-release-ready.py
 
       - name: Validate tracked workflow topology and budget
         run: |

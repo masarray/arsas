@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "baselineSourceCommit": "71e8d7e864b22c2f2146e5f8576cef0126c5f6e7",
-  "baselineName": "CI-P3F: package-ready gate defers Windows installer allocation",
-  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3D establish reproducible sealed exact-byte promotion through installer/release. P3F changes orchestration only: a non-authoritative Ubuntu metadata gate waits for the exact canonical package artifact before allocating the Windows installer runner; full package-byte verification and installer validation remain unchanged.",
+  "baselineName": "CI-P3G: release-ready gate defers Windows release allocation",
+  "policy": "P0 workflow-sprawl baseline remains immutable. P3A-P3F establish reproducible exact-byte promotion and defer installer Windows allocation. P3G adds a metadata-only Ubuntu release gate so production Windows release capacity is allocated only after the exact canonical package and exact completed-success validated installer artifacts exist; all byte/hash/TRX/runtime/release verification remains in the Windows release authority.",
   "preP0Observed": {
     "workflowFiles": 28,
     "actionsCheckout": 31,
@@ -18,9 +18,9 @@
   },
   "limits": {
     "workflowFiles": 31,
-    "actionsCheckout": 35,
+    "actionsCheckout": 36,
     "actionsSetupDotnet": 11,
-    "actionsSetupPython": 18,
+    "actionsSetupPython": 19,
     "dotnetRestore": 11,
     "dotnetBuild": 11,
     "dotnetTest": 12,
@@ -511,5 +511,62 @@
     "manualWorkflowDispatchBypassesGate": true,
     "releaseAuthorityChanged": false,
     "rollback": "Remove package-ready job and installer needs/if dependency to restore direct Windows polling. Never remove the full sealed-package verifier or installer/runtime smoke to reduce wait time."
+  },
+  "ciP3ReleaseReadyGate": {
+    "issueNumber": 462,
+    "lane": "release-windows",
+    "approach": "For non-manual production release events, checkout the exact release source on ubuntu-latest, resolve version/ARIEC61850/ArdIrec identity, and wait for exact Build ARSAS package metadata plus exact completed-success validated installer metadata before allocating windows-latest. Windows release still revalidates and materializes both artifacts byte-for-byte.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 35,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 18,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 36,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 19,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "staticLimitsChanged": true,
+    "addedWorkflowFiles": 0,
+    "addedCheckoutActions": 1,
+    "addedSetupPythonActions": 1,
+    "addedDotnetRestoreBuildTest": 0,
+    "metadataGateRunner": "ubuntu-latest",
+    "boundedWaitSeconds": 2700,
+    "canonicalPackageMetadataRequired": true,
+    "completedSuccessfulInstallerMetadataRequired": true,
+    "exactSourceShaRequired": true,
+    "exactMainPushDependencyRunsRequired": true,
+    "gateResolvesVersionEngineAndArdIrecIdentity": true,
+    "packageBytesTrustedByGate": false,
+    "installerBytesTrustedByGate": false,
+    "releasePromotionAuthority": false,
+    "fullCanonicalPackageVerifierRetained": true,
+    "fullValidatedInstallerVerifierRetained": true,
+    "releasePortableSmokeRetained": true,
+    "releaseInstalledRuntimeSmokeRetained": true,
+    "checksumsSbomProvenanceAttestationsRetained": true,
+    "manualWorkflowDispatchBypassesGate": true,
+    "installerArchiveTransient404Retry": {
+      "status": 404,
+      "boundedByExistingVerifierDeadline": true,
+      "otherHttpErrorsHardFail": true,
+      "persistent404TimesOut": true
+    },
+    "rollback": "Remove release-ready job and windows-release needs/if dependency to restore direct Windows polling. Keep exact package and installer verifiers, runtime smoke and release authority unchanged."
   }
 }
