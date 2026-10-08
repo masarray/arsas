@@ -410,7 +410,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         // The current source is the explicit P6.2 code-only trial. P6.1 remains
         // immutable ancestry, not a field-proven replacement or a new main pin.
         Assert.Equal(
-            "e45259b710e5e6962203428abbc7fa063a25f52d",
+            "352c81e6a798635c6addcee0683235ca87ad416d",
             root.GetProperty("commit").GetString());
         Assert.Equal(153, root.GetProperty("sourcePullRequest").GetInt32());
 
