@@ -1050,6 +1050,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             session.HybridValidation.Reset(hybrid);
             if (session.StaticDataSetReportOnly)
             {
+                var parity = StaticAcquisitionParityTracker.Record(session.Device, hybrid);
+                Log(
+                    parity.Status == StaticAcquisitionParityStatus.Mismatch ? "WARN" : "INFO",
+                    session.Device.Name,
+                    $"Static ingress parity evidence: {parity.Summary}. Concrete live RCB slots are diagnostic-only and excluded from the semantic fingerprint.");
+
+                foreach (var difference in parity.Differences.Take(6))
+                    Log("WARN", session.Device.Name, $"Static ingress parity difference: {difference}");
+
                 Log("INFO", session.Device.Name,
                     $"Static DataSet ARIEC authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, engineFallbackCandidates={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. Engine fallback candidates are diagnostic only and are not scheduled as MMS process polling.");
             }
