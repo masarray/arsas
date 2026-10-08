@@ -271,7 +271,7 @@ internal static class DiagnosticReportBuilder
             builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
     }
 
-    private static void AppendStaticIngressParity(
+    internal static void AppendStaticIngressParity(
         StringBuilder builder,
         StaticAcquisitionParitySnapshot parity)
     {
@@ -285,6 +285,7 @@ internal static class DiagnosticReportBuilder
             builder.AppendLine($"    traffic       : {discovery.RoutedTrafficSummary}; first={discovery.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in discovery.RuntimeTargets.Take(8))
                 builder.AppendLine($"    runtime       : {target} [{(discovery.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
+            AppendStaticSemanticBasis(builder, discovery);
         }
 
         if (parity.OpenScl is { } openScl)
@@ -293,10 +294,45 @@ internal static class DiagnosticReportBuilder
             builder.AppendLine($"    traffic       : {openScl.RoutedTrafficSummary}; first={openScl.FirstRoutedReportAtUtc?.ToString("O") ?? "pending"}");
             foreach (var target in openScl.RuntimeTargets.Take(8))
                 builder.AppendLine($"    runtime       : {target} [{(openScl.RoutedReportTargets.Contains(target, StringComparer.Ordinal) ? "ROUTED" : "PENDING")}]");
+            AppendStaticSemanticBasis(builder, openScl);
         }
 
         foreach (var difference in parity.Differences.Take(12))
             builder.AppendLine($"  difference     : {difference}");
+    }
+
+    /// <summary>
+    /// Read-only, bounded provenance for explaining why two independent field runs
+    /// produced different hashes. These exact source-neutral rows feed the existing
+    /// hash; indexed live RCB instances are intentionally excluded from the rows.
+    /// Truncation is explicit: partial rows must not be used as parity proof.
+    /// </summary>
+    private static void AppendStaticSemanticBasis(
+        StringBuilder builder,
+        StaticAcquisitionIngressEvidence evidence)
+    {
+        const int maxRows = 12;
+        const int maxCharsPerRow = 4096;
+
+        builder.AppendLine($"    semantic gate  : {(evidence.IsComparable ? "COMPARABLE" : "INCOMPLETE")}" +
+            (evidence.IsComparable ? string.Empty : $"; {evidence.IncomparableReason}"));
+        builder.AppendLine($"    semantic basis : {evidence.SemanticLines.Count} fingerprint row(s); " +
+            "indexed live RCB slots excluded; diagnostic copy only");
+        for (var i = 0; i < Math.Min(evidence.SemanticLines.Count, maxRows); i++)
+        {
+            var row = evidence.SemanticLines[i] ?? string.Empty;
+            var part = row.Length > maxCharsPerRow
+                ? row[..maxCharsPerRow]
+                : row;
+            // Avoid synthetic diagnostic lines if an external source contains CR/LF.
+            part = part.Replace("\r", @"\r", StringComparison.Ordinal)
+                .Replace("\n", @"\n", StringComparison.Ordinal);
+            builder.AppendLine($"    semantic[{i}]   : {part}" +
+                (row.Length > maxCharsPerRow ? $" [TRUNCATED; full length={row.Length}]" : string.Empty));
+        }
+
+        if (evidence.SemanticLines.Count > maxRows)
+            builder.AppendLine($"    semantic rows  : TRUNCATED; shown={maxRows}, total={evidence.SemanticLines.Count}");
     }
 
     private static RouteAnalysis AnalyzeRoute(string targetText)
