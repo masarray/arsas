@@ -79,13 +79,21 @@ jobs:
 
       - name: Checkout immutable ARIEC61850 engine revision for manual diagnostics
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ steps.engine.outputs.repository }}
-          ref: ${{ steps.engine.outputs.commit }}
-          path: ARIEC61850
-          persist-credentials: false
-          fetch-depth: 1
+        shell: powershell
+        env:
+          ENGINE_REPOSITORY: ${{ steps.engine.outputs.repository }}
+          ENGINE_COMMIT: ${{ steps.engine.outputs.commit }}
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ARIEC61850
+          if ($LASTEXITCODE -ne 0) { throw 'Engine clone failed.' }
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ENGINE_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned engine fetch failed.' }
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned engine checkout failed.' }
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -cne $env:ENGINE_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+          }
 
       - name: Setup .NET 8 for manual diagnostics
         if: github.event_name == 'workflow_dispatch'
