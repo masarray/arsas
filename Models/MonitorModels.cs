@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Scl.Workspace;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Models;
 
@@ -41,6 +42,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _sclSourceSha256 = string.Empty;
     private string _sclIedName = string.Empty;
     private string _sclAccessPointName = string.Empty;
+    private string _sclEndpointOrigin = "Unbound";
 
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
@@ -134,15 +136,28 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         set => Set(ref _sclAccessPointName, value?.Trim() ?? string.Empty);
     }
 
-    // Imported ConnectedAP alternatives are source-file evidence, not live state.
-    // Keep the authoritative model and selected AP bound to the same candidate.
+    // AP identities exist even with no IP in Communication. Never infer an AP
+    // from the endpoint alone; each binding carries its own explicit origin.
+    [JsonIgnore]
+    public IReadOnlyList<SclAccessPointChoice> SclAccessPointChoices { get; set; } = Array.Empty<SclAccessPointChoice>();
+
     [JsonIgnore]
     public IReadOnlyList<SclMmsEndpoint> SclEndpointCandidates { get; set; } = Array.Empty<SclMmsEndpoint>();
 
+    public string SclEndpointOrigin
+    {
+        get => _sclEndpointOrigin;
+        set
+        {
+            if (Set(ref _sclEndpointOrigin, value?.Trim() ?? "Unbound"))
+                Raise(nameof(SclEndpointHint));
+        }
+    }
+
     [JsonIgnore]
-    public string SclEndpointHint => SclEndpointCandidates.Count > 1
-        ? $"SCD AccessPoint {SclAccessPointName} • {EndpointText}. Right-click to choose another declared MMS endpoint."
-        : EndpointText;
+    public string SclEndpointHint => SclAccessPointChoices.Count > 1
+        ? $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin}). Right-click to choose an AP; an AP without SCD IP needs its own binding."
+        : $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin})";
 
     public bool HasSclDesignModel => SclWorkspace != null || !string.IsNullOrWhiteSpace(SclSourceSha256);
     public bool RequiresEndpointBinding => HasSclDesignModel && string.IsNullOrWhiteSpace(IpAddress);
