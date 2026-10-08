@@ -585,5 +585,38 @@ class PackageReuseTests(unittest.TestCase):
             )
 
 
+    def test_installer_package_ready_gate_only_schedules_windows_authority(self):
+        workflow = (ROOT.parent / ".github/workflows/installer-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("  package-ready:", workflow)
+        self.assertIn("    needs: [package-ready]", workflow)
+        self.assertIn("runs-on: ubuntu-latest", workflow)
+        self.assertIn("Wait for exact Build ARSAS package artifact metadata", workflow)
+        self.assertIn("ARSAS-windows-package-input", workflow)
+        self.assertIn(
+            "Latest exact Build ARSAS run failed before package readiness",
+            workflow,
+        )
+
+        gate = workflow.split("  package-ready:", 1)[1].split("\n  installer:", 1)[0]
+        self.assertNotIn("archive_download_url", gate)
+        self.assertNotIn("verify-ci-package-reuse.py", gate)
+        self.assertIn(
+            "package bytes remain untrusted until Windows verifier completes",
+            gate,
+        )
+
+        installer = workflow.split("\n  installer:", 1)[1]
+        self.assertIn("verify-ci-package-reuse.py", installer)
+        self.assertIn("--allow-in-progress-artifact", installer)
+        self.assertIn("Compile installer from exact tested payload", installer)
+        self.assertIn("Silent install and field-runtime smoke test", installer)
+        self.assertIn(
+            "github.event_name == 'workflow_dispatch' ||",
+            installer,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
