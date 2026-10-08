@@ -200,6 +200,8 @@ class NativeShadowTests(unittest.TestCase):
         self.assertIn("ARSAS-native-ctest-shadow", canonical)
         self.assertIn("actions/upload-artifact@v7", canonical)
         self.assertIn("Build and test pinned native bridge", comtrade)
+        self.assertIn("ARIEC61850_COMMIT=$($engineLock.commit)", comtrade)
+        self.assertIn("engines\\ARIEC61850.lock.json", comtrade)
 
 
 if __name__ == "__main__":
