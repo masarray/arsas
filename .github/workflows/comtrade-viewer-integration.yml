@@ -18,6 +18,10 @@ on:
       - "tests/ARSAS.Tests/ArdIrecLocusNativeSessionIntegrationTests.cs"
       - "tests/ARSAS.Tests/Comtrade*.cs"
       - "scripts/build-ardirec-bridge.ps1"
+      - "scripts/write-ci-native-ctest-proof.py"
+      - "scripts/compare-ci-native-shadow.py"
+      - "scripts/test-ci-native-shadow.py"
+      - ".github/workflows/build.yml"
       - "scripts/publish-windows-portable.ps1"
       - "engines/ARDIREC.lock.json"
       - "docs/COMTRADE_VIEWER_INTEGRATION.md"
@@ -26,6 +30,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
@@ -91,16 +96,19 @@ jobs:
         shell: powershell
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "arsas-native-comtrade"
+          $nativeJunit = Join-Path $env:RUNNER_TEMP "comtrade-independent-ctest.xml"
           .\ARSAS\scripts\build-ardirec-bridge.ps1 `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
             -OutputDirectory $stage `
-            -BuildDirectory "$env:RUNNER_TEMP\ardirec-native-build"
+            -BuildDirectory "$env:RUNNER_TEMP\ardirec-native-build" `
+            -CTestJunitPath $nativeJunit
 
           $bridge = Join-Path $stage "ardirec_bridge.dll"
           if (-not (Test-Path $bridge -PathType Leaf)) {
             throw "Pinned ArdIrec native bridge was not staged: $bridge"
           }
           "NATIVE_BRIDGE_PATH=$bridge" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "INDEPENDENT_CTEST_JUNIT=$nativeJunit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Enforce field-tested native-only ARSAS COMTRADE routing
         shell: powershell
@@ -148,3 +156,40 @@ jobs:
           }
 
           Write-Host "COMTRADE Open uses the field-tested in-process workstation with Phasor, Harmonics and Locus; no Qt/external ArdIrec process launch remains."
+
+      - name: Advisory same-SHA native CTest and bridge byte shadow comparison
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'ci-p3j-c-native-shadow-parity.json'
+          python .\ARSAS\scripts\compare-ci-native-shadow.py `
+            --head-sha $env:PR_HEAD_SHA `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --independent-junit $env:INDEPENDENT_CTEST_JUNIT `
+            --independent-bridge $env:NATIVE_BRIDGE_PATH `
+            --wait-seconds 600 `
+            --output $out
+          $verdict = $LASTEXITCODE
+          "### CI-P3J-C native shadow parity (advisory)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if (Test-Path $out -PathType Leaf) {
+            $proof = Get-Content $out -Raw | ConvertFrom-Json
+            "- canonical run: $($proof.canonicalRunId)/$($proof.canonicalRunAttempt), status: $($proof.canonicalRunStatus)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- CTest case inventory equal: $($proof.ctestInventoryEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- Independent vs canonical bridge bytes equal: $($proof.bridgeBytesEqual)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- Canonical build completed-success: $($proof.fullCanonicalBuildPassed)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            "- canonical comparison unavailable; no native equivalence may be claimed" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          "- COMTRADE Windows CMake/CTest is retained; this is not release or deduplication authority" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($verdict -ne 0) {
+            Write-Warning "Advisory CI-P3J-C comparison failed/unavailable; independent native CTest remains mandatory."
+            exit $verdict
+          }
