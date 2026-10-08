@@ -357,6 +357,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .Select(signal => NormalizeReference(signal.ObjectReference))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // A source SHA and AP name together scope a prior offline binding.
+        // Never reuse the previous AP's TCP address after importing another AP
+        // (including when the engine has no direct ConnectedAP IP).
+        var sameExactAp = device.SclSourceSha256.Equals(document.SourceSha256, StringComparison.OrdinalIgnoreCase) &&
+            device.SclIedName.Equals(workspace.IedName, StringComparison.OrdinalIgnoreCase) &&
+            device.SclAccessPointName.Equals(workspace.AccessPointName, StringComparison.OrdinalIgnoreCase);
+
         DetachSignalHandlers(device.Signals);
         device.Signals.Clear();
         device.RecountSelectedSignals();
@@ -369,11 +376,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             device.IpAddress = endpoint.IpAddress;
             device.Port = endpoint.Port;
+            device.SclEndpointOrigin = "SCD-declared";
         }
-        else if (string.IsNullOrWhiteSpace(device.IpAddress) || device.IpAddress == "192.168.1.10")
+        else if (!sameExactAp || string.IsNullOrWhiteSpace(device.IpAddress) || device.IpAddress == "192.168.1.10")
         {
             device.IpAddress = string.Empty;
             device.Port = 102;
+            device.SclEndpointOrigin = "Unbound";
+        }
+        else if (device.SclEndpointOrigin == "Unbound")
+        {
+            device.SclEndpointOrigin = "Existing exact-AP binding";
         }
 
         var allowDynamicReporting = ShouldAllowDynamicReportingForScl(signals);
@@ -384,6 +397,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.SclSourceSha256 = document.SourceSha256;
         device.SclIedName = workspace.IedName;
         device.SclAccessPointName = workspace.AccessPointName;
+        device.SclAccessPointChoices = SclEndpointTopology.Choices(document, workspace.IedName);
         device.SclEndpointCandidates = SclEndpointTopology.Candidates(document, workspace.IedName);
         device.HasDiscoveryCache = signals.Count > 0;
 
@@ -464,7 +478,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RestoreKnownSclEndpointIfAvailable(
         Iec61850MonitorDevice device,
-        SclIedWorkspace workspace)
+        SclIedWorkspace workspace,
+        bool allowLegacyIedHint = true)
     {
         if (!string.IsNullOrWhiteSpace(device.IpAddress) ||
             workspace.PreferredEndpoint?.HasUsableAddress == true)
@@ -472,24 +487,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (!UserPreferenceStore.TryLoadSuccessfulEndpointForIed(
-                workspace.IedName,
-                out var ipAddress,
-                out var port))
-        {
+        // Exact AP/SCD source binding first. Legacy IED-wide history is a
+        // compatibility hint ONLY for initial import, never for AP switching.
+        var exact = SclEndpointBindingStore.TryGet(
+            device.SclSourceSha256, workspace.IedName, workspace.AccessPointName,
+            out var ipAddress, out var port);
+        if (!exact && (!allowLegacyIedHint || !UserPreferenceStore.TryLoadSuccessfulEndpointForIed(
+                workspace.IedName, out ipAddress, out port)))
             return;
-        }
 
         device.IpAddress = ipAddress;
         device.Port = port;
+        device.SclEndpointOrigin = exact ? "Remembered exact SCD/IED/AP" : "Remembered legacy IED hint";
         device.Status = "SCL model ready • remembered endpoint";
-        device.Detail =
-            $"The SCL does not declare a direct MMS IP for this AccessPoint. ARSAS restored {ipAddress}:{port} from the most recent successful session for the exact IEDName '{workspace.IedName}'. Play will validate it with a fresh MMS association before any live operation.";
+        device.Detail = exact
+            ? $"Previously verified MMS endpoint restored for this exact SCD hash, IED and AccessPoint. Play makes a fresh MMS association."
+            : $"Previously successful IED-wide endpoint suggested for the initial SCL import. It is not evidence for any other AccessPoint; Play verifies the new association.";
         device.RefreshComputed();
-        AddLog(
-            "INFO",
-            device.Name,
-            $"SCL has no direct MMS endpoint; restored previously successful endpoint {ipAddress}:{port} for exact IEDName {workspace.IedName}. Live use still requires a fresh association.");
+        AddLog("INFO", device.Name,
+            $"SCL AccessPoint {workspace.AccessPointName} has no direct MMS IP; restored {device.SclEndpointOrigin}: {ipAddress}:{port}. Connection still requires fresh verification.");
     }
 
     private void RemoveRedundantOfflineSclCards(
@@ -609,6 +625,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         device.IpAddress = wizard.RelayIpAddress;
         device.Port = wizard.MmsPort;
+        device.SclEndpointOrigin = "Operator-bound • unverified";
         device.Status = "SCL model ready";
         device.Detail = device.AllowDynamicDataSetWrites
             ? "Endpoint bound locally. Saving the selected signals will connect and arm Smart Dynamic reporting with a safe free RCB before polling fallback."
@@ -987,6 +1004,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 device,
                 _applicationCancellation.Token,
                 progress);
+
+            // Persist ONLY after verified SCL-assisted MMS association succeeded.
+            // Per-AP persistence is independent of legacy IED-wide history.
+            if (device.IsConnected && device.HasSclDesignModel &&
+                !string.IsNullOrWhiteSpace(device.SclSourceSha256) &&
+                !string.IsNullOrWhiteSpace(device.SclAccessPointName))
+            {
+                try
+                {
+                    SclEndpointBindingStore.RecordVerified(
+                        device.SclSourceSha256, device.SclIedName,
+                        device.SclAccessPointName, device.IpAddress, device.Port);
+                    if (device.SclEndpointOrigin != "SCD-declared")
+                        device.SclEndpointOrigin = "Verified exact SCD/IED/AP";
+                }
+                catch (Exception ex)
+                {
+                    AddLog("WARN", device.Name, $"Could not save per-AccessPoint successful endpoint: {ex.Message}");
+                }
+            }
 
             device.RecountSelectedSignals();
             await WaitForDiscoveryProgressAnimationAsync(device, TimeSpan.FromMilliseconds(900));
