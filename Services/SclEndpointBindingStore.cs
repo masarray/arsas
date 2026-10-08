@@ -127,8 +127,17 @@ internal static class SclEndpointBindingStore
         !string.IsNullOrWhiteSpace(ied) &&
         !string.IsNullOrWhiteSpace(ap);
 
-    private static bool ValidAddress(string ip, int port) =>
-        port is >= 1 and <= 65535 && IPAddress.TryParse(ip, out var address) &&
-        address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
-        !IPAddress.Any.Equals(address) && !IPAddress.Broadcast.Equals(address);
+    private static bool ValidAddress(string ip, int port)
+    {
+        if (port is < 1 or > 65535 || !IPAddress.TryParse(ip, out var address))
+            return false;
+        return address.AddressFamily switch
+        {
+            System.Net.Sockets.AddressFamily.InterNetwork =>
+                !IPAddress.Any.Equals(address) && !IPAddress.Broadcast.Equals(address),
+            System.Net.Sockets.AddressFamily.InterNetworkV6 =>
+                !IPAddress.IPv6Any.Equals(address) && !address.IsIPv6Multicast,
+            _ => false
+        };
+    }
 }
