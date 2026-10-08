@@ -244,6 +244,29 @@ class ReleaseReadyTests(unittest.TestCase):
             self.assertEqual(resolved["engineSha"], E)
             self.assertEqual(resolved["ardirecSha"], A)
 
+    def test_release_workflow_defers_windows_but_retains_full_authority_verifiers(self):
+        workflow = (ROOT.parent / ".github/workflows/release-windows.yml").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "release-ready:",
+            "runs-on: ubuntu-latest",
+            "wait-ci-release-ready.py",
+            "needs: [release-ready]",
+            "github.event_name == 'workflow_dispatch'",
+            "verify-ci-package-reuse.py",
+            "verify-ci-installer-reuse.py",
+            "Smoke-test exact release portable single EXE",
+            "Smoke-test silent installer and uninstaller",
+            "Generate SPDX 2.3 package SBOM",
+            "Create or update GitHub Release",
+        ):
+            self.assertIn(token, workflow)
+        self.assertIn(
+            "authority: scheduling metadata only; Windows release revalidates all artifact bytes",
+            workflow,
+        )
+
     def test_tag_identity_must_match_canonical_version(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
