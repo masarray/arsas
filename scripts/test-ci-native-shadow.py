@@ -201,7 +201,7 @@ class NativeShadowTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@v7", canonical)
         self.assertIn("Build and test pinned native bridge", comtrade)
         self.assertEqual(comtrade.count("name: Validate COMTRADE viewer integration"), 1)
-        self.assertEqual(comtrade.count("name: Advisory same-SHA native"), 1)
+        self.assertEqual(comtrade.count("name: Advisory exact-SHA native comparison"), 1)
         self.assertEqual(comtrade.count("name: Checkout immutable ArdIrec revision"), 1)
 
         self.assertIn("native-shadow-observer:", comtrade)
