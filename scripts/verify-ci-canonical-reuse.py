@@ -22,6 +22,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
 import importlib.util
@@ -44,6 +45,46 @@ EXPECTED_TRX = "arsas-tests.trx"
 
 class ProofError(RuntimeError):
     pass
+
+
+def required_test_matches(trx: bytes, required_substrings: list[str]) -> dict[str, int]:
+    if not required_substrings:
+        return {}
+
+    normalized: list[str] = []
+    for value in required_substrings:
+        item = (value or "").strip()
+        if not item or len(item) > 200 or "\n" in item or "\r" in item:
+            raise ProofError("Required canonical test substring is invalid")
+        if item not in normalized:
+            normalized.append(item)
+
+    try:
+        root = ET.fromstring(trx)
+    except ET.ParseError as exc:
+        raise ProofError("Canonical TRX cannot be parsed for required domain tests") from exc
+
+    results: list[tuple[str, str]] = []
+    for element in root.findall(".//{*}UnitTestResult"):
+        name = element.attrib.get("testName", "")
+        outcome = element.attrib.get("outcome", "")
+        if name:
+            results.append((name, outcome))
+
+    proof: dict[str, int] = {}
+    for required in normalized:
+        matches = [(name, outcome) for name, outcome in results if required in name]
+        if not matches:
+            raise ProofError(
+                f"Canonical TRX is missing required test family: {required}"
+            )
+        nonpassing = [name for name, outcome in matches if outcome != "Passed"]
+        if nonpassing:
+            raise ProofError(
+                f"Canonical TRX required test family is not entirely Passed: {required}"
+            )
+        proof[required] = len(matches)
+    return proof
 
 
 def validate_identity(repo: str, head_sha: str, merge_sha: str, engine_sha: str,
@@ -85,6 +126,7 @@ def validate_artifact_archive(
     payload: bytes, *, merge_sha: str, engine_sha: str,
     workflow_run_id: int, run_attempt: int,
     expected_event_name: str = "pull_request",
+    required_test_substrings: list[str] | None = None,
 ) -> dict:
     if not payload or len(payload) > MAX_ARCHIVE_BYTES:
         raise ProofError("Canonical artifact is missing or exceeds bounded size")
@@ -156,6 +198,7 @@ def validate_artifact_archive(
         raise ProofError("TRX does not prove a fully passing test suite") from exc
     if manifest.get("testCounters") != actual:
         raise ProofError("Canonical TRX counters disagree with manifest")
+    required_tests = required_test_matches(trx, required_test_substrings or [])
     return {
         "canonicalRunId": workflow_run_id,
         "canonicalRunAttempt": run_attempt,
@@ -165,6 +208,7 @@ def validate_artifact_archive(
         "failed": actual["failed"],
         "notExecuted": actual["notExecuted"],
         "artifactSha256": hashlib.sha256(payload).hexdigest(),
+        "requiredTests": required_tests,
     }
 
 
@@ -233,6 +277,7 @@ def verify_canonical(
     wait_seconds: int = 960, poll_seconds: int = 10,
     allow_in_progress_artifact: bool = False,
     event_name: str = "pull_request",
+    required_test_substrings: list[str] | None = None,
 ) -> dict:
     validate_identity(
         repository, head_sha, merge_sha, engine_sha, branch, event_name
@@ -282,6 +327,7 @@ def verify_canonical(
                             blob, merge_sha=merge_sha, engine_sha=engine_sha,
                             workflow_run_id=run_id, run_attempt=attempt,
                             expected_event_name=event_name,
+                            required_test_substrings=required_test_substrings,
                         )
                     except ProofError as exc:
                         if "stale/different source revision" not in str(exc):
@@ -331,6 +377,15 @@ def main() -> int:
     )
     parser.add_argument("--wait-seconds", type=int, default=960)
     parser.add_argument(
+        "--require-test-substring",
+        action="append",
+        default=[],
+        help=(
+            "Require at least one Passed UnitTestResult whose testName contains "
+            "this substring. Repeat for multiple domain test families."
+        ),
+    )
+    parser.add_argument(
         "--allow-in-progress-artifact",
         action="store_true",
         help=(
@@ -350,6 +405,7 @@ def main() -> int:
         wait_seconds=args.wait_seconds,
         allow_in_progress_artifact=args.allow_in_progress_artifact,
         event_name=args.event_name,
+        required_test_substrings=args.require_test_substring,
     )
     payload = json.dumps(result, sort_keys=True)
     print("Canonical full-regression reuse PASS: " + payload)
