@@ -155,9 +155,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     }
 
     [JsonIgnore]
-    public string SclEndpointHint => SclAccessPointChoices.Count > 1
-        ? $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin}). Right-click to choose an AP; an AP without SCD IP needs its own binding."
-        : $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin})";
+    public string SclEndpointHint => !HasSclDesignModel
+        ? EndpointText
+        : SclAccessPointChoices.Count > 1
+            ? $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin}). Right-click to choose an AP; an AP without SCD IP needs its own binding."
+            : $"SCD AP {SclAccessPointName} • {EndpointText} ({SclEndpointOrigin})";
 
     public bool HasSclDesignModel => SclWorkspace != null || !string.IsNullOrWhiteSpace(SclSourceSha256);
     public bool RequiresEndpointBinding => HasSclDesignModel && string.IsNullOrWhiteSpace(IpAddress);
