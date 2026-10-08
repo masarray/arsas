@@ -15,6 +15,56 @@ internal static class DiagnosticReportBuilder
     private sealed record AdapterIpv4(string Name, NetworkInterfaceType Type, IPAddress Address, int PrefixLength);
     private sealed record RouteAnalysis(string Source, string MatchingAdapters, string AdapterMatrix, string Note);
 
+    public static string BuildEmergency(
+        IReadOnlyCollection<Iec61850MonitorDevice> devices,
+        IReadOnlyCollection<DiagnosticEntry> logs,
+        Iec61850MonitorDevice? selectedDevice,
+        Exception collectionFailure)
+    {
+        ArgumentNullException.ThrowIfNull(collectionFailure);
+
+        var appAssembly = Assembly.GetEntryAssembly() ?? typeof(DiagnosticReportBuilder).Assembly;
+        var engineAssembly = typeof(AR.Iec61850.Mms.MmsClientSession).Assembly;
+        var builder = new StringBuilder(16 * 1024);
+        builder.AppendLine("ARSAS Emergency Diagnostic Report");
+        builder.AppendLine("Diagnostic collection degraded, but support evidence was preserved.");
+        builder.AppendLine(new string('=', 72));
+        builder.AppendLine($"Generated local : {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}");
+        builder.AppendLine($"App version     : {GetAssemblyVersion(appAssembly)}");
+        builder.AppendLine($"Engine version  : {GetAssemblyVersion(engineAssembly)}");
+        builder.AppendLine($"Collection error: {collectionFailure.GetType().Name}: {collectionFailure.Message}");
+        builder.AppendLine($"IED count       : {devices.Count}");
+        builder.AppendLine($"Selected IED    : {selectedDevice?.Name ?? "none"}");
+        builder.AppendLine();
+
+        builder.AppendLine("IED SNAPSHOT");
+        builder.AppendLine(new string('-', 72));
+        foreach (var device in devices)
+        {
+            builder.AppendLine(
+                $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status}");
+        }
+        if (devices.Count == 0)
+            builder.AppendLine("No IED card is present.");
+
+        builder.AppendLine();
+        builder.AppendLine("RECENT DIAGNOSTICS");
+        builder.AppendLine(new string('-', 72));
+        foreach (var entry in logs.OrderBy(item => item.Time).TakeLast(200))
+        {
+            builder.AppendLine(
+                $"{entry.Time:yyyy-MM-dd HH:mm:ss.fff} | {entry.Level} | {entry.Source} | {entry.Message}");
+        }
+        if (logs.Count == 0)
+            builder.AppendLine("No diagnostic entries.");
+
+        builder.AppendLine();
+        builder.AppendLine("NOTE");
+        builder.AppendLine(new string('-', 72));
+        builder.AppendLine("This fallback report intentionally skips network probes and complex aggregation so diagnostics remain copyable even when the normal collector encounters malformed workspace state.");
+        return builder.ToString();
+    }
+
     public static async Task<string> BuildAsync(
         IReadOnlyCollection<Iec61850MonitorDevice> devices,
         IReadOnlyCollection<DiagnosticEntry> logs,
