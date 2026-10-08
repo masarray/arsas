@@ -2317,7 +2317,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             foreach (var profile in project.Devices ?? new List<Iec61850TesterDeviceProfile>())
             {
-                var restoredSclWorkspace = await TryRestoreSclWorkspaceAsync(profile);
+                // Restore one SCD parse for both the selected model and all
+                // source-declared AP choices; no duplicate file I/O or lost APs.
+                var restoredSclDocument = await TryRestoreSclWorkspaceAsync(profile);
+                var restoredSclWorkspace = restoredSclDocument?.Ieds.FirstOrDefault(item =>
+                    item.IedName.Equals(profile.SclIedName, StringComparison.OrdinalIgnoreCase) &&
+                    (string.IsNullOrWhiteSpace(profile.SclAccessPointName) ||
+                     item.AccessPointName.Equals(profile.SclAccessPointName, StringComparison.OrdinalIgnoreCase)));
                 var cachedSignals = (profile.CachedSignals ?? new List<Iec61850CachedSignalProfile>())
                     .Where(item => !string.IsNullOrWhiteSpace(item.ObjectReference))
                     .Select(item => item.ToSignal())
@@ -2348,7 +2354,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     SclSourcePath = profile.SclSourcePath,
                     SclSourceSha256 = profile.SclSourceSha256,
                     SclIedName = profile.SclIedName,
-                    SclAccessPointName = profile.SclAccessPointName,
+                    SclAccessPointName = restoredSclWorkspace?.AccessPointName ?? profile.SclAccessPointName,
+                    SclAccessPointChoices = restoredSclDocument is null
+                        ? Array.Empty<SclAccessPointChoice>()
+                        : SclEndpointTopology.Choices(restoredSclDocument, restoredSclWorkspace?.IedName ?? profile.SclIedName),
+                    SclEndpointCandidates = restoredSclDocument is null
+                        ? Array.Empty<SclMmsEndpoint>()
+                        : SclEndpointTopology.Candidates(restoredSclDocument, restoredSclWorkspace?.IedName ?? profile.SclIedName),
+                    SclEndpointOrigin = restoredSclWorkspace?.PreferredEndpoint?.HasUsableAddress == true &&
+                        restoredSclWorkspace.PreferredEndpoint.IpAddress.Equals(profile.IpAddress, StringComparison.OrdinalIgnoreCase)
+                            ? "SCD-declared"
+                            : string.IsNullOrWhiteSpace(profile.IpAddress) ? "Unbound" : "Project binding • revalidate",
                     HasDiscoveryCache = hasSavedModel,
                     Status = hasSclProvenance
                         ? string.IsNullOrWhiteSpace(profile.IpAddress) ? "SCL model ready — bind endpoint" : "SCL model ready"
@@ -2396,7 +2412,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async Task<SclIedWorkspace?> TryRestoreSclWorkspaceAsync(Iec61850TesterDeviceProfile profile)
+    private async Task<SclWorkspaceDocument?> TryRestoreSclWorkspaceAsync(Iec61850TesterDeviceProfile profile)
     {
         if (string.IsNullOrWhiteSpace(profile.SclSourcePath) || string.IsNullOrWhiteSpace(profile.SclSourceSha256))
             return null;
@@ -2412,8 +2428,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 profile.SclSourcePath,
                 new SclWorkspaceOpenOptions
                 {
-                    IedName = profile.SclIedName,
-                    AccessPointName = profile.SclAccessPointName
+                    // Do NOT filter by AP: the menu must recover other source
+                    // AP identities without a second SCD parse at project load.
+                    IedName = profile.SclIedName
                 },
                 _applicationCancellation.Token);
             if (!document.SourceSha256.Equals(profile.SclSourceSha256, StringComparison.OrdinalIgnoreCase))
@@ -2423,9 +2440,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return null;
             }
 
-            return document.Ieds.FirstOrDefault(item =>
-                (string.IsNullOrWhiteSpace(profile.SclIedName) || item.IedName.Equals(profile.SclIedName, StringComparison.OrdinalIgnoreCase)) &&
-                (string.IsNullOrWhiteSpace(profile.SclAccessPointName) || item.AccessPointName.Equals(profile.SclAccessPointName, StringComparison.OrdinalIgnoreCase)));
+            var matches = document.Ieds.Where(item =>
+                (string.IsNullOrWhiteSpace(profile.SclIedName) ||
+                 item.IedName.Equals(profile.SclIedName, StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrWhiteSpace(profile.SclAccessPointName) ||
+                 item.AccessPointName.Equals(profile.SclAccessPointName, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+            if (matches.Length == 0)
+            {
+                AddLog("WARN", "SCL", "Saved IED/AP no longer resolves in the unchanged source SCD; no model binding was inferred.");
+                return null;
+            }
+
+            return document;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
