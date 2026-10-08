@@ -42,7 +42,9 @@ internal static class Iec61850ReportContinuityInspector
         var entryIdPresent = !string.IsNullOrEmpty(frame.EntryIdHex);
         var entryIdChanged = priorEntryIdPresent && entryIdPresent &&
             !string.Equals(state.LastEntryIdHex, frame.EntryIdHex, StringComparison.OrdinalIgnoreCase);
-        var entryContext = buffered
+        // Avoid formatting provenance on every healthy InformationReport:
+        // materialize it only when there is an actual continuity finding.
+        string EntryContext() => buffered
             ? $"; BRCB EntryID previousPresent={priorEntryIdPresent}, currentPresent={entryIdPresent}, changed={entryIdChanged}"
             : string.Empty;
 
@@ -86,14 +88,16 @@ internal static class Iec61850ReportContinuityInspector
                         previousSub == MaxSequenceNumber ||
                         sub != previousSub + 1)
                         Warn($"Segmented report discontinuity: expected sqNum={state.SegmentedSequenceNumber}, " +
-                             $"subSqNum={previousSub + 1}; received sqNum={current}, subSqNum={sub}" + entryContext);
+                             $"subSqNum={previousSub + 1}; received sqNum={current}, subSqNum={sub}" + EntryContext());
                 }
                 else
                 {
                     if (sub != 0)
                         Warn($"Segmented report starts at SubSqNum={sub}, expected=0; " +
-                             "prior segment evidence is absent" + entryContext);
-                    CheckSequence(state.LastSequenceNumber, current, Warn, entryContext);
+                             "prior segment evidence is absent" + EntryContext());
+                    var discontinuity = DescribeSequenceAnomaly(state.LastSequenceNumber, current);
+                    if (discontinuity is not null)
+                        Warn(discontinuity + EntryContext());
                 }
 
                 if (!frame.MoreSegmentsFollow.HasValue)
@@ -118,7 +122,9 @@ internal static class Iec61850ReportContinuityInspector
                 state.AwaitingMoreSegments = false;
                 state.SegmentedSequenceNumber = null;
                 state.LastSubSequenceNumber = null;
-                CheckSequence(state.LastSequenceNumber, current, Warn, entryContext);
+                var discontinuity = DescribeSequenceAnomaly(state.LastSequenceNumber, current);
+                    if (discontinuity is not null)
+                        Warn(discontinuity + EntryContext());
                 state.LastSequenceNumber = current;
             }
         }
@@ -133,24 +139,19 @@ internal static class Iec61850ReportContinuityInspector
         return findings is null ? Array.Empty<string>() : findings;
     }
 
-    private static void CheckSequence(
-        ulong? previous,
-        ulong current,
-        Action<string> warn,
-        string entryContext)
+    private static string? DescribeSequenceAnomaly(ulong? previous, ulong current)
     {
         if (!previous.HasValue)
-            return; // First observed report is not necessarily the first server report.
+            return null; // First observed report is not necessarily the first server report.
 
         var prior = previous.Value;
         if ((prior < MaxSequenceNumber && current == prior + 1) ||
             (prior == MaxSequenceNumber && current == 0))
-            return;
+            return null;
 
         var classification = current == prior ? "duplicate/replay" :
             current < prior ? "backward/reset/replay" : "forward gap";
-        warn($"Report sequence discontinuity ({classification}): previous={prior}, " +
-             $"current={current}; RptEna/reconnect/GI context is not yet verified" +
-             entryContext + "; no event-loss conclusion");
+        return $"Report sequence discontinuity ({classification}): previous={prior}, " +
+               $"current={current}; RptEna/reconnect/GI context is not yet verified; no event-loss conclusion";
     }
 }
