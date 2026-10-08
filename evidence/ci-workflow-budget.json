@@ -24,7 +24,7 @@
     "dotnetRestore": 11,
     "dotnetBuild": 11,
     "dotnetTest": 12,
-    "actionsUploadArtifact": 35,
+    "actionsUploadArtifact": 33,
     "workflowsWithDotnetBuild": 10,
     "workflowsWithDotnetTest": 9
   },
@@ -602,12 +602,12 @@
     "issueNumber": 467,
     "lane": "validate-sv-evidence + validate-io-testing",
     "approach": "On pull_request, preserve workflow/job check names but run on ubuntu-latest, resolve exact engine lock, and require exact canonical Build ARSAS all-pass TRX plus explicit domain test-family presence. workflow_dispatch retains existing focused Windows restore/build/test diagnostics.",
-    "staticLimitsChanged": false,
+    "staticLimitsChanged": true,
     "addedWorkflowFiles": 0,
     "addedCheckoutActions": 0,
     "addedSetupPythonActions": 0,
     "addedSetupDotnetActions": 0,
-    "addedUploadArtifactActions": 0,
+    "addedUploadArtifactActions": -2,
     "prWindowsRunnerRequired": false,
     "canonicalIdentity": [
       "PR head/branch",
@@ -634,6 +634,39 @@
     "releaseAuthorityChanged": false,
     "packageAuthorityChanged": false,
     "physicalAuthorityChanged": false,
-    "rollback": "Restore pull_request execution to the focused Windows restore/build/test path. Never waive exact canonical identity or required domain-test assertions to make a specialized check pass."
+    "rollback": "Restore pull_request execution to the focused Windows restore/build/test path. Never waive exact canonical identity or required domain-test assertions to make a specialized check pass.",
+    "limitsBefore": {
+      "workflowFiles": 31,
+      "actionsCheckout": 36,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 19,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 35,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "limitsAfter": {
+      "workflowFiles": 31,
+      "actionsCheckout": 36,
+      "actionsSetupDotnet": 11,
+      "actionsSetupPython": 19,
+      "dotnetRestore": 11,
+      "dotnetBuild": 11,
+      "dotnetTest": 12,
+      "actionsUploadArtifact": 33,
+      "workflowsWithDotnetBuild": 10,
+      "workflowsWithDotnetTest": 9
+    },
+    "manualCompilerLogFoldedIntoDomainEvidenceArtifact": true,
+    "artifactNamesRetained": [
+      "ARSAS-sv-evidence-test-results",
+      "ARSAS-io-testing-test-results"
+    ],
+    "retiredRedundantManualArtifactNames": [
+      "ARSAS-sv-evidence-compiler-log",
+      "ARSAS-io-testing-compiler-log"
+    ]
   }
 }
