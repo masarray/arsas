@@ -36,16 +36,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public int ConsecutiveErrors { get; set; }
     }
 
-    private sealed class ReportStreamState
-    {
-        public ulong? LastSequenceNumber { get; set; }
-        public ulong? SegmentedSequenceNumber { get; set; }
-        public ulong? LastSubSequenceNumber { get; set; }
-        public bool AwaitingMoreSegments { get; set; }
-        public ulong? ConfigurationRevision { get; set; }
-        public string LastEntryIdHex { get; set; } = string.Empty;
-    }
-
     private sealed class DeviceSession
     {
         public required Iec61850MonitorDevice Device { get; init; }
@@ -59,7 +49,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, string> PointPlanIds { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
         public PriorityQueue<string, long> PollQueue { get; } = new();
-        public Dictionary<string, ReportStreamState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int LastUnroutedReportCount { get; set; }
         public int ReportPlanCursor { get; set; }
         public IReadOnlyList<ReportControlPlan> PendingReportPlans { get; set; } = Array.Empty<ReportControlPlan>();
@@ -1329,103 +1319,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             var streamKey = BuildReportStreamKey(plan, frame);
             if (!session.ReportStreams.TryGetValue(streamKey, out var state))
             {
-                state = new ReportStreamState();
+                state = new Iec61850ReportContinuityState();
                 session.ReportStreams[streamKey] = state;
             }
 
-            if (frame.BufferOverflow == true)
+            // IEC 61850-7-2 evidence analysis only: each exact RCB has isolated
+            // report continuity state. We never discard, rewrite or reorder decoded
+            // process values, re-arm an RCB or add MMS process polling from warnings.
+            foreach (var finding in Iec61850ReportContinuityInspector.Observe(
+                         state, frame, plan.Buffered))
             {
                 Log("WARN", session.Device.Name,
-                    $"BRCB buffer overflow reported by {ReportName(frame.ReportControlReference, plan.ReportControlReference)}. Buffered event continuity may be incomplete.");
+                    $"{ReportName(frame.ReportControlReference, plan.ReportControlReference)}: {finding}");
             }
-
-            if (frame.ConfRev.HasValue)
-            {
-                if (state.ConfigurationRevision.HasValue && state.ConfigurationRevision.Value != frame.ConfRev.Value)
-                {
-                    Log("WARN", session.Device.Name,
-                        $"Report ConfRev changed on {ReportName(frame.ReportControlReference, plan.ReportControlReference)}: {state.ConfigurationRevision.Value} → {frame.ConfRev.Value}. DataSet coverage is being treated as changed and should be revalidated.");
-                }
-                state.ConfigurationRevision = frame.ConfRev;
-            }
-
-            ValidateReportSequence(session, plan, frame, state);
-
-            if (!string.IsNullOrWhiteSpace(frame.EntryIdHex))
-                state.LastEntryIdHex = frame.EntryIdHex;
         }
-    }
-
-    private void ValidateReportSequence(
-        DeviceSession session,
-        ReportControlPlan plan,
-        NativeReportFrameMetadata frame,
-        ReportStreamState state)
-    {
-        if (!frame.SequenceNumber.HasValue)
-            return;
-
-        var current = frame.SequenceNumber.Value;
-        var reportName = ReportName(frame.ReportControlReference, plan.ReportControlReference);
-        if (frame.SubSequenceNumber.HasValue)
-        {
-            var currentSub = frame.SubSequenceNumber.Value;
-            if (state.SegmentedSequenceNumber.HasValue)
-            {
-                var expectedSub = state.LastSubSequenceNumber.GetValueOrDefault() + 1;
-                if (state.SegmentedSequenceNumber.Value != current || currentSub != expectedSub)
-                {
-                    Log("WARN", session.Device.Name,
-                        $"Segmented report discontinuity on {reportName}: expected sqNum={state.SegmentedSequenceNumber.Value}, subSqNum={expectedSub}; received sqNum={current}, subSqNum={currentSub}.");
-                }
-            }
-            else if (state.LastSequenceNumber.HasValue &&
-                     !IsExpectedReportSequence(state.LastSequenceNumber.Value, current))
-            {
-                Log("WARN", session.Device.Name,
-                    $"Report sequence discontinuity on {reportName}: previous={state.LastSequenceNumber.Value}, current={current}.");
-            }
-
-            state.SegmentedSequenceNumber = current;
-            state.LastSubSequenceNumber = currentSub;
-            state.AwaitingMoreSegments = frame.MoreSegmentsFollow == true;
-            if (!state.AwaitingMoreSegments)
-            {
-                state.LastSequenceNumber = current;
-                state.SegmentedSequenceNumber = null;
-                state.LastSubSequenceNumber = null;
-            }
-
-            return;
-        }
-
-        if (state.AwaitingMoreSegments)
-        {
-            Log("WARN", session.Device.Name,
-                $"Segmented report on {reportName} ended without the expected continuation before sqNum={current}.");
-            state.SegmentedSequenceNumber = null;
-            state.LastSubSequenceNumber = null;
-            state.AwaitingMoreSegments = false;
-        }
-
-        if (state.LastSequenceNumber.HasValue &&
-            !IsExpectedReportSequence(state.LastSequenceNumber.Value, current))
-        {
-            Log("WARN", session.Device.Name,
-                $"Report sequence discontinuity on {reportName}: previous={state.LastSequenceNumber.Value}, current={current}.");
-        }
-
-        state.LastSequenceNumber = current;
-    }
-
-    private static bool IsExpectedReportSequence(ulong previous, ulong current)
-    {
-        if (current == previous + 1)
-            return true;
-
-        // Report sequence counters are vendor/RCB dependent and commonly wrap.
-        // A reset to zero is accepted; duplicate or skipped non-zero values are not.
-        return current == 0;
     }
 
     private static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
