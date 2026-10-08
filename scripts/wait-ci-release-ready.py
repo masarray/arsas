@@ -117,7 +117,7 @@ def resolve_identity(source_dir: Path, *, source_sha: str, ref_type: str, ref_na
     ardirec_sha = _sha(str(ard.get("commit", "")), "ArdIrec")
     if iec.get("repository") != "masarray/ARIEC61850" or iec.get("ref") != "main":
         raise ReleaseReadyError("ARIEC61850 release lock identity is invalid")
-    if ard.get("repository") != "masarray/ArdIrec":
+    if str(ard.get("repository", "")).lower() != "masarray/ardirec":
         raise ReleaseReadyError("ArdIrec release lock identity is invalid")
     bridge = ard.get("bridge") if isinstance(ard.get("bridge"), dict) else {}
     if ard.get("schema") != 3 or bridge.get("abi") != 1 or bridge.get("mode") != "native-only":
