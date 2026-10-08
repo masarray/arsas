@@ -18,13 +18,13 @@
   },
   "limits": {
     "workflowFiles": 31,
-    "actionsCheckout": 36,
+    "actionsCheckout": 37,
     "actionsSetupDotnet": 11,
     "actionsSetupPython": 19,
     "dotnetRestore": 11,
     "dotnetBuild": 11,
     "dotnetTest": 12,
-    "actionsUploadArtifact": 34,
+    "actionsUploadArtifact": 35,
     "workflowsWithDotnetBuild": 10,
     "workflowsWithDotnetTest": 9
   },
@@ -678,10 +678,20 @@
     "addedCheckoutActions": 0,
     "addedUploadArtifactActions": 1,
     "artifactName": "ARSAS-native-ctest-shadow",
-    "artifactContents": ["ctest.xml", "ci-native-ctest-authority.json"],
+    "artifactContents": [
+      "ctest.xml",
+      "ci-native-ctest-authority.json"
+    ],
     "artifactRetentionDays": 14,
     "boundedShadowWaitSeconds": 600,
-    "crossRunRouting": ["exact PR head SHA", "exact PR branch", "exact synthetic merge source SHA", "engine lock SHA", "ArdIrec lock SHA", "canonical run ID/attempt"],
+    "crossRunRouting": [
+      "exact PR head SHA",
+      "exact PR branch",
+      "exact synthetic merge source SHA",
+      "engine lock SHA",
+      "ArdIrec lock SHA",
+      "canonical run ID/attempt"
+    ],
     "comparisonStatus": "advisory",
     "provisionalEvidenceDoesNotImplyCompletedCanonicalBuild": true,
     "nativeBridgeIdentityDifferenceIsVisibleNotWaived": true,
@@ -691,5 +701,37 @@
     "physicalAuthorityChanged": false,
     "binaryReuseAllowed": false,
     "rollback": "Remove the tiny shadow upload and advisory comparison only. Keep canonical package native CTest proof, independent Windows CMake/CTest and all release/physical authority intact."
+  },
+  "ciP3JNativeShadowObserver": {
+    "issueNumber": 470,
+    "lane": "independent COMTRADE native Windows and read-only Ubuntu observer",
+    "approach": "Keep independent pinned Windows CMake/CTest and native-only route gate mandatory; stage its actual DLL/JUnit only on PR, then move the existing wait-for-canonical-native-shadow and hash/test-inventory comparison to lightweight Ubuntu after Windows job succeeds.",
+    "measurement": {
+      "referenceRun": "37755975584",
+      "nativeBuildTestSeconds": 67,
+      "shadowComparisonWaitSeconds": 152,
+      "independentWindowsJobSeconds": 237,
+      "observedUtc": "2026-10-08T09:21:44Z",
+      "basis": "GitHub Actions jobs/steps recorded timestamps; a baseline, not a performance guarantee."
+    },
+    "staticBudgetChanged": true,
+    "addedWorkflowFiles": 0,
+    "addedWindowsJobs": 0,
+    "addedUbuntuJobs": 1,
+    "addedCheckoutActions": 1,
+    "addedUploadArtifactActions": 1,
+    "artifactName": "ARSAS-independent-native-ctest-shadow",
+    "artifactFiles": [
+      "ctest.xml",
+      "ardirec_bridge.dll"
+    ],
+    "artifactRetentionDays": 14,
+    "manualWindowsCTestRetained": true,
+    "independentNativeRouteGuardRetained": true,
+    "comparisonAdvisory": true,
+    "releaseAuthorityChanged": false,
+    "physicalAuthorityChanged": false,
+    "nativeDeduplicationAuthorized": false,
+    "rollback": "Remove Ubuntu observer and independent evidence upload, restore existing Windows advisory comparison; never remove mandatory Windows CMake/CTest or native-only route checks."
   }
 }
