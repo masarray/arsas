@@ -90,7 +90,7 @@ jobs:
                            [int]$lock.sourcePullRequest -eq 148
           $serverAtTrial = $null -ne $serverAt -and
                            $lock.commit -eq $serverAt.exactCommit -and
-                           $serverAt.exactCommit -eq 'e45259b710e5e6962203428abbc7fa063a25f52d' -and
+                           $serverAt.exactCommit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
                            $serverAt.baseEngineCommit -eq $trial.exactCommit -and
                            [int]$serverAt.sourcePullRequest -eq 153 -and
                            [int]$lock.sourcePullRequest -eq 153 -and
