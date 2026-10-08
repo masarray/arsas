@@ -43,8 +43,11 @@ internal static class DiagnosticReportBuilder
         {
             builder.AppendLine(
                 $"{device.DeviceId} | {device.Name} | endpoint={device.EndpointText} | connected={device.IsConnected} | monitoring={device.IsMonitoring} | status={device.Status} | staticParity={device.StaticAcquisitionParity.Summary} | routedTraffic={device.StaticAcquisitionParity.TrafficQualificationSummary}");
-            if (device.SclEndpointCandidates.Count > 0)
-                builder.AppendLine($"  SCD selected AP={device.SclAccessPointName}; MMS APs={string.Join(", ", device.SclEndpointCandidates.Select(ap => $"{ap.AccessPointName}={ap.IpAddress}:{ap.Port}"))}");
+            if (device.SclAccessPointChoices.Count > 0)
+            {
+                builder.AppendLine($"  SCD selected AP={device.SclAccessPointName}; endpoint provenance={device.SclEndpointOrigin}");
+                builder.AppendLine($"  SCD AP choices={string.Join(", ", device.SclAccessPointChoices.Select(choice => choice.HasDeclaredAddress ? $"{choice.AccessPointName}={choice.DeclaredEndpoint!.EndpointText} [SCD]" : $"{choice.AccessPointName}=[No SCD IP]"))}");
+            }
         }
         if (devices.Count == 0)
             builder.AppendLine("No IED card is present.");
@@ -132,16 +135,19 @@ internal static class DiagnosticReportBuilder
 
                 builder.AppendLine($"IED              : {device.Name}");
                 builder.AppendLine($"Endpoint         : {device.EndpointText}");
-                if (device.SclEndpointCandidates.Count > 0)
+                if (device.SclAccessPointChoices.Count > 0)
                 {
                     builder.AppendLine($"SCD selected AP  : {device.SclAccessPointName}");
-                    builder.AppendLine($"SCD MMS APs      : {device.SclEndpointCandidates.Count}");
-                    foreach (var ap in device.SclEndpointCandidates)
+                    builder.AppendLine($"Endpoint origin  : {device.SclEndpointOrigin}");
+                    builder.AppendLine($"SCD AP choices   : {device.SclAccessPointChoices.Count}");
+                    builder.AppendLine($"SCD direct MMS IP: {device.SclEndpointCandidates.Count}");
+                    foreach (var choice in device.SclAccessPointChoices)
                     {
-                        var current = ap.AccessPointName.Equals(device.SclAccessPointName, StringComparison.OrdinalIgnoreCase) &&
-                                      ap.IpAddress.Equals(device.IpAddress, StringComparison.OrdinalIgnoreCase) &&
-                                      ap.Port == device.Port;
-                        builder.AppendLine($"  {(current ? "SELECTED" : "AVAILABLE")} {ap.IedName}/{ap.AccessPointName} -> {ap.IpAddress}:{ap.Port} ({ap.SubNetworkName})");
+                        var current = choice.AccessPointName.Equals(device.SclAccessPointName, StringComparison.OrdinalIgnoreCase);
+                        var declared = choice.HasDeclaredAddress
+                            ? $"{choice.DeclaredEndpoint!.EndpointText} ({choice.DeclaredEndpoint.SubNetworkName})"
+                            : "No SCD IP (local binding required)";
+                        builder.AppendLine($"  {(current ? "SELECTED" : "AVAILABLE")} {choice.IedName}/{choice.AccessPointName} -> {declared}");
                     }
                 }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
