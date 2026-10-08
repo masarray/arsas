@@ -50,6 +50,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
         public PriorityQueue<string, long> PollQueue { get; } = new();
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public long ContinuityProcessUpdatesSeen { get; set; }
+        public int ContinuityUntrackedStreams { get; set; }
         public int LastUnroutedReportCount { get; set; }
         public int ReportPlanCursor { get; set; }
         public IReadOnlyList<ReportControlPlan> PendingReportPlans { get; set; } = Array.Empty<ReportControlPlan>();
@@ -489,6 +491,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportReferenceIndex.Clear();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ContinuityProcessUpdatesSeen = 0;
+        session.ContinuityUntrackedStreams = 0;
+        session.Device.ReportContinuityEvidence = null;
         session.LastUnroutedReportCount = 0;
         session.ReportPlanCursor = 0;
         session.PendingReportPlans = Array.Empty<ReportControlPlan>();
@@ -1314,12 +1319,39 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 $"{delta} IEC 61850 InformationReport frame(s) were not routed because RptID/DataSet identity was ambiguous. The engine intentionally refused unsafe DataSet projection.");
         }
 
+        if (slice.Updates.Count > 0)
+            session.ContinuityProcessUpdatesSeen =
+                Math.Min(long.MaxValue - slice.Updates.Count, session.ContinuityProcessUpdatesSeen) +
+                slice.Updates.Count;
+
+        // Bound metadata cardinality even if an IED emits pathological RptID
+        // variations. Report acceptance and value delivery remain untouched.
+        const int maxTrackedStreams = 64;
         foreach (var frame in slice.ReportFrames)
         {
             var streamKey = BuildReportStreamKey(plan, frame);
             if (!session.ReportStreams.TryGetValue(streamKey, out var state))
             {
-                state = new Iec61850ReportContinuityState();
+                if (session.ReportStreams.Count >= maxTrackedStreams)
+                {
+                    if (session.ContinuityUntrackedStreams < int.MaxValue)
+                        session.ContinuityUntrackedStreams++;
+                    if (session.ContinuityUntrackedStreams == 1)
+                        Log("WARN", session.Device.Name,
+                            "Report continuity evidence reached the 64-stream diagnostic limit; " +
+                            "additional metadata identities remain untracked; report processing continues.");
+                    continue;
+                }
+
+                state = new Iec61850ReportContinuityState
+                {
+                    ReportControlReference = string.IsNullOrWhiteSpace(frame.ReportControlReference)
+                        ? plan.ReportControlReference : frame.ReportControlReference,
+                    DataSetReference = string.IsNullOrWhiteSpace(frame.DataSetReference)
+                        ? plan.DataSetReference : frame.DataSetReference,
+                    ReportId = frame.ReportId,
+                    Buffered = plan.Buffered
+                };
                 session.ReportStreams[streamKey] = state;
             }
 
@@ -1333,6 +1365,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     $"{ReportName(frame.ReportControlReference, plan.ReportControlReference)}: {finding}");
             }
         }
+
+        // One immutable publication per non-empty slice, never per value/frame.
+        // The GUI may concurrently Copy Diagnostic without locking the MMS loop.
+        if (slice.Updates.Count > 0 || slice.ReportFrames.Count > 0)
+            session.Device.ReportContinuityEvidence =
+                Iec61850ReportContinuityInspector.Snapshot(
+                    session.ReportStreams,
+                    session.ContinuityProcessUpdatesSeen,
+                    session.ContinuityUntrackedStreams);
     }
 
     private static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
@@ -1760,6 +1801,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
+        session.ContinuityProcessUpdatesSeen = 0;
+        session.ContinuityUntrackedStreams = 0;
+        session.Device.ReportContinuityEvidence = null;
         session.LastUnroutedReportCount = 0;
         ResetAssociationReportEvidence(session);
 
@@ -2064,6 +2108,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.StaticReportProjection.Reset();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ContinuityProcessUpdatesSeen = 0;
+        session.ContinuityUntrackedStreams = 0;
+        session.Device.ReportContinuityEvidence = null;
         session.LastUnroutedReportCount = 0;
         session.ReportPlanCursor = 0;
         session.PendingReportPlans = Array.Empty<ReportControlPlan>();
