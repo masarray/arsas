@@ -118,13 +118,13 @@ internal static class Iec61850ReportContinuityInspector
                 if (state.AwaitingMoreSegments)
                     Warn($"Segmented report was interrupted before continuation of " +
                          $"sqNum={state.SegmentedSequenceNumber}, subSqNum={state.LastSubSequenceNumber}" +
-                         entryContext);
+                         EntryContext());
                 state.AwaitingMoreSegments = false;
                 state.SegmentedSequenceNumber = null;
                 state.LastSubSequenceNumber = null;
                 var discontinuity = DescribeSequenceAnomaly(state.LastSequenceNumber, current);
-                    if (discontinuity is not null)
-                        Warn(discontinuity + EntryContext());
+                if (discontinuity is not null)
+                    Warn(discontinuity + EntryContext());
                 state.LastSequenceNumber = current;
             }
         }
