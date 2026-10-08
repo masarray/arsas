@@ -11,7 +11,7 @@ namespace ArIED61850Tester.Services;
 
 internal static class DiagnosticReportBuilder
 {
-    private sealed record TcpProbeResult(string Endpoint, string Result, string Detail);
+    private sealed record TcpProbeResult(string DeviceId, string Endpoint, string Result, string Detail);
     private sealed record AdapterIpv4(string Name, NetworkInterfaceType Type, IPAddress Address, int PrefixLength);
     private sealed record RouteAnalysis(string Source, string MatchingAdapters, string AdapterMatrix, string Note);
 
@@ -24,7 +24,14 @@ internal static class DiagnosticReportBuilder
         var appAssembly = Assembly.GetEntryAssembly() ?? typeof(DiagnosticReportBuilder).Assembly;
         var engineAssembly = typeof(AR.Iec61850.Mms.MmsClientSession).Assembly;
         var probes = await Task.WhenAll(devices.Select(device => ProbeDeviceAsync(device, cancellationToken))).ConfigureAwait(false);
-        var probeByEndpoint = probes.ToDictionary(result => result.Endpoint, StringComparer.OrdinalIgnoreCase);
+
+        // Diagnostics must remain available even when the workspace itself is malformed,
+        // duplicated, offline-only or contains multiple cards with the same endpoint text
+        // (for example "No endpoint"). DeviceId is the stable per-card identity; endpoint
+        // text is evidence, not a dictionary key.
+        var probeByDeviceId = probes
+            .GroupBy(result => result.DeviceId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
         var builder = new StringBuilder(64 * 1024);
         builder.AppendLine("ARSAS Diagnostic Report");
@@ -69,7 +76,7 @@ internal static class DiagnosticReportBuilder
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var diagnostic = device.LastDiagnosticSnapshot ?? new Iec61850DeviceDiagnosticSnapshot();
-                probeByEndpoint.TryGetValue(device.EndpointText, out var probe);
+                probeByDeviceId.TryGetValue(device.DeviceId, out var probe);
 
                 builder.AppendLine($"IED              : {device.Name}");
                 builder.AppendLine($"Endpoint         : {device.EndpointText}");
@@ -274,10 +281,10 @@ internal static class DiagnosticReportBuilder
         CancellationToken cancellationToken)
     {
         if (device.IsConnected)
-            return new TcpProbeResult(device.EndpointText, "SKIPPED", "active MMS session already connected");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "SKIPPED", "active MMS session already connected");
 
         if (string.IsNullOrWhiteSpace(device.IpAddress) || device.Port is <= 0 or > 65535)
-            return new TcpProbeResult(device.EndpointText, "INVALID", "invalid endpoint");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "INVALID", "invalid endpoint");
 
         using var client = new TcpClient();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -287,7 +294,7 @@ internal static class DiagnosticReportBuilder
         {
             await client.ConnectAsync(device.IpAddress, device.Port, timeout.Token).ConfigureAwait(false);
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "OPEN", $"TCP accepted in {stopwatch.Elapsed.TotalMilliseconds:0} ms");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "OPEN", $"TCP accepted in {stopwatch.Elapsed.TotalMilliseconds:0} ms");
         }
         catch (SocketException ex)
         {
@@ -300,12 +307,12 @@ internal static class DiagnosticReportBuilder
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "TIMEOUT", $"> {stopwatch.Elapsed.TotalMilliseconds:0} ms");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "TIMEOUT", $"> {stopwatch.Elapsed.TotalMilliseconds:0} ms");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            return new TcpProbeResult(device.EndpointText, "FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            return new TcpProbeResult(device.DeviceId, device.EndpointText, "FAILED", $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 
