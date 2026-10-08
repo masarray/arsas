@@ -164,12 +164,18 @@ internal static class StaticAcquisitionParityTracker
                 (kind == "static-brcb") != plan.Buffered)
                 evidenceIssues.Add($"DataSet {dataSetReference} has inconsistent static RCB family evidence");
 
-            var members = dataSet?.Members
+            // Absolute member indexes are ingress-specific: imported SCL uses 1-based
+            // FCDA ordinals while MMS discovery uses 0-based list positions.
+            // Only the ordered semantic *position* is part of the parity fingerprint.
+            // Keep source indexes unchanged for the authoritative model and guard them
+            // independently so missing/duplicate positions cannot become false MATCH.
+            var orderedMembers = dataSet?.Members
                 .OrderBy(member => member.Index)
-                .Select(member =>
-                    $"{member.Index}:{NormalizeReference(member.Reference)}@{NormalizeFc(member.FunctionalConstraint)}")
-                .ToArray()
-                ?? Array.Empty<string>();
+                .ToArray() ?? Array.Empty<LiveIedDataSetMemberModel>();
+            var members = orderedMembers
+                .Select((member, position) =>
+                    $"{position}:{NormalizeReference(member.Reference)}@{NormalizeFc(member.FunctionalConstraint)}")
+                .ToArray();
 
             if (dataSet is null)
                 evidenceIssues.Add($"DataSet {dataSetReference} missing from {ingress} model");
@@ -180,10 +186,24 @@ internal static class StaticAcquisitionParityTracker
 
             if (dataSet is not null)
             {
-                if (dataSet.Members.Select(member => member.Index).Distinct().Count() != members.Length ||
-                    dataSet.Members.Any(member => member.Index < 0))
+                var invalidOrDuplicateIndex = orderedMembers.Length > 0 && orderedMembers[0].Index < 0;
+                var hasIndexGap = false;
+                for (var position = 1; position < orderedMembers.Length; position++)
+                {
+                    // long arithmetic avoids overflow near int.MaxValue, and sorted
+                    // index comparisons prevent duplicate/gap information being erased.
+                    var delta = (long)orderedMembers[position].Index - orderedMembers[position - 1].Index;
+                    if (delta <= 0)
+                        invalidOrDuplicateIndex = true;
+                    else if (delta != 1)
+                        hasIndexGap = true;
+                }
+
+                if (invalidOrDuplicateIndex)
                     evidenceIssues.Add($"DataSet {dataSetReference} has invalid or duplicate ordered member indices");
-                if (dataSet.Members.Any(member =>
+                if (hasIndexGap)
+                    evidenceIssues.Add($"DataSet {dataSetReference} has noncontiguous ordered member indices");
+                if (orderedMembers.Any(member =>
                         string.IsNullOrWhiteSpace(member.Reference) ||
                         string.IsNullOrWhiteSpace(member.FunctionalConstraint)))
                     evidenceIssues.Add($"DataSet {dataSetReference} has incomplete member identity or FC evidence");
