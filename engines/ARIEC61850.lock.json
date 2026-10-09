@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "f42318c70a2af8f467d0eb21f0709d6115f6c35a",
+  "commit": "8b0c0f7e695b016834e40a6f068994dcc945cb1a",
   "sourcePullRequest": 157,
   "purpose": "EXPERIMENTAL DISCOVERY DATASET TYPE CLOSURE, code qualification pending: exact engine PR #157, extends immutable P6.2 baseline without touching canonical command/RCB or cyclic polling invariants. Physical F650 parity required before promotion.",
   "previousTrialPin": {
@@ -78,7 +78,7 @@
     "issue": 495,
     "enginePullRequest": 157,
     "baseEngineCommit": "352c81e6a798635c6addcee0683235ca87ad416d",
-    "exactCommit": "f42318c70a2af8f467d0eb21f0709d6115f6c35a",
+    "exactCommit": "8b0c0f7e695b016834e40a6f068994dcc945cb1a",
     "consumerPullRequest": 497,
     "fullNameListFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
