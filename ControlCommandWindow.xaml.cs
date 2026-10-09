@@ -275,6 +275,12 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private static string BuildCommandResultText(Iec61850ControlCommandResult result)
     {
         var details = new List<string>();
+        if (!result.IsSuccess)
+        {
+            var explanation = Iec61850ControlFailureReason.Explain(result);
+            details.Add($"{explanation.Summary} [{explanation.Confidence}].");
+            details.Add($"Check: {explanation.Checks}.");
+        }
         var rejectedStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
         if (rejectedStep != null)
         {
@@ -307,7 +313,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(result.AddCause))
         {
             details.Add($"AddCause: {result.AddCause}.");
-            details.Add(ExplainAddCause(result.AddCause));
+            details.Add(Iec61850ControlFailureReason.Explain(result).Summary);
         }
         if (!string.IsNullOrWhiteSpace(result.LastApplErrorText))
             details.Add(result.LastApplErrorText);
@@ -319,19 +325,6 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             details.Add($"Total: {result.TotalElapsedText}.");
         return string.Join(" ", details.Where(text => !string.IsNullOrWhiteSpace(text)));
     }
-
-    private static string ExplainAddCause(string addCause)
-        => (addCause ?? string.Empty).Trim().ToLowerInvariant() switch
-        {
-            "blocked-by-interlocking" => "IED BLOCKED COMMAND BY INTERLOCKING.",
-            "blocked-by-synchrocheck" => "IED BLOCKED COMMAND BY SYNCHROCHECK.",
-            "blocked-by-mode" => "IED blocked the command because the active control mode does not permit it.",
-            "blocked-by-process" => "IED blocked the command by process conditions.",
-            "blocked-by-health" => "IED blocked the command because of device/process health conditions.",
-            "no-access-authority" => "IED reports that this client/origin has no control access authority.",
-            "not-supported" => "IED reports that the requested control condition/service is not supported.",
-            _ => string.Empty
-        };
 
     private static bool TryExtractNumber(string? text, out double value)
     {

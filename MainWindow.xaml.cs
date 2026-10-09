@@ -1542,6 +1542,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             clickStopwatch.Stop();
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
+
+            // A rejected physical control needs a prominent operator-visible
+            // explanation; the status bar and Diagnostics alone are insufficient.
+            // Never present a generic MMS access-denied as proven Local/Remote.
+            if (!result.IsSuccess)
+            {
+                var explanation = Iec61850ControlFailureReason.Explain(result);
+                MarkDiagnosticAlert();
+                MessageBox.Show(this,
+                    $"{explanation.Summary}\n\nEvidence: {explanation.Evidence}\n" +
+                    $"Certainty: {explanation.Confidence}\n\nCheck: {explanation.Checks}\n\n" +
+                    "The exact MMS response and AddCause (if supplied) remain in Diagnostics.",
+                    result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
+                        ? $"Command Not Sent — {signal.ObjectReference}"
+                        : $"IED Command Failed — {signal.ObjectReference}",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1586,13 +1603,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ? " • Operate NOT sent"
                     : string.Empty;
                 var cause = string.IsNullOrWhiteSpace(result.AddCause) ? string.Empty : $" • AddCause={result.AddCause}";
-                return $"IED REJECTED {stage}: {result.Message}{cause}{stopped}{suffix}";
+                var explanation = Iec61850ControlFailureReason.Explain(result);
+                return $"IED REJECTED {stage}: {explanation.Summary} [{explanation.Confidence}]. " +
+                       $"Check: {explanation.Checks}. Wire: {result.Message}{cause}{stopped}{suffix}";
             }
         }
 
         return result.IsSuccess
             ? $"{result.Stage}: {result.FeedbackValue}{suffix}"
-            : $"{result.Stage}: {result.Message}{suffix}";
+            : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
     }
 
     private async void ControlDetails_Click(object sender, RoutedEventArgs e)

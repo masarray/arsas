@@ -209,13 +209,8 @@ public static class Iec61850StaticControlStatusProjectionService
         return signals
             .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
             .Where(signal => LiteralEquals(signal.ObjectReference, dataObjectReference))
-            .Where(signal =>
-                string.IsNullOrWhiteSpace(signal.DataSetReference) ||
-                LiteralEquals(signal.DataSetReference, dataSetReference))
-            .Where(signal =>
-                string.IsNullOrWhiteSpace(signal.DisplayReference) ||
-                LiteralEquals(signal.DisplayReference, memberReference) ||
-                LiteralEquals(signal.DisplayReference, dataObjectReference))
+            // Full DataObject is command identity. Its DataSets are reporting
+            // memberships, not independent Operate targets.
             .OrderByDescending(signal => LiteralEquals(signal.DataSetReference, dataSetReference))
             .ThenByDescending(signal => LiteralEquals(signal.DisplayReference, memberReference))
             .FirstOrDefault();
@@ -268,8 +263,10 @@ public static class Iec61850StaticControlStatusProjectionService
         string memberReference,
         string exactFeedbackReference)
     {
-        control.DisplayReference = memberReference;
-        control.DataSetReference = membership.DataSetReference;
+        // Keep original command provenance. All other DataSet memberships
+        // remain available on the canonical ARIEC descriptor.
+        if (string.IsNullOrWhiteSpace(control.DataSetReference))
+            control.DataSetReference = membership.DataSetReference;
         control.IsReportCapable = true;
         control.ControlCdc = cdc;
         if (!string.IsNullOrWhiteSpace(exactFeedbackReference))
