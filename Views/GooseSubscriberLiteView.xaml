@@ -153,14 +153,12 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="238"/>
+                <ColumnDefinition Width="*" MinWidth="520"/>
                 <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="*" MinWidth="420"/>
-                <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="330"/>
+                <ColumnDefinition Width="390" MinWidth="340"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10" Visibility="Collapsed">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -279,7 +277,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10">
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="9">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -292,7 +290,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Event timeline" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Text="Messages" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource Ink}"/>
                             <Border Margin="8,0,0,0" Background="#EEF4FF" BorderBrush="#C9D9F1"
                                     BorderThickness="1" CornerRadius="9" Padding="7,2">
@@ -300,8 +298,11 @@
                                            FontWeight="SemiBold" Foreground="#45648E"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="Changes &amp; warnings" FontSize="9.4"
-                                   Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                        <CheckBox Grid.Column="1" Content="Show retransmissions"
+                                   IsChecked="{Binding ShowGooseRetransmissions, Mode=TwoWay}"
+                                   FontSize="9.6" Foreground="{StaticResource Muted}"
+                                   VerticalAlignment="Center"
+                                   ToolTip="Show all GOOSE retransmissions; changes and new warnings appear by default."/>
                     </Grid>
 
                     <Grid Grid.Row="2">
@@ -372,7 +373,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="155" MinWidth="120"/>
                                 <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="78"/>
-                                <DataGridTextColumn Header="Values" Binding="{Binding Summary}" Width="*" MinWidth="150"/>
+                                <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="150"/>
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -382,7 +383,7 @@
                             <StackPanel>
                                 <TextBlock Text="Waiting for a meaningful event" FontSize="12.4"
                                            FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="New publishers, state changes and warnings appear here."
+                                <TextBlock Text="New publishers, changed values and new warnings appear here."
                                            FontSize="10" Foreground="{StaticResource Muted}" TextAlignment="Center"
                                            TextWrapping="Wrap" Margin="0,3,0,0"/>
                             </StackPanel>
@@ -391,7 +392,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="4" Style="{StaticResource Card}" Padding="10">
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="9">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

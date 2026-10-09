@@ -55,13 +55,16 @@ public sealed class GooseLeafValueRow : ObservableObject
         FunctionalConstraint = snapshot.FunctionalConstraint;
         Cdc = snapshot.Cdc;
         BType = snapshot.BType;
+        var changedOnWire = _value != "-" &&
+            !string.Equals(_value, snapshot.Value, StringComparison.Ordinal) &&
+            !string.Equals(snapshot.Value, "<missing in frame>", StringComparison.Ordinal);
         PreviousValue = snapshot.PreviousValue;
         Value = snapshot.Value;
         BindingSource = snapshot.BindingSource;
-        IsChanged = snapshot.IsChanged;
-        if (snapshot.IsChanged)
+        IsChanged = snapshot.IsChanged || changedOnWire;
+        if (IsChanged)
         {
-            _highlightUntilUtc = DateTimeOffset.UtcNow.AddSeconds(5);
+            _highlightUntilUtc = DateTimeOffset.UtcNow.AddSeconds(3);
             IsHighlighted = true;
         }
         Raise(nameof(TypeText));

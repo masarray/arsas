@@ -12,10 +12,18 @@ namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
-    private const int MaxGooseTimelineEvents = 300;
+    private const int MaxGooseTimelineEvents = 500;
     private const int MaxPendingGooseTimelineEvents = 512;
 
-    private readonly ConcurrentQueue<GooseSubscriberFrameSnapshot> _pendingGooseTimeline = new();
+    private readonly ConcurrentQueue<(GooseSubscriberFrameSnapshot Frame, GooseTimelineDecision Decision)> _pendingGooseTimeline = new();
+    private readonly Dictionary<string, GooseTimelineSignature> _lastGooseTimelineSignature = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gooseTimelineGate = new();
+    private bool _showGooseRetransmissions;
+    public bool ShowGooseRetransmissions
+    {
+        get => _showGooseRetransmissions;
+        set => Set(ref _showGooseRetransmissions, value);
+    }
     private readonly Dictionary<string, DateTimeOffset> _lastGooseTimelineTimestamp = new(StringComparer.OrdinalIgnoreCase);
     private GooseEventRow? _selectedGooseEvent;
     private bool _goosePresentationInstalled;
@@ -143,26 +151,29 @@ public partial class MainWindow
         args.Handled = true;
     }
 
-    private void GooseTimeline_FrameReceived(GooseSubscriberFrameSnapshot snapshot)
+    private void GooseTimeline_FrameReceived(GooseSubscriberFrameSnapshot frame)
     {
-        if (!IsMeaningfulGooseTimelineEvent(snapshot))
-            return;
-
-        _pendingGooseTimeline.Enqueue(snapshot);
-        while (_pendingGooseTimeline.Count > MaxPendingGooseTimelineEvents && _pendingGooseTimeline.TryDequeue(out _))
+        // Read-only capture still records every frame. Only operator messages
+        // are coalesced, using exact decoded payload evidence per publisher.
+        var values = frame.StreamEvent.GooseValues.Count > 0
+            ? frame.StreamEvent.GooseValues.Select(x => x.DisplayValue)
+            : frame.Frame.Pdu.Values.Select(x => MmsDataValueRenderer.ToCompactString(x, string.Empty));
+        var fingerprint = new GooseTimelineSignature(
+            string.Concat(values.Select(x => $"{x?.Length ?? 0}:{x}")),
+            frame.Frame.Pdu.StateNumber.ToString(CultureInfo.InvariantCulture),
+            string.Join(" • ", frame.StreamEvent.Diagnostics.OrderBy(x => x, StringComparer.Ordinal)),
+            frame.StreamEvent.GooseSequenceStatus.ToString());
+        GooseTimelineDecision decision;
+        lock (_gooseTimelineGate)
         {
+            _lastGooseTimelineSignature.TryGetValue(frame.StreamKey, out var previous);
+            decision = GooseTimelineEventPolicy.Evaluate(previous, fingerprint, ShowGooseRetransmissions);
+            _lastGooseTimelineSignature[frame.StreamKey] = fingerprint;
         }
-    }
-
-    private static bool IsMeaningfulGooseTimelineEvent(GooseSubscriberFrameSnapshot snapshot)
-    {
-        if (snapshot.PacketCount <= 1 || snapshot.StreamEvent.ChangedValueCount > 0 || snapshot.StreamEvent.Diagnostics.Count > 0)
-            return true;
-
-        var status = snapshot.StreamEvent.GooseSequenceStatus.ToString();
-        return status.Contains("State", StringComparison.OrdinalIgnoreCase) ||
-               (!status.Contains("Retransmission", StringComparison.OrdinalIgnoreCase) &&
-                !status.Contains("Normal", StringComparison.OrdinalIgnoreCase));
+        if (!decision.Include) return;
+        _pendingGooseTimeline.Enqueue((frame, decision));
+        while (_pendingGooseTimeline.Count > MaxPendingGooseTimelineEvents &&
+               _pendingGooseTimeline.TryDequeue(out _)) { }
     }
 
     private void GooseTimelineUiFlushTimer_Tick(object? sender, EventArgs args)
@@ -171,7 +182,7 @@ public partial class MainWindow
         if (nowUtc >= _nextGooseHighlightExpiryCheckUtc)
         {
             ExpireGooseHighlights(nowUtc);
-            _nextGooseHighlightExpiryCheckUtc = nowUtc.AddSeconds(1);
+            _nextGooseHighlightExpiryCheckUtc = nowUtc.AddMilliseconds(250);
         }
 
         if (_pendingGooseTimeline.IsEmpty)
@@ -180,8 +191,8 @@ public partial class MainWindow
         var processed = 0;
         while (processed < 48 && _pendingGooseTimeline.TryDequeue(out var captured))
         {
-            var stream = BuildGooseStreamSnapshot(captured, _gooseBindingCatalog);
-            var eventRow = BuildGooseEventRow(captured, stream);
+            var stream = BuildGooseStreamSnapshot(captured.Frame, _gooseBindingCatalog);
+            var eventRow = BuildGooseEventRow(captured.Frame, stream, captured.Decision);
             // Append in capture order. Tail insertion avoids shifting every realized row.
             GooseEvents.Add(eventRow);
             while (GooseEvents.Count > MaxGooseTimelineEvents)
@@ -206,46 +217,34 @@ public partial class MainWindow
         }
     }
 
-    private GooseEventRow BuildGooseEventRow(
-        GooseSubscriberFrameSnapshot captured,
-        GooseStreamSnapshot stream)
+    private GooseEventRow BuildGooseEventRow(GooseSubscriberFrameSnapshot captured,
+        GooseStreamSnapshot stream, GooseTimelineDecision decision)
     {
-        var status = stream.SequenceStatus;
-        var hasDiagnostics = !string.IsNullOrWhiteSpace(stream.DiagnosticsSummary);
-        var isNew = captured.PacketCount <= 1;
-        var isStateChange = stream.ChangedValueCount > 0 || status.Contains("State", StringComparison.OrdinalIgnoreCase);
-
-        var eventText = isNew
-            ? "New"
-            : hasDiagnostics
-                ? "Warning"
-                : isStateChange
-                    ? "State change"
-                    : FriendlySequenceStatus(status);
-        var eventTone = hasDiagnostics
-            ? "Warning"
-            : isStateChange
-                ? "Change"
-                : "Info";
-
+        var hasNewWarning = !string.IsNullOrWhiteSpace(stream.DiagnosticsSummary) &&
+                            (decision.IsNew || decision.DiagnosticsChanged);
+        var valueAnomaly = decision.PayloadChanged && !decision.StateChanged;
+        var changed = decision.PayloadChanged || decision.StateChanged;
+        var eventText = decision.IsNew ? "New" :
+            valueAnomaly ? "Value changed" :
+            hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
+            changed ? "State change" : FriendlySequenceStatus(stream.SequenceStatus);
+        var tone = valueAnomaly || hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
+            changed ? "Change" : "Info";
         var deltaText = "-";
-        if (_lastGooseTimelineTimestamp.TryGetValue(captured.StreamKey, out var previousTimestamp))
-        {
-            var delta = captured.CaptureTimestamp - previousTimestamp;
-            deltaText = FormatGooseDelta(delta);
-        }
+        if (_lastGooseTimelineTimestamp.TryGetValue(captured.StreamKey, out var prev))
+            deltaText = FormatGooseDelta(captured.CaptureTimestamp - prev);
         _lastGooseTimelineTimestamp[captured.StreamKey] = captured.CaptureTimestamp;
-
         return new GooseEventRow
         {
             StreamKey = captured.StreamKey,
             Timestamp = captured.CaptureTimestamp,
             DeltaText = deltaText,
             EventText = eventText,
-            EventTone = eventTone,
+            EventTone = tone,
             Publisher = BuildGoosePublisherName(stream),
             StateSequenceText = $"{stream.StateNumberText} / {stream.SequenceNumberText}",
-            Summary = BuildGooseEventSummary(stream, isNew, hasDiagnostics)
+            Summary = valueAnomaly ? "Payload changed without stNum increment — verify publisher." :
+                BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
         };
     }
 
@@ -345,6 +344,7 @@ public partial class MainWindow
         {
         }
         _lastGooseTimelineTimestamp.Clear();
+        lock (_gooseTimelineGate) _lastGooseTimelineSignature.Clear();
         _nextGooseHighlightExpiryCheckUtc = DateTimeOffset.MinValue;
         GooseEvents.Clear();
         SelectedGooseEvent = null;
